@@ -76,7 +76,12 @@ def update_membership_state_after_stripe_paiement(ligne_article):
 
         # Si c'est un paiement récurrent :
         if price.recurring_payment :
-            membership.current_iteration += 1
+            try :
+                membership.current_iteration += 1
+            except TypeError: # il est a None
+                membership.current_iteration = 1
+            except Exception as exc:
+                raise exc
 
             # On dit a stripe d'annuler les prochaines itérations
             if membership.max_iteration:

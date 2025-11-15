@@ -975,10 +975,6 @@ class Price(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False, unique=True, db_index=True)
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="prices", verbose_name=_("Product"))
 
-    @property
-    def product_is_membership_from_model(self):
-        return True
-
     short_description = models.CharField(max_length=250, blank=True, null=True)
     long_description = models.TextField(blank=True, null=True)
 
@@ -2323,6 +2319,7 @@ class Paiement_stripe(models.Model):
             return self.status
 
         checkout_session = self.get_checkout_session()
+        metadata = checkout_session.metadata
 
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
@@ -2342,8 +2339,7 @@ class Paiement_stripe(models.Model):
             if checkout_session.mode == 'subscription':
                 if bool(checkout_session.subscription):
                     self.subscription = checkout_session.subscription
-                    metadata = checkout_session.metadata
-                    # La récurrence est géré dans le webhook de renouvellement.
+                    # La récurrence max est géré dans le webhook de renouvellement : BaseBillet.triggers.update_membership_state_after_stripe_paiement
                     # Ajout des metadata du checkout pour les futurs webhook de renouvellement
                     subscription = stripe.Subscription.modify(
                         f"{checkout_session.subscription}",
@@ -2364,6 +2360,7 @@ class Paiement_stripe(models.Model):
         # grace au post_save BaseBillet.models.check_status_stripe
 
         # Reservation.VALID lorsque le mail est envoyé et non en erreur
+        logger.info(f"Update status stripe metadata : {metadata}")
         self.save()
         return self.status
 

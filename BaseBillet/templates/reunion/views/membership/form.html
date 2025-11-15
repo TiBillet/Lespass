@@ -27,12 +27,38 @@
                         <!-- Prix libre ET récurrent : input décimal avec incrémentation par 10 cts -->
                         <!-- Utilise des classes compatibles mode clair/sombre (Bootstrap 5.3 color modes) -->
                         <div class="mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary">
-                            <label class="form-label fw-bold text-primary" for="price-{{ price.uuid }}">
-                                {{ price.name }}
-                            </label>
+                            <!-- Titre + badges alignés sur la même ligne -->
+                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2" aria-label="{% trans 'Payment information' %}">
+                                <label class="form-label fw-bold text-primary mb-0 me-1" for="price-{{ price.uuid }}">
+                                    {{ price.name }}
+                                </label>
+                                {% if price.recurring_payment %}
+                                    <span class="badge rounded-pill text-bg-warning">
+                                        {# Remplace "récurrent" par une périodicité claire #}
+                                        {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                            {% trans 'Monthly payment' %}
+                                        {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                            {% trans 'Annual payment' %}
+                                        {% elif price.subscription_type == 'D' %}
+                                            {% trans 'Daily payment' %}
+                                        {% elif price.subscription_type == 'W' %}
+                                            {% trans 'Weekly payment' %}
+                                        {% elif price.subscription_type == 'H' %}
+                                            {% trans 'Hourly payment' %}
+                                        {% else %}
+                                            {% trans 'Recurring payment' %}
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
+                                {% if price.iteration %}
+                                    <span class="badge rounded-pill text-bg-info">
+                                        {% blocktrans count it=price.iteration %}Up to {{ it }} installment{% plural %}Up to {{ it }} installments{% endblocktrans %}
+                                    </span>
+                                {% endif %}
+                            </div>
                             {% if price.max_per_user_reached %}
                                 <div class="alert alert-danger" role="alert">
-                                    {% trans "Vous êtes déja abonné à ce tarif" %}
+                                    {% trans "You are already subscribed to this rate." %}
                                 </div>
                             {% else %}
                                 <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
@@ -42,11 +68,28 @@
                                        name="custom_amount"
                                        min="{{ price.prix }}"
                                        step="0.10"
-                                       placeholder="{% trans 'Enter the amount (minimum' %} {{ price.prix }}€)"
+                                       placeholder="{% blocktrans with min=price.prix %}Enter the amount (minimum {{ min }}€){% endblocktrans %}"
                                        aria-describedby="custom-amount-help-{{ price.uuid }}"
                                        required>
                                 <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
-                                    {% trans "Recurring payment - Enter your desired amount" %}
+                                    {# Aide contextualisée selon la périodicité du paiement #}
+                                    {% if price.recurring_payment %}
+                                        {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                            {% trans 'Monthly payment — Enter your desired amount' %}
+                                        {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                            {% trans 'Annual payment — Enter your desired amount' %}
+                                        {% elif price.subscription_type == 'D' %}
+                                            {% trans 'Daily payment — Enter your desired amount' %}
+                                        {% elif price.subscription_type == 'W' %}
+                                            {% trans 'Weekly payment — Enter your desired amount' %}
+                                        {% elif price.subscription_type == 'H' %}
+                                            {% trans 'Hourly payment — Enter your desired amount' %}
+                                        {% else %}
+                                            {% trans 'Recurring payment — Enter your desired amount' %}
+                                        {% endif %}
+                                    {% else %}
+                                        {% trans "Enter your desired amount" %}
+                                    {% endif %}
                                 </small>
                                 {% if price.fedow_reward_enabled %}
                                     <div class="mt-2">
@@ -59,7 +102,7 @@
                         </div>
                     {% else %}
                         <!-- Prix standard : bouton radio classique -->
-                        <div class="form-check me-3">
+                        <div class="form-check me-3 mb-2">
                             <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
                                    value="{{ price.uuid }}" required {% if price.out_of_stock %}disabled{% endif %}>
                             <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}" for="price-{{ price.uuid }}">
@@ -67,6 +110,33 @@
                                     {{ price.name }}
                                 {% else %}
                                     {{ price.name }} - {{ price.prix }}€
+                                {% endif %}
+                                <!-- Badges d'information récurrence / itérations -->
+                                {% if price.recurring_payment or price.iteration %}
+                                    <span class="ms-2 d-inline-flex gap-2 flex-wrap align-items-center align-middle">
+                                        {% if price.recurring_payment %}
+                                            <span class="badge rounded-pill text-bg-warning">
+                                                {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                                    {% trans 'Monthly payment' %}
+                                                {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                                    {% trans 'Annual payment' %}
+                                                {% elif price.subscription_type == 'D' %}
+                                                    {% trans 'Daily payment' %}
+                                                {% elif price.subscription_type == 'W' %}
+                                                    {% trans 'Weekly payment' %}
+                                                {% elif price.subscription_type == 'H' %}
+                                                    {% trans 'Hourly payment' %}
+                                                {% else %}
+                                                    {% trans 'Recurring payment' %}
+                                                {% endif %}
+                                            </span>
+                                        {% endif %}
+                                        {% if price.iteration %}
+                                            <span class="badge rounded-pill text-bg-info">
+                                                {% blocktrans count it=price.iteration %}Up to {{ it }} installment{% plural %}Up to {{ it }} installments{% endblocktrans %}
+                                            </span>
+                                        {% endif %}
+                                    </span>
                                 {% endif %}
                                 {% if price.fedow_reward_enabled %}
                                     <span>
@@ -85,14 +155,14 @@
         {% if user.is_anonymous %}
             <div class="form-floating mb-3">
                 <input id="membership-email" name="email" type="email" class="form-control"
-                       placeholder="adresse@exemple.fr" role="textbox"
+                       placeholder="{% trans 'address@example.com' %}" role="textbox"
                        aria-label="{% trans 'Email address' %}" required>
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
 
             <div class="form-floating mb-3">
                 <input id="confirm-email" name="confirm-email" type="email" class="form-control"
-                       placeholder="adresse@exemple.fr"
+                       placeholder="{% trans 'address@example.com' %}"
                        role="textbox"
                        aria-label="{% trans 'Email confirmation' %}" required>
                 <label for="confirm-email">{% trans 'Email confirmation' %}</label>
@@ -109,7 +179,7 @@
 
                     if (email !== confirmEmail) {
                         event.preventDefault(); // empêche l’envoi de la requête HTMX
-                        errorDiv.textContent = "Les emails ne correspondent pas.";
+                        errorDiv.textContent = "{% trans 'Email addresses do not match.' %}";
                     } else {
                         errorDiv.textContent = ""; // nettoyage si c’est bon
                     }
@@ -118,7 +188,7 @@
 
         {% elif user.is_active %}
             <div class="form-floating mb-3">
-                <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
+                <input name="email" type="email" class="form-control" placeholder="{% trans 'address@example.com' %}" role="textbox"
                        aria-label="{% trans 'Email address' %}" value="{{ user.email }}" readonly>
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
@@ -289,7 +359,7 @@
                         if (!anyChecked) {
                             ok = false;
                             if (error) {
-                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher au moins une option.';
+                                error.textContent = group.getAttribute('data-error-message') || '{% translate "Please check at least one option." %}';
                                 error.style.display = 'block';
                             }
                             boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
@@ -314,7 +384,7 @@
                         if (!input.checked) {
                             ok = false;
                             if (error) {
-                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher cette case.';
+                                error.textContent = group.getAttribute('data-error-message') || '{% translate "Please check this box." %}';
                                 error.style.display = 'block';
                             }
                             input.setAttribute('aria-invalid', 'true');
