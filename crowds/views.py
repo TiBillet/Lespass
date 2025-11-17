@@ -18,7 +18,6 @@ from fedow_public.models import AssetFedowPublic
 from .models import Initiative, Contribution, CrowdConfig, Vote, Participation
 
 from django.contrib.auth import get_user_model
-from .demo_data import seed as seed_crowds_demo
 
 User = get_user_model()
 
@@ -53,8 +52,6 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         Affiche la liste des projets avec le thème TiBillet + HTMX (pas de blink).
         """
-        # if settings.TEST:
-        #     seed_crowds_demo()
 
         active_slug = (request.GET.get("tag") or "").strip()
         search_query = (request.GET.get("q") or "").strip()

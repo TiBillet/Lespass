@@ -577,6 +577,12 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     config = Configuration.get_solo()
 
+    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
+    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    if getattr(ligne_article, "sended_to_laboutik", False) or ligne_article.status == LigneArticle.REFUNDED:
+        logger.info("refund déjà envoyé à Laboutik – skip")
+        return True
+
     # On check si le serveur cashless est bien opérationnel :
     try:
         if not config.check_serveur_cashless():
@@ -590,8 +596,6 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
-    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
-    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
     logger.info(f"send_refund_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
 
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
@@ -608,7 +612,7 @@ def send_refund_to_laboutik(self, ligne_article_pk):
             },
             data=json_data,
             verify=bool(not settings.DEBUG),
-            timeout=2,
+            timeout=(5, 10),  # 5s de connexion, 10s de lecture
         )
 
         # Si la réponse est 404, on déclenche un retry
@@ -616,10 +620,14 @@ def send_refund_to_laboutik(self, ligne_article_pk):
             logger.info("sended_to_laboutik = True")
             ligne_article.sended_to_laboutik = True
             ligne_article.save()
-        if response.status_code == 404:
-            # Augmente le délai de retry avec un backoff exponentiel
+            return True
+        elif response.status_code == 429 or 500 <= response.status_code < 600:
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
             raise self.retry(countdown=retry_delay)
+        if response.status_code == 404:
+            # Augmente le délai de retry avec un backoff exponentiel
+            logger.error("Serveur down ?")
+            return False
 
     except requests.exceptions.RequestException as exc:
         # Log et retry en cas d’erreur réseau ou autre exception
@@ -640,6 +648,15 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     config = Configuration.get_solo()
 
+    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
+    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    if getattr(ligne_article, "sended_to_laboutik", False) or ligne_article.status == LigneArticle.REFUNDED:
+        logger.info("refund déjà envoyé à Laboutik – skip")
+        return True
+
+    logger.info(f"send_sale_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
+
+
     # On check si le serveur cashless est bien opérationnel :
     try:
         if not config.check_serveur_cashless():
@@ -653,13 +670,12 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
-    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
-    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
-    logger.info(f"send_sale_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
 
     # On va relancer la requete vers la db tant que ligne_article n'est pas valide
-    while ligne_article.status != LigneArticle.VALID:
+    timed = 0
+    while ligne_article.status != LigneArticle.VALID and timed < 100:
         time.sleep(1)
+        timed += 1
         ligne_article.refresh_from_db()
         logger.info(f"send_sale_to_laboutik -> Ligne Article is Valid ? : {ligne_article.get_status_display()}")
 
@@ -677,7 +693,7 @@ def send_sale_to_laboutik(self, ligne_article_pk):
             },
             data=json_data,
             verify=bool(not settings.DEBUG),
-            timeout=2,
+            timeout=(5, 10),
         )
         if response.status_code == 200:
             logger.info("sended_to_laboutik = True")

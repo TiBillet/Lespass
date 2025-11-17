@@ -42,7 +42,7 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
     for ligne_article in lignes_article:
         # Chaque passage en PAID activera le pre_save triggers.LigneArticlePaid_ActionByCategorie
         # # Si toutes les lignes sont validées, ça met le paiement stripe en valid via set_paiement_stripe_valid
-        ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
+        # ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to {LigneArticle.PAID} : save()")
         ligne_article.status = LigneArticle.PAID
         ligne_article.save()
@@ -119,7 +119,8 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
 def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticle):
     logger.info(
         f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
-    send_refund_to_laboutik.delay(new_instance.pk)
+    if not new_instance.sended_to_laboutik or new_instance.status != LigneArticle.REFUNDED:
+        send_refund_to_laboutik.delay(new_instance.pk)
 
 ######################## SIGNAL RESERVATION ########################
 

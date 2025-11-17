@@ -5,7 +5,7 @@ from django.db import connection
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe, PaymentMethod
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership, \
     send_to_brevo, refill_from_lespass_to_user_wallet_from_price_solded
 from BaseBillet.templatetags.tibitags import dround
@@ -34,9 +34,10 @@ def update_sale_if_free_price(ligne_article):
 
     return ligne_article
 
-def update_membership_state_after_stripe_paiement(ligne_article):
+def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
+
     membership: Membership = paiement_stripe.membership.first()
     if not membership:
         membership = ligne_article.membership
@@ -44,7 +45,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
 
-    if price.free_price:
+    if price.free_price and ligne_article.payment_method != PaymentMethod.STRIPE_RECURENT : # pas de paiement récurrent.
         # Le montant a été entré dans stripe, on ne l'a pas entré à la création
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         # recherche du checkout
@@ -61,6 +62,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
         membership.first_contribution = timezone.now()
 
     membership.last_contribution = timezone.now()
+
     membership.stripe_paiement.add(paiement_stripe)
 
     # Si c'est une adhésion à validation manuelle :
@@ -87,7 +89,7 @@ def update_membership_state_after_stripe_paiement(ligne_article):
             if membership.max_iteration:
                 if membership.current_iteration == membership.max_iteration:
                     subscription = stripe.Subscription.modify(
-                        f"{checkout_session.subscription}",
+                        f"{membership.stripe_id_subscription}",
                         stripe_account=Configuration.get_solo().get_stripe_connect_account(),
                         cancel_at_period_end=True
                     )
@@ -192,10 +194,10 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
 
     # Categorie ADHESION
     def trigger_A(self):
-        logger.info(f"    START TRIGGER_A ADHESION PAID")
+        ligne_article: LigneArticle = self.ligne_article
+        logger.info(f"    START TRIGGER_A ADHESION PAID ligne_article.uuid : {ligne_article.uuid}")
 
         # On va chercher l'article vendu et l'adhésion associéé
-        ligne_article: LigneArticle = self.ligne_article
         membership = ligne_article.membership
 
         # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
@@ -208,7 +210,8 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
 
         # On lie le tenant à l'user, pour qu'iel soit visible dans l'admin et que les adéhsion et reservations soient visible dans my_account
         user: TibilletUser = membership.user
-        user.client_achat.add(connection.tenant)
+        if connection.tenant not in user.client_achat.all():
+            user.client_achat.add(connection.tenant)
 
         # Si l'user n'a pas de nom/prenom, on lui colle celui de l'adhésion
         if not user.first_name or not user.last_name:

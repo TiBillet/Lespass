@@ -227,7 +227,7 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
             membership=membership,
         )
         lignes_articles.append(ligne_article)
-
+        logger.info(f"new_entry_from_stripe_subscription_invoice. ligne_article : {ligne_article.uuid} {ligne_article.payment_method}")
     # on reprend les même metadata que dans BaseBillet.validators.MembershipValidator.get_checkout_stripe
     metadata = {
         'tenant': f'{tenant.uuid}',

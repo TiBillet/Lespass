@@ -2228,15 +2228,15 @@ class Paiement_stripe(models.Model):
 
     NON, OPEN, PENDING, EXPIRE, PAID, VALID, NOTSYNC, CANCELED, REFUNDED = 'N', 'O', 'W', 'E', 'P', 'V', 'S', 'C', 'R'
     STATUS_CHOICES = (
-        (NON, 'Payment link not generated'),
-        (OPEN, 'Sent to Stripe'),
-        (PENDING, 'Waiting for payment'),
-        (EXPIRE, 'Expired'),
-        (PAID, 'Paid for'),
-        (VALID, 'Paid and confirmed'),  # envoyé sur serveur cashless
-        (NOTSYNC, 'Paid but issues with Stripe sync'),  # envoyé sur serveur cashless qui retourne une erreur
-        (CANCELED, 'Cancelled'),
-        (REFUNDED, 'Refunded'),
+        (NON, _('Payment link not generated')),
+        (OPEN, _('Sent to Stripe')),
+        (PENDING, _('Waiting for payment')),
+        (EXPIRE, _('Expired')),
+        (PAID, _('Paid')),
+        (VALID, _('Paid and confirmed')),  # envoyé sur serveur cashless
+        (NOTSYNC, _('Paid but issues with LaBoutik sync')),  # envoyé sur serveur cashless qui retourne une erreur
+        (CANCELED, _('Cancelled')),
+        (REFUNDED, _('Refunded')),
     )
     status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=NON, verbose_name="Order status")
 
