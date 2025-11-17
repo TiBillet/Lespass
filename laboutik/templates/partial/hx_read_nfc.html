@@ -4,15 +4,19 @@
 <div id="confirm" role="status" aria-label="waiting primary card">
 	<!-- ref pour entrer automatiquement le tag_id par nfc.js -->
 	<input class="addition-include-data" data-ref="nfc-result-tag-id" name="tag_id" />
+	{% if uuid_transaction != '' %}
+	<!-- entrer automatiquement l'uuid de transaction -->
+	 <input type="text" class="addition-include-data" name="uuid_transaction" value="{{ uuid_transaction }}" />
+	{% endif %}
 
 	<c-spinner.nfc />
 
 	<h1>{% translate "Attente lecture carte" %}</h1>
 
 	<!-- reference(id) for the insertion of simulation buttons -->
-	<div id="nfc-simu-tag" style="z-index: 4;"></div>
+	<div id="nfc-simu-tag" style="z-index: 974;"></div>
 
-	<c-bt.return selector="#confirm" style="z-index: 4;" />
+	<c-bt.return selector="#confirm" style="z-index: 974;" />
 
 	<script>
 		// lance le lecteure nfc
@@ -44,6 +48,7 @@
 			align-items: center;
 			background-color: var(--noir01);
 			color: var(--blanc01);
+			z-index: 974;
 		}
 
 		.nfc-reader-simu-bt {

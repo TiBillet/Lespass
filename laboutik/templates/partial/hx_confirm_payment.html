@@ -1,8 +1,8 @@
 {% load static i18n %}
 
 <div id="confirm" class="BF-col">
-	<h1>{% translate "Confirmez le paiement par" %} {{ payment_method }}</h1>
-
+	<h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
+	<h3>uuid_transaction = {{uuid_transaction}}</h3>
 	{% if method == 'espece' %}
 	<div id="given-sum-container" class="BF-col">
 		<div class="info-sum-given">{% translate "somme donnée" %}</div>
@@ -15,7 +15,7 @@
 		<!-- include bt_return.html -->
 		<c-bt.return selector="#confirm" layer="2" />
 
-		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="setAndSubmitForm('{{ method }}')">
+		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="setAndSubmitForm('{{ method }}', '{{ uuid_transaction }}')">
 			<div class="bt-basic-icon">
 				<i class="fas fa-check-circle"></i>
 			</div>

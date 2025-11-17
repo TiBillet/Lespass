@@ -6,15 +6,15 @@
 	<c-spinner.nfc />
 	<h1>{{ title_nfc }}</h1>
 
-	<h3 id="message-nfc" style="z-index: 4; color: var({{ msg.color }});">
+	<h3 id="message-nfc" style="z-index: 974; color: var({{ msg.color }});">
 		{% if msg.content %}{{msg.content}}{% endif %}
 	</h3>
 
 
 	<!-- reference(id) for the insertion of simulation buttons -->
-	<div id="nfc-simu-tag" style="z-index: 4;"></div>
+	<div id="nfc-simu-tag" style="z-index: 974;"></div>
 	{% if selector %}
-	<c-bt.return selector="{{selector}}" style="z-index: 4;" />
+	<c-bt.return selector="{{selector}}" style="z-index: 974;" />
 	{% endif %}
 	<!-- lance le lecteure nfc -->
 	<script>

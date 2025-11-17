@@ -1,0 +1,2527 @@
+{
+  "pvs": [
+    {
+      "id": "0e724e72-3399-4642-8cb3-3df4eff94182",
+      "name": "Bar 1",
+      "poid_liste": 1,
+      "comportement": "A",
+      "afficher_les_prix": true,
+      "accepte_especes": true,
+      "accepte_carte_bancaire": true,
+      "accepte_cheque": false,
+      "accepte_commandes": true,
+      "service_direct": true,
+      "articles": [
+        {
+          "id": "8f08b90d-d3f0-49da-9dbd-8be795f689ef",
+          "name": "Retour Consigne",
+          "prix": -100,
+          "poid_liste": 16,
+          "categorie": {
+            "id": 4,
+            "name": "Consigne",
+            "poid_liste": 5,
+            "icon": "fa-recycle",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "RetourConsigne",
+          "methode_choices": "CR",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "consigne",
+          "bt_groupement": {
+            "methode_name": "RetourConsigne",
+            "moyens_paiement": "espece|nfc",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe2",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "67d231cd-d1c2-4bf3-ac51-18af778b4f8c",
+          "name": "Pression 33",
+          "prix": 200,
+          "poid_liste": 28,
+          "categorie": {
+            "id": 9,
+            "name": "Pression",
+            "poid_liste": 10,
+            "icon": "fa-beer",
+            "couleur_backgr": "#f6cd61",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": "https://lespass.filaos.re/static/images/biere_52x52.png",
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "pression",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "855b9cc1-3ece-488a-8783-7b782d4151fb",
+          "name": "Pression 50",
+          "prix": 250,
+          "poid_liste": 29,
+          "categorie": {
+            "id": 9,
+            "name": "Pression",
+            "poid_liste": 10,
+            "icon": "fa-beer",
+            "couleur_backgr": "#f6cd61",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "pression",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "8a75f2d2-9d3f-4ca7-9367-13b0afa19bca",
+          "name": "Eau 50cL",
+          "prix": 100,
+          "poid_liste": 30,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "7beda12d-4295-49a7-a2fd-81cce64dbeab",
+          "name": "Eau 1L",
+          "prix": 150,
+          "poid_liste": 31,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "ffec2f43-44a1-4688-aa32-2959d5fd8c00",
+          "name": "Caf\u00e9",
+          "prix": 100,
+          "poid_liste": 32,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "f372cb3e-c487-4f46-8a89-650458d7435f",
+          "name": "Soft P",
+          "prix": 100,
+          "poid_liste": 33,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "a5035dc2-17d7-496e-a614-6cd503c1e800",
+          "name": "Soft G",
+          "prix": 150,
+          "poid_liste": 34,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "e183504e-b98d-409a-9cca-618fec771f6e",
+          "name": "Guinness",
+          "prix": 499,
+          "poid_liste": 35,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "9de6ba60-d939-4658-b235-b13ea322b299",
+          "name": "Desp\u00e9",
+          "prix": 320,
+          "poid_liste": 36,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "61214857-0e75-4eee-85cb-a1d0154788cc",
+          "name": "Chimay Bleue",
+          "prix": 280,
+          "poid_liste": 37,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "6afe6ea7-38bc-4278-8024-43996c51c5e4",
+          "name": "Chimay Rouge",
+          "prix": 260,
+          "poid_liste": 38,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "12549d06-62b9-4742-8529-3cbf040783c0",
+          "name": "CdBoeuf",
+          "prix": 2500,
+          "poid_liste": 39,
+          "categorie": {
+            "id": 11,
+            "name": "Menu",
+            "poid_liste": 12,
+            "icon": "fa-hamburger",
+            "couleur_backgr": "#FF0000",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              1
+            ],
+            "tva": {
+              "name": "Run Alcool",
+              "taux": "8.50"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "menu",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "8f8bf701-10aa-4943-9368-6c1a0ccf253c",
+          "name": "Gateau",
+          "prix": 90000,
+          "poid_liste": 40,
+          "categorie": {
+            "id": 12,
+            "name": "Dessert",
+            "poid_liste": 13,
+            "icon": "fa-birthday-cake",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              1
+            ],
+            "tva": {
+              "name": "Run Resto",
+              "taux": "2.10"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "class_categorie": "dessert",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        }
+      ],
+      "icon": "fa-beer"
+    },
+    {
+      "id": "0877636e-dae1-411f-806b-87ce0560705d",
+      "name": "Resto",
+      "poid_liste": 2,
+      "comportement": "A",
+      "afficher_les_prix": true,
+      "accepte_especes": true,
+      "accepte_carte_bancaire": true,
+      "accepte_cheque": false,
+      "accepte_commandes": true,
+      "service_direct": false,
+      "articles": [
+        {
+          "id": "8f08b90d-d3f0-49da-9dbd-8be795f689ef",
+          "name": "Retour Consigne",
+          "prix": -100,
+          "poid_liste": 16,
+          "categorie": {
+            "id": 4,
+            "name": "Consigne",
+            "poid_liste": 5,
+            "icon": "fa-recycle",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "RetourConsigne",
+          "methode_choices": "CR",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "consigne",
+          "bt_groupement": {
+            "methode_name": "RetourConsigne",
+            "moyens_paiement": "espece|nfc",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe2",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "67d231cd-d1c2-4bf3-ac51-18af778b4f8c",
+          "name": "Pression 33",
+          "prix": 200,
+          "poid_liste": 28,
+          "categorie": {
+            "id": 9,
+            "name": "Pression",
+            "poid_liste": 10,
+            "icon": "fa-beer",
+            "couleur_backgr": "#f6cd61",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "pression",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "855b9cc1-3ece-488a-8783-7b782d4151fb",
+          "name": "Pression 50",
+          "prix": 250,
+          "poid_liste": 29,
+          "categorie": {
+            "id": 9,
+            "name": "Pression",
+            "poid_liste": 10,
+            "icon": "fa-beer",
+            "couleur_backgr": "#f6cd61",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "pression",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "8a75f2d2-9d3f-4ca7-9367-13b0afa19bca",
+          "name": "Eau 50cL",
+          "prix": 100,
+          "poid_liste": 30,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "7beda12d-4295-49a7-a2fd-81cce64dbeab",
+          "name": "Eau 1L",
+          "prix": 150,
+          "poid_liste": 31,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "ffec2f43-44a1-4688-aa32-2959d5fd8c00",
+          "name": "Caf\u00e9",
+          "prix": 100,
+          "poid_liste": 32,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "f372cb3e-c487-4f46-8a89-650458d7435f",
+          "name": "Soft P",
+          "prix": 100,
+          "poid_liste": 33,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "a5035dc2-17d7-496e-a614-6cd503c1e800",
+          "name": "Soft G",
+          "prix": 150,
+          "poid_liste": 34,
+          "categorie": {
+            "id": 8,
+            "name": "Soft",
+            "poid_liste": 9,
+            "icon": "fa-coffee",
+            "couleur_backgr": "#337ab7",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Restauration",
+              "taux": "10.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "soft",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "e183504e-b98d-409a-9cca-618fec771f6e",
+          "name": "Guinness",
+          "prix": 499,
+          "poid_liste": 35,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "9de6ba60-d939-4658-b235-b13ea322b299",
+          "name": "Desp\u00e9",
+          "prix": 320,
+          "poid_liste": 36,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "61214857-0e75-4eee-85cb-a1d0154788cc",
+          "name": "Chimay Bleue",
+          "prix": 280,
+          "poid_liste": 37,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "6afe6ea7-38bc-4278-8024-43996c51c5e4",
+          "name": "Chimay Rouge",
+          "prix": 260,
+          "poid_liste": 38,
+          "categorie": {
+            "id": 10,
+            "name": "Bieres Btl",
+            "poid_liste": 11,
+            "icon": "fa-wine-bottle",
+            "couleur_backgr": "#00FF00",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              2
+            ],
+            "tva": {
+              "name": "Alcool",
+              "taux": "20.00"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "bieres-btl",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "12549d06-62b9-4742-8529-3cbf040783c0",
+          "name": "CdBoeuf",
+          "prix": 2500,
+          "poid_liste": 39,
+          "categorie": {
+            "id": 11,
+            "name": "Menu",
+            "poid_liste": 12,
+            "icon": "fa-hamburger",
+            "couleur_backgr": "#FF0000",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              1
+            ],
+            "tva": {
+              "name": "Run Alcool",
+              "taux": "8.50"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "menu",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "8f8bf701-10aa-4943-9368-6c1a0ccf253c",
+          "name": "Gateau",
+          "prix": 800,
+          "poid_liste": 40,
+          "categorie": {
+            "id": 12,
+            "name": "Dessert",
+            "poid_liste": 13,
+            "icon": "fa-birthday-cake",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              1
+            ],
+            "tva": {
+              "name": "Run Resto",
+              "taux": "2.10"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "0877636e-dae1-411f-806b-87ce0560705d",
+          "class_categorie": "dessert",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        }
+      ],
+      "icon": "fa-hamburger"
+    },
+    {
+      "id": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
+      "name": "Test",
+      "poid_liste": 5,
+      "comportement": "A",
+      "afficher_les_prix": true,
+      "accepte_especes": true,
+      "accepte_carte_bancaire": true,
+      "accepte_cheque": false,
+      "accepte_commandes": true,
+      "service_direct": true,
+      "articles": [
+        {
+          "id": "c25e4191-8ac5-425d-897a-017492a13836",
+          "name": "Retour Consigne bis",
+          "prix": -100,
+          "poid_liste": 41,
+          "categorie": {
+            "id": 998,
+            "name": "angry",
+            "poid_liste": 998,
+            "icon": "fa-angry",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "RetourConsigne",
+          "methode_choices": "CR",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
+          "bt_groupement": {
+            "methode_name": "RetourConsigne",
+            "moyens_paiement": "espece|nfc",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe2",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "dcb08c46-9b0d-4aca-9de8-b50ebde80a0d",
+          "name": "Retour Consigne Rebis",
+          "prix": -100,
+          "poid_liste": 42,
+          "categorie": {
+            "id": 998,
+            "name": "angry",
+            "poid_liste": 998,
+            "icon": "fa-angry",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "RetourConsigne",
+          "methode_choices": "CR",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
+          "bt_groupement": {
+            "methode_name": "RetourConsigne",
+            "moyens_paiement": "espece|nfc",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe2",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "be5158ad-b97e-435d-9d8b-f4446f7801ae",
+          "name": "Jeux ou acteurs et non-acteurs",
+          "prix": 2100,
+          "poid_liste": 43,
+          "categorie": {
+            "id": 11,
+            "name": "Menu",
+            "poid_liste": 12,
+            "icon": "fa-hamburger",
+            "couleur_backgr": "#FF0000",
+            "couleur_texte": "#ffffff",
+            "groupements": [
+              1
+            ],
+            "tva": {
+              "name": "Run Alcool",
+              "taux": "8.50"
+            }
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
+          "class_categorie": "menu",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        }
+      ],
+      "icon": null
+    },
+    {
+      "id": "789df895-e22b-4837-828e-0fe99fb43dcf",
+      "name": "Kiosque",
+      "poid_liste": 10,
+      "comportement": "K",
+      "afficher_les_prix": true,
+      "accepte_especes": true,
+      "accepte_carte_bancaire": true,
+      "accepte_cheque": false,
+      "accepte_commandes": true,
+      "service_direct": true,
+      "articles": [],
+      "icon": null
+    },
+    {
+      "id": "12083d94-cd0e-4839-bce8-6a9838efc735",
+      "name": "Cashless",
+      "poid_liste": 200,
+      "comportement": "C",
+      "afficher_les_prix": true,
+      "accepte_especes": true,
+      "accepte_carte_bancaire": true,
+      "accepte_cheque": false,
+      "accepte_commandes": false,
+      "service_direct": true,
+      "articles": [
+        {
+          "id": "90eb4507-1c55-4d87-ad6c-bf6ccd35b532",
+          "name": "TestCoin +0.1",
+          "prix": 10,
+          "poid_liste": 8,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "96b0f7a1-e4d0-4c21-afea-4b68f08477ec",
+          "name": "TestCoin +0.5",
+          "prix": 50,
+          "poid_liste": 9,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "e247df33-d61c-4fda-b56c-33e84023ae6c",
+          "name": "TestCoin +1",
+          "prix": 100,
+          "poid_liste": 10,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "3816bf00-b2c7-41bf-a966-6d4be002af92",
+          "name": "TestCoin +5",
+          "prix": 500,
+          "poid_liste": 11,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "5198f675-883a-401f-8e0c-b56393e4d0c4",
+          "name": "TestCoin +10",
+          "prix": 1000,
+          "poid_liste": 12,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "507a89d6-e9eb-46b5-add2-5e6f2d393776",
+          "name": "TestCoin +20",
+          "prix": 2000,
+          "poid_liste": 13,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "accb493a-5fde-4e02-934e-0df8b4152791",
+          "name": "TestCoin +50",
+          "prix": 5000,
+          "poid_liste": 14,
+          "categorie": {
+            "id": 3,
+            "name": "Cashless",
+            "poid_liste": 4,
+            "icon": "fa-euro-sign",
+            "couleur_backgr": "#E64A19",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelle",
+          "methode_choices": "RE",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cashless",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelle",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe4",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "c22f80fb-d16f-475f-9fdb-3a08a18b4f6c",
+          "name": "Consigne",
+          "prix": 100,
+          "poid_liste": 15,
+          "categorie": {
+            "id": 4,
+            "name": "Consigne",
+            "poid_liste": 5,
+            "icon": "fa-recycle",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "VT",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "consigne",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "8f08b90d-d3f0-49da-9dbd-8be795f689ef",
+          "name": "Retour Consigne",
+          "prix": -100,
+          "poid_liste": 16,
+          "categorie": {
+            "id": 4,
+            "name": "Consigne",
+            "poid_liste": 5,
+            "icon": "fa-recycle",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "RetourConsigne",
+          "methode_choices": "CR",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "consigne",
+          "bt_groupement": {
+            "methode_name": "RetourConsigne",
+            "moyens_paiement": "espece|nfc",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe2",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "18496268-d8e0-472a-b550-42b6fcedf642",
+          "name": "Cashback",
+          "prix": 1050,
+          "poid_liste": 17,
+          "categorie": {
+            "id": 4,
+            "name": "Consigne",
+            "poid_liste": 5,
+            "icon": "fa-recycle",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "VenteArticle",
+          "methode_choices": "HB",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "consigne",
+          "bt_groupement": {
+            "methode_name": "VenteArticle",
+            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+            "besoin_tag_id": "nfc",
+            "groupe": "groupe1",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "7aa9d9fc-3e2f-4a4b-948a-cf47701e9035",
+          "name": "TestCoin Cadeau +0.1",
+          "prix": 10,
+          "poid_liste": 18,
+          "categorie": {
+            "id": 5,
+            "name": "Cadeau",
+            "poid_liste": 6,
+            "icon": "fa-gift",
+            "couleur_backgr": "#FF00FF",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelleCadeau",
+          "methode_choices": "RC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cadeau",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelleCadeau",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe5",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "676a91cc-9198-45a2-bbf0-b35370974a5d",
+          "name": "TestCoin Cadeau +0.5",
+          "prix": 50,
+          "poid_liste": 19,
+          "categorie": {
+            "id": 5,
+            "name": "Cadeau",
+            "poid_liste": 6,
+            "icon": "fa-gift",
+            "couleur_backgr": "#FF00FF",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelleCadeau",
+          "methode_choices": "RC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cadeau",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelleCadeau",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe5",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "2f020719-ba1f-440c-b1b5-51fc2d338749",
+          "name": "TestCoin Cadeau +1",
+          "prix": 100,
+          "poid_liste": 20,
+          "categorie": {
+            "id": 5,
+            "name": "Cadeau",
+            "poid_liste": 6,
+            "icon": "fa-gift",
+            "couleur_backgr": "#FF00FF",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelleCadeau",
+          "methode_choices": "RC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cadeau",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelleCadeau",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe5",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "c83a08ae-0ebe-410e-b9aa-c472eb7f1b44",
+          "name": "TestCoin Cadeau +5",
+          "prix": 500,
+          "poid_liste": 21,
+          "categorie": {
+            "id": 5,
+            "name": "Cadeau",
+            "poid_liste": 6,
+            "icon": "fa-gift",
+            "couleur_backgr": "#FF00FF",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelleCadeau",
+          "methode_choices": "RC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cadeau",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelleCadeau",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe5",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "6e82efae-f6b7-4eb3-a8f4-111720bd55bc",
+          "name": "TestCoin Cadeau +10",
+          "prix": 1000,
+          "poid_liste": 22,
+          "categorie": {
+            "id": 5,
+            "name": "Cadeau",
+            "poid_liste": 6,
+            "icon": "fa-gift",
+            "couleur_backgr": "#FF00FF",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelleCadeau",
+          "methode_choices": "RC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cadeau",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelleCadeau",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe5",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "c1e15bf4-ce05-4252-94cd-4f4ec2e0f7ca",
+          "name": "TestCoin Cadeau +20",
+          "prix": 2000,
+          "poid_liste": 23,
+          "categorie": {
+            "id": 5,
+            "name": "Cadeau",
+            "poid_liste": 6,
+            "icon": "fa-gift",
+            "couleur_backgr": "#FF00FF",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "AjoutMonnaieVirtuelleCadeau",
+          "methode_choices": "RC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "cadeau",
+          "bt_groupement": {
+            "methode_name": "AjoutMonnaieVirtuelleCadeau",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe5",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "f03dc538-4643-4e9c-8f17-c37977e61fcb",
+          "name": "VIDER CARTE",
+          "prix": 0,
+          "poid_liste": 24,
+          "categorie": {
+            "id": 6,
+            "name": "Danger",
+            "poid_liste": 7,
+            "icon": "fa-radiation",
+            "couleur_backgr": "#FF0000",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "ViderCarte",
+          "methode_choices": "VC",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "danger",
+          "bt_groupement": {
+            "methode_name": "ViderCarte",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe7",
+            "nb_commande_max": 1
+          }
+        },
+        {
+          "id": "817ecf5a-bb37-40f2-ba12-d8d3863e296a",
+          "name": "VOID CARTE",
+          "prix": 0,
+          "poid_liste": 25,
+          "categorie": {
+            "id": 6,
+            "name": "Danger",
+            "poid_liste": 7,
+            "icon": "fa-radiation",
+            "couleur_backgr": "#FF0000",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "ViderCarte",
+          "methode_choices": "VV",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "class_categorie": "danger",
+          "bt_groupement": {
+            "methode_name": "ViderCarte",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe7",
+            "nb_commande_max": 1
+          }
+        },
+        {
+          "id": "42ffe511-d880-4964-9b96-0981a9fe4071",
+          "name": "Paiement Fractionn\u00e9",
+          "prix": 100,
+          "poid_liste": 26,
+          "categorie": {
+            "id": 998,
+            "name": "angry",
+            "poid_liste": 998,
+            "icon": "fa-angry",
+            "couleur_backgr": "#FFFFFF",
+            "couleur_texte": "#000000",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "PaiementFractionne",
+          "methode_choices": "FR",
+          "archive": false,
+          "bt_groupement": {
+            "moyens_paiement": "",
+            "besoin_tag_id": "",
+            "groupe": "groupe888",
+            "nb_commande_max": 1000
+          }
+        }
+      ],
+      "icon": "fa-euro-sign"
+    },
+    {
+      "id": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+      "name": "Adh\u00e9sions",
+      "poid_liste": 9,
+      "comportement": "A",
+      "afficher_les_prix": true,
+      "accepte_especes": true,
+      "accepte_carte_bancaire": true,
+      "accepte_cheque": false,
+      "accepte_commandes": true,
+      "service_direct": true,
+      "articles": [
+        {
+          "id": "c57aa770-899f-4de0-96bd-27d710ee6fc8",
+          "name": "Badgeuse co-working (Le Tiers-Lustre) Passage",
+          "prix": 0,
+          "poid_liste": 2,
+          "categorie": {
+            "id": 1,
+            "name": "Badge",
+            "poid_liste": 2,
+            "icon": null,
+            "couleur_backgr": "#17a2b8",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "BG",
+          "methode_choices": "BG",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "class_categorie": "badge",
+          "bt_groupement": {
+            "methode_name": "BG",
+            "moyens_paiement": "",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe6",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "3efd3761-a8b6-4cbc-8291-156985b8c207",
+          "name": "Adh\u00e9sion (Le Tiers-Lustre) Annuelle",
+          "prix": 2000,
+          "poid_liste": 3,
+          "categorie": {
+            "id": 2,
+            "name": "Adh\u00e9sions",
+            "poid_liste": 3,
+            "icon": null,
+            "couleur_backgr": "#17a2b8",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "Adhesion",
+          "methode_choices": "AD",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "class_categorie": "adhesions",
+          "bt_groupement": {
+            "methode_name": "Adhesion",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe3",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "07192e0e-3596-417d-a2ba-ac2f3d17e566",
+          "name": "Adh\u00e9sion (Le Tiers-Lustre) Mensuelle",
+          "prix": 200,
+          "poid_liste": 4,
+          "categorie": {
+            "id": 2,
+            "name": "Adh\u00e9sions",
+            "poid_liste": 3,
+            "icon": null,
+            "couleur_backgr": "#17a2b8",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "Adhesion",
+          "methode_choices": "AD",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "class_categorie": "adhesions",
+          "bt_groupement": {
+            "methode_name": "Adhesion",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe3",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "bc489e27-c97f-49ca-a32a-7ff5af943e98",
+          "name": "Adh\u00e9sion (Le Tiers-Lustre) Prix libre",
+          "prix": 100,
+          "poid_liste": 5,
+          "categorie": {
+            "id": 2,
+            "name": "Adh\u00e9sions",
+            "poid_liste": 3,
+            "icon": null,
+            "couleur_backgr": "#17a2b8",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "Adhesion",
+          "methode_choices": "AD",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "class_categorie": "adhesions",
+          "bt_groupement": {
+            "methode_name": "Adhesion",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe3",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "2351c70b-801b-4d7d-8d0e-5ccd042b8a6a",
+          "name": "Panier AMAP (Le Tiers-Lustre) Annuelle",
+          "prix": 40000,
+          "poid_liste": 6,
+          "categorie": {
+            "id": 2,
+            "name": "Adh\u00e9sions",
+            "poid_liste": 3,
+            "icon": null,
+            "couleur_backgr": "#17a2b8",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "Adhesion",
+          "methode_choices": "AD",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "class_categorie": "adhesions",
+          "bt_groupement": {
+            "methode_name": "Adhesion",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe3",
+            "nb_commande_max": 1000
+          }
+        },
+        {
+          "id": "b3bc9e1a-ef96-4871-95f8-241b1e092696",
+          "name": "Panier AMAP (Le Tiers-Lustre) Mensuelle",
+          "prix": 4000,
+          "poid_liste": 7,
+          "categorie": {
+            "id": 2,
+            "name": "Adh\u00e9sions",
+            "poid_liste": 3,
+            "icon": null,
+            "couleur_backgr": "#17a2b8",
+            "couleur_texte": "#ffffff",
+            "groupements": [],
+            "tva": null
+          },
+          "url_image": null,
+          "couleur_texte": null,
+          "methode_name": "Adhesion",
+          "methode_choices": "AD",
+          "archive": false,
+          "afficher_les_prix": true,
+          "nom_module": "vue_pv",
+          "monnaie_principale_name": "TestCoin",
+          "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "class_categorie": "adhesions",
+          "bt_groupement": {
+            "methode_name": "Adhesion",
+            "moyens_paiement": "espece|carte_bancaire|CH",
+            "besoin_tag_id": "tout",
+            "groupe": "groupe3",
+            "nb_commande_max": 1000
+          }
+        }
+      ],
+      "icon": null
+    }
+  ],
+  "tables": [
+    {
+      "id": 1,
+      "name": "S01",
+      "poids": 1,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 2,
+      "name": "S02",
+      "poids": 2,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 3,
+      "name": "S03",
+      "poids": 3,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 4,
+      "name": "S04",
+      "poids": 4,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 5,
+      "name": "S05",
+      "poids": 5,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 6,
+      "name": "Ex01",
+      "poids": 6,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 7,
+      "name": "Ex02",
+      "poids": 7,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 8,
+      "name": "Ex03",
+      "poids": 8,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 9,
+      "name": "Ex04",
+      "poids": 9,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    },
+    {
+      "id": 10,
+      "name": "Ex05",
+      "poids": 10,
+      "position_top": 0,
+      "position_left": 0,
+      "categorie": null,
+      "statut": "L",
+      "ephemere": false,
+      "archive": false
+    }
+  ],
+  "bt_groupement": [
+    {
+      "methode_name": "VenteArticle",
+      "moyens_paiement": "espece|carte_bancaire|nfc|CH",
+      "besoin_tag_id": "nfc",
+      "groupe": "groupe1",
+      "nb_commande_max": 1000
+    },
+    {
+      "methode_name": "RetourConsigne",
+      "moyens_paiement": "espece|nfc",
+      "besoin_tag_id": "nfc",
+      "groupe": "groupe2",
+      "nb_commande_max": 1000
+    },
+    {
+      "methode_name": "Adhesion",
+      "moyens_paiement": "espece|carte_bancaire|CH",
+      "besoin_tag_id": "tout",
+      "groupe": "groupe3",
+      "nb_commande_max": 1000
+    },
+    {
+      "methode_name": "AjoutMonnaieVirtuelle",
+      "moyens_paiement": "espece|carte_bancaire|CH",
+      "besoin_tag_id": "tout",
+      "groupe": "groupe4",
+      "nb_commande_max": 1000
+    },
+    {
+      "methode_name": "AjoutMonnaieVirtuelleCadeau",
+      "moyens_paiement": "",
+      "besoin_tag_id": "tout",
+      "groupe": "groupe5",
+      "nb_commande_max": 1000
+    },
+    {
+      "methode_name": "BG",
+      "moyens_paiement": "",
+      "besoin_tag_id": "tout",
+      "groupe": "groupe6",
+      "nb_commande_max": 1000
+    },
+    {
+      "methode_name": "ViderCarte",
+      "moyens_paiement": "",
+      "besoin_tag_id": "tout",
+      "groupe": "groupe7",
+      "nb_commande_max": 1
+    },
+    {
+      "methode_name": "",
+      "moyens_paiement": "",
+      "besoin_tag_id": "",
+      "groupe": "groupe888",
+      "nb_commande_max": 1000
+    }
+  ],
+  "dummy": [
+    {
+      "id": 998,
+      "name": "angry",
+      "poid_liste": 998,
+      "icon": "fa-angry",
+      "couleur_backgr": "#FFFFFF",
+      "couleur_texte": "#000000",
+      "groupements": [],
+      "tva": null
+    }
+  ],
+  "cards": [
+    {
+      "type_card": "primary_card",
+      "tag_id": "A49E8E2A",
+      "name": "master",
+      "pvs_list": [
+        {
+          "uuid": "0e724e72-3399-4642-8cb3-3df4eff94182",
+          "name": "Bar 1",
+          "poid_liste": 1,
+          "icon": "fa-beer"
+        },
+        {
+          "uuid": "0877636e-dae1-411f-806b-87ce0560705d",
+          "name": "Resto",
+          "poid_liste": 2,
+          "icon": "fa-hamburger"
+        },
+        {
+          "uuid": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
+          "name": "Test",
+          "poid_liste": 5,
+          "icon": null
+        },
+        {
+          "uuid": "789df895-e22b-4837-828e-0fe99fb43dcf",
+          "name": "Kiosque",
+          "poid_liste": 10,
+          "icon": null
+        },
+        {
+          "uuid": "12083d94-cd0e-4839-bce8-6a9838efc735",
+          "name": "Cashless",
+          "poid_liste": 200,
+          "icon": "fa-euro-sign"
+        },
+        {
+          "uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "name": "Adh\u00e9sions",
+          "poid_liste": 9,
+          "icon": null
+        }
+      ],
+      "responsable": {
+        "name": "TERMINATOR",
+        "uuid": "17896c22-7a60-45f4-a959-175bfc8a5369",
+        "edit_mode": true
+      },
+      "wallets": 0,
+      "wallets_gift": 0,
+      "mode_gerant": true
+    },
+    {
+      "type_card": "client_card",
+      "tag_id": "41726643",
+      "name": "client1",
+      "wallets": 50,
+      "wallets_gift": 5,
+      "memberships": [
+        {
+          "uuid": "sggsghggsg45sjskhhkjshgks",
+          "name": "Panaier amap1 1 mois",
+          "range": [
+            "14/11/2025",
+            "15/12/2025"
+          ]
+        },
+        {
+          "uuid": "ghxsghggsyulmsj65hhkjsztks",
+          "name": "Adh\u00e9sion lieu",
+          "range": [
+            "14/11/2025",
+            "15/12/2026"
+          ]
+        }
+      ]
+    },
+    {
+      "type_card": "client_card",
+      "tag_id": "52BE6543",
+      "name": "client2",
+      "wallets": 0,
+      "wallets_gift": 0,
+      "memberships": []
+    },
+    {
+      "type_card": "client_card",
+      "tag_id": "33BC1DAA",
+      "name": "client3",
+      "wallets": 0,
+      "wallets_gift": 0,
+      "memberships": []
+    }
+  ],
+  "transactions": [
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "tag_id": "52BE6543",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 8.19
+      },
+      "id": "f2ccdd565f5b4290958c3b08d80f73f9"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "tag_id": "52BE6543",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "15c25f200db94e8f926735d0c722e04c"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "tag_id": "52BE6543",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "bc7a1ea8c91a41619f78b1c879f3e0b5"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "tag_id": "33BC1DAA",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "5e6e06148a984140b2b1e206e292ab0f"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 6.49,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "tag_id": "52BE6543",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 6.49
+      },
+      "id": "82f688c3afc64702a4108e4c11c4a711"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "tag_id": "52BE6543",
+        "uuid_transaction": "None",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "ee515c1a0df7445da1f468980b22e597"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "tag_id": "33BC1DAA",
+        "uuid_transaction": "ee515c1a0df7445da1f468980b22e597",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "c91831f025364bcf933a5227c998cc5b"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "tag_id": "52BE6543",
+        "uuid_transaction": "None",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "76454ad509a84b729614370d3ce1155d"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "tag_id": "33BC1DAA",
+        "uuid_transaction": "76454ad509a84b729614370d3ce1155d",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "funds_insufficient": true,
+        "missing": 2.5
+      },
+      "id": "24a4460d808544e3815c242529a6e8ba"
+    }
+  ],
+  "orders": []
+}

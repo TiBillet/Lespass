@@ -58,7 +58,7 @@ function bigToFloat(value) {
  */
 function sendEvent(name, selector, data) {
 	data = data === undefined ? {} : data
-	// console.log(`-> sendEvent "${name}"  --   selector = ${selector}  -- data = ${data}`)
+	// console.log(`-> sendEvent "${name}"  --   selector = ${selector}  -- data = ${JSON.stringify(data, null, 2)}`)
 	try {
 		const event = new CustomEvent(name, { detail: data })
 		document.querySelector(selector).dispatchEvent(event)
@@ -75,10 +75,16 @@ function hideAndEmptyElement(selector) {
 	element.innerHTML = ''
 }
 
-// maj des
-function setAndSubmitForm(method) {
+// update form
+function setAndSubmitForm(method, uuidTransaction) {
+	console.log('-> setAndSubmitForm, method =', method, '  --  uuidTransaction =', uuidTransaction);
 	// modifie la valeur de l'input moyen de paiement
 	document.querySelector('#addition-moyen-paiement').value = method
+
+	// modifie la valeur de l'input uuid transaction
+	if (uuidTransaction !== '') {
+		document.querySelector('#addition-uuid-transaction').value = uuidTransaction
+	}
 
 	// Insert l'input given-sum (somme donnée) ou modifie sa valeur. 
 	const givenSumElement = document.querySelector('#given-sum')
@@ -95,9 +101,11 @@ function setAndSubmitForm(method) {
 		}
 	}
 
-	// changer l'url du POST
 	const form = document.querySelector('#addition-form')
+	// changer l'url du POST
 	form.setAttribute('hx-post', 'hx_payment')
+	// update event to submit
+	form.setAttribute('hx-trigger', 'validerPaiement')
 	// prend en compte les changement sur le formulaire
 	htmx.process(form)
 

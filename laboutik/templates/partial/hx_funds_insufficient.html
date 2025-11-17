@@ -1,0 +1,54 @@
+{% load static i18n %}
+
+<div id="messages" class="BF-col">
+	<div class="fi-title1 test-return-title">{% translate "Fonds insuffisants." %}</div>
+	<div class="fi-msg1 test-return-missing-cash">
+		{% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
+		{{ card.name }}.
+	</div>
+	<c-status-wallets monnaie-name="{{ monnaie_name }}" name="{{ card.name }}" :wallets="wallets" />
+	<div class="fi-msg1 test-returm-possible-purchase">{% translate "Achat possible par :" %}</div>
+
+	{% if payments_accepted.accepte_especes %}
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' total="{{ payment.missing }}" icon="fa-coins"
+		hx-get="hx_confirm_payment?method=espece&uuid_transaction={{ uuid_transaction }}" />
+	{% endif %}
+
+	{% if payments_accepted.accepte_carte_bancaire %}
+	<c-bt.paiement name='{% translate "CB" %}' total="{{ payment.missing }}" icon="fa-coins"
+		hx-get="hx_confirm_payment?method=carte_bancaire&uuid_transaction={{ uuid_transaction }}" />
+	{% endif %}
+
+	<c-bt.paiement name='{% translate "CASHLESS" %}' total="{{ payment.missing }}" icon="fa-address-card"
+		hx-get="hx_read_nfc?uuid_transaction={{ uuid_transaction }}" />
+
+	<!-- TODO: chèque ? -->
+	<c-bt.return />
+
+	<style>
+		#messages {
+			position: absolute;
+			left: 0;
+			top: 0;
+			width: 100%;
+			height: 100%;
+			z-index: 800;
+			color: var(--blanc01);
+			background-color: var(--rouge07);
+			font-size: 1.5rem;
+			text-align: center;
+		}
+
+		.fi-title1 {
+			font-size: 2.5rem;
+			font-weight: bold;
+			text-align: center;
+		}
+
+		.fi-msg1 {
+			font-size: 2.5rem;
+			font-weight: bold;
+			text-align: center;
+		}
+	</style>
+</div>

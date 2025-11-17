@@ -18,10 +18,17 @@ import mockData
 
 import method
 
+# db mock
+db = mockData.mockDb("./laboutik/utils/mockDb.json")
+
 data_pvs = mockData.get_data_pvs()
 
 state = {
   "version": "0.9.11",
+  "place": {
+    "name": "lieu de test",
+    "monnaie_name": "lémien" 
+  },
   "demo": {
     "active": settings.DEMO,
     "tags_id": [
@@ -33,6 +40,8 @@ state = {
     ],
   }
 }
+
+currency_data = {"cc": "EUR", "symbol": "€", "name": "European Euro"}
 
 payments_translation = {
   "nfc": _("cashless"),
@@ -210,7 +219,7 @@ def pv_route(request):
     "tables": mockData.tables,
     "table_status_colors": {"S": "--orange01", "O": "--rouge01", "L": "--vert02"},
     "title": title,
-    "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+    "currency_data": currency_data,
     "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
     "id_table": id_table,
   }
@@ -242,7 +251,7 @@ def hx_display_type_payment(request):
 
   context = {
     "moyens_paiement": moyens_paiement,
-    "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+    "currency_data": currency_data,
     "total": total,
     "mode_gerant": mode_gerant,
     "deposit_is_present": deposit_is_present,
@@ -253,13 +262,19 @@ def hx_display_type_payment(request):
 
 
 def hx_read_nfc(request):
-  context = {}
+  uuid_transaction = request.GET.get("uuid_transaction")
+  context = {"uuid_transaction": uuid_transaction}
   return render(request, "partial/hx_read_nfc.html", context)
 
 
 def hx_confirm_payment(request):
   payment_method = request.GET.get("method")
-  context = {"method": payment_method, "payment_method": payments_translation[payment_method]}
+  uuid_transaction = request.GET.get("uuid_transaction")
+  context = {
+    "method": payment_method, 
+    "payment_translation": payments_translation[payment_method],
+    "uuid_transaction": uuid_transaction
+  }
   return render(request, "partial/hx_confirm_payment.html", context)
 
 
@@ -267,27 +282,73 @@ def hx_payment(request):
   # msg_type = success, info, error, warning
   payment = request.POST.dict()
 
-  # dev
-  payment["success"] = True
-
+	# total achats
   payment["total"] = int(payment["total"]) / 100
-  if payment.get("given_sum"):
-    payment["given_sum"] = float(payment["given_sum"])
-    payment["give_back"] = payment["given_sum"] - payment["total"]
+
+  
+  # dev mock: db and payment success ?
+	# default
+
+  payment["success"] = True
+  if payment["moyen_paiement"] == "nfc" and payment.get("tag_id"):
+    tag_id = payment["tag_id"]
+    card = mockData.get_card_from_tagid(tag_id)
+    wallets = float(card["wallets"])
+    payment["funds_insufficient"] = False
+    if payment["total"] > wallets:
+      payment["success"] = False
+      payment["funds_insufficient"] = True
+      payment["missing"] = payment["total"] - wallets
+
+    print(f'card wallets = {wallets}')
+    print(f'funds_insufficient = {payment["funds_insufficient"]}')
 
   print(f"-------- payment = ${payment}")
 
   if payment["success"]:
+	  # somme donnée
+    if payment.get("given_sum"):
+      payment["given_sum"] = float(payment["given_sum"])
+      payment["give_back"] = payment["given_sum"] - payment["total"]
+
+
     context = {
-      "title": _("Transaction ok"),
-      "msg_type": "success",
-      "currency_data": {"cc": "EUR", "symbol": "€", "name": "European Euro"},
+      "currency_data": currency_data,
       "payment": payment,
       "moyen_paiement": payments_translation[payment["moyen_paiement"]]
     }
-    return render(request, "partial/hx_return_on_payment.html", context)
+    return render(request, "partial/hx_payment_success.html", context)
 
   if payment["success"] == False:
+    print(f'-----uuid_transaction = {payment["uuid_transaction"]}')
+    if payment["funds_insufficient"]:
+      # record funds insufficient step 1
+      if payment["uuid_transaction"] == None:
+        uuid_transaction = db.add('transactions', {
+          "payment": payment
+        })
+
+      card = db.get_by_index('cards', 'tag_id', payment['tag_id'])[0]
+      pv = db.get_by_index('pvs', 'id', payment['uuid_pv'])[0]
+      # print(f"-------- uuid_transaction = {uuid_transaction}")
+      context = {
+				"currency_data": currency_data,
+      	"payment": payment,
+        "card": card,
+        "wallets": {
+          "monnaie": card["wallets"],
+          "gift_monnaie": card["wallets_gift"]
+        },
+        "monnaie_name": state["place"]["monnaie_name"],
+        "payments_accepted": {
+          "accepte_especes": pv["accepte_especes"],
+  	      "accepte_carte_bancaire": pv["accepte_carte_bancaire"],
+  	      "accepte_cheque": pv["accepte_cheque"]
+        },
+        "uuid_transaction": uuid_transaction
+			}
+      return render(request, "partial/hx_funds_insufficient.html", context)
+
     context = {
       "msg_type": "warning",
       "msg_content": "Il y a une erreur !",

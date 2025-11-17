@@ -1,16 +1,18 @@
-from django.conf import settings
-from pathlib import Path
+# from django.conf import settings
 import json
 import uuid
 
+#dev
+settings = {
+  "DEMO_TAGID_CM": "GHTRDFRT",
+  "DEMO_TAGID_CLIENT1": "1",
+  "DEMO_TAGID_CLIENT2": "2",
+  "DEMO_TAGID_CLIENT3": "3",
+  "DEMO_TAGID_UNKNOWN": "XXXXXXXX"
+}
+
 nombreMaxSelectionArticle = 1000
 
-group_Unkown_articles = {
-	"moyens_paiement": "",
-	"besoin_tag_id": "",
-	"groupe": "groupe888",
-	"nb_commande_max": nombreMaxSelectionArticle
-}
 
 bt_groupement = [
 	{
@@ -1779,16 +1781,16 @@ tables = [
   }
 ]
 
-responsable = {
+responsable = [{
   "name": "TERMINATOR",
   "uuid": "17896c22-7a60-45f4-a959-175bfc8a5369",
   "edit_mode": True,
-}
+}]
 
 cards = [
 	{
 		"type_card": "primary_card",
-		"tag_id": settings.DEMO_TAGID_CM,
+		"tag_id": settings["DEMO_TAGID_CM"],
 		"name": "master",
 		"pvs_list": [
 			{"uuid": "0e724e72-3399-4642-8cb3-3df4eff94182", "name": "Bar 1", "poid_liste": 1, "icon": "fa-beer"},
@@ -1805,7 +1807,7 @@ cards = [
 	},
   {
 		"type_card": "client_card",
-		"tag_id": settings.DEMO_TAGID_CLIENT1,
+		"tag_id": settings["DEMO_TAGID_CLIENT1"],
 		'name': 'client1',
 		'wallets': 50,
 		'wallets_gift': 5,
@@ -1824,7 +1826,7 @@ cards = [
 	},
   {
 		"type_card": "client_card",
-		"tag_id": settings.DEMO_TAGID_CLIENT2,
+		"tag_id": settings["DEMO_TAGID_CLIENT2"],
 		'name': 'client2',
 		'wallets': 0,
 		'wallets_gift': 0,
@@ -1832,7 +1834,7 @@ cards = [
 	},
   {
 		"type_card": "client_card",
-		"tag_id": settings.DEMO_TAGID_CLIENT3,
+		"tag_id": settings["DEMO_TAGID_CLIENT3"],
 		'name': 'client3',
 		'wallets': 0,
 		'wallets_gift': 0,
@@ -1840,11 +1842,10 @@ cards = [
 	},
 ]
 
-
 # dummy default category, replace categorie = None
 categoriy_angry = {
 	"id": 998,
-  "name": "angry",
+  "name": "categoriy_angry",
   "poid_liste": 998,
   "icon": "fa-angry",
   "couleur_backgr": "#FFFFFF",
@@ -1853,130 +1854,24 @@ categoriy_angry = {
   "tva": None
 }
 
-# maj data
-def fixe_pv(pv):
-	for article in pv['articles']:
-		# pas de categorie
-		if article['categorie'] == None:
-			article['categorie'] = categoriy_angry
-
-		# pas de fond
-		if article['categorie']['couleur_backgr'] == None:
-			article['categorie']['couleur_backgr'] = '#17a2b8'
-
-		# pas de couleur texte
-		if article['categorie']['couleur_texte'] == None:
-			article['categorie']['couleur_texte'] = '#ffffff'
-
-		# prix * 100
-		article['prix'] = int(article['prix'] * 100)
-
-		# ajout des groupement de boutons(articles)
-		new_group = group_Unkown_articles
-		for group in bt_groupement:
-			if article['methode_name'] == group['methode_name']:
-				new_group = group
-				break
-		article['bt_groupement'] = new_group
-
-
-def get_data_pvs():
-	for pv in pvs:
-		fixe_pv(pv)
-	return pvs
-
-# id catégorie unique et triage par poid
-def filter_categories(pv):
-	testIdem = []	
-	categories = []
-	for article in pv['articles']:
-		# print(f"article['categorie'] = {article['categorie']}")
-		if article['categorie'] == None:
-			cat = categoriy_angryretour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
-		else:
-			cat = article['categorie']
-
-		if cat['id'] not in testIdem:
-			testIdem.append(cat['id'])
-			categories.append(cat)
-
-	retour = sorted(categories, key=lambda x: x['poid_liste'])
-	testIdem = None
-	categories = None
-	return retour 
-
-
-def get_card_from_tagid(tag_id):
-	# retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
-	retour = {"type_card": "unknown"}
-	for card in cards:
-		if card["tag_id"] == tag_id:
-			retour = card
-			break
-	return retour
-
-def get_pv_from_uuid(uuid, pvs):
-	retour = {}
-	for pv in pvs:
-		if pv["id"] == uuid:
-			retour = pv
-			break
-	return retour
-
-def get_table_by_id(id):
-	retour = None
-	for table in tables:
-		if table["id"] == id:
-			retour = table
-			break
-	return retour
-
-def get_article_from_uuid(uuid_article, articles):
-	retour = None
-	for article in articles:
-		if (uuid_article == article['id']):
-			retour = article
-			break
-	return retour
-
-def get_uuid():
-  return uuid.uuid4().hex
-
-def init_db():
-  new_db = {}
-  new_db["pvs"] = pvs
-  new_db["tables"] = tables
-  new_db["bt_groupement"] = bt_groupement
-  new_db["dummy"] = [categoriy_angry]
-  new_db["cards"] = cards
-  new_db["transactions"] = []
-  new_db["orders"] = []
-  return new_db
 
 class mockDb:
   def __init__(self, db_path):
-    try:
-      self.db_path = db_path
-      db_file = Path(db_path)
-      if db_file.is_file() == False:
-        new_db = init_db()
-        self.data = new_db
-        json_str = json.dumps(new_db, indent=2)
-        with open(self.db_path, "w") as f:
-          f.write(json_str)
-      else:
-        # Read from file and parse JSON
-        with open(self.db_path, "r") as file:
-          data = json.load(file)
-        self.data =  data
-    except Exception as error:
-      print(f"reset db, error: {error}")
-      self.data = {}
+    self.db_path = db_path
+    # Read from file and parse JSON
+    with open(self.db_path, "r") as file:
+      data = json.load(file)
+    self.data =  data
 
   def reset(self):
     try:
       print("-> reset db")
-      new_db = init_db()
+      new_db = {}
+      new_db["pvs"] = pvs
+      new_db["tables"] = tables
+      new_db["bt_groupement"] = bt_groupement
+      new_db["dummy"] = [categoriy_angry]
+      new_db["cards"] = cards
       self.data = new_db
       json_str = json.dumps(new_db, indent=2)
       with open(self.db_path, "w") as f:
@@ -1998,13 +1893,13 @@ class mockDb:
 
   def add(self, table, obj):
     try:
-      id = uuid.uuid4().hex
-      obj['id'] = id
+      uuid = uuid.uuid4().hex
+      obj['id'] = uuid
       self.data[table].append(obj)
       self.write_json(self.data)
-      return id 
+      return uuid 
     except Exception as error:
-      print(f"add db, error: {error}")
+      print(f"save db, error: {error}")
       return False
 
   def del_by_id(self, table, value):
@@ -2057,17 +1952,17 @@ class mockDb:
     for table in self.data:
       print(f"- {table}")
 
-
-# db = mockDb("./laboutik/utils/mockDb.json")
+# resetDb()
+db = mockDb("mockDb.json")
 # db.reset()
 # create_table = db.create_table('users')
-# tables = db.get_all('tables')
+tables = db.get_all('tables')
 # users = db.add('users', {"email": "fil@sfr.fr", "passwd": "gggskhkhskhkhkhkshkhs"})
 # users = db.add('users', {"email": "fil@sfr.fr", "passwd": "gggskhkhskhkhkhkshkhs"})
 # users = db.add('users', {"email": "roan@sfr.fr", "passwd": "kkkskxxxxkhkhkhkshkhs"})
 # del_table = db.del_by_id('users', '2f17cfccceda4fc78c662d556fa25af2')
-# print(f"tables = {tables}")
-# print("-------------------------------------------------------------")
+print(f"tables = {tables}")
+print("-------------------------------------------------------------")
 # print(f"del_table = {del_table}")
-# print("-------------------------------------------------------------")
-# db.list_tables()
+print("-------------------------------------------------------------")
+db.list_tables()
