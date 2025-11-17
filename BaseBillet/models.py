@@ -1100,6 +1100,10 @@ class Price(models.Model):
                                                  verbose_name=_("Max number of recurrences"),
                                                  help_text=_(
                                                      "A rate with a monthly period and iterations=2 will last two months with two payments: one on day D and another the following month."))
+    commitment = models.BooleanField(default=False,
+                                     verbose_name=_("Commitment to the duration of the iteration."),
+                                     help_text=_("If checked, the user will not be able to cancel the automatic debit from their account. You will always be able to interrupt the automatic debit on the Stripe interface.")
+                                     )
 
     manual_validation = models.BooleanField(default=False,
                                             verbose_name=_("Need manual validation"),

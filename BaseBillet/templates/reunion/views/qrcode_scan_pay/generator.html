@@ -12,7 +12,7 @@
                     <!-- Display generated QR code -->
                     <div class="card">
                         <div class="card-header bg-success text-white">
-                            <h3 class="text-center">{% translate 'QR Code Generated' %}</h3>
+                            <h3 class="text-center">Paiement</h3>
                         </div>
                         <div class="card-body">
                             <div class="alert alert-success mb-4">
@@ -312,11 +312,11 @@
                     <!-- QR Code Generator Form -->
                     <div class="card">
                         <div class="card-header bg-primary text-white">
-                            <h3 class="text-center">{% translate 'Generate Payment QR Code' %}</h3>
+                            <h3 class="text-center">Initier un paiement</h3>
                         </div>
                         <div class="card-body">
                             <p class="lead text-center mb-4">
-                                {% translate 'Fill in the details below to generate a payment QR code' %}
+                                Remplissez les informations ci-dessous pour initier un paiement.
                             </p>
                             
                             <form method="post" action="{% url 'qrcodescanpay-generate-qrcode' %}">
@@ -351,7 +351,7 @@
                                 <div class="d-grid gap-2">
                                     <button type="submit" class="btn btn-success btn-lg">
                                         <i class="bi bi-qr-code me-2"></i>
-                                        {% translate 'Generate QR Code' %}
+                                        Initier un paiement
                                     </button>
                                     
                                     <a href="{% url 'my_account-list' %}" class="btn btn-outline-secondary">

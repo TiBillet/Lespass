@@ -1208,7 +1208,9 @@ class PriceAdmin(ModelAdmin):
     form = PriceChangeForm
 
     conditional_fields = {
-        "max_per_user": "free_price == false"
+        "max_per_user": "free_price == false",
+        "iteration": "recurring_payment == true",
+        "commitment": "iteration > 0",
     }
 
     fieldsets = (
@@ -1218,7 +1220,7 @@ class PriceAdmin(ModelAdmin):
                 'product',
                 ('prix', 'free_price'),
                 'subscription_type',
-                ('recurring_payment', 'iteration'),
+                ('recurring_payment', 'iteration', 'commitment'),
                 'manual_validation',
                 'order',
                 'max_per_user',
