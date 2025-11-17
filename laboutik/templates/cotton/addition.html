@@ -134,7 +134,11 @@
 		document.querySelector('#addition-comportement').value = ''
 		document.querySelector('#addition-total').value = '0'
 		document.querySelector('#addition-moyen-paiement').value = ''
-		// document.querySelector('#addition-uuid-transaction').value = ''
+		// sup input uuid transaction
+		const inputUuidTransactionExist = document.querySelector('input[name="uuid_transaction"]')
+		if (inputUuidTransactionExist) {
+			inputUuidTransactionExist.remove()
+		}
 	}
 
 	// écoute lévènement 'paymentIsPossible'

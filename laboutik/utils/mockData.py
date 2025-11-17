@@ -1826,7 +1826,7 @@ cards = [
 		"type_card": "client_card",
 		"tag_id": settings.DEMO_TAGID_CLIENT2,
 		'name': 'client2',
-		'wallets': 0,
+		'wallets': 1,
 		'wallets_gift': 0,
 		'memberships': []
 	},
@@ -1950,7 +1950,6 @@ def init_db():
   new_db["dummy"] = [categoriy_angry]
   new_db["cards"] = cards
   new_db["transactions"] = []
-  new_db["orders"] = []
   return new_db
 
 class mockDb:

@@ -83,7 +83,15 @@ function setAndSubmitForm(method, uuidTransaction) {
 
 	// modifie la valeur de l'input uuid transaction
 	if (uuidTransaction !== '') {
-		document.querySelector('#addition-uuid-transaction').value = uuidTransaction
+		// test input uuid transaction exist
+		const inputExist = document.querySelector('input[name="uuid_transaction"]')
+		if (inputExist === null) {
+			// premier insertion dans le dom
+			document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input type="text" class="addition-include-data" name="uuid_transaction" value="${uuidTransaction}" />`)
+		} else {
+			// maj value uniquement
+			inputExist.value = uuidTransaction
+		}
 	}
 
 	// Insert l'input given-sum (somme donnée) ou modifie sa valeur. 

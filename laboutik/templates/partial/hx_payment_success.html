@@ -6,6 +6,15 @@
 		{% translate "Total" %}({{ moyen_paiement }}) {{ payment.total }} {{ currency_data.symbol }}
 	</div>
 
+	{% if payment_card1 and payment_card1.moyen_paiement == 'nfc' %}
+	<c-status-wallets monnaie-name="{{ monnaie_name }}" name="{{ payment_card1.card_name }}" :wallets="payment_card1.wallets" />
+	{% endif %}
+
+	{% if payment.moyen_paiement == 'nfc' %}
+	<c-status-wallets monnaie-name="{{ monnaie_name }}" name="{{ payment.card_name }}" :wallets="payment.wallets" />
+	{% endif %}
+
+
 	{% if payment.given_sum %}
 	<div class="test-return-given-sum payment-msg1" style="margin-top:2rem">
 		{% translate "Somme donnée" %} {{ payment.given_sum }} {{ currency_data.symbol }}

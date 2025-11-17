@@ -1,6 +1,14 @@
 {% load static i18n %}
 
 <div id="messages" class="BF-col">
+	{% if payment.moyen_paiement == 'nfc' and step == 2 %}
+	<div class="fi-title1 test-return-title">{% translate "Fonds insuffisants" %}</div>
+	<div class="fi-title1">{% translate "sur deuxième carte" %}</div>
+	<div class="fi-msg1 test-return-missing-cash">
+		{% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
+		{{ card.name }}.
+	</div>
+	{% else %}
 	<div class="fi-title1 test-return-title">{% translate "Fonds insuffisants." %}</div>
 	<div class="fi-msg1 test-return-missing-cash">
 		{% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
@@ -23,6 +31,7 @@
 		hx-get="hx_read_nfc?uuid_transaction={{ uuid_transaction }}" />
 
 	<!-- TODO: chèque ? -->
+	{% endif %}
 	<c-bt.return />
 
 	<style>
@@ -46,7 +55,7 @@
 		}
 
 		.fi-msg1 {
-			font-size: 2.5rem;
+			font-size: 1.5rem;
 			font-weight: bold;
 			text-align: center;
 		}
