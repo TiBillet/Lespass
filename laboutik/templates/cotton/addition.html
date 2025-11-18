@@ -21,14 +21,34 @@
 	<input type="text" class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
 	<input type="text" class="addition-include-data" name="responsable" value="{{ card.name }}" />
 	<input type="text" class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
+	<input type="text" class="addition-include-data" id="nfc-tag-id" name="tag_id" />
 	<input type="text" class="addition-include-data" id="addition-comportement" name="comportement"
 		value="{{ pv.comportement }}" />
 	<input type="number" class="addition-include-data" id="addition-total" name="total" value="" />
 	<input type="text" class="addition-include-data" id="addition-moyen-paiement" name="moyen_paiement" value="" />
 	<input type="text" class="addition-include-data" id="addition-hostname-client" name="hostname_client" value="" />
+	<input type="text" class="addition-include-data" name="uuid_transaction" value="" />
+	<input type="number" class="addition-include-data" id="addition-given-sum" name="given_sum" value="" />
 </div>
 
 <script>
+	/**
+	 * Send custum event
+	 * @param {string} name event name 
+	 * @param {string} selector css selector
+	 * @param {object} data 
+	 */
+	function additionSendEvent(name, selector, data) {
+		data = data === undefined ? {} : data
+		console.log(`-> additionSendEvent "${name}" on "${selector}"`)
+		try {
+			const event = new CustomEvent(name, { detail: data })
+			document.querySelector(selector).dispatchEvent(event)
+		} catch (error) {
+			console.log('additionSendEvent,', error);
+		}
+	}
+
 	function paiementIsPossible(event) {
 		let nbArticles = 0
 		// compte le nombre d'articles dans l'addition
@@ -49,7 +69,7 @@
 			htmx.process(event.target)
 
 			// valide l'envoie du paiement
-			sendEvent('validerPaiement', '#addition-form')
+			additionSendEvent('validerPaiement', '#addition-form')
 		}
 	}
 
@@ -98,7 +118,7 @@
 		const totalAddition = calculateTotal()
 		// update input "#addition-total" and ".addition-include-data" (hx_payment)
 		document.querySelector('#addition-total').value = totalAddition
-		sendEvent('infoTotalAddition', 'body', { totalAddition })
+		additionSendEvent('infoTotalAddition', 'body', { totalAddition })
 	}
 
 	/**
@@ -120,12 +140,12 @@
 			document.querySelector(`#addition-form [name="repid-${uuid}"]`).remove()
 		}
 		// console.log('-> decrementArticle, quantityArticle =', quantityArticle)
-		sendEvent('articleIsDecrement', '#products', { uuid, quantity })
+		additionSendEvent('articleIsDecrement', '#products', { uuid, quantity })
 		const totalAddition = calculateTotal()
-		sendEvent('infoTotalAddition', 'body', { totalAddition })
+		additionSendEvent('infoTotalAddition', 'body', { totalAddition })
 	}
 
-	function resetAdditionMethod() {
+	function resetAdditionForm() {
 		// clear addition list form
 		document.querySelector('#addition-form').innerHTML = ''
 		// clear addition list lines
@@ -134,10 +154,36 @@
 		document.querySelector('#addition-comportement').value = ''
 		document.querySelector('#addition-total').value = '0'
 		document.querySelector('#addition-moyen-paiement').value = ''
-		// sup input uuid transaction
-		const inputUuidTransactionExist = document.querySelector('input[name="uuid_transaction"]')
-		if (inputUuidTransactionExist) {
-			inputUuidTransactionExist.remove()
+		document.querySelector('input[name="uuid_transaction"]').value = ''
+		document.querySelector('#addition-given-sum').value = '0'
+	}
+
+	window.manageAdditionFormHtmx = function (event) {
+		const action = event.detail
+		console.log('-> manageAdditionFormHtmx, action =', action);
+
+		const form = document.querySelector(action.form)
+
+		if (action.updateType === 'url') {
+			form.setAttribute('hx-post', action.value)
+			// ask htmx to process new changes
+			htmx.process(form)
+		}
+
+		if (action.updateType === 'trigger') {
+			form.setAttribute('hx-trigger', action.value)
+			// ask htmx to process new changes
+			htmx.process(form)
+		}
+
+		if (action.updateType === 'input') {
+			document.querySelector(action.selector).value = action.value
+			// ask htmx to process new changes
+			htmx.process(form)
+		}
+
+		if (action.updateType === 'submit') {
+			additionSendEvent(action.value, action.form, {})
 		}
 	}
 
@@ -147,8 +193,12 @@
 	// écoute lévènement 'articleIsIncremented'
 	document.querySelector('#addition').addEventListener('articleIsIncremented', updateAddition)
 
-	// écoute lévènement 'resetAddition'
-	document.querySelector('#addition').addEventListener('resetAddition', resetAdditionMethod)
+	// écoute lévènement 'resetAdditionForm'
+	document.querySelector('#addition').addEventListener('resetAdditionForm', resetAdditionForm)
+
+	// écoute lévènement 'manageAdditionFormHtmx'
+	document.querySelector('#addition').addEventListener('manageAdditionFormHtmx', manageAdditionFormHtmx)
+
 
 	document.addEventListener('DOMContentLoaded', () => {
 		// récupère le hostname du local storage

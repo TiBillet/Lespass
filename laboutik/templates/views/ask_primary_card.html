@@ -1,27 +1,30 @@
 {% extends "base.html" %}
-
 {% load static i18n %}
+<!--
 
+-->
 {% block content %}
-<div id="nfc-container">
-	<c-read-nfc :msg="msg" title-nfc='{% translate "Attente carte primaire" %}' hx-post="ask_primary_card"
-		hx-target="body" />
-	<style>
-		#nfc-container {
-			position: relative;
-			left: 0;
-			top: 0;
-			width: 100%;
-			height: 100%;
-			width: 100%;
-			height: 100%;
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-			background-color: var(--noir01);
-			color: var(--blanc01);
-		}
-	</style>
-</div>
+<c-read-nfc id="nfc-container" set="page"
+	nfc-send='{"eventName": "manageFormHtmx", "selectorForm": "#form-nfc", "actions": ["inputTagId,#nfc-tag-id","hx-trigger,nfcResult", "url,ask_primary_card", "submit"]}'>
+	<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target=".message-nfc"
+		hx-swap="innerHTML">
+		{% csrf_token %}
+		<input id="nfc-tag-id" name="tag_id" />
+	</form>
+	<h1>{% translate "Attente carte primaire" %}</h1>
+	<h3 class="message-nfc">{{msg}}</h3>
+</c-read-nfc>
 {% endblock content %}
+
+{% block css %}
+<style>
+	.message-nfc {
+		min-height: 1.5rem;
+		margin-bottom: 0.7rem;
+		font-weight: bold;
+		white-space: pre-line;
+		text-align: center;
+		color: var(--yellow00);
+	}
+</style>
+{% endblock css %}

@@ -1837,7 +1837,7 @@ cards = [
 		'wallets': 0,
 		'wallets_gift': 0,
 		'memberships': []
-	},
+	}
 ]
 
 
@@ -1905,15 +1905,6 @@ def filter_categories(pv):
 	categories = None
 	return retour 
 
-
-def get_card_from_tagid(tag_id):
-	# retour = {"type_card": "unknown", "tag_id": "unknown", "pvs_list": []}
-	retour = {"type_card": "unknown"}
-	for card in cards:
-		if card["tag_id"] == tag_id:
-			retour = card
-			break
-	return retour
 
 def get_pv_from_uuid(uuid, pvs):
 	retour = {}

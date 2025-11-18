@@ -58,7 +58,7 @@ function bigToFloat(value) {
  */
 function sendEvent(name, selector, data) {
 	data = data === undefined ? {} : data
-	// console.log(`-> sendEvent "${name}"  --   selector = ${selector}  -- data = ${JSON.stringify(data, null, 2)}`)
+	// console.log(`-> sendEvent "${name}" on "${selector}"`)
 	try {
 		const event = new CustomEvent(name, { detail: data })
 		document.querySelector(selector).dispatchEvent(event)
@@ -75,38 +75,25 @@ function hideAndEmptyElement(selector) {
 	element.innerHTML = ''
 }
 
+
 // update form
 function setAndSubmitForm(method, uuidTransaction) {
+	uuidTransaction = uuidTransaction === 'None' ? '' : uuidTransaction
 	console.log('-> setAndSubmitForm, method =', method, '  --  uuidTransaction =', uuidTransaction);
+
 	// modifie la valeur de l'input moyen de paiement
 	document.querySelector('#addition-moyen-paiement').value = method
 
 	// modifie la valeur de l'input uuid transaction
 	if (uuidTransaction !== '') {
-		// test input uuid transaction exist
-		const inputExist = document.querySelector('input[name="uuid_transaction"]')
-		if (inputExist === null) {
-			// premier insertion dans le dom
-			document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input type="text" class="addition-include-data" name="uuid_transaction" value="${uuidTransaction}" />`)
-		} else {
-			// maj value uniquement
-			inputExist.value = uuidTransaction
-		}
+		document.querySelector('input[name="uuid_transaction"]').value = uuidTransaction
 	}
 
 	// Insert l'input given-sum (somme donnée) ou modifie sa valeur. 
 	const givenSumElement = document.querySelector('#given-sum')
 	if (method === 'espece' && givenSumElement !== null) {
 		const givenSum = givenSumElement.value
-		// test input exist
-		const inputExist = document.querySelector('#addition-given-sum')
-		if (inputExist === null) {
-			// premier insertion dans le dom
-			document.querySelector('#addition-form').insertAdjacentHTML('afterend', `<input type="number" class="addition-include-data" id="addition-given-sum" name="given_sum" value="${givenSum}" />`)
-		} else {
-			// maj value uniquement
-			inputExist.value = givenSum
-		}
+		document.querySelector('#addition-given-sum').value = givenSum
 	}
 
 	const form = document.querySelector('#addition-form')
@@ -122,4 +109,32 @@ function setAndSubmitForm(method, uuidTransaction) {
 
 	// submit le formulaire
 	sendEvent('validerPaiement', '#addition-form')
+}
+
+window.manageFormHtmx = function (event) {
+	const action = event.detail
+	// console.log('-> updateFormHtmx, action =', action)
+	const form = document.querySelector(action.form)
+
+	if (action.updateType === 'url') {
+		form.setAttribute('hx-post', action.value)
+		// ask htmx to process new changes
+		htmx.process(form)
+	}
+
+	if (action.updateType === 'trigger') {
+		form.setAttribute('hx-trigger', action.value)
+		// ask htmx to process new changes
+		htmx.process(form)
+	}
+
+	if (action.updateType === 'input') {
+		document.querySelector(action.selector).value = action.value
+		// ask htmx to process new changes
+		htmx.process(form)
+	}
+
+	if (action.updateType === 'submit') {
+		sendEvent(action.value, action.form, {})
+	}
 }

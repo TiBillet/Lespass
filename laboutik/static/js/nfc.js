@@ -9,9 +9,80 @@ let NfcReader = class {
 		this.intervalIDVerifApiCordova = null
 		this.cordovaLecture = false
 		this.simuData = state.demo.tags_id
+		this.conf = null
+	}
+
+	sendCommand(eventName, form, data) {
+		// console.log('-> sendCommand form =', form, '  --  data =', data, '  --  eventName =', eventName)
+		try {
+			data['form'] = form
+			const event = new CustomEvent(eventName, { detail: data })
+			document.querySelector(form).dispatchEvent(event)
+		} catch (error) {
+			console.log('sendCommand,', error);
+		}
+	}
+
+	parseAndSendCommands(tagId, conf) {
+		try {
+			let eventTrigger = ''
+			const eventName = conf.eventName
+			const form = conf.selectorForm
+			const actions = conf.actions
+			for (let i = 0; i < actions.length; i++) {
+				const action = actions[i].split(',')
+				const updateType = action[0]
+				let obj
+				// populate input tagId
+				if (updateType === 'inputTagId') {
+					obj = {
+						updateType: 'input',
+						selector: action[1],
+						value: tagId
+					}
+				}
+				// populate input
+				if (updateType === 'input') {
+					obj = {
+						updateType: 'input',
+						selector: action[1],
+						value: action[2],
+					}
+				}
+				// populate hx-post
+				if (updateType === 'url') {
+					obj = {
+						updateType: 'url',
+						value: action[1],
+					}
+				}
+				// populate hx-trigger
+				if (updateType === 'hx-trigger') {
+					eventTrigger = action[1]
+					obj = {
+						updateType: 'hx-trigger',
+						value: action[1],
+					}
+				}
+
+				// submit
+				if (updateType === 'submit') {
+					obj = {
+						updateType: 'submit',
+						value: eventTrigger,
+					}
+				}
+
+				// send event
+				this.sendCommand(eventName,form, obj)
+			}
+		} catch (error) {
+			console.log('nfc - parseAndSendCommands :', error)
+		}
 	}
 
 	verificationTagId(tagId, uuidConnexion) {
+		const conf = this.conf
 		let msgErreurs = 0, data
 
 		// mettre tagId en majuscule
@@ -33,14 +104,7 @@ let NfcReader = class {
 
 			// envoyer le résultat du lecteur
 			if (msgErreurs === 0) {
-				// entrer la valeur dans le formulaire
-				document.querySelector('#nfc-result-tag-id').value = tagId
-				const event = new CustomEvent("nfcResult", { detail: tagId })
-				// document.querySelector('#form-nfc').dispatchEvent(event)
-				document.querySelector('body').dispatchEvent(event)
-
-				// réinitialisation de l'état du lecteur nfc
-				this.uuidConnexion = null
+				this.parseAndSendCommands(tagId, conf)
 				this.stop()
 			}
 		}
@@ -61,33 +125,12 @@ let NfcReader = class {
 		}
 	}
 
-	sendSimuNfcTagId(event) {
-		if (event.target.className === 'nfc-reader-simu-bt') {
-			// console.log('-> sendSimuNfcTagId')
-			try {
-				const tagId = event.target.getAttribute('tag-id')
-				// entrer la valeur dans les input ayant un attribut data-ref="nfc-result-tag-id"
-				document.querySelectorAll('input[data-ref="nfc-result-tag-id"]').forEach(input => {
-					input.value = tagId
-				})
-				// envoyer le résultat au formulaire
-				const newEvent = new CustomEvent("nfcResult", { detail: null })
-				// envoie sur tous les formulaires
-				document.querySelectorAll('form').forEach(form => {
-					form.dispatchEvent(newEvent)
-				})
-				this.stop()
-			} catch (error) {
-				console.log('-> sendSimuNfcTagId,', error)
-			}
-		}
-	}
-
 	/**
 	* Gestion de la réception du tagIDS et de l'uuidConnexion
 	* @param mode
 	*/
 	gestionModeLectureNfc(mode) {
+		const conf = this.conf
 		// console.log('1 -> gestionModeLectureNfc, mode =', mode)
 		this.uuidConnexion = crypto.randomUUID()
 
@@ -115,7 +158,7 @@ let NfcReader = class {
 		if (mode === 'NFCMC') {
 			this.cordovaLecture = true
 			this.intervalIDVerifApiCordova = setInterval(() => {
-				this.listenCordovaNfc()
+				this.listenCordovaNfc(conf)
 			}, 500)
 		}
 
@@ -129,12 +172,26 @@ let NfcReader = class {
       `
 			})
 			document.querySelector('#nfc-simu-tag').innerHTML = uiSimu
-			document.querySelector('#nfc-simu-tag').addEventListener('click', this.sendSimuNfcTagId.bind(this))
+
+			// bt simulation receipt tag id
+			document.querySelector('#nfc-simu-tag').addEventListener('click', (ev) => {
+				if (ev.target.className === 'nfc-reader-simu-bt') {
+					try {
+						const tagId = ev.target.getAttribute('tag-id')
+						this.parseAndSendCommands(tagId, conf)
+						this.stop()
+					} catch (error) {
+						console.log('-> simulaton tag id,', error)
+					}
+				}
+
+			})
 		}
 	}
 
-	start() {
+	start(conf) {
 		// console.log('0 -> startLecture  --  DEMO =', state.demo.active)
+		this.conf = conf
 		try {
 			if (state.demo.active) {
 				// simule

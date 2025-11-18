@@ -59,7 +59,7 @@ function resetArticles() {
 		article.querySelector('.article-lock-layer').style.display = "none"
 	})
 	// reset addition
-	sendEvent('resetAddition', '#addition', {})
+	sendEvent('resetAdditionForm', '#addition', {})
 	// total to 0 of button valider 
 	sendEvent('infoTotalAddition', 'body', { totalAddition: 0 })
 }

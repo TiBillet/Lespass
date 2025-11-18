@@ -1,5 +1,6 @@
 from django.shortcuts import render
-from django.http import JsonResponse, HttpResponseNotFound, HttpResponseNotAllowed
+from django.http import HttpResponse
+from django.template import Template, RequestContext
 from django.conf import settings
 from rest_framework import status
 from django.utils.translation import gettext as _
@@ -105,7 +106,7 @@ def hx_check_card(request):
     context["tag_id"] = tag_id
 
     # dev
-    card = mockData.get_card_from_tagid(tag_id)
+    card = db.get_by_index("cards", "tag_id", tag_id)[0]
     background = "--warning"
     card["type_card"] = "unknown"
 
@@ -119,42 +120,42 @@ def hx_check_card(request):
 
 
 def ask_primary_card(request):
-  msg = {}
   context = {"state": state, "stateJson": dumps(state), "method": request.method}
-
   if request.method == "POST":
     tag_id_cm = request.POST.get("tag_id").upper()
-    print(f"ask_primary_card, tag_id_cm = {tag_id_cm}")
 
     # dev
     carte_perdu = False
-    testCard = mockData.get_card_from_tagid(tag_id_cm)
-    print(f"-- testCard = {testCard}")
+    card = {}
+    if tag_id_cm == 'XXXXXXXX':
+      card["type_card"] = "unknown"
+    else:
+      card = db.get_by_index("cards", "tag_id", tag_id_cm)[0]
 
     # carte primaire
-    if testCard["type_card"] == "primary_card" and testCard["tag_id"] == "A49E8E2A":
+    if card["type_card"] == "primary_card" and card["tag_id"] == "A49E8E2A":
       # carte perdue
       if carte_perdu:
-        msg = {
-          "color": "--yellow00",
-          "content": _("Carte perdue ? non primaire"),
-        }
+        template = Template(_("Carte perdue ? non primaire"))
+        context = RequestContext(request)
+        return HttpResponse(template.render(context))
       else:
         # carte primaire ok => redirection
-        uuid_pv = testCard["pvs_list"][0]["uuid"]
-        print(f"laboutik - DEV | uuid pv = {uuid_pv}")
+        uuid_pv = card["pvs_list"][0]["uuid"]
         return HttpResponseClientRedirect("pv_route?uuid_pv=" + uuid_pv + "&tag_id_cm=" + tag_id_cm)
 
     # carte cliente
-    if testCard["type_card"] == "client_card":
-      print("laboutik - DEV | c'est une carte client")
-      msg = {"color": "--yellow00", "content": _("Carte non primaire")}
+    if card["type_card"] == "client_card":
+      template = Template(_("Carte non primaire"))
+      context = RequestContext(request)
+      return HttpResponse(template.render(context))
 
     # carte inconnue
-    if testCard["type_card"] == "unknown":
-      msg = {"color": "--yellow00", "content": _("Carte inconnue")}
+    if card["type_card"] == "unknown":
+      template = Template(_("Carte inconnue"))
+      context = RequestContext(request)
+      return HttpResponse(template.render(context))
 
-  context["msg"] = msg
   return render(request, "views/ask_primary_card.html", context)
 
 
@@ -173,7 +174,7 @@ def pv_route(request):
   uuid_pv = request.GET.get("uuid_pv")
   tag_id_cm = request.GET.get("tag_id_cm")
   pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
-  card = mockData.get_card_from_tagid(tag_id_cm)
+  card = db.get_by_index("cards", "tag_id", tag_id_cm)[0]
   # restaurant par défaut
   title = _("Choisir une table")
   template = "tables.html"
@@ -306,7 +307,7 @@ def hx_payment(request):
   print(f"-------- payment = ${payment}")
 
   # transaction (complémentaire)
-  uuid_transaction = payment["uuid_transaction"] if payment.get("uuid_transaction") and payment.get("uuid_transaction") != 'None' else ""
+  uuid_transaction = payment["uuid_transaction"] if payment.get("uuid_transaction") else ""
   # payment step
   step = 2
   
@@ -327,6 +328,7 @@ def hx_payment(request):
     if payment.get("given_sum"):
       payment["given_sum"] = float(payment["given_sum"])
       payment["give_back"] = payment["given_sum"] - payment["total"]
+      print(f'moyen_paiement = {payment["moyen_paiement"]}')
 
     context = {
       "currency_data": currency_data,

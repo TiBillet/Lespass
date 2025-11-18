@@ -1,38 +1,7 @@
 {% load static %}
 {% load static i18n %}
-
-<div id="confirm" role="status" aria-label="waiting primary card">
-	<!-- ref pour entrer automatiquement le tag_id par nfc.js -->
-	<input class="addition-include-data" data-ref="nfc-result-tag-id" name="tag_id" />
-	{% if uuid_transaction != '' %}
-	<!-- entrer automatiquement l'uuid de transaction -->
-	 <input type="text" class="addition-include-data" name="uuid_transaction" value="{{ uuid_transaction }}" />
-	{% endif %}
-
-	<c-spinner.nfc />
-
+<c-read-nfc id="confirm" selector="#confirm" set="partial" nfc-send='{"eventName": "manageAdditionFormHtmx", "selectorForm": "#addition-form", "actions": ["input,#addition-moyen-paiement,nfc", "inputTagId,#nfc-tag-id","hx-trigger,validerPaiement", "url,hx_payment", "submit"]}'>
 	<h1>{% translate "Attente lecture carte" %}</h1>
-
-	<!-- reference(id) for the insertion of simulation buttons -->
-	<div id="nfc-simu-tag" style="z-index: 974;"></div>
-
-	<c-bt.return selector="#confirm" style="z-index: 974;" />
-
-	<script>
-		// lance le lecteure nfc
-		window.nfc = new NfcReader()
-		nfc.start()
-		//  modification du mouen de paiement
-		document.querySelector('#addition-moyen-paiement').value = 'nfc'
-		window.formToModify = document.querySelector('#addition-form')
-		// change le trigger de form #addition-form pour "nfcResult"
-		formToModify.setAttribute('hx-trigger', 'nfcResult')
-		// changer l'url du POST
-		formToModify.setAttribute('hx-post', 'hx_payment')
-		// prend en compte les changements dynamiques sur le formulaire
-		htmx.process(formToModify)
-	</script>
-
 	<style>
 		#confirm {
 			position: absolute;
@@ -51,23 +20,6 @@
 			z-index: 974;
 		}
 
-		.nfc-reader-simu-bt {
-			width: 200px;
-			height: 70px;
-			background-color: var(--bleu04);
-			color: var(--blanc01);
-			display: flex;
-			flex-direction: row;
-			justify-content: center;
-			align-items: center;
-			font-size: 1.5rem;
-			margin-bottom: 2rem;
-			border-radius: 8px;
-			font-weight: bold;
-			white-space: pre-line;
-			text-align: center;
-		}
-
 		#message-nfc {
 			flex-direction: row;
 			justify-content: center;
@@ -77,4 +29,5 @@
 			text-align: center;
 		}
 	</style>
-</div>
+
+</c-read-nfc>

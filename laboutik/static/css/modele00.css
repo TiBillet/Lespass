@@ -185,7 +185,7 @@
 		align-items: center;
 	}
 
-	/* spinner */
+	/* spinner 
 	.spinner-container {
 		position: absolute;
 		left: 0;
@@ -219,7 +219,7 @@
 			transform: rotate(360deg);
 		}
 	}
-
+*/
 	/* pour une largeur supérieure à 600 pixels 
 	@media only screen and (width > 600px) {
 		.bt-basic-container {
