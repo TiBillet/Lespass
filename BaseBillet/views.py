@@ -1601,10 +1601,12 @@ class EventMVT(viewsets.ViewSet):
                     'tag', 'products', 'products__prices',
                 ).filter(
                     published=True,
-                    datetime__gte=timezone.localtime() - timedelta(days=1),
-                ).exclude(tag__slug__in=tenant['tag_filter']  # On prend les évènement d'aujourd'hui
-                          ).exclude(
-                    categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
+                    datetime__gte=timezone.localtime() - timedelta(days=1), # On prend les évènement a partir d'hier
+                ).exclude(
+                    tag__slug__in=tenant['tag_filter']
+                ).exclude(
+                    categorie=Event.ACTION
+                )  # Les Actions sont affichés dans la page de l'evenement parent
 
                 if tenant['tenant'] != this_tenant:  # on est pas sur le tenant d'origine, on filtre le bool private
                     events = events.filter(

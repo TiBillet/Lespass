@@ -275,7 +275,7 @@ class TicketCreator():
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
-                # pas d'objet reservation ?
+                payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
                 promotional_code=self.promo_code,
             )
@@ -629,6 +629,7 @@ class MembershipValidator(serializers.Serializer):
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price, custom_amount=custom_amount),
             membership=membership,
+            payment_method=PaymentMethod.STRIPE_NOFED,
             amount=amount,
             qty=1,
         )

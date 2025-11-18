@@ -77,7 +77,7 @@ class SaleOrigin(models.TextChoices):
     LABOUTIK = "LB", _("Cash register")
     ADMIN = "AD", _("Administration")
     EXTERNAL = "EX", _("External")
-    QRCODE_MA = "QR", _("QrCode on my account")
+    QRCODE_MA = "QR", _("QrCode or NFC")
 
 
 class PaymentMethod(models.TextChoices):
@@ -85,11 +85,11 @@ class PaymentMethod(models.TextChoices):
     CC = "CC", _("Credit card: POS terminal")
     CASH = "CA", _("Cash")
     CHEQUE = "CH", _("Check")
-    QRCODE_MA = "QR", _("QrCode on my account")
+    QRCODE_MA = "QR", _("QrCode or NFC")
     TRANSFER = "TR", _("Bank transfer")
     STRIPE_FED = "SF", _("Online: federated Stripe")
-    STRIPE_NOFED = "SN", _("Online: Stripe account")
-    STRIPE_RECURENT = "SR", _("Recurring: Stripe account")
+    STRIPE_NOFED = "SN", _("Online: Stripe")
+    STRIPE_RECURENT = "SR", _("Recurring: Stripe")
     LOCAL_EURO = 'LE', _("Asset local fiat")
     LOCAL_GIFT = 'LG', _("Asset local gift")
 

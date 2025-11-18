@@ -68,7 +68,7 @@
                                        name="custom_amount"
                                        min="{{ price.prix }}"
                                        step="0.10"
-                                       placeholder="{% blocktrans with min=price.prix %}Enter the amount (minimum {{ min }}€){% endblocktrans %}"
+                                       placeholder="{% trans "Enter the amount (minimum" %} {{ min }}€)"
                                        aria-describedby="custom-amount-help-{{ price.uuid }}"
                                        required>
                                 <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
