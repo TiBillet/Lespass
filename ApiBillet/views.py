@@ -32,8 +32,9 @@ from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSe
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik
+    OptionGenerale, Membership, PaymentMethod, LigneArticle
+from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik, send_payment_refused_user
+from BaseBillet.tasks import send_membership_sepa_pending_user
 from Customers.models import Client
 from PaiementStripe.views import new_entry_from_stripe_subscription_invoice
 from TiBillet import settings
@@ -1032,14 +1033,14 @@ class Webhook_stripe(APIView):
 
 
         ##################
-        # 3 Type de webhook possible :
-        # - Checkout session completed.
+        # 4 Type de webhook possible :
+        # - Checkout session completed et async completed pour les SEPA
         # - Transfert stripe compte à compte
         # - invoice paid pour un paiement récurrent
         ##################
 
         # c'est une requete depuis un webhook stripe
-        if payload.get('type') == "checkout.session.completed":
+        if payload.get('type') == "checkout.session.completed" or payload.get('type') == "checkout.session.async_payment_succeeded":
             if "return_refill_wallet" in payload["data"]["object"]["success_url"]:
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
@@ -1063,7 +1064,61 @@ class Webhook_stripe(APIView):
                     return Response(f"Traitement en cours : {paiement_stripe.get_status_display()}", status=status.HTTP_208_ALREADY_REPORTED)
 
                 paiement_stripe.update_checkout_status() # mets à jour l'objet stripe.subscription si besoin
+
                 paiement_stripe.refresh_from_db()
+
+                # Si c'est un paiement SEPA en attente, on envoie un mail via Celery pour prévenir
+                if paiement_stripe.status == Paiement_stripe.PENDING:
+                    first_ligne = paiement_stripe.lignearticles.first()
+                    if first_ligne and first_ligne.payment_method == PaymentMethod.STRIPE_SEPA_NOFED:
+                        # Envoi d'un email FALC pour informer l'utilisateur.
+                        # Objectif: dire simplement que la demande est prise en compte
+                        # et que l'adhésion sera active après réception du prélèvement SEPA.
+                        try:
+                            # On peut avoir plusieurs lignes. On cible les lignes d'adhésion.
+                            memberships = set()
+                            for ligne in paiement_stripe.lignearticles.all():
+                                if getattr(ligne, 'membership', None):
+                                    memberships.add(ligne.membership)
+
+                            # Envoi un mail par adhésion (en pratique, souvent 1)
+                            for membership in memberships:
+                                send_membership_sepa_pending_user.delay(str(membership.uuid))
+                        except Exception as e:
+                            logger.error(f"Erreur envoi email SEPA pending: {e}")
+
+
+
+                return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
+
+        elif payload.get('type') == "checkout.session.async_payment_failed":
+            if not payload["data"]["object"]["metadata"].get('tenant'):
+                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
+                return Response(f"Pas de tenant dans metadata, pas pour nous ? {payload}",
+                                status=status.HTTP_204_NO_CONTENT)
+
+            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            if tenant_uuid_in_metadata == "payment_link" :
+                return Response(f"Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
+
+            tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+            with tenant_context(tenant):
+                paiement_stripe = Paiement_stripe.objects.get(
+                    checkout_session_id_stripe=payload['data']['object']['id'])
+                logger.info(
+                    f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')} - with tenant_context({tenant}) -> paiment_stripe_validator")
+
+                if paiement_stripe.traitement_en_cours:
+                    return Response(f"Traitement en cours : {paiement_stripe.get_status_display()}", status=status.HTTP_208_ALREADY_REPORTED)
+
+
+                paiement_stripe.update_checkout_status() # mets à jour l'objet stripe.subscription si besoin
+                paiement_stripe.status = Paiement_stripe.FAILED
+                paiement_stripe.lignearticles.all().update(status=LigneArticle.FAILED)
+                paiement_stripe.save()
+
+                # envoyer ici le mail d'echec de paiement
+                send_payment_refused_user.delay(str(paiement_stripe.uuid))
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 
 

@@ -88,7 +88,8 @@ class PaymentMethod(models.TextChoices):
     QRCODE_MA = "QR", _("QrCode or NFC")
     TRANSFER = "TR", _("Bank transfer")
     STRIPE_FED = "SF", _("Online: federated Stripe")
-    STRIPE_NOFED = "SN", _("Online: Stripe")
+    STRIPE_NOFED = "SN", _("Online: Stripe CC")
+    STRIPE_SEPA_NOFED = "SP", _("Online: Stripe SEPA")
     STRIPE_RECURENT = "SR", _("Recurring: Stripe")
     LOCAL_EURO = 'LE', _("Asset local fiat")
     LOCAL_GIFT = 'LG', _("Asset local gift")
@@ -656,6 +657,11 @@ class Configuration(SingletonModel):
     # A degager, on utilise uniquement le stripe account connect
     stripe_api_key = models.CharField(max_length=110, blank=True, null=True)
     stripe_test_api_key = models.CharField(max_length=110, blank=True, null=True)
+
+    stripe_accept_sepa = models.BooleanField(default=False,
+                                             verbose_name=_("Accept SEPA payments"),
+                                             help_text=_("SEPA Direct Debit is a deferred payment method. Please check the current rates on the Stripe website and activate it at https://dashboard.stripe.com/settings/payment_methods. Payment validation may take between 3 and 4 business days. Currently available only for subscriptions and memberships. Contact the team if you wish to extend this option.")
+                                             )
 
     def get_stripe_api(self):
         # Test ou pas test ?
@@ -2230,12 +2236,13 @@ class Paiement_stripe(models.Model):
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, blank=True, null=True)
 
-    NON, OPEN, PENDING, EXPIRE, PAID, VALID, NOTSYNC, CANCELED, REFUNDED = 'N', 'O', 'W', 'E', 'P', 'V', 'S', 'C', 'R'
+    NON, OPEN, PENDING, EXPIRE, FAILED, PAID, VALID, NOTSYNC, CANCELED, REFUNDED = 'N', 'O', 'W', 'E', 'F', 'P', 'V', 'S', 'C', 'R'
     STATUS_CHOICES = (
         (NON, _('Payment link not generated')),
         (OPEN, _('Sent to Stripe')),
         (PENDING, _('Waiting for payment')),
         (EXPIRE, _('Expired')),
+        (FAILED, _('Failed')),
         (PAID, _('Paid')),
         (VALID, _('Paid and confirmed')),  # envoyé sur serveur cashless
         (NOTSYNC, _('Paid but issues with LaBoutik sync')),  # envoyé sur serveur cashless qui retourne une erreur
@@ -2301,12 +2308,12 @@ class Paiement_stripe(models.Model):
                 for ligne in self.lignearticles.all()])
 
     def get_checkout_session(self):
-        config = Configuration.get_solo()
+        self.config = Configuration.get_solo()
         # stripe.api_key = config.get_stripe_api()
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
         checkout_session = stripe.checkout.Session.retrieve(
             self.checkout_session_id_stripe,
-            stripe_account=config.get_stripe_connect_account()
+            stripe_account=self.config.get_stripe_connect_account()
         )
         return checkout_session
 
@@ -2316,6 +2323,7 @@ class Paiement_stripe(models.Model):
         """
 
         self.refresh_from_db()
+
         if self.status == Paiement_stripe.VALID:
             return self.status
 
@@ -2325,12 +2333,27 @@ class Paiement_stripe(models.Model):
         checkout_session = self.get_checkout_session()
         metadata = checkout_session.metadata
 
+        # On vérifie le moyen de paiement. C'est peut être un SEPA
+        if checkout_session.get('payment_method_types') :
+            if 'sepa_debit' in checkout_session.get('payment_method_types'):
+                payment_intent_id = checkout_session.get('payment_intent')
+                if payment_intent_id :
+                    payment_intent = stripe.PaymentIntent.retrieve(
+                        payment_intent_id,
+                        stripe_account=self.config.get_stripe_connect_account()
+                    )
+                    if 'sepa_debit' in payment_intent.get('payment_method_options') and 'sepa_debit' in payment_intent.get('payment_method_types'):
+                        self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
+
+
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
             self.status = Paiement_stripe.PENDING
             # Si le paiement est expiré
             if datetime.now().timestamp() > checkout_session.expires_at:
                 self.status = Paiement_stripe.EXPIRE
+
+
 
         elif checkout_session.payment_status == "paid":
             self.status = Paiement_stripe.PAID
@@ -2405,7 +2428,7 @@ class LigneArticle(models.Model):
 
     CANCELED, REFUNDED, CREATED = 'C', 'R', 'O',
     UNPAID, PAID, FREERES = 'U', 'P', 'F'
-    VALID = 'V'
+    VALID, FAILED = 'V', 'D'
 
     TYPE_CHOICES = [
         (CANCELED, _('Cancelled')),
@@ -2415,6 +2438,7 @@ class LigneArticle(models.Model):
         (FREERES, _('Free booking')),
         (PAID, _('Paid but not confirmed')),
         (VALID, _('Confirmed')),
+        (FAILED, _('Failed')),
     ]
 
     status = models.CharField(max_length=3, choices=TYPE_CHOICES, default=CREATED,

@@ -7,6 +7,7 @@ import requests
 import stripe
 from PIL import Image
 from django.db import connection
+from django.db.transaction import atomic
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context
 from rest_framework import serializers
@@ -987,7 +988,7 @@ def create_ticket(pricesold, customer, reservation):
 
     return ticket
 
-
+@atomic
 def get_or_create_price_sold(price: Price, event: Event = None,
                              promo_code:PromotionalCode = None, custom_amount: Decimal = None,):
     """
@@ -1009,6 +1010,11 @@ def get_or_create_price_sold(price: Price, event: Event = None,
             productsold__product=price.product,
             productsold__event=event,
             prix=prix, price=price)
+    except PriceSold.MultipleObjectsReturned:
+        pricesold = PriceSold.objects.filter(
+            productsold__product=price.product,
+            productsold__event=event,
+            prix=prix, price=price).first()
     except PriceSold.DoesNotExist:
         try :
             productsold = ProductSold.objects.get(product=price.product, event=event)

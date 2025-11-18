@@ -425,7 +425,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'vat_taxe',
                 'onboard_stripe',
                 'stripe_invoice',
-                # 'stripe_mode_test',
+                'stripe_accept_sepa',
             ),
         }),
         # ('Danger !', {

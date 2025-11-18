@@ -462,6 +462,334 @@ def send_membership_pending_user(membership_uuid: str):
 
 
 @app.task
+def send_membership_sepa_pending_user(membership_uuid: str):
+    """
+    Email SEPA (FALC) pour l'utilisateur.
+    Objectif: informer simplement que la demande est prise en compte
+    et que l'adhésion sera activée après réception du prélèvement SEPA.
+
+    - Ton simple et clair (FALC).
+    - Pas de jargon technique.
+    - Utilise le template générique 'emails/email_generique.html'.
+    """
+    # Attendre légèrement au cas où la transaction/membership vient juste d'être créée
+    time.sleep(1)
+    # Récupération du membership
+    try:
+        membership = Membership.objects.get(uuid=UUID(membership_uuid))
+    except Membership.DoesNotExist:
+        logging.getLogger(__name__).warning(
+            f"send_membership_sepa_pending_user: membership {membership_uuid} introuvable")
+        return False
+
+
+@app.task
+def send_payment_error_user(paiement_stripe_uuid: str, reason: str = None):
+    """
+    Envoie un email (FALC) à l'utilisateur pour l'informer que son paiement n'a pas abouti.
+
+    - Texte simple et clair.
+    - Utilise le template dédié: 'emails/payment_error.html'.
+
+    Paramètres:
+    - paiement_stripe_uuid: UUID de l'objet Paiement_stripe (en texte)
+    - reason: texte optionnel pour préciser la raison affichée (ex: erreur technique Stripe)
+    """
+    time.sleep(1)
+    try:
+        paiement: Paiement_stripe = Paiement_stripe.objects.get(uuid=UUID(paiement_stripe_uuid))
+    except Paiement_stripe.DoesNotExist:
+        logger.error(f"send_payment_error_user: paiement {paiement_stripe_uuid} introuvable")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    try:
+        domain = tenant.get_primary_domain().domain
+    except Exception:
+        domain = os.environ.get('DOMAIN', 'tibillet.org')
+
+    # On essaye de récupérer l'utilisateur depuis le paiement, sinon depuis la première adhésion liée
+    user = paiement.user
+    membership = None
+    if not user:
+        try:
+            membership = paiement.lignearticles.filter(membership__isnull=False).first()
+            if membership:
+                membership = membership.membership
+                user = membership.user
+        except Exception:
+            membership = None
+
+    if not user or not getattr(user, 'email', None):
+        logger.warning("send_payment_error_user: aucun destinataire")
+        return False
+
+    # Logo: celui du lieu si disponible, sinon logo TiBillet
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    # Textes FALC
+    title = _(f"{config.organisation} : Paiement non abouti")
+    main_text = _("Votre paiement n'a pas abouti.")
+    # Messages complémentaires
+    main_text_2 = _("Vous pouvez réessayer plus tard.")
+    if reason:
+        main_text_2 = f"{main_text_2} " + _(f"Raison: {reason}")
+    main_text_3 = _("Vérifiez vos informations bancaires si besoin.")
+
+    # Bouton simple: Ouvrir mon espace
+    try:
+        button = {
+            'text': _("Ouvrir mon espace"),
+            'url': forge_connexion_url(user, f"https://{domain}")
+        }
+    except Exception:
+        button = None
+
+    # Informations utiles
+    # Produit/adhésion si présent
+    produit_label = None
+    if membership and getattr(membership, 'price', None):
+        try:
+            produit_label = f"{membership.price.product.name} - {membership.price.name}"
+        except Exception:
+            produit_label = _("Adhésion")
+    else:
+        try:
+            # Fallback: liste des articles
+            produit_label = paiement.articles()
+        except Exception:
+            produit_label = _("Commande")
+
+    table_info = {
+        _('Produit'): produit_label,
+        _('Montant'): f"{dround(paiement.total())} {config.currency_code}",
+        _('Date'): date_format(paiement.order_date, format='DATETIME_FORMAT', use_l10n=True),
+        _('Référence'): paiement.uuid_8(),
+    }
+
+    context = {
+        'username': (membership.member_name() if membership else None) or getattr(user, 'full_name', lambda: None)() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Paiement"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'main_text_3': main_text_3,
+        'table_info': table_info,
+        'button_color': "#cc4b37",
+        'button': button,
+        'next_text_1': _("Besoin d'aide ? Répondez à cet email."),
+        'end_text': _("Merci"),
+        'signature': _("Marvin, le robot TiBillet"),
+    }
+
+    try:
+        mail = CeleryMailerClass(
+            email=f"{user.email}",
+            title=f"{context.get('title')}",
+            template='emails/payment_error.html',
+            context=context,
+        )
+        mail.send()
+        logger.info("send_payment_error_user: mail envoyé")
+        return True
+    except Exception as e:
+        logger.error(f"send_payment_error_user: erreur d'envoi {e}")
+        return False
+
+
+@app.task
+def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
+    """
+    Envoie un email (FALC) lorsque la banque a refusé le paiement.
+
+    - Texte simple et clair.
+    - Utilise le template dédié: 'emails/payment_refused.html'.
+
+    Paramètres:
+    - paiement_stripe_uuid: UUID de l'objet Paiement_stripe (en texte)
+    - reason: texte optionnel pour préciser la raison affichée (ex: fonds insuffisants)
+    """
+    time.sleep(1)
+    try:
+        paiement: Paiement_stripe = Paiement_stripe.objects.get(uuid=UUID(paiement_stripe_uuid))
+    except Paiement_stripe.DoesNotExist:
+        logger.error(f"send_payment_refused_user: paiement {paiement_stripe_uuid} introuvable")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    try:
+        domain = tenant.get_primary_domain().domain
+    except Exception:
+        domain = os.environ.get('DOMAIN', 'tibillet.org')
+
+    # Utilisateur depuis le paiement, sinon depuis l'adhésion liée
+    user = paiement.user
+    membership = None
+    if not user:
+        try:
+            membership = paiement.lignearticles.filter(membership__isnull=False).first()
+            if membership:
+                membership = membership.membership
+                user = membership.user
+        except Exception:
+            membership = None
+
+    if not user or not getattr(user, 'email', None):
+        logger.warning("send_payment_refused_user: aucun destinataire")
+        return False
+
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    title = _(f"{config.organisation} : Paiement refusé par la banque")
+    main_text = _("La banque a refusé le paiement.")
+    main_text_2 = _("Cela peut arriver en cas de fonds insuffisants ou d'un blocage.")
+    if reason:
+        main_text_2 = f"{main_text_2} " + _(f"Raison: {reason}")
+    main_text_3 = _("Vous pouvez vérifier votre compte ou essayer un autre moyen de paiement.")
+
+    try:
+        button = {
+            'text': _("Ouvrir mon espace"),
+            'url': forge_connexion_url(user, f"https://{domain}")
+        }
+    except Exception:
+        button = None
+
+    produit_label = None
+    if membership and getattr(membership, 'price', None):
+        try:
+            produit_label = f"{membership.price.product.name} - {membership.price.name}"
+        except Exception:
+            produit_label = _("Adhésion")
+    else:
+        try:
+            produit_label = paiement.articles()
+        except Exception:
+            produit_label = _("Commande")
+
+    table_info = {
+        _('Produit'): produit_label,
+        _('Montant'): f"{dround(paiement.total())} {config.currency_code}",
+        _('Date'): date_format(paiement.order_date, format='DATETIME_FORMAT', use_l10n=True),
+        _('Référence'): paiement.uuid_8(),
+    }
+
+    context = {
+        'username': (membership.member_name() if membership else None) or getattr(user, 'full_name', lambda: None)() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Paiement"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'main_text_3': main_text_3,
+        'table_info': table_info,
+        'button_color': "#cc4b37",
+        'button': button,
+        'next_text_1': _("Besoin d'aide ? Répondez à cet email."),
+        'end_text': _("Merci"),
+        'signature': _("Marvin, le robot TiBillet"),
+    }
+
+    try:
+        mail = CeleryMailerClass(
+            email=f"{user.email}",
+            title=f"{context.get('title')}",
+            template='emails/payment_refused.html',
+            context=context,
+        )
+        mail.send()
+        logger.info("send_payment_refused_user: mail envoyé")
+        return True
+    except Exception as e:
+        logger.error(f"send_payment_refused_user: erreur d'envoi {e}")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    domain = tenant.get_primary_domain().domain
+
+    user = membership.user
+    if not user or not getattr(user, 'email', None):
+        logging.getLogger(__name__).warning(
+            "send_membership_sepa_pending_user: aucun destinataire (user/email manquant)")
+        return False
+
+    # Logo: celui du lieu si disponible, sinon logo TiBillet
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    # Contenus FALC
+    title = _(f"{config.organisation} : Votre demande est prise en compte (SEPA)")
+    main_text = _(
+        "Nous avons bien reçu votre demande d’adhésion."
+    )
+    main_text_2 = _(
+        "Vous avez choisi de payer par prélèvement SEPA. Le prélèvement peut prendre quelques jours."
+    )
+    main_text_3 = _(
+        "Votre adhésion sera active après réception du prélèvement."
+    )
+
+    # Bouton simple: Ouvrir mon espace (si l'email n'est pas validé, cela permettra aussi de se connecter)
+    button = None
+
+    # Tableau d’infos simples
+    table_info = {
+        _('Produit'): f'{membership.price.product.name} - {membership.price.name}' if membership.price else _('Adhésion'),
+        _('Montant'): f"{dround(membership.contribution_value)} {config.currency_code}",
+        _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
+    }
+
+    context = {
+        'username': membership.member_name() or user.full_name() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Adhésion"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'main_text_3': main_text_3,
+        'table_info': table_info,
+        'button_color': "#009058",
+        'button': button,
+        'next_text_1': _("Vous n’avez rien à faire. Nous vous écrirons quand ce sera validé."),
+        'end_text': _("Merci et à bientôt !"),
+        'signature': _("Marvin, le robot TiBillet"),
+    }
+
+    try:
+        send_email_generique(context=context, email=f"{user.email}")
+        logging.getLogger(__name__).info("send_membership_sepa_pending_user: mail envoyé")
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"send_membership_sepa_pending_user: erreur d'envoi {e}")
+        return False
+
+
+@app.task
 def send_membership_payment_link_user(membership_uuid: str):
     """Envoie un email à l'adhérent avec le lien de paiement Stripe après validation admin."""
     time.sleep(1)
