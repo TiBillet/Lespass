@@ -1087,8 +1087,6 @@ class Webhook_stripe(APIView):
                         except Exception as e:
                             logger.error(f"Erreur envoi email SEPA pending: {e}")
 
-
-
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 
         elif payload.get('type') == "checkout.session.async_payment_failed":
