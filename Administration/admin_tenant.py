@@ -673,19 +673,19 @@ class ProductFormFieldInlineForm(ModelForm):
         except Exception:
             pass
         # Disable the Choices input unless type is Single/Radio/Multi select
-        try:
-            ftype = getattr(self.instance, 'field_type', None)
-            selectable = ftype in (
-                ProductFormField.FieldType.SINGLE_SELECT,
-                ProductFormField.FieldType.RADIO_SELECT,
-                ProductFormField.FieldType.MULTI_SELECT,
-            )
-            if not selectable:
-                self.fields["options_csv"].widget.attrs["disabled"] = "disabled"
-                # self.fields["options_csv"].widget.attrs["placeholder"] = "Inutile"
-                # self.fields["options_csv"].widget.attrs["style"] = "display: none"
-        except Exception:
-            pass
+        # try:
+        #     ftype = getattr(self.instance, 'field_type', None)
+        #     selectable = ftype in (
+        #         ProductFormField.FieldType.SINGLE_SELECT,
+        #         ProductFormField.FieldType.RADIO_SELECT,
+        #         ProductFormField.FieldType.MULTI_SELECT,
+        #     )
+        #     if not selectable:
+        #         self.fields["options_csv"].widget.attrs["disabled"] = "disabled"
+        #         # self.fields["options_csv"].widget.attrs["placeholder"] = "Inutile"
+        #         # self.fields["options_csv"].widget.attrs["style"] = "display: none"
+        # except Exception:
+        #     pass
 
     @staticmethod
     def _parse_csv_or_json(value: str):
