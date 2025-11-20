@@ -19,7 +19,7 @@ msgstr ""
 
 #: Administration/admin_tenant.py:114 BaseBillet/views.py:598
 msgid "Please login to access this page."
-msgstr "Connectez-vous pour accéder à ce tarif."
+msgstr "Connectez-vous pour accéder à cette page."
 
 #: Administration/admin_tenant.py:170
 msgid ""
