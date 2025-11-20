@@ -2093,13 +2093,13 @@ msgstr ""
 
 #: BaseBillet/models.py:1128
 msgid "Reward user wallet on ticket scanning"
-msgstr ""
+msgstr "Charger le portefeuille de l'utilisateur.ice après le scan du billet"
 
 #: BaseBillet/models.py:1129
 msgid ""
 "If enabled, after scanning a ticket, the user wallet will receive tokens."
 msgstr ""
-"Si cette option est activée, après un paiement réussi, le portefeuille de "
+"Si cette option est activée, après le scan du billet, le portefeuille de "
 "l'utilisateur sera crédité."
 
 #: BaseBillet/models.py:1135
