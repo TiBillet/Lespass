@@ -2215,6 +2215,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'tag',
                 'options_radio',
                 'options_checkbox',
+                'reservation_button_name',
             ),
         }),
         (_('Bookings'), {

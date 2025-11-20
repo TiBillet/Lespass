@@ -28,7 +28,7 @@
                 data-bs-toggle="offcanvas"
                 data-bs-target="#bookingPanel"
                 aria-controls="bookingPanel">
-            {% translate "I want to book one or more seats" %}
+            {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
         </button>
 
         {% if not event.free_price %}

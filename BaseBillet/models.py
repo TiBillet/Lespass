@@ -1219,6 +1219,8 @@ class Event(models.Model):
                                                          verbose_name=_(
                                                              "Minimum value of cashless refill"))
 
+    reservation_button_name = models.CharField(max_length=150, blank=True, null=True, verbose_name=_("Button name for reservation"), help_text=_("If empty : I want to reserve one or more seats."))
+
     img = StdImageField(upload_to='images/',
                         blank=True, null=True,
                         variations={
