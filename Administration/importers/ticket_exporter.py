@@ -46,10 +46,14 @@ class TicketExportResource(resources.ModelResource):
     reservation_datetime = Field(column_name='reservation_datetime')
     payment_method_display = Field(attribute='get_payment_method_display', column_name='payment_method')
 
+    # Ticket fields
+    numero_uuid = Field(attribute='numero_uuid', column_name='numero_uuid')
+
     # Formbricks fields
     email = Field(attribute='reservation__user_commande__email', column_name='email')
     user_id = Field(column_name='userId')
     reservation_uuid = Field(attribute='reservation__uuid', column_name='reservation_uuid')
+
 
     # --- Dynamic columns for Reservation.custom_form ---
     def before_export(self, queryset, *args, **kwargs):
@@ -112,6 +116,7 @@ class TicketExportResource(resources.ModelResource):
             'email',
             'user_id',
             'reservation_uuid',
+            'numero_uuid',
             # 'first_name',
             # 'last_name',
             'status_display',
@@ -121,7 +126,7 @@ class TicketExportResource(resources.ModelResource):
             'reservation_datetime',
             'payment_method_display',
         )
-        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'email', 'user_id', 'reservation_uuid')
+        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'email', 'user_id', 'reservation_uuid', 'numero_uuid')
 
     def dehydrate_event_datetime(self, ticket):
         """
