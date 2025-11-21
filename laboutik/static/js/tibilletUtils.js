@@ -81,34 +81,34 @@ function setAndSubmitForm(method, uuidTransaction) {
 	uuidTransaction = uuidTransaction === 'None' ? '' : uuidTransaction
 	console.log('-> setAndSubmitForm, method =', method, '  --  uuidTransaction =', uuidTransaction);
 
-	// modifie la valeur de l'input moyen de paiement
-	document.querySelector('#addition-moyen-paiement').value = method
+	// demande au composant addition de modifier la valeur de l'input moyen de paiement
+	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'input', selector: '#addition-moyen-paiement', value: method })
 
-	// modifie la valeur de l'input uuid transaction
+	// demande au composant addition de modifier la valeur de l'input uuid transaction
 	if (uuidTransaction !== '') {
-		document.querySelector('input[name="uuid_transaction"]').value = uuidTransaction
+		sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'input', selector: 'input[name="uuid_transaction"]', value: uuidTransaction })
 	}
 
-	// Insert l'input given-sum (somme donnée) ou modifie sa valeur. 
+	// demande au composant addition de modifier la valeur de l'input given-sum (somme donnée)
 	const givenSumElement = document.querySelector('#given-sum')
 	if (method === 'espece' && givenSumElement !== null) {
-		const givenSum = givenSumElement.value
-		document.querySelector('#addition-given-sum').value = givenSum
+		// somme donnée en centimes
+		const givenSum = Number(givenSumElement.value) * 100
+		// demande au composant addition de modifier la valeur de l'input givenSum
+		sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'input', selector: '#addition-given-sum', value: givenSum })
 	}
 
-	const form = document.querySelector('#addition-form')
-	// changer l'url du POST
-	form.setAttribute('hx-post', 'hx_payment')
-	// update event to submit
-	form.setAttribute('hx-trigger', 'validerPaiement')
-	// prend en compte les changement sur le formulaire
-	htmx.process(form)
+	// demande au composant addition de modifier la valeur du hx-post (changer l'url du POST)
+	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'url', selector: '#addition-form', value: 'hx_payment' })
+	// demande au composant addition de modifier la valeur de hx-trigger
+	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'trigger', value: 'validerPaiement' })
 
 	hideAndEmptyElement('#confirm')
 	hideAndEmptyElement('#messages')
 
 	// submit le formulaire
-	sendEvent('validerPaiement', '#addition-form')
+	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'submit', value: 'validerPaiement' })
+
 }
 
 window.manageFormHtmx = function (event) {
@@ -138,3 +138,43 @@ window.manageFormHtmx = function (event) {
 		sendEvent(action.value, action.form, {})
 	}
 }
+
+// aiguillage d'eventsOrganizer :
+// - Est un objet contenant l'aiguillage de chaque évènement reçu
+// - un évènement reçu dispatch d'autres évèvement - exemple: { name: 'additionInsertArticle', selector: '#addition' }
+// - exemple: je reçois le message 'addArticle' alors j'envoie le message "additionInsertArticle"
+const switches = {
+	articlesAdd: [{ name: 'additionInsertArticle', selector: '#addition' }],
+	additionTotalChange: [{ name: 'updateBtValider', selector: '#bt-valider' }],
+	additionRemoveArticle: [{ name: 'articlesRemove', selector: '#products' }],
+	resetArticles: [{ name: 'additionReset', selector: '#addition' }, { name: 'articlesReset', selector: '#products' }],
+	articlesDisplayCategory: [{ name: 'articlesDisplayCategory', selector: '#products' }],
+}
+
+function eventsOrganizer(event) {
+	try {
+		const data = event.detail.data
+		const src = event.detail.src
+		const msg = event.detail.msg
+		console.log(`--- eventsOrganizer - ${src.file}/${src.method} ---`)
+		console.log('- msg =', msg)
+		console.log('- data =', data)
+		console.log('--------------------------------------------------------------------')
+		console.log('   ')
+
+		// récupère les "routes" d'un évènement
+		const eventSwitch = switches[msg]
+
+		// envoi les évènements
+		for (let i = 0; i < eventSwitch.length; i++) {
+			const eventData = eventSwitch[i];
+			sendEvent(eventData.name, eventData.selector, data)
+		}
+	} catch (error) {
+
+	}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+	document.querySelector('#event-organizer').addEventListener('organizerMsg', eventsOrganizer)
+})

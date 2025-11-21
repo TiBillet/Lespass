@@ -49,7 +49,8 @@ payments_translation = {
   "espece": _("espèce"),
   "carte_bancaire": _("carte bancaire"),
   "CH": _("chèque"),
-  "gift": _("cadeau")
+  "gift": _("cadeau"),
+	"": _("inconnu")
 }
 
 def login_hardware(request):
@@ -83,12 +84,12 @@ def new_hardware(request):
   devHardwareOk = True
 
   # hardware activé
-  if devHardwareOk == True:
+  if devHardwareOk:
     # Le code pin a été validé, on renvoie vers la page de login
     return HttpResponseClientRedirect("login_hardware?activation=1")
 
   # error
-  if devHardwareOk == False:
+  if not devHardwareOk:
     context = {
       "error": _(
         "Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage."
@@ -114,6 +115,7 @@ def hx_check_card(request):
       background = "--rouge06"
       error_msg = _("Carte inconnue")
 
+  context["error_msg"] = error_msg
   context["background"] = background
   # print(f"-- context = {context}")
   return render(request, "partial/hx_check_card.html", context)
@@ -284,7 +286,7 @@ def hx_payment(request):
   payment = request.POST.dict()
 
 	# total achats
-  payment["total"] = int(payment["total"]) / 100
+  payment["total"] = int(payment["total"])
 
  
   # dev mock: db and payment success ?
@@ -297,12 +299,12 @@ def hx_payment(request):
       "monnaie": card["wallets"],
       "gift_monnaie": card["wallets_gift"]
     }
-    wallets = float(card["wallets"]) + float(card["wallets_gift"]) 
+    wallets = (float(card["wallets"]) * 100) + (float(card["wallets_gift"]) * 100) 
     payment["funds_insufficient"] = False
     if payment["total"] > wallets:
       payment["success"] = False
       payment["funds_insufficient"] = True
-      payment["missing"] = payment["total"] - wallets
+      payment["missing"] = (payment["total"] - wallets) / 100
 
   print(f"-------- payment = ${payment}")
 
@@ -326,10 +328,12 @@ def hx_payment(request):
   if payment["success"]:
 	  # somme donnée
     if payment.get("given_sum"):
-      payment["given_sum"] = float(payment["given_sum"])
-      payment["give_back"] = payment["given_sum"] - payment["total"]
+      payment["give_back"] = (float(payment["given_sum"]) - float(payment["total"])) / 100
+      payment["given_sum"] = float(payment["given_sum"]) / 100
       print(f'moyen_paiement = {payment["moyen_paiement"]}')
 
+    # plus en centimes
+    payment["total"] = payment["total"] / 100
     context = {
       "currency_data": currency_data,
       "payment": payment,

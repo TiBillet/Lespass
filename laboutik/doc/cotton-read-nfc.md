@@ -48,5 +48,5 @@
 
 ## Infos
 ### NFC
-- .../laboutik/static/js/nfc.js lecture et simulation du nfc (envoie les actions de `<c-read-nfc>`)
-- .../laboutik/static/js/tibilletUtils.js, function manageFormHtmx(applique les actions de `<c-read-nfc>`)
+- .../laboutik/static/js/nfc.js - lecture et simulation du nfc (envoie les actions de `<c-read-nfc>`)
+- .../laboutik/static/js/tibilletUtils.js - function manageFormHtmx(applique les actions de `<c-read-nfc>`)

@@ -49,8 +49,12 @@
 	* Reset articles, addition list and value of button valider
 	*/
 	function manageReset() {
-		// reset articles
-		sendEvent('resetArticles', '#products', {})
+	// reset articles
+	sendEvent('organizerMsg', '#event-organizer', {
+		src: { file: 'common_user_interface.html', method: 'manageReset' },
+		msg: 'resetArticles',
+		data: {}
+	})
 	}
 
 	function updateBtValider(event) {
@@ -60,7 +64,7 @@
 
 	document.addEventListener('DOMContentLoaded', () => {
 		document.querySelector('#bt-reset').addEventListener('click', manageReset)
-		document.querySelector('body').addEventListener('infoTotalAddition', updateBtValider)
+		document.querySelector('#bt-valider').addEventListener('updateBtValider', updateBtValider)
 	})
 
 </script>

@@ -2656,6 +2656,407 @@
         "missing": 1.5
       },
       "id": "a0d281ad0ac24e4e973060a495d2a0ff"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "A",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "5",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "73d0ea5285a140f8b843168095018807"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "A",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "40",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "8fb35748196e4276bd97e59451f42c62"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "03399929a8e54eb489eddc923692e20e"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "96f60855f93e4822bc28e6415156b2aa"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "d9d9aaf929514dd9bf399f9d393e7ff1"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": 4.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -4.1899999999999995
+      },
+      "id": "8fb36cc82afe41c9b2bc6ee319db2023"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": 4.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -4.1899999999999995
+      },
+      "id": "05608cbd0145467aa7a3eda910d93c7c"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": 4.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -4.1899999999999995
+      },
+      "id": "0d64f1ff3f5b425e830b468060f92dd1"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "4",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "d510b61ccbc0444f9074100f48d1e926"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "bf609fc896f4416d88b1ff9dab8b1718"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -8.19
+      },
+      "id": "c132c98da3914fe4b031de436c738186"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "3600",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "30ff79fb5c734e50a2a3662508bf42c6"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "33BC1DAA",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client3",
+        "wallets": {
+          "monnaie": 0,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 2.0
+      },
+      "id": "fbb25a88db094e299ed36f3338138c30"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "33BC1DAA",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "400",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true
+      },
+      "id": "eeb256649fd5492a98fce387779568af"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "33BC1DAA",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "400",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true
+      },
+      "id": "5098b0165a2a42218dd12548fb790a0c"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "400",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "9eff5786a5ec49f9ac186a40a5df9d4e"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "39270a27e6944aebaabae26221ff902f"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "espece",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true,
+        "give_back": -2.0
+      },
+      "id": "7eb2940bfcd1488b9c3bee776d00f803"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "A",
+        "total": 819,
+        "moyen_paiement": "carte_bancaire",
+        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "85b8868471ee4918b0feb432cc71e8cb"
     }
   ]
 }

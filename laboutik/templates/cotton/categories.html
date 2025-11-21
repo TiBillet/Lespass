@@ -62,6 +62,29 @@
 				document.querySelector('#addition').style.display = "none"
 			}
 
+			// display select category
+			if (ele.getAttribute('data-sel') !== null) {
+				const category = ele.getAttribute('data-sel')
+
+				// dispatch event "articlesDisplayCategory"
+				sendEvent('organizerMsg', '#event-organizer', {
+					src: { file: 'categories.html', method: 'manageCategories' },
+					msg: 'articlesDisplayCategory',
+					data: { category }
+				})
+			}
+
+			// display all categories
+			if (ele.id === "category-all") {
+				// dispatch event "articlesDisplayCategory"
+				sendEvent('organizerMsg', '#event-organizer', {
+					src: { file: 'categories.html', method: 'manageCategories' },
+					msg: 'articlesDisplayCategory',
+					data: { category: 'cat-all' }
+				})
+			}
+
+			/*
 			// select all
 			if (ele.id === "category-all") {
 				// all remove category-item-active
@@ -92,6 +115,7 @@
 				})
 
 			}
+				*/
 		}
 	}
 	document.querySelector("#categories").addEventListener('click', manageCategories)

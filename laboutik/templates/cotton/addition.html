@@ -8,209 +8,23 @@
 		<div>{% translate "PRIX" %}</div>
 	</div>
 	<div id="addition-list"></div>
-	<!-- Attention:
-	 - aucun input dans #addition-form ne doit contenir "repid-" dans son attribut name, 
-	 		le formulaire est rempli automatiquement par article.js
-	 - les attributs hx-post et hx-triger sont dynamic en fonction des étapes "paiement" et "affichage des moyens de paiement"
-	-->
 	<form id="addition-form" class="hide" hx-post="hx_display_type_payment" hx-trigger="validerPaiement"
-		hx-target="#messages" hx-swap="outerHTML" hx-include='[class="addition-include-data"]'
-		hx-on::after-request="hideAndEmptyElement('#confirm')"></form>
-	<!-- hx-include -->
-	<input type="text" class="addition-include-data" name="id_table" value="{{ id_table }}" />
-	<input type="text" class="addition-include-data" name="uuid_pv" value="{{ pv.id }}" />
-	<input type="text" class="addition-include-data" name="responsable" value="{{ card.name }}" />
-	<input type="text" class="addition-include-data" name="tag_id_cm" value="{{ card.tag_id }}" />
-	<input type="text" class="addition-include-data" id="nfc-tag-id" name="tag_id" />
-	<input type="text" class="addition-include-data" id="addition-comportement" name="comportement"
-		value="{{ pv.comportement }}" />
-	<input type="number" class="addition-include-data" id="addition-total" name="total" value="" />
-	<input type="text" class="addition-include-data" id="addition-moyen-paiement" name="moyen_paiement" value="" />
-	<input type="text" class="addition-include-data" id="addition-hostname-client" name="hostname_client" value="" />
-	<input type="text" class="addition-include-data" name="uuid_transaction" value="" />
-	<input type="number" class="addition-include-data" id="addition-given-sum" name="given_sum" value="" />
+		hx-target="#messages" hx-swap="outerHTML" hx-on::after-request="hideAndEmptyElement('#confirm')">
+		<input type="text" name="id_table" value="{{ id_table }}" />
+		<input type="text" name="uuid_pv" value="{{ pv.id }}" />
+		<input type="text" name="responsable" value="{{ card.name }}" />
+		<input type="text" name="tag_id_cm" value="{{ card.tag_id }}" />
+		<input type="text" id="nfc-tag-id" name="tag_id" />
+		<input type="text" id="addition-comportement" name="comportement" value="{{ pv.comportement }}" />
+		<input type="number" id="addition-total" name="total" value="" />
+		<input type="text" id="addition-moyen-paiement" name="moyen_paiement" value="" />
+		<input type="text" id="addition-hostname-client" name="hostname_client" value="" />
+		<input type="text" name="uuid_transaction" value="" />
+		<input type="number" id="addition-given-sum" name="given_sum" value="" />
+	</form>
 </div>
 
-<script>
-	/**
-	 * Send custum event
-	 * @param {string} name event name 
-	 * @param {string} selector css selector
-	 * @param {object} data 
-	 */
-	function additionSendEvent(name, selector, data) {
-		data = data === undefined ? {} : data
-		console.log(`-> additionSendEvent "${name}" on "${selector}"`)
-		try {
-			const event = new CustomEvent(name, { detail: data })
-			document.querySelector(selector).dispatchEvent(event)
-		} catch (error) {
-			console.log('additionSendEvent,', error);
-		}
-	}
-
-	function paiementIsPossible(event) {
-		let nbArticles = 0
-		// compte le nombre d'articles dans l'addition
-		event.target.querySelectorAll('input').forEach(ele => {
-			const name = ele.getAttribute('name')
-			if (name.includes('repid-')) {
-				nbArticles++
-			}
-		})
-
-		if (nbArticles <= 0) {
-			// affiche message pas d'articles
-			document.querySelector('#message-no-article').classList.remove('hide')
-		} else {
-			// préparation post type de paiement
-			event.target.setAttribute('hx-post', 'hx_display_type_payment')
-			event.target.setAttribute('hx-trigger', 'validerPaiement')
-			htmx.process(event.target)
-
-			// valide l'envoie du paiement
-			additionSendEvent('validerPaiement', '#addition-form')
-		}
-	}
-
-	/**
-	* total in unit cents
-	* @returns {Number} total articles
-	*/
-	function calculateTotal() {
-		total = 0
-		document.querySelectorAll('#addition-form input').forEach(input => {
-			if (input.name.includes('repid-')) {
-				const uuid = input.name.substring(6)
-				const number = parseInt(input.value)
-				const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
-				const price = parseInt(article.dataset.price)
-				total = total + (number * price)
-			}
-		})
-		return total
-	}
-
-	function updateAddition({ detail }) {
-		const { uuid, price, quantity, name, currency } = detail
-		// console.log('-> updateAddition, uuid =', uuid, '  --  price =', price, '  --  quantity =', quantity)
-		// input in form
-		const input = document.querySelector(`#addition-form [name="repid-${uuid}"]`)
-		if (input === null) {
-			// create input if not exist
-			document.querySelector('#addition-form').insertAdjacentHTML('beforeend', `<input type="number" name="repid-${uuid}" value="1" />`)
-			// create the addition list line - css are in components/addition.html
-			const additionLine = `<div id="addition-line-${uuid}" data-quantity="${quantity}" data-price="${uuid}" class="addition-line-grid">
-				<div class="addition-col-bt BF-col">
-					<i class="fas fa-minus-square" onclick="decrementArticle('${uuid}');" title="Enlever un article !"></i>
-				</div>
-				<div id="addition-quantity-${uuid}" class="addition-col-quantity BF-col">${quantity}</div>
-				<div class="addition-col-name BF-col">${name}</div>
-				<div class="addition-col-price BF-col">${price / 100}${currency}</div>
-			`
-			document.querySelector('#addition-list').insertAdjacentHTML('beforeend', additionLine)
-		} else {
-			// update input only
-			input.value = Number(quantity)
-			// addition line column quantity
-			document.querySelector(`#addition-line-${uuid} .addition-col-quantity`).innerText = quantity
-		}
-		const totalAddition = calculateTotal()
-		// update input "#addition-total" and ".addition-include-data" (hx_payment)
-		document.querySelector('#addition-total').value = totalAddition
-		additionSendEvent('infoTotalAddition', 'body', { totalAddition })
-	}
-
-	/**
-	* decrement the quantity of article in the addition list and input in #addition-form
-	* @param {String} uuid - uuid article 
-	*/
-	function decrementArticle(uuid) {
-		const eleQuantity = document.querySelector(`#addition-quantity-${uuid}`)
-		let quantity = Number(eleQuantity.innerText)
-		quantity--
-		// addition list
-		eleQuantity.innerText = quantity
-		// #addition-form
-		document.querySelector(`#addition-form [name="repid-${uuid}"]`).value = Number(quantity)
-		if (quantity === 0) {
-			// addition list
-			document.querySelector(`#addition-line-${uuid}`).remove()
-			// #addition-form
-			document.querySelector(`#addition-form [name="repid-${uuid}"]`).remove()
-		}
-		// console.log('-> decrementArticle, quantityArticle =', quantityArticle)
-		additionSendEvent('articleIsDecrement', '#products', { uuid, quantity })
-		const totalAddition = calculateTotal()
-		additionSendEvent('infoTotalAddition', 'body', { totalAddition })
-	}
-
-	function resetAdditionForm() {
-		// clear addition list form
-		document.querySelector('#addition-form').innerHTML = ''
-		// clear addition list lines
-		document.querySelector('#addition-list').innerHTML = ''
-		// inputs = ''
-		document.querySelector('#addition-comportement').value = ''
-		document.querySelector('#addition-total').value = '0'
-		document.querySelector('#addition-moyen-paiement').value = ''
-		document.querySelector('input[name="uuid_transaction"]').value = ''
-		document.querySelector('#addition-given-sum').value = '0'
-	}
-
-	window.manageAdditionFormHtmx = function (event) {
-		const action = event.detail
-		console.log('-> manageAdditionFormHtmx, action =', action);
-
-		const form = document.querySelector(action.form)
-
-		if (action.updateType === 'url') {
-			form.setAttribute('hx-post', action.value)
-			// ask htmx to process new changes
-			htmx.process(form)
-		}
-
-		if (action.updateType === 'trigger') {
-			form.setAttribute('hx-trigger', action.value)
-			// ask htmx to process new changes
-			htmx.process(form)
-		}
-
-		if (action.updateType === 'input') {
-			document.querySelector(action.selector).value = action.value
-			// ask htmx to process new changes
-			htmx.process(form)
-		}
-
-		if (action.updateType === 'submit') {
-			additionSendEvent(action.value, action.form, {})
-		}
-	}
-
-	// écoute lévènement 'paymentIsPossible'
-	document.querySelector('#addition-form').addEventListener('paymentIsPossible?', paiementIsPossible)
-
-	// écoute lévènement 'articleIsIncremented'
-	document.querySelector('#addition').addEventListener('articleIsIncremented', updateAddition)
-
-	// écoute lévènement 'resetAdditionForm'
-	document.querySelector('#addition').addEventListener('resetAdditionForm', resetAdditionForm)
-
-	// écoute lévènement 'manageAdditionFormHtmx'
-	document.querySelector('#addition').addEventListener('manageAdditionFormHtmx', manageAdditionFormHtmx)
-
-
-	document.addEventListener('DOMContentLoaded', () => {
-		// récupère le hostname du local storage
-		let hosname = ''
-		try {
-			hosname = JSON.parse(localStorage.getItem('laboutik')).hostname
-		} catch (error) {
-			console.log('Récupération du hostname:', error);
-		}
-		document.querySelector('#addition-hostname-client').value = hosname
-	})
-</script>
+<script src="{% static 'js/addition.js' %}"></script>
 
 <style>
 	#addition {
