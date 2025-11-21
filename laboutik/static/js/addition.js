@@ -54,6 +54,9 @@ function additionInsertArticle({ detail }) {
 		msg: 'additionTotalChange',
 		data: { totalAddition }
 	})
+
+	// renseigne le formulaire
+	document.querySelector('#addition-total').value = totalAddition
 }
 
 /**
@@ -91,6 +94,9 @@ function additionRemoveArticle(uuid) {
 		msg: 'additionTotalChange',
 		data: { totalAddition }
 	})
+
+	// renseigne le formulaire
+	document.querySelector('#addition-total').value = totalAddition
 }
 
 function additionReset() {
@@ -119,10 +125,70 @@ function additionReset() {
 		msg: 'additionTotalChange',
 		data: { totalAddition }
 	})
+
+	// renseigne le formulaire
+	document.querySelector('#addition-total').value = totalAddition
 }
 
+
+function additionDisplayPaymentTypes() {
+	let nbArticles = 0
+	const form = document.querySelector('#addition-form')
+	// compte le nombre d'articles dans l'addition
+	form.querySelectorAll('input').forEach(ele => {
+		const name = ele.getAttribute('name')
+		if (name.includes('repid-')) {
+			nbArticles++
+		}
+	})
+
+	if (nbArticles <= 0) {
+		// affiche message pas d'articles
+		document.querySelector('#message-no-article').classList.remove('hide')
+	} else {
+		// préparation post type de paiement
+		form.setAttribute('hx-post', 'hx_display_type_payment')
+		form.setAttribute('hx-trigger', 'click')
+		htmx.process(form)
+
+		// valide l'envoie du paiement
+		form.click()
+	}
+}
+
+// gestionnaire de formulaire
+function additionManageForm(event) {
+	try {
+		const data = event.detail
+		const form = document.querySelector('#addition-form')
+
+		// update input
+		if (data.actionType === 'updateInput') {
+			document.querySelector(data.selector).value = data.value
+		}
+
+		// change post url
+		if (data.actionType === 'postUrl') {
+			form.setAttribute('hx-post', data.value)
+			htmx.process(form)
+		}
+
+		// submit form
+		if (data.actionType === 'submit') {
+			form.setAttribute('hx-trigger', 'click')
+			htmx.process(form)
+			// submit
+			form.click()
+		}
+
+	} catch (error) {
+		console.log('-> addition.js - additionManageForm,', error)
+	}
+}
 
 document.addEventListener('DOMContentLoaded', () => {
 	document.querySelector('#addition').addEventListener('additionInsertArticle', additionInsertArticle)
 	document.querySelector('#addition').addEventListener('additionReset', additionReset)
+	document.querySelector('#addition').addEventListener('additionDisplayPaymentTypes', additionDisplayPaymentTypes)
+	document.querySelector('#addition').addEventListener('additionManageForm', additionManageForm)
 })

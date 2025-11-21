@@ -75,42 +75,17 @@ function hideAndEmptyElement(selector) {
 	element.innerHTML = ''
 }
 
-
-// update form
-function setAndSubmitForm(method, uuidTransaction) {
-	uuidTransaction = uuidTransaction === 'None' ? '' : uuidTransaction
-	console.log('-> setAndSubmitForm, method =', method, '  --  uuidTransaction =', uuidTransaction);
-
-	// demande au composant addition de modifier la valeur de l'input moyen de paiement
-	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'input', selector: '#addition-moyen-paiement', value: method })
-
-	// demande au composant addition de modifier la valeur de l'input uuid transaction
-	if (uuidTransaction !== '') {
-		sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'input', selector: 'input[name="uuid_transaction"]', value: uuidTransaction })
-	}
-
-	// demande au composant addition de modifier la valeur de l'input given-sum (somme donnée)
-	const givenSumElement = document.querySelector('#given-sum')
-	if (method === 'espece' && givenSumElement !== null) {
-		// somme donnée en centimes
-		const givenSum = Number(givenSumElement.value) * 100
-		// demande au composant addition de modifier la valeur de l'input givenSum
-		sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'input', selector: '#addition-given-sum', value: givenSum })
-	}
-
-	// demande au composant addition de modifier la valeur du hx-post (changer l'url du POST)
-	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'url', selector: '#addition-form', value: 'hx_payment' })
-	// demande au composant addition de modifier la valeur de hx-trigger
-	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'trigger', value: 'validerPaiement' })
-
-	hideAndEmptyElement('#confirm')
-	hideAndEmptyElement('#messages')
-
-	// submit le formulaire
-	sendEvent('manageAdditionFormHtmx', '#addition-form', { updateType: 'submit', value: 'validerPaiement' })
-
+// demande de mise à jour du moyen de paiement dans le formulaire de l'addition
+function askAdditionManageForm(actionType, selector, value) {
+	// dispatch event "askAdditionManageForm"
+	sendEvent('organizerMsg', '#event-organizer', {
+		src: { file: 'hx_display_type_payement.html', method: 'additionUpdateForm' },
+		msg: 'additionManageForm',
+		data: { actionType, selector, value }
+	})
 }
 
+/*
 window.manageFormHtmx = function (event) {
 	const action = event.detail
 	// console.log('-> updateFormHtmx, action =', action)
@@ -138,6 +113,7 @@ window.manageFormHtmx = function (event) {
 		sendEvent(action.value, action.form, {})
 	}
 }
+*/
 
 // aiguillage d'eventsOrganizer :
 // - Est un objet contenant l'aiguillage de chaque évènement reçu
@@ -149,6 +125,9 @@ const switches = {
 	additionRemoveArticle: [{ name: 'articlesRemove', selector: '#products' }],
 	resetArticles: [{ name: 'additionReset', selector: '#addition' }, { name: 'articlesReset', selector: '#products' }],
 	articlesDisplayCategory: [{ name: 'articlesDisplayCategory', selector: '#products' }],
+	additionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
+	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
+	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }]
 }
 
 function eventsOrganizer(event) {
@@ -156,11 +135,11 @@ function eventsOrganizer(event) {
 		const data = event.detail.data
 		const src = event.detail.src
 		const msg = event.detail.msg
-		console.log(`--- eventsOrganizer - ${src.file}/${src.method} ---`)
-		console.log('- msg =', msg)
-		console.log('- data =', data)
-		console.log('--------------------------------------------------------------------')
-		console.log('   ')
+		// console.log(`--- eventsOrganizer - ${src.file}/${src.method} ---`)
+		// console.log('- msg =', msg)
+		// console.log('- data =', data)
+		// console.log('--------------------------------------------------------------------')
+		// console.log('   ')
 
 		// récupère les "routes" d'un évènement
 		const eventSwitch = switches[msg]

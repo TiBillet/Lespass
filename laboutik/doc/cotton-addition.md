@@ -4,6 +4,8 @@
 - écoute des évènements:
   . additionInsertArticle
 	. additionReset
+	. additionDisplayPaymentTypes
+	. additionUpdateForm
 
 - émet des évènements:
   . additionRemoveArticle

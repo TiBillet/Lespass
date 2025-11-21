@@ -12,73 +12,30 @@ let NfcReader = class {
 		this.conf = null
 	}
 
-	sendCommand(eventName, form, data) {
-		// console.log('-> sendCommand form =', form, '  --  data =', data, '  --  eventName =', eventName)
-		try {
-			data['form'] = form
-			const event = new CustomEvent(eventName, { detail: data })
-			document.querySelector(form).dispatchEvent(event)
-		} catch (error) {
-			console.log('sendCommand,', error);
-		}
-	}
+	SendTagIdAndSubmit(tagId, conf) {
+		console.log('-> SendTagIdAndSubmit, conf =', conf)
 
-	parseAndSendCommands(tagId, conf) {
-		try {
-			let eventTrigger = ''
-			const eventName = conf.eventName
-			const form = conf.selectorForm
-			const actions = conf.actions
-			for (let i = 0; i < actions.length; i++) {
-				const action = actions[i].split(',')
-				const updateType = action[0]
-				let obj
-				// populate input tagId
-				if (updateType === 'inputTagId') {
-					obj = {
-						updateType: 'input',
-						selector: action[1],
-						value: tagId
-					}
-				}
-				// populate input
-				if (updateType === 'input') {
-					obj = {
-						updateType: 'input',
-						selector: action[1],
-						value: action[2],
-					}
-				}
-				// populate hx-post
-				if (updateType === 'url') {
-					obj = {
-						updateType: 'url',
-						value: action[1],
-					}
-				}
-				// populate hx-trigger
-				if (updateType === 'hx-trigger') {
-					eventTrigger = action[1]
-					obj = {
-						updateType: 'hx-trigger',
-						value: action[1],
-					}
-				}
+		// dispatch event - peuple le tagId dans un formulaire
+		sendEvent('organizerMsg', '#event-organizer', {
+			src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
+			msg: conf.eventManageForm,
+			data: { actionType: 'updateInput', selector: '#nfc-tag-id', value: tagId }
+		})
 
-				// submit
-				if (updateType === 'submit') {
-					obj = {
-						updateType: 'submit',
-						value: eventTrigger,
-					}
-				}
+		// modifie l'url du post du formulaire
+		sendEvent('organizerMsg', '#event-organizer', {
+			src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
+			msg: conf.eventManageForm,
+			data: { actionType: 'postUrl', selector: '', value: conf.submitUrl }
+		})
 
-				// send event
-				this.sendCommand(eventName,form, obj)
-			}
-		} catch (error) {
-			console.log('nfc - parseAndSendCommands :', error)
-		}
+		// submit le formulaire
+		sendEvent('organizerMsg', '#event-organizer', {
+			src: { file: 'nfc.js', method: 'SendTagIdAndSubmit' },
+			msg: conf.eventManageForm,
+			data: { actionType: 'submit' }
+		})
+
 	}
 
 	verificationTagId(tagId, uuidConnexion) {
@@ -104,7 +61,7 @@ let NfcReader = class {
 
 			// envoyer le résultat du lecteur
 			if (msgErreurs === 0) {
-				this.parseAndSendCommands(tagId, conf)
+				this.SendTagIdAndSubmit(tagId, conf)
 				this.stop()
 			}
 		}
@@ -178,7 +135,7 @@ let NfcReader = class {
 				if (ev.target.className === 'nfc-reader-simu-bt') {
 					try {
 						const tagId = ev.target.getAttribute('tag-id')
-						this.parseAndSendCommands(tagId, conf)
+						this.SendTagIdAndSubmit(tagId, conf)
 						this.stop()
 					} catch (error) {
 						console.log('-> simulaton tag id,', error)

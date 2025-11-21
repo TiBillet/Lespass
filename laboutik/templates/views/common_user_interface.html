@@ -31,7 +31,7 @@
 		</div>
 	</div>
 	<!-- bouton valider -->
-	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" onclick="sendEvent('paymentIsPossible?','#addition-form')">
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok">
 		<i class="fas fa-check-circle md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "VALIDER" %}</div>
@@ -57,6 +57,14 @@
 	})
 	}
 
+	function displayPaymentTypes() {
+		sendEvent('organizerMsg', '#event-organizer', {
+		src: { file: 'common_user_interface.html', method: 'displayPaymentTypes' },
+		msg: 'additionDisplayPaymentTypes',
+		data: {}
+	})
+	}
+
 	function updateBtValider(event) {
 		// console.log('-> updateBtValider, event.detail =', event.detail)
 		document.querySelector('#bt-valider-total').innerText = (event.detail.totalAddition / 100)
@@ -65,6 +73,7 @@
 	document.addEventListener('DOMContentLoaded', () => {
 		document.querySelector('#bt-reset').addEventListener('click', manageReset)
 		document.querySelector('#bt-valider').addEventListener('updateBtValider', updateBtValider)
+		document.querySelector('#bt-valider').addEventListener('click', displayPaymentTypes)
 	})
 
 </script>

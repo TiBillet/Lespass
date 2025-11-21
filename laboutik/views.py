@@ -213,6 +213,7 @@ def pv_route(request):
   card["pvs_list"] = sorted(card["pvs_list"], key=lambda x: x["poid_liste"])
 
   context = {
+		"hostname_client": "mock host name from device login",
     "state": state,
     "stateJson": dumps(state),
     "pv": pv,
@@ -292,6 +293,7 @@ def hx_payment(request):
   # dev mock: db and payment success ?
 	# default
   payment["success"] = True
+
   if payment["moyen_paiement"] == "nfc" and payment.get("tag_id"):
     card = db.get_by_index('cards', 'tag_id', payment['tag_id'])[0]
     payment["card_name"] = card["name"]
@@ -344,6 +346,13 @@ def hx_payment(request):
     return render(request, "partial/hx_payment_success.html", context)
 
   if payment["success"] == False:
+    if int(payment["given_sum"]) < payment["total"]:
+      context = {
+		    "msg_type": "warning",
+			  "msg_content": _("Fonds insuffisants !")
+			}
+      return render(request, "partial/hx_messages.html", context)
+
     if payment_card1 and payment_card1.get('tag_id') == payment.get('tag_id') and step == 2:
       context = {
 		    "msg_type": "warning",

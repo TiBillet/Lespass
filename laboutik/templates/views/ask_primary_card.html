@@ -4,8 +4,7 @@
 
 -->
 {% block content %}
-<c-read-nfc id="nfc-container" set="page"
-	nfc-send='{"eventName": "manageFormHtmx", "selectorForm": "#form-nfc", "actions": ["inputTagId,#nfc-tag-id","hx-trigger,nfcResult", "url,ask_primary_card", "submit"]}'>
+<c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm" content="page" submit-url="ask_primary_card">
 	<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target=".message-nfc"
 		hx-swap="innerHTML">
 		{% csrf_token %}
@@ -14,6 +13,40 @@
 	<h1>{% translate "Attente carte primaire" %}</h1>
 	<h3 class="message-nfc">{{msg}}</h3>
 </c-read-nfc>
+
+<script>
+	// gestionnaire de formulaire
+	function primaryCardManageForm(event) {
+		try {
+			const data = event.detail
+			const form = document.querySelector('#form-nfc')
+
+			// update input
+			if (data.actionType === 'updateInput') {
+				document.querySelector(data.selector).value = data.value
+			}
+
+			// change post url
+			if (data.actionType === 'postUrl') {
+				form.setAttribute('hx-post', data.value)
+				htmx.process(form)
+			}
+
+			// submit form
+			if (data.actionType === 'submit') {
+				form.setAttribute('hx-trigger', 'click')
+				htmx.process(form)
+				// submit
+				form.click()
+			}
+
+		} catch (error) {
+			console.log('-> addition.js - additionManageForm,', error)
+		}
+	}
+	// écoute des commandes sur le formulaire "#form-nfc"
+	document.querySelector('#form-nfc').addEventListener('primaryCardManageForm', primaryCardManageForm)
+</script>
 {% endblock content %}
 
 {% block css %}

@@ -14,7 +14,7 @@
 		<!-- include bt_return.html -->
 		<c-bt.return selector="#confirm" layer="2" />
 
-		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="setAndSubmitForm('{{ method }}', '{{ uuid_transaction }}')">
+		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="confirmPayment('{{ method }}')">
 			<div class="bt-basic-icon">
 				<i class="fas fa-check-circle"></i>
 			</div>
@@ -25,6 +25,18 @@
 	</div>
 </div>
 
+<script>
+	function confirmPayment(method) {
+		if (method === 'espece') {
+			// récupère la somme donée
+			const givenSum = Number(document.querySelector('#given-sum').value) * 100
+			// update given sum in form
+			askAdditionManageForm('updateInput', '#addition-given-sum', givenSum)
+		}
+		// submit
+		askAdditionManageForm('submit', null, 'hx_payment')
+	}
+</script>
 <style>
 	#confirm {
 		position: absolute;

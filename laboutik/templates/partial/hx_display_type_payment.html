@@ -5,15 +5,19 @@
 	<h1 class="message-title">{% translate "Types de paiement" %}</h1>
 	<!-- cashless -->
 	{% if 'nfc' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc" />
+	<c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc"
+		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" />
 	{% endif %}
 
 	<!-- espèce, pas une consigne -->
 	{% if 'espece' in moyens_paiement %}
 	{% if deposit_is_present %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" action="setAndSubmitForm('espece')" />
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins"
+		onclick ="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece'); askAdditionManageForm('submit',null,'hx_payment')" />
 	{% else %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece" />
+	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece"
+		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" />
 	{% endif %}
 	{% endif %}
 
@@ -23,17 +27,22 @@
 
 	<!-- carte bancaire -->
 	{% if 'carte_bancaire' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" hx-get="hx_confirm_payment?method=carte_bancaire" />
+	<c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" hx-get="hx_confirm_payment?method=carte_bancaire"
+		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" />
 	{% endif %}
 
 	<!-- cheque -->
 	{% if 'CH' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" hx-get="hx_confirm_payment?method=CH" />
+	<c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" hx-get="hx_confirm_payment?method=CH"
+		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" />
 	{% endif %}
 
 	<!-- "OFFRIR" en mode gérant uniquement mais pas pour le point de ventes "CASHLESS" -->
 	{% if mode_gerant and comportement != 'C' %}
-	<c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" hx-get="hx_confirm_payment?method=gift" />
+	<c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" hx-get="hx_confirm_payment?method=gift"
+		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" />
 	{% endif %}
 
 	<!-- pas de moyens de paiement -->

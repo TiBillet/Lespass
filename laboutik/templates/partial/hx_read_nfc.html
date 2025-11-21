@@ -1,6 +1,6 @@
 {% load static %}
 {% load static i18n %}
-<c-read-nfc id="confirm" selector="#confirm" set="partial" nfc-send='{"eventName": "manageAdditionFormHtmx", "selectorForm": "#addition-form", "actions": ["input,#addition-moyen-paiement,nfc", "inputTagId,#nfc-tag-id","hx-trigger,validerPaiement", "url,hx_payment", "submit"]}'>
+<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" content="partial" submit-url="hx_payment">
 	<h1>{% translate "Attente lecture carte" %}</h1>
 	<style>
 		#confirm {
@@ -17,7 +17,6 @@
 			align-items: center;
 			background-color: var(--noir01);
 			color: var(--blanc01);
-			z-index: 974;
 		}
 
 		#message-nfc {

@@ -11,42 +11,21 @@
 	</div>
 
 	<script>
-		const set = '{{set}}'
+		const content = '{{content}}'
+		const submitUrl = '{{ submit_url }}'
+		const eventManageForm = '{{ event_manage_form }}'
 
-		function getConfNfc() {
-			const ele = document.querySelector('.nfc-container')
-			const conf = JSON.parse(ele.getAttribute('nfc-send'))
-			return conf
-		}
 		function initNfc() {
-			const conf = getConfNfc()
-			// lance l'écoute sur un formulaire
-			console.log('-> iniNfc,  conf =', conf);
-			
-			document.querySelector(conf.selectorForm).addEventListener(conf.eventName, window[conf.eventName])
+			console.log('initNfc, eventManageForm =', eventManageForm, '  --  submitUrl =', submitUrl);
+			try {		
 			const nfc = new NfcReader()
 			// start read nfc
-			nfc.start(conf)
+			nfc.start({eventManageForm, submitUrl})
+			} catch (error) {
+				console.log('-> Cotton - read_nfc.html - initNfc,', error)
+			}
 		}
-
-		// page
-		if (set === 'page') {
 			initNfc()
-		}
-
-		// partial htmx
-		if (set === 'partial') {
-			// wait swap finish
-			document.body.addEventListener('htmx:afterSettle', function (ev) {
-				const ele = ev.target.classList.contains('nfc-container')
-				if (ele) {
-					initNfc()
-				}
-			})
-		}
-
-		console.log('set =', set);
-		
 	</script>
 
 	<style>
