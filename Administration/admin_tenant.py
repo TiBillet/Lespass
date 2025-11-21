@@ -195,6 +195,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
 class ScanAppAdmin(ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
+    list_before_template = "admin/scanapp/list_before.html"
 
     list_display = [
         'name',
