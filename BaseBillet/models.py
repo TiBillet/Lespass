@@ -1078,6 +1078,7 @@ class Price(models.Model):
     NA, YEAR, MONTH = 'N', 'Y', 'M'
     CAL_MONTH, DAY, HOUR = 'O', 'D', 'H'
     WEEK, CIVIL, SCHOLAR = 'W', 'C', 'S'
+    LIFE = 'L'
     SUB_CHOICES = [
         (NA, _('Non applicable')),
         (HOUR, _('1 hour')),
@@ -1088,6 +1089,7 @@ class Price(models.Model):
         (YEAR, _("365 days")),
         (CIVIL, _('Calendar year : 1st of January')),
         (SCHOLAR, _('School year: 1st of September')),
+        (LIFE, _('valid for life')),
     ]
 
     subscription_type = models.CharField(max_length=1,
@@ -2656,6 +2658,9 @@ class Membership(models.Model):
                     year = dt.year + 1
                 # Fin de l'année scolaire au 31 août 23:59:59.999999 (tz-aware)
                 deadline = datetime(year, 8, 31, 23, 59, 59, 999999, tzinfo=tenant_tzinfo)
+            elif self.price.subscription_type == Price.LIFE:
+                deadline = dt + relativedelta(months=1200)
+
         self.deadline = deadline
         self.save()
         return deadline

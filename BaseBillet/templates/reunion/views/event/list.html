@@ -2,12 +2,12 @@
 {% load static i18n tibitags %}
 
 {% block title %}{% translate 'Agenda' %}{% endblock %}
-{% block meta_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block meta_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block og_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
-{% block og_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
 {% block twitter_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
-{% block twitter_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
 
 {% block main %}
