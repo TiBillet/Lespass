@@ -108,6 +108,9 @@ class Command(BaseCommand):
         tag_fun = ensure_tag("Rigolo", "#ffa348")
         tag_python = ensure_tag("Python", "#f9f06b")
         tag_htmlcss = ensure_tag("HTML/CSS", "#c061cb")
+        # Tags complémentaires pour la transparence budgétaire et la communauté
+        tag_transparent = ensure_tag("Transparence", "#4dd0e1")
+        tag_communaute = ensure_tag("Communauté", "#8ff0a4")
 
         # ---------------------------------------------------------------------
         # 1) Crowdfunding — projet simple, contributions en € (pas de budget contributif)
@@ -331,6 +334,84 @@ class Command(BaseCommand):
             logger.warning(f"Impossible de renommer/lier l'asset TIME → MTemps: {e}")
 
         # ---------------------------------------------------------------------
+        # 4bis) Financement participatif pour maintenir le lieu (budget adaptatif)
+        # ---------------------------------------------------------------------
+        # FALC:
+        # - Objectif qui suit les demandes (budget contributif adaptatif)
+        # - Plusieurs lignes de demandes (loyers, EDF, consommables) déclarées par l'admin principal
+        # - Contributions financières couvrant 60% du besoin → il manque 40% à financer
+        maintien, _ = Initiative.objects.get_or_create(
+            name="Financement participatif pour maintenir le lieu",
+            defaults=dict(
+                short_description=(
+                    "exemple de budget contributif ou le total demandé suis les demande participative. "
+                    "Le but est de financer en toute transparence."
+                ),
+                description=(
+                    "Aidez nous à payer les charges : Loyer, chauffages, consomables, le budget total évolue "
+                    "mais nous avons toujours besoin de vous !"
+                ),
+                funding_goal=int(0),  # objectif suit les demandes validées
+                archived=False,
+                budget_contributif=True,
+                adaptative_funding_goal_on_participation=True,
+                funding_mode="adaptative",
+                currency="€",
+                direct_debit=False,
+            ),
+        )
+        # Mise à jour (idempotence) si l'initiative existe déjà
+        maintien.short_description = (
+            "exemple de budget contributif ou le total demandé suis les demande participative. "
+            "Le but est de financer en toute transparence."
+        )
+        maintien.description = (
+            "Aidez nous à payer les charges : Loyer, chauffages, consomables, le budget total évolue "
+            "mais nous avons toujours besoin de vous !"
+        )
+        maintien.currency = "€"
+        maintien.budget_contributif = True
+        maintien.adaptative_funding_goal_on_participation = True
+        maintien.funding_mode = "adaptative"
+        maintien.save()
+        # Tags lisibles
+        maintien.tags.set([tag_transparent, tag_communaute])
+
+        # Participations (demandes) — total demandé = 2 340 €
+        # - 4 lignes de loyer à 500€
+        for i in range(1, 5):
+            add_participation(
+                maintien,
+                base_email,
+                500,
+                f"Loyer #{i} — mensualité",
+                state=Participation.State.APPROVED_ADMIN,
+            )
+        # - 3 lignes EDF à 100€
+        for i in range(1, 4):
+            add_participation(
+                maintien,
+                base_email,
+                100,
+                f"Facture EDF #{i}",
+                state=Participation.State.APPROVED_ADMIN,
+            )
+        # - Consommables divers 40€
+        add_participation(
+            maintien,
+            base_email,
+            40,
+            "Consommables divers (PQ, papier imprimante)",
+            state=Participation.State.APPROVED_ADMIN,
+        )
+
+        # Contributions financières: 60% du total demandé (2340€) = 1404€
+        # Plusieurs contributeurs pour illustrer
+        add_contribution(maintien, 700, name="Collecte en ligne")
+        add_contribution(maintien, 500, name="Donateur.rice anonyme")
+        add_contribution(maintien, 204, name="Cagnotte locale")
+
+        # ---------------------------------------------------------------------
         # 5) Nouvelle initiative "Idée à voter ! Votez et on le code"
         # ---------------------------------------------------------------------
         idea_vote, _ = Initiative.objects.get_or_create(
@@ -365,7 +446,8 @@ class Command(BaseCommand):
 
         # Résumé console
         all_inits = Initiative.objects.filter(name__in=[
-            cf.name, bc_fixe.name, bc_adapt.name, time_valo.name, idea_vote.name
+            cf.name, bc_fixe.name, bc_adapt.name, time_valo.name, idea_vote.name,
+            "Financement participatif pour maintenir le lieu",
         ])
         for it in all_inits:
             logger.info(

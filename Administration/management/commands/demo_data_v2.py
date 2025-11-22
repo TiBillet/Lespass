@@ -16,6 +16,7 @@ from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
 from fedow_public.models import AssetFedowPublic
+from crowds.models import Initiative, Contribution, Participation
 
 logger = logging.getLogger(__name__)
 
@@ -332,8 +333,141 @@ class Command(BaseCommand):
                     },
                 ],
                 "initiatives": [
-                    {"name": "Démonter des palettes", "budget_contributif": True, "currency": "€"},
-                    {"name": "Construire des plans open source", "budget_contributif": False, "currency": "€"},
+                    # FALC: Les initiatives ci‑dessous couvrent tous les cas d’usage (LES PASS uniquement)
+                    {
+                        "name": "Crowdfunding : Financer un projet concret",
+                        "short_description": "Un projet classique financé par des dons en €.",
+                        "description": "Exemple de financement participatif classique : pas de budget contributif, ni d'objectif adaptatif. Les contributions en € font avancer la jauge.",
+                        "funding_goal": 8000,  # en euros → sera converti en centimes
+                        "archived": False,
+                        "budget_contributif": False,
+                        "adaptative_funding_goal_on_participation": False,
+                        "funding_mode": "cascade",
+                        "currency": "€",
+                        "direct_debit": False,
+                        "tags": ["Difficultée : Facile"],
+                        "contributions": [
+                            {"amount_eur": 1200, "name": "Fondation A"},
+                            {"amount_eur": 800, "name": "Soutien individuel"},
+                            {"amount_eur": 1200, "name": "Entreprise locale"}
+                        ]
+                    },
+                    {
+                        "name": "Budget contributif : objectif 5 000 € (100% financé)",
+                        "short_description": "Budget contributif avec objectif fixe et financement total.",
+                        "description": "Objectif de financement à 5 000 €. Les contributions couvrent 100% de l'objectif. En parallèle, une vingtaine de participations validées représentent environ 70% du budget.",
+                        "funding_goal": 5000,
+                        "archived": False,
+                        "budget_contributif": True,
+                        "adaptative_funding_goal_on_participation": False,
+                        "funding_mode": "cascade",
+                        "currency": "€",
+                        "direct_debit": False,
+                        "tags": ["Difficultée : Intermédiaire"],
+                        "contributions": [
+                            {"amount_eur": 1000, "name": "Collecte en ligne"},
+                            {"amount_eur": 1500, "name": "Subvention locale"},
+                            {"amount_eur": 2500, "name": "Mécénat"}
+                        ],
+                        "participations": [
+                            # 10 x 100 €
+                            *[{"user_email": f"particip{i}@example.org", "requested_value": 100, "description": f"Participation #{i} — tâche courte (quelques heures)", "state": "APPROVED_ADMIN"} for i in range(1, 11)],
+                            # 5 x 200 €
+                            *[{"user_email": f"particip{i}@example.org", "requested_value": 200, "description": f"Participation #{i} — tâche d'une demi‑journée", "state": "APPROVED_ADMIN"} for i in range(11, 16)],
+                            # 5 x 300 € (~3 500€ total)
+                            *[{"user_email": f"particip{i}@example.org", "requested_value": 300, "description": f"Participation #{i} — tâche d'une journée", "state": "VALIDATED_ADMIN", "time_spent_minutes": 7 * 60} for i in range(16, 21)],
+                        ]
+                    },
+                    {
+                        "name": "Budget contributif adaptatif : 5 demandes, 55% financés",
+                        "short_description": "Objectif qui s'ajuste au total des demandes validées.",
+                        "description": "Le but de financement s'ajuste aux demandes validées. 5 participants remplissent la jauge. Deux structures contribuent mais n'atteignent que 55% du besoin total.",
+                        "funding_goal": 0,
+                        "archived": False,
+                        "budget_contributif": True,
+                        "adaptative_funding_goal_on_participation": True,
+                        "funding_mode": "adaptative",
+                        "currency": "€",
+                        "direct_debit": False,
+                        "tags": ["Difficultée : Confirmé"],
+                        "participations": [
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 600, "description": "Analyse et cadrage (1 j)", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 800, "description": "Dév. fonctionnalité A (2 j)", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 900, "description": "Intégration & tests (2 j)", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 700, "description": "Design/UX (1,5 j)", "state": "VALIDATED_ADMIN", "time_spent_minutes": int(1.5 * 7 * 60)},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 1000, "description": "Documentation & transmission (2,5 j)", "state": "VALIDATED_ADMIN", "time_spent_minutes": int(2.5 * 7 * 60)},
+                        ],
+                        "contributions": [
+                            {"amount_eur": 1500, "name": "Structure A"},
+                            {"amount_eur": 700, "name": "Structure B"}
+                        ]
+                    },
+                    {
+                        "name": "Valorisation en monnaie temps : contributions en heures",
+                        "short_description": "Budget contributif valorisé en heures (monnaie temps).",
+                        "description": "Le travail de 6 personnes est valorisé en monnaie temps. Une structure finance l'équivalent du temps passé, de 1 heure à plusieurs demi‑journées.",
+                        "funding_goal": 20,  # 20 h (converti en centi‑unités)
+                        "archived": False,
+                        "budget_contributif": True,
+                        "adaptative_funding_goal_on_participation": False,
+                        "funding_mode": "cascade",
+                        "currency": "h",
+                        "direct_debit": False,
+                        "tags": ["Difficultée : Facile"],
+                        "asset_name": "MTemps",
+                        "participations": [
+                            {"user_email": "h1@example.org", "requested_value": 1, "description": "Tâche #1 — 1 h déclarée", "state": "VALIDATED_ADMIN", "time_spent_minutes": 60},
+                            {"user_email": "h2@example.org", "requested_value": 2, "description": "Tâche #2 — 2 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 120},
+                            {"user_email": "h3@example.org", "requested_value": 3, "description": "Tâche #3 — 3 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 180},
+                            {"user_email": "h4@example.org", "requested_value": 4, "description": "Tâche #4 — 4 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 240},
+                            {"user_email": "h5@example.org", "requested_value": 4, "description": "Tâche #5 — 4 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 240},
+                            {"user_email": "h6@example.org", "requested_value": 6, "description": "Tâche #6 — 6 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 360}
+                        ],
+                        "contributions": [
+                            {"amount_eur": 20.0, "name": "Structure solidaire (heures)"}
+                        ]
+                    },
+                    {
+                        "name": "Idée à voter ! Votez et on le code",
+                        "short_description": "Proposez une idée, votez, et on la code si tout le monde suit !",
+                        "description": "Cette initiative sert d'exemple pour la collecte d'idées. Les membres votent pour les plus pertinentes. Quand ça prend, on spécifie, on planifie… et on code !",
+                        "funding_goal": 0,
+                        "archived": False,
+                        "budget_contributif": False,
+                        "adaptative_funding_goal_on_participation": False,
+                        "funding_mode": "cascade",
+                        "currency": "€",
+                        "direct_debit": False,
+                        "tags": ["Idée : Votez et on le code !", "Difficultée : Facile", "Communauté", "Rigolo"]
+                    },
+                    {
+                        "name": "Financement participatif pour maintenir le lieu",
+                        "short_description": "exemple de budget contributif ou le total demandé suis les demande participative. Le but est de financer en toute transparence.",
+                        "description": "Aidez nous à payer les charges : Loyer, chauffages, consomables, le budget total évolue mais nous avons toujours besoin de vous !",
+                        "funding_goal": 0,
+                        "archived": False,
+                        "budget_contributif": True,
+                        "adaptative_funding_goal_on_participation": True,
+                        "funding_mode": "adaptative",
+                        "currency": "€",
+                        "direct_debit": False,
+                        "tags": ["Transparence", "Communauté"],
+                        "participations": [
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #1 — mensualité", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #2 — mensualité", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #3 — mensualité", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #4 — mensualité", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 100, "description": "Facture EDF #1", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 100, "description": "Facture EDF #2", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 100, "description": "Facture EDF #3", "state": "APPROVED_ADMIN"},
+                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 40, "description": "Consommables divers (PQ, papier imprimante)", "state": "APPROVED_ADMIN"}
+                        ],
+                        "contributions": [
+                            {"amount_eur": 700, "name": "Collecte en ligne"},
+                            {"amount_eur": 500, "name": "Donateur.rice anonyme"},
+                            {"amount_eur": 204, "name": "Cagnotte locale"}
+                        ]
+                    },
                 ],
             },
             {
@@ -512,7 +646,25 @@ class Command(BaseCommand):
                      ]},
                 ],
                 "events": [],
-                "initiatives": [],
+                "initiatives": [
+                    {
+                        "name": "Financement participatif du réseau",
+                        "short_description": "Appel à dons pour soutenir les actions du réseau.",
+                        "description": "Soutenez les actions du réseau: mutualisation d'outils, rencontres et accompagnements.",
+                        "funding_goal": 2500,
+                        "archived": False,
+                        "budget_contributif": False,
+                        "adaptative_funding_goal_on_participation": False,
+                        "funding_mode": "cascade",
+                        "currency": "€",
+                        "direct_debit": False,
+                        "tags": ["Communauté"],
+                        "contributions": [
+                            {"amount_eur": 300, "name": "Entreprise solidaire"},
+                            {"amount_eur": 150, "name": "Don individuel"}
+                        ]
+                    }
+                ],
             },
         ]
 
@@ -605,6 +757,20 @@ class Command(BaseCommand):
                 return None
             opt, _ = OptionGenerale.objects.get_or_create(name=name)
             return opt
+
+        def map_participation_state(label: str) -> str:
+            """Mappe une chaîne vers une constante de Participation.State."""
+            if not label:
+                return Participation.State.APPROVED_ADMIN
+            u = label.upper()
+            mapping = {
+                'REQUESTED': Participation.State.REQUESTED,
+                'APPROVED_ADMIN': Participation.State.APPROVED_ADMIN,
+                'COMPLETED_USER': Participation.State.COMPLETED_USER,
+                'VALIDATED_ADMIN': Participation.State.VALIDATED_ADMIN,
+                'REJECTED_ADMIN': Participation.State.REJECTED_ADMIN,
+            }
+            return mapping.get(u, Participation.State.APPROVED_ADMIN)
 
         created_tenants: list[Client] = []
         with schema_context('public'):
@@ -1009,3 +1175,139 @@ class Command(BaseCommand):
                             logger.warning(f"Impossible de configurer la récompense monnaie temps pour '{child.get('name')}' : {e}\n")
 
                 logger.info(f"Données importées pour {tenant.name} (idempotent)")
+
+                # -----------------------------
+                # Initiatives (crowds) — import depuis les fixtures
+                # -----------------------------
+                # FALC: On intègre les initiatives ici pour centraliser toutes les données démo dans ce JSON.
+                inits = fx.get('initiatives', []) or []
+                if inits:
+                    # Préparer des tags utiles (couleurs déjà gérées par ensure_tag)
+                    admin_email_env = os.environ.get('ADMIN_EMAIL', 'admin@example.org')
+
+                    for init in inits:
+                        try:
+                            name = init.get('name')
+                            if not name:
+                                continue
+                            # funding_goal exprimé en « unités » selon la currency
+                            # Convention: on stocke en centi-unités (comme les € en centimes)
+                            currency = init.get('currency') or '€'
+                            goal_units = init.get('funding_goal') or 0
+                            funding_goal_centi = int(round(float(goal_units) * 100))
+
+                            initiative_obj, _ = Initiative.objects.get_or_create(
+                                name=name,
+                                defaults=dict(
+                                    short_description=init.get('short_description') or '',
+                                    description=init.get('description') or '',
+                                    funding_goal=funding_goal_centi,
+                                    archived=bool(init.get('archived', False)),
+                                    budget_contributif=bool(init.get('budget_contributif', False)),
+                                    adaptative_funding_goal_on_participation=bool(init.get('adaptative_funding_goal_on_participation', False)),
+                                    funding_mode=init.get('funding_mode') or 'cascade',
+                                    currency=currency,
+                                    direct_debit=bool(init.get('direct_debit', False)),
+                                )
+                            )
+                            # Mise à jour minimale si l'objet existait déjà (idempotent + refresh)
+                            fields_to_update = []
+                            for fld, fxkey, transform in [
+                                ('short_description', 'short_description', str),
+                                ('description', 'description', str),
+                                ('currency', 'currency', str),
+                            ]:
+                                val = init.get(fxkey)
+                                if val is not None and getattr(initiative_obj, fld) != transform(val):
+                                    setattr(initiative_obj, fld, transform(val))
+                                    fields_to_update.append(fld)
+                            if goal_units is not None and initiative_obj.funding_goal != funding_goal_centi:
+                                initiative_obj.funding_goal = funding_goal_centi
+                                fields_to_update.append('funding_goal')
+                            for bfield in ['archived', 'budget_contributif', 'adaptative_funding_goal_on_participation', 'direct_debit']:
+                                if bfield in init and getattr(initiative_obj, bfield) != bool(init.get(bfield)):
+                                    setattr(initiative_obj, bfield, bool(init.get(bfield)))
+                                    fields_to_update.append(bfield)
+                            if 'funding_mode' in init and initiative_obj.funding_mode != init.get('funding_mode'):
+                                initiative_obj.funding_mode = init.get('funding_mode')
+                                fields_to_update.append('funding_mode')
+                            if fields_to_update:
+                                initiative_obj.save(update_fields=fields_to_update)
+
+                            # Tags
+                            for tag_name in init.get('tags', []) or []:
+                                t = ensure_tag(tag_name)
+                                if t:
+                                    initiative_obj.tags.add(t)
+
+                            # Lier un asset (ex: monnaie temps) si demandé
+                            asset_name = init.get('asset_name')
+                            if asset_name:
+                                try:
+                                    asset_obj = AssetFedowPublic.objects.filter(name=asset_name).first()
+                                    if asset_obj and getattr(initiative_obj, 'asset_id', None) != asset_obj.uuid:
+                                        initiative_obj.asset = asset_obj
+                                        initiative_obj.save(update_fields=['asset'])
+                                except Exception as e:
+                                    logger.warning(f"Impossible de lier l'asset '{asset_name}' à l'initiative '{name}': {e}")
+
+                            # Contributions (financières ou en unité)
+                            for c in init.get('contributions', []) or []:
+                                try:
+                                    amount_eur = float(c.get('amount_eur', 0))
+                                    amount_cents = int(round(amount_eur * 100))
+                                except Exception:
+                                    amount_cents = 0
+                                contributor_name = (c.get('name') or '')
+                                if amount_cents <= 0:
+                                    continue
+                                exists = Contribution.objects.filter(
+                                    initiative=initiative_obj,
+                                    amount=amount_cents,
+                                    contributor_name=contributor_name or "",
+                                    payment_status=Contribution.PaymentStatus.PAID_ADMIN,
+                                ).exists()
+                                if not exists:
+                                    Contribution.objects.create(
+                                        initiative=initiative_obj,
+                                        amount=amount_cents,
+                                        contributor_name=contributor_name,
+                                        payment_status=Contribution.PaymentStatus.PAID_ADMIN,
+                                    )
+
+                            # Participations (demandes de budget)
+                            for p in init.get('participations', []) or []:
+                                # Remplacement de variable d'env dans l'email si nécessaire
+                                raw_email = p.get('user_email') or ''
+                                user_email = raw_email.replace('${ADMIN_EMAIL}', admin_email_env) if raw_email else admin_email_env
+                                try:
+                                    requested_val = float(p.get('requested_value') or 0)
+                                except Exception:
+                                    requested_val = 0
+                                requested_cents = int(round(requested_val * 100))
+                                if requested_cents <= 0:
+                                    continue
+                                desc = p.get('description') or ''
+                                state = map_participation_state(p.get('state'))
+                                time_spent = p.get('time_spent_minutes')
+
+                                user = get_or_create_user(user_email, send_mail=False)
+                                part, created = Participation.objects.get_or_create(
+                                    initiative=initiative_obj,
+                                    participant=user,
+                                    description=desc,
+                                    requested_amount_cents=requested_cents,
+                                    defaults={"state": state},
+                                )
+                                updates = []
+                                if part.state != state:
+                                    part.state = state
+                                    updates.append('state')
+                                if time_spent is not None and state in (Participation.State.COMPLETED_USER, Participation.State.VALIDATED_ADMIN):
+                                    if part.time_spent_minutes != int(time_spent):
+                                        part.time_spent_minutes = int(time_spent)
+                                        updates.append('time_spent_minutes')
+                                if updates:
+                                    part.save(update_fields=updates)
+                        except Exception as e:
+                            logger.warning(f"Erreur lors de l'import de l'initiative '{init.get('name')}' pour {tenant.name}: {e}")
