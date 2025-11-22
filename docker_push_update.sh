@@ -8,8 +8,14 @@ cd "$SCRIPT_DIR"
 readonly IMAGE_NAME="lespass"
 readonly DOCKER_USER="tibillet"
 
+# Charger les variables depuis le fichier VERSION (contient maintenant des assignments shell)
 if [[ -f VERSION ]]; then
-  VERSION="$(< VERSION)"
+  # shellcheck disable=SC1091
+  source VERSION
+  if [[ -z "${VERSION:-}" ]]; then
+    echo "La variable VERSION n'est pas définie dans le fichier VERSION" >&2
+    exit 1
+  fi
 else
   echo "VERSION file not found next to this script" >&2
   exit 1
