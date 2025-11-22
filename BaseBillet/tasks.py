@@ -1687,34 +1687,42 @@ def membership_renewal_reminder():
                                                     price__recurring_payment=False, # on ne prend pas les adhésions avec paiement récurents
                                                     )
 
-            for membership in memberships:
-                config = Configuration.get_solo()
-                user = membership.user
-                email = user.email
+            if memberships.exists():
+                count = memberships.count()
+                progress = 0
+                logger.info(f"membership_renewal_reminder : {count} memberships to renew - tenant :{tenant.schema_name}")
 
-                context = {
-                    'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
-                    'membership': membership,
-                    'now': timezone.now(),
-                    'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
-                    'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
-                    'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
-                }
+                for membership in memberships:
+                    progress += 1
+                    logger.info(f'    progress : {progress}/{count}')
 
-                try:
-                    mail = CeleryMailerClass(
-                        email,
-                        f"{context.get('title')}",
-                        template="emails/membership_renewal_reminder.html",
-                        context=context,
-                    )
-                    mail.send()
-                    logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
-                    return mail.sended
-                except Exception as e:
-                    logger.error(
-                        f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
-                    return False
+                    config = Configuration.get_solo()
+                    user = membership.user
+                    email = user.email
+
+                    context = {
+                        'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
+                        'membership': membership,
+                        'now': timezone.now(),
+                        'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
+                        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+                        'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
+                    }
+
+                    try:
+                        mail = CeleryMailerClass(
+                            email,
+                            f"{context.get('title')}",
+                            template="emails/membership_renewal_reminder.html",
+                            context=context,
+                        )
+                        mail.send()
+                        logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
+                        return mail.sended
+                    except Exception as e:
+                        logger.error(
+                            f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
+                        return False
 
 
 @app.task
