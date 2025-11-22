@@ -17,7 +17,7 @@ poetry run python /DjangoFiles/manage.py collectstatic --no-input
 #fi
 
 #echo "Migrate"
-#poetry run python /DjangoFiles/manage.py migrate
+#poetry run python manage.py migrate_schemas --executor=multiprocessing
 
 echo "Gunicorn start"
 poetry run gunicorn TiBillet.wsgi --log-level=info --access-logfile /DjangoFiles/logs/gunicorn.logs --log-file /DjangoFiles/logs/gunicorn.logs --error-logfile /DjangoFiles/logs/gunicorn.logs --log-level info --capture-output --reload -w 5 -b 0.0.0.0:8002

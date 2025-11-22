@@ -291,12 +291,12 @@ class WebhookAdmin(ModelAdmin):
             if webhook.event == Webhook.MEMBERSHIP_V:
                 # On va chercher le membership le plus récent
                 membership = Membership.objects.filter(contribution_value__isnull=False).first()
-                webhook_membership(membership.pk, solo_webhook_pk=object_id)
+                webhook_membership(membership.pk)
                 webhook.refresh_from_db()
             elif webhook.event == Webhook.RESERVATION_V:
                 # On va chercher le membership le plus récent
                 reservation = Reservation.objects.filter(status=Reservation.VALID).first()
-                webhook_reservation(reservation.pk, solo_webhook_pk=object_id)
+                webhook_reservation(reservation.pk)
                 webhook.refresh_from_db()
 
             messages.info(

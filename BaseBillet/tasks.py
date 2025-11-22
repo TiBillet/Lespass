@@ -1425,17 +1425,10 @@ def ticket_celery_mailer(reservation_uuid: str):
 
 
 @app.task
-def webhook_reservation(reservation_pk, solo_webhook_pk=None):
+def webhook_reservation(reservation_pk):
     logger.info(f"webhook_reservation : {reservation_pk}")
-
-    # On lance tous les webhook ou juste un seul ?
-    webhooks = []
-    if solo_webhook_pk:
-        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
-    else:
-        webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
-
-    if len(webhooks) > 0:
+    webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
+    if webhooks.exists():
         reservation = Reservation.objects.get(pk=reservation_pk)
         json = {
             "object": "reservation",
@@ -1445,6 +1438,7 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
         }
 
         for webhook in webhooks:
+            logger.info(f"webhook_reservation : {webhook.url}")
             try:
                 response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
@@ -1459,23 +1453,16 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
 
 
 @app.task
-def webhook_membership(membership_pk, solo_webhook_pk=None):
+def webhook_membership(membership_pk):
     logger.info(f"webhook_membership : {membership_pk}")
-
     # On lance tous les webhook ou juste un seul ?
-    webhooks = []
-    if solo_webhook_pk:
-        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
-    else:
-        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
-
-    if len(webhooks) > 0:
+    webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
+    if webhooks.exists():
         membership = Membership.objects.get(pk=membership_pk)
-        # Build payload with DRF serializer
         data_sended = json.dumps(MembershipSerializer(membership).data, cls=DjangoJSONEncoder)
 
-        # Si plusieurs webhook :
         for webhook in webhooks:
+            logger.info(f"webhook_membership : {webhook.url}")
             try:
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             headers={"Content-type": "application/json"},

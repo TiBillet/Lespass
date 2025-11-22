@@ -2861,6 +2861,7 @@ class Webhook(models.Model):
     last_response = models.TextField(null=True, blank=True)
 
 
+
 class FederatedPlace(models.Model):
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective")
     tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Tag filters"),
