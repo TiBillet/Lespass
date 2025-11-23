@@ -6,6 +6,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
+from django.db import connection
 from faker import Faker
 
 from AuthBillet.models import TibilletUser
@@ -781,25 +782,56 @@ class Command(BaseCommand):
                 name = fx.get('name')
                 if not name:
                     continue
-                tenant, _ = Client.objects.get_or_create(
-                    schema_name=slugify(name),
-                    defaults=dict(
+                schema = slugify(name)
+                # Étape 1: création/maj du tenant sans auto_create_schema
+                tenant = Client.objects.filter(schema_name=schema).first()
+                if not tenant:
+                    tenant = Client(
+                        schema_name=schema,
                         name=name,
                         on_trial=False,
                         categorie=Client.SALLE_SPECTACLE,
                     )
-                )
-                # Harmoniser le nom si le tenant existait déjà
-                if tenant.name != name:
-                    tenant.name = name
-                    tenant.on_trial = False
-                    tenant.categorie = Client.SALLE_SPECTACLE
+                    tenant.auto_create_schema = False
                     tenant.save()
+                else:
+                    # Harmoniser les champs principaux si le tenant existait déjà
+                    updated = False
+                    if tenant.name != name:
+                        tenant.name = name
+                        updated = True
+                    if tenant.on_trial:
+                        tenant.on_trial = False
+                        updated = True
+                    if tenant.categorie != Client.SALLE_SPECTACLE:
+                        tenant.categorie = Client.SALLE_SPECTACLE
+                        updated = True
+                    if updated:
+                        tenant.save()
 
-                Domain.objects.get_or_create(
-                    domain=f"{slugify(name)}.{domain_base}",
-                    defaults=dict(tenant=tenant, is_primary=True)
-                )
+                # Création idempotente du schéma via SQL (même philosophie que cron_morning)
+                try:
+                    with connection.cursor() as cursor:
+                        cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}";')
+                except Exception as e:
+                    logger.warning(f"Impossible de créer le schéma '{schema}' pour le tenant {name}: {e}")
+
+                # Domaine principal idempotent et rattaché au tenant
+                try:
+                    domain_str = f"{schema}.{domain_base}"
+                    domain_obj, _ = Domain.objects.get_or_create(
+                        domain=domain_str,
+                        tenant=tenant,
+                        defaults=dict(is_primary=True)
+                    )
+                    if not getattr(domain_obj, 'is_primary', False):
+                        domain_obj.is_primary = True
+                        try:
+                            domain_obj.save(update_fields=['is_primary'])
+                        except Exception:
+                            domain_obj.save()
+                except Exception as e:
+                    logger.warning(f"Impossible d'assurer le domaine principal pour {name}: {e}")
 
                 # FALC: On ajoute l'admin comme gestionnaire du tenant.
                 try:
@@ -811,6 +843,25 @@ class Command(BaseCommand):
                     logger.warning(f"Impossible d'ajouter l'admin au tenant {name}: {e}")
 
                 created_tenants.append(tenant)
+
+        # -----------------------------
+        # 1.b) Migrations des tenants via subprocess (multiprocessing)
+        # -----------------------------
+        try:
+            import subprocess, sys
+            logger.info("Lancement des migrations des tenants (multiprocessing)...")
+            # Ne pas capturer stdout/stderr pour laisser la sortie s'afficher dans le terminal
+            subprocess.run(
+                [sys.executable, "manage.py", "migrate_schemas", "--executor=multiprocessing"],
+                check=True,
+            )
+            logger.info("Migrations terminées.")
+        except subprocess.CalledProcessError as e:
+            logger.error(
+                "Erreur de migration (return code: %s). Voir la sortie ci-dessus pour les détails.",
+                e.returncode,
+            )
+            raise e
 
         # -----------------------------
         # 2) Remplissage des données par tenant
