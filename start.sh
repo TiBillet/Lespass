@@ -27,6 +27,7 @@ poetry run python /DjangoFiles/manage.py collectstatic --no-input
 #fi
 
 # Migration conditionnelle
+# Peut être qu'on pourra utilise ./manage.py showmigrations | grep '\[ \]' a terme ?
 if [[ "${MIGRATE:-0}" = "1" ]]; then
   echo "Migrate"
   poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing
