@@ -1,32 +1,33 @@
 {% load static %}
 {% load static i18n %}
-<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" content="partial" submit-url="hx_payment">
-	<h1>{% translate "Attente lecture carte" %}</h1>
-	<style>
-		#confirm {
-			position: absolute;
-			left: 0;
-			top: 0;
-			width: 100%;
-			height: 100%;
-			width: 100%;
-			height: 100%;
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-			background-color: var(--noir01);
-			color: var(--blanc01);
-		}
+<div id="confirm">
+	<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" submit-url="hx_payment">
+		<h1>{% translate "Attente lecture carte" %}</h1>
 
-		#message-nfc {
-			flex-direction: row;
-			justify-content: center;
-			align-items: center;
-			font-weight: bold;
-			white-space: pre-line;
-			text-align: center;
-		}
-	</style>
+		<style>
+			#confirm {
+				position: absolute;
+				left: 0;
+				top: 0;
+				width: 100%;
+				height: 100%;
+				width: 100%;
+				height: 100%;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				background-color: var(--noir01);
+				color: var(--blanc01);
+			}
 
-</c-read-nfc>
+			#message-nfc {
+				flex-direction: row;
+				justify-content: center;
+				align-items: center;
+				font-weight: bold;
+				white-space: pre-line;
+				text-align: center;
+			}
+		</style>
+	</c-read-nfc>

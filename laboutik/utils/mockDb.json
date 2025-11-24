@@ -3486,6 +3486,493 @@
         "success": true
       },
       "id": "343719ae33cb44a6817882fc21230dac"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "A",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "c03b38d1741846c7ac74e97b65749bd5"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "A",
+        "total": 4.99,
+        "moyen_paiement": "carte_bancaire",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "success": true
+      },
+      "id": "396e1ab71b984674afc842b6709b8d0b"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "A",
+        "total": 8.19,
+        "moyen_paiement": "carte_bancaire",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "c21d408e4dda47f6abe65eb8387859bb"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "CH",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -8.19
+      },
+      "id": "60181d3f48a84239bd52240ec103b654"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -8.19
+      },
+      "id": "36af6f5696064411a7fc9d77bc19c74e"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "a54dfff289c648b389c4b11a4ec4fb2d"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 5.99,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true
+      },
+      "id": "dec3b32a97484047ab10e23977ce05cb"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "11d548e1ca514cab993752000e723217"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true
+      },
+      "id": "b84fa34815794268b468a834232f2f12"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "0b043b89adf24c0e972bbcb4190b7000"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "cef21108a23a44f6a1a2443434126334"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true
+      },
+      "id": "cf85206263484e2aa2c2500336242820"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 8.19,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "success": true,
+        "give_back": -8.19
+      },
+      "id": "7c2dd110ab994903a884a4f366789cb7"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 5.0,
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "success": true,
+        "give_back": 3.0
+      },
+      "id": "e3297e417e2d4053bb1424f3c150582e"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "espece",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 4.0,
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true,
+        "give_back": 2.0
+      },
+      "id": "0d62ebe36aa0419d8a8e0d780f61e7a3"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "CH",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true,
+        "give_back": -2.0
+      },
+      "id": "7a65259bae5149e5ae2a1c7514592883"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "carte_bancaire",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true,
+        "give_back": -2.0
+      },
+      "id": "dc7a7349b25f4e20a38e44efaece96e8"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "41726643",
+        "comportement": "",
+        "total": 2.5,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true,
+        "card_name": "client1",
+        "wallets": {
+          "monnaie": 50,
+          "gift_monnaie": 5
+        },
+        "funds_insufficient": false,
+        "give_back": -2.5
+      },
+      "id": "d196e81cff564f4c95150a689349be49"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "ca6ee142cf1e42b699c298963c7b6fdd"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "671bbb47671e496a8f89ab818605d608"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": false,
+        "card_name": "client2",
+        "wallets": {
+          "monnaie": 1,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 1.0
+      },
+      "id": "bbdf70ceb4db4d5f852eef893c2ccdda"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "41726643",
+        "comportement": "",
+        "total": 2.0,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0.0,
+        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "success": true,
+        "card_name": "client1",
+        "wallets": {
+          "monnaie": 50,
+          "gift_monnaie": 5
+        },
+        "funds_insufficient": false,
+        "give_back": -2.0
+      },
+      "id": "14c4b371372a4c90af40f96ba4893657"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "A49E8E2A",
+        "comportement": "",
+        "total": 849,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": "0",
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-8a75f2d2-9d3f-4ca7-9367-13b0afa19bca": "1",
+        "success": false,
+        "card_name": "master",
+        "wallets": {
+          "monnaie": 0,
+          "gift_monnaie": 0
+        },
+        "funds_insufficient": true,
+        "missing": 8.49
+      },
+      "id": "7dfe58483c8b476195020732c096cdfc"
     }
   ]
 }

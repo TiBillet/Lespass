@@ -14,7 +14,7 @@
 		<!-- include bt_return.html -->
 		<c-bt.return selector="#confirm" layer="2" />
 
-		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="confirmPayment('{{ method }}')">
+		<div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="askManageAddition('{{ method }}')">
 			<div class="bt-basic-icon">
 				<i class="fas fa-check-circle"></i>
 			</div>
@@ -26,15 +26,30 @@
 </div>
 
 <script>
-	function confirmPayment(method) {
+	function askManageAddition(method) {
+		// insérer la somme donnée dans le formulaire de l'addition
 		if (method === 'espece') {
-			// récupère la somme donée
 			const givenSum = Number(document.querySelector('#given-sum').value) * 100
-			// update given sum in form
-			askAdditionManageForm('updateInput', '#addition-given-sum', givenSum)
+			sendEvent('organizerMsg', '#event-organizer', {
+				src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+				msg: 'additionManageForm',
+				data: { actionType: 'updateInput', selector: '#addition-given-sum', value: givenSum }
+			})
 		}
-		// submit
-		askAdditionManageForm('submit', null, 'hx_payment')
+
+		// hx-post = 'hx_payment'
+		sendEvent('organizerMsg', '#event-organizer', {
+			src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+			msg: 'additionManageForm',
+			data: { actionType: 'postUrl', selector: null, value: 'hx_payment' }
+		})
+
+		// submit le formulaire
+		sendEvent('organizerMsg', '#event-organizer', {
+			src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+			msg: 'additionManageForm',
+			data: { actionType: 'submit' }
+		})
 	}
 </script>
 <style>

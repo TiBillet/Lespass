@@ -11,16 +11,11 @@
 	</div>
 
 	<script>
-		const content = '{{content}}'
-		const submitUrl = '{{ submit_url }}'
-		const eventManageForm = '{{ event_manage_form }}'
-
 		function initNfc() {
-			console.log('initNfc, eventManageForm =', eventManageForm, '  --  submitUrl =', submitUrl);
 			try {		
 			const nfc = new NfcReader()
 			// start read nfc
-			nfc.start({eventManageForm, submitUrl})
+			nfc.start({eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}'})
 			} catch (error) {
 				console.log('-> Cotton - read_nfc.html - initNfc,', error)
 			}

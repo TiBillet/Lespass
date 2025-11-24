@@ -158,6 +158,8 @@ function additionDisplayPaymentTypes() {
 
 // gestionnaire de formulaire
 function additionManageForm(event) {
+	// console.log('-> additionManageForm, event.detail =', event.detail);
+	
 	try {
 		const data = event.detail
 		const form = document.querySelector('#addition-form')

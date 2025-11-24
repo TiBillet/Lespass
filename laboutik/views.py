@@ -346,7 +346,7 @@ def hx_payment(request):
     return render(request, "partial/hx_payment_success.html", context)
 
   if payment["success"] == False:
-    if int(payment["given_sum"]) < payment["total"]:
+    if int(payment["given_sum"]) > 0 and int(payment["given_sum"]) < payment["total"]:
       context = {
 		    "msg_type": "warning",
 			  "msg_content": _("Fonds insuffisants !")

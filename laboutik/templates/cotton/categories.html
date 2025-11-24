@@ -83,39 +83,6 @@
 					data: { category: 'cat-all' }
 				})
 			}
-
-			/*
-			// select all
-			if (ele.id === "category-all") {
-				// all remove category-item-active
-				allRemoveCatActive()
-				// add category-item-active
-				ele.classList.add('category-item-active')
-				// affiche tous les produits
-				document.querySelectorAll('#products .article-container').forEach(article => {
-					article.style.display = "flex"
-				})
-			}
-
-			// select category
-			if (ele.getAttribute('data-sel') !== null) {
-				const cat = ele.getAttribute('data-sel')
-				console.log('catégorie =', cat)
-				// all remove category-item-active
-				allRemoveCatActive()
-				// add category-item-active
-				ele.classList.add('category-item-active')
-				// affiche uniquement les produits de catégories sélectionnées
-				document.querySelectorAll('#products .article-container').forEach(article => {
-					if (article.classList.contains(cat)) {
-						article.style.display = "flex"
-					} else {
-						article.style.display = "none"
-					}
-				})
-
-			}
-				*/
 		}
 	}
 	document.querySelector("#categories").addEventListener('click', manageCategories)

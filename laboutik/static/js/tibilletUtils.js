@@ -85,35 +85,6 @@ function askAdditionManageForm(actionType, selector, value) {
 	})
 }
 
-/*
-window.manageFormHtmx = function (event) {
-	const action = event.detail
-	// console.log('-> updateFormHtmx, action =', action)
-	const form = document.querySelector(action.form)
-
-	if (action.updateType === 'url') {
-		form.setAttribute('hx-post', action.value)
-		// ask htmx to process new changes
-		htmx.process(form)
-	}
-
-	if (action.updateType === 'trigger') {
-		form.setAttribute('hx-trigger', action.value)
-		// ask htmx to process new changes
-		htmx.process(form)
-	}
-
-	if (action.updateType === 'input') {
-		document.querySelector(action.selector).value = action.value
-		// ask htmx to process new changes
-		htmx.process(form)
-	}
-
-	if (action.updateType === 'submit') {
-		sendEvent(action.value, action.form, {})
-	}
-}
-*/
 
 // aiguillage d'eventsOrganizer :
 // - Est un objet contenant l'aiguillage de chaque évènement reçu

@@ -4,7 +4,7 @@
 
 -->
 {% block content %}
-<c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm" content="page" submit-url="ask_primary_card">
+<c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm" submit-url="ask_primary_card">
 	<form id="form-nfc" class="hide" hx-post="ask_primary_card" hx-trigger="nfcResult" hx-target=".message-nfc"
 		hx-swap="innerHTML">
 		{% csrf_token %}
