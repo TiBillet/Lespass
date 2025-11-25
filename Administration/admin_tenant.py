@@ -4063,54 +4063,54 @@ class ParticipationInline(TabularInline):
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
-class InitiativeAdminForm(ModelForm):
-    funding_goal_eur = forms.DecimalField(
-        label=_("Objectif"),
-        help_text=_("Montant de l'objectif dans la devise de l'initiative (affiché en unités, enregistré en centimes)."),
-        decimal_places=2,
-        max_digits=12,
-        min_value=0,
-        required=True,
-        widget=UnfoldAdminTextInputWidget,
-    )
-
-    class Meta:
-        model = Initiative
-        fields = (
-            "name",
-            "short_description",
-            "description",
-            "funding_goal_eur",
-            "currency",
-            # "direct_debit",
-            "img",
-            "budget_contributif",
-        )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        inst: Initiative | None = getattr(self, "instance", None)
-        if inst and getattr(inst, "pk", None):
-            try:
-                self.fields["funding_goal_eur"].initial = (Decimal(inst.funding_goal or 0) / Decimal("100")).quantize(Decimal("0.01"))
-            except Exception:
-                self.fields["funding_goal_eur"].initial = Decimal("0.00")
-
-    def save(self, commit=True):
-        instance: Initiative = super().save(commit=False)
-        # Convert euros to integer cents safely
-        value_eur: Decimal = self.cleaned_data.get("funding_goal_eur") or Decimal("0")
-        cents = int((value_eur.quantize(Decimal("0.01")) * 100).to_integral_value())
-        instance.funding_goal = max(0, cents)
-        if commit:
-            instance.save()
-            self.save_m2m()
-        return instance
+# class InitiativeAdminForm(ModelForm):
+#     funding_goal_eur = forms.DecimalField(
+#         label=_("Objectif"),
+#         help_text=_("Montant de l'objectif dans la devise de l'initiative (affiché en unités, enregistré en centimes)."),
+#         decimal_places=2,
+#         max_digits=12,
+#         min_value=0,
+#         required=True,
+#         widget=UnfoldAdminTextInputWidget,
+#     )
+#
+#     class Meta:
+#         model = Initiative
+#         fields = (
+#             "name",
+#             "short_description",
+#             "description",
+#             "funding_goal_eur",
+#             "currency",
+#             # "direct_debit",
+#             "img",
+#             "budget_contributif",
+#         )
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         inst: Initiative | None = getattr(self, "instance", None)
+#         if inst and getattr(inst, "pk", None):
+#             try:
+#                 self.fields["funding_goal_eur"].initial = (Decimal(inst.funding_goal or 0) / Decimal("100")).quantize(Decimal("0.01"))
+#             except Exception:
+#                 self.fields["funding_goal_eur"].initial = Decimal("0.00")
+#
+#     def save(self, commit=True):
+#         instance: Initiative = super().save(commit=False)
+#         # Convert euros to integer cents safely
+#         value_eur: Decimal = self.cleaned_data.get("funding_goal_eur") or Decimal("0")
+#         cents = int((value_eur.quantize(Decimal("0.01")) * 100).to_integral_value())
+#         instance.funding_goal = max(0, cents)
+#         if commit:
+#             instance.save()
+#             self.save_m2m()
+#         return instance
 
 
 @admin.register(Initiative, site=staff_admin_site)
 class InitiativeAdmin(ModelAdmin):
-    form = InitiativeAdminForm
+    # form = InitiativeAdminForm
     list_display = (
         "name",
         "created_at",
@@ -4126,12 +4126,12 @@ class InitiativeAdmin(ModelAdmin):
         "name",
         "short_description",
         "description",
-        "funding_goal_eur",
         "currency",
         # "direct_debit",
         "img",
         "tags",
         "archived",
+        "vote",
         "budget_contributif",
         "adaptative_funding_goal_on_participation",
     )
@@ -4164,12 +4164,14 @@ class InitiativeAdmin(ModelAdmin):
     currency.short_description = _("Devise")
 
     def funded_amount_display(self, obj):
-        return f"{obj.funded_amount_eur:.2f}"
+        decimal_amount = Decimal(obj.total_funded_amount or 0) / Decimal("100")
+        return f"{decimal_amount:.2f}"
 
     funded_amount_display.short_description = _("Financé")
 
     def funding_goal_display(self, obj):
-        return f"{obj.funding_goal_eur:.2f} {self.currency(obj)}"
+        decimal_amount = Decimal(obj.funding_goal or 0) / Decimal("100")
+        return f"{decimal_amount:.2f} {self.currency(obj)}"
 
     funding_goal_display.short_description = _("Objectif")
 

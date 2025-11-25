@@ -17,7 +17,8 @@ from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
 from fedow_public.models import AssetFedowPublic
-from crowds.models import Initiative, Contribution, Participation
+from crowds.models import Initiative, Contribution, Participation, BudgetItem
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -1302,6 +1303,117 @@ class Command(BaseCommand):
                                 except Exception as e:
                                     logger.warning(f"Impossible de lier l'asset '{asset_name}' à l'initiative '{name}': {e}")
 
+                            # -----------------------------
+                            # Lignes budgétaires (BudgetItem)
+                            # -----------------------------
+                            # Nouveau: l'objectif total affiché provient de la somme des BudgetItem approuvés.
+                            # Le JSON de démo peut fournir init['budget_items'] comme liste de dicts:
+                            #   { description, amount_eur, state(optional: requested/approved/rejected),
+                            #     contributor_email(optional), validator_email(optional) }
+                            try:
+                                budget_items = init.get('budget_items') or []
+                            except Exception:
+                                budget_items = []
+
+                            # Helper pour récupérer un utilisateur par email (ou créer un placeholder)
+                            def _get_user(email: str) -> TibilletUser | None:
+                                try:
+                                    if not email:
+                                        return None
+                                    user = TibilletUser.objects.filter(email=email).first()
+                                    if user:
+                                        return user
+                                    # fallback: créer un user minimal via utilitaire
+                                    try:
+                                        u = get_or_create_user(email=email)
+                                        return u
+                                    except Exception:
+                                        return None
+                                except Exception:
+                                    return None
+
+                            # Création depuis fixtures si fournis
+                            created_any_bi = False
+                            for bi in budget_items:
+                                try:
+                                    desc = (bi.get('description') or '').strip()
+                                    amt_eur = Decimal(str(bi.get('amount_eur') or 0))
+                                except Exception:
+                                    desc = ''
+                                    amt_eur = Decimal('0')
+                                if not desc or amt_eur <= 0:
+                                    continue
+                                state = (bi.get('state') or 'approved').strip().lower()
+                                if state not in ['requested', 'approved', 'rejected']:
+                                    state = 'approved'
+                                contributor = _get_user(bi.get('contributor_email') or admin_email_env)
+                                validator = None
+                                if state in ['approved', 'rejected']:
+                                    validator = _get_user(bi.get('validator_email') or admin_email_env)
+
+                                # Idempotence: on considère (initiative, description, amount) comme clé naturelle simple
+                                try:
+                                    bi_obj, created = BudgetItem.objects.get_or_create(
+                                        initiative=initiative_obj,
+                                        description=desc,
+                                        amount=amt_eur,
+                                        defaults={
+                                            'contributor': contributor or TibilletUser.objects.filter(email=admin_email_env).first(),
+                                            'state': state,
+                                            'validator': validator if state in ['approved', 'rejected'] else None,
+                                        }
+                                    )
+                                    if not created:
+                                        updates = []
+                                        if bi_obj.state != state:
+                                            bi_obj.state = state
+                                            updates.append('state')
+                                        if state in ['approved', 'rejected'] and validator and bi_obj.validator_id != getattr(validator, 'id', None):
+                                            bi_obj.validator = validator
+                                            updates.append('validator')
+                                        if contributor and bi_obj.contributor_id != getattr(contributor, 'id', None):
+                                            bi_obj.contributor = contributor
+                                            updates.append('contributor')
+                                        if updates:
+                                            try:
+                                                bi_obj.save(update_fields=updates)
+                                            except Exception:
+                                                bi_obj.save()
+                                    created_any_bi = created_any_bi or created
+                                except Exception as e:
+                                    logger.warning(f"BudgetItem non créé pour '{name}': {e}")
+
+                            # Si aucune ligne n'est fournie dans le JSON, générer une répartition simple (60/40)
+                            if not budget_items and (goal_units or 0) > 0:
+                                try:
+                                    admin_user = TibilletUser.objects.filter(email=admin_email_env).first()
+                                    if not admin_user:
+                                        admin_user = _get_user(admin_email_env)
+                                    g = Decimal(str(goal_units))
+                                    p1 = (g * Decimal('0.6')).quantize(Decimal('0.01'))
+                                    p2 = (g - p1).quantize(Decimal('0.01'))
+                                    defaults_common = {
+                                        'contributor': admin_user,
+                                        'state': 'approved',
+                                        'validator': admin_user,
+                                    }
+                                    # BI 1
+                                    BudgetItem.objects.get_or_create(
+                                        initiative=initiative_obj,
+                                        description=f"{name} – Poste A",
+                                        amount=p1,
+                                        defaults=defaults_common,
+                                    )
+                                    # BI 2
+                                    BudgetItem.objects.get_or_create(
+                                        initiative=initiative_obj,
+                                        description=f"{name} – Poste B",
+                                        amount=p2,
+                                        defaults=defaults_common,
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"Impossible de générer des BudgetItem par défaut pour '{name}': {e}")
+
                             # Contributions (financières ou en unité)
                             for c in init.get('contributions', []) or []:
                                 try:
@@ -1326,18 +1438,29 @@ class Command(BaseCommand):
                                         payment_status=Contribution.PaymentStatus.PAID_ADMIN,
                                     )
 
+                            # Si des participations sont fournies dans le JSON, activer automatiquement
+                            # l'affichage du budget contributif pour rendre la section visible sur le front.
+                            try:
+                                provided_parts = (init.get('participations', []) or [])
+                                if provided_parts and not getattr(initiative_obj, 'budget_contributif', False):
+                                    initiative_obj.budget_contributif = True
+                                    initiative_obj.save(update_fields=['budget_contributif'])
+                            except Exception:
+                                # ne bloque pas le seed si erreur
+                                pass
+
                             # Participations (demandes de budget)
                             for p in init.get('participations', []) or []:
                                 # Remplacement de variable d'env dans l'email si nécessaire
                                 raw_email = p.get('user_email') or ''
                                 user_email = raw_email.replace('${ADMIN_EMAIL}', admin_email_env) if raw_email else admin_email_env
                                 try:
-                                    requested_val = float(p.get('requested_value') or 0)
+                                    # Autoriser la participation bénévole si requested_value est vide/0
+                                    requested_raw = p.get('requested_value')
+                                    requested_val = float(requested_raw) if (requested_raw is not None and requested_raw != "") else 0.0
                                 except Exception:
                                     requested_val = 0
-                                requested_cents = int(round(requested_val * 100))
-                                if requested_cents <= 0:
-                                    continue
+                                requested_cents = int(round(requested_val * 100)) if requested_val > 0 else None
                                 desc = p.get('description') or ''
                                 state = map_participation_state(p.get('state'))
                                 time_spent = p.get('time_spent_minutes')

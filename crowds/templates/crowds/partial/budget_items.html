@@ -1,0 +1,74 @@
+{% load i18n %}
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+        <tr>
+            <th scope="col">{% translate 'Proposé par' %}</th>
+            <th scope="col">{% translate 'Description' %}</th>
+            <th scope="col" class="text-end">{% translate 'Montant' %}</th>
+            <th scope="col">{% translate 'Date' %}</th>
+            <th scope="col" class="text-end">{% translate 'Validation' %}</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for bi in budget_items %}
+            <tr>
+                <td>
+                    {% if bi.contributor %}
+                        {{ bi.contributor.email }}
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="small">{{ bi.description|linebreaksbr }}</td>
+                <td class="text-end">{{ bi.amount|floatformat:2 }} {{ initiative.currency }}</td>
+                <td>{{ bi.created_at|date:'Y-m-d H:i' }}</td>
+                <td class="text-end">
+                    {% if bi.state == 'requested' %}
+                        {% if user.is_authenticated %}
+                            {% if user.is_staff or user.is_superuser %}
+                                <div class="btn-group" role="group" aria-label="{% translate 'Validation' %}">
+                                    <button class="btn btn-sm btn-outline-success"
+                                            title="{% translate 'Approuver la proposition' %}"
+                                            hx-post="{{ initiative.get_absolute_url }}budget-items/{{ bi.uuid }}/approve/"
+                                            hx-target="#budget_items_list"
+                                            hx-swap="innerHTML">
+                                        {% translate 'Approuver' %}
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            title="{% translate 'Rejeter la proposition' %}"
+                                            hx-post="{{ initiative.get_absolute_url }}budget-items/{{ bi.uuid }}/reject/"
+                                            hx-target="#budget_items_list"
+                                            hx-swap="innerHTML">
+                                        {% translate 'Rejeter' %}
+                                    </button>
+                                </div>
+                            {% else %}
+                                <span class="badge text-bg-warning">{% translate 'Proposition formulée' %}</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge text-bg-warning">{% translate 'Proposition formulée' %}</span>
+                        {% endif %}
+                    {% else %}
+                        {% if bi.state == 'approved' %}
+                            <span class="badge text-bg-success">{{ bi.get_state_display }}</span>
+                        {% elif bi.state == 'rejected' %}
+                            <span class="badge text-bg-danger">{{ bi.get_state_display }}</span>
+                        {% else %}
+                            {{ bi.get_state_display }}
+                        {% endif %}
+{#                        {% if bi.validator %}#}
+{#                            <span class="text-muted small ms-2">{% translate 'par' %} {{ bi.validator_name }}</span>#}
+{#                        {% endif %}#}
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="5"
+                    class="text-center text-muted py-4">{% translate 'Aucune ligne budgétaire pour le moment.' %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>

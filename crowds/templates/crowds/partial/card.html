@@ -35,7 +35,7 @@
                       <span class="text-muted">
                         <i class="bi bi-piggy-bank me-1" aria-hidden="true"></i>{{ crowd_config.name_funding_goal }}
                       </span>
-                      <strong>{{ initiative.get_funding_goal|dround }} {{ initiative.currency }}</strong>
+                      <strong>{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
                 </div>
 
                 {# budget_contributif #}
@@ -65,7 +65,7 @@
                     <span>
                         <strong class="text-body">{{ initiative.progress_percent_int }}%</strong>
                         <span class="text-muted">{% translate 'sur' %}</span>
-                        <strong class="text-body">{{ initiative.get_funding_goal|dround }} {{ initiative.currency }}</strong>
+                        <strong class="text-body">{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
                     </span>
                 </div>
                 <div class="progress mt-2" style="height: .5rem;">

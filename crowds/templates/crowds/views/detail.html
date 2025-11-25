@@ -26,10 +26,12 @@
         <header class="mb-3">
             {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
             <h1 class="mt-3">{{ initiative.name }}
+                {% if initiative.vote %}
                 {# compteur de votes #}
                 <span class="ms-sm-2">
                     {% include 'crowds/partial/votes_badge.html' with initiative=initiative %}
                 </span>
+                {% endif %}
             </h1>
 
             {# Tags de l’initiative #}
@@ -53,8 +55,99 @@
 
         <p class="lead">{{ initiative.description |safe |default:"" }}</p>
 
-        {# Barre de progression des financement #}
-        <section class="my-4">
+        {# 1) Votes #}
+        {% if initiative.vote %}
+        <section id="votes" class="mt-5">
+            <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                <span>{% translate 'Votes' %}</span>
+                <span>
+                    {% if user.is_authenticated %}
+                        <button
+                                class="btn btn-sm btn-primary"
+                                title="{% translate 'Voter pour la pertinence' %}"
+                                hx-post="{{ initiative.get_absolute_url }}vote/"
+                                hx-trigger="click"
+                                hx-target="#votes-{{ initiative.uuid }}"
+                                hx-swap="outerHTML">
+                            <i class="bi bi-hand-thumbs-up"></i>
+                            {% translate 'Voter' %}
+                        </button>
+                    {% else %}
+                        <button
+                                class="btn btn-sm btn-primary"
+                                title="{% translate 'Voter pour la pertinence' %}"
+                                onclick="crowdsVoteRequireLogin()">
+                            <i class="bi bi-hand-thumbs-up"></i>
+                            {% translate 'Voter' %}
+                        </button>
+                    {% endif %}
+                </span>
+            </h2>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                    <tr>
+                        <th scope="col">{% translate 'Votant·e' %}</th>
+                        <th scope="col">{% translate 'Date' %}</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for v in votes %}
+                        <tr>
+                            <td>{{ v.user.email }}</td>
+                            <td>{{ v.created_at|date:'Y-m-d H:i' }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="2"
+                                class="text-center text-muted py-4">{% translate 'Aucun vote pour le moment.' %}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endif %}
+
+        {# 2) Lignes budgétaires #}
+        <section id="budget" class="mt-4">
+            <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                <span>{% translate 'Lignes budgétaires' %}</span>
+                <span>
+                    <button class="btn btn-sm btn-outline-primary"
+                            onclick="return (window.crowdsOpenBudgetItemProposal ? crowdsOpenBudgetItemProposal() : (window.crowdsShowBudgetProposalFallback ? crowdsShowBudgetProposalFallback() : alert('Module non charge')))">
+                        <i class="bi bi-lightbulb"></i>
+                        {% translate 'Proposer' %}
+                    </button>
+                </span>
+            </h2>
+            <p class="text-muted small mb-2">
+                {% translate 'Total à financer' %}:
+                <strong>{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
+            </p>
+            <div id="budget_items_list">
+                {% include 'crowds/partial/budget_items.html' %}
+            </div>
+        </section>
+
+        {# 3) Financement #}
+        <section id="financement" class="my-4">
+            <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                <span>{% translate 'Financement' %}</span>
+                <span>
+                    {% if user.is_authenticated %}
+                        <button type="button" class="btn btn-sm btn-primary" title="{% translate 'Financer' %}"
+                                onclick="openContributionModal()">
+                            💸 {% translate 'Financer' %}
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn btn-sm btn-primary" title="{% translate 'Financer' %}"
+                                onclick="crowdsVoteRequireLogin()">
+                            💸 {% translate 'Financer' %}
+                        </button>
+                    {% endif %}
+                </span>
+            </h2>
             <div class="progress">
                 <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0"
                      aria-valuemax="100" aria-valuenow="{{ initiative.progress_percent_int }}" style="width: 0%"
@@ -62,31 +155,16 @@
                     <span class="visually-hidden">{{ requested_percent_int }}%</span>
                 </div>
             </div>
-            <p class="mt-2 mb-0 text-center text-muted small">
+            <p class="mt-2 mb-3 text-center text-muted small">
                 {% translate "Financé" %}:
-                <strong>{{ initiative.funded_amount|dround }} {{ initiative.currency }}</strong>
-                / <strong>{{ initiative.get_funding_goal|dround }} {{ initiative.currency }}</strong>
+                <strong>{{ initiative.total_funded_amount|dround }} {{ initiative.currency }}</strong>
+                / <strong>{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
             </p>
 
+            <div id="contributions_list">
+                {% include 'crowds/partial/contributions.html' %}
+            </div>
         </section>
-
-
-        {# Barre de progression des demandes de participations vs financements #}
-        {% if initiative.budget_contributif %}
-            <section class="my-4">
-                <div class="progress">
-                    <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0"
-                         aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%"
-                         data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
-                        <span class="visually-hidden">{{ requested_percent_int }}%</span>
-                    </div>
-                </div>
-                <p class="mt-2 mb-0 text-center text-muted small">
-                    {% translate "Demandé par les contributeur.ices" %}:
-                    <strong>{{ initiative.requested_total_cents|dround }} {{ initiative.currency }}</strong>
-                </p>
-            </section>
-        {% endif %}
 
         <script>
             (function () {
@@ -111,94 +189,42 @@
                hx-push-url="true">
                 ← {% translate 'Retour' %}
             </a>
-
-            {# Bouton voter #}
-            {% if user.is_authenticated %}
-                <button
-                        class="btn btn-primary"
-                        title="{{ crowd_config.vote_button_name }}"
-                        hx-post="{{ initiative.get_absolute_url }}vote/"
-                        hx-trigger="click"
-                        hx-target="#votes-{{ initiative.uuid }}"
-                        hx-swap="outerHTML">
-                    <i class="bi bi-hand-thumbs-up"> </i>{{ crowd_config.vote_button_name }}
-                </button>
-            {% else %}
-                <button
-                        class="btn btn-primary"
-                        title="{{ crowd_config.vote_button_name }}"
-                        onclick="crowdsVoteRequireLogin()">
-                    <i class="bi bi-hand-thumbs-up"> </i>{{ crowd_config.vote_button_name }}
-                </button>
-            {% endif %}
-
-            {% if initiative.budget_contributif %}
-                {# Participer (déclaration de participation) #}
-                {% if user.is_authenticated %}
-                    <button class="btn btn-outline-primary" onclick="crowdsOpenParticipate()">
-                        <i class="bi bi-person-gear"></i>
-                        {% translate 'Participer' %}
-                    </button>
-                {% else %}
-                    <button class="btn btn-outline-primary" onclick="crowdsVoteRequireLogin()">
-                        <i class="bi bi-person-gear"></i>
-                        {% translate 'Participer' %}
-                    </button>
-                {% endif %}
-            {% endif %}
-
-            {# Contribution financière (formulaire Swal → HTMX) #}
-            {% if user.is_authenticated %}
-                <button type="button" class="btn btn-primary" title="{% translate 'Financer' %}"
-                        onclick="openContributionModal()">
-                    💸 {% translate 'Financer' %}
-                </button>
-            {% else %}
-                <button type="button" class="btn btn-primary" title="{% translate 'Financer' %}"
-                        onclick="crowdsVoteRequireLogin()">
-                    💸 {% translate 'Financer' %}
-                </button>
-            {% endif %}
         </div>
 
 
-        <section class="mt-5">
-            <h2 class="h4 mb-3">{% translate 'Votants' %}</h2>
-            <div class="table-responsive">
-                <table class="table align-middle">
-                    <thead>
-                    <tr>
-                        <th scope="col">{% translate 'Utilisateur' %}</th>
-                        <th scope="col">{% translate 'Date' %}</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for v in votes %}
-                        <tr>
-                            <td>{{ v.user.email }}</td>
-                            <td>{{ v.created_at|date:'Y-m-d H:i' }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="2"
-                                class="text-center text-muted py-4">{% translate 'Aucun vote pour le moment.' %}</td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="mt-5">
-            <h2 class="h4 mb-3">{% translate 'Contributions financières' %}</h2>
-            <div id="contributions_list">
-                {% include 'crowds/partial/contributions.html' %}
-            </div>
-        </section>
+        {# La section Contributions est désormais intégrée dans "Financement" #}
 
         {% if initiative.budget_contributif %}
-            <section class="mt-5">
-                <h2 class="h4 mb-3">{% translate 'Organisez votre budget contributif' %}</h2>
+            {# 4) Réalisation #}
+            <section id="realisation" class="mt-5">
+                <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                    <span>{% translate 'Réalisation' %}</span>
+                    <span>
+                        {% if user.is_authenticated %}
+                            <button class="btn btn-sm btn-outline-primary" onclick="crowdsOpenParticipate()">
+                                <i class="bi bi-person-gear"></i>
+                                {% translate 'Participer' %}
+                            </button>
+                        {% else %}
+                            <button class="btn btn-sm btn-outline-primary" onclick="crowdsVoteRequireLogin()">
+                                <i class="bi bi-person-gear"></i>
+                                {% translate 'Participer' %}
+                            </button>
+                        {% endif %}
+                    </span>
+                </h2>
+                {# Barre de progression des demandes de participations vs financements #}
+                <div class="progress">
+                    <div class="progress-bar bg-{{ requested_color }}" role="progressbar" aria-valuemin="0"
+                         aria-valuemax="100" aria-valuenow="{{ requested_percent_int_capped }}" style="width: 0%"
+                         data-requested-bar="1" data-width-int="{{ requested_percent_int_capped }}">
+                        <span class="visually-hidden">{{ requested_percent_int }}%</span>
+                    </div>
+                </div>
+                <p class="mt-2 mb-3 text-center text-muted small">
+                    {% translate "Demandé par les contributeur.ices" %}:
+                    <strong>{{ initiative.requested_total_cents|dround }} {{ initiative.currency }}</strong>
+                </p>
                 <h6 class="h6 mb-3">Pour en savoir plus sur les budgets contributifs, <a
                         href="https://movilab.org/wiki/Coremuneration_et_budget_contributif" target="_blank">visitez
                     movilab !</a></h6>
@@ -207,6 +233,160 @@
                 </div>
             </section>
         {% endif %}
+
+        {# Helpers JS pour actions de la page détail #}
+        {% translate "Proposer une ligne budgétaire" as t_bi_title %}
+        {% translate "Le module n'est pas encore chargé. Réessayez ou rechargez la page." as t_bi_not_loaded %}
+        {% translate "Décrivez la dépense proposée" as t_bi_desc %}
+        {% translate "Montant proposé (en unités, ex: 123.45)" as t_bi_amount_prompt %}
+        {% translate "Proposition envoyée" as t_bi_sent %}
+        {% translate "Impossible d'envoyer" as t_bi_send_fail %}
+        {% translate "Erreur réseau" as t_bi_net_err %}
+        {% translate "Montant (en unités)" as t_bi_amount_label %}
+        {% translate "Description" as t_bi_desc_label %}
+        {% translate "Envoyer" as t_bi_send %}
+        {% translate "Annuler" as t_bi_cancel %}
+        {% translate "Veuillez indiquer un montant valide." as t_bi_amount_invalid %}
+        {% translate "Veuillez décrire en quelques mots (min 5 caractères)." as t_bi_desc_invalid %}
+        {% translate "Une erreur est survenue." as t_bi_error %}
+        <script>
+          (function(){
+            const isAuth = {{ user.is_authenticated|yesno:"true,false" }};
+            // Safely expose i18n strings for JS (already escaped for JS context)
+            const T = Object.freeze({
+              bi_title: '{{ t_bi_title|escapejs }}',
+              not_loaded: '{{ t_bi_not_loaded|escapejs }}',
+              bi_desc: '{{ t_bi_desc|escapejs }}',
+              bi_amount_prompt: '{{ t_bi_amount_prompt|escapejs }}',
+              sent: '{{ t_bi_sent|escapejs }}',
+              send_fail: '{{ t_bi_send_fail|escapejs }}',
+              net_err: '{{ t_bi_net_err|escapejs }}',
+              amount_label: '{{ t_bi_amount_label|escapejs }}',
+              desc_label: '{{ t_bi_desc_label|escapejs }}',
+              send: '{{ t_bi_send|escapejs }}',
+              cancel: '{{ t_bi_cancel|escapejs }}',
+              amount_invalid: '{{ t_bi_amount_invalid|escapejs }}',
+              desc_invalid: '{{ t_bi_desc_invalid|escapejs }}',
+              error_generic: '{{ t_bi_error|escapejs }}',
+            });
+
+            function getCookie(name){
+              const value = `; ${document.cookie}`;
+              const parts = value.split(`; ${name}=`);
+              if (parts.length === 2) return parts.pop().split(';').shift();
+              return null;
+            }
+
+            // Fallback used by the inline onclick if the main function isn't loaded
+            window.crowdsShowBudgetProposalFallback = function(){
+              try {
+                if (window.Swal && typeof Swal.fire === 'function'){
+                  Swal.fire({ icon: 'info', title: T.bi_title, text: T.not_loaded });
+                } else {
+                  alert(T.not_loaded);
+                }
+              } catch(e){ /* noop */ }
+            };
+
+            window.crowdsOpenBudgetItemProposal = function() {
+              try {
+                if (!isAuth) {
+                  if (typeof window.crowdsVoteRequireLogin === 'function') {
+                    return window.crowdsVoteRequireLogin();
+                  }
+                }
+                if (!(window.Swal && typeof window.Swal.fire === 'function')) {
+                  const desc = prompt(T.bi_desc);
+                  if (!desc) return;
+                  const amount = prompt(T.bi_amount_prompt);
+                  if (!amount) return;
+                  const formData = new URLSearchParams();
+                  formData.set('description', desc);
+                  formData.set('amount_eur', amount);
+                  fetch("{{ initiative.get_absolute_url }}budget/propose/", {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                      'X-CSRFToken': getCookie('csrftoken') || ''
+                    },
+                    body: formData.toString()
+                  }).then(async (r)=>{
+                    if (r.status === 401){ window.crowdsVoteRequireLogin && crowdsVoteRequireLogin(); return; }
+                    const data = await r.json().catch(()=>({}));
+                    if (r.ok && data && data.html){
+                      const target = document.getElementById('budget_items_list');
+                      if (target) target.innerHTML = data.html;
+                      if (window.Swal) Swal.fire({toast:true,position:'top',timer:1600,showConfirmButton:false,icon:'success',title:T.sent});
+                    } else {
+                      if (window.Swal) Swal.fire({icon:'error',title:T.send_fail, text: (data && data.error) ? data.error : ''});
+                    }
+                  }).catch(()=>{
+                    if (window.Swal) Swal.fire({icon:'error',title:T.net_err});
+                  });
+                  return;
+                }
+
+                Swal.fire({
+                  title: T.bi_title,
+                  html:
+                    '<div class="mb-2 text-start">' +
+                      '<label class="form-label">' + T.amount_label + '</label>'+
+                      '<input id="swal_amount" type="number" step="0.01" min="0.01" class="form-control" placeholder="0.00" />' +
+                    '</div>'+
+                    '<div class="mb-2 text-start">' +
+                      '<label class="form-label">' + T.desc_label + '</label>'+
+                      '<textarea id="swal_desc" class="form-control" rows="3" placeholder="' + T.bi_desc + '"></textarea>'+
+                    '</div>',
+                  showCancelButton: true,
+                  confirmButtonText: T.send,
+                  cancelButtonText: T.cancel,
+                  preConfirm: () => {
+                    const amount = document.getElementById('swal_amount').value.trim();
+                    const desc = document.getElementById('swal_desc').value.trim();
+                    if (!amount || parseFloat(amount) <= 0) {
+                      Swal.showValidationMessage(T.amount_invalid);
+                      return false;
+                    }
+                    if (!desc || desc.length < 5) {
+                      Swal.showValidationMessage(T.desc_invalid);
+                      return false;
+                    }
+                    return { amount, desc };
+                  }
+                }).then((res)=>{
+                  if (!res.isConfirmed) return;
+                  if (!isAuth) { window.crowdsVoteRequireLogin && crowdsVoteRequireLogin(); return; }
+                  const {amount, desc} = res.value || {};
+                  const formData = new URLSearchParams();
+                  formData.set('description', desc);
+                  formData.set('amount_eur', amount);
+                  fetch("{{ initiative.get_absolute_url }}budget/propose/", {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                      'X-CSRFToken': getCookie('csrftoken') || ''
+                    },
+                    body: formData.toString()
+                  }).then(async (r)=>{
+                    if (r.status === 401){ window.crowdsVoteRequireLogin && crowdsVoteRequireLogin(); return; }
+                    const data = await r.json().catch(()=>({}));
+                    if (r.ok && data && data.html){
+                      const target = document.getElementById('budget_items_list');
+                      if (target) target.innerHTML = data.html;
+                      Swal.fire({toast:true,position:'top',timer:1600,showConfirmButton:false,icon:'success',title:T.sent});
+                    } else {
+                      Swal.fire({icon:'error',title:T.send_fail, text: (data && data.error) ? data.error : ''});
+                    }
+                  }).catch(()=>{
+                    Swal.fire({icon:'error',title:T.net_err});
+                  });
+                });
+              } catch (e) {
+                alert(T.error_generic);
+              }
+            }
+          })();
+        </script>
 
 
         <script>
@@ -353,7 +533,7 @@
                             <label class="form-label">{% blocktrans with cur=initiative.currency %}
                         Montant sollicité (en {{ cur }}){% endblocktrans %}</label>
                             <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
-                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé." %}</div>
+                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé." %} {% translate "Laissez vide si bénévolat." %}</div>
                         </div>
                     `,
                     focusConfirm: false,
@@ -363,23 +543,21 @@
                     preConfirm: () => {
                         const desc = document.getElementById('part-desc').value.trim();
                         const amtStr = document.getElementById('part-amt').value;
-                        const amt = Math.round(parseFloat(amtStr || '0') * 100);
+                        const parsed = parseFloat(amtStr);
+                        const amt = isNaN(parsed) ? null : Math.round(parsed * 100);
                         if (!desc) {
                             Swal.showValidationMessage('{% translate "Veuillez décrire votre participation." %}');
                             return false;
                         }
-                        if (!amt || amt <= 0) {
-                            Swal.showValidationMessage('{% translate "Veuillez indiquer un montant valide (> 0)." %}');
-                            return false;
-                        }
                         // Post via HTMX and update the participations list without blink
+                        const values = { description: desc };
+                        if (typeof amt === 'number' && amt > 0) {
+                            values.requested_amount_cents = amt;
+                        }
                         htmx.ajax('POST', '{{ initiative.get_absolute_url }}participate/', {
                             target: '#participations_list',
                             swap: 'innerHTML',
-                            values: {
-                                description: desc,
-                                requested_amount_cents: amt
-                            }
+                            values: values
                         });
                     }
                 });

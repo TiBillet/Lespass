@@ -15,7 +15,13 @@ import json
 from BaseBillet.views import get_context
 from BaseBillet.models import Tag
 from fedow_public.models import AssetFedowPublic
-from .models import Initiative, Contribution, CrowdConfig, Vote, Participation
+from .models import Initiative, Contribution, CrowdConfig, Vote, Participation, BudgetItem
+from .serializers import (
+    BudgetItemProposalSerializer,
+    ContributionCreateSerializer,
+    ParticipationCreateSerializer,
+    ParticipationCompleteSerializer,
+)
 
 from django.contrib.auth import get_user_model
 
@@ -42,6 +48,13 @@ class InitiativeViewSet(viewsets.ViewSet):
         contributions = initiative.contributions.select_related("contributor").order_by("-created_at")
         return {
             "contributions": contributions,
+            "initiative": initiative,
+        }
+
+    def _budget_items_context(self, initiative):
+        items = initiative.budget_items.select_related("contributor", "validator").order_by("-created_at")
+        return {
+            "budget_items": items,
             "initiative": initiative,
         }
 
@@ -107,6 +120,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         initiative = get_object_or_404(Initiative, pk=pk)
         contributions = initiative.contributions.select_related("contributor").order_by("-created_at")
+        budget_items = initiative.budget_items.select_related("contributor", "validator").order_by("-created_at")
 
         context = get_context(request)
         # Précharger les votants pour éviter le N+1
@@ -120,6 +134,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             "crowd_config": CrowdConfig.get_solo(),
             "initiative": initiative,
             "contributions": contributions,
+            "budget_items": budget_items,
             "contrib_name_help": name_help,
             "contrib_desc_help": desc_help,
             "votes": votes,
@@ -174,7 +189,7 @@ class InitiativeViewSet(viewsets.ViewSet):
     def participate(self, request, pk=None):
         """
         Déclare une participation à une initiative.
-        Champs attendus: description (str), requested_amount_cents (int > 0)
+        Champs attendus: description (str), requested_amount_cents (int > 0) optionnel (bénévolat possible)
         Réponses:
          - 401 si non connecté
          - Si HX-Request avec HX-Target == 'participations_list' → renvoie le partiel HTML mis à jour
@@ -187,28 +202,128 @@ class InitiativeViewSet(viewsets.ViewSet):
             response = render(request, "crowds/partial/participations.html", context)
             response.status_code = 401
             return response
-        desc = (request.POST.get("description") or "").strip()
-        try:
-            amount = int(request.POST.get("requested_amount_cents") or 0)
-        except (TypeError, ValueError):
-            amount = 0
-        if not desc or amount <= 0:
+        # Validation via DRF serializer (et sanitation HTML)
+        serializer = ParticipationCreateSerializer(data=request.data)
+        if not serializer.is_valid():
             context = get_context(request)
             context.update(self._participations_context(initiative))
             response = render(request, "crowds/partial/participations.html", context)
             response.status_code = 400
             return response
 
+        data = serializer.validated_data
         Participation.objects.create(
             initiative=initiative,
             participant=request.user,
-            description=desc,
-            requested_amount_cents=amount,
+            description=data.get("description") or "",
+            requested_amount_cents=data.get("requested_amount_cents"),
             state=Participation.State.REQUESTED,
         )
         context = get_context(request)
         context.update(self._participations_context(initiative))
         return render(request, "crowds/partial/participations.html", context)
+
+    @action(detail=True, methods=["post"], url_path="budget/propose")
+    def propose_budget_item(self, request, pk=None):
+        """
+        Propose une nouvelle ligne budgétaire pour une initiative.
+        Champs attendus:
+          - description (str, requis, min 5 chars)
+          - amount_eur (float/decimal > 0)
+
+        Réponses:
+          - 401 JSON {error} si non connecté
+          - 400 JSON {error} si invalide
+          - 200 JSON {ok: true, html: '<...>'} avec le partiel #budget_items_list mis à jour
+        """
+        initiative = get_object_or_404(Initiative, pk=pk)
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "auth_required"}, status=401)
+
+        serializer = BudgetItemProposalSerializer(data=request.POST)
+        if not serializer.is_valid():
+            return JsonResponse({"error": serializer.errors}, status=400)
+
+        # Création de la proposition
+        BudgetItem.objects.create(
+            initiative=initiative,
+            contributor=request.user,
+            description=serializer.validated_data["description"],
+            amount=serializer.validated_data["amount_eur"],
+            state=BudgetItem.State.REQUESTED,
+        )
+
+        # Rendu du partiel mis à jour
+        context = get_context(request)
+        context.update(self._budget_items_context(initiative))
+        html = render(request, "crowds/partial/budget_items.html", context).content.decode("utf-8")
+        return JsonResponse({"ok": True, "html": html})
+
+
+    @action(detail=True, methods=["post"], url_path=r"budget-items/(?P<bid>[^/.]+)/approve")
+    def approve_budget_item(self, request, pk=None, bid=None):
+        """
+        Approuve une proposition de ligne budgétaire.
+        Réservé aux admins/staff. Retourne toujours le partiel HTML mis à jour.
+        """
+        initiative = get_object_or_404(Initiative, pk=pk)
+
+        def _render(status_code=200):
+            ctx = get_context(request)
+            ctx.update(self._budget_items_context(initiative))
+            resp = render(request, "crowds/partial/budget_items.html", ctx)
+            resp.status_code = status_code
+            return resp
+
+        if not request.user.is_authenticated:
+            return _render(status_code=401)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return _render(status_code=403)
+
+        item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
+        if item.state != BudgetItem.State.REQUESTED:
+            return _render(status_code=400)
+        try:
+            item.state = BudgetItem.State.APPROVED
+            item.validator = request.user
+            item.save(update_fields=["state", "validator"])
+        except Exception:
+            # En cas d'erreur, on renvoie le partiel sans changer l'état
+            return _render(status_code=400)
+        return _render(status_code=200)
+
+
+    @action(detail=True, methods=["post"], url_path=r"budget-items/(?P<bid>[^/.]+)/reject")
+    def reject_budget_item(self, request, pk=None, bid=None):
+        """
+        Rejette une proposition de ligne budgétaire.
+        Réservé aux admins/staff. Retourne toujours le partiel HTML mis à jour.
+        """
+        initiative = get_object_or_404(Initiative, pk=pk)
+
+        def _render(status_code=200):
+            ctx = get_context(request)
+            ctx.update(self._budget_items_context(initiative))
+            resp = render(request, "crowds/partial/budget_items.html", ctx)
+            resp.status_code = status_code
+            return resp
+
+        if not request.user.is_authenticated:
+            return _render(status_code=401)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return _render(status_code=403)
+
+        item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
+        if item.state != BudgetItem.State.REQUESTED:
+            return _render(status_code=400)
+        try:
+            item.state = BudgetItem.State.REJECTED
+            item.validator = request.user
+            item.save(update_fields=["state", "validator"])
+        except Exception:
+            return _render(status_code=400)
+        return _render(status_code=200)
+
 
     @action(detail=True, methods=["post"], url_path=r"participations/(?P<pid>[^/.]+)/complete")
     def complete_participation(self, request, pk=None, pid=None):
@@ -225,6 +340,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             response = render(request, "crowds/partial/participations.html", context)
             response.status_code = 401
             return response
+
         if part.participant_id != request.user.id:
             context = get_context(request)
             context.update(self._participations_context(initiative))
@@ -333,26 +449,24 @@ class InitiativeViewSet(viewsets.ViewSet):
             response = render(request, "crowds/partial/contributions.html", context)
             response.status_code = 401
             return response
-        # Inputs
-        try:
-            amount = int(request.POST.get("amount") or request.POST.get("amount_cents") or 0)
-        except (TypeError, ValueError):
-            amount = 0
-        contributor_name = (request.POST.get("contributor_name") or "").strip()
-        description = (request.POST.get("description") or "").strip()
-        if amount <= 0 or not contributor_name:
+
+        # Validation via DRF serializer (et sanitation HTML)
+        serializer = ContributionCreateSerializer(data=request.data)
+        if not serializer.is_valid():
             context = get_context(request)
             context.update(self._contributions_context(initiative))
             response = render(request, "crowds/partial/contributions.html", context)
             response.status_code = 400
             return response
+
         # Create
+        data = serializer.validated_data
         Contribution.objects.create(
             initiative=initiative,
             contributor=request.user,
-            contributor_name=contributor_name,
-            description=description,
-            amount=amount,
+            contributor_name=data.get("contributor_name") or "",
+            description=data.get("description") or "",
+            amount=data.get("amount") or 0,
         )
         context = get_context(request)
         context.update(self._contributions_context(initiative))

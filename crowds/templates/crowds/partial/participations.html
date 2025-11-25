@@ -17,7 +17,13 @@
         <tr>
           <td>{{ p.participant.email }}</td>
           <td class="small">{{ p.description|linebreaksbr }}</td>
-          <td class="text-end">{{ p.requested_amount_eur|floatformat:2 }} {{ initiative.currency }}</td>
+          <td class="text-end">
+            {% if p.requested_amount_cents == None %}
+              <span class="text-muted">—</span>
+            {% else %}
+              {{ p.requested_amount_eur|floatformat:2 }} {{ initiative.currency }}
+            {% endif %}
+          </td>
           <td>
             {% if p.state == 'requested' %}
               <span class="badge text-bg-warning">{% translate 'Demande formulée' %}</span>

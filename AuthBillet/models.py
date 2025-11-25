@@ -217,6 +217,15 @@ class TibilletUser(AbstractUser):
             return self.first_name
         return "Anonyme"
 
+    def full_name_or_email(self):
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        return self.email
+
+
+
     def achat(self):
         # Check if client_achat is already prefetched to avoid N+1 query
         if hasattr(self, '_prefetched_objects_cache') and 'client_achat' in self._prefetched_objects_cache:
