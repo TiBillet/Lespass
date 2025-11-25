@@ -5,7 +5,7 @@
         <div class="card-body d-flex flex-column">
             <h5 class="card-title d-flex justify-content-between align-items-start">
                 <span>{{ initiative.name }}</span>
-                {% include "crowds/partial/votes_badge.html" with initiative=initiative %}
+                {% if initiative.vote %}{% include "crowds/partial/votes_badge.html" with initiative=initiative %}{% endif %}
             </h5>
             <p class="card-text text-muted small flex-grow-1">{{ initiative.short_description|striptags|truncatewords:250 }}</p>
 
@@ -26,9 +26,9 @@
                 </p>
             {% endif %}
 
-            {# Bloc FALC: deux valeurs claires sur le financement et les demandes validées #}
+            {# Bloc FALC: Objectif uniquement #}
             <div class="rounded bg-body-tertiary p-2 mb-2 small" role="group"
-                 aria-label="{% translate 'Informations simples : argent reçu et demandes validées' %}">
+                 aria-label="{% translate 'Objectif à financer' %}">
 
                 {# objectif #}
                 <div class="d-flex justify-content-between align-items-center">
@@ -38,34 +38,15 @@
                       <strong>{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
                 </div>
 
-                {# budget_contributif #}
-                {% if initiative.budget_contributif %}
-                <div class="d-flex justify-content-between align-items-center mt-1">
-                  <span class="text-muted">
-                    <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>{{ crowd_config.name_participations }}
-                  </span>
-                    <span class="d-inline-flex align-items-center gap-2">
-                    <span class="rounded-circle bg-{{ initiative.requested_ratio_color }}" aria-hidden="true"
-                          style="width:.75rem;height:.75rem;display:inline-block"></span>
-                    <strong>{{ initiative.requested_total_eur|floatformat:2 }} {{ initiative.currency }}</strong>
-                  </span>
-                </div>
-                {% endif %}
-
-            </div>
 
             <!-- Bloc FALC : Avancement du financement avec objectif, plus lisible -->
-            <div class="rounded bg-body-tertiary p-2 mb-3 small" role="group"
-                 aria-label="{% translate 'Avancement du financement et objectif' %}">
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="text-muted">
                         <i class="bi bi-graph-up me-1" aria-hidden="true"></i>
-                        {% translate 'Financement' %}
+                        {% translate 'Financement' %} : {{ initiative.progress_percent_int }}%
                     </span>
                     <span>
-                        <strong class="text-body">{{ initiative.progress_percent_int }}%</strong>
-                        <span class="text-muted">{% translate 'sur' %}</span>
-                        <strong class="text-body">{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
+                        <strong class="text-body">{{ initiative.total_funded_amount|dround }} {{ initiative.currency }}</strong>
                     </span>
                 </div>
                 <div class="progress mt-2" style="height: .5rem;">
@@ -109,6 +90,34 @@
                 </p>
             </div>
 
+            {# Bloc FALC : Budget contributif avec barre de progression #}
+            {% if initiative.budget_contributif %}
+            <div class="rounded bg-body-tertiary p-2 mb-3 small" role="group"
+                 aria-label="{% translate 'Budget contributif et demandes validées' %}">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted">
+                        <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>{{ crowd_config.name_participations }}
+                    </span>
+                    <span>
+                        <strong class="text-body">{{ initiative.requested_total_eur|floatformat:2 }} {{ initiative.currency }}</strong>
+                    </span>
+                </div>
+                <div class="progress mt-2" style="height: .5rem;">
+                    <div class="progress-bar bg-{{ initiative.requested_ratio_color }}"
+                         role="progressbar"
+                         style="width: 0%" data-crowds-progress="1"
+                         data-width-int="{{ initiative.requested_vs_funded_percent_int }}"
+                         aria-valuenow="{{ initiative.requested_vs_funded_percent_int }}" aria-valuemin="0"
+                         aria-valuemax="100"></div>
+                </div>
+                <p class="visually-hidden mb-0">
+                    {% blocktrans with percent=initiative.requested_vs_funded_percent_int requested=initiative.requested_total_eur|floatformat:2 currency=initiative.currency %}
+                        Budget contributif : {{ requested }} {{ currency }} soit {{ percent }} pour cent du financé.
+                    {% endblocktrans %}
+                </p>
+            </div>
+            {% endif %}
+
             <div class="d-flex justify-content-between align-items-center mt-auto gap-2">
                 <a class="btn btn-outline-secondary btn-sm"
                    href="{{ initiative.get_absolute_url }}"
@@ -118,6 +127,7 @@
                     {% translate 'Détails' %}
                 </a>
 
+                {% if inititative.vote %}
                 {% if user.is_authenticated %}
                     <button
                             class="btn btn-sm btn-primary"
@@ -139,6 +149,7 @@
                         <i class="bi bi-hand-thumbs-up"></i>
                         {{ crowd_config.vote_button_name }}
                     </button>
+                {% endif %}
                 {% endif %}
             </div>
         </div>
