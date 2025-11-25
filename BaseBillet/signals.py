@@ -117,9 +117,9 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     set_paiement_stripe_valid(old_instance, new_instance)
 
 def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticle):
-    logger.info(
-        f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
-    if not new_instance.sended_to_laboutik or new_instance.status != LigneArticle.REFUNDED:
+    if not new_instance.sended_to_laboutik:
+        logger.info(
+            f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
         send_refund_to_laboutik.delay(new_instance.pk)
 
 ######################## SIGNAL RESERVATION ########################
@@ -281,7 +281,7 @@ PRE_SAVE_TRANSITIONS = {
     'LIGNEARTICLE': {
         LigneArticle.CREATED: {
             LigneArticle.PAID: ligne_article_paid,
-            LigneArticle.REFUNDED: ligne_article_refunded, # dans le cas ou on ajoute une nouvelle ligne pour annoncer un remboursement de billet
+            LigneArticle.REFUNDED: ligne_article_refunded, # dans le cas ou on ajoute une nouvelle ligne pour annoncer un remboursement de billet ( le remboursement n'est pas une étape de paid -> refund, mais une nouvelle ligne crée )
         },
         LigneArticle.UNPAID: {
             LigneArticle.PAID: ligne_article_paid,

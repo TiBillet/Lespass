@@ -2604,6 +2604,7 @@ class ReservationAddAdmin(ModelForm):
             # 'last_name',
         # ]
 
+
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
         pricesold = cleaned_data.get('pricesold')
@@ -2697,6 +2698,7 @@ class ReservationAdmin(ModelAdmin):
         'total_paid',
     )
     # readonly_fields = list_display
+
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
     list_filter = ['event', ReservationValidFilter, 'datetime', 'options']
 

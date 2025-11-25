@@ -401,6 +401,7 @@ class Configuration(SingletonModel):
                         delete_orphans=True,
                         verbose_name=_('Background image'),
                         )
+
     @property
     def get_med_img(self):
         # Cache key based on instance ID and method name
@@ -433,8 +434,6 @@ class Configuration(SingletonModel):
 
         return result
 
-
-
     @property
     def get_social_card(self):
         # Cache key based on instance ID and method name
@@ -450,7 +449,6 @@ class Configuration(SingletonModel):
             cache.set(cache_key, result, 3600)
 
         return result
-
 
     # TZ_REUNION, TZ_PARIS = "Indian/Reunion", "Europe/Paris"
     # TZ_CHOICES = [
@@ -512,8 +510,6 @@ class Configuration(SingletonModel):
             }
         else:
             return []
-
-
 
     def full_url(self):
         return f"https://{connection.tenant.get_primary_domain().domain}/"
@@ -660,7 +656,8 @@ class Configuration(SingletonModel):
 
     stripe_accept_sepa = models.BooleanField(default=False,
                                              verbose_name=_("Accept SEPA payments"),
-                                             help_text=_("SEPA Direct Debit is a deferred payment method. Please check the current rates on the Stripe website and activate it at https://dashboard.stripe.com/settings/payment_methods. Payment validation may take between 3 and 4 business days. Currently available only for subscriptions and memberships. Contact the team if you wish to extend this option.")
+                                             help_text=_(
+                                                 "SEPA Direct Debit is a deferred payment method. Please check the current rates on the Stripe website and activate it at https://dashboard.stripe.com/settings/payment_methods. Payment validation may take between 3 and 4 business days. Currently available only for subscriptions and memberships. Contact the team if you wish to extend this option.")
                                              )
 
     def get_stripe_api(self):
@@ -709,7 +706,7 @@ class Configuration(SingletonModel):
     ### FEDERATION
     """
 
-    #TODO: A virer, géré par une autre table
+    # TODO: A virer, géré par une autre table
     federated_with = models.ManyToManyField(Client,
                                             blank=True,
                                             verbose_name=_("Federated with"),
@@ -754,8 +751,6 @@ class Configuration(SingletonModel):
         if self.organisation:
             return _("Settings for ") + self.organisation
         return _('Settings')
-
-
 
 
 class Product(models.Model):
@@ -905,16 +900,16 @@ class PromotionalCode(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=200, verbose_name=_("Coupon name"),
-                          help_text=_("Descriptive name for the discount coupon."), unique=True)
+                            help_text=_("Descriptive name for the discount coupon."), unique=True)
 
     discount_rate = models.DecimalField(max_digits=5, decimal_places=2,
-                                         verbose_name=_("Discount rate (%)"),
-                                         help_text=_("Discount percentage to apply (0-100)."))
+                                        verbose_name=_("Discount rate (%)"),
+                                        help_text=_("Discount percentage to apply (0-100)."))
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE,
-                               related_name="promotional_codes",
-                               verbose_name=_("Product"),
-                               help_text=_("Product to which this discount coupon applies."))
+                                related_name="promotional_codes",
+                                verbose_name=_("Product"),
+                                help_text=_("Product to which this discount coupon applies."))
 
     is_active = models.BooleanField(default=True, verbose_name=_("Active"))
 
@@ -1009,15 +1004,14 @@ class Price(models.Model):
                            verbose_name=_("VAT rate"),
                            )
 
-
     stock = models.SmallIntegerField(blank=True, null=True,
                                      verbose_name=_("Maximum capacity"),
-                                     help_text=_("Number of valid memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the quantity is unlimited."),
+                                     help_text=_(
+                                         "Number of valid memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the quantity is unlimited."),
                                      )
 
-
     def out_of_stock(self, event=None):
-        if self.stock is None or self.stock < 1 :
+        if self.stock is None or self.stock < 1:
             return False
 
         if self.product.categorie_article == Product.ADHESION:
@@ -1067,7 +1061,6 @@ class Price(models.Model):
     #                                                 verbose_name=_("Maximum all user"),
     #                                                 help_text=_("Limit the maximum number of memberships for all users. Leave blank for unlimited."))
 
-
     adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
                                              related_name="adhesion_obligatoire",
                                              verbose_name=_("Subscription required"),
@@ -1110,7 +1103,8 @@ class Price(models.Model):
                                                      "A rate with a monthly period and iterations=2 will last two months with two payments: one on day D and another the following month."))
     commitment = models.BooleanField(default=False,
                                      verbose_name=_("Commitment to the duration of the iteration."),
-                                     help_text=_("If checked, the user will not be able to cancel the automatic debit from their account. You will always be able to interrupt the automatic debit on the Stripe interface.")
+                                     help_text=_(
+                                         "If checked, the user will not be able to cancel the automatic debit from their account. You will always be able to interrupt the automatic debit on the Stripe interface.")
                                      )
 
     manual_validation = models.BooleanField(default=False,
@@ -1179,7 +1173,8 @@ class Event(models.Model):
                                         help_text=_("Second date / time optional"))
 
     created = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, verbose_name=_("Created by"))
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+                                   verbose_name=_("Created by"))
 
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
@@ -1221,7 +1216,9 @@ class Event(models.Model):
                                                          verbose_name=_(
                                                              "Minimum value of cashless refill"))
 
-    reservation_button_name = models.CharField(max_length=150, blank=True, null=True, verbose_name=_("Button name for reservation"), help_text=_("If empty : I want to reserve one or more seats."))
+    reservation_button_name = models.CharField(max_length=150, blank=True, null=True,
+                                               verbose_name=_("Button name for reservation"),
+                                               help_text=_("If empty : I want to reserve one or more seats."))
 
     img = StdImageField(upload_to='images/',
                         blank=True, null=True,
@@ -1254,14 +1251,12 @@ class Event(models.Model):
                                     "The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
                                 )
 
-
     def get_social_card(self):
         # Cache key based on instance ID and method name
         cache_key = f'event_get_social_card_{self.pk}'
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return cached_result
-
 
         result = None
         if self.img:
@@ -1305,7 +1300,6 @@ class Event(models.Model):
         # Cache the result for 1 hour (3600 seconds)
         cache.set(cache_key, result, 3600)
         return result
-
 
     def get_sticker_img(self):
         # Cache key based on instance ID and method name
@@ -1559,7 +1553,8 @@ class Event(models.Model):
         timezone = pytz.timezone(config.fuseau_horaire)
         if not self.uuid:
             self.uuid = uuid.uuid4()
-        self.slug = slugify(f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')} {self.pk.hex[:8]}")
+        self.slug = slugify(
+            f"{self.name} {self.datetime.astimezone(timezone).strftime('%y%m%d-%H%M')} {self.pk.hex[:8]}")
 
         # Génère l'url de l'évènement si il n'est pas externe.
         # Nécéssaire pour le prefetch multi tenant
@@ -1582,10 +1577,8 @@ class Event(models.Model):
         cache.delete(f'event_get_sticker_img_{self.pk}')
         cache.delete(f'event_get_social_card_{self.pk}')
 
-
     # def get_absolute_url(self):
     #     return reverse("event-detail", args=[self.slug])
-
 
     def __str__(self):
         return f"{self.datetime.strftime('%d/%m')} {self.name}"
@@ -1707,7 +1700,7 @@ class ProductSold(models.Model):
         # noinspection PyUnresolvedReferences
         images = []
         if self.img():
-            try :
+            try:
                 images = [f"https://{domain_url}{self.img().med.url}", ]
             except Exception:
                 images = []
@@ -1804,7 +1797,7 @@ class PriceSold(models.Model):
             elif self.price.subscription_type == Price.YEAR:
                 data_stripe["recurring"]["interval"] = "year"
 
-        elif self.price.free_price: # Si c'est récurrent et free price, le if précédent s'applique
+        elif self.price.free_price:  # Si c'est récurrent et free price, le if précédent s'applique
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
@@ -1921,17 +1914,17 @@ class Reservation(models.Model):
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
-        if self.total_paid() > 0 :
+        if self.total_paid() > 0:
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-            for paiement in self.paiements.all():
+            for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                              Paiement_stripe.PAID,
+                                                              Paiement_stripe.NOTSYNC,
+                                                              ]):
                 paiement: Paiement_stripe
                 checkout = paiement.get_checkout_session()
                 payment_intent = checkout.payment_intent
-                # On applique un 2% de frais pour rembourser les frais stripe de paiement
-                # ( les remboursements sont gratuit, mais quand même...)
-                # amount = int(checkout.amount_total - (checkout.amount_total * Decimal(0.02)))
 
                 try:
                     refund = stripe.Refund.create(
@@ -1994,12 +1987,15 @@ class Reservation(models.Model):
 
         refunded = False
         # If reservation had a payment try partial refund
-        if self.total_paid() > 0 :
+        if self.total_paid() > 0:
             config = Configuration.get_solo()
             stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
 
             # Find the paiement/lignearticle corresponding to this ticket
-            for paiement in self.paiements.all():
+            for paiement in self.paiements.filter(status__in=[Paiement_stripe.VALID,
+                                                              Paiement_stripe.PAID,
+                                                              Paiement_stripe.NOTSYNC,
+                                                              ]):
                 try:
                     checkout = paiement.get_checkout_session()
                     payment_intent = checkout.payment_intent
@@ -2338,17 +2334,17 @@ class Paiement_stripe(models.Model):
         metadata = checkout_session.metadata
 
         # On vérifie le moyen de paiement. C'est peut être un SEPA
-        if checkout_session.get('payment_method_types') :
+        if checkout_session.get('payment_method_types'):
             if 'sepa_debit' in checkout_session.get('payment_method_types'):
                 payment_intent_id = checkout_session.get('payment_intent')
-                if payment_intent_id :
+                if payment_intent_id:
                     payment_intent = stripe.PaymentIntent.retrieve(
                         payment_intent_id,
                         stripe_account=self.config.get_stripe_connect_account()
                     )
-                    if 'sepa_debit' in payment_intent.get('payment_method_options') and 'sepa_debit' in payment_intent.get('payment_method_types'):
+                    if 'sepa_debit' in payment_intent.get(
+                            'payment_method_options') and 'sepa_debit' in payment_intent.get('payment_method_types'):
                         self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
-
 
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
@@ -2423,7 +2419,7 @@ class LigneArticle(models.Model):
                                       verbose_name=_("Payment method"))
 
     promotional_code = models.ForeignKey(PromotionalCode, on_delete=models.PROTECT, blank=True, null=True,
-                                   verbose_name=_("Promotional code"), related_name="lignearticles")
+                                         verbose_name=_("Promotional code"), related_name="lignearticles")
 
     asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
 
@@ -2526,7 +2522,7 @@ class Membership(models.Model):
     date_added = models.DateTimeField(auto_now_add=True)
 
     last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
-    first_contribution = models.DateTimeField(null=True, blank=True) # utilisé dans le cas des iterations max
+    first_contribution = models.DateTimeField(null=True, blank=True)  # utilisé dans le cas des iterations max
     max_iteration = models.IntegerField(null=True, blank=True)
     current_iteration = models.IntegerField(null=True, blank=True)
 
@@ -2590,7 +2586,6 @@ class Membership(models.Model):
     state = models.CharField(max_length=2, choices=STATE_CHOICES, default=WAITING_PAYMENT,
                              verbose_name=_("State"))
 
-
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
     stripe_id_subscription = models.CharField(
         max_length=28,
@@ -2608,7 +2603,6 @@ class Membership(models.Model):
     option_generale = models.ManyToManyField(OptionGenerale,
                                              blank=True,
                                              related_name="membership_options")
-
 
     class Meta:
         # unique_together = ('user', 'price')
@@ -2680,7 +2674,7 @@ class Membership(models.Model):
             return None
 
         # Date de premier paiement
-        if not dt0: # peut être appellé avec l'argument lors du retour webhook de stripe
+        if not dt0:  # peut être appellé avec l'argument lors du retour webhook de stripe
             dt0 = self.first_contribution
         if not dt0:
             return None
@@ -2729,7 +2723,6 @@ class Membership(models.Model):
 
         # Par défaut (NA ou autre): aucune itération applicable
         return None
-        
 
     def is_valid(self):
         if self.get_deadline():
@@ -2859,7 +2852,6 @@ class Webhook(models.Model):
     event = models.CharField(max_length=2, choices=EVENT_CHOICES, default=RESERVATION_V,
                              verbose_name=_("Event"))
     last_response = models.TextField(null=True, blank=True)
-
 
 
 class FederatedPlace(models.Model):

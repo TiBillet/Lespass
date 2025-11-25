@@ -1135,6 +1135,8 @@ class Webhook_stripe(APIView):
             amount = transfer.amount
 
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
+
+            #TODO : prendre le tenant dans le metadata ?
             for tenant in Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.WAITING_CONFIG]):
                 with tenant_context(tenant): # Comment faire sans itérer dans tout les tenant ?
                     config = Configuration.get_solo()
