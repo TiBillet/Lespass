@@ -19,9 +19,9 @@
 </c-read-nfc>
 ```
 ## Infos
-- Le formulaire qui post le tagId de la carte primaire est géré par l'évènement "primaryCardManageForm"
-- Le formulaire d'achats est géré par l'évènement "additionManageForm"
-  propre fonction pour leur mise à jour et l'envoi. 
+- nfc.js donne un tagId et demande d'envoyer un formulaire par l'intermédiaire d'un évènement qui lance une méthode.
+- Le formulaire qui post le tagId de la carte primaire est géré par l'évènement "primaryCardManageForm".
+- Le formulaire d'achats est géré par l'évènement "additionManageForm".
 
 ## Doc
 - id = sert à référencer le conteneur(html) principal qui contient tout le visuel lors de la lecture des cartes nfc.
@@ -29,9 +29,10 @@
 - selector permet d'ajouter un bouton retour qui éfface le conteneur lequel contient tout le visuel lors de la lecture des cartes nfc.
   Sa valeur est égale au id.
 
-- event-manage-form est le nom de l'évènement qui gère l'insertion du tagId et l'envoi du formulaire
+- event-manage-form est le nom de l'évènement qui gère l'insertion du tagId et l'envoi du formulaire.
 
-- submit-url permet de cibler le formulaire à modifier et à écouter; obligatoire.
+- submit-url permet de fixer l'url du formulaire à poster (suivant les  étapes du fonctionnnement de l'application,
+  l'url du formulaire peux être dynamique)
 
 ## Exemples
 - ask_primary_card.html
