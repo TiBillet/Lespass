@@ -899,7 +899,7 @@ msgstr ""
 
 #: Administration/templates/admin/reservation/custom_form_section.html:10
 msgid "No custom form answers for this booking."
-msgstr "Pas de réponses sur mesure pour cette adhésion"
+msgstr "Pas de formulaire dynamique sur ce produit."
 
 #: Administration/templates/admin/service.html:6
 msgid "Are you looking for a custom dashboard?"

@@ -582,6 +582,7 @@ class ReservationValidator(serializers.Serializer):
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
+
         self.checkout_link = self.tickets.checkout_link if self.tickets.checkout_link else None
 
         return attrs
