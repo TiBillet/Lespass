@@ -2697,7 +2697,7 @@ class ReservationAdmin(ModelAdmin):
         'options_str',
         'total_paid',
     )
-    readonly_fields = list_display
+    # readonly_fields = list_display
 
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
     list_filter = ['event', ReservationValidFilter, 'datetime', 'options']

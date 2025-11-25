@@ -903,11 +903,13 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
 def send_refund_to_laboutik(self, ligne_article_pk):
     # Le max de temps entre deux retries : 24 heures
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    logger.info(f"send_refund_to_laboutik - waiting for save: {ligne_article_pk}")
+    time.sleep(5)
     config = Configuration.get_solo()
 
     # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
     ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
-    if getattr(ligne_article, "sended_to_laboutik", False) or ligne_article.status == LigneArticle.REFUNDED:
+    if ligne_article.sended_to_laboutik:
         logger.info("refund déjà envoyé à Laboutik – skip")
         return True
 
