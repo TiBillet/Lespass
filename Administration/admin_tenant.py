@@ -78,7 +78,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_reservation_cancellation_user, send_sale_to_laboutik
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
-from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative
+from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
@@ -3991,9 +3991,20 @@ class ContributionInline(TabularInline):
     extra = 0
     can_delete = True
     show_change_link = True
+    # Evite de charger 200k users dans un select: champ en saisie par ID
+    raw_id_fields = ("contributor",)
 
-    fields = ("contributor_name", "amount", "amount_eur_display", "payment_status", "paid_at")
-    readonly_fields = ("amount_eur_display", )
+    fields = (
+        "contributor_name",
+        "contributor",
+        "description",
+        "amount",
+        "amount_eur_display",
+        "payment_status",
+        "paid_at",
+        "created_at",
+    )
+    readonly_fields = ("amount_eur_display", "created_at", "contributor")
 
     def amount_eur_display(self, obj):
         if not obj:
@@ -4002,68 +4013,119 @@ class ContributionInline(TabularInline):
 
     amount_eur_display.short_description = _("Montant")
 
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
-
+    # Permissions simples (FALC)
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("contributor", "initiative")
 
 
 class VoteInline(TabularInline):
     model = Vote
     fk_name = 'initiative'
     extra = 0
-    can_delete = False
-    readonly_fields = ("user", "created_at")
+    can_delete = True
+    readonly_fields = ("created_at", "user")
     fields = ("user", "created_at")
-
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
+    # Saisie par ID pour éviter l'autocomplete sur une très grande table user
+    raw_id_fields = ("user",)
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
+        # Pas de modification du vote: on peut supprimer/ajouter
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("user")
+
+
+class BudgetItemInline(TabularInline):
+    model = BudgetItem
+    fk_name = 'initiative'
+    extra = 0
+    can_delete = True
+    show_change_link = True
+    # Evite les gros menus déroulants de users
+    raw_id_fields = ("contributor", "validator")
+
+    fields = (
+        "contributor",
+        "description",
+        "amount",
+        "state",
+        "validator",
+        "created_at",
+    )
+    readonly_fields = ("created_at", "contributor", "validator")
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("contributor", "validator")
 
 class ParticipationInline(TabularInline):
     model = Participation
     fk_name = 'initiative'
     extra = 0
+    # Evite le chargement massif des users
+    raw_id_fields = ("participant",)
     fields = (
         "participant",
         "description",
-        "requested_amount_cents",
+        "amount",
         "state",
         "time_spent_minutes",
         "created_at",
         "updated_at",
     )
-    readonly_fields = ("created_at", "updated_at")
-
-    # Surcharger la méthode pour désactiver la suppression
-    def has_delete_permission(self, request, obj=None):
-        return False
+    readonly_fields = ("created_at", "updated_at", "participant")
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("participant")
 
 # class InitiativeAdminForm(ModelForm):
 #     funding_goal_eur = forms.DecimalField(
@@ -4141,16 +4203,40 @@ class InitiativeAdmin(ModelAdmin):
     list_filter = ("created_at", "tags")
     search_fields = ("name", "description", "tags__name")
     date_hierarchy = "created_at"
-    inlines = [ContributionInline, ParticipationInline, ]
+    inlines = [VoteInline, BudgetItemInline, ContributionInline, ParticipationInline]
     ordering = ("-created_at",)
     filter_horizontal = ("tags",)
     autocomplete_fields = ("tags", )
+    # Optimise les requêtes en changelist (FK direct)
+    list_select_related = ("asset",)
 
     formfield_overrides = {
         models.TextField: {
             "widget": WysiwygWidget,
         }
     }
+
+    def get_queryset(self, request):
+        # Optimise les agrégations et évite les N+1 en liste admin
+        qs = super().get_queryset(request)
+        qs = (
+            qs
+            .select_related("asset")
+            .prefetch_related("tags")
+            .annotate(
+                funded_total=models.Sum("contributions__amount", distinct=True),
+                funding_goal_total=models.Sum(
+                    models.Case(
+                        models.When(budget_items__state="approved", then=models.F("budget_items__amount")),
+                        default=models.Value(0),
+                        output_field=models.IntegerField(),
+                    ),
+                    distinct=True,
+                ),
+                votes_total=models.Count("votes", distinct=True),
+            )
+        )
+        return qs
 
     def save_model(self, request, obj, form, change):
         obj: Initiative
@@ -4166,13 +4252,20 @@ class InitiativeAdmin(ModelAdmin):
     currency.short_description = _("Devise")
 
     def funded_amount_display(self, obj):
-        decimal_amount = Decimal(obj.total_funded_amount or 0) / Decimal("100")
+        total = getattr(obj, "funded_total", None)
+        if total is None:
+            total = obj.total_funded_amount
+        decimal_amount = Decimal(total or 0) / Decimal("100")
         return f"{decimal_amount:.2f}"
 
     funded_amount_display.short_description = _("Financé")
 
     def funding_goal_display(self, obj):
-        decimal_amount = Decimal(obj.funding_goal or 0) / Decimal("100")
+        # Objectif = somme des lignes budgétaires approuvées
+        goal = getattr(obj, "funding_goal_total", None)
+        if goal is None:
+            goal = obj.total_funding_amount
+        decimal_amount = Decimal(goal or 0) / Decimal("100")
         return f"{decimal_amount:.2f} {self.currency(obj)}"
 
     funding_goal_display.short_description = _("Objectif")

@@ -83,7 +83,7 @@
                     })();
                 </script>
                 <p class="visually-hidden mb-0">
-                    {% blocktrans with percent=initiative.progress_percent_int goal=initiative.funding_goal_eur|floatformat:2 currency=initiative.currency %}
+                    {% blocktrans with percent=initiative.progress_percent_int goal=initiative.total_funding_amount|dround currency=initiative.currency %}
                         Avancement du financement : {{ percent }} pour cent sur un objectif de {{ goal }} {{ currency }}
                         .
                     {% endblocktrans %}
@@ -99,7 +99,7 @@
                         <i class="bi bi-clipboard-check me-1" aria-hidden="true"></i>{{ crowd_config.name_participations }}
                     </span>
                     <span>
-                        <strong class="text-body">{{ initiative.requested_total_eur|floatformat:2 }} {{ initiative.currency }}</strong>
+                        <strong class="text-body">{{ initiative.total_participation_amount|dround }} {{ initiative.currency }}</strong>
                     </span>
                 </div>
                 <div class="progress mt-2" style="height: .5rem;">
@@ -111,7 +111,7 @@
                          aria-valuemax="100"></div>
                 </div>
                 <p class="visually-hidden mb-0">
-                    {% blocktrans with percent=initiative.requested_vs_funded_percent_int requested=initiative.requested_total_eur|floatformat:2 currency=initiative.currency %}
+                    {% blocktrans with percent=initiative.requested_vs_funded_percent_int requested=initiative.total_participation_amount|dround currency=initiative.currency %}
                         Budget contributif : {{ requested }} {{ currency }} soit {{ percent }} pour cent du financé.
                     {% endblocktrans %}
                 </p>
