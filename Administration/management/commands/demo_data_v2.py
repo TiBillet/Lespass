@@ -1188,22 +1188,23 @@ class Command(BaseCommand):
                     admin_email_env = os.environ.get('ADMIN_EMAIL', 'admin@example.org')
 
                     for init in inits:
+                        # Préparer une variable d'initiative hors try pour éviter UnboundLocalError en cas d'échec
+                        initiative_obj = None
                         try:
                             name = init.get('name')
                             if not name:
                                 continue
-                            # funding_goal exprimé en « unités » selon la currency
-                            # Convention: on stocke en centi-unités (comme les € en centimes)
+                            # funding_goal (en unités) peut exister dans les fixtures uniquement
+                            # Il n'est plus stocké sur le modèle. On le conserve pour éventuellement
+                            # générer des lignes budgétaires par défaut si aucune n'est fournie.
                             currency = init.get('currency') or '€'
                             goal_units = init.get('funding_goal') or 0
-                            funding_goal_centi = int(round(float(goal_units) * 100))
 
                             initiative_obj, _ = Initiative.objects.get_or_create(
                                 name=name,
                                 defaults=dict(
                                     short_description=init.get('short_description') or '',
                                     description=init.get('description') or '',
-                                    funding_goal=funding_goal_centi,
                                     archived=bool(init.get('archived', False)),
                                     vote=bool(init.get('vote', False)),
                                     budget_contributif=bool(init.get('budget_contributif', False)),
@@ -1224,9 +1225,6 @@ class Command(BaseCommand):
                                 if val is not None and getattr(initiative_obj, fld) != transform(val):
                                     setattr(initiative_obj, fld, transform(val))
                                     fields_to_update.append(fld)
-                            if goal_units is not None and initiative_obj.funding_goal != funding_goal_centi:
-                                initiative_obj.funding_goal = funding_goal_centi
-                                fields_to_update.append('funding_goal')
                             for bfield in ['archived', 'budget_contributif', 'adaptative_funding_goal_on_participation', 'direct_debit']:
                                 if bfield in init and getattr(initiative_obj, bfield) != bool(init.get(bfield)):
                                     setattr(initiative_obj, bfield, bool(init.get(bfield)))
@@ -1298,6 +1296,11 @@ class Command(BaseCommand):
                                     amt_eur = Decimal('0')
                                 if not desc or amt_eur <= 0:
                                     continue
+                                # Les BudgetItem.amount sont stockés en centimes (int)
+                                try:
+                                    amt_cents = int((amt_eur * 100).to_integral_value())
+                                except Exception:
+                                    amt_cents = int(round(float(amt_eur) * 100))
                                 state = (bi.get('state') or 'approved').strip().lower()
                                 if state not in ['requested', 'approved', 'rejected']:
                                     state = 'approved'
@@ -1313,7 +1316,7 @@ class Command(BaseCommand):
                                     bi_obj, created = BudgetItem.objects.get_or_create(
                                         initiative=initiative_obj,
                                         description=desc,
-                                        amount=amt_eur,
+                                        amount=amt_cents,
                                         defaults={
                                             'contributor': contributor or TibilletUser.objects.filter(email=admin_email_env).first(),
                                             'state': state,
@@ -1349,6 +1352,9 @@ class Command(BaseCommand):
                                     g = Decimal(str(goal_units))
                                     p1 = (g * Decimal('0.6')).quantize(Decimal('0.01'))
                                     p2 = (g - p1).quantize(Decimal('0.01'))
+                                    # Conversion en centimes
+                                    p1_cents = int((p1 * 100).to_integral_value())
+                                    p2_cents = int((p2 * 100).to_integral_value())
                                     defaults_common = {
                                         'contributor': admin_user,
                                         'state': 'approved',
@@ -1358,14 +1364,14 @@ class Command(BaseCommand):
                                     BudgetItem.objects.get_or_create(
                                         initiative=initiative_obj,
                                         description=f"{name} – Poste A",
-                                        amount=p1,
+                                        amount=p1_cents,
                                         defaults=defaults_common,
                                     )
                                     # BI 2
                                     BudgetItem.objects.get_or_create(
                                         initiative=initiative_obj,
                                         description=f"{name} – Poste B",
-                                        amount=p2,
+                                        amount=p2_cents,
                                         defaults=defaults_common,
                                     )
                                 except Exception as e:
@@ -1427,7 +1433,7 @@ class Command(BaseCommand):
                                     initiative=initiative_obj,
                                     participant=user,
                                     description=desc,
-                                    requested_amount_cents=requested_cents,
+                                    amount=requested_cents,
                                     defaults={"state": state},
                                 )
                                 updates = []
@@ -1450,7 +1456,7 @@ class Command(BaseCommand):
                             provided_votes = init.get('votes') or []
                         except Exception:
                             provided_votes = []
-                        if provided_votes:
+                        if provided_votes and initiative_obj:
                             # S'assurer que l'initiative a bien l'option de vote activée si des votes sont fournis
                             if not getattr(initiative_obj, 'vote', False):
                                 try:
@@ -1470,3 +1476,8 @@ class Command(BaseCommand):
                                     Vote.objects.get_or_create(initiative=initiative_obj, user=voter)
                                 except Exception as e:
                                     logger.warning(f"Vote non créé pour '{initiative_obj.name}' ({u_email}): {e}")
+                        elif provided_votes and not initiative_obj:
+                            # Si l'initiative a échoué à être créée, on ne peut pas créer les votes
+                            logger.warning(
+                                f"Votes fournis mais initiative introuvable/non créée pour '{init.get('name')}' sur tenant {tenant.name}. Votes ignorés."
+                            )
