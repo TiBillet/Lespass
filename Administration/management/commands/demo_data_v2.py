@@ -17,7 +17,7 @@ from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
 from fedow_public.models import AssetFedowPublic
-from crowds.models import Initiative, Contribution, Participation, BudgetItem
+from crowds.models import Initiative, Contribution, Participation, BudgetItem, Vote
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
@@ -337,138 +337,84 @@ class Command(BaseCommand):
                 "initiatives": [
                     # FALC: Les initiatives ci‑dessous couvrent tous les cas d’usage (LES PASS uniquement)
                     {
-                        "name": "Crowdfunding : Financer un projet concret",
+                        "name": "Crowdfunding simple : Financer un projet concret : H2G2, la suite !",
                         "short_description": "Un projet classique financé par des dons en €.",
-                        "description": "Exemple de financement participatif classique : pas de budget contributif, ni d'objectif adaptatif. Les contributions en € font avancer la jauge.",
-                        "funding_goal": 8000,  # en euros → sera converti en centimes
+                        "description": "Exemple de financement participatif classique. Franchement celui la il est génial. Si quelqu'un veut bien le lancer dans la vraie vie ... Adapter tout le guide du routard galactique en série ! Ah ! Et on veut la suite aussi de Dirk Gently !",
                         "archived": False,
                         "budget_contributif": False,
                         "adaptative_funding_goal_on_participation": False,
                         "funding_mode": "cascade",
                         "currency": "€",
                         "direct_debit": False,
-                        "tags": ["Difficultée : Facile"],
+                        "tags": ["Crowdfunding"],
+                        "budget_items" : [
+                            {"contributor": "douglas.adams@h2g2.org", "description": "Frais d'auto-stop", "amount" : 1500},
+                            {"contributor": "thor@dirkgently.org", "description": "Scénario", "amount" : 80000},
+                            {"contributor": "fondation@h2g2.org", "description": "Script", "amount" : 60000},
+                            {"contributor": "fondation@h2g2.org", "description": "Tournage", "amount" : 150000},
+                        ],
                         "contributions": [
-                            {"amount_eur": 1200, "name": "Fondation A"},
-                            {"amount_eur": 800, "name": "Soutien individuel"},
-                            {"amount_eur": 1200, "name": "Entreprise locale"}
+                            {"amount_eur": 120000, "name": "Fondation H2G2"},
+                            {"amount_eur": 800, "name": "Douglas Adams"},
+                            {"amount_eur": 600, "name": "Arthur Dent"},
+                            {"amount_eur": 30, "name": "Ford Perfect"},
+                            {"amount_eur": 12000, "name": "Zaphod Beeblebrox"},
+                            {"amount_eur": 400, "name": "Tricia Mc Millan"},
+                            {"amount_eur": 1000, "name": "Marvin"},
                         ]
                     },
                     {
-                        "name": "Budget contributif : objectif 5 000 € (100% financé)",
-                        "short_description": "Budget contributif avec objectif fixe et financement total.",
-                        "description": "Objectif de financement à 5 000 €. Les contributions couvrent 100% de l'objectif. En parallèle, une vingtaine de participations validées représentent environ 70% du budget.",
-                        "funding_goal": 5000,
-                        "vote": True,
+                        "name": "Budget contributif ouvert à tous.tes : Aide nous à construire notre Tiers lieux de rêve !",
+                        "short_description": "Budget contributif avec objectif fixe : contributions en Monnaie Temps !",
+                        "description": "Objectif de financement qui peut être mouvant suivant les idées de chantier",
+                        "vote": False,
                         "archived": False,
                         "budget_contributif": True,
                         "adaptative_funding_goal_on_participation": False,
                         "funding_mode": "cascade",
-                        "currency": "€",
+                        "currency": "MTemps",
                         "direct_debit": False,
                         "tags": ["Difficultée : Intermédiaire"],
+                        "budget_items": [
+                            {"contributor": "zaphod@h2g2.org", "description": "Aménagement du garage pour le coeur en or", "amount": 10000},
+                            {"contributor": "douglas.adams@h2g2.org", "description": "Fyord", "amount": 6000},
+                            {"contributor": "souris@h2g2.org", "description": "Charpente", "amount": 40000},
+                        ],
                         "contributions": [
                             {"amount_eur": 1000, "name": "Collecte en ligne"},
                             {"amount_eur": 1500, "name": "Subvention locale"},
-                            {"amount_eur": 2500, "name": "Mécénat"}
+                            {"amount_eur": 25000, "name": "Mécénat"}
                         ],
                         "participations": [
-                            # 10 x 100 €
-                            *[{"user_email": f"particip{i}@example.org", "requested_value": 100, "description": f"Participation #{i} — tâche courte (quelques heures)", "state": "APPROVED_ADMIN"} for i in range(1, 11)],
-                            # 5 x 200 €
-                            *[{"user_email": f"particip{i}@example.org", "requested_value": 200, "description": f"Participation #{i} — tâche d'une demi‑journée", "state": "APPROVED_ADMIN"} for i in range(11, 16)],
-                            # 5 x 300 € (~3 500€ total)
-                            *[{"user_email": f"particip{i}@example.org", "requested_value": 300, "description": f"Participation #{i} — tâche d'une journée", "state": "VALIDATED_ADMIN", "time_spent_minutes": 7 * 60} for i in range(16, 21)],
+                            {"user_email": f"arthur.dent@h2g2.org", "requested_value": 100, "description": f"Frais de pressing pour robe de chambre", "state": "APPROVED_ADMIN"},
+                            {"user_email": f"zaphod@h2g2.org", "requested_value": 1000, "description": f"Décoration : Portrait du président de la galaxie", "state": "REQUESTED"},
+                            {"user_email": f"souris@h2g2.org", "requested_value": 4200, "description": f"Construction de Compute-1", "state": "APPROVED_ADMIN"},
+                            {"user_email": f"dauphins@h2g2.org", "requested_value": 420, "description": f"Salut, et merci pour le poisson !", "state": "APPROVED_ADMIN"},
+                            {"user_email": f"ford@h2g2.org", "requested_value": 20000, "description": f"Impression du guide sur papier", "state": "REQUESTED"},
                         ]
                     },
                     {
-                        "name": "Budget contributif adaptatif : 5 demandes, 55% financés",
-                        "short_description": "Objectif qui s'ajuste au total des demandes validées.",
-                        "description": "Le but de financement s'ajuste aux demandes validées. 5 participants remplissent la jauge. Deux structures contribuent mais n'atteignent que 55% du besoin total.",
-                        "funding_goal": 0,
+                        "name": "Idée ! Votez et on le fabrique !",
+                        "short_description": "Voici une idée géniale : Un tutoriel pour apprendre à voler en loupant le sol. Votez, proposez des budgets et on s'y met tous si ça prend !",
+                        "description": "Cette initiative sert d'exemple pour la collecte d'idées. Les membres votent pour les plus pertinentes. Quand ça prend, on spécifie, on planifie… et on se lance !",
                         "archived": False,
+                        "vote": True,
                         "budget_contributif": True,
                         "adaptative_funding_goal_on_participation": True,
-                        "funding_mode": "adaptative",
-                        "currency": "€",
-                        "direct_debit": False,
-                        "tags": ["Difficultée : Confirmé"],
-                        "participations": [
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 600, "description": "Analyse et cadrage (1 j)", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 800, "description": "Dév. fonctionnalité A (2 j)", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 900, "description": "Intégration & tests (2 j)", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 700, "description": "Design/UX (1,5 j)", "state": "VALIDATED_ADMIN", "time_spent_minutes": int(1.5 * 7 * 60)},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 1000, "description": "Documentation & transmission (2,5 j)", "state": "VALIDATED_ADMIN", "time_spent_minutes": int(2.5 * 7 * 60)},
-                        ],
-                        "contributions": [
-                            {"amount_eur": 1500, "name": "Structure A"},
-                            {"amount_eur": 700, "name": "Structure B"}
-                        ]
-                    },
-                    {
-                        "name": "Valorisation en monnaie temps : contributions en heures",
-                        "short_description": "Budget contributif valorisé en heures (monnaie temps).",
-                        "description": "Le travail de 6 personnes est valorisé en monnaie temps. Une structure finance l'équivalent du temps passé, de 1 heure à plusieurs demi‑journées.",
-                        "funding_goal": 20,  # 20 h (converti en centi‑unités)
-                        "archived": False,
-                        "budget_contributif": True,
-                        "adaptative_funding_goal_on_participation": False,
-                        "funding_mode": "cascade",
-                        "currency": "h",
-                        "direct_debit": False,
-                        "tags": ["Difficultée : Facile"],
-                        "asset_name": "MTemps",
-                        "participations": [
-                            {"user_email": "h1@example.org", "requested_value": 1, "description": "Tâche #1 — 1 h déclarée", "state": "VALIDATED_ADMIN", "time_spent_minutes": 60},
-                            {"user_email": "h2@example.org", "requested_value": 2, "description": "Tâche #2 — 2 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 120},
-                            {"user_email": "h3@example.org", "requested_value": 3, "description": "Tâche #3 — 3 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 180},
-                            {"user_email": "h4@example.org", "requested_value": 4, "description": "Tâche #4 — 4 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 240},
-                            {"user_email": "h5@example.org", "requested_value": 4, "description": "Tâche #5 — 4 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 240},
-                            {"user_email": "h6@example.org", "requested_value": 6, "description": "Tâche #6 — 6 h déclarées", "state": "VALIDATED_ADMIN", "time_spent_minutes": 360}
-                        ],
-                        "contributions": [
-                            {"amount_eur": 20.0, "name": "Structure solidaire (heures)"}
-                        ]
-                    },
-                    {
-                        "name": "Idée à voter ! Votez et on le code",
-                        "short_description": "Proposez une idée, votez, et on la code si tout le monde suit !",
-                        "description": "Cette initiative sert d'exemple pour la collecte d'idées. Les membres votent pour les plus pertinentes. Quand ça prend, on spécifie, on planifie… et on code !",
-                        "funding_goal": 0,
-                        "archived": False,
-                        "budget_contributif": False,
-                        "adaptative_funding_goal_on_participation": False,
                         "funding_mode": "cascade",
                         "currency": "€",
                         "direct_debit": False,
-                        "tags": ["Idée : Votez et on le code !", "Difficultée : Facile", "Communauté", "Rigolo"]
-                    },
-                    {
-                        "name": "Financement participatif pour maintenir le lieu",
-                        "short_description": "exemple de budget contributif ou le total demandé suis les demande participative. Le but est de financer en toute transparence.",
-                        "description": "Aidez nous à payer les charges : Loyer, chauffages, consomables, le budget total évolue mais nous avons toujours besoin de vous !",
-                        "funding_goal": 0,
-                        "archived": False,
-                        "budget_contributif": True,
-                        "adaptative_funding_goal_on_participation": True,
-                        "funding_mode": "adaptative",
-                        "currency": "€",
-                        "direct_debit": False,
-                        "tags": ["Transparence", "Communauté"],
-                        "participations": [
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #1 — mensualité", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #2 — mensualité", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #3 — mensualité", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 500, "description": "Loyer #4 — mensualité", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 100, "description": "Facture EDF #1", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 100, "description": "Facture EDF #2", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 100, "description": "Facture EDF #3", "state": "APPROVED_ADMIN"},
-                            {"user_email": "${ADMIN_EMAIL}", "requested_value": 40, "description": "Consommables divers (PQ, papier imprimante)", "state": "APPROVED_ADMIN"}
+                        "tags": ["Idée : Votez !", "Difficultée : Facile", "Communauté", "Rigolo"],
+                        "budget_items": [
+                            {"contributor": "arthur.dent@h2g2.org", "description": "La méthode : Louper le sol en une trilogie de 5 volumes", "amount": 10000},
                         ],
-                        "contributions": [
-                            {"amount_eur": 700, "name": "Collecte en ligne"},
-                            {"amount_eur": 500, "name": "Donateur.rice anonyme"},
-                            {"amount_eur": 204, "name": "Cagnotte locale"}
+                        "votes":[
+                            {"user_email": "arthur.dent@h2g2.org"},
+                            {"user_email": "fenchurch@h2g2.org"},
+                            {"user_email": "dauphins@h2g2.org"},
+                            {"user_email": "marvin@h2g2.org"},
+                            {"user_email": "alea.dent@h2g2.org"},
+                            {"user_email": "tricia@h2g2.org"},
                         ]
                     },
                 ],
@@ -771,7 +717,10 @@ class Command(BaseCommand):
                 'APPROVED_ADMIN': Participation.State.APPROVED_ADMIN,
                 'COMPLETED_USER': Participation.State.COMPLETED_USER,
                 'VALIDATED_ADMIN': Participation.State.VALIDATED_ADMIN,
-                'REJECTED_ADMIN': Participation.State.REJECTED_ADMIN,
+                # Les anciennes fixtures pouvaient contenir REJECTED_ADMIN
+                # Le modèle n'expose que "REJECTED"
+                'REJECTED_ADMIN': Participation.State.REJECTED,
+                'REJECTED': Participation.State.REJECTED,
             }
             return mapping.get(u, Participation.State.APPROVED_ADMIN)
 
@@ -1339,7 +1288,11 @@ class Command(BaseCommand):
                             for bi in budget_items:
                                 try:
                                     desc = (bi.get('description') or '').strip()
-                                    amt_eur = Decimal(str(bi.get('amount_eur') or 0))
+                                    # Supporte amount_eur (clé historique) et amount (nouvelle clé en unités)
+                                    raw_amount = bi.get('amount_eur')
+                                    if raw_amount is None:
+                                        raw_amount = bi.get('amount')
+                                    amt_eur = Decimal(str(raw_amount or 0))
                                 except Exception:
                                     desc = ''
                                     amt_eur = Decimal('0')
@@ -1348,7 +1301,9 @@ class Command(BaseCommand):
                                 state = (bi.get('state') or 'approved').strip().lower()
                                 if state not in ['requested', 'approved', 'rejected']:
                                     state = 'approved'
-                                contributor = _get_user(bi.get('contributor_email') or admin_email_env)
+                                # Supporte contributor_email (historique) et contributor (nouvelle clé email)
+                                contributor_email = bi.get('contributor_email') or bi.get('contributor')
+                                contributor = _get_user(contributor_email or admin_email_env)
                                 validator = None
                                 if state in ['approved', 'rejected']:
                                     validator = _get_user(bi.get('validator_email') or admin_email_env)
@@ -1487,3 +1442,31 @@ class Command(BaseCommand):
                                     part.save(update_fields=updates)
                         except Exception as e:
                             logger.warning(f"Erreur lors de l'import de l'initiative '{init.get('name')}' pour {tenant.name}: {e}")
+                        
+                        # -----------------------------
+                        # Votes depuis fixtures
+                        # -----------------------------
+                        try:
+                            provided_votes = init.get('votes') or []
+                        except Exception:
+                            provided_votes = []
+                        if provided_votes:
+                            # S'assurer que l'initiative a bien l'option de vote activée si des votes sont fournis
+                            if not getattr(initiative_obj, 'vote', False):
+                                try:
+                                    initiative_obj.vote = True
+                                    initiative_obj.save(update_fields=['vote'])
+                                except Exception:
+                                    pass
+                            for v in provided_votes:
+                                try:
+                                    u_email = (v.get('user_email') or '').strip()
+                                except Exception:
+                                    u_email = ''
+                                if not u_email:
+                                    continue
+                                try:
+                                    voter = get_or_create_user(u_email, send_mail=False)
+                                    Vote.objects.get_or_create(initiative=initiative_obj, user=voter)
+                                except Exception as e:
+                                    logger.warning(f"Vote non créé pour '{initiative_obj.name}' ({u_email}): {e}")

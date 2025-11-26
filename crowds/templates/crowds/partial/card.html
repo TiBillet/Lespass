@@ -33,9 +33,9 @@
                 {# objectif #}
                 <div class="d-flex justify-content-between align-items-center">
                       <span class="text-muted">
-                        <i class="bi bi-piggy-bank me-1" aria-hidden="true"></i>{{ crowd_config.name_funding_goal }}
+                        <i class="bi bi-piggy-bank me-1" aria-hidden="true"></i>{{ crowd_config.name_goal }}
                       </span>
-                      <strong>{{ initiative.total_funding_goal|dround }} {{ initiative.currency }}</strong>
+                      <strong>{{ initiative.total_funding_amount|dround }} {{ initiative.currency }}</strong>
                 </div>
 
 
@@ -43,14 +43,14 @@
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="text-muted">
                         <i class="bi bi-graph-up me-1" aria-hidden="true"></i>
-                        {% translate 'Financement' %} : {{ initiative.progress_percent_int }}%
+                        {{ crowd_config.name_funding }} : {{ initiative.progress_percent_int }}%
                     </span>
                     <span>
                         <strong class="text-body">{{ initiative.total_funded_amount|dround }} {{ initiative.currency }}</strong>
                     </span>
                 </div>
                 <div class="progress mt-2" style="height: .5rem;">
-                    <div class="progress-bar {% if initiative.progress_percent_int >= 100 %}bg-success{% elif initiative.progress_percent_int >= 80 %}bg-warning{% else %}bg-info{% endif %}"
+                    <div class="progress-bar bg-{{ initiative.progress_percent_color }}"
                          role="progressbar"
                          style="width: 0%" data-crowds-progress="1"
                          data-width-int="{{ initiative.progress_percent_int }}"
@@ -103,7 +103,7 @@
                     </span>
                 </div>
                 <div class="progress mt-2" style="height: .5rem;">
-                    <div class="progress-bar bg-{{ initiative.requested_ratio_color }}"
+                    <div class="progress-bar bg-{{ initiative.requested_vs_funded_color }}"
                          role="progressbar"
                          style="width: 0%" data-crowds-progress="1"
                          data-width-int="{{ initiative.requested_vs_funded_percent_int }}"
@@ -127,7 +127,7 @@
                     {% translate 'Détails' %}
                 </a>
 
-                {% if inititative.vote %}
+                {% if initiative.vote  %}
                 {% if user.is_authenticated %}
                     <button
                             class="btn btn-sm btn-primary"
@@ -137,8 +137,7 @@
                             hx-target="#votes-{{ initiative.uuid }}"
                             hx-swap="outerHTML"
                     >
-                        <i class="bi bi-hand-thumbs-up"></i>
-                        {{ crowd_config.vote_button_name }}
+                        👍 {{ crowd_config.vote_button_name }}
                     </button>
                 {% else %}
                     <button
@@ -146,8 +145,7 @@
                             title="{% translate 'Voter pour la pertinence' %}"
                             onclick="crowdsVoteRequireLogin()"
                     >
-                        <i class="bi bi-hand-thumbs-up"></i>
-                        {{ crowd_config.vote_button_name }}
+                        👍 {{ crowd_config.vote_button_name }}
                     </button>
                 {% endif %}
                 {% endif %}

@@ -25,15 +25,19 @@ class CrowdConfig(SingletonModel):
     title = models.CharField(max_length=255, blank=True, verbose_name=_("Titre"), default="Contribuez")
     description = models.TextField(blank=True, default="Découvrez les projets à financer et les budgets contributifs")
     vote_button_name = models.CharField(max_length=255, blank=True, verbose_name=_("Nom du bouton de vote"),
-                                        default="Ça m'intérèsse !")
-    name_funding_goal = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Objectif'"),
-                                         default=_("Objectif"), help_text=_("Sera affiché en face de la somme"))
-    name_contributions = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Contributions'"),
-                                          default=_("Contributions"),
-                                          help_text=_("Sera affiché en face de la somme et sur le detail"))
+                                        default="Ça m'intérèsse !", help_text=_(
+            "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le changer dans chaque initiative."))
+    name_goal = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Objectif'"),
+                                 default=_("Objectif"), help_text=_(
+            "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le changer dans chaque initiative."))
+    name_funding = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Financement'"),
+                                    default=_("Financement"),
+                                    help_text=_(
+                                        "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le changer dans chaque initiative."))
     name_participations = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Participations'"),
                                            default=_("Participations"),
-                                           help_text=_("Sera affiché en face de la somme et sur le detail"))
+                                           help_text=_(
+                                               "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le changer dans chaque initiative."))
 
 
 class Initiative(models.Model):
@@ -48,22 +52,35 @@ class Initiative(models.Model):
     short_description = models.CharField(max_length=500, blank=True, verbose_name=_("Short description"),
                                          help_text=_("Short description for the cards view and social card."))
 
-    # TODO: a virer, le total est maintenant le total des BudgetItems
-    funding_goal = models.PositiveIntegerField(verbose_name=_("Goal (cents)"), help_text=_(
-        "Serves only to calculate the percentage claimed by participants."))
-    # funded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Montant financé (€)")
-
     created_at = models.DateTimeField(default=timezone.now, verbose_name=_("Created at"))
     archived = models.BooleanField(default=False, verbose_name=_("Archived"),
                                    help_text=_("Archived initiatives are not displayed in the main page."))
 
     vote = models.BooleanField(default=False, verbose_name=_("Activer les votes"),
                                help_text=_("Les utilisateurs peuvent voter pour les initiatives qui leur plaisent."))
+
     budget_contributif = models.BooleanField(default=False, verbose_name=_("Budget contributif"), help_text=_(
         "Permettez a votre communauté de proposer des actions qui s'inscrivent dans un budget contributif : https://movilab.org/wiki/Coremuneration_et_budget_contributif"))
     adaptative_funding_goal_on_participation = models.BooleanField(default=False, verbose_name=_(
         "Objectif lié aux demandes de participation"), help_text=_(
         "Si activé, l'objectif à financer augmentera en fonction des demandes de participations au budget contributif validées."))
+
+    vote_button_name = models.CharField(max_length=255, blank=True, verbose_name=_("Nom du bouton de vote"),
+                                        default="Ça m'intérèsse !",
+                                        help_text=_(
+                                            "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet initiative. Vous pouvez aussi le changer celui par default pour tous dans la configuration."))
+    name_goal = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Objectif'"),
+                                 default=_("Objectif"),
+                                 help_text=_(
+                                     "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet initiative. Vous pouvez aussi le changer celui par default pour tous dans la configuration."))
+    name_funding = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Financement'"),
+                                    default=_("Financement"),
+                                    help_text=_(
+                                        "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet initiative. Vous pouvez aussi le changer celui par default pour tous dans la configuration."))
+    name_participations = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Participations'"),
+                                           default=_("Participations"),
+                                           help_text=_(
+                                               "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet initiative. Vous pouvez aussi le changer celui par default pour tous dans la configuration."))
 
     asset = models.ForeignKey("fedow_public.AssetFedowPublic", on_delete=models.PROTECT,
                               related_name="projects", verbose_name=_("Asset"),
@@ -143,12 +160,14 @@ class Initiative(models.Model):
     def __str__(self):
         return self.name
 
+    ### TOTAUX ###
     # --- Objectifs et lignes budgetaires ---
     @property
-    def total_funding_goal(self):
-        decimal_amount = self.budget_items.filter(state=BudgetItem.State.APPROVED).aggregate(models.Sum("amount"))[
+    def total_funding_amount(self):
+        int_amount = self.budget_items.filter(state=BudgetItem.State.APPROVED).aggregate(models.Sum("amount"))[
                              "amount__sum"] or 0
-        return decimal_amount
+        logger.info(f"total_funding_amount: {int_amount}")
+        return int_amount
 
     # --- Financement reçu ---
     @property
@@ -158,86 +177,66 @@ class Initiative(models.Model):
 
     # --- Sommes demandées par les participations au budget contributif ---
     @property
-    def requested_total_cents(self) -> int:
-        """Total des montants demandés pris en compte (en centimes).
-        Ne comptabilise pas les participations non validées par un·e admin (APPROVED_ADMIN).
-        """
-        try:
-            return (
-                    self.participations
-                    .exclude(state__in=[Participation.State.REQUESTED, Participation.State.REJECTED])
-                    .aggregate(models.Sum("requested_amount_cents"))
-                    ["requested_amount_cents__sum"]
-                    or 0
-            )
-        except Exception:
-            return 0
+    def total_participation_amount(self) -> int:
+        int_total_participation = (
+                self.participations
+                .exclude(state__in=[Participation.State.REQUESTED, Participation.State.REJECTED])
+                .aggregate(models.Sum("amount"))
+                ["amount__sum"]
+                or 0
+        )
+        return int_total_participation
 
-    # Calcul de l'objectif si adaptatif ou pas :
-    @property
-    def get_funding_goal(self):
-        # Si le budget est noté en "adaptatif", ce sont les demandes
-        if self.adaptative_funding_goal_on_participation:
-            requested = self.requested_total_cents
-            if self.total_funding_goal > requested:
-                return self.total_funding_goal
-            return requested
-        else:
-            return self.total_funding_goal
 
-    @property
-    def requested_total_eur(self) -> float:
-        return (self.requested_total_cents or 0) / 100
+    ### END TOTAUX ###
 
+    ### BARRE POURCENTAGE ###
+    # Financement
     @property
-    def requested_vs_funded_percent(self) -> float:
-        """Pourcentage demandé par rapport au montant financé.
-        Si aucun financement n'a encore été reçu, retourne 0 pour éviter une division par zéro.
-        """
-        funded = self.total_funded_amount or 0
-        requested = self.requested_total_cents or 0
-        if funded <= 0 or requested <= 0:
-            return 0
-        return (requested / funded) * 100
-
-    @property
-    def requested_vs_funded_percent_int(self) -> int:
-        try:
-            return int(self.requested_vs_funded_percent)
-        except Exception:
-            return 0
-
-    @property
-    def requested_ratio_color(self) -> str:
-        """Couleur Bootstrap en fonction des seuils (<80 vert, 80-99 orange, >=100 rouge)."""
-        p = self.requested_vs_funded_percent
-        if p >= 100:
-            return "danger"
-        if p >= 80:
-            return "warning"
-        return "success"
-
-    @property
-    def progress_percent(self):
+    def progress_percent_int(self):
         """Pourcentage de financement atteint.
         total_funded_amount est en centimes (int), total_funding_goal est en unités (Decimal).
         On convertit le financé en unités avant division et on gère les zéros pour éviter les erreurs.
         """
         try:
-            goal = self.total_funding_goal or 0
+            goal = self.total_funding_amount or 0
             if not goal or goal == 0:
                 return 0
-            funded_eur = dround(self.total_funded_amount)
-            return (funded_eur / goal) * 100
+            return int((self.total_funded_amount / self.total_funding_amount) * 100)
         except Exception:
             return 0
 
     @property
-    def progress_percent_int(self):
-        try:
-            return int(self.progress_percent)
-        except Exception:
+    def progress_percent_color(self) -> str:
+        """Couleur Bootstrap en fonction des seuils (<80 vert, 80-99 orange, >=100 rouge)."""
+        p = self.progress_percent_int
+        if p >= 100:
+            return "success"
+        if p >= 80:
+            return "warning"
+        return "info"
+
+    # budget participatif
+    @property
+    def requested_vs_funded_percent_int(self) -> float:
+        """Pourcentage demandé par rapport au montant financé.
+        Si aucun financement n'a encore été reçu, retourne 0 pour éviter une division par zéro.
+        """
+        funded = self.total_funded_amount or 0
+        requested = self.total_participation_amount or 0
+        if funded <= 0 or requested <= 0:
             return 0
+        return int((requested / funded) * 100)
+
+    @property
+    def requested_vs_funded_color(self) -> str:
+        """Couleur Bootstrap en fonction des seuils (<80 vert, 80-99 orange, >=100 rouge)."""
+        p = self.requested_vs_funded_percent_int
+        if p >= 100:
+            return "danger"
+        if p >= 80:
+            return "warning"
+        return "success"
 
     @property
     def votes_count(self) -> int:
@@ -281,7 +280,7 @@ class BudgetItem(models.Model):
     )
 
     description = models.TextField(blank=True, verbose_name=_("Decrivez l'objectif à financer."))
-    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="Montant (décimal)")
+    amount = models.PositiveIntegerField(default=0, verbose_name="Montant")
 
     class State(models.TextChoices):
         REQUESTED = "requested", _("Proposition formulée")  # proposedActionStatus
@@ -315,7 +314,8 @@ class Contribution(models.Model):
         "Decrivez ce que vous attendez de la contribution, ou envoyez un messages sympa à l'équipe !"))
     contributor = models.ForeignKey("AuthBillet.TibilletUser", related_name="contributions", on_delete=models.PROTECT,
                                     null=True, blank=True)
-    amount = models.PositiveIntegerField(verbose_name="Montant (centimes)")
+    amount = models.PositiveIntegerField(verbose_name="Montant")
+
     payment_status = models.CharField(max_length=16, choices=PaymentStatus.choices, default=PaymentStatus.PENDING,
                                       verbose_name=_("Statut de paiement"))
     paid_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Payée le"))
@@ -379,17 +379,21 @@ class Participation(models.Model):
     uuid = models.UUIDField(primary_key=True, editable=False, default=uuid4)
     initiative = models.ForeignKey(Initiative, related_name="participations", on_delete=models.CASCADE,
                                    help_text=_("Projet concerné (schema.org/Project)"))
+
     participant = models.ForeignKey(
         "AuthBillet.TibilletUser",
         related_name="crowd_participations",
         on_delete=models.CASCADE,
         help_text=_("Utilisateur·ice qui participe (schema.org/Person)")
     )
+
     description = models.TextField(blank=False, help_text=_("Description de la participation (schema.org/description)"))
-    requested_amount_cents = models.PositiveIntegerField(
-        help_text=_("Part du budget sollicité en centimes (schema.org/MonetaryAmount)"),
+
+    amount = models.PositiveIntegerField(
+        help_text=_("Part du budget sollicité."),
         null=True, blank=True
     )
+
     state = models.CharField(max_length=32, choices=State.choices, default=State.REQUESTED,
                              help_text=_("Statut de l'action (schema.org/ActionStatusType)"))
     time_spent_minutes = models.PositiveIntegerField(null=True, blank=True,
@@ -405,9 +409,5 @@ class Participation(models.Model):
             models.Index(fields=["initiative", "participant"])
         ]
 
-    @property
-    def requested_amount_eur(self) -> float:
-        return (self.requested_amount_cents or 0) / 100
-
     def __str__(self):
-        return f"{self.participant.email} → {self.initiative.name} ({self.requested_amount_eur:.2f}€)"
+        return f"{self.participant.email} → {self.initiative.name} ({dround(self.amount)})"

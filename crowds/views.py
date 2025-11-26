@@ -2,6 +2,8 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
+import logging
+
 
 from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
@@ -26,6 +28,7 @@ from .serializers import (
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 # Create your views here.
@@ -141,12 +144,10 @@ class InitiativeViewSet(viewsets.ViewSet):
             "voters_count": votes.count(),
             "participations": participations,
             # "funded_eur": (initiative.funded_amount or 0) / 100,
-            "goal_eur": (initiative.funding_goal or 0) / 100,
+            # "goal_eur": (initiative.funding_goal or 0) / 100,
             # Progression des demandes de participations vs financements
             # "requested_eur": initiative.requested_total_eur,
             "requested_percent_int": initiative.requested_vs_funded_percent_int,
-            "requested_percent_int_capped": min(100, initiative.requested_vs_funded_percent_int),
-            "requested_color": initiative.requested_ratio_color,
         })
 
         return render(request, "crowds/views/detail.html", context)
@@ -202,9 +203,11 @@ class InitiativeViewSet(viewsets.ViewSet):
             response = render(request, "crowds/partial/participations.html", context)
             response.status_code = 401
             return response
+
         # Validation via DRF serializer (et sanitation HTML)
         serializer = ParticipationCreateSerializer(data=request.data)
         if not serializer.is_valid():
+            logger.warning("Invalid participation request: %s", serializer.errors)
             context = get_context(request)
             context.update(self._participations_context(initiative))
             response = render(request, "crowds/partial/participations.html", context)
@@ -212,11 +215,13 @@ class InitiativeViewSet(viewsets.ViewSet):
             return response
 
         data = serializer.validated_data
+        amount = serializer.amount if data.get("requested_amount") else None
+
         Participation.objects.create(
             initiative=initiative,
             participant=request.user,
             description=data.get("description") or "",
-            requested_amount_cents=data.get("requested_amount_cents"),
+            amount=amount,
             state=Participation.State.REQUESTED,
         )
         context = get_context(request)
@@ -249,7 +254,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             initiative=initiative,
             contributor=request.user,
             description=serializer.validated_data["description"],
-            amount=serializer.validated_data["amount_eur"],
+            amount=serializer.amount,
             state=BudgetItem.State.REQUESTED,
         )
 

@@ -11,7 +11,12 @@
       </tr>
     </thead>
     <tbody>
+      {% with total=contributions|length %}
       {% for c in contributions %}
+        {% if forloop.counter == 5 %}
+    </tbody>
+    <tbody id="contrib-more-{{ initiative.uuid }}" class="collapse">
+        {% endif %}
         <tr>
           <td>{{ c.get_contriutor_name }}</td>
           <td class="small">{{ c.description|default:""|linebreaksbr }}</td>
@@ -46,6 +51,19 @@
           <td colspan="5" class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
         </tr>
       {% endfor %}
+      {% endwith %}
     </tbody>
   </table>
 </div>
+{% with total=contributions|length %}
+{% if total > 4 %}
+<div class="text-center mt-2">
+  <button class="btn btn-sm btn-outline-secondary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#contrib-more-{{ initiative.uuid }}"
+          aria-expanded="false" aria-controls="contrib-more-{{ initiative.uuid }}"
+          onclick="this.dataset.altText=this.dataset.altText||this.innerText; const t=this.getAttribute('aria-expanded')==='true'?this.dataset.altText:'{% translate 'Afficher moins' %}'; this.innerText=t;">
+    {% translate 'Afficher plus' %}
+  </button>
+</div>
+{% endif %}
+{% endwith %}

@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n tibitags %}
 <div class="table-responsive">
     <table class="table align-middle">
         <thead>
@@ -11,7 +11,12 @@
         </tr>
         </thead>
         <tbody>
+        {% with total=budget_items|length %}
         {% for bi in budget_items %}
+            {% if forloop.counter == 5 %}
+        </tbody>
+        <tbody id="bi-more-{{ initiative.uuid }}" class="collapse">
+            {% endif %}
             <tr>
                 <td>
                     {% if bi.contributor %}
@@ -21,7 +26,7 @@
                     {% endif %}
                 </td>
                 <td class="small">{{ bi.description|linebreaksbr }}</td>
-                <td class="text-end">{{ bi.amount|floatformat:2 }} {{ initiative.currency }}</td>
+                <td class="text-end">{{ bi.amount|dround }} {{ initiative.currency }}</td>
                 <td>{{ bi.created_at|date:'Y-m-d H:i' }}</td>
                 <td class="text-end">
                     {% if bi.state == 'requested' %}
@@ -69,6 +74,19 @@
                     class="text-center text-muted py-4">{% translate 'Aucune ligne budgétaire pour le moment.' %}</td>
             </tr>
         {% endfor %}
+        {% endwith %}
         </tbody>
     </table>
 </div>
+{% with total=budget_items|length %}
+{% if total > 4 %}
+<div class="text-center mt-2">
+    <button class="btn btn-sm btn-outline-secondary" type="button"
+            data-bs-toggle="collapse" data-bs-target="#bi-more-{{ initiative.uuid }}"
+            aria-expanded="false" aria-controls="bi-more-{{ initiative.uuid }}"
+            onclick="this.dataset.altText=this.dataset.altText||this.innerText; const t=this.getAttribute('aria-expanded')==='true'?this.dataset.altText:'{% translate 'Afficher moins' %}'; this.innerText=t;">
+        {% translate 'Afficher plus' %}
+    </button>
+</div>
+{% endif %}
+{% endwith %}

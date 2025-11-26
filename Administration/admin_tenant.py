@@ -3933,8 +3933,8 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
             "title",
             "description",
             "vote_button_name",
-            "name_funding_goal",
-            "name_contributions",
+            "name_goal",
+            "name_funding",
             "name_participations",
         )}),
     )
@@ -4121,7 +4121,7 @@ class InitiativeAdmin(ModelAdmin):
         "progress_percent_int",
         "currency",
         "votes_count",
-        "requested_total_display",
+        # "requested_total_display",
     )
 
     fields = (
@@ -4177,13 +4177,13 @@ class InitiativeAdmin(ModelAdmin):
 
     funding_goal_display.short_description = _("Objectif")
 
-    def requested_total_display(self, obj):
-        # Seules les participations approuvées par un·e admin sont comptées dans le total (voir modèle)
-        color = obj.requested_ratio_color
-        value = f"{obj.requested_total_eur:.2f} {self.currency(obj)}"
-        return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
-
-    requested_total_display.short_description = _("Demandes validées")
+    # def requested_total_display(self, obj):
+        ## Seules les participations approuvées par un·e admin sont comptées dans le total (voir modèle)
+        # color = obj.requested_ratio_color
+        # value = f"{obj.requested_total_eur:.2f} {self.currency(obj)}"
+        # return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
+    #
+    # requested_total_display.short_description = _("Demandes validées")
 
 
 

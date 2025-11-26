@@ -11,16 +11,11 @@ class BudgetItemProposalSerializer(serializers.Serializer):
 
     def validate_description(self, value: str) -> str:
         # Sanitize HTML to avoid script injections; allow basic formatting only
-        return clean_html(value or "")
+        return clean_html(value)
 
     def validate_amount_eur(self, value: Decimal) -> Decimal:
-        try:
-            if value is None or value <= Decimal("0"):
-                raise serializers.ValidationError("Montant invalide")
-        except InvalidOperation:
-            raise serializers.ValidationError("Montant invalide")
+        self.amount = int(Decimal(value) * 100)
         return value
-
 
 class ContributionCreateSerializer(serializers.Serializer):
     contributor_name = serializers.CharField(allow_blank=False, trim_whitespace=True)
@@ -36,12 +31,16 @@ class ContributionCreateSerializer(serializers.Serializer):
 
 
 class ParticipationCreateSerializer(serializers.Serializer):
-    description = serializers.CharField(min_length=5, allow_blank=False, trim_whitespace=True)
-    # Optionnel: peut être vide en cas de bénévolat
-    requested_amount_cents = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+    description = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    requested_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
 
     def validate_description(self, value: str) -> str:
-        return clean_html(value or "")
+        return clean_html(value)
+
+    def validate_requested_amount(self, value: Decimal) -> Decimal:
+        if value:
+            self.amount = int(Decimal(value) * 100)
+        return value
 
 
 class ParticipationCompleteSerializer(serializers.Serializer):
