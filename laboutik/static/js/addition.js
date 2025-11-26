@@ -166,7 +166,7 @@ function additionManageForm(event) {
 
 		// update input
 		if (data.actionType === 'updateInput') {
-			document.querySelector(data.selector).value = data.value
+			form.querySelector(data.selector).value = data.value
 		}
 
 		// change post url

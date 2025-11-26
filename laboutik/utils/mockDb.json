@@ -15,7 +15,7 @@
         {
           "id": "8f08b90d-d3f0-49da-9dbd-8be795f689ef",
           "name": "Retour Consigne",
-          "prix": -100,
+          "prix": -1,
           "poid_liste": 16,
           "categorie": {
             "id": 4,
@@ -36,19 +36,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "consigne",
-          "bt_groupement": {
-            "methode_name": "RetourConsigne",
-            "moyens_paiement": "espece|nfc",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe2",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "consigne"
         },
         {
           "id": "67d231cd-d1c2-4bf3-ac51-18af778b4f8c",
           "name": "Pression 33",
-          "prix": 200,
+          "prix": 2,
           "poid_liste": 28,
           "categorie": {
             "id": 9,
@@ -56,7 +49,7 @@
             "poid_liste": 10,
             "icon": "fa-beer",
             "couleur_backgr": "#f6cd61",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -74,19 +67,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "pression",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "pression"
         },
         {
           "id": "855b9cc1-3ece-488a-8783-7b782d4151fb",
           "name": "Pression 50",
-          "prix": 250,
+          "prix": 2.5,
           "poid_liste": 29,
           "categorie": {
             "id": 9,
@@ -94,7 +80,7 @@
             "poid_liste": 10,
             "icon": "fa-beer",
             "couleur_backgr": "#f6cd61",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -112,19 +98,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "pression",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "pression"
         },
         {
           "id": "8a75f2d2-9d3f-4ca7-9367-13b0afa19bca",
           "name": "Eau 50cL",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 30,
           "categorie": {
             "id": 8,
@@ -132,7 +111,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -150,19 +129,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "7beda12d-4295-49a7-a2fd-81cce64dbeab",
           "name": "Eau 1L",
-          "prix": 150,
+          "prix": 1.5,
           "poid_liste": 31,
           "categorie": {
             "id": 8,
@@ -170,7 +142,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -188,19 +160,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "ffec2f43-44a1-4688-aa32-2959d5fd8c00",
           "name": "Caf\u00e9",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 32,
           "categorie": {
             "id": 8,
@@ -208,7 +173,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -226,19 +191,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "f372cb3e-c487-4f46-8a89-650458d7435f",
           "name": "Soft P",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 33,
           "categorie": {
             "id": 8,
@@ -246,7 +204,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -264,19 +222,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "a5035dc2-17d7-496e-a614-6cd503c1e800",
           "name": "Soft G",
-          "prix": 150,
+          "prix": 1.5,
           "poid_liste": 34,
           "categorie": {
             "id": 8,
@@ -284,7 +235,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -302,19 +253,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "e183504e-b98d-409a-9cca-618fec771f6e",
           "name": "Guinness",
-          "prix": 499,
+          "prix": 4.99,
           "poid_liste": 35,
           "categorie": {
             "id": 10,
@@ -322,7 +266,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -340,19 +284,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "9de6ba60-d939-4658-b235-b13ea322b299",
           "name": "Desp\u00e9",
-          "prix": 320,
+          "prix": 3.2,
           "poid_liste": 36,
           "categorie": {
             "id": 10,
@@ -360,7 +297,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -378,19 +315,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "61214857-0e75-4eee-85cb-a1d0154788cc",
           "name": "Chimay Bleue",
-          "prix": 280,
+          "prix": 2.8,
           "poid_liste": 37,
           "categorie": {
             "id": 10,
@@ -398,7 +328,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -416,19 +346,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "6afe6ea7-38bc-4278-8024-43996c51c5e4",
           "name": "Chimay Rouge",
-          "prix": 260,
+          "prix": 2.6,
           "poid_liste": 38,
           "categorie": {
             "id": 10,
@@ -436,7 +359,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -454,19 +377,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "12549d06-62b9-4742-8529-3cbf040783c0",
           "name": "CdBoeuf",
-          "prix": 2500,
+          "prix": 25,
           "poid_liste": 39,
           "categorie": {
             "id": 11,
@@ -474,7 +390,7 @@
             "poid_liste": 12,
             "icon": "fa-hamburger",
             "couleur_backgr": "#FF0000",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               1
             ],
@@ -492,19 +408,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "menu",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "menu"
         },
         {
           "id": "8f8bf701-10aa-4943-9368-6c1a0ccf253c",
           "name": "Gateau",
-          "prix": 90000,
+          "prix": 900,
           "poid_liste": 40,
           "categorie": {
             "id": 12,
@@ -512,7 +421,7 @@
             "poid_liste": 13,
             "icon": "fa-birthday-cake",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               1
             ],
@@ -530,14 +439,7 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-          "class_categorie": "dessert",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "dessert"
         }
       ],
       "icon": "fa-beer"
@@ -557,7 +459,7 @@
         {
           "id": "8f08b90d-d3f0-49da-9dbd-8be795f689ef",
           "name": "Retour Consigne",
-          "prix": -100,
+          "prix": -1,
           "poid_liste": 16,
           "categorie": {
             "id": 4,
@@ -578,19 +480,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "consigne",
-          "bt_groupement": {
-            "methode_name": "RetourConsigne",
-            "moyens_paiement": "espece|nfc",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe2",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "consigne"
         },
         {
           "id": "67d231cd-d1c2-4bf3-ac51-18af778b4f8c",
           "name": "Pression 33",
-          "prix": 200,
+          "prix": 2,
           "poid_liste": 28,
           "categorie": {
             "id": 9,
@@ -598,7 +493,7 @@
             "poid_liste": 10,
             "icon": "fa-beer",
             "couleur_backgr": "#f6cd61",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -616,19 +511,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "pression",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "pression"
         },
         {
           "id": "855b9cc1-3ece-488a-8783-7b782d4151fb",
           "name": "Pression 50",
-          "prix": 250,
+          "prix": 2.5,
           "poid_liste": 29,
           "categorie": {
             "id": 9,
@@ -636,7 +524,7 @@
             "poid_liste": 10,
             "icon": "fa-beer",
             "couleur_backgr": "#f6cd61",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -654,19 +542,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "pression",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "pression"
         },
         {
           "id": "8a75f2d2-9d3f-4ca7-9367-13b0afa19bca",
           "name": "Eau 50cL",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 30,
           "categorie": {
             "id": 8,
@@ -674,7 +555,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -692,19 +573,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "7beda12d-4295-49a7-a2fd-81cce64dbeab",
           "name": "Eau 1L",
-          "prix": 150,
+          "prix": 1.5,
           "poid_liste": 31,
           "categorie": {
             "id": 8,
@@ -712,7 +586,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -730,19 +604,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "ffec2f43-44a1-4688-aa32-2959d5fd8c00",
           "name": "Caf\u00e9",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 32,
           "categorie": {
             "id": 8,
@@ -750,7 +617,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -768,19 +635,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "f372cb3e-c487-4f46-8a89-650458d7435f",
           "name": "Soft P",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 33,
           "categorie": {
             "id": 8,
@@ -788,7 +648,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -806,19 +666,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "a5035dc2-17d7-496e-a614-6cd503c1e800",
           "name": "Soft G",
-          "prix": 150,
+          "prix": 1.5,
           "poid_liste": 34,
           "categorie": {
             "id": 8,
@@ -826,7 +679,7 @@
             "poid_liste": 9,
             "icon": "fa-coffee",
             "couleur_backgr": "#337ab7",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -844,19 +697,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "soft",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "soft"
         },
         {
           "id": "e183504e-b98d-409a-9cca-618fec771f6e",
           "name": "Guinness",
-          "prix": 499,
+          "prix": 4.99,
           "poid_liste": 35,
           "categorie": {
             "id": 10,
@@ -864,7 +710,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -882,19 +728,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "9de6ba60-d939-4658-b235-b13ea322b299",
           "name": "Desp\u00e9",
-          "prix": 320,
+          "prix": 3.2,
           "poid_liste": 36,
           "categorie": {
             "id": 10,
@@ -902,7 +741,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -920,19 +759,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "61214857-0e75-4eee-85cb-a1d0154788cc",
           "name": "Chimay Bleue",
-          "prix": 280,
+          "prix": 2.8,
           "poid_liste": 37,
           "categorie": {
             "id": 10,
@@ -940,7 +772,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -958,19 +790,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "6afe6ea7-38bc-4278-8024-43996c51c5e4",
           "name": "Chimay Rouge",
-          "prix": 260,
+          "prix": 2.6,
           "poid_liste": 38,
           "categorie": {
             "id": 10,
@@ -978,7 +803,7 @@
             "poid_liste": 11,
             "icon": "fa-wine-bottle",
             "couleur_backgr": "#00FF00",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               2
             ],
@@ -996,19 +821,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "bieres-btl",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "bieres-btl"
         },
         {
           "id": "12549d06-62b9-4742-8529-3cbf040783c0",
           "name": "CdBoeuf",
-          "prix": 2500,
+          "prix": 25,
           "poid_liste": 39,
           "categorie": {
             "id": 11,
@@ -1016,7 +834,7 @@
             "poid_liste": 12,
             "icon": "fa-hamburger",
             "couleur_backgr": "#FF0000",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               1
             ],
@@ -1034,19 +852,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "menu",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "menu"
         },
         {
           "id": "8f8bf701-10aa-4943-9368-6c1a0ccf253c",
           "name": "Gateau",
-          "prix": 800,
+          "prix": 8,
           "poid_liste": 40,
           "categorie": {
             "id": 12,
@@ -1054,7 +865,7 @@
             "poid_liste": 13,
             "icon": "fa-birthday-cake",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               1
             ],
@@ -1072,14 +883,7 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "0877636e-dae1-411f-806b-87ce0560705d",
-          "class_categorie": "dessert",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "dessert"
         }
       ],
       "icon": "fa-hamburger"
@@ -1099,18 +903,9 @@
         {
           "id": "c25e4191-8ac5-425d-897a-017492a13836",
           "name": "Retour Consigne bis",
-          "prix": -100,
+          "prix": -1,
           "poid_liste": 41,
-          "categorie": {
-            "id": 998,
-            "name": "angry",
-            "poid_liste": 998,
-            "icon": "fa-angry",
-            "couleur_backgr": "#FFFFFF",
-            "couleur_texte": "#000000",
-            "groupements": [],
-            "tva": null
-          },
+          "categorie": null,
           "url_image": null,
           "couleur_texte": null,
           "methode_name": "RetourConsigne",
@@ -1119,30 +914,14 @@
           "afficher_les_prix": true,
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
-          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
-          "bt_groupement": {
-            "methode_name": "RetourConsigne",
-            "moyens_paiement": "espece|nfc",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe2",
-            "nb_commande_max": 1000
-          }
+          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73"
         },
         {
           "id": "dcb08c46-9b0d-4aca-9de8-b50ebde80a0d",
           "name": "Retour Consigne Rebis",
-          "prix": -100,
+          "prix": -1,
           "poid_liste": 42,
-          "categorie": {
-            "id": 998,
-            "name": "angry",
-            "poid_liste": 998,
-            "icon": "fa-angry",
-            "couleur_backgr": "#FFFFFF",
-            "couleur_texte": "#000000",
-            "groupements": [],
-            "tva": null
-          },
+          "categorie": null,
           "url_image": null,
           "couleur_texte": null,
           "methode_name": "RetourConsigne",
@@ -1151,19 +930,12 @@
           "afficher_les_prix": true,
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
-          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
-          "bt_groupement": {
-            "methode_name": "RetourConsigne",
-            "moyens_paiement": "espece|nfc",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe2",
-            "nb_commande_max": 1000
-          }
+          "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73"
         },
         {
           "id": "be5158ad-b97e-435d-9d8b-f4446f7801ae",
           "name": "Jeux ou acteurs et non-acteurs",
-          "prix": 2100,
+          "prix": 21,
           "poid_liste": 43,
           "categorie": {
             "id": 11,
@@ -1171,7 +943,7 @@
             "poid_liste": 12,
             "icon": "fa-hamburger",
             "couleur_backgr": "#FF0000",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [
               1
             ],
@@ -1189,14 +961,7 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "7d4e787e-a238-4f3b-adb6-b14a9d7ccc73",
-          "class_categorie": "menu",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "menu"
         }
       ],
       "icon": null
@@ -1230,7 +995,7 @@
         {
           "id": "90eb4507-1c55-4d87-ad6c-bf6ccd35b532",
           "name": "TestCoin +0.1",
-          "prix": 10,
+          "prix": 0.1,
           "poid_liste": 8,
           "categorie": {
             "id": 3,
@@ -1238,7 +1003,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1251,19 +1016,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "96b0f7a1-e4d0-4c21-afea-4b68f08477ec",
           "name": "TestCoin +0.5",
-          "prix": 50,
+          "prix": 0.5,
           "poid_liste": 9,
           "categorie": {
             "id": 3,
@@ -1271,7 +1029,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1284,19 +1042,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "e247df33-d61c-4fda-b56c-33e84023ae6c",
           "name": "TestCoin +1",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 10,
           "categorie": {
             "id": 3,
@@ -1304,7 +1055,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1317,19 +1068,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "3816bf00-b2c7-41bf-a966-6d4be002af92",
           "name": "TestCoin +5",
-          "prix": 500,
+          "prix": 5,
           "poid_liste": 11,
           "categorie": {
             "id": 3,
@@ -1337,7 +1081,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1350,19 +1094,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "5198f675-883a-401f-8e0c-b56393e4d0c4",
           "name": "TestCoin +10",
-          "prix": 1000,
+          "prix": 10,
           "poid_liste": 12,
           "categorie": {
             "id": 3,
@@ -1370,7 +1107,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1383,19 +1120,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "507a89d6-e9eb-46b5-add2-5e6f2d393776",
           "name": "TestCoin +20",
-          "prix": 2000,
+          "prix": 20,
           "poid_liste": 13,
           "categorie": {
             "id": 3,
@@ -1403,7 +1133,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1416,19 +1146,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "accb493a-5fde-4e02-934e-0df8b4152791",
           "name": "TestCoin +50",
-          "prix": 5000,
+          "prix": 50,
           "poid_liste": 14,
           "categorie": {
             "id": 3,
@@ -1436,7 +1159,7 @@
             "poid_liste": 4,
             "icon": "fa-euro-sign",
             "couleur_backgr": "#E64A19",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1449,19 +1172,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cashless",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelle",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe4",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cashless"
         },
         {
           "id": "c22f80fb-d16f-475f-9fdb-3a08a18b4f6c",
           "name": "Consigne",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 15,
           "categorie": {
             "id": 4,
@@ -1482,19 +1198,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "consigne",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "consigne"
         },
         {
           "id": "8f08b90d-d3f0-49da-9dbd-8be795f689ef",
           "name": "Retour Consigne",
-          "prix": -100,
+          "prix": -1,
           "poid_liste": 16,
           "categorie": {
             "id": 4,
@@ -1515,19 +1224,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "consigne",
-          "bt_groupement": {
-            "methode_name": "RetourConsigne",
-            "moyens_paiement": "espece|nfc",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe2",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "consigne"
         },
         {
           "id": "18496268-d8e0-472a-b550-42b6fcedf642",
           "name": "Cashback",
-          "prix": 1050,
+          "prix": 10.5,
           "poid_liste": 17,
           "categorie": {
             "id": 4,
@@ -1548,19 +1250,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "consigne",
-          "bt_groupement": {
-            "methode_name": "VenteArticle",
-            "moyens_paiement": "espece|carte_bancaire|nfc|CH",
-            "besoin_tag_id": "nfc",
-            "groupe": "groupe1",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "consigne"
         },
         {
           "id": "7aa9d9fc-3e2f-4a4b-948a-cf47701e9035",
           "name": "TestCoin Cadeau +0.1",
-          "prix": 10,
+          "prix": 0.1,
           "poid_liste": 18,
           "categorie": {
             "id": 5,
@@ -1568,7 +1263,7 @@
             "poid_liste": 6,
             "icon": "fa-gift",
             "couleur_backgr": "#FF00FF",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1581,19 +1276,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cadeau",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelleCadeau",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe5",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cadeau"
         },
         {
           "id": "676a91cc-9198-45a2-bbf0-b35370974a5d",
           "name": "TestCoin Cadeau +0.5",
-          "prix": 50,
+          "prix": 0.5,
           "poid_liste": 19,
           "categorie": {
             "id": 5,
@@ -1601,7 +1289,7 @@
             "poid_liste": 6,
             "icon": "fa-gift",
             "couleur_backgr": "#FF00FF",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1614,19 +1302,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cadeau",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelleCadeau",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe5",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cadeau"
         },
         {
           "id": "2f020719-ba1f-440c-b1b5-51fc2d338749",
           "name": "TestCoin Cadeau +1",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 20,
           "categorie": {
             "id": 5,
@@ -1634,7 +1315,7 @@
             "poid_liste": 6,
             "icon": "fa-gift",
             "couleur_backgr": "#FF00FF",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1647,19 +1328,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cadeau",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelleCadeau",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe5",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cadeau"
         },
         {
           "id": "c83a08ae-0ebe-410e-b9aa-c472eb7f1b44",
           "name": "TestCoin Cadeau +5",
-          "prix": 500,
+          "prix": 5,
           "poid_liste": 21,
           "categorie": {
             "id": 5,
@@ -1667,7 +1341,7 @@
             "poid_liste": 6,
             "icon": "fa-gift",
             "couleur_backgr": "#FF00FF",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1680,19 +1354,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cadeau",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelleCadeau",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe5",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cadeau"
         },
         {
           "id": "6e82efae-f6b7-4eb3-a8f4-111720bd55bc",
           "name": "TestCoin Cadeau +10",
-          "prix": 1000,
+          "prix": 10,
           "poid_liste": 22,
           "categorie": {
             "id": 5,
@@ -1700,7 +1367,7 @@
             "poid_liste": 6,
             "icon": "fa-gift",
             "couleur_backgr": "#FF00FF",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1713,19 +1380,12 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cadeau",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelleCadeau",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe5",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cadeau"
         },
         {
           "id": "c1e15bf4-ce05-4252-94cd-4f4ec2e0f7ca",
           "name": "TestCoin Cadeau +20",
-          "prix": 2000,
+          "prix": 20,
           "poid_liste": 23,
           "categorie": {
             "id": 5,
@@ -1733,7 +1393,7 @@
             "poid_liste": 6,
             "icon": "fa-gift",
             "couleur_backgr": "#FF00FF",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1746,14 +1406,7 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "cadeau",
-          "bt_groupement": {
-            "methode_name": "AjoutMonnaieVirtuelleCadeau",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe5",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "cadeau"
         },
         {
           "id": "f03dc538-4643-4e9c-8f17-c37977e61fcb",
@@ -1766,7 +1419,7 @@
             "poid_liste": 7,
             "icon": "fa-radiation",
             "couleur_backgr": "#FF0000",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1779,14 +1432,7 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "danger",
-          "bt_groupement": {
-            "methode_name": "ViderCarte",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe7",
-            "nb_commande_max": 1
-          }
+          "class_categorie": "danger"
         },
         {
           "id": "817ecf5a-bb37-40f2-ba12-d8d3863e296a",
@@ -1799,7 +1445,7 @@
             "poid_liste": 7,
             "icon": "fa-radiation",
             "couleur_backgr": "#FF0000",
-            "couleur_texte": "#ffffff",
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1812,41 +1458,19 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "12083d94-cd0e-4839-bce8-6a9838efc735",
-          "class_categorie": "danger",
-          "bt_groupement": {
-            "methode_name": "ViderCarte",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe7",
-            "nb_commande_max": 1
-          }
+          "class_categorie": "danger"
         },
         {
           "id": "42ffe511-d880-4964-9b96-0981a9fe4071",
           "name": "Paiement Fractionn\u00e9",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 26,
-          "categorie": {
-            "id": 998,
-            "name": "angry",
-            "poid_liste": 998,
-            "icon": "fa-angry",
-            "couleur_backgr": "#FFFFFF",
-            "couleur_texte": "#000000",
-            "groupements": [],
-            "tva": null
-          },
+          "categorie": null,
           "url_image": null,
           "couleur_texte": null,
           "methode_name": "PaiementFractionne",
           "methode_choices": "FR",
-          "archive": false,
-          "bt_groupement": {
-            "moyens_paiement": "",
-            "besoin_tag_id": "",
-            "groupe": "groupe888",
-            "nb_commande_max": 1000
-          }
+          "archive": false
         }
       ],
       "icon": "fa-euro-sign"
@@ -1873,8 +1497,8 @@
             "name": "Badge",
             "poid_liste": 2,
             "icon": null,
-            "couleur_backgr": "#17a2b8",
-            "couleur_texte": "#ffffff",
+            "couleur_backgr": null,
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1887,27 +1511,20 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "class_categorie": "badge",
-          "bt_groupement": {
-            "methode_name": "BG",
-            "moyens_paiement": "",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe6",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "badge"
         },
         {
           "id": "3efd3761-a8b6-4cbc-8291-156985b8c207",
           "name": "Adh\u00e9sion (Le Tiers-Lustre) Annuelle",
-          "prix": 2000,
+          "prix": 20,
           "poid_liste": 3,
           "categorie": {
             "id": 2,
             "name": "Adh\u00e9sions",
             "poid_liste": 3,
             "icon": null,
-            "couleur_backgr": "#17a2b8",
-            "couleur_texte": "#ffffff",
+            "couleur_backgr": null,
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1920,27 +1537,20 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "class_categorie": "adhesions",
-          "bt_groupement": {
-            "methode_name": "Adhesion",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe3",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "adhesions"
         },
         {
           "id": "07192e0e-3596-417d-a2ba-ac2f3d17e566",
           "name": "Adh\u00e9sion (Le Tiers-Lustre) Mensuelle",
-          "prix": 200,
+          "prix": 2,
           "poid_liste": 4,
           "categorie": {
             "id": 2,
             "name": "Adh\u00e9sions",
             "poid_liste": 3,
             "icon": null,
-            "couleur_backgr": "#17a2b8",
-            "couleur_texte": "#ffffff",
+            "couleur_backgr": null,
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1953,27 +1563,20 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "class_categorie": "adhesions",
-          "bt_groupement": {
-            "methode_name": "Adhesion",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe3",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "adhesions"
         },
         {
           "id": "bc489e27-c97f-49ca-a32a-7ff5af943e98",
           "name": "Adh\u00e9sion (Le Tiers-Lustre) Prix libre",
-          "prix": 100,
+          "prix": 1,
           "poid_liste": 5,
           "categorie": {
             "id": 2,
             "name": "Adh\u00e9sions",
             "poid_liste": 3,
             "icon": null,
-            "couleur_backgr": "#17a2b8",
-            "couleur_texte": "#ffffff",
+            "couleur_backgr": null,
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -1986,27 +1589,20 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "class_categorie": "adhesions",
-          "bt_groupement": {
-            "methode_name": "Adhesion",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe3",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "adhesions"
         },
         {
           "id": "2351c70b-801b-4d7d-8d0e-5ccd042b8a6a",
           "name": "Panier AMAP (Le Tiers-Lustre) Annuelle",
-          "prix": 40000,
+          "prix": 400,
           "poid_liste": 6,
           "categorie": {
             "id": 2,
             "name": "Adh\u00e9sions",
             "poid_liste": 3,
             "icon": null,
-            "couleur_backgr": "#17a2b8",
-            "couleur_texte": "#ffffff",
+            "couleur_backgr": null,
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -2019,27 +1615,20 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "class_categorie": "adhesions",
-          "bt_groupement": {
-            "methode_name": "Adhesion",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe3",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "adhesions"
         },
         {
           "id": "b3bc9e1a-ef96-4871-95f8-241b1e092696",
           "name": "Panier AMAP (Le Tiers-Lustre) Mensuelle",
-          "prix": 4000,
+          "prix": 40,
           "poid_liste": 7,
           "categorie": {
             "id": 2,
             "name": "Adh\u00e9sions",
             "poid_liste": 3,
             "icon": null,
-            "couleur_backgr": "#17a2b8",
-            "couleur_texte": "#ffffff",
+            "couleur_backgr": null,
+            "couleur_texte": null,
             "groupements": [],
             "tva": null
           },
@@ -2052,14 +1641,7 @@
           "nom_module": "vue_pv",
           "monnaie_principale_name": "TestCoin",
           "pv": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "class_categorie": "adhesions",
-          "bt_groupement": {
-            "methode_name": "Adhesion",
-            "moyens_paiement": "espece|carte_bancaire|CH",
-            "besoin_tag_id": "tout",
-            "groupe": "groupe3",
-            "nb_commande_max": 1000
-          }
+          "class_categorie": "adhesions"
         }
       ],
       "icon": null
@@ -2272,12 +1854,6 @@
           "icon": null
         },
         {
-          "uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "name": "Adh\u00e9sions",
-          "poid_liste": 9,
-          "icon": null
-        },
-        {
           "uuid": "789df895-e22b-4837-828e-0fe99fb43dcf",
           "name": "Kiosque",
           "poid_liste": 10,
@@ -2288,6 +1864,12 @@
           "name": "Cashless",
           "poid_liste": 200,
           "icon": "fa-euro-sign"
+        },
+        {
+          "uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "name": "Adh\u00e9sions",
+          "poid_liste": 9,
+          "icon": null
         }
       ],
       "responsable": {
@@ -2297,7 +1879,9 @@
       },
       "wallets": 0,
       "wallets_gift": 0,
-      "mode_gerant": true
+      "mode_gerant": true,
+      "memberships": [],
+      "email": "robinhood69@free.fr"
     },
     {
       "type_card": "client_card",
@@ -2305,6 +1889,7 @@
       "name": "client1",
       "wallets": 50,
       "wallets_gift": 5,
+      "email": "robosapiens@free.fr",
       "memberships": [
         {
           "uuid": "sggsghggsg45sjskhhkjshgks",
@@ -2330,6 +1915,7 @@
       "name": "client2",
       "wallets": 1,
       "wallets_gift": 0,
+      "email": null,
       "memberships": []
     },
     {
@@ -2338,1996 +1924,9 @@
       "name": "client3",
       "wallets": 0,
       "wallets_gift": 0,
+      "email": null,
       "memberships": []
     }
   ],
-  "transactions": [
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "",
-        "total": 3.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "tag_id": "52BE6543",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-8a75f2d2-9d3f-4ca7-9367-13b0afa19bca": "2",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 2.0
-      },
-      "id": "1d4243dc83fa493a8f9061e59e8797b1"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "A",
-        "total": 6.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "tag_id": "52BE6543",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 5.0
-      },
-      "id": "ecd6e70f621449e285fa3719c4230400"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "",
-        "total": 6.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "tag_id": "52BE6543",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 5.0
-      },
-      "id": "e54bdb4ad5a543ec844216e5fb230f56"
-    },
-    {
-      "payment": {
-        "given_sum": 45.0,
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "",
-        "total": 6.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": true,
-        "give_back": 39.0
-      },
-      "id": "5b2849ec845a43efbf5243e8ed060539"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "tag_id": "52BE6543",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "8620979a10c544a8b67bcbb4d247f76a"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "",
-        "total": 1.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "tag_id": "52BE6543",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "success": true,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": false,
-        "give_back": -1.0
-      },
-      "id": "d2cf8af2767a4009b2f7a9169e678e33"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "comportement": "",
-        "total": 5.4,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "tag_id": "52BE6543",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 4.4
-      },
-      "id": "9c0289919cb145749ccabcdf3506439b"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "A",
-        "total": 3.8,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": true
-      },
-      "id": "3544f0b0562e4058a6162293245c0b51"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "A",
-        "total": 3.8,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": true
-      },
-      "id": "73165605a5d746baad82691efb54b300"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "A",
-        "total": 5.4,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
-        "success": true
-      },
-      "id": "32bc5019cdea4b6f8f77b592bae1d838"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "A",
-        "total": 3.5,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-855b9cc1-3ece-488a-8783-7b782d4151fb": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "card_name": "client1",
-        "wallets": {
-          "monnaie": 50,
-          "gift_monnaie": 5
-        },
-        "funds_insufficient": false
-      },
-      "id": "871d0c0f9f544112ae86acd1637c7190"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "",
-        "total": 2.5,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 45.0,
-        "repid-7beda12d-4295-49a7-a2fd-81cce64dbeab": "1",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "success": true,
-        "give_back": 42.5
-      },
-      "id": "82f0969c79d14b5c8fcd326490832ae2"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "",
-        "total": 5.4,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
-        "success": true,
-        "give_back": -5.4
-      },
-      "id": "ae59ede3de1544c7a93561b590fd79bb"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "A",
-        "total": 2.5,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.5
-      },
-      "id": "a0d281ad0ac24e4e973060a495d2a0ff"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "5",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "73d0ea5285a140f8b843168095018807"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "40",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "8fb35748196e4276bd97e59451f42c62"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "03399929a8e54eb489eddc923692e20e"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "96f60855f93e4822bc28e6415156b2aa"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "d9d9aaf929514dd9bf399f9d393e7ff1"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 4.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -4.1899999999999995
-      },
-      "id": "8fb36cc82afe41c9b2bc6ee319db2023"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 4.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -4.1899999999999995
-      },
-      "id": "05608cbd0145467aa7a3eda910d93c7c"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 4.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -4.1899999999999995
-      },
-      "id": "0d64f1ff3f5b425e830b468060f92dd1"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "4",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "d510b61ccbc0444f9074100f48d1e926"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "bf609fc896f4416d88b1ff9dab8b1718"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -8.19
-      },
-      "id": "c132c98da3914fe4b031de436c738186"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "3600",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "30ff79fb5c734e50a2a3662508bf42c6"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "33BC1DAA",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client3",
-        "wallets": {
-          "monnaie": 0,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 2.0
-      },
-      "id": "fbb25a88db094e299ed36f3338138c30"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "33BC1DAA",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "400",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true
-      },
-      "id": "eeb256649fd5492a98fce387779568af"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "33BC1DAA",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "400",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true
-      },
-      "id": "5098b0165a2a42218dd12548fb790a0c"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "400",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "9eff5786a5ec49f9ac186a40a5df9d4e"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "nfc",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "39270a27e6944aebaabae26221ff902f"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "give_back": -2.0
-      },
-      "id": "7eb2940bfcd1488b9c3bee776d00f803"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 819,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "AMD-AMD-Ryzen-5-5600G-with-Radeon-Graphics-c85acf0cdc9e",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "85b8868471ee4918b0feb432cc71e8cb"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 0.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-8f08b90d-d3f0-49da-9dbd-8be795f689ef": "1",
-        "success": true,
-        "give_back": 0.0
-      },
-      "id": "f0d9dd2c5fd74167b40368705f28364d"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 0,
-        "moyen_paiement": "espece",
-        "hostname_client": "",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true
-      },
-      "id": "0eb44c6a0cc64993aea6f121a87c14d2"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 8.5,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-67d231cd-d1c2-4bf3-ac51-18af778b4f8c": "2",
-        "repid-855b9cc1-3ece-488a-8783-7b782d4151fb": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "success": true
-      },
-      "id": "38340169b94447049276b3a7bf2cfcc8"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 649,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true
-      },
-      "id": "6a169da4e5d24a4ab2fa9f8906d8d16b"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.5,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "success": true,
-        "give_back": -2.5
-      },
-      "id": "5338b3387ac84d94a8237d524c135ae7"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 6.49,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 4.8,
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true,
-        "give_back": -1.69
-      },
-      "id": "6d98aef50d944672b5e548e824ed5a07"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 5.0,
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "give_back": 3.0
-      },
-      "id": "14532e643c77456bbd40360d4de95618"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "500",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "2f2ba98cf06344949a623583188cd03f"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "400",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": false
-      },
-      "id": "2615bc24267548149d49661b1f4f51f6"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "400",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": false
-      },
-      "id": "d68d0cc252e44b69a0e8bc679ac5dae1"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "450",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": false
-      },
-      "id": "110d065cea714704b893c1974c0000f5"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 30.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": 21.81
-      },
-      "id": "3c8a5d89423b4977a34983017de46dc0"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 250,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "success": false
-      },
-      "id": "56b4723b126c4aada808764466abfd29"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 250,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "success": false
-      },
-      "id": "2457163af56f4ce7b279b67c3eb54bb3"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 649,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 649,
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true
-      },
-      "id": "79db16826d57464ba1867c715ac35ab3"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 10.69,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -10.69
-      },
-      "id": "3582f715be104c85a1c841e8811444c0"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 649,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": false
-      },
-      "id": "cf19dddaad3f434ab6836234a57980dd"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 1298,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "2",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "2",
-        "success": false
-      },
-      "id": "3cd1c5a33093469cb9e6f1ef4ceb0716"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 649,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": false
-      },
-      "id": "bb89f4c09d87431baf4f53b895c8ed2e"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 6.49,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true,
-        "give_back": -6.49
-      },
-      "id": "19f988f0571d4c95a2cae03c247d21df"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 6.49,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true,
-        "give_back": -6.49
-      },
-      "id": "09299a1add73477aaf4f594130eea88d"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 649,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true
-      },
-      "id": "343719ae33cb44a6817882fc21230dac"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "c03b38d1741846c7ac74e97b65749bd5"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 4.99,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true
-      },
-      "id": "396e1ab71b984674afc842b6709b8d0b"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 8.19,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "c21d408e4dda47f6abe65eb8387859bb"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -8.19
-      },
-      "id": "60181d3f48a84239bd52240ec103b654"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -8.19
-      },
-      "id": "36af6f5696064411a7fc9d77bc19c74e"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "a54dfff289c648b389c4b11a4ec4fb2d"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 5.99,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true
-      },
-      "id": "dec3b32a97484047ab10e23977ce05cb"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "11d548e1ca514cab993752000e723217"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true
-      },
-      "id": "b84fa34815794268b468a834232f2f12"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "0b043b89adf24c0e972bbcb4190b7000"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "cef21108a23a44f6a1a2443434126334"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true
-      },
-      "id": "cf85206263484e2aa2c2500336242820"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -8.19
-      },
-      "id": "7c2dd110ab994903a884a4f366789cb7"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 5.0,
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "success": true,
-        "give_back": 3.0
-      },
-      "id": "e3297e417e2d4053bb1424f3c150582e"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 4.0,
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "give_back": 2.0
-      },
-      "id": "0d62ebe36aa0419d8a8e0d780f61e7a3"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "give_back": -2.0
-      },
-      "id": "7a65259bae5149e5ae2a1c7514592883"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "give_back": -2.0
-      },
-      "id": "dc7a7349b25f4e20a38e44efaece96e8"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "",
-        "total": 2.5,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "card_name": "client1",
-        "wallets": {
-          "monnaie": 50,
-          "gift_monnaie": 5
-        },
-        "funds_insufficient": false,
-        "give_back": -2.5
-      },
-      "id": "d196e81cff564f4c95150a689349be49"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "ca6ee142cf1e42b699c298963c7b6fdd"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "671bbb47671e496a8f89ab818605d608"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 200,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 1.0
-      },
-      "id": "bbdf70ceb4db4d5f852eef893c2ccdda"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "41726643",
-        "comportement": "",
-        "total": 2.0,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-ffec2f43-44a1-4688-aa32-2959d5fd8c00": "1",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "success": true,
-        "card_name": "client1",
-        "wallets": {
-          "monnaie": 50,
-          "gift_monnaie": 5
-        },
-        "funds_insufficient": false,
-        "give_back": -2.0
-      },
-      "id": "14c4b371372a4c90af40f96ba4893657"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "A49E8E2A",
-        "comportement": "",
-        "total": 849,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-8a75f2d2-9d3f-4ca7-9367-13b0afa19bca": "1",
-        "success": false,
-        "card_name": "master",
-        "wallets": {
-          "monnaie": 0,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 8.49
-      },
-      "id": "7dfe58483c8b476195020732c096cdfc"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "A",
-        "total": 6.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 5.0,
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": true,
-        "give_back": -1.0
-      },
-      "id": "076b684c33bc401dac68a7780f523d7b"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "",
-        "comportement": "",
-        "total": 5.4,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 1.0,
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
-        "success": true,
-        "give_back": -4.4
-      },
-      "id": "049438b0b7ec4fe8920d98525d6460a9"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 7.19
-      },
-      "id": "7f012cb342524e7cb56fb931426963f0"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 7.19
-      },
-      "id": "9612a0eecb8844a0bfac471fa45b1c47"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 819,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "5000",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 7.19
-      },
-      "id": "fef0091633714eddb193fafc5e1b44ef"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 10.99,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 50.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": true,
-        "give_back": 39.01
-      },
-      "id": "09783febaf854f38bdc611456838c30f"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 8.19,
-        "moyen_paiement": "carte_bancaire",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "success": true,
-        "give_back": -8.19
-      },
-      "id": "c0285991bee441ef9f8a590a2617ea16"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 6.49,
-        "moyen_paiement": "CH",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 0.0,
-        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "1",
-        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
-        "success": true,
-        "give_back": -6.49
-      },
-      "id": "8fbb74adb0084fb39bb82f6178865fcc"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "A49E8E2A",
-        "comportement": "",
-        "total": 600,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": false,
-        "card_name": "master",
-        "wallets": {
-          "monnaie": 0,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 6.0
-      },
-      "id": "ed6bdb7c565b45fba0a176f17c38e14a"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "A49E8E2A",
-        "comportement": "",
-        "total": 600,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "5000",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": false,
-        "card_name": "master",
-        "wallets": {
-          "monnaie": 0,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 6.0
-      },
-      "id": "c183ae2588514b0fb6d0976d8f54522a"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "A49E8E2A",
-        "comportement": "",
-        "total": 12.0,
-        "moyen_paiement": "espece",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": 2.0,
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "2",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "2",
-        "success": true,
-        "give_back": -10.0
-      },
-      "id": "e7abeab7906243ba9ae2963ae13db994"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 600,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 5.0
-      },
-      "id": "3d99380083224e5eafebdaf0dad3b576"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 880,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "2",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 7.8
-      },
-      "id": "865481d7513c42caa9359490e2d3376a"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 880,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "2",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 7.8
-      },
-      "id": "99571429200c4b7d88a562dc377ae47d"
-    },
-    {
-      "payment": {
-        "id_table": "None",
-        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
-        "responsable": "master",
-        "tag_id_cm": "A49E8E2A",
-        "tag_id": "52BE6543",
-        "comportement": "",
-        "total": 1160,
-        "moyen_paiement": "nfc",
-        "hostname_client": "mock host name from device login",
-        "uuid_transaction": "",
-        "given_sum": "0",
-        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
-        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "3",
-        "success": false,
-        "card_name": "client2",
-        "wallets": {
-          "monnaie": 1,
-          "gift_monnaie": 0
-        },
-        "funds_insufficient": true,
-        "missing": 10.6
-      },
-      "id": "27acbded32f747cfa4a630f2bc8ee9de"
-    }
-  ]
+  "transactions": []
 }

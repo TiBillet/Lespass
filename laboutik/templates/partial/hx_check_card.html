@@ -1,40 +1,73 @@
 {% load static i18n %}
 
-<div id="messages" style="background-color:{{ background }};" class="BF-col-uniforme popup-cashless-conteneur">
-	{% if method == 'GET' %}
-	<c-read-nfc title-nfc='{% translate "Attente lecture carte" %}' selector="#messages" hx-post="hx_check_card" hx-target="#messages" />
-	{% endif %}
+<c-read-nfc id="messages" selector="#messages" event-manage-form="checkCardManageForm" submit-url="hx_card_feedback">
+  <form id="form-check-nfc" class="hide" hx-post="hx_card_feedback" hx-trigger="" hx-target="#messages"
+    hx-swap="outerHTML">
+    {% csrf_token %}
+    <input id="nfc-tag-id" name="tag_id" />
+  </form>
+  <h1>{% translate "Attente lecture carte" %}</h1>
 
-	{% if method == 'POST' %}
-	<div class="check-carte-container" style="background-color: var({{ background }});">
-		{{ tag_id }}
-	</div>
-	{% endif %}
+  <script>
+    // gestionnaire de formulaire
+    function checkCardManageForm(event) {
+      console.log('-> checkCardManageForm, event.detail =', event.detail);
+      
+      try {
+        const data = event.detail
+        const form = document.querySelector('#form-check-nfc')
 
-	<style>
-		#messages {
-			position: absolute;
-			left: 0;
-			top: 0;
-			width: 100%;
-			height: 100%;
-			width: 100%;
-			height: 100%;
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-			background-color: var(--noir01);
-			color: var(--blanc01);
-		}
-		.check-carte-container {
-			width: 100%;
-			height: 100%;
-			color: var(--white);
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			align-items: center;
-		}
-	</style>
-</div>
+        // update input
+        if (data.actionType === 'updateInput') {
+          form.querySelector(data.selector).value = data.value
+        }
+
+        // change post url
+        if (data.actionType === 'postUrl') {
+          form.setAttribute('hx-post', data.value)
+          htmx.process(form)
+        }
+
+        // submit form
+        if (data.actionType === 'submit') {
+          form.setAttribute('hx-trigger', 'click')
+          htmx.process(form)
+          // submit
+          form.click()
+        }
+
+      } catch (error) {
+        console.log('-> hx_check_card - checkCardManageForm,', error)
+      }
+    }
+    // écoute des commandes sur le formulaire "#form-nfc"
+    document.querySelector('#form-check-nfc').addEventListener('checkCardManageForm', checkCardManageForm)
+  </script>
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: var(--noir01);
+      color: var(--blanc01);
+    }
+
+    .check-carte-container {
+      width: 100%;
+      height: 100%;
+      color: var(--white);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+  </style>
+</c-read-nfc>

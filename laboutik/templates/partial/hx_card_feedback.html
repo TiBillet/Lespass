@@ -1,0 +1,25 @@
+{% load static i18n %}
+
+<div id="messages" style="background-color: var({{ background }});">
+  <div>{{ tag_id }}</div>
+
+	<c-bt.return selector="#messages" />
+
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: var(--noir01);
+      color: var(--blanc01);
+    }
+  </style>
+</div>

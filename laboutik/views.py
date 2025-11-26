@@ -19,277 +19,369 @@ import mockData
 
 import method
 
-# db mock
+# --- mock ---
+# db 
 db = mockData.mockDb("./laboutik/utils/mockDb.json")
 
 data_pvs = mockData.get_data_pvs()
 
 state = {
-  "version": "0.9.11",
-  "place": {
-    "name": "lieu de test",
-    "monnaie_name": "lémien" 
-  },
-  "demo": {
-    "active": settings.DEMO,
-    "tags_id": [
-      {"tag_id": settings.DEMO_TAGID_CM, "name": _("Carte primaire")},
-      {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
-      {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
-      {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
-      {"tag_id": settings.DEMO_TAGID_UNKNOWN, "name": _("Carte client inconnu")},
-    ],
-  }
+    "version": "0.9.11",
+    "place": {"name": "lieu de test", "monnaie_name": "lémien"},
+    "demo": {
+        "active": settings.DEMO,
+        "tags_id": [
+            {"tag_id": settings.DEMO_TAGID_CM, "name": _("Carte primaire")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+            {"tag_id": settings.DEMO_TAGID_UNKNOWN, "name": _("Carte client inconnu")},
+        ],
+    },
 }
 
 currency_data = {"cc": "EUR", "symbol": "€", "name": "European Euro"}
 
 payments_translation = {
-  "nfc": _("cashless"),
-  "espece": _("espèce"),
-  "carte_bancaire": _("carte bancaire"),
-  "CH": _("chèque"),
-  "gift": _("cadeau"),
-	"": _("inconnu")
+    "nfc": _("cashless"),
+    "espece": _("espèce"),
+    "carte_bancaire": _("carte bancaire"),
+    "CH": _("chèque"),
+    "gift": _("cadeau"),
+    "": _("inconnu"),
 }
 
+uuid_article_consigne = "8f08b90d-d3f0-49da-9dbd-8be795f689ef"
+# --- end mock ---
+
 def login_hardware(request):
-  context = {"state": state, "stateJson": dumps(state)}
-  
-  # dev
-  devLoginOk = 1
+    context = {"state": state, "stateJson": dumps(state)}
 
-  if request.method == "POST":
-    if devLoginOk == 1:
-      return HttpResponseClientRedirect("ask_primary_card")
+    # dev
+    devLoginOk = 1
 
-    if devLoginOk == 0:
-      context = {"error": _("Utilisateur non actif. Relancez l'appairage.")}
-      return render(request, "components/new-hardware-error.html", context)
+    if request.method == "POST":
+        if devLoginOk == 1:
+            return HttpResponseClientRedirect("ask_primary_card")
 
-    # DEBUG = AttributeError: module 'rest_framework.status' has no attribute 'HTTP_400_UNAUTHORIZED'
-    if devLoginOk == 2:
-      context = {"error": _("*** login_hardware_validator.errors ***")}
-      return render(request, "components/hardware-login-error.html", context)
+        if devLoginOk == 0:
+            context = {"error": _("Utilisateur non actif. Relancez l'appairage.")}
+            return render(request, "components/new-hardware-error.html", context)
 
-  if request.method == "GET":
-    activation = request.GET.get("activation")
-    context["activation"] = activation
+        # DEBUG = AttributeError: module 'rest_framework.status' has no attribute 'HTTP_400_UNAUTHORIZED'
+        if devLoginOk == 2:
+            context = {"error": _("*** login_hardware_validator.errors ***")}
+            return render(request, "components/hardware-login-error.html", context)
 
-    return render(request, "views/login_hardware.html", context)
+    if request.method == "GET":
+        activation = request.GET.get("activation")
+        context["activation"] = activation
+
+        return render(request, "views/login_hardware.html", context)
 
 
 def new_hardware(request):
-  # dev
-  devHardwareOk = True
+    # dev
+    devHardwareOk = True
 
-  # hardware activé
-  if devHardwareOk:
-    # Le code pin a été validé, on renvoie vers la page de login
-    return HttpResponseClientRedirect("login_hardware?activation=1")
+    # hardware activé
+    if devHardwareOk:
+        # Le code pin a été validé, on renvoie vers la page de login
+        return HttpResponseClientRedirect("login_hardware?activation=1")
 
-  # error
-  if not devHardwareOk:
-    context = {
-      "error": _(
-        "Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage."
-      )
-    }
-    return render(request, "components/new-hardware-error.html", context)
+    # error
+    if not devHardwareOk:
+        context = {
+            "error": _(
+                "Appareil déja en cours d'utilisation. Désactivez le d'abord pour un nouvel appairage."
+            )
+        }
+        return render(request, "components/new-hardware-error.html", context)
 
-
-def hx_check_card(request):
-  background = "--success"
-  context = {"method": request.method}
-
-  if request.method == "POST":
+def hx_card_feedback(request):
     tag_id = request.POST.get("tag_id").upper()
-    context["tag_id"] = tag_id
+    background = "--success"
 
     # dev
-    card = db.get_by_index("cards", "tag_id", tag_id)[0]
-    background = "--warning"
-    card["type_card"] = "unknown"
+    card = db.get_by_index("cards", "tag_id", tag_id)
+    if len(card) == 0:
+        card = {}
+        card["type_card"] = "unknown"
+        background = "--error"
+    else:
+      card = card[0]
+      # carte anonyme
+      if card["email"] == None:
+          background = "--warning"
 
-    if card["type_card"] == "unknown":
-      background = "--rouge06"
-      error_msg = _("Carte inconnue")
+    print(f'-> hx_card_feedback, card = {card}')
 
-  context["error_msg"] = error_msg
-  context["background"] = background
-  # print(f"-- context = {context}")
-  return render(request, "partial/hx_check_card.html", context)
+    context = {
+      "card": card,
+      "tag_id": tag_id,
+      "background": background
+    }
+    return render(request, "partial/hx_card_feedback.html", context)
+
+def hx_check_card(request):
+    context = {}
+    return render(request, "partial/hx_check_card.html", context)
 
 
 def ask_primary_card(request):
-  context = {"state": state, "stateJson": dumps(state), "method": request.method}
-  if request.method == "POST":
-    tag_id_cm = request.POST.get("tag_id").upper()
+    context = {"state": state, "stateJson": dumps(state), "method": request.method}
+    if request.method == "POST":
+        tag_id_cm = request.POST.get("tag_id").upper()
 
-    # dev
-    carte_perdu = False
-    card = {}
-    if tag_id_cm == 'XXXXXXXX':
-      card["type_card"] = "unknown"
-    else:
-      card = db.get_by_index("cards", "tag_id", tag_id_cm)[0]
+        # dev
+        carte_perdu = False
+        card = {}
+        if tag_id_cm == "XXXXXXXX":
+            card["type_card"] = "unknown"
+        else:
+            card = db.get_by_index("cards", "tag_id", tag_id_cm)[0]
 
-    # carte primaire
-    if card["type_card"] == "primary_card" and card["tag_id"] == "A49E8E2A":
-      # carte perdue
-      if carte_perdu:
-        template = Template(_("Carte perdue ? non primaire"))
-        context = RequestContext(request)
-        return HttpResponse(template.render(context))
-      else:
-        # carte primaire ok => redirection
-        uuid_pv = card["pvs_list"][0]["uuid"]
-        return HttpResponseClientRedirect("pv_route?uuid_pv=" + uuid_pv + "&tag_id_cm=" + tag_id_cm)
+        # carte primaire
+        if card["type_card"] == "primary_card" and card["tag_id"] == "A49E8E2A":
+            # carte perdue
+            if carte_perdu:
+                template = Template(_("Carte perdue ? non primaire"))
+                context = RequestContext(request)
+                return HttpResponse(template.render(context))
+            else:
+                # carte primaire ok => redirection
+                uuid_pv = card["pvs_list"][0]["uuid"]
+                return HttpResponseClientRedirect(
+                    "pv_route?uuid_pv=" + uuid_pv + "&tag_id_cm=" + tag_id_cm
+                )
 
-    # carte cliente
-    if card["type_card"] == "client_card":
-      template = Template(_("Carte non primaire"))
-      context = RequestContext(request)
-      return HttpResponse(template.render(context))
+        # carte cliente
+        if card["type_card"] == "client_card":
+            template = Template(_("Carte non primaire"))
+            context = RequestContext(request)
+            return HttpResponse(template.render(context))
 
-    # carte inconnue
-    if card["type_card"] == "unknown":
-      template = Template(_("Carte inconnue"))
-      context = RequestContext(request)
-      return HttpResponse(template.render(context))
+        # carte inconnue
+        if card["type_card"] == "unknown":
+            template = Template(_("Carte inconnue"))
+            context = RequestContext(request)
+            return HttpResponse(template.render(context))
 
-  return render(request, "views/ask_primary_card.html", context)
+    return render(request, "views/ask_primary_card.html", context)
 
 
 def pv_route(request):
-  # pour un mode restaurant (non service direct)
-  try:
-    id_table = int(request.GET.get("id_table"))
-  except:
-    id_table = None
+    # pour un mode restaurant (non service direct)
+    try:
+        id_table = int(request.GET.get("id_table"))
+    except:
+        id_table = None
 
-  # force le service direct en mode restaurant
-  force_service_direct = True if request.GET.get("force_service_direct") == "true" else None
+    # force le service direct en mode restaurant
+    force_service_direct = (
+        True if request.GET.get("force_service_direct") == "true" else None
+    )
 
-  # mode restaurant forcer en service direct
-  restaurant_service_direct = request.GET.get("restaurant_service_direct")
-  uuid_pv = request.GET.get("uuid_pv")
-  tag_id_cm = request.GET.get("tag_id_cm")
-  pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
-  card = db.get_by_index("cards", "tag_id", tag_id_cm)[0]
-  # restaurant par défaut
-  title = _("Choisir une table")
-  template = "tables.html"
+    # mode restaurant forcer en service direct
+    restaurant_service_direct = request.GET.get("restaurant_service_direct")
+    uuid_pv = request.GET.get("uuid_pv")
+    tag_id_cm = request.GET.get("tag_id_cm")
+    pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+    card = db.get_by_index("cards", "tag_id", tag_id_cm)[0]
+    # restaurant par défaut
+    title = _("Choisir une table")
+    template = "tables.html"
 
-  # service directe
-  if pv["service_direct"] == True or force_service_direct == True:
-    title = _("Service direct")
-    template = "common_user_interface.html"
+    # service directe
+    if pv["service_direct"] == True or force_service_direct == True:
+        title = _("Service direct")
+        template = "common_user_interface.html"
 
-  # commandes table
-  if id_table != None:
-    table_name = mockData.get_table_by_id(id_table)["name"]
-    print(f"table_name = {table_name}")
-    title = _("Commande table ") + table_name
-    template = "common_user_interface.html"
+    # commandes table
+    if id_table != None:
+        table_name = mockData.get_table_by_id(id_table)["name"]
+        print(f"table_name = {table_name}")
+        title = _("Commande table ") + table_name
+        template = "common_user_interface.html"
 
-  # kiosque
-  if pv["comportement"] == "K":
-    template = "kiosk.html"
+    # kiosque
+    if pv["comportement"] == "K":
+        template = "kiosk.html"
 
-  print(f"laboutik - DEV | template = {template}")
+    print(f"laboutik - DEV | template = {template}")
 
-  state["comportement"] = pv["comportement"]
-  state["afficher_les_prix"] = pv["afficher_les_prix"]
-  state["accepte_especes"] = pv["accepte_especes"]
-  state["accepte_carte_bancaire"] = pv["accepte_carte_bancaire"]
-  state["accepte_cheque"] = pv["accepte_cheque"]
-  state["accepte_commandes"] = pv["accepte_commandes"]
-  state["service_direct"] = pv["service_direct"]
-  state["monnaie_principale_name"] = "TestCoin"
-  state["passageModeGerant"] = True
-  state["mode_gerant"] = card["mode_gerant"]
-  # triage par poid_liste
-  card["pvs_list"] = sorted(card["pvs_list"], key=lambda x: x["poid_liste"])
+    state["comportement"] = pv["comportement"]
+    state["afficher_les_prix"] = pv["afficher_les_prix"]
+    state["accepte_especes"] = pv["accepte_especes"]
+    state["accepte_carte_bancaire"] = pv["accepte_carte_bancaire"]
+    state["accepte_cheque"] = pv["accepte_cheque"]
+    state["accepte_commandes"] = pv["accepte_commandes"]
+    state["service_direct"] = pv["service_direct"]
+    state["monnaie_principale_name"] = "TestCoin"
+    state["passageModeGerant"] = True
+    state["mode_gerant"] = card["mode_gerant"]
+    # triage par poid_liste
+    card["pvs_list"] = sorted(card["pvs_list"], key=lambda x: x["poid_liste"])
 
-  context = {
-		"hostname_client": "mock host name from device login",
-    "state": state,
-    "stateJson": dumps(state),
-    "pv": pv,
-    "card": card,
-    "categories": mockData.filter_categories(pv),
-    "categoriy_angry": mockData.categoriy_angry,
-    "tables": mockData.tables,
-    "table_status_colors": {"S": "--orange01", "O": "--rouge01", "L": "--vert02"},
-    "title": title,
-    "currency_data": currency_data,
-    "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
-    "id_table": id_table,
-  }
-  return render(request, "views/" + template, context)
+    context = {
+        "hostname_client": "mock host name from device login",
+        "state": state,
+        "stateJson": dumps(state),
+        "pv": pv,
+        "card": card,
+        "categories": mockData.filter_categories(pv),
+        "categoriy_angry": mockData.categoriy_angry,
+        "tables": mockData.tables,
+        "table_status_colors": {"S": "--orange01", "O": "--rouge01", "L": "--vert02"},
+        "title": title,
+        "currency_data": currency_data,
+        "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
+        "id_table": id_table,
+    }
+    return render(request, "views/" + template, context)
 
 
 def hx_display_type_payment(request):
-  dataPost = request.POST
-  uuid_pv = dataPost.get("uuid_pv")
+    dataPost = request.POST
+    uuid_pv = dataPost.get("uuid_pv")
 
-  # récupère uniquement les uuid articles
-  uuids = method.post_filter(request.POST)
+    # récupère uniquement les uuid articles
+    uuids = method.post_filter(request.POST)
 
-  # obtenir le point de vente en fonction de son uuid
-  pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
+    # obtenir le point de vente en fonction de son uuid
+    pv = mockData.get_pv_from_uuid(uuid_pv, data_pvs)
 
-  # retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
-  moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
+    # retourne les moyens de paiement nécessaires et filtrés par moyens de paiement acceptés
+    moyens_paiement = method.selection_moyens_paiement(pv, uuids, request.POST)
 
-  # import ipdb; ipdb.set_trace()
-  # calcul du total de l'addition
-  total = method.calcul_total_addition(pv, uuids, request.POST)
+    # import ipdb; ipdb.set_trace()
+    # calcul du total de l'addition en €(pas en centimes d'euro)
+    total = method.calcul_total_addition(pv, uuids, request.POST)
 
-  # dev mock
-  mode_gerant = False
+    # dev mock
+    mode_gerant = False
 
-  # dev mock (article consigne présent)
-  deposit_is_present = False
+    # dev mock (article consigne présent) True/False
+    deposit_is_present = uuid_article_consigne in uuids
 
-  context = {
-    "moyens_paiement": moyens_paiement,
-    "currency_data": currency_data,
-    "total": total,
-    "mode_gerant": mode_gerant,
-    "deposit_is_present": deposit_is_present,
-    "comportement": pv["comportement"],
-  }
+    if deposit_is_present:
+        total = abs(total)
 
-  return render(request, "partial/hx_display_type_payment.html", context)
+    context = {
+        "state": state,
+        "moyens_paiement": moyens_paiement,
+        "currency_data": currency_data,
+        "total": total,
+        "mode_gerant": mode_gerant,
+        "deposit_is_present": deposit_is_present,
+        "comportement": pv["comportement"],
+    }
+
+    return render(request, "partial/hx_display_type_payment.html", context)
 
 
 def hx_read_nfc(request):
-  uuid_transaction = "" if request.GET.get("uuid_transaction") == None else request.GET.get("uuid_transaction")
-  context = {"uuid_transaction": uuid_transaction}
-  return render(request, "partial/hx_read_nfc.html", context)
+    uuid_transaction = (
+        ""
+        if request.GET.get("uuid_transaction") == None
+        else request.GET.get("uuid_transaction")
+    )
+    context = {"uuid_transaction": uuid_transaction}
+    return render(request, "partial/hx_read_nfc.html", context)
 
 
 def hx_confirm_payment(request):
-  payment_method = request.GET.get("method")
-  uuid_transaction = request.GET.get("uuid_transaction")
-  context = {
-    "method": payment_method, 
-    "payment_translation": payments_translation[payment_method],
-    "uuid_transaction": uuid_transaction
-  }
-  return render(request, "partial/hx_confirm_payment.html", context)
+    payment_method = request.GET.get("method")
+    total = request.GET.get("total")
+    uuid_transaction = request.GET.get("uuid_transaction")
+    context = {
+        "method": payment_method,
+        "total": total,
+        "payment_translation": payments_translation[payment_method],
+        "uuid_transaction": uuid_transaction,
+        "currency_data": currency_data
+    }
+    return render(request, "partial/hx_confirm_payment.html", context)
 
 
 def hx_payment(request):
-  # msg_type = success, info, error, warning
-  payment = request.POST.dict()
+    # récupère uniquement les uuid articles
+    uuids = method.post_filter(request.POST)
 
-	# total achats
-  payment["total"] = int(payment["total"])
+    # msg_type = success, info, error, warning
+    payment = request.POST.dict()
 
- 
+    # total achats
+    payment["total"] = int(payment["total"])
+
+    # somme donnée
+    payment["given_sum"] = int(payment["given_sum"])
+
+    # dev mock
+    fonds_insuffisants = False
+
+    # paiement manquant
+    payment["missing"] = 0
+
+    # dev mock (article consigne présent) True/False
+    deposit_is_present = uuid_article_consigne in uuids
+
+    # obtenir le point de vente en fonction de son uuid
+    pv = mockData.get_pv_from_uuid(payment["uuid_pv"], data_pvs)
+
+    # calcul du total de l'addition en €(pas en centimes d'euro)
+    total = method.calcul_total_addition(pv, uuids, request.POST)
+    if deposit_is_present:
+      total = abs(total)
+
+    print(f'payment["moyen_paiement"] = {payment["moyen_paiement"]}')
+    print(f'payment["given_sum"] = {payment["given_sum"]}')
+    print(f'deposit_is_present = {deposit_is_present}')
+
+    context = {
+      "currency_data": currency_data,
+      "payment": payment,
+      "monnaie_name": state["place"]["monnaie_name"],
+      "moyen_paiement": payments_translation[payment["moyen_paiement"]],
+      "deposit_is_present": deposit_is_present,
+      "total": total,
+      "state": state
+    }
+
+    # Paiement par chèque ou cb
+    if payment["moyen_paiement"] == "carte_bancaire" or payment["moyen_paiement"] == "CH":
+        payment["total"] = payment["total"] / 100
+        return render(request, "partial/hx_return_payment_success.html", context)
+
+    # paiement en espèce
+    if payment["moyen_paiement"] == "espece":
+        # pas de somme donnée
+        if payment["given_sum"] == 0 or payment["given_sum"] >= payment["total"]:
+            # somme à rendre
+            payment["give_back"] = 0
+            if payment["given_sum"] > payment["total"]:
+                payment["give_back"] = (payment["given_sum"] - payment["total"]) / 100
+
+            payment["total"] = payment["total"] / 100
+            return render(request, "partial/hx_return_payment_success.html", context)
+
+        # fonds insuffisants 
+        if payment["total"] > payment["given_sum"]:
+            fonds_insuffisants = True
+
+    # paiement nfc + deposit_is_present(consigne)
+    if payment["moyen_paiement"] == "nfc":
+        if deposit_is_present:
+          return render(request, "partial/hx_return_payment_success.html", context)
+
+
+    print(f'fonds_insuffisants = {fonds_insuffisants}')
+    if fonds_insuffisants == True:
+        # payment["missing"] =  int(payment["total"]) -  
+        uuid_transaction = db.add("transactions", {"payment": payment})
+
+
+    """
   # dev mock: db and payment success ?
 	# default
   payment["success"] = True
@@ -386,5 +478,12 @@ def hx_payment(request):
       "msg_type": "warning",
       "msg_content": "Il y a une erreur !",
       "selector_bt_retour": "#messages",
+    }
+    return render(request, "partial/hx_messages.html", context)
+  """
+    context = {
+        "msg_type": "warning",
+        "msg_content": "Il y a une erreur !",
+        "selector_bt_retour": "#messages",
     }
     return render(request, "partial/hx_messages.html", context)

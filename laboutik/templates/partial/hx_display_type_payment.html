@@ -2,80 +2,94 @@
 {% load laboutik_process %}
 
 <div id="messages" class="BF-col">
-	<h1 class="message-title">{% translate "Types de paiement" %}</h1>
-	<!-- cashless -->
-	{% if 'nfc' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc" hx-target="#confirm"
-		hx-trigger="click" hx-swap="outerHTML"
-		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" />
-	{% endif %}
+  <!-- consignes -->
+  {% if deposit_is_present %}
+   <h1 class="message-title">{% translate "Rembourser la consigne par :" %}</h1>
+  <!-- cashless -->
+  {% if 'nfc' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc" hx-target="#confirm"
+    hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" />
+  {% endif %}
 
-	<!-- espèce, pas une consigne -->
-	{% if 'espece' in moyens_paiement %}
-	{% if deposit_is_present %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins"
-		onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece'); askAdditionManageForm('submit',null,'hx_payment')" />
-	{% else %}
-	<c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece"
-		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
-		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" />
-	{% endif %}
-	{% endif %}
 
-	<!-- TODO: espèce, une consigne: espèce à rendre, depositIsPresent -->
-	{% if 'espece' in moyens_paiement %}
-	{% endif %}
+  <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins"
+    onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece'); askAdditionManageForm('postUrl',null,'hx_payment'); askAdditionManageForm('submit')" />
 
-	<!-- carte bancaire -->
-	{% if 'carte_bancaire' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" hx-get="hx_confirm_payment?method=carte_bancaire"
-		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
-		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" />
-	{% endif %}
+  {% else %}
+  <!-- pas de consignes -->
+  <h1 class="message-title">{% translate "Types de paiement" %}</h1>
+  <!-- cashless -->
+  {% if 'nfc' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" hx-get="hx_read_nfc" hx-target="#confirm"
+    hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')" />
+  {% endif %}
 
-	<!-- cheque -->
-	{% if 'CH' in moyens_paiement %}
-	<c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" hx-get="hx_confirm_payment?method=CH"
-		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
-		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" />
-	{% endif %}
+  <!-- espèce, pas une consigne -->
+  {% if 'espece' in moyens_paiement %}
 
-	<!-- "OFFRIR" en mode gérant uniquement mais pas pour le point de ventes "CASHLESS" -->
-	{% if mode_gerant and comportement != 'C' %}
-	<c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" hx-get="hx_confirm_payment?method=gift"
-		hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
-		hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" />
-	{% endif %}
+  <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="hx_confirm_payment?method=espece&total={{ total }}"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')" />
+  {% endif %}
 
-	<!-- pas de moyens de paiement -->
-	{% if moyens_paiement|length == 0%}
-	<h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
-	{% endif %}
 
-	<!-- include bt_return.html -->
-	<c-bt.return />
+  <!-- TODO: espèce, une consigne: espèce à rendre, depositIsPresent -->
+  {% if 'espece' in moyens_paiement %}
+  {% endif %}
 
-	<style>
-		#messages {
-			position: absolute;
-			left: 0;
-			top: 0;
-			width: 100%;
-			height: 100%;
-			color: var(--blanc01);
-			font-size: 1.5rem;
-			text-align: center;
-			background-color: var(--bleu09);
-		}
+  <!-- carte bancaire -->
+  {% if 'carte_bancaire' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" hx-get="hx_confirm_payment?method=carte_bancaire"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')" />
+  {% endif %}
 
-		.message-title {
-			font-size: 1.5rem;
-			font-weight: bold;
-		}
+  <!-- cheque -->
+  {% if 'CH' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" hx-get="hx_confirm_payment?method=CH"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')" />
+  {% endif %}
 
-		/* button */
-		.paiement-bt-total {
-			font-size: 1.5rem;
-		}
-	</style>
+  <!-- "OFFRIR" en mode gérant uniquement mais pas pour le point de ventes "CASHLESS" -->
+  {% if mode_gerant and comportement != 'C' %}
+  <c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" hx-get="hx_confirm_payment?method=gift"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" />
+  {% endif %}
+
+  <!-- pas de moyens de paiement -->
+  {% if moyens_paiement|length == 0%}
+  <h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
+  {% endif %}
+
+  {% endif %}
+  <!-- include bt_return.html -->
+  <c-bt.return />
+
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      color: var(--blanc01);
+      font-size: 1.5rem;
+      text-align: center;
+      background-color: var(--bleu09);
+    }
+
+    .message-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+
+    /* button */
+    .paiement-bt-total {
+      font-size: 1.5rem;
+    }
+  </style>
 </div>

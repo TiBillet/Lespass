@@ -14,6 +14,7 @@ let NfcReader = class {
 
 	SendTagIdAndSubmit(tagId, conf) {
 		console.log('-> SendTagIdAndSubmit, conf =', conf)
+    console.log('-> SendTagIdAndSubmit, tagId =', tagId)
 
 		// dispatch event - peuple le tagId dans un formulaire
 		sendEvent('organizerMsg', '#event-organizer', {

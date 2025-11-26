@@ -1782,7 +1782,7 @@ tables = [
 responsable = {
   "name": "TERMINATOR",
   "uuid": "17896c22-7a60-45f4-a959-175bfc8a5369",
-  "edit_mode": True,
+  "edit_mode": True
 }
 
 cards = [
@@ -1801,7 +1801,9 @@ cards = [
 		'responsable': responsable,
 		'wallets': 0,
 		'wallets_gift': 0,
-		'mode_gerant': True
+		'mode_gerant': True,
+    'memberships': [],
+    "email": "robinhood69@free.fr"
 	},
   {
 		"type_card": "client_card",
@@ -1809,6 +1811,7 @@ cards = [
 		'name': 'client1',
 		'wallets': 50,
 		'wallets_gift': 5,
+    "email": "robosapiens@free.fr",
 		'memberships': [
 			{
 				"uuid": 'sggsghggsg45sjskhhkjshgks',
@@ -1828,6 +1831,7 @@ cards = [
 		'name': 'client2',
 		'wallets': 1,
 		'wallets_gift': 0,
+    "email": None,
 		'memberships': []
 	},
   {
@@ -1836,6 +1840,7 @@ cards = [
 		'name': 'client3',
 		'wallets': 0,
 		'wallets_gift': 0,
+    'email': None,
 		'memberships': []
 	}
 ]
