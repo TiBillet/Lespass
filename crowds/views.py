@@ -121,7 +121,10 @@ class InitiativeViewSet(viewsets.ViewSet):
         """
         Affiche le détail d’un projet dans la charte graphique TiBillet.
         """
-        initiative = get_object_or_404(Initiative, pk=pk)
+        # Précharge les tags pour éviter les requêtes supplémentaires dans le template
+        initiative = get_object_or_404(
+            Initiative.objects.prefetch_related("tags"), pk=pk
+        )
         contributions = initiative.contributions.select_related("contributor").order_by("-created_at")
         budget_items = initiative.budget_items.select_related("contributor", "validator").order_by("-created_at")
 
@@ -133,6 +136,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         from django.utils.translation import gettext as _
         name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
         desc_help = Contribution._meta.get_field("description").help_text or _("Un petit mot pour décrire votre contribution")
+        # Ne passer que les variables réellement utilisées par les templates
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
             "initiative": initiative,
@@ -141,13 +145,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             "contrib_name_help": name_help,
             "contrib_desc_help": desc_help,
             "votes": votes,
-            "voters_count": votes.count(),
             "participations": participations,
-            # "funded_eur": (initiative.funded_amount or 0) / 100,
-            # "goal_eur": (initiative.funding_goal or 0) / 100,
-            # Progression des demandes de participations vs financements
-            # "requested_eur": initiative.requested_total_eur,
-            "requested_percent_int": initiative.requested_vs_funded_percent_int,
         })
 
         return render(request, "crowds/views/detail.html", context)
