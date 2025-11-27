@@ -1854,6 +1854,12 @@
           "icon": null
         },
         {
+          "uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
+          "name": "Adh\u00e9sions",
+          "poid_liste": 9,
+          "icon": null
+        },
+        {
           "uuid": "789df895-e22b-4837-828e-0fe99fb43dcf",
           "name": "Kiosque",
           "poid_liste": 10,
@@ -1864,12 +1870,6 @@
           "name": "Cashless",
           "poid_liste": 200,
           "icon": "fa-euro-sign"
-        },
-        {
-          "uuid": "f5c1b847-5a13-4790-b7f6-fdeccde90a98",
-          "name": "Adh\u00e9sions",
-          "poid_liste": 9,
-          "icon": null
         }
       ],
       "responsable": {
@@ -1928,5 +1928,132 @@
       "memberships": []
     }
   ],
-  "transactions": []
+  "transactions": [
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 90200,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0,
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "2",
+        "repid-8f8bf701-10aa-4943-9368-6c1a0ccf253c": "1",
+        "missing": 901.0
+      },
+      "id": "7b9d6e11b66241df9cd5b95dddd441b4"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 90000,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0,
+        "repid-8f8bf701-10aa-4943-9368-6c1a0ccf253c": "1",
+        "missing": 899.0
+      },
+      "id": "101a4f8bb2c9405dbbf20fc859f79a0d"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 1099,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0,
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "missing": 9.99
+      },
+      "id": "3792b0b74dee446fae3aabdd8d2d30c9"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 3959,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0,
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
+        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-12549d06-62b9-4742-8529-3cbf040783c0": "1",
+        "missing": 38.59
+      },
+      "id": "7bbae271285349eaae5787e0dddf6f88"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 3959,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0,
+        "repid-f372cb3e-c487-4f46-8a89-650458d7435f": "1",
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
+        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-12549d06-62b9-4742-8529-3cbf040783c0": "1",
+        "missing": 38.59
+      },
+      "id": "d531b497ef2347dd940ffff202bf0026"
+    },
+    {
+      "payment": {
+        "id_table": "None",
+        "uuid_pv": "0e724e72-3399-4642-8cb3-3df4eff94182",
+        "responsable": "master",
+        "tag_id_cm": "A49E8E2A",
+        "tag_id": "52BE6543",
+        "comportement": "",
+        "total": 4309,
+        "moyen_paiement": "nfc",
+        "hostname_client": "mock host name from device login",
+        "uuid_transaction": "",
+        "given_sum": 0,
+        "repid-9de6ba60-d939-4658-b235-b13ea322b299": "1",
+        "repid-12549d06-62b9-4742-8529-3cbf040783c0": "1",
+        "repid-61214857-0e75-4eee-85cb-a1d0154788cc": "1",
+        "repid-6afe6ea7-38bc-4278-8024-43996c51c5e4": "1",
+        "repid-e183504e-b98d-409a-9cca-618fec771f6e": "1",
+        "repid-a5035dc2-17d7-496e-a614-6cd503c1e800": "3",
+        "missing": 42.09
+      },
+      "id": "624befaadbc64e94ae6a848ee1bddb79"
+    }
+  ]
 }

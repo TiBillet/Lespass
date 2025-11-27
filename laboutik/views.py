@@ -118,8 +118,10 @@ def hx_card_feedback(request):
 
     context = {
       "card": card,
+      "total_monnaie": card["wallets"] + card["wallets_gift"],
       "tag_id": tag_id,
-      "background": background
+      "background": background,
+      "state": state
     }
     return render(request, "partial/hx_card_feedback.html", context)
 
@@ -311,14 +313,11 @@ def hx_payment(request):
     # msg_type = success, info, error, warning
     payment = request.POST.dict()
 
-    # total achats
+    # total achats en centimes d'euro
     payment["total"] = int(payment["total"])
 
-    # somme donnée
+    # somme donnée en centimes d'euro
     payment["given_sum"] = int(payment["given_sum"])
-
-    # dev mock
-    fonds_insuffisants = False
 
     # paiement manquant
     payment["missing"] = 0
@@ -334,8 +333,7 @@ def hx_payment(request):
     if deposit_is_present:
       total = abs(total)
 
-    print(f'payment["moyen_paiement"] = {payment["moyen_paiement"]}')
-    print(f'payment["given_sum"] = {payment["given_sum"]}')
+    print(f'total = {total}')
     print(f'deposit_is_present = {deposit_is_present}')
 
     context = {
@@ -362,24 +360,65 @@ def hx_payment(request):
             if payment["given_sum"] > payment["total"]:
                 payment["give_back"] = (payment["given_sum"] - payment["total"]) / 100
 
-            payment["total"] = payment["total"] / 100
+            payment["total"] = total
             return render(request, "partial/hx_return_payment_success.html", context)
-
-        # fonds insuffisants 
-        if payment["total"] > payment["given_sum"]:
-            fonds_insuffisants = True
 
     # paiement nfc + deposit_is_present(consigne)
     if payment["moyen_paiement"] == "nfc":
         if deposit_is_present:
           return render(request, "partial/hx_return_payment_success.html", context)
+        
+        # get card
+        card = db.get_by_index("cards", "tag_id", payment["tag_id"])
+
+        # carte inconnue
+        if len(card) == 0:
+            context = {
+                "msg_type": "warning",
+                "msg_content": _("Carte inconnue !"),
+                "selector_bt_retour": "#messages"
+            }
+            return render(request, "partial/hx_messages.html", context)
+
+        # total wallets en euro
+        total_wallets = card[0]["wallets"] + card[0]["wallets_gift"]
+
+        # context communs
+        pv = db.get_by_index('pvs', 'id', payment['uuid_pv'])[0]
+        context = {
+            "currency_data": currency_data,
+            "payment": payment,
+            "wallets": {
+              "monnaie": card[0]["wallets"],
+              "gift_monnaie": card[0]["wallets_gift"]
+            },
+            "monnaie_name": state["place"]["monnaie_name"],
+            "payments_accepted": {
+              "accepte_especes": pv["accepte_especes"],
+              "accepte_carte_bancaire": pv["accepte_carte_bancaire"],
+              "accepte_cheque": pv["accepte_cheque"]
+            },
+            "total": total,
+            "step": 1 # dev
+        }
+
+        # fonds insuffisants
+        if total_wallets < total:
+            payment["missing"] =  ((total * 100) - (total_wallets * 100)) / 100
+
+            # enregistrement de la transaction et receptio d'un uuid
+            uuid_transaction = db.add("transactions", {"payment": payment})
+
+            context["uuid_transaction"]: uuid_transaction
+            return render(request, "partial/hx_funds_insufficient.html", context)
+        else:
+            # fonds suffisants
+            return render(request, "partial/hx_return_payment_success.html", context)
 
 
-    print(f'fonds_insuffisants = {fonds_insuffisants}')
-    if fonds_insuffisants == True:
-        # payment["missing"] =  int(payment["total"]) -  
-        uuid_transaction = db.add("transactions", {"payment": payment})
 
+    print(f'payment["missing"] = {payment["missing"]}')
+  
 
     """
   # dev mock: db and payment success ?
