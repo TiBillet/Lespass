@@ -348,19 +348,19 @@ class Command(BaseCommand):
                         "direct_debit": False,
                         "tags": ["Crowdfunding"],
                         "budget_items" : [
-                            {"contributor": "douglas.adams@h2g2.org", "description": "Frais d'auto-stop", "amount" : 1500},
-                            {"contributor": "thor@dirkgently.org", "description": "Scénario", "amount" : 80000},
-                            {"contributor": "fondation@h2g2.org", "description": "Script", "amount" : 60000},
-                            {"contributor": "fondation@h2g2.org", "description": "Tournage", "amount" : 150000},
+                            {"contributor": "douglas.adams@h2g2.org", "description": "Frais d'auto-stop", "amount" : 15},
+                            {"contributor": "thor@dirkgently.org", "description": "Scénario", "amount" : 800},
+                            {"contributor": "fondation@h2g2.org", "description": "Script", "amount" : 600},
+                            {"contributor": "fondation@h2g2.org", "description": "Tournage", "amount" : 1500},
                         ],
                         "contributions": [
-                            {"amount_eur": 120000, "name": "Fondation H2G2"},
-                            {"amount_eur": 800, "name": "Douglas Adams"},
-                            {"amount_eur": 600, "name": "Arthur Dent"},
+                            {"amount_eur": 1200, "name": "Fondation H2G2"},
+                            {"amount_eur": 80, "name": "Douglas Adams"},
+                            {"amount_eur": 60, "name": "Arthur Dent"},
                             {"amount_eur": 30, "name": "Ford Perfect"},
-                            {"amount_eur": 12000, "name": "Zaphod Beeblebrox"},
-                            {"amount_eur": 400, "name": "Tricia Mc Millan"},
-                            {"amount_eur": 1000, "name": "Marvin"},
+                            {"amount_eur": 1200, "name": "Zaphod Beeblebrox"},
+                            {"amount_eur": 40, "name": "Tricia Mc Millan"},
+                            {"amount_eur": 100, "name": "Marvin"},
                         ]
                     },
                     {
@@ -377,8 +377,8 @@ class Command(BaseCommand):
                         "tags": ["Difficultée : Intermédiaire"],
                         "budget_items": [
                             {"contributor": "zaphod@h2g2.org", "description": "Aménagement du garage pour le coeur en or", "amount": 10000},
-                            {"contributor": "douglas.adams@h2g2.org", "description": "Fyord", "amount": 6000},
-                            {"contributor": "souris@h2g2.org", "description": "Charpente", "amount": 40000},
+                            {"contributor": "douglas.adams@h2g2.org", "description": "Fyord", "amount": 600},
+                            {"contributor": "souris@h2g2.org", "description": "Charpente", "amount": 4000},
                         ],
                         "contributions": [
                             {"amount_eur": 1000, "name": "Collecte en ligne"},
@@ -390,7 +390,7 @@ class Command(BaseCommand):
                             {"user_email": f"zaphod@h2g2.org", "requested_value": 1000, "description": f"Décoration : Portrait du président de la galaxie", "state": "REQUESTED"},
                             {"user_email": f"souris@h2g2.org", "requested_value": 4200, "description": f"Construction de Compute-1", "state": "APPROVED_ADMIN"},
                             {"user_email": f"dauphins@h2g2.org", "requested_value": 420, "description": f"Salut, et merci pour le poisson !", "state": "APPROVED_ADMIN"},
-                            {"user_email": f"ford@h2g2.org", "requested_value": 20000, "description": f"Impression du guide sur papier", "state": "REQUESTED"},
+                            {"user_email": f"ford@h2g2.org", "requested_value": 200, "description": f"Impression du guide sur papier", "state": "REQUESTED"},
                         ]
                     },
                     {
