@@ -112,10 +112,10 @@ function additionReset() {
 	document.querySelector('#addition-list').innerHTML = ''
 	// inputs = ''
 	document.querySelector('#addition-comportement').value = ''
-	document.querySelector('#addition-total').value = '0'
+	document.querySelector('#addition-total').value = ''
 	document.querySelector('#addition-moyen-paiement').value = ''
-	document.querySelector('input[name="uuid_transaction"]').value = ''
-	document.querySelector('#addition-given-sum').value = '0'
+	document.querySelector('#addition-uuid-transaction').value = ''
+	document.querySelector('#addition-given-sum').value = ''
 
 	const totalAddition = calculateTotal()
 

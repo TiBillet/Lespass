@@ -18,3 +18,7 @@ def divide_by(value, arg):
 def mul(value, arg):
     # 2 chiffre après la virgule
     return value * arg
+
+@register.filter
+def force_dot(value):
+    return str(value).replace(',', '.')

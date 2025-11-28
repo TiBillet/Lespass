@@ -17,9 +17,18 @@
   <!-- pas de consigne -->
   <div class="payment-title1 test-return-title-content">{% translate "Transaction ok" %}</div>
 
-  <div class="test-return-total-achats payment-msg1">
-    {% translate "Total" %}({{ moyen_paiement }}) {{ payment.total }} {{ currency_data.symbol }}
+  <!-- complément pour fonds insuffisants -->
+  {% if original_payment %}
+  <div class="payment-msg1 test-return-total-achats">
+    {% translate "Total" %}({{ original_moyen_paiement }}/{{ moyen_paiement }}) {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
   </div>
+  {% else %}
+    <div class="payment-msg1 test-return-total-achats">
+    {% translate "Total" %}({{ moyen_paiement }}) {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
+  </div>
+  {%  endif %}
+
+
   <!-- monnaie à rendre -->
   {% if payment.give_back > 0 %}
   <div class="payment-msg1"> {% translate "Somme donnée" %} {{ payment.given_sum|divide_by:100 }} {{ currency_data.symbol }}</div>

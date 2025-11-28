@@ -1,6 +1,8 @@
 {% load static i18n %}
+{% load laboutik_process %}
 
 <div id="confirm" class="BF-col">
+  <div>uuid_transaction = {{ uuid_transaction }}</div>
   <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
   {% if method == 'espece' %}
   <!-- <div id="given-sum-container" class="BF-col"> -->
@@ -14,8 +16,7 @@
     <!-- include bt_return.html -->
     <c-bt.return selector="#confirm" layer="2" />
 
-    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success"
-      onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total }} {% endif %})">
+    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }} {% endif %})" ;>
       <div class="bt-basic-icon">
         <i class="fas fa-check-circle"></i>
       </div>

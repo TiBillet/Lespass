@@ -260,6 +260,8 @@ def hx_display_type_payment(request):
     # calcul du total de l'addition en €(pas en centimes d'euro)
     total = method.calcul_total_addition(pv, uuids, request.POST)
 
+    print(f'total = {total}  --  type = {type(total)}')
+
     # dev mock
     mode_gerant = False
 
@@ -283,19 +285,15 @@ def hx_display_type_payment(request):
 
 
 def hx_read_nfc(request):
-    uuid_transaction = (
-        ""
-        if request.GET.get("uuid_transaction") == None
-        else request.GET.get("uuid_transaction")
-    )
-    context = {"uuid_transaction": uuid_transaction}
+    context = {}
     return render(request, "partial/hx_read_nfc.html", context)
 
 
 def hx_confirm_payment(request):
     payment_method = request.GET.get("method")
     total = request.GET.get("total")
-    uuid_transaction = request.GET.get("uuid_transaction")
+    uuid_transaction = "" if request.GET.get("uuid_transaction") == None else request.GET.get("uuid_transaction")
+
     context = {
         "method": payment_method,
         "total": total,
@@ -317,7 +315,7 @@ def hx_payment(request):
     payment["total"] = int(payment["total"])
 
     # somme donnée en centimes d'euro
-    payment["given_sum"] = int(payment["given_sum"])
+    payment["given_sum"] = 0 if payment.get("given_sum") == "" else int(payment["given_sum"])
 
     # paiement manquant
     payment["missing"] = 0
@@ -333,8 +331,12 @@ def hx_payment(request):
     if deposit_is_present:
       total = abs(total)
 
-    print(f'total = {total}')
-    print(f'deposit_is_present = {deposit_is_present}')
+    # récupère le premier fonds d'une transaction à fonds insuffisants
+    original_payment = None
+    if payment["uuid_transaction"] != '':
+        transactionSearch = db.get_by_index('transactions', 'id', payment["uuid_transaction"])
+        if len(transactionSearch) == 1:
+            original_payment = transactionSearch[0]
 
     context = {
       "currency_data": currency_data,
@@ -343,7 +345,8 @@ def hx_payment(request):
       "moyen_paiement": payments_translation[payment["moyen_paiement"]],
       "deposit_is_present": deposit_is_present,
       "total": total,
-      "state": state
+      "state": state,
+      "original_payment": original_payment
     }
 
     # Paiement par chèque ou cb
@@ -353,8 +356,15 @@ def hx_payment(request):
 
     # paiement en espèce
     if payment["moyen_paiement"] == "espece":
+        print(f'original_payment = {original_payment}')
+
+        # bring of the first transaction
+        bring_first_transaction = 0
+        if original_payment:
+          bring_first_transaction = original_payment["total"] - (original_payment["missing"] * 100)
+
         # pas de somme donnée
-        if payment["given_sum"] == 0 or payment["given_sum"] >= payment["total"]:
+        if payment["given_sum"] == 0 or (payment["given_sum"] + bring_first_transaction) >= payment["total"]:
             # somme à rendre
             payment["give_back"] = 0
             if payment["given_sum"] > payment["total"]:
@@ -386,140 +396,41 @@ def hx_payment(request):
         # context communs
         pv = db.get_by_index('pvs', 'id', payment['uuid_pv'])[0]
         context = {
-            "currency_data": currency_data,
             "payment": payment,
+            "monnaie_name": state["place"]["monnaie_name"],
+            "moyen_paiement": payments_translation[payment["moyen_paiement"]],
+            "state": state,
+            "original_payment": original_payment,
+            "currency_data": currency_data,
             "wallets": {
               "monnaie": card[0]["wallets"],
               "gift_monnaie": card[0]["wallets_gift"]
             },
-            "monnaie_name": state["place"]["monnaie_name"],
             "payments_accepted": {
               "accepte_especes": pv["accepte_especes"],
               "accepte_carte_bancaire": pv["accepte_carte_bancaire"],
               "accepte_cheque": pv["accepte_cheque"]
             },
-            "total": total,
-            "step": 1 # dev
+            "card": card[0]
         }
+        if original_payment:
+          context["original_moyen_paiement"] = payments_translation[original_payment["moyen_paiement"]]
 
         # fonds insuffisants
         if total_wallets < total:
             payment["missing"] =  ((total * 100) - (total_wallets * 100)) / 100
 
             # enregistrement de la transaction et receptio d'un uuid
-            uuid_transaction = db.add("transactions", {"payment": payment})
+            # uuid_transaction = db.add("transactions", {"payment": payment})
+            uuid_transaction = db.add("transactions", payment)
+            print(f'uuid_transaction = {uuid_transaction}')
 
-            context["uuid_transaction"]: uuid_transaction
+            context["uuid_transaction"] = uuid_transaction
             return render(request, "partial/hx_funds_insufficient.html", context)
         else:
             # fonds suffisants
             return render(request, "partial/hx_return_payment_success.html", context)
 
-
-
-    print(f'payment["missing"] = {payment["missing"]}')
-  
-
-    """
-  # dev mock: db and payment success ?
-	# default
-  payment["success"] = True
-
-  if payment["moyen_paiement"] == "nfc" and payment.get("tag_id"):
-    card = db.get_by_index('cards', 'tag_id', payment['tag_id'])[0]
-    payment["card_name"] = card["name"]
-    payment["wallets"] = {
-      "monnaie": card["wallets"],
-      "gift_monnaie": card["wallets_gift"]
-    }
-    wallets = (float(card["wallets"]) * 100) + (float(card["wallets_gift"]) * 100) 
-    payment["funds_insufficient"] = False
-    if payment["total"] > wallets:
-      payment["success"] = False
-      payment["funds_insufficient"] = True
-      payment["missing"] = (payment["total"] - wallets) / 100
-
-  print(f"-------- payment = ${payment}")
-
-  # transaction (complémentaire)
-  uuid_transaction = payment["uuid_transaction"] if payment.get("uuid_transaction") else ""
-  # payment step
-  step = 2
-  
-  # step 1, record funds insufficient (data card 1)
-  payment_card1 = None
-  if uuid_transaction == "":
-    step = 1
-    # print(f'--- ajout transaction dans db ---')
-    uuid_transaction = db.add('transactions', {
-      "payment": payment
-    })
-  else:
-    payment_card1 = db.get_by_index('transactions', 'id', uuid_transaction)[0]['payment']
-    # print(f'crédits complémentaires donnés')
-
-  if payment["success"]:
-	  # somme donnée
-    if payment.get("given_sum"):
-      payment["give_back"] = (float(payment["given_sum"]) - float(payment["total"])) / 100
-      payment["given_sum"] = float(payment["given_sum"]) / 100
-      print(f'moyen_paiement = {payment["moyen_paiement"]}')
-
-    # plus en centimes
-    payment["total"] = payment["total"] / 100
-    context = {
-      "currency_data": currency_data,
-      "payment": payment,
-			"payment_card1": payment_card1,
-      "monnaie_name": state["place"]["monnaie_name"],
-      "moyen_paiement": payments_translation[payment["moyen_paiement"]]
-    }
-    return render(request, "partial/hx_payment_success.html", context)
-
-  if payment["success"] == False:
-    if int(payment["given_sum"]) > 0 and int(payment["given_sum"]) < payment["total"]:
-      context = {
-		    "msg_type": "warning",
-			  "msg_content": _("Fonds insuffisants !")
-			}
-      return render(request, "partial/hx_messages.html", context)
-
-    if payment_card1 and payment_card1.get('tag_id') == payment.get('tag_id') and step == 2:
-      context = {
-		    "msg_type": "warning",
-			  "msg_content": _("Vous utilisez la même carte !")
-			}
-      return render(request, "partial/hx_messages.html", context)
-
-    if payment["funds_insufficient"]:
-      card = db.get_by_index('cards', 'tag_id', payment['tag_id'])[0]
-      pv = db.get_by_index('pvs', 'id', payment['uuid_pv'])[0]
-      context = {
-				"currency_data": currency_data,
-      	"payment": payment,
-        "card": card,
-        "wallets": {
-          "monnaie": card["wallets"],
-          "gift_monnaie": card["wallets_gift"]
-        },
-        "monnaie_name": state["place"]["monnaie_name"],
-        "payments_accepted": {
-          "accepte_especes": pv["accepte_especes"],
-  	      "accepte_carte_bancaire": pv["accepte_carte_bancaire"],
-  	      "accepte_cheque": pv["accepte_cheque"]
-        },
-        "uuid_transaction": uuid_transaction,
-				"step": step
-			}
-      return render(request, "partial/hx_funds_insufficient.html", context)
-
-    context = {
-      "msg_type": "warning",
-      "msg_content": "Il y a une erreur !",
-      "selector_bt_retour": "#messages",
-    }
-    return render(request, "partial/hx_messages.html", context)
-  """
     context = {
         "msg_type": "warning",
         "msg_content": "Il y a une erreur !",
