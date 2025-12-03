@@ -250,6 +250,13 @@ class Command(BaseCommand):
                         "tags": ["Réunion"],
                     },
                 ],
+                # Actifs (assets) Fedow à créer/assurer pour ce tenant uniquement si déclarés
+                # - MonaLocalim: jeton local fiat (code SSA) utilisé pour récompenser certaines adhésions
+                # - MTemps: monnaie temps (code H) pour récompenser le scan de billets bénévole
+                "assets": [
+                    {"name": "MonaLocalim", "currency_code": "SSA", "category": "TOKEN_LOCAL_FIAT"},
+                    {"name": "MTemps", "currency_code": "H", "category": "TIME"},
+                ],
                 "adhesions": [
                     {  # Adhésion classique plein/solidaire
                         "name": "Adhésion associative Tiers Lustre",
@@ -461,7 +468,7 @@ class Command(BaseCommand):
                 "tva_number": fake.bban()[:20],
                 "siren": fake.siret()[:20],
                 "phone": fake.phone_number()[:20],
-                "email": os.environ.get('ADMIN_EMAIL', 'admin@example.org'),
+                "email": os.environ.get('ADMIN_EMAIL').replace("@", "+cf@", 1),
                 "stripe_mode_test": True,
                 "stripe_connect_account_test": "",
                 "stripe_payouts_enabled": True,
@@ -523,7 +530,7 @@ class Command(BaseCommand):
                 "tva_number": fake.bban()[:20],
                 "siren": fake.siret()[:20],
                 "phone": fake.phone_number()[:20],
-                "email": os.environ.get('ADMIN_EMAIL', 'admin@example.org'),
+                "email": os.environ.get('ADMIN_EMAIL').replace("@", "+co@", 1),
                 "stripe_mode_test": True,
                 "stripe_connect_account_test": "",
                 "stripe_payouts_enabled": True,
@@ -573,7 +580,7 @@ class Command(BaseCommand):
                 "tva_number": fake.bban()[:20],
                 "siren": fake.siret()[:20],
                 "phone": fake.phone_number()[:20],
-                "email": os.environ.get('ADMIN_EMAIL', 'admin@example.org'),
+                "email": os.environ.get('ADMIN_EMAIL').replace("@", "+mc@", 1),
                 "stripe_mode_test": True,
                 "stripe_connect_account_test": "",
                 "stripe_payouts_enabled": True,
@@ -629,7 +636,7 @@ class Command(BaseCommand):
                 "tva_number": fake.bban()[:20],
                 "siren": fake.siret()[:20],
                 "phone": fake.phone_number()[:20],
-                "email": os.environ.get('ADMIN_EMAIL', 'admin@example.org'),
+                "email": os.environ.get('ADMIN_EMAIL').replace("@", "+rlr@", 1),
                 "stripe_mode_test": True,
                 "stripe_connect_account_test": "",
                 "stripe_payouts_enabled": True,
@@ -915,12 +922,14 @@ class Command(BaseCommand):
         created_tenants: list[Client] = []
         with schema_context('public'):
             domain_base = os.getenv("DOMAIN", "example.org")
-            admin_email = os.environ.get('ADMIN_EMAIL', 'admin@example.org')
 
             for fx in fixtures:
                 name = fx.get('name')
+                admin_email = fx.get('email')
+
                 if not name:
                     continue
+
                 schema = slugify(name)
                 # Étape 1: création/maj du tenant sans auto_create_schema
                 tenant = Client.objects.filter(schema_name=schema).first()
@@ -972,14 +981,6 @@ class Command(BaseCommand):
                 except Exception as e:
                     logger.warning(f"Impossible d'assurer le domaine principal pour {name}: {e}")
 
-                # FALC: On ajoute l'admin comme gestionnaire du tenant.
-                try:
-                    user: TibilletUser = get_or_create_user(admin_email, send_mail=False)
-                    user.client_admin.add(tenant)
-                    user.is_staff = True
-                    user.save()
-                except Exception as e:
-                    logger.warning(f"Impossible d'ajouter l'admin au tenant {name}: {e}")
 
                 created_tenants.append(tenant)
 
@@ -1014,6 +1015,17 @@ class Command(BaseCommand):
                 if not fx:
                     continue
 
+                # FALC: On ajoute l'admin comme gestionnaire du tenant.
+                try:
+                    admin_user: TibilletUser = get_or_create_user(fx.get('email'), send_mail=False)
+                    admin_user.client_admin.add(tenant)
+                    admin_user.is_staff = True
+                    admin_user.save()
+                except Exception as e:
+                    logger.error(f"Impossible d'ajouter l'admin au tenant {name}: {e}")
+                    raise e
+
+
                 addr_data = fx.get('adresse') or {}
                 addr_obj = None
                 if addr_data:
@@ -1040,34 +1052,28 @@ class Command(BaseCommand):
                     config = Configuration.get_solo()
                     config.organisation = tenant.name
                     # Champs texte d'accueil
-                    if fx.get('short_description'):
-                        config.short_description = fx.get('short_description')
-                    if fx.get('long_description'):
-                        config.long_description = fx.get('long_description')
+                    config.short_description = fx.get('short_description')
+                    config.long_description = fx.get('long_description')
                     # Coordonnées et identifiants
-                    if fx.get('tva_number'):
-                        config.tva_number = fx.get('tva_number')
-                    if fx.get('siren'):
-                        config.siren = fx.get('siren')
-                    if fx.get('phone'):
-                        config.phone = fx.get('phone')
-                    config.email = fx.get('email') or os.environ.get('ADMIN_EMAIL', config.email)
+                    config.tva_number = fx.get('tva_number')
+                    config.siren = fx.get('siren')
+                    config.phone = fx.get('phone')
+
+                    config.email = admin_user.email
+
                     # Liens publics
-                    if fx.get('site_web'):
-                        config.site_web = fx.get('site_web')
-                    if fx.get('legal_documents'):
-                        config.legal_documents = fx.get('legal_documents')
+                    config.site_web = fx.get('site_web')
+                    config.legal_documents = fx.get('legal_documents')
                     # Stripe (mode test pour la démo)
-                    if fx.get('stripe_mode_test') is not None:
-                        config.stripe_mode_test = bool(fx.get('stripe_mode_test'))
-                    if fx.get('stripe_connect_account_test') is not None:
-                        config.stripe_connect_account_test = fx.get('stripe_connect_account_test')
-                    if fx.get('stripe_payouts_enabled') is not None:
-                        config.stripe_payouts_enabled = bool(fx.get('stripe_payouts_enabled'))
+                    config.stripe_mode_test = bool(fx.get('stripe_mode_test'))
+                    config.stripe_connect_account_test = fx.get('stripe_connect_account_test')
+                    config.stripe_payouts_enabled = bool(fx.get('stripe_payouts_enabled'))
+
                     # Adresse principale liée à la config
                     if addr_obj:
                         config.postal_address = addr_obj
                     config.save()
+
                 except Exception as e:
                     logger.warning(f"Impossible de configurer Configuration pour {tenant.name}: {e}")
 
@@ -1076,40 +1082,46 @@ class Command(BaseCommand):
                     raise Exception('Erreur on install : can_fedow = False')
 
 
+                # Actifs Fedow (création sur demande seulement)
+                def map_asset_category(cat: str):
+                    c = (cat or '').upper()
+                    try:
+                        if c == 'TOKEN_LOCAL_FIAT':
+                            return AssetFedowPublic.TOKEN_LOCAL_FIAT
+                        if c == 'TIME':
+                            return AssetFedowPublic.TIME
+                        if hasattr(AssetFedowPublic, c):
+                            return getattr(AssetFedowPublic, c)
+                    except Exception:
+                        pass
+                    return AssetFedowPublic.TOKEN_LOCAL_FIAT
+
+                assets_by_name: dict[str, AssetFedowPublic] = {}
+                try:
+                    declared_assets = fx.get('assets', []) or []
+                except Exception:
+                    declared_assets = []
+                if declared_assets:
+                    try:
+                        fedow_config = FedowConfig.get_solo()
+                        fedow_asset = AssetFedow(fedow_config=fedow_config)
+                        for a in declared_assets:
+                            try:
+                                payload = AssetFedowPublic(
+                                    name=a.get('name'),
+                                    currency_code=a.get('currency_code'),
+                                    category=map_asset_category(a.get('category')),
+                                )
+                                created = fedow_asset.get_or_create_token_asset(payload)
+                                obj = AssetFedowPublic.objects.filter(uuid=created.get('uuid')).first()
+                                if obj:
+                                    assets_by_name[obj.name] = obj
+                            except Exception as e:
+                                logger.warning(f"Asset Fedow non créé/assuré pour '{tenant.name}': {e}")
+                    except Exception as e:
+                        logger.warning(f"Impossible d'initialiser les assets Fedow pour {tenant.name}: {e}")
+
                 # Adhésions (produits)
-                # FALC: On s'assure de l'existence d'un asset local pour les récompenses (ex: MonaLocalim)
-                local_reward_asset = None
-                try:
-                    fedow_config = FedowConfig.get_solo()
-                    fedow_asset = AssetFedow(fedow_config=fedow_config)
-                    # Crée l'actif s'il n'existe pas encore
-                    asset_payload = AssetFedowPublic(
-                        name="MonaLocalim",
-                        currency_code="SSA",
-                        category=AssetFedowPublic.TOKEN_LOCAL_FIAT,
-                    )
-                    created_asset = fedow_asset.get_or_create_token_asset(asset_payload)
-                    # Récupération de l'instance pour lier dans les Price
-                    local_reward_asset = AssetFedowPublic.objects.filter(uuid=created_asset.get('uuid')).first()
-                except Exception as e:
-                    logger.warning(f"Impossible d'assurer l'asset local de récompense (MonaLocalim): {e}")
-
-                # FALC: On prépare aussi un actif de "monnaie temps" pour récompenser le scan de billets.
-                # Nom lisible: MTemps. Catégorie: TIME.
-                time_reward_asset = None
-                try:
-                    fedow_config = FedowConfig.get_solo()
-                    fedow_asset = AssetFedow(fedow_config=fedow_config)
-                    time_payload = AssetFedowPublic(
-                        name="MTemps",
-                        currency_code="H",
-                        category=AssetFedowPublic.TIME,
-                    )
-                    created_time_asset = fedow_asset.get_or_create_token_asset(time_payload)
-                    time_reward_asset = AssetFedowPublic.objects.filter(uuid=created_time_asset.get('uuid')).first()
-                except Exception as e:
-                    logger.warning(f"Impossible d'assurer l'asset de monnaie temps (MTemps): {e}")
-
                 for adh in fx.get('adhesions', []) or []:
                     prod, _ = Product.objects.get_or_create(
                         name=adh['name'],
@@ -1161,12 +1173,15 @@ class Command(BaseCommand):
                                 asset_obj = None
                                 if asset_uuid:
                                     asset_obj = AssetFedowPublic.objects.filter(uuid=asset_uuid).first()
+                                    if not asset_obj:
+                                        logger.warning(f"Asset UUID '{asset_uuid}' introuvable pour le tenant {tenant.name}. Récompense ignorée.")
                                 if not asset_obj and asset_name:
-                                    asset_obj = AssetFedowPublic.objects.filter(name=asset_name).first()
-                                if not asset_obj and local_reward_asset:
-                                    asset_obj = local_reward_asset
+                                    # Cherche dans la base du tenant, sinon dans les assets déclarés
+                                    asset_obj = AssetFedowPublic.objects.filter(name=asset_name).first() or assets_by_name.get(asset_name)
                                 if asset_obj:
                                     fedow_defaults['fedow_reward_asset'] = asset_obj
+                                else:
+                                    logger.info(f"Aucun asset Fedow lié pour le tarif '{pr.get('name')}' (produit '{prod.name}') — définissez 'fedow_reward_asset' ou 'fedow_reward_asset_name' et déclarez l'asset dans le JSON.")
                         except Exception as e:
                             logger.warning(f"Impossible de traiter la récompense Fedow pour '{adh.get('name')}': {e}")
 
@@ -1349,8 +1364,10 @@ class Command(BaseCommand):
                             if not price.reward_on_ticket_scanned:
                                 price.reward_on_ticket_scanned = True
                                 updated_fields.append('reward_on_ticket_scanned')
-                            if time_reward_asset and price.fedow_reward_asset_id != getattr(time_reward_asset, 'uuid', None):
-                                price.fedow_reward_asset = time_reward_asset
+                            # Utiliser l'asset de type TIME uniquement s'il est déclaré (ex: "MTemps")
+                            time_asset = assets_by_name.get('MTemps')
+                            if time_asset and price.fedow_reward_asset_id != getattr(time_asset, 'uuid', None):
+                                price.fedow_reward_asset = time_asset
                                 updated_fields.append('fedow_reward_asset')
                             # Montant symbolique par scan (1 unité de temps)
                             if price.fedow_reward_amount != 1:
@@ -1373,7 +1390,7 @@ class Command(BaseCommand):
                 inits = fx.get('initiatives', []) or []
                 if inits:
                     # Préparer des tags utiles (couleurs déjà gérées par ensure_tag)
-                    admin_email_env = os.environ.get('ADMIN_EMAIL', 'admin@example.org')
+                    admin_email_env = config.email
 
                     for init in inits:
                         # Préparer une variable d'initiative hors try pour éviter UnboundLocalError en cas d'échec
