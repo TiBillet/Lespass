@@ -979,7 +979,15 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     config = Configuration.get_solo()
 
     # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
-    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    try :
+        ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    except LigneArticle.DoesNotExist:
+        sleep(3)
+        ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    except Exception as exc:
+        logger.error(f"Erreur lors de get ligne_article {ligne_article_pk} : {exc}")
+        raise exc
+
     if getattr(ligne_article, "sended_to_laboutik", False) or ligne_article.status == LigneArticle.REFUNDED:
         logger.info("refund déjà envoyé à Laboutik – skip")
         return True

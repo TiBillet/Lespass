@@ -438,8 +438,8 @@ class Command(BaseCommand):
                 # Fédérations: ce lieu affiche des contenus d'autres tenants (avec filtres de tags)
                 "federations": [
                     {
-                        "tenant": "La LowCow Motiv'",
-                        "include_tags": ["Rock", "Jazz"],
+                        "tenant": "Chantefrein",
+                        "include_tags": [],
                         "exclude_tags": ["Réunion"],
                         "membership_visible": True
                     },
@@ -452,10 +452,10 @@ class Command(BaseCommand):
                 ],
             },
             {
-                "name": "La LowCow Motiv'",
+                "name": "Chantefrein",
                 "short_description": "Lieu de démo: culture, bricolage et bons moments.",
                 "long_description": (
-                    "Bienvenue à La LowCow Motiv'. Ici on danse, on coud et on apprend. "
+                    "Bienvenue au Chantefrein. Ici on danse, on coud et on apprend. "
                     "Exemples d'évènements payants, gratuits et à prix libre, ainsi que des adhésions simples ou récurrentes."
                 ),
                 "tva_number": fake.bban()[:20],
@@ -487,14 +487,14 @@ class Command(BaseCommand):
                                     "prices": [{"name": "Prix libre", "prix": 1, "free_price": True}]}],
                      "tags": ["Prix libre"]},
                     {  # Evènements de type réunion pour tester les filtres de fédération
-                        "name": "Réunion d'équipe LowCow Motiv",
+                        "name": "Point Coop' Chantefrein",
                         "categorie": "CONFERENCE",
                         "short_description": "Réunion interne de l'équipe",
                         "long_description": "Point d'équipe mensuel.",
                         "tags": ["Réunion"],
                     },
                     {
-                        "name": "Assemblée générale annuelle LowCow Motiv",
+                        "name": "AG Ordinaire Chantefrein ",
                         "categorie": "CONFERENCE",
                         "short_description": "AG statutaire",
                         "long_description": "Assemblée générale de l'association.",
@@ -503,7 +503,7 @@ class Command(BaseCommand):
 
                 ],
                 "adhesions": [
-                    {"name": "Adhésion LowCow", "categorie_article": "ADHESION",
+                    {"name": "Adhésion Chantefrein", "categorie_article": "ADHESION",
                      "prices": [
                          {"name": "Annuelle", "prix": 15, "subscription_type": "YEAR"},
                          {"name": "Mensuelle", "prix": 1.5, "recurring_payment": True, "subscription_type": "MONTH"},
