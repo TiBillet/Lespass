@@ -12,7 +12,7 @@ from faker import Faker
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Product, OptionGenerale, Price, Configuration, Event, Tag, PostalAddress, \
-    FormbricksConfig, FormbricksForms, ProductFormField
+    FormbricksConfig, FormbricksForms, ProductFormField, FederatedPlace, Membership
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
 from fedow_connect.models import FedowConfig
@@ -48,13 +48,16 @@ Règles générales :
 
 
 class Command(BaseCommand):
-    # def add_arguments(self, parser):
-    # Named (optional) arguments
-    # parser.add_argument(
-    #     '--tdd',
-    #     action='store_true',
-    #     help='Demo data for Test drived dev',
-    # )
+    def add_arguments(self, parser):
+        # Options du script
+        parser.add_argument(
+            '--flush',
+            action='store_true',
+            help=(
+                "Purge les contenus (évènements, adhésions, initiatives, produits, tarifs, options, fédérations, tags) "
+                "des tenants de démo avant réimport. Ne supprime pas les assets ni la configuration."
+            ),
+        )
 
     def handle(self, *args, **options):
         # FALC: On va créer des données de démonstration.
@@ -231,6 +234,20 @@ class Command(BaseCommand):
                             {"name": "Peinture et décoration", "categorie": "ACTION", "jauge_max": 8},
                             {"name": "Bricolage et réparations", "categorie": "ACTION", "jauge_max": 5},
                         ],
+                    },
+                    {  # Evènements de type réunion pour tester les filtres de fédération
+                        "name": "Réunion d'équipe",
+                        "categorie": "CONFERENCE",
+                        "short_description": "Réunion interne de l'équipe",
+                        "long_description": "Point d'équipe mensuel.",
+                        "tags": ["Réunion"],
+                    },
+                    {
+                        "name": "Assemblée générale annuelle",
+                        "categorie": "CONFERENCE",
+                        "short_description": "AG statutaire",
+                        "long_description": "Assemblée générale de l'association.",
+                        "tags": ["Réunion"],
                     },
                 ],
                 "adhesions": [
@@ -418,6 +435,21 @@ class Command(BaseCommand):
                         ]
                     },
                 ],
+                # Fédérations: ce lieu affiche des contenus d'autres tenants (avec filtres de tags)
+                "federations": [
+                    {
+                        "tenant": "La LowCow Motiv'",
+                        "include_tags": ["Rock", "Jazz"],
+                        "exclude_tags": ["Réunion"],
+                        "membership_visible": True
+                    },
+                    {
+                        "tenant": "La Maison des Communs",
+                        "include_tags": ["Prix libre"],
+                        "exclude_tags": ["Réunion"],
+                        "membership_visible": True
+                    }
+                ],
             },
             {
                 "name": "La LowCow Motiv'",
@@ -454,6 +486,21 @@ class Command(BaseCommand):
                                     "nominative": False,
                                     "prices": [{"name": "Prix libre", "prix": 1, "free_price": True}]}],
                      "tags": ["Prix libre"]},
+                    {  # Evènements de type réunion pour tester les filtres de fédération
+                        "name": "Réunion d'équipe LowCow Motiv",
+                        "categorie": "CONFERENCE",
+                        "short_description": "Réunion interne de l'équipe",
+                        "long_description": "Point d'équipe mensuel.",
+                        "tags": ["Réunion"],
+                    },
+                    {
+                        "name": "Assemblée générale annuelle LowCow Motiv",
+                        "categorie": "CONFERENCE",
+                        "short_description": "AG statutaire",
+                        "long_description": "Assemblée générale de l'association.",
+                        "tags": ["Réunion"],
+                    },
+
                 ],
                 "adhesions": [
                     {"name": "Adhésion LowCow", "categorie_article": "ADHESION",
@@ -507,6 +554,14 @@ class Command(BaseCommand):
                 "initiatives": [
                     {"name": "Fresque murale participative", "budget_contributif": False, "currency": "€"},
                 ],
+                "federations": [
+                    {
+                        "tenant": "La Maison des Communs",
+                        "include_tags": ["Jazz"],
+                        "exclude_tags": ["Réunion"],
+                        "membership_visible": False
+                    }
+                ],
             },
             {
                 "name": "La Maison des Communs",
@@ -553,6 +608,14 @@ class Command(BaseCommand):
                 "initiatives": [
                     {"name": "Outils partagés — achat collectif", "budget_contributif": True, "currency": "€"},
                     {"name": "Documentation des savoir-faire", "budget_contributif": False, "currency": "€"},
+                ],
+                "federations": [
+                    {
+                        "tenant": "Le Coeur en or",
+                        "include_tags": ["Jazz"],
+                        "exclude_tags": ["Réunion"],
+                        "membership_visible": True
+                    }
                 ],
             },
             {
@@ -616,6 +679,131 @@ class Command(BaseCommand):
                 ],
             },
         ]
+        # -----------------------------
+        # 0) Option --flush: purge sélective des données existantes des tenants ciblés
+        # -----------------------------
+        if options.get('flush'):
+            try:
+                confirmation = input(
+                    "Êtes-vous bien sûr de PURGER les évènements, adhésions, initiatives, produits, tarifs, options, fédérations et tags des tenants de démo ? Tapez 'oui' pour confirmer: "
+                )
+            except Exception:
+                confirmation = ''
+            if confirmation.strip().lower() not in ['oui', 'yes']:
+                self.stdout.write(self.style.WARNING("Opération annulée: aucune donnée supprimée. Relancez avec --flush et confirmez par 'oui'."))
+            else:
+                # Pour chaque tenant listé dans les fixtures, si le tenant existe, on purge uniquement:
+                # - Events (et sous-évènements)
+                # - Membership (adhésions des personnes)
+                # - Initiatives et leurs objets liés (crowds: votes, participations, contributions, budget items)
+                from django.db.models import ProtectedError
+
+                with schema_context('public'):
+                    for fx in fixtures:
+                        name = fx.get('name')
+                        if not name:
+                            continue
+                        schema = slugify(name)
+                        tenant = Client.objects.filter(schema_name=schema).first()
+                        if not tenant:
+                            logger.info(f"--flush: tenant '{name}' introuvable, rien à purger.")
+                            continue
+                        try:
+                            with tenant_context(tenant):
+                                ev_deleted = 0
+                                memb_deleted = 0
+                                init_deleted = 0
+                                price_deleted = 0
+                                product_deleted = 0
+                                option_deleted = 0
+                                fed_deleted = 0
+                                tag_deleted = 0
+
+                                # Purge des évènements
+                                try:
+                                    qs = Event.objects.all()
+                                    ev_deleted = qs.count()
+                                    if ev_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des évènements: {e}")
+
+                                # Purge des adhésions (instances), pas des produits/prix
+                                try:
+                                    qs = Membership.objects.all()
+                                    memb_deleted = qs.count()
+                                    if memb_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des adhésions: {e}")
+
+                                # Purge des initiatives et des objets crowds associés
+                                try:
+                                    # Supprimer d'abord les objets enfants pour éviter des ProtectedError éventuelles
+                                    Vote.objects.all().delete()
+                                    Participation.objects.all().delete()
+                                    BudgetItem.objects.all().delete()
+                                    Contribution.objects.all().delete()
+                                    init_deleted = Initiative.objects.count()
+                                    if init_deleted:
+                                        Initiative.objects.all().delete()
+                                except ProtectedError as e:
+                                    logger.warning(f"--flush {tenant.name}: contrainte de protection lors de la purge des initiatives: {e}")
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des initiatives: {e}")
+
+                                # Purge des tarifs (Price) puis des produits (Product)
+                                try:
+                                    qs = Price.objects.all()
+                                    price_deleted = qs.count()
+                                    if price_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des tarifs (Price): {e}")
+
+                                try:
+                                    qs = Product.objects.all()
+                                    product_deleted = qs.count()
+                                    if product_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des produits (Product): {e}")
+
+                                # Purge des options générales
+                                try:
+                                    qs = OptionGenerale.objects.all()
+                                    option_deleted = qs.count()
+                                    if option_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des options (OptionGenerale): {e}")
+
+                                # Purge des fédérations (puis tags)
+                                try:
+                                    qs = FederatedPlace.objects.all()
+                                    fed_deleted = qs.count()
+                                    if fed_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des fédérations (FederatedPlace): {e}")
+
+                                try:
+                                    qs = Tag.objects.all()
+                                    tag_deleted = qs.count()
+                                    if tag_deleted:
+                                        qs.delete()
+                                except Exception as e:
+                                    logger.warning(f"--flush {tenant.name}: erreur lors de la suppression des tags: {e}")
+
+                                logger.info(
+                                    f"--flush {tenant.name}: évènements supprimés={ev_deleted}, adhésions supprimées={memb_deleted}, "
+                                    f"initiatives supprimées={init_deleted}, tarifs supprimés={price_deleted}, produits supprimés={product_deleted}, "
+                                    f"options supprimées={option_deleted}, fédérations supprimées={fed_deleted}, tags supprimés={tag_deleted}"
+                                )
+                        except Exception as e:
+                            logger.error(f"--flush: échec de purge pour '{name}': {e}")
+
+                self.stdout.write(self.style.SUCCESS("Purge sélective terminée. Réimport en cours…"))
 
         # -----------------------------
         # 1) Création des tenants (public)
@@ -1311,29 +1499,30 @@ class Command(BaseCommand):
                                 if state in ['approved', 'rejected']:
                                     validator = _get_user(bi.get('validator_email') or admin_email_env)
 
-                                # Idempotence: on considère (initiative, description, amount) comme clé naturelle simple
+                                # Idempotence renforcée: utiliser (initiative, description, contributor) comme clé
                                 try:
+                                    contributor_key = contributor or TibilletUser.objects.filter(email=admin_email_env).first()
                                     bi_obj, created = BudgetItem.objects.get_or_create(
                                         initiative=initiative_obj,
                                         description=desc,
-                                        amount=amt_cents,
+                                        contributor=contributor_key,
                                         defaults={
-                                            'contributor': contributor or TibilletUser.objects.filter(email=admin_email_env).first(),
+                                            'amount': amt_cents,
                                             'state': state,
                                             'validator': validator if state in ['approved', 'rejected'] else None,
                                         }
                                     )
                                     if not created:
                                         updates = []
+                                        if bi_obj.amount != amt_cents:
+                                            bi_obj.amount = amt_cents
+                                            updates.append('amount')
                                         if bi_obj.state != state:
                                             bi_obj.state = state
                                             updates.append('state')
                                         if state in ['approved', 'rejected'] and validator and bi_obj.validator_id != getattr(validator, 'id', None):
                                             bi_obj.validator = validator
                                             updates.append('validator')
-                                        if contributor and bi_obj.contributor_id != getattr(contributor, 'id', None):
-                                            bi_obj.contributor = contributor
-                                            updates.append('contributor')
                                         if updates:
                                             try:
                                                 bi_obj.save(update_fields=updates)
@@ -1429,14 +1618,17 @@ class Command(BaseCommand):
                                 time_spent = p.get('time_spent_minutes')
 
                                 user = get_or_create_user(user_email, send_mail=False)
+                                # Idempotence: ne pas inclure le montant dans la clé, car il peut évoluer
                                 part, created = Participation.objects.get_or_create(
                                     initiative=initiative_obj,
                                     participant=user,
                                     description=desc,
-                                    amount=requested_cents,
-                                    defaults={"state": state},
+                                    defaults={"state": state, "amount": requested_cents},
                                 )
                                 updates = []
+                                if part.amount != requested_cents:
+                                    part.amount = requested_cents
+                                    updates.append('amount')
                                 if part.state != state:
                                     part.state = state
                                     updates.append('state')
@@ -1481,3 +1673,59 @@ class Command(BaseCommand):
                             logger.warning(
                                 f"Votes fournis mais initiative introuvable/non créée pour '{init.get('name')}' sur tenant {tenant.name}. Votes ignorés."
                             )
+
+                # -----------------------------
+                # Fédérations (agenda + adhésions)
+                # -----------------------------
+                # FALC: Après la création de TOUS les tenants, on peut lier des fédérations
+                # entre lieux. Ici, on lit le bloc "federations" du JSON du tenant courant.
+                feds = fx.get('federations', []) or []
+                if feds:
+                    for fed in feds:
+                        try:
+                            target_name = fed.get('tenant')
+                            if not target_name:
+                                continue
+                            # Récupérer le tenant cible (dans le schéma public)
+                            with schema_context('public'):
+                                target_client = Client.objects.filter(name=target_name).first()
+                            if not target_client:
+                                logger.warning(f"Federation ignorée: tenant cible '{target_name}' introuvable pour {tenant.name}")
+                                continue
+                            # Créer/mettre à jour la fédération
+                            fp, created_fp = FederatedPlace.objects.get_or_create(tenant=target_client)
+                            updates = []
+                            membership_visible = bool(fed.get('membership_visible'))
+                            if fp.membership_visible != membership_visible:
+                                fp.membership_visible = membership_visible
+                                updates.append('membership_visible')
+                            if updates:
+                                try:
+                                    fp.save(update_fields=updates)
+                                except Exception:
+                                    fp.save()
+
+                            # Tags: include (tag_filter) et exclude (tag_exclude)
+                            include_tags = [t for t in (fed.get('include_tags') or []) if t]
+                            exclude_tags = [t for t in (fed.get('exclude_tags') or []) if t]
+
+                            if include_tags is not None:
+                                tag_objs = []
+                                for name in include_tags:
+                                    t = ensure_tag(name)
+                                    if t:
+                                        tag_objs.append(t)
+                                # set() est idempotent et remplace la liste courante par la souhaitée
+                                if tag_objs is not None:
+                                    fp.tag_filter.set(tag_objs)
+
+                            if exclude_tags is not None:
+                                tag_objs = []
+                                for name in exclude_tags:
+                                    t = ensure_tag(name)
+                                    if t:
+                                        tag_objs.append(t)
+                                if tag_objs is not None:
+                                    fp.tag_exclude.set(tag_objs)
+                        except Exception as e:
+                            logger.warning(f"Erreur lors de la configuration d'une fédération pour {tenant.name}: {e}")

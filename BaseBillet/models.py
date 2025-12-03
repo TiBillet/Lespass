@@ -2853,16 +2853,22 @@ class Webhook(models.Model):
                              verbose_name=_("Event"))
     last_response = models.TextField(null=True, blank=True)
 
+### Fédérations
+
 
 class FederatedPlace(models.Model):
     tenant = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="Collective")
     tag_filter = models.ManyToManyField(Tag, blank=True, related_name="filtred", verbose_name=_("Tag filters"),
                                         help_text=_("Show only these tags."))
+
     tag_exclude = models.ManyToManyField(Tag, blank=True, related_name="excluded", verbose_name=_("Excluded tags"),
-                                         help_text=_("Don't show those tags."))
+                                         help_text=_("Exclude those tags."))
 
     membership_visible = models.BooleanField(default=False, verbose_name=_("Federate memberships and subscriptions"),
-                                             help_text=_("Also display memberships and subscriptions for this site."))
+                                             help_text=_("Display memberships and subscriptions for this site."))
+
+    # initiative_visible = models.BooleanField(default=False, verbose_name=_("Federate initiatives"),
+    #                                          help_text=_("Display the need for contributions from federated structures."))
 
     class Meta:
         verbose_name = _('Federated space')
