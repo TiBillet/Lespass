@@ -1,4 +1,4 @@
-console.log('DEMO =', state.demo.active, '  --  type =', typeof state.demo.active)
+console.log('DEMO =', state.demo.active)
 
 import { generatePemKeys, signMessage } from './modules/cryptoRsa.js'
 import { readConfFile, writeConfFile, isCordovaApp } from './modules/hardwareLayer.js'
@@ -64,6 +64,7 @@ async function deleteConfs() {
 
 
 function showPairAgain() {
+  console.log('-> showPairAgain')
 	localStorage.removeItem('laboutik')
 	document.querySelector('#new-pair').classList.remove('hide')
 }
@@ -84,7 +85,7 @@ window.laboutikNewPair = async function () {
 }
 
 async function initLogin() {
-	log({ tag: 'INFO', msg: '-> initLogin' })
+	console.log('-> initLogin')
 	const configuration = JSON.parse(localStorage.getItem('laboutik'))
 	// console.log('-> configuration =', configuration)
 
@@ -117,7 +118,7 @@ async function initLogin() {
 
 // remplir le formulaire #form-new-hardware et le valider
 async function activateDevice(configuration) {
-	log({ tag: 'info', msg: '-> activateDevice' })
+	console.log('-> activateDevice')
 	try {
 		// generate client rsa keys pem
 		const keysPemCashlessClient = await generatePemKeys()
@@ -144,19 +145,23 @@ async function activateDevice(configuration) {
 		// valid form
 		document.querySelector('#form-new-hardware button').click()
 	} catch (error) {
-		log('-> ActivateDevice,', error)
+		console.log('-> ActivateDevice,', error)
 	}
 }
 
 
 // main
 function initMain(configuration) {
+  console.log('-> initMain, configuration =', configuration);
+  
 	try {
 		//configuration fichier existe
 		if (configuration !== null) {
+       console.log('- configuration différente null');
 
 			// configuration locale n'existe pas
 			if (confLocalStorage === null) {
+         console.log('- confLocalStorage = null');
 				// le périphérique n'est pas activé
 				if (activation === false) {
 					activateDevice(configuration)
@@ -188,7 +193,7 @@ function initMain(configuration) {
 			console.log('confLocalStorage =', confLocalStorage);
 
 		} else {
-			log({ msg: 'Aucune configuration' })
+			console.log('Aucune configuration')
 			showPairAgain()
 		}
 	} catch (error) {
@@ -199,7 +204,7 @@ function initMain(configuration) {
 // mobile
 if (mobile === true) {
 	document.addEventListener('deviceready', async () => {
-		log({ tag: 'INGO', msg: '-> mobile, deviceready' })
+		console.log('-> mobile, deviceready')
 		const basePath = cordova.file.dataDirectory
 		const pathToFile = basePath + cordovaFileName
 
