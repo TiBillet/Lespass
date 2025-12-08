@@ -275,6 +275,177 @@ paths:
       responses:
         '204':
           description: Deleted
+  /api/v2/sales/:
+    get:
+      operationId: listSales
+      summary: List sales lines as schema.org Products (requires start/end, TZ-aware)
+      description: |
+        FR (FALC): Liste des ventes entre deux dates. Vous DEVEZ fournir
+        deux paramètres: `start` et `end` au format ISO‑8601 avec fuseau horaire
+        (exemple: 2025-01-31T23:59:59+01:00). La réponse est une `ItemList`
+        de `Product` (schema.org), avec des propriétés additionnelles utiles
+        (`sale_line_uuid`, `quantity`, `vat`, `payment_method`, `status`).
+
+        EN: List sales in a date window. Requires `start` and `end` query
+        parameters as ISO‑8601 TZ‑aware datetimes. Returns an `ItemList` of
+        schema.org `Product` items, each representing the sold product.
+      tags: [Sale]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: start
+          required: true
+          description: |
+            FR: Début de période (ISO‑8601, avec fuseau horaire). Exemple: 2025-01-01T00:00:00+01:00
+            EN: Period start (ISO‑8601 with timezone). Example: 2025-01-01T00:00:00+01:00
+          schema:
+            type: string
+            format: date-time
+          example: "2025-01-01T00:00:00+01:00"
+        - in: query
+          name: end
+          required: true
+          description: |
+            FR: Fin de période (ISO‑8601, avec fuseau horaire). Doit être ≥ start.
+            EN: Period end (ISO‑8601 with timezone). Must be ≥ start.
+          schema:
+            type: string
+            format: date-time
+          example: "2025-01-31T23:59:59+01:00"
+        - in: query
+          name: status
+          required: false
+          description: |
+            FR: Filtre sur le statut métier de la ligne. Par défaut, seules les lignes `VALID` sont renvoyées.
+            Utilisez `ALL` pour désactiver le filtre. Valeurs possibles: `ALL`, `CANCELED (C)`, `REFUNDED (R)`,
+            `CREATED (O)`, `UNPAID (U)`, `FREERES (F)`, `PAID (P)`, `VALID (V)`, `FAILED (D)`.
+
+            EN: Filter by line business status. Default returns only `VALID` lines. Use `ALL` to disable the filter.
+            Allowed values: `ALL`, `CANCELED (C)`, `REFUNDED (R)`, `CREATED (O)`, `UNPAID (U)`, `FREERES (F)`,
+            `PAID (P)`, `VALID (V)`, `FAILED (D)`.
+          schema:
+            type: string
+            example: VALID
+      responses:
+        '200':
+          description: OK — ItemList of Products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemList'
+              examples:
+                salesList:
+                  summary: Sales list example
+                  value:
+                    "@context": "https://schema.org"
+                    "@type": "ItemList"
+                    startDate: "2025-01-01T00:00:00+01:00"
+                    endDate: "2025-01-31T23:59:59+01:00"
+                    itemListElement:
+                      - "@type": "Product"
+                        name: "Billet Concert — Plein tarif"
+                        category: "Ticket booking"
+                        image: "https://example.test/media/images/abc_med.jpg"
+                        sku: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                        identifier: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                        offers:
+                          "@type": "Offer"
+                          price: "10.00"
+                          priceCurrency: "EUR"
+                        additionalProperty:
+                          - "@type": "PropertyValue"
+                            name: "sale_line_uuid"
+                            value: "6a1f2e8c-9c3b-4f1a-8e2d-7b6a5c4d3e2f"
+                          - "@type": "PropertyValue"
+                            name: "quantity"
+                            value: "1"
+                          - "@type": "PropertyValue"
+                            name: "vat"
+                            value: "20.00"
+                salesListAll:
+                  summary: Sales list without status filter
+                  value:
+                    "@context": "https://schema.org"
+                    "@type": "ItemList"
+                    startDate: "2025-01-01T00:00:00+01:00"
+                    endDate: "2025-01-31T23:59:59+01:00"
+                    itemListElement: []
+        '400':
+          description: Bad Request — missing/invalid start/end
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                detail: "Paramètres 'start' et 'end' obligatoires (ISO 8601, avec fuseau horaire)."
+        '401':
+          description: Unauthorized — API key missing/invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden — API key lacks "sale" permission or user not tenant admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/sales/{uuid}/:
+    get:
+      operationId: retrieveSale
+      summary: Retrieve one sale line as schema.org Product by UUID
+      description: |
+        FR (FALC): Donne le détail d’une ligne de vente sous forme de `Product` (schema.org).
+        Les propriétés additionnelles incluent l’UUID de la ligne, la quantité et la TVA.
+
+        EN: Returns a single sale line as a schema.org `Product` resource.
+      tags: [Sale]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK — Product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              examples:
+                oneSale:
+                  summary: One sale line as Product
+                  value:
+                    "@context": "https://schema.org"
+                    "@type": "Product"
+                    name: "Adhésion annuelle"
+                    category: "Subscription or membership"
+                    identifier: "6a1f2e8c-9c3b-4f1a-8e2d-7b6a5c4d3e2f"
+                    offers:
+                      "@type": "Offer"
+                      price: "5.00"
+                      priceCurrency: "EUR"
+                    additionalProperty:
+                      - "@type": "PropertyValue"
+                        name: "sale_line_uuid"
+                        value: "6a1f2e8c-9c3b-4f1a-8e2d-7b6a5c4d3e2f"
+                      - "@type": "PropertyValue"
+                        name: "quantity"
+                        value: "2"
+                      - "@type": "PropertyValue"
+                        name: "vat"
+                        value: "0.00"
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -285,6 +456,12 @@ components:
       description: |
         Pass your key as `Authorization: Api-Key <key>`.
   schemas:
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: Unauthorized
     PostalAddress:
       type: object
       properties:
@@ -439,3 +616,79 @@ components:
                     items:
                       type: string
                   - type: string
+    Product:
+      type: object
+      description: schema.org/Product representation used for sales lines
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Product
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        image:
+          type: string
+          format: uri
+          nullable: true
+        category:
+          type: string
+          description: Human-readable product category
+        sku:
+          type: string
+          description: Product UUID
+        identifier:
+          type: string
+          description: Product UUID (alias)
+        offers:
+          $ref: '#/components/schemas/Offer'
+        additionalProperty:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+    Offer:
+      type: object
+      properties:
+        '@type':
+          type: string
+          example: Offer
+        price:
+          type: string
+          description: Unit price including VAT, as string
+          example: "10.00"
+        priceCurrency:
+          type: string
+          example: EUR
+    PropertyValue:
+      type: object
+      properties:
+        '@type':
+          type: string
+          example: PropertyValue
+        name:
+          type: string
+        value:
+          type: string
+    ItemList:
+      type: object
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: ItemList
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        itemListElement:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'

@@ -53,6 +53,7 @@ ipdb = "^0.13.13"
 ipython = "^8.18.0"
 django-browser-reload = "^1.12.1"
 faker = "^23.2.1"
+pytest = "8.4.2"
 
 [build-system]
 requires = ["poetry-core"]

@@ -72,7 +72,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode
+    PromotionalCode, Tva
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik
@@ -132,6 +132,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'reservation',
         'ticket',
         'wallet',
+        'sale',
     ]
 
     fields = [
@@ -141,7 +142,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         # Les boutons de permissions :
         ('event', 'product',),
         ('reservation', 'ticket'),
-        ('wallet',),
+        ('wallet', 'sale'),
         'user',
         'key',
     ]
@@ -810,7 +811,7 @@ class ProductAdminCustomForm(ModelForm):
         fields = (
             'name',
             'categorie_article',
-            # 'nominative',
+            'tva',
             'short_description',
             'long_description',
             'img',
@@ -877,6 +878,22 @@ class CheckStripeComponent(BaseComponent):
         )
         return context
 
+@admin.register(Tva, site=staff_admin_site)
+class TvaAdmin(ModelAdmin):
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return False
+
+
 
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
@@ -893,6 +910,7 @@ class ProductAdmin(ModelAdmin):
             'fields': (
                 'name',
                 'categorie_article',
+                'tva',
                 'img',
                 'poids',
                 'short_description',

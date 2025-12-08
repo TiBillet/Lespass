@@ -752,16 +752,35 @@ class Configuration(SingletonModel):
             return _("Settings for ") + self.organisation
         return _('Settings')
 
+class Tva(models.Model):
+    uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
+    tva_rate = models.DecimalField(max_digits=4, decimal_places=2, verbose_name=_("TVA rate"), unique=True)
+
+    def __str__(self):
+        return f"{self.tva_rate}%"
+
+    def ht_from_ttc(self, prix):
+        return dround(prix / (1 + (self.tva_rate / 100)))
+
+    def tva_from_ttc(self, prix):
+        return dround(prix - self.ht_from_ttc(prix))
+
+    class Meta:
+        ordering = ['tva_rate']
+        verbose_name = _("TVA rate")
+        verbose_name_plural = _("TVA rate")
 
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=500, verbose_name=_("Name"))
+    tva = models.ForeignKey(Tva, on_delete=models.PROTECT, null=True, blank=True,
+                            verbose_name=("TVA rate"), help_text=_("Leave if zero VAT"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"),
-                                         help_text=_("Affiché uniquement pour les produits adhésions / abonnements."))
+                                         help_text=_("Displayed only for membership/subscription products."))
     long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"),
-                                        help_text=_("Affiché uniquement pour les produits adhésions / abonnements."))
+                                        help_text=_("Displayed only for membership/subscription products."))
 
     publish = models.BooleanField(default=True, verbose_name=_("Publish"))
     poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Weight"),
@@ -869,11 +888,6 @@ class Product(models.Model):
                                             help_text=_(
                                                 "'Subscribe' If empty. Only useful for membership or subscription products."))
 
-    # TODO: A retirer, plus utilisé ?
-    # send_to_cashless = models.BooleanField(default=False,
-    #                                        verbose_name="Envoyer au cashless",
-    #                                        help_text="Produit checké par le serveur cashless.",
-    #                                        )
 
     def fedow_category(self):
         self_category_map = {
@@ -2457,6 +2471,40 @@ class LigneArticle(models.Model):
     def __str__(self):
         return self.uuid_8()
 
+    # -- TVA auto-fill on creation only --
+    def _compute_default_vat(self) -> Decimal:
+        """
+        Determine default VAT for this line from related Product TVA if available,
+        otherwise fallback to global configuration, else 0.00.
+        """
+        # 1) Product TVA via PriceSold -> ProductSold -> Product
+        try:
+            if self.pricesold and self.pricesold.productsold and self.pricesold.productsold.product:
+                product = self.pricesold.productsold.product
+                if getattr(product, 'tva', None):
+                    return Decimal(product.tva.tva_rate)
+        except Exception:
+            pass
+
+        # 2) Fallback to Configuration default VAT
+        try:
+            return Decimal(Configuration.get_solo().vat_taxe)
+        except Exception:
+            return Decimal('0.00')
+
+    def save(self, *args, **kwargs):
+        # Run only on creation; do not impact updates
+        if getattr(self._state, 'adding', False):
+            try:
+                current_vat = Decimal(self.vat) if self.vat is not None else None
+            except Exception:
+                current_vat = None
+
+            if current_vat is None or current_vat == Decimal('0.00'):
+                self.vat = self._compute_default_vat()
+
+        super().save(*args, **kwargs)
+
     def total(self) -> int:
         # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
         if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price:
@@ -2813,6 +2861,8 @@ class ExternalApiKey(models.Model):
     ticket = models.BooleanField(default=False, verbose_name=_("Tickets"))
 
     wallet = models.BooleanField(default=False, verbose_name=_("Wallets"))
+    # Nouvelle route API pour les ventes (LigneArticle)
+    sale = models.BooleanField(default=False, verbose_name=_("Sales"))
 
     def api_permissions(self):
         return {
@@ -2825,6 +2875,8 @@ class ExternalApiKey(models.Model):
             "reservation": self.reservation,
             "ticket": self.ticket,
             "wallet": self.wallet,
+            # Basename de la route des ventes
+            "sale": self.sale,
         }
 
     class Meta:

@@ -1,11 +1,13 @@
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 import random
 import string
 
 from rest_framework import serializers
 from django.utils.text import slugify
+from django.utils.translation import gettext_lazy as _
 
-from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale
+from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, PriceSold, Product
 
 # Image validation utilities
 from PIL import Image, UnidentifiedImageError
@@ -536,3 +538,146 @@ class PostalAddressCreateSerializer(serializers.Serializer):
             latitude=lat,
             longitude=lon,
         )
+
+
+
+
+class SemanticProductFromSaleLineSerializer(serializers.Serializer):
+    """
+    Sérializer sémantique (schema.org) pour une ligne de vente.
+
+    Objectif:
+    - Prendre les mêmes données métier qu'un `LigneArticleSerializer` (même instance source),
+      mais produire une représentation sémantique lisible par humains et machines.
+    - Sortie au format schema.org avec `@type: Product`.
+
+    Remarques FALC (Facile À Lire et à Comprendre):
+    - On décrit le produit de la ligne (Product) avec ses infos principales.
+    - On ajoute une offre (Offer) avec le prix unitaire et la devise.
+    - On inclut des infos utiles en plus (TVA, quantité, UUID de la ligne) dans `additionalProperty`.
+    - Cette classe n'altère pas la donnée en base; elle ne fait que formater la réponse.
+    """
+
+    # Ce Serializer est « read-only » et reconstruit un dict sémantique depuis l'instance
+
+    def _absolute_url(self, relative_url: str) -> str:
+        request = self.context.get('request')
+        if request and relative_url:
+            try:
+                return request.build_absolute_uri(relative_url)
+            except Exception:
+                return relative_url
+        return relative_url
+
+    def to_representation(self, instance: LigneArticle) -> Dict[str, Any]:
+        # Sécurise les accès aux relations
+        productsold: PriceSold | None = getattr(instance, 'pricesold', None)
+        product: Product | None = None
+        if productsold and getattr(productsold, 'productsold', None):
+            product = productsold.productsold.product
+
+        # Nom et descriptions
+        name = product.name if (product and product.name) else _('Product')
+        short_desc = getattr(product, 'short_description', None) if product else None
+        long_desc = getattr(product, 'long_description', None) if product else None
+        description = long_desc or short_desc
+
+        # Image (si présente)
+        image_url = None
+        if product and getattr(product, 'img', None):
+            try:
+                # Tente d'utiliser une variante raisonnable si dispo
+                if hasattr(product.img, 'med') and hasattr(product.img.med, 'url'):
+                    image_url = self._absolute_url(product.img.med.url)
+                elif hasattr(product.img, 'url'):
+                    image_url = self._absolute_url(product.img.url)
+            except Exception:
+                image_url = None
+
+        # Prix unitaire TTC (à partir de LigneArticle.amount en centimes)
+        price_unit_eur = None
+        if instance.amount is not None:
+            try:
+                price_unit_eur = str(Decimal(instance.amount) / Decimal('100'))
+            except Exception:
+                price_unit_eur = None
+
+        # Catégorie (affichage lisible si disponible)
+        category = None
+        if product and hasattr(product, 'get_categorie_article_display'):
+            try:
+                category = product.get_categorie_article_display()
+            except Exception:
+                category = None
+
+        # Identifiants
+        sku = str(product.uuid) if product else None
+        product_id = str(product.uuid) if product else None
+
+        # Offre schema.org (simplifiée)
+        offers = None
+        if price_unit_eur is not None:
+            offers = {
+                "@type": "Offer",
+                # Prix TTC unitaire au moment de la vente
+                "price": price_unit_eur,
+                "priceCurrency": "EUR",
+            }
+
+        # Propriétés additionnelles utiles (claires et FALC)
+        additional_property = [
+            {
+                "@type": "PropertyValue",
+                "name": "sale_line_uuid",
+                "value": str(instance.uuid),
+                "description": "Identifiant unique de la ligne de vente",
+            },
+            {
+                "@type": "PropertyValue",
+                "name": "quantity",
+                "value": str(instance.qty),
+                "description": "Quantité vendue",
+            },
+            {
+                "@type": "PropertyValue",
+                "name": "vat",
+                "value": str(instance.vat),
+                "description": "TVA appliquée en pourcentage",
+            },
+        ]
+
+        if getattr(instance, 'payment_method', None):
+            additional_property.append({
+                "@type": "PropertyValue",
+                "name": "payment_method",
+                "value": instance.payment_method,
+                "description": "Méthode de paiement",
+            })
+
+        if getattr(instance, 'status', None):
+            additional_property.append({
+                "@type": "PropertyValue",
+                "name": "status",
+                "value": instance.status,
+                "description": "Statut de la ligne",
+            })
+
+        # Construction finale schema.org/Product
+        data: Dict[str, Any] = {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": name,
+            "sku": sku,
+            "category": category,
+            "description": description,
+            "productID": product_id,
+            "datePublished": instance.datetime.isoformat() if instance.datetime else None,
+            "offers": offers,
+            # Informations complémentaires simples et utiles
+            "additionalProperty": additional_property,
+        }
+
+        if image_url:
+            data["image"] = image_url
+
+        return data

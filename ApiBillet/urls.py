@@ -17,6 +17,7 @@ router.register(r'optionticket', api_view.OptionTicket, basename='optionticket')
 # router.register(r'chargecashless', api_view.ChargeCashless, basename='chargecashless')
 router.register(r'ticket', api_view.TicketViewset, basename='ticket')
 router.register(r'wallet', api_view.Wallet, basename='wallet')
+
 # router.register(r'detailCashlessCard', api_view.DetailCashlessCards, basename='detailCashlessCard')
 # router.register(r'loadCardsFromDict', api_view.Loadcardsfromdict, basename='loadCardsFromDict')
 
