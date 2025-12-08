@@ -2555,9 +2555,11 @@ class LigneArticle(models.Model):
 
     def user_email(self):
         if self.membership:
-            return self.membership.user.email
+            if self.membership.user:
+                return self.membership.user.email
         elif self.paiement_stripe:
-            return self.paiement_stripe.user.email
+            if self.paiement_stripe.user:
+                return self.paiement_stripe.user.email
         return None
 
 class Membership(models.Model):
