@@ -486,7 +486,6 @@
                             <label for="contrib-amt" class="form-label">{% blocktrans with cur=initiative.currency %}
                         Montant (en {{ cur }}){% endblocktrans %}</label>
                             <input id="contrib-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
-                            <div class="form-text">{% translate "Le montant sera converti en centimes." %}</div>
                         </div>
                     `,
                     focusConfirm: false,
