@@ -2367,8 +2367,6 @@ class Paiement_stripe(models.Model):
             if datetime.now().timestamp() > checkout_session.expires_at:
                 self.status = Paiement_stripe.EXPIRE
 
-
-
         elif checkout_session.payment_status == "paid":
             self.status = Paiement_stripe.PAID
             self.last_action = timezone.now()
@@ -2555,6 +2553,12 @@ class LigneArticle(models.Model):
             return f"{self.paiement_stripe.uuid}"
         return f"{self.uuid}"
 
+    def user_email(self):
+        if self.membership:
+            return self.membership.user.email
+        elif self.paiement_stripe:
+            return self.paiement_stripe.user.email
+        return None
 
 class Membership(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, editable=False)

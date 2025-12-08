@@ -1963,10 +1963,14 @@ class LigneArticleAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    list_filter = ('status', 'pricesold__productsold')
+    list_filter = ('status',
+                   'pricesold__productsold',
+                   ('datetime', RangeDateTimeFilter),
+                   )
 
     list_display = [
         'productsold',
+        'user_email',
         'datetime',
         'amount_decimal',
         '_qty',
@@ -1974,17 +1978,23 @@ class LigneArticleAdmin(ModelAdmin):
         'total_decimal',
         'display_status',
         'payment_method',
-        'sended_to_laboutik',
+        # 'sended_to_laboutik',
     ]
     # fields = "__all__"
     # readonly_fields = fields
-
+    search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name', 'paiement_stripe__user__email', 'membership__user__email')
     ordering = ('-datetime',)
 
     def get_queryset(self, request):
         # Utiliser select_related pour précharger pricesold et productsold
         queryset = super().get_queryset(request)
-        return queryset.select_related('pricesold__productsold')
+        return queryset.select_related('pricesold__productsold',
+                                       'pricesold__price',
+                                       'paiement_stripe',
+                                       'paiement_stripe__user',
+                                       'membership',
+                                       'membership__user',
+                                       )
 
     @display(description=_("Value"))
     def amount_decimal(self, obj):
