@@ -137,16 +137,7 @@ class CeleryMailerClass():
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
-def report_to_pdf(report):
-    template_name = 'report/ticketz.html'
-    font_config = FontConfiguration()
-    template = get_template(template_name)
-    html = template.render(report)
-    pdf_binary = HTML(string=html).write_pdf(
-        font_config=font_config,
-    )
-    logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
-    return pdf_binary
+
 
 
 def create_membership_invoice_pdf(membership: Membership):
@@ -1279,7 +1270,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
 
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour new_tenant_mailer : {e}")
         raise e
 
 
@@ -1304,9 +1295,22 @@ def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
 
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour new_tenant_after_stripe_mailer : {e}")
         raise e
 
+
+"""
+#TODO : A degager, pas utilisé ?
+def report_to_pdf(report):
+    template_name = 'report/ticketz.html'
+    font_config = FontConfiguration()
+    template = get_template(template_name)
+    html = template.render(report)
+    pdf_binary = HTML(string=html).write_pdf(
+        font_config=font_config,
+    )
+    logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
+    return pdf_binary
 
 @app.task
 def report_celery_mailer(data_report_list: list):
@@ -1337,6 +1341,7 @@ def report_celery_mailer(data_report_list: list):
         except smtplib.SMTPRecipientsRefused as e:
             logger.error(
                 f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+"""
 
 
 @app.task
@@ -1355,7 +1360,7 @@ def send_email_generique(context: dict = None, email: str = None, attached_files
 
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour send_email_generique : {e}")
 
 
 @app.task
