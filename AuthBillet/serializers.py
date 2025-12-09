@@ -86,8 +86,7 @@ class MeSerializer(serializers.ModelSerializer):
     reservations = serializers.SerializerMethodField()
     membership = serializers.SerializerMethodField()
     admin_this_tenant = serializers.SerializerMethodField()
-
-    # membership = MembershipSerializer(many=True )
+    can_initiate_payment = serializers.SerializerMethodField()
 
     # On filtre les reservation : pas plus vieille qu'une semaine.
     def get_reservations(self, user):
@@ -108,9 +107,12 @@ class MeSerializer(serializers.ModelSerializer):
         return serializer.data
 
     def get_admin_this_tenant(self, user: TibilletUser):
-        this_tenant: Client = connection.tenant
-        if user.is_tenant_admin(this_tenant):
+        self.this_tenant: Client = connection.tenant
+        if user.is_tenant_admin(self.this_tenant):
             return True
+
+    def get_can_initiate_payment(self, user: TibilletUser):
+        return user.can_initiate_payment(self.this_tenant)
 
     class Meta:
         model = TibilletUser
@@ -129,6 +131,7 @@ class MeSerializer(serializers.ModelSerializer):
             'reservations',
             'membership',
             'admin_this_tenant',
+            'can_initiate_payment',
         ]
         read_only_fields = fields
         # depth = 1

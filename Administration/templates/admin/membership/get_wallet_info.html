@@ -1,9 +1,0 @@
-{% load i18n %}
-
-<div class="border border-base-300 border-dashed mb-4 p-3 rounded dark:border-base-700">
-    <button class="border font-medium px-3 py-2 rounded-md text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
-            hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML">
-        {% translate "Get cards and wallet information" %}
-    </button>
-</div>
-

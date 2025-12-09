@@ -36,6 +36,7 @@ from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
     GhostConfig, BrevoConfig, Product, Price, Paiement_stripe
+from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
 from fedow_connect.fedow_api import FedowAPI
@@ -1896,10 +1897,18 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
     """
     config = Configuration.get_solo()
     activate(config.language)
-    admin_email = config.email
+    tenant : Client = connection.tenant
+
+    emails = sorted({
+        e.strip().lower()
+        for e in (
+                [u.email for u in tenant.user_admin.all()] +
+                [u.email for u in tenant.initiate_payment.all()]
+        )
+        if e and e.strip()
+    })
 
     title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Payment received.")
-
     # Variables sémantiques pour le template
     try:
         dt = datetime.datetime.strptime(payment_time_str, '%d/%m/%Y %H:%M')
@@ -1907,6 +1916,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
         payment_time_iso = aware_dt.isoformat()
     except Exception:
         payment_time_iso = timezone.now().isoformat()
+
     currency_symbol = "€"
     context = {
         'title': title,
@@ -1921,7 +1931,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
         'currency_symbol': currency_symbol,
     }
     mail = CeleryMailerClass(
-        admin_email,
+        emails,
         title,
         template="reunion/views/qrcode_scan_pay/email/payment_success_admin.html",
         context=context,

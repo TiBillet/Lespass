@@ -164,9 +164,14 @@ class TibilletUser(AbstractUser):
                                       related_name="user_principal",
                                       )
 
+    last_know_ip = models.GenericIPAddressField(blank=True, null=True)
+    last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)
+
     # ou as t il acheté ?
     client_achat = models.ManyToManyField(Client,
                                           related_name="user_achats", blank=True)
+
+    ### GRANULARITE ###
 
     # sur quelle interface d'admin peut-il aller ?
     client_admin = models.ManyToManyField(Client,
@@ -176,8 +181,24 @@ class TibilletUser(AbstractUser):
         """Vérifie si le tenant est dans le client_admin de l'utilisateur."""
         return self.client_admin.filter(pk=tenant.pk).exists()
 
-    last_know_ip = models.GenericIPAddressField(blank=True, null=True)
-    last_know_user_agent = models.CharField(max_length=500, blank=True, null=True)
+    initiate_payment = models.ManyToManyField(Client, verbose_name=_("Can initiate payments"), related_name="initiate_payment",
+                                           help_text=_("Can initiate payments on behalf of the location from My Account area"))
+
+    def can_initiate_payment(self, tenant):
+        return self.initiate_payment.filter(pk=tenant.pk).exists()
+
+    create_event = models.ManyToManyField(Client, verbose_name=_("Can create event"), related_name="create_event",
+                                           help_text=_("Can create event on agenda page"))
+
+    def can_create_event(self, tenant):
+        return self.create_event.filter(pk=tenant.pk).exists()
+
+
+    manage_crowd = models.ManyToManyField(Client, verbose_name=_("Can manage crodws"), related_name="manage_crowd",
+                                           help_text=_("Can manage crowds initiative"))
+
+    def can_manage_crowd(self, tenant):
+        return self.manage_crowd.filter(pk=tenant.pk).exists()
 
     ### ADHESIONS ###
 
@@ -224,21 +245,19 @@ class TibilletUser(AbstractUser):
             return self.first_name
         return self.email
 
-
-
-    def achat(self):
-        # Check if client_achat is already prefetched to avoid N+1 query
-        if hasattr(self, '_prefetched_objects_cache') and 'client_achat' in self._prefetched_objects_cache:
-            return " - ".join([achat.name for achat in self.client_achat.all()])
-        else:
-            return " - ".join([achat["name"] for achat in self.client_achat.values("name")])
+    # def achat(self):
+    #     # Check if client_achat is already prefetched to avoid N+1 query
+    #     if hasattr(self, '_prefetched_objects_cache') and 'client_achat' in self._prefetched_objects_cache:
+    #         return " - ".join([tenant.name for tenant in self.client_achat.all()])
+    #     else:
+    #         return " - ".join([tenant["name"] for tenant in self.client_achat.values("name")])
 
     def administre(self):
         # Check if client_admin is already prefetched to avoid N+1 query
         if hasattr(self, '_prefetched_objects_cache') and 'client_admin' in self._prefetched_objects_cache:
-            return " - ".join([admin.name for admin in self.client_admin.all()])
+            return " - ".join([tenant.name for tenant in self.client_admin.all()])
         else:
-            return " - ".join([admin["name"] for admin in self.client_admin.values("name")])
+            return " - ".join([tenant["name"] for tenant in self.client_admin.values("name")])
 
     def as_password(self):
         return bool(self.password)

@@ -480,39 +480,6 @@ UNFOLD = {
     "TABS": [
         {
             # Déclare dans quel affichage les tabs s'activent
-            "models": ["AuthBillet.humanuser", "BaseBillet.membership"],
-            "items": [
-                {
-                    "title": _("All"),
-                    # "icon": "sports_motorsports",
-                    "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
-                },
-                {
-                    "title": _("Active subscriptions"),
-                    # "icon": "sports_motorsports",
-                    "link": lambda
-                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
-                },
-                {
-                    "title": _("Non-suscribed members"),
-                    # "icon": "sports_motorsports",
-                    "link": lambda
-                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=N',
-                },
-                {
-                    "title": _("Subscriptions"),
-                    # "icon": "precision_manufacturing",
-                    "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
-                },
-                # {
-                #     "title": _("Custom page"),
-                #     "icon": "grade",
-                #     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
-                # },
-            ],
-        },
-        {
-            # Déclare dans quel affichage les tabs s'activent
             "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
             "items": [
                 {

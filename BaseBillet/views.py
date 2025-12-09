@@ -38,7 +38,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ApiBillet.permissions import TenantAdminPermission
+from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
@@ -485,6 +485,57 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+
+class SpecialAdminAction(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+    permission_classes = [TenantAdminPermission, ]
+
+    @action(detail=True, methods=['POST'])
+    def toggle_user_right(self, request, pk):
+        user = get_object_or_404(HumanUser, pk=pk)
+        tenant = connection.tenant
+        referer = request.headers.get('Referer') or f"/admin/AuthBillet/humanuser/{pk}/change/"
+        logger.info(f"toggle_user_right : {request.data}")
+
+        if request.GET.get('action') == 'client_admin' :
+            if user.client_admin.filter(pk=tenant.pk).exists():
+                user.client_admin.remove(tenant)
+                messages.info(request, _("Admin right removed"))
+            else:
+                user.client_admin.add(tenant)
+                messages.success(request, _("Admin right granted: with great power comes great responsibility."))
+
+        elif request.GET.get('action') == 'initiate_payment' :
+            if user.initiate_payment.filter(pk=tenant.pk).exists():
+                user.initiate_payment.remove(tenant)
+                messages.info(request, _("Right removed: initiate payment"))
+            else:
+                user.initiate_payment.add(tenant)
+                messages.success(request, _("Right granted: initiate payment"))
+
+        elif request.GET.get('action') == 'create_event' :
+            if user.create_event.filter(pk=tenant.pk).exists():
+                user.create_event.remove(tenant)
+                messages.info(request, _("Right removed: Event create"))
+            else:
+                user.create_event.add(tenant)
+                messages.success(request, _("Right granted: Event create"))
+
+        elif request.GET.get('action') == 'manage_crowd' :
+            if user.manage_crowd.filter(pk=tenant.pk).exists():
+                user.manage_crowd.remove(tenant)
+                messages.info(request, _("Right removed: Manage crowds"))
+            else:
+                user.manage_crowd.add(tenant)
+                messages.success(request, _("Right granted: Manage crowds"))
+
+        else:
+            messages.error(request, _("No right selected"))
+
+        return HttpResponseClientRedirect(referer)
+
+
 
 
 class TiBilletLogin(viewsets.ViewSet):
@@ -981,12 +1032,9 @@ class MyAccount(viewsets.ViewSet):
 class QrCodeScanPay(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission, ])
+    @action(detail=True, methods=['GET'], permission_classes=[CanInitiatePaymentPermission, ])
     def check_payment(self, request: HttpRequest, pk=None):
         user = request.user
-        this_tenant: Client = connection.tenant
-        if not user.is_tenant_admin(this_tenant):
-            return HttpResponse(status=403)
 
         la_uuid = uuid.UUID(pk)
         is_valid = False
@@ -1001,30 +1049,21 @@ class QrCodeScanPay(viewsets.ViewSet):
         }
         return render(request, "reunion/views/qrcode_scan_pay/fragments/check_payment.html", context=context)
 
-    @action(detail=False, methods=['GET'], permission_classes=[TenantAdminPermission, ])
+    @action(detail=False, methods=['GET'], permission_classes=[CanInitiatePaymentPermission, ])
     def get_generator(self, request: HttpRequest):
 
         user = request.user
-        this_tenant: Client = connection.tenant
-        if not user.is_tenant_admin(this_tenant):
-            messages.add_message(request, messages.ERROR, _("You are not authorized to access this page."))
-            return redirect('/')
         # GET de la route /qrcodegenerator
         # On livre le template qui permet de générer un qrcode
         template_context = get_context(request)
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
-    @action(detail=False, methods=['POST'], permission_classes=[TenantAdminPermission, ])
+    @action(detail=False, methods=['POST'], permission_classes=[CanInitiatePaymentPermission, ])
     def generate_qrcode(self, request: HttpRequest):
         # POST de la route /qrcodegenerator qui génère le qrcode
         data = request.POST
         logger.info(f"QRCODEGENERATOR POST : {data}")
         user = request.user
-
-        this_tenant: Client = connection.tenant
-        if not user.is_tenant_admin(this_tenant):
-            messages.add_message(request, messages.ERROR, _("You are not authorized to access this page."))
-            return redirect('/')
 
         # Get the form data
         amount = int(dround(Decimal(data.get('amount'))) * 100)
@@ -1083,7 +1122,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         # if request.method == 'POST' : # C'est le résultat du scanner
         #     import ipdb; ipdb.set_trace()
 
-    @action(methods=['POST'], detail=False, permission_classes=[TenantAdminPermission, ])
+    @action(methods=['POST'], detail=False, permission_classes=[CanInitiatePaymentPermission, ])
     def process_with_nfc(self, request):
         nfc_validator = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
         if not nfc_validator.is_valid():

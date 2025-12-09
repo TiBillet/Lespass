@@ -61,6 +61,7 @@ from unfold.widgets import (
     UnfoldAdminColorInputWidget,
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
+    UnfoldBooleanSwitchWidget,
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
@@ -1312,68 +1313,14 @@ USER
 """
 
 
-class MembershipInline(TabularInline):
-    model = Membership
-    # form = MembershipInlineForm
-    extra = 0
-    # show_change_link = True
-    can_delete = False
-    tab = True
 
-    fields = (
-        'first_name',
-        'last_name',
-        'last_contribution',
-        'price',
-        'contribution_value',
-        'deadline',
-        'is_valid',
-    )
-    readonly_fields = fields
-
-    def get_queryset(self, request):
-        # On ne rend pas visible les adhésion qui n'ont pas eu de last_contribution
-        return super().get_queryset(request).exclude(last_contribution=None)
-
-    def has_change_permission(self, request, obj=None):
-        return False  # On interdit la modification
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return False  # Autoriser l'ajout
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    # def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
-    #     if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
-    #         # Appliquez un filtre sur les objets accessibles via la ForeignKey
-    #         kwargs["queryset"] = Price.objects.filter(product__categorie_article=Product.ADHESION,
-    #                                                   publish=True)  # Exemple de filtre
-    #     return super().formfield_for_foreignkey(db_field, request, **kwargs)
-    #
-    # # pour retirer les petits boutons add/edit a coté de la foreign key
-    # def get_formset(self, request, obj=None, **kwargs):
-    #     formset = super().get_formset(request, obj, **kwargs)
-    #     price = formset.form.base_fields['price']
-    #
-    #     price.widget.can_add_related = False
-    #     price.widget.can_delete_related = False
-    #     price.widget.can_change_related = False
-    #     price.widget.can_view_related = False
-    #
-    #     return formset
-
-
-class is_tenant_admin(admin.SimpleListFilter):
+class is_tenant_admin_filter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
     title = _("Administrator")
 
     # Parameter for the filter that will be used in the URL query.
-    parameter_name = "is_admin"
+    parameter_name = "client_admin"
 
     def lookups(self, request, model_admin):
         return [("Y", _("Yes")), ("N", _("No"))]
@@ -1382,13 +1329,33 @@ class is_tenant_admin(admin.SimpleListFilter):
         if self.value() == "Y":
             return queryset.filter(
                 client_admin__in=[connection.tenant],
-                is_staff=True,
-                is_active=True,
                 espece=TibilletUser.TYPE_HUM
             ).distinct()
         if self.value() == "N":
             return queryset.exclude(
                 client_admin__in=[connection.tenant],
+            ).distinct()
+
+class can_init_paiement_filter(admin.SimpleListFilter):
+    # Human-readable title which will be displayed in the
+    # right admin sidebar just above the filter options.
+    title = _("Can initiate payments")
+
+    # Parameter for the filter that will be used in the URL query.
+    parameter_name = "initiate_payment"
+
+    def lookups(self, request, model_admin):
+        return [("Y", _("Yes")), ("N", _("No"))]
+
+    def queryset(self, request, queryset):
+        if self.value() == "Y":
+            return queryset.filter(
+                initiate_payment__in=[connection.tenant],
+                espece=TibilletUser.TYPE_HUM
+            ).distinct()
+        if self.value() == "N":
+            return queryset.exclude(
+                initiate_payment__in=[connection.tenant],
             ).distinct()
 
 
@@ -1437,35 +1404,32 @@ class UserWithMembershipValid(admin.SimpleListFilter):
             ).distinct()
 
 
+
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
 class HumanUserAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-    inlines = [MembershipInline, ]
+    warn_unsaved_form = False  # Default: False
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.prefetch_related('memberships', 'client_admin', 'client_achat')
+        return queryset.prefetch_related('memberships', 'client_admin')
 
-    """
-    On affiche en haut du changelist un bouton pour pouvoir changer sa carte 
-    Change form view sert à donner le pk de l'user pour le bouton htmx
-    """
-    change_form_after_template = "admin/membership/get_wallet_info.html"
+    change_form_after_template = "admin/human_user/right_and_wallet_info.html"
 
+    # changeform_view sert à donner le pk de l'user pour le bouton htmx
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None) -> Any:
         extra_context = extra_context or {}
         extra_context['object_id'] = object_id
         return super().changeform_view(request, object_id, form_url, extra_context)
 
+
     list_display = [
         'email',
         'first_name',
         'last_name',
         'display_memberships_valid',
-        'is_active',
     ]
 
     search_fields = [
@@ -1474,69 +1438,67 @@ class HumanUserAdmin(ModelAdmin):
         'last_name',
     ]
 
-    fieldsets = [
+    fieldsets = (
         ('Général', {
-            'fields': [
+            'fields': (
                 'email',
                 ('first_name', 'last_name'),
-                "is_active",
-                ("email_valid", "email_error"),
-                "administre",
-            ],
+                "email_valid",
+            )
         }),
+    )
+
+    readonly_fields = [
+        "email",
+        "email_valid",
+        "administre",
     ]
-    readonly_fields = ["email", "email_valid", "email_error", "administre", "achat", "client_source"]
 
     list_filter = [
         "is_active",
-        "email_error",
         UserWithMembershipValid,
-        "is_staff",
+        is_tenant_admin_filter,
+        can_init_paiement_filter,
         "email_valid",
-        "email_error",
-        # "is_hidden",
-        # ("salary", RangeNumericFilter),
-        # ("status", ChoicesDropdownFilter),
-        # ("created_at", RangeDateTimeFilter),
     ]
 
-    # Pour les bouton en haut de la vue change
-    # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["set_admin", "remove_admin"]
 
-    @action(
-        description=_("Give admin rights"),
-        url_path="set_admin",
-        permissions=["custom_actions_detail"],
-    )
-    def set_admin(self, request, object_id):
-        user = HumanUser.objects.get(pk=object_id)
-        if all([user.email_valid, user.is_active]) and not user.email_error:
-            user.set_staff(connection.tenant)
-            messages.success(request,
-                             _(f"With great power comes great responsibilities. {user.email} has been promoted to admin."))
-        else:
-            messages.error(request, _(f"Does not fulfill condition: {user.email} needs to confirm their email."))
+    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
+                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
+        extra_context = extra_context or {}
+        extra_context['object_id'] = object_id
+        # Provide initial states for rights toggles
+        if object_id:
+            try:
+                user = TibilletUser.objects.get(pk=object_id)
+                tenant = connection.tenant
+                # Admin (client_admin) initial state
+                extra_context['is_client_admin'] = user.client_admin.filter(pk=tenant.pk).exists()
+                extra_context['can_initiate_payment'] = user.initiate_payment.filter(pk=tenant.pk).exists()
+                extra_context['can_create_event'] = user.create_event.filter(pk=tenant.pk).exists()
+                extra_context['can_manage_crowd'] = user.manage_crowd.filter(pk=tenant.pk).exists()
+            except HumanUser.DoesNotExist:
+                extra_context['is_client_admin'] = False
+                extra_context['can_initiate_payment'] = False
+                extra_context['can_create_event'] = False
+                extra_context['can_manage_crowd'] = False
+            except ValidationError as e:
+                # c'est une requete post pour les actions
+                pass
+            except Exception as e:
+                raise e
 
-        return redirect(request.META["HTTP_REFERER"])
-
-    @action(
-        description=_("Strip admin rights"),
-        url_path="remove_admin",
-        permissions=["custom_actions_detail"],
-    )
-    def remove_admin(self, request, object_id):
-        user = HumanUser.objects.get(pk=object_id)
-        user.client_admin.remove(connection.tenant)
-        messages.success(request, _(f"{user.email} has been demoted."))
-        return redirect(request.META["HTTP_REFERER"])
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     # noinspection PyTypeChecker
     @display(description=_("Subscriptions"), label={None: "danger", True: "success"})
     def display_memberships_valid(self, instance: HumanUser):
         count = instance.memberships_valid()
         if count > 0:
-            return True, _(f"Valid: {count}")
+            # Lien cliquable vers la liste des adhésions filtrée par l'email
+            url = "/admin/BaseBillet/membership/"
+            query = urlencode({"q": instance.email})
+            return True, format_html('<a href="{}?{}">{}</a>', url, query, _(f"Valid: {count}"))
         return None, _("None")
 
     def has_view_permission(self, request, obj=None):
@@ -1552,7 +1514,9 @@ class HumanUserAdmin(ModelAdmin):
         return False  # Autoriser l'ajout
 
     def has_custom_actions_detail_permission(self, request, object_id):
-        return TenantAdminPermissionWithRequest(request)
+        perm = TenantAdminPermissionWithRequest(request)
+        logger.info(request.user, perm)
+        return perm
 
 
 ### ADHESION
@@ -1564,8 +1528,6 @@ from Administration.importers.membership_importers import (
 
 
 # from Administration.importers.event_importers import PostalAddressForeignKeyWidget
-
-
 class MembershipAddForm(ModelForm):
     '''
     Formulaire d'ajout d'adhésion sur l'interface d'administration.
@@ -1712,7 +1674,6 @@ class MembershipChangeForm(ModelForm):
             'option_generale',
             'deadline',
             'commentaire',
-            'custom_form',
         )
 
 # Le petit badge route a droite du titre "adhésion"
@@ -1755,6 +1716,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     list_sections = [MembershipCustomFormSection]
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+    # Ajoute un bloc personnalisé après le formulaire dans la vue change
+    change_form_after_template = "admin/membership/custom_form.html"
 
     resource_classes = [MembershipExportResource, MembershipImportResource]
     export_form_class = ExportForm
@@ -1844,15 +1807,17 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None):
         extra_context = extra_context or {}
-        show_validation_buttons = False
+        extra_context["show_validation_buttons"] = False
+
         if object_id:
             try:
                 membership = Membership.objects.get(pk=object_id)
+                extra_context['membership'] = membership
                 if membership.status == Membership.ADMIN_WAITING:
-                    show_validation_buttons = True
+                    extra_context["show_validation_buttons"] = True
             except Membership.DoesNotExist:
-                show_validation_buttons = False
-        extra_context["show_validation_buttons"] = show_validation_buttons
+                extra_context["show_validation_buttons"] = False
+
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     @action(
@@ -2262,12 +2227,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'private',
             ),
         }),
-        # ("Carrousel d'image", {
-        #     'fields': (
-        #         'carrousel',
-        #     ),
-        #     "classes": ["tab"],
-        # }),
     )
 
     list_display = [
