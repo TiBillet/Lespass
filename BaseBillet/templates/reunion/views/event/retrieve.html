@@ -107,7 +107,7 @@
         <!-- tags -->
         <p>
             {% for tag  in event.tag.all %}
-                <span class="badge text-bg-info p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
+                <span style="{{ tag.style_attr }}" class="badge p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
             {% endfor %}
         </p>
 
