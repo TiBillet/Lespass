@@ -25,9 +25,11 @@
                         {% endif %}
                         <div class="card-body">
                             <h3 class="card-title">{{ place.organisation }}</h3>
-                            <p class="card-text">
-                                {{ place.short_description }}
-                            </p>
+                            {% if place.short_description %}
+                                <p class="card-text">
+                                    {{ place.short_description }}
+                                </p>
+                            {% endif %}
                         </div>
                         <div class="card-footer p-0">
                             {% if place.assets %}
