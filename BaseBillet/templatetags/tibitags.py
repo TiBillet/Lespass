@@ -1,7 +1,7 @@
 from datetime import datetime
-from itertools import product
 from random import randint
 
+import requests
 from django import template
 from django.db import connection
 from django.utils import timezone
@@ -11,6 +11,20 @@ from Administration.management.commands.demo_data import logger
 from fedow_connect.utils import dround as utils_dround
 
 register = template.Library()
+
+@register.filter
+def strip_trailing_slash(value):
+    """Supprime les / à la fin de la chaîne"""
+    if isinstance(value, str):
+        return value.rstrip('/')
+    return value
+
+@register.filter
+def strip_leading_slash(value):
+    """Supprime les / au début de la chaîne"""
+    if isinstance(value, str):
+        return value.lstrip('/')
+    return value
 
 @register.filter
 def modulo(num, val):
@@ -33,16 +47,28 @@ def range_by(events: list, val: int):
 
 
 @register.filter
-def in_list(value, list):
-    value = str(value)
-    retour = value in list.split(',')
-    return retour
+def price_out_of_stock(value, event):
+    price = value
+    return price.out_of_stock(event=event)
+
+
 
 @register.filter
-def not_in_list(value, list):
-    value = str(value)
-    retour = value not in list.split(',')
-    return retour
+def in_list(value:str, liste:list):
+    logger.info(f"in_list {value} in {liste}")
+    return value in liste
+
+# @register.filter
+# def in_list(value, liste):
+#     value = str(value)
+#     retour = value in liste.split(',')
+#     return retour
+#
+# @register.filter
+# def not_in_list(value, liste):
+#     value = str(value)
+#     retour = value not in liste.split(',')
+#     return retour
 
 
 @register.filter
@@ -54,7 +80,9 @@ def is_membership(user, membership_product) -> bool:
 
 @register.filter
 def can_admin(user):
-    if user.is_superuser:
+    if user.is_anonymous:
+        return False
+    elif user.is_superuser:
         return True
 
     admin_this = False
@@ -75,11 +103,19 @@ def dround(value):
 def from_iso_to_date(value):
     return datetime.fromisoformat(value)
 
+def get30randimg():
+    list30 = []
+    for i in range(30):
+        rq = requests.get(f'https://picsum.photos/{randint(1680,1920)}/{randint(1050,1200)}', timeout=1)
+        list30.append(rq.url)
+    return list30
+
 @register.filter
 def randImg(value):
-    if not value :
-        return f"/static/images/404-{randint(1,12)}.jpg"
+    if not value:
+        return f"/static/images/404-{randint(1, 20)}.jpg"
     return value
+
 
 @register.filter
 def randCardImg(value):
@@ -98,6 +134,15 @@ def dict_key(d, k):
         return d[k]
     except KeyError:
         return ""
+
+@register.filter
+def safe_join(value, sep=", "):
+    """Join a list safely, otherwise return the value unchanged."""
+    if type(value)==list:
+        return sep.join(map(str, value))
+    elif type(value)==bool:
+        return _("Yes") if value else _("No")
+    return value
 
 @register.filter(name='get_choice_string')
 def get_choice_string(value: str, choice: tuple):

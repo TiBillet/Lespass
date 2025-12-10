@@ -52,16 +52,16 @@
                                 {% endif %}
                             </td>
                         </tr>
-                        <tr>
-                            <th>{% trans "Recipient" %}</th>
-                            <td>
-                                {% if not ticket.first_name and not ticket.last_name %}
-                                    {% translate "Anonymous" %}
-                                {% else %}
-                                    {{ ticket.first_name }} {{ ticket.last_name }}
-                                {% endif %}
-                            </td>
-                        </tr>
+{#                        <tr>#}
+{#                            <th>{% trans "Recipient" %}</th>#}
+{#                            <td>#}
+{#                                {% if not ticket.first_name and not ticket.last_name %}#}
+{#                                    {% translate "Anonymous" %}#}
+{#                                {% else %}#}
+{#                                    {{ ticket.first_name }} {{ ticket.last_name }}#}
+{#                                {% endif %}#}
+{#                            </td>#}
+{#                        </tr>#}
                         <tr>
                             <th>{% trans "Email" %}</th>
                             <td>

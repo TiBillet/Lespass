@@ -1,0 +1,5 @@
+{% load i18n %}
+<span class="badge text-bg-info" id="votes-{{ initiative.uuid }}" title="{% translate 'Votes de pertinence' %}">
+  <i class="bi bi-hand-thumbs-up"></i>
+  <span class="votes-count">{{ initiative.votes_count }}</span>
+</span>

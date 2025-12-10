@@ -191,5 +191,5 @@ class Command(BaseCommand):
             fedowAPI = FedowAPI()
             if not FedowConfig.get_solo().can_fedow():
                 raise Exception('Erreur on install : can_fedow = False')
-
+            fedowAPI.asset.get_accepted_assets() # on récupère l'asset FED
         call_command('check_permissions')

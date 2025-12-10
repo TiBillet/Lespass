@@ -15,7 +15,8 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin, Configuration
 from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation, \
-    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership
+    trigger_product_update_tasks, send_sale_to_laboutik, send_refund_to_laboutik, webhook_membership, \
+    refill_from_lespass_to_user_wallet_from_ticket_scanned
 from BaseBillet.triggers import TRIGGER_LigneArticlePaid_ActionByCategorie
 from fedow_connect.fedow_api import AssetFedow
 from fedow_connect.models import FedowConfig
@@ -41,7 +42,7 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
     for ligne_article in lignes_article:
         # Chaque passage en PAID activera le pre_save triggers.LigneArticlePaid_ActionByCategorie
         # # Si toutes les lignes sont validées, ça met le paiement stripe en valid via set_paiement_stripe_valid
-        ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
+        # ligne_article.payment_method = PaymentMethod.STRIPE_NOFED
         logger.info(f"            {ligne_article.pricesold} {ligne_article.status} to {LigneArticle.PAID} : save()")
         ligne_article.status = LigneArticle.PAID
         ligne_article.save()
@@ -116,9 +117,10 @@ def ligne_article_paid(old_instance: LigneArticle, new_instance: LigneArticle):
     set_paiement_stripe_valid(old_instance, new_instance)
 
 def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticle):
-    logger.info(
-        f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
-    send_refund_to_laboutik.delay(new_instance.pk)
+    if not new_instance.sended_to_laboutik:
+        logger.info(
+            f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
+        send_refund_to_laboutik.delay(new_instance.pk)
 
 ######################## SIGNAL RESERVATION ########################
 
@@ -174,6 +176,17 @@ def error_in_mail(old_instance: Reservation, new_instance: Reservation):
     logger.info(f"    SIGNAL RESERVATION error_in_mail")
     new_instance.paiements.all().update(traitement_en_cours=False)
     # TODO: Prévenir l'admin q'un billet a été acheté, mais pas envoyé
+
+
+######################## SIGNAL TICKET ########################
+
+def check_reward(old_instance: Ticket, new_instance: Ticket):
+    try :
+        price: Price = new_instance.pricesold.price
+        if price.reward_on_ticket_scanned:
+            refill_from_lespass_to_user_wallet_from_ticket_scanned.delay(new_instance.pk)
+    except Exception as e :
+        logger.error(f"check_reward : {e}")
 
 
 ######################## SIGNAL TIBILLETUSER ########################
@@ -237,6 +250,9 @@ def error_regression(old_instance, new_instance):
 def test_signal(old_instance, new_instance):
     logger.info(f"Test signal instance : {new_instance} - Status : {new_instance.status}")
 
+# def test_signal_ipdb(old_instance, new_instance):
+#     logger.info(f"Test signal instance : {new_instance} - Status : {new_instance.status}")
+#     import ipdb; ipdb.set_trace()
 
 # On déclare les transitions possibles entre différents etats des statuts.
 # Exemple première ligne : Si status passe de PENDING vers PAID, alors on lance set_ligne_article_paid
@@ -265,7 +281,7 @@ PRE_SAVE_TRANSITIONS = {
     'LIGNEARTICLE': {
         LigneArticle.CREATED: {
             LigneArticle.PAID: ligne_article_paid,
-            LigneArticle.REFUNDED: ligne_article_refunded, # dans le cas ou on ajoute une nouvelle ligne pour annoncer un remboursement de billet
+            LigneArticle.REFUNDED: ligne_article_refunded, # dans le cas ou on ajoute une nouvelle ligne pour annoncer un remboursement de billet ( le remboursement n'est pas une étape de paid -> refund, mais une nouvelle ligne crée )
         },
         LigneArticle.UNPAID: {
             LigneArticle.PAID: ligne_article_paid,
@@ -313,6 +329,12 @@ PRE_SAVE_TRANSITIONS = {
             True: activator_free_reservation,
         }
     },
+
+    'TICKET': {
+        Ticket.NOT_SCANNED: {
+            Ticket.SCANNED: check_reward,
+        }
+    }
 }
 
 
@@ -373,7 +395,7 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
 
         if instance.archive:
             # L'instance est archivé, on le notifie à Fedow :
-            fedow_asset.archive_asset(instance)
+            fedow_asset.archive_asset(instance.uuid)
 
 
 @receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic

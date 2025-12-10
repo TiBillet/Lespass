@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+# Se placer dans le dossier du script pour accéder au fichier VERSION
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Charger les variables (VERSION, MIGRATE) depuis le fichier VERSION si disponible
+if [[ -f VERSION ]]; then
+  # shellcheck disable=SC1091
+  source VERSION
+fi
+
 #curl -sSL https://install.python-poetry.org | python3
 export PATH="/home/tibillet/.local/bin:$PATH"
 poetry install
@@ -8,13 +18,21 @@ echo "Poetry install ok"
 
 poetry run python /DjangoFiles/manage.py collectstatic --no-input
 
-poetry run python /DjangoFiles/manage.py migrate
 
 # Création des tenant publics et agenda
-poetry run python /DjangoFiles/manage.py install
+# poetry run python /DjangoFiles/manage.py install
 
-if [ "$TEST" = "1" ]; then
-  poetry run python manage.py demo_data
+#if [ "$TEST" = "1" ]; then
+#  poetry run python manage.py demo_data
+#fi
+
+# Migration conditionnelle
+# Peut être qu'on pourra utilise ./manage.py showmigrations | grep '\[ \]' a terme ?
+if [[ "${MIGRATE:-0}" = "1" ]]; then
+  echo "Migrate"
+  poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing
+else
+  echo "Skip migrate (MIGRATE=${MIGRATE:-0})"
 fi
 
 echo "Gunicorn start"

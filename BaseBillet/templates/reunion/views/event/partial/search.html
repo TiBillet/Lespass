@@ -24,8 +24,14 @@
         {% endif %}
 
         <div class="form-floating" id="search_form">
-            <input type="text" class="form-control" id="search" placeholder="{% trans 'an event, a artist, a location…' %}" name="search">
+            <input type="text" class="form-control" id="search" placeholder="{% trans 'an event, a artist, a location…' %}" name="search" value="{{ search|default:'' }}">
             <label for="exampleFormControlInput1" class="form-label"> {% translate "I'm looking for" %} </label>
+            {# Preserve selected tags when searching #}
+            {% if tags %}
+                {% for t in tags %}
+                    <input type="hidden" name="tag" value="{{ t }}">
+                {% endfor %}
+            {% endif %}
         </div>
 
         <button class="btn btn-outline-primary" id="submit_event_search" type="submit"

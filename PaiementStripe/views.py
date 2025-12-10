@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+
+"""
+FR1420041010050500013M02606	L'état du PaymentIntent passe de processing à succeeded.
+FR3020041010050500013M02609	L'état du PaymentIntent passe de processing à succeeded au bout d'au moins trois minutes.
+FR8420041010050500013M02607	L'état du PaymentIntent passe de processing à requires_payment_method.
+FR7920041010050500013M02600	L'état du PaymentIntent passe de processing à requires_payment_methodau bout d'au moins trois minutes.
+FR5720041010050500013M02608	L'état du PaymentIntent passe de processing à succeeded, mais un litige est immédiatement créé.
+FR9720041010050000000343434	Le paiement échoue avec un code d'erreur charge_exceeds_source_limit , car le montant du paiement entraîne un dépassement de la limite hebdomadaire de volume de paiement du compte.
+FR5920041010050000000121212	Le paiement échoue avec un code d'erreur charge_exceeds_weekly_limit , car le montant du paiement dépasse la limite du volume de transactions du compte.
+FR9720041010050000002222227	Échec du paiement avec un code d’échec insufficient_funds.
+"""
+
 class CreationPaiementStripe():
 
     def __init__(self,
@@ -50,7 +62,8 @@ class CreationPaiementStripe():
 
         # On instancie Stripe et entre en db le paiement en state Pending
         self.stripe_api_key = self._stripe_api_key()
-        self.stripe_connect_account = Configuration.get_solo().get_stripe_connect_account()
+        self.config = Configuration.get_solo()
+        self.stripe_connect_account = self.config.get_stripe_connect_account()
 
         self.paiement_stripe_db = self._send_paiement_stripe_in_db()
 
@@ -118,7 +131,8 @@ class CreationPaiementStripe():
     def _mode(self):
         """
         Mode Stripe payment ou subscription
-        Si c'est une subscription avec itération, on le modifiera dans le retour stripe
+        Si c'est une subscription avec une récurrence max, on le modifiera dans le retour stripe
+        Le controleur pour la récurrence :
         :return: string
         """
         mode = 'payment'
@@ -141,10 +155,14 @@ class CreationPaiementStripe():
         success_url = f"{self.absolute_domain}{self.paiement_stripe_db.uuid}/{self.success_url}"
         cancel_url = f"{self.absolute_domain}{self.paiement_stripe_db.uuid}/{self.cancel_url}"
 
+        payment_method_types = ["card",]
+        if not self.reservation and self.config.stripe_accept_sepa:
+            payment_method_types.append("sepa_debit")
+
         data_checkout = {
             'success_url': f'{success_url}',
             'cancel_url': f'{cancel_url}',
-            'payment_method_types': ["card"],
+            'payment_method_types': payment_method_types,
             'customer_email': f'{self.user.email}',
             'line_items': self.line_items,
             'mode': self.mode,
@@ -153,8 +171,7 @@ class CreationPaiementStripe():
             'stripe_account': f'{self.stripe_connect_account}',
         }
 
-        config = Configuration.get_solo()
-        if self.mode == 'payment' and config.stripe_invoice :
+        if self.mode == 'payment' and self.config.stripe_invoice :
             data_checkout['invoice_creation'] = {"enabled": True,}
         return data_checkout
 
@@ -226,7 +243,7 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
             membership=membership,
         )
         lignes_articles.append(ligne_article)
-
+        logger.info(f"new_entry_from_stripe_subscription_invoice. ligne_article : {ligne_article.uuid} {ligne_article.payment_method}")
     # on reprend les même metadata que dans BaseBillet.validators.MembershipValidator.get_checkout_stripe
     metadata = {
         'tenant': f'{tenant.uuid}',

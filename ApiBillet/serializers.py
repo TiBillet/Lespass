@@ -7,6 +7,7 @@ import requests
 import stripe
 from PIL import Image
 from django.db import connection
+from django.db.transaction import atomic
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context
 from rest_framework import serializers
@@ -987,8 +988,9 @@ def create_ticket(pricesold, customer, reservation):
 
     return ticket
 
-
-def get_or_create_price_sold(price: Price, event: Event = None, promo_code:PromotionalCode = None):
+@atomic
+def get_or_create_price_sold(price: Price, event: Event = None,
+                             promo_code:PromotionalCode = None, custom_amount: Decimal = None,):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -997,30 +999,40 @@ def get_or_create_price_sold(price: Price, event: Event = None, promo_code:Promo
     On lie le prix générique à l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
-
-    productsold, created = ProductSold.objects.get_or_create(
-        event=event,
-        product=price.product
-    )
-
-    if created:
-        logger.info(f"get_or_create_price_sold -> Demande de productsold {productsold.nickname()} created : {created}")
-        productsold.get_id_product_stripe()
-
     prix = price.prix
+    if custom_amount:
+        prix = dround(custom_amount)
     if promo_code:
         prix = dround(prix - (prix * promo_code.discount_rate / 100))
 
-    pricesold, created = PriceSold.objects.get_or_create(
-        productsold=productsold,
-        prix=prix,
-        price=price,
-    )
+    try :
+        pricesold = PriceSold.objects.get(
+            productsold__product=price.product,
+            productsold__event=event,
+            prix=prix, price=price)
+    except PriceSold.MultipleObjectsReturned:
+        pricesold = PriceSold.objects.filter(
+            productsold__product=price.product,
+            productsold__event=event,
+            prix=prix, price=price).first()
+    except PriceSold.DoesNotExist:
+        try :
+            productsold = ProductSold.objects.get(product=price.product, event=event)
+        except ProductSold.DoesNotExist:
+            productsold = ProductSold.objects.create(
+                event=event,
+                product=price.product
+            )
+        pricesold = PriceSold.objects.create(
+            productsold=productsold,
+            prix=prix,
+            price=price,
+        )
 
-    if created:
-        logger.info(f"pricesold {pricesold.price.name} created : {created}")
+    if not pricesold.id_price_stripe and price.product.categorie_article not in [Product.FREERES, Product.BADGE]:
         pricesold.get_id_price_stripe()
 
+    logger.info(f"GET_OR_CREATE_PRICESOLD {price.product.categorie_article} - prix : {pricesold.prix}, id_price_stripe : {pricesold.id_price_stripe}")
     return pricesold
 
 
@@ -1212,9 +1224,10 @@ class ApiReservationValidator(serializers.Serializer):
                     'qty': float(entry['qty']),
                 }
 
-                if entry['qty'] > price.max_per_user:
-                    raise serializers.ValidationError(
-                        _(f'Booking count above maximum for this event and rate.'))
+                if price.max_per_user:
+                    if entry['qty'] > price.max_per_user:
+                        raise serializers.ValidationError(
+                            _(f'Booking count above maximum for this event and rate.'))
 
                 if product.categorie_article in [Product.BILLET, Product.FREERES]:
                     self.nbr_ticket += entry['qty']
@@ -1266,8 +1279,9 @@ class ApiReservationValidator(serializers.Serializer):
 
         resas = event.valid_tickets_count()
 
-        if self.nbr_ticket > event.max_per_user:
-            raise serializers.ValidationError(_(f'Booking ticket count is over maximum allowed per user.'))
+        if event.max_per_user:
+            if self.nbr_ticket > event.max_per_user:
+                raise serializers.ValidationError(_(f'Booking ticket count is over maximum allowed per user.'))
 
         if resas + self.nbr_ticket > event.jauge_max:
             raise serializers.ValidationError(_(f'Only {resas} seats left.'))

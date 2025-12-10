@@ -1,0 +1,139 @@
+/* SweetAlert2 overrides to keep inputs readable in both light and dark themes
+   Strategy: force a neutral light style for the popup and form controls, regardless of the
+   current Bootstrap data-bs-theme. Keep it minimal and accessible. */
+
+/* Popup container and text */
+.swal2-popup {
+  background-color: #ffffff !important;
+  color: #212529 !important; /* Bootstrap body color */
+}
+
+/* Titles and content text */
+.swal2-title,
+.swal2-html-container,
+.swal2-content {
+  color: #212529 !important;
+}
+
+/* Native SweetAlert2 inputs */
+.swal2-input,
+.swal2-textarea,
+.swal2-select {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+  border: 1px solid #ced4da !important; /* Bootstrap default input border */
+  border-radius: .375rem !important;      /* match .form-control */
+  box-shadow: none !important;
+}
+
+/* Placeholders */
+.swal2-input::placeholder,
+.swal2-textarea::placeholder {
+  color: #6c757d !important; /* text-muted */
+  opacity: 1 !important;     /* Firefox */
+}
+
+/* Focus states: mimic Bootstrap 5 focus ring */
+.swal2-input:focus,
+.swal2-textarea:focus,
+.swal2-select:focus {
+  border-color: #86b7fe !important;
+  outline: 0 !important;
+  box-shadow: 0 0 0 .25rem rgba(13, 110, 253, .25) !important; /* primary ring */
+}
+
+/* Checkbox / radio and their labels */
+.swal2-checkbox,
+.swal2-radio,
+.swal2-checkbox label,
+.swal2-radio label {
+  color: #212529 !important;
+}
+
+.swal2-checkbox input[type="checkbox"],
+.swal2-radio input[type="radio"] {
+  accent-color: #0d6efd; /* Bootstrap primary */
+}
+
+/* Footer text, validation messages */
+.swal2-footer,
+.swal2-validation-message {
+  color: #212529 !important;
+}
+
+/* Ensure dark mode doesn’t override anything (extra specificity) */
+[data-bs-theme="dark"] .swal2-popup,
+[data-bs-theme="dark"] .swal2-title,
+[data-bs-theme="dark"] .swal2-html-container,
+[data-bs-theme="dark"] .swal2-input,
+[data-bs-theme="dark"] .swal2-textarea,
+[data-bs-theme="dark"] .swal2-select {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+}
+
+/* Also normalize Bootstrap controls embedded inside Swal (custom HTML content) */
+.swal2-popup .form-control,
+.swal2-popup .form-select {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+  border: 1px solid #ced4da !important;
+  border-radius: .375rem !important;
+  box-shadow: none !important;
+}
+
+.swal2-popup .form-control::placeholder {
+  color: #6c757d !important;
+  opacity: 1 !important;
+}
+
+.swal2-popup .form-control:focus,
+.swal2-popup .form-select:focus {
+  border-color: #86b7fe !important;
+  outline: 0 !important;
+  box-shadow: 0 0 0 .25rem rgba(13, 110, 253, .25) !important;
+}
+
+[data-bs-theme="dark"] .swal2-popup .form-control,
+[data-bs-theme="dark"] .swal2-popup .form-select {
+  background-color: #ffffff !important;
+  color: #212529 !important;
+}
+
+
+/* Help text in SweetAlert: keep readable in both themes */
+.swal2-popup .form-text,
+.swal2-popup .text-muted {
+  color: #495057 !important; /* Bootstrap gray-700: good contrast on white */
+}
+
+/* Ensure dark theme does not wash it out */
+[data-bs-theme="dark"] .swal2-popup .form-text,
+[data-bs-theme="dark"] .swal2-popup .text-muted {
+  color: #495057 !important;
+}
+
+
+/* Rounded corners consistently in both light and dark themes */
+.swal2-popup {
+  border-radius: .75rem !important; /* slightly more rounded than inputs */
+}
+
+/* Toast variant */
+.swal2-popup.swal2-toast {
+  border-radius: .5rem !important;
+}
+
+/* SweetAlert2 default buttons */
+.swal2-actions .swal2-styled,
+.swal2-confirm,
+.swal2-cancel {
+  border-radius: .375rem !important; /* match Bootstrap .btn/.form-control radius */
+}
+
+/* Ensure dark theme doesn't override rounded corners */
+[data-bs-theme="dark"] .swal2-popup { border-radius: .75rem !important; }
+[data-bs-theme="dark"] .swal2-popup.swal2-toast { border-radius: .5rem !important; }
+[data-bs-theme="dark"] .swal2-actions .swal2-styled,
+[data-bs-theme="dark"] .swal2-confirm,
+[data-bs-theme="dark"] .swal2-cancel { border-radius: .375rem !important; }

@@ -1,0 +1,30 @@
+{% load i18n tibitags %}
+
+{% if resa.custom_form %}
+<div class="accordion accordion-flush mt-3" id="resa{{ resa.uuid }}FormAccordion">
+  <div class="accordion-item">
+    <h4 class="accordion-header">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+              data-bs-target="#resa{{ resa.uuid }}FormDetails" aria-expanded="false"
+              aria-controls="resa{{ resa.uuid }}FormDetails">
+        {% trans 'Answers to the reservation form' %}
+      </button>
+    </h4>
+    <div id="resa{{ resa.uuid }}FormDetails" class="accordion-collapse collapse"
+         data-bs-parent="#resa{{ resa.uuid }}FormAccordion">
+      <div class="accordion-body">
+        <table class="table">
+          <tbody>
+          {% for key, value in resa.custom_form.items %}
+            <tr>
+              <th>{{ key }}</th>
+              <td>{{ value | safe_join:", " }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}

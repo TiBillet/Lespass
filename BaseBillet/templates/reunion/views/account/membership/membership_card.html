@@ -50,6 +50,9 @@
         <li class="list-group-item px-0">
           {% trans 'Issued by' %} <strong>{{ membership.origin }}</strong>
         </li>
+          <li class="list-group-item px-0">
+          {% trans 'Contribution' %} : <strong>{{ membership.contribution_value }}</strong> €
+        </li>
         <li class="list-group-item px-0">
           {% for option in membership.option_generale.all %}
           <span class="badge text-bg-info p-2 me-1 mb-1 fs-6 fw-medium">
@@ -66,12 +69,28 @@
 
     {% if membership.is_valid %}
     <div class="card-footer">
+      {# Infos de renouvellement / expiration en FALC #}
+      {% if membership.price.recurring_payment %}
+      <p class="mt-3">
+        Se renouvelle dans {{ membership.get_deadline|naturaltime }}
+      </p>
+      {% if membership.price.commitment %}
+      <p class="mb-0">
+        {# L'engagement se calcule depuis first_contribution sur "iteration" périodes #}
+        Engagement jusqu'au {{ membership.get_iteration_end_date|date }}
+        {% if membership.first_contribution and membership.get_iteration_end_date %}
+          (durée: {{ membership.first_contribution|timesince:membership.get_iteration_end_date }})
+        {% endif %}
+      </p>
+      {% endif %}
+      {% else %}
       <p class="mt-3">
         {% trans 'Expires' %} {{ membership.get_deadline|naturaltime }}
       </p>
+      {% endif %}
 
       {# Show cancel auto debit button only when auto-renewing with Stripe sub id #}
-      {% if membership.status == 'A' and membership.stripe_id_subscription %}
+      {% if membership.status == 'A' and membership.stripe_id_subscription and not membership.price.commitment %}
       <form
           method="post"
           action="/api/cancel_sub/"

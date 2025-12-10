@@ -2,12 +2,12 @@
 {% load tibitags i18n %}
 
 {% block title %}{% translate 'Home' %}{% endblock %}
-{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
 {% block og_title %}{{ config.organisation }}{% endblock %}
-{% block og_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+{% block og_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 {% block twitter_title %}{{ config.organisation }}{% endblock %}
-{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}

@@ -1,5 +1,8 @@
 import logging
+import re
 from datetime import timedelta
+from decimal import Decimal
+from typing import Any, Dict, Optional, List
 
 import stripe
 from django.conf import settings
@@ -11,23 +14,134 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
+from Administration.utils import clean_html as admin_clean_html
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
-from AuthBillet.models import TibilletUser
+from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Tag, Event, \
-    Reservation, PriceSold, Ticket, ProductSold, Configuration, ProductFormField, PromotionalCode
+from BaseBillet.models import Event, PostalAddress, Tag, Configuration
+from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
+    PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
+from fedow_connect.fedow_api import FedowAPI
+from fedow_connect.utils import dround
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
+
+
+def build_custom_form_from_request(req_data, products, prefix: str = 'form__'):
+    """
+    Factorized validator for dynamic custom forms based on ProductFormField.
+    - req_data: request.data or a plain dict-like object; may be a QueryDict with getlist().
+    - products: iterable of Product for which to load ProductFormField definitions.
+    - prefix: key prefix expected in the payload (default: 'form__').
+    Returns: dict of validated values; raises serializers.ValidationError with field-key mapping on error.
+    """
+    # Collect ProductFormField for the provided products
+    custom_form = {}
+    try:
+        product_fields_qs = ProductFormField.objects.filter(product__in=list(products))
+        product_fields = {ff.name: ff for ff in product_fields_qs}
+    except Exception:
+        product_fields = {}
+
+    for name, ff in product_fields.items():
+        key = f"{prefix}{name}"
+        # Use label as the JSON key; fallback to name if label is empty
+        label_key = (ff.label or '').strip() or name
+        # MULTI SELECT → normalize to list
+        if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
+            if hasattr(req_data, 'getlist'):
+                value_list = req_data.getlist(key)
+            else:
+                v = req_data.get(key)
+                if v in [None, '']:
+                    value_list = []
+                elif isinstance(v, list):
+                    value_list = v
+                else:
+                    value_list = [v]
+
+            # Required
+            if ff.required and not value_list:
+                raise serializers.ValidationError({key: [_('This field is required.')]})
+
+            # Validate options
+            if value_list:
+                invalid = [val for val in value_list if ff.options and val not in ff.options]
+                if invalid:
+                    raise serializers.ValidationError({key: [_('Invalid choice.')]})
+
+            if value_list:
+                if label_key in custom_form:
+                    # Duplicate label collision across fields -> put error on current request key
+                    raise serializers.ValidationError({key: [_('Duplicate field label. Please change the label.')]})
+                custom_form[label_key] = value_list
+            continue
+
+        # SINGLE SELECT (dropdown) or RADIO SELECT → scalar
+        if ff.field_type in (ProductFormField.FieldType.SINGLE_SELECT, ProductFormField.FieldType.RADIO_SELECT):
+            value = req_data.get(key)
+            if ff.required and value in [None, '']:
+                raise serializers.ValidationError({key: [_('This field is required.')]})
+            if value not in [None, '']:
+                if ff.options and value not in ff.options:
+                    raise serializers.ValidationError({key: [_('Invalid choice.')]})
+                if label_key in custom_form:
+                    raise serializers.ValidationError({key: [_('Duplicate field label. Please change the label.')]})
+                custom_form[label_key] = value
+            continue
+
+        # BOOLEAN → always store boolean (default False if not sent)
+        if ff.field_type == ProductFormField.FieldType.BOOLEAN:
+            raw = req_data.get(key)
+            bool_val = False
+            if raw is not None:
+                sval = str(raw).lower()
+                bool_val = sval in ('1', 'true', 'on', 'yes', 'y')
+            if ff.required and not bool_val:
+                raise serializers.ValidationError({key: [_('This field is required.')]})
+            if label_key in custom_form:
+                raise serializers.ValidationError({key: [_('Duplicate field label. Please change the label.')]})
+            custom_form[label_key] = bool_val
+            continue
+
+        # Default (text areas, etc.) → scalar
+        value = req_data.get(key)
+        if ff.required and value in [None, '']:
+            raise serializers.ValidationError({key: [_('This field is required.')]})
+        if value not in [None, '']:
+            if label_key in custom_form:
+                raise serializers.ValidationError({key: [_('Duplicate field label. Please change the label.')]})
+            custom_form[label_key] = value
+
+    return custom_form
 
 
 class ContactValidator(serializers.Serializer):
     email = serializers.EmailField()
     subject = serializers.CharField()
     message = serializers.CharField()
+    # Captcha arithmétique très simple: x + y == answer
+    x = serializers.IntegerField(required=True, min_value=0)
+    y = serializers.IntegerField(required=True, min_value=0)
+    answer = serializers.IntegerField(required=True)
+
+    def validate(self, attrs):
+        # Vérifie que la réponse correspond à la somme x + y
+        try:
+            x = int(attrs.get('x', 0))
+            y = int(attrs.get('y', 0))
+            answer = int(attrs.get('answer', -1))
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({'answer': [_('Please answer the anti-spam question.')]})
+
+        if x + y != answer:
+            raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
+
+        return attrs
 
 
 class TagValidator(serializers.Serializer):
@@ -49,8 +163,10 @@ class LinkQrCodeValidator(serializers.Serializer):
         emailConfirmation = attrs['emailConfirmation']
         if emailConfirmation != email:
             logger.error(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
-            raise serializers.ValidationError(_(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
+            raise serializers.ValidationError(
+                _(f"Email confirmation failed: the email and its confirmation are different. A typo, maybe?"))
         return attrs
+
 
 class LoginEmailValidator(serializers.Serializer):
     email = serializers.EmailField()
@@ -93,7 +209,7 @@ class TicketCreator():
         )
         reservation.status = Reservation.FREERES_USERACTIV if reservation.user_commande.is_active else Reservation.FREERES
         reservation.save()
-        return [ticket,]
+        return [ticket, ]
 
     # FREERES : réservation gratuite
     def method_F(self, prices_dict):
@@ -159,8 +275,9 @@ class TicketCreator():
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
-                # pas d'objet reservation ?
+                payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
+                promotional_code=self.promo_code,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -211,7 +328,7 @@ class TicketCreator():
         reservation.status = Reservation.UNPAID
         reservation.save()
 
-        print(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
+        logger.debug(f"get_checkout_stripe OK : {new_paiement_stripe.checkout_session.stripe_id}")
         return new_paiement_stripe.checkout_session.url
 
 
@@ -233,19 +350,29 @@ class ReservationValidator(serializers.Serializer):
         # Rercher des produits potentiels
         event = self.event
         products_dict = {}
-        self.products = [] # Pour checker si un formulaire forbricks est présent
-        self.free_price = False # Pour vérification plus bas que le prix libre est bien seul
+        self.products = []  # Pour checker si un formulaire forbricks est présent
+        self.free_price = False  # Pour vérification plus bas que le prix libre est bien seul
 
         for product in event.products.all():
             for price in product.prices.all():
                 # Un input possède l'uuid du prix ?
-                if self.initial_data.get(str(price.uuid)):
-                    qty = int(self.initial_data.get(str(price.uuid)))
+                raw_val = self.initial_data.get(str(price.uuid))
+                if raw_val not in [None, '']:
+                    # Certains frontends envoient des nombres comme "15.00" → normaliser en int de manière sûre
+                    try:
+                        # Depuis une QueryDict, la valeur peut être une liste
+                        if isinstance(raw_val, list):
+                            raw_val = raw_val[-1] if raw_val else ''
+                        sval = str(raw_val).strip().replace(',', '.')
+                        # Autoriser les décimales mais caster en entier (quantité)
+                        qty = int(Decimal(sval))
+                    except Exception:
+                        raise serializers.ValidationError({str(price.uuid): [_('Invalid quantity.')]})
 
-                    if qty <= 0 : # Skip zero or negative quantities
+                    if qty <= 0:  # Skip zero or negative quantities
                         continue
 
-                    if price.free_price: # Pour vérification plus bas que le prix libre est bien seul
+                    if price.free_price:  # Pour vérification plus bas que le prix libre est bien seul
                         self.free_price = True
                     self.products.append(product)
                     if products_dict.get(product):
@@ -254,7 +381,7 @@ class ReservationValidator(serializers.Serializer):
                     else:
                         # Si le dict product n'existe pas :
                         products_dict[product] = {price: qty}
-        
+
         return products_dict
 
     def validate_event(self, value):
@@ -266,7 +393,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_email(self, value):
         logger.info(f"validate email : {value}")
-        if not hasattr(self, 'admin_created'): # Si ça n'est pas un ticket créé dans l'admin :
+        if not hasattr(self, 'admin_created'):  # Si ça n'est pas un ticket créé dans l'admin :
             # On vérifie que l'utilisateur connecté et l'email correspondent bien.
             request = self.context.get('request')
             if request.user.is_authenticated:
@@ -278,7 +405,7 @@ class ReservationValidator(serializers.Serializer):
 
     def validate_options(self, value):
         # On check que les options sont bien dans l'event original.
-        try :
+        try:
             event: Event = self.event
         except Exception as e:
             logger.error(f"validate_options : {e}")
@@ -299,10 +426,13 @@ class ReservationValidator(serializers.Serializer):
         # If empty or None, no validation needed (it's optional)
         if not value:
             return value
-        
+
         # Check if promotional code exists by name
         try:
             promo_code = PromotionalCode.objects.get(name=value, is_active=True)
+            if not promo_code.is_usable():
+                raise serializers.ValidationError(_(f'Invalid or inactive promotional code.'))
+
             # Store for later validation in validate() method
             self.promo_code = promo_code
             logger.info(f"validate_promotional_code : {promo_code.name} found for product {promo_code.product.name}")
@@ -325,10 +455,10 @@ class ReservationValidator(serializers.Serializer):
         logger.info(f"validate : {attrs}")
         event = self.event
 
-        if not hasattr(self, 'admin_created') :
+        if not hasattr(self, 'admin_created'):
             # Si ça n'est pas un ticket créé dans l'admin, on va chercher les produits dans le POST
             products_dict = self.extract_products()
-        else :
+        else:
             # c'est appellé depuis ADD de l'admin ticket
             products_dict = getattr(self, 'products_dict')
 
@@ -355,20 +485,34 @@ class ReservationValidator(serializers.Serializer):
             logger.info(f"Promotional code {promo_code.name} validated for product {promo_code.product.name}")
 
         for product, price_dict in products_dict.items():
+            # Si le maximum par user produit est déja atteint :
+            if product.max_per_user_reached(user, event=event):
+                raise serializers.ValidationError(_(f'Maximum capacity reached for this product.'))
+
             # les produits sont prévu par l'évent ?
             if product not in event.products.all():
                 raise serializers.ValidationError(_(f'Invalid product.'))
 
             # chaque maximum par user est respecté ?
             for price, qty in price_dict.items():
-                if qty > price.max_per_user:
-                    raise serializers.ValidationError(
-                        _(f'Bookings exceed capacity for this rate.'))
+                # Si l'user a déja reservé avant :
+                if price.max_per_user_reached(user, event=event):
+                    raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
+
+                # Si la jauge de ce prix est atteinte
+                if price.out_of_stock(event=event):
+                    raise serializers.ValidationError(_(f'Maximum capacity reached for this price.'))
+
+                if price.max_per_user:
+                    if qty > price.max_per_user:
+                        raise serializers.ValidationError(
+                            _(f'Bookings exceed capacity for this rate.'))
                 total_ticket_qty += qty
 
                 # Check adhésion
                 if price.adhesion_obligatoire:
-                    if not user.memberships.filter(price__product=price.adhesion_obligatoire, deadline__gte=timezone.now()).exists():
+                    if not user.memberships.filter(price__product=price.adhesion_obligatoire,
+                                                   deadline__gte=timezone.now()).exists():
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
 
@@ -377,8 +521,9 @@ class ReservationValidator(serializers.Serializer):
             raise serializers.ValidationError(_(f'No ticket.'))
 
         # Vérification du max par user sur l'event
-        if total_ticket_qty > event.max_per_user:
-            raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
+        if event.max_per_user:
+            if total_ticket_qty > event.max_per_user:
+                raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
         # Pour vérification plus bas que le prix libre est bien seul
         if hasattr(self, 'free_price'):
@@ -391,17 +536,18 @@ class ReservationValidator(serializers.Serializer):
         under_purchase = event.under_purchase()
         if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
             remains = event.jauge_max - valid_tickets_count - under_purchase
-            raise serializers.ValidationError(_('Number of places available : ')+ f"{remains}")
+            raise serializers.ValidationError(_('Number of places available : ') + f"{remains}")
 
         # Vérification que l'utilisateur peut reserer une place s'il est déja inscrit sur un horaire
         if not Configuration.get_solo().allow_concurrent_bookings:
             start_this_event = event.datetime
             end_this_event = event.end_datetime
             if not end_this_event:
-                end_this_event = start_this_event + timedelta(hours=1) # Si ya pas de fin sur l'event, on rajoute juste une heure.
+                end_this_event = start_this_event + timedelta(
+                    hours=1)  # Si ya pas de fin sur l'event, on rajoute juste une heure.
 
             if Reservation.objects.filter(
-                user_commande=user,
+                    user_commande=user,
             ).filter(
                 Q(event__datetime__range=(start_this_event, end_this_event)) |
                 Q(event__end_datetime__range=(start_this_event, end_this_event)) |
@@ -409,48 +555,11 @@ class ReservationValidator(serializers.Serializer):
             ).exists():
                 raise serializers.ValidationError(_(f'You have already booked this slot.'))
 
-
-        # Collect dynamic custom form fields from request (names prefixed with 'form__')
+        # Build validated custom_form from dynamic fields (prefixed with 'form__') across selected products
         request = self.context.get('request')
         req_data = request.data if request is not None else self.initial_data
-
-        # Build map of expected dynamic fields across all selected products
-        custom_form = {}
-        try:
-            selected_products = list(products_dict.keys())
-            product_fields_qs = ProductFormField.objects.filter(product__in=selected_products)
-            product_fields = {ff.name: ff for ff in product_fields_qs}
-        except Exception:
-            product_fields = {}
-
-        for name, ff in product_fields.items():
-            key = f"form__{name}"
-            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                value = req_data.getlist(key)
-            else:
-                value = req_data.get(key)
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if value in [None, '']:
-                        value = []
-                    elif not isinstance(value, list):
-                        value = [value]
-
-            # Enforce required
-            if ff.required:
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if not value:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-                else:
-                    if value in [None, '']:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-
-            # Only store non-empty values
-            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                if value:
-                    custom_form[name] = value
-            else:
-                if value not in [None, '']:
-                    custom_form[name] = value
+        selected_products = list(products_dict.keys())
+        custom_form = build_custom_form_from_request(req_data, selected_products, prefix='form__')
 
         # On fabrique l'objet reservation
         reservation = Reservation.objects.create(
@@ -473,6 +582,7 @@ class ReservationValidator(serializers.Serializer):
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
+
         self.checkout_link = self.tickets.checkout_link if self.tickets.checkout_link else None
 
         return attrs
@@ -486,7 +596,7 @@ class MembershipValidator(serializers.Serializer):
     price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
-
+    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
     firstname = serializers.CharField(max_length=200)
     lastname = serializers.CharField(max_length=200)
     email = serializers.EmailField()
@@ -496,9 +606,8 @@ class MembershipValidator(serializers.Serializer):
 
     newsletter = serializers.BooleanField()
 
-
     @staticmethod
-    def get_checkout_stripe(membership: Membership):
+    def get_checkout_stripe(membership: Membership, custom_amount: Decimal = None):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -514,10 +623,15 @@ class MembershipValidator(serializers.Serializer):
             'user': f"{user.email}",
         }
 
+        amount = int(price.prix * 100)
+        if custom_amount:
+            amount = int(custom_amount * 100)
+
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price),
+            pricesold=get_or_create_price_sold(price, custom_amount=custom_amount),
             membership=membership,
-            amount=int(price.prix * 100),
+            payment_method=PaymentMethod.STRIPE_NOFED,
+            amount=amount,
             qty=1,
         )
 
@@ -549,16 +663,46 @@ class MembershipValidator(serializers.Serializer):
 
     def validate(self, attrs):
         self.price = attrs['price']
+        custom_amount = None
+        if self.price.recurring_payment and self.price.free_price:
+            custom_amount = dround(attrs['custom_amount'])
+
+        if self.price.free_price:
+            if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
+                contribution = custom_amount or self.price.prix
+                if contribution < self.price.prix:
+                    logger.info("prix inférieur au minimum")
+                    raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 
         # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
         self.user = get_or_create_user(attrs['email'])
+
+        # Vérififaction du max par user sur le produit :
+        if self.price.product.max_per_user_reached(user=self.user):
+                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+
+        # Vérification du max per user
+        if self.price.max_per_user:
+            user_membeshipr_count = Membership.objects.filter(
+                user=self.user,
+                price=self.price,
+                deadline__gt=timezone.localtime()).count()
+            if user_membeshipr_count >= self.price.max_per_user:
+                logger.info("max per user")
+                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+
 
         ### CREATION DE LA FICHE MEMBRE
         # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
         membership = Membership.objects.create(
             user=self.user,
-            price=self.price
+            price=self.price,
+            contribution_value=custom_amount,
+            # None si pas de contribution value, sera rempli par la validation du paiement
         )
+
+        if self.price.recurring_payment and self.price.iteration :
+            membership.max_iteration = self.price.iteration
 
         membership.first_name = attrs['firstname']
         membership.last_name = attrs['lastname']
@@ -571,55 +715,17 @@ class MembershipValidator(serializers.Serializer):
         if options:
             membership.option_generale.set(attrs['options'])
 
-        # Collect dynamic custom form fields from request (names prefixed with 'form__')
+        # Build validated custom_form from dynamic fields (prefixed with 'form__') for the membership product
         request = self.context.get('request')
         req_data = request.data if request else {}
-
-        # Build a map of expected fields for this product to validate types/required
-        custom_form = {}
-        try:
-            product = self.price.product
-            product_fields = {ff.name: ff for ff in ProductFormField.objects.filter(product=product)}
-        except Exception:
-            product_fields = {}
-
-        for name, ff in product_fields.items():
-            key = f"form__{name}"
-            value = None
-            if hasattr(req_data, 'getlist') and ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                value = req_data.getlist(key)
-            else:
-                value = req_data.get(key)
-                # If MULTI_SELECT but parser gave a scalar, normalize to list
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if value in [None, '']:
-                        value = []
-                    elif not isinstance(value, list):
-                        value = [value]
-
-            # Enforce required
-            if ff.required:
-                if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                    if not value:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-                else:
-                    if value in [None, '']:
-                        raise serializers.ValidationError({key: [_('This field is required.')]})
-
-            # Only store non-empty values
-            if ff.field_type == ProductFormField.FieldType.MULTI_SELECT:
-                if value:
-                    custom_form[name] = value
-            else:
-                if value not in [None, '']:
-                    custom_form[name] = value
-
+        product = self.price.product
+        custom_form = build_custom_form_from_request(req_data, [product], prefix='form__')
         membership.custom_form = custom_form or None
 
         membership.save()
         self.membership = membership
         # Création du lien de paiement
-        self.checkout_stripe_url = self.get_checkout_stripe(membership)
+        self.checkout_stripe_url = self.get_checkout_stripe(membership, custom_amount=custom_amount)
 
         return attrs
 
@@ -642,11 +748,11 @@ class TenantCreateValidator(serializers.Serializer):
 
     def validate_name(self, value):
         if WaitingConfiguration.objects.filter(slug=slugify(value)).exists():
-            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
         if Client.objects.filter(name=value).exists():
-            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
         if Domain.objects.filter(domain__icontains=f'{slugify(value)}').exists():
-            raise serializers.ValidationError(f"{value}. "+ _('This name is not available'))
+            raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
 
         return value
 
@@ -664,12 +770,12 @@ class TenantCreateValidator(serializers.Serializer):
 
             slug = slugify(name)
             dns = waiting_config.dns_choice if waiting_config.dns_choice else 'tibillet.coop'
-            if settings.DEBUG :
+            if settings.DEBUG:
                 dns = "tibillet.localhost"
 
-            tenant.name=name
-            tenant.on_trial=False
-            tenant.categorie=Client.SALLE_SPECTACLE
+            tenant.name = name
+            tenant.on_trial = False
+            tenant.categorie = Client.SALLE_SPECTACLE
             tenant.save()
 
             Domain.objects.get_or_create(
@@ -677,7 +783,6 @@ class TenantCreateValidator(serializers.Serializer):
                 tenant=tenant,
                 is_primary=True
             )
-
 
         with tenant_context(tenant):
             ## Création du premier admin:
@@ -700,7 +805,7 @@ class TenantCreateValidator(serializers.Serializer):
             config.slug = slugify(name)
             config.email = user.email
 
-            try :
+            try:
                 rootConf = RootConfiguration.get_solo()
                 stripe.api_key = rootConf.get_stripe_api()
                 config.stripe_mode_test = rootConf.stripe_mode_test
@@ -745,3 +850,242 @@ class TenantCreateValidator(serializers.Serializer):
         waiting_config.save()
 
         return tenant
+
+
+from uuid import UUID
+
+
+class QrCodeScanPayNfcValidator(serializers.Serializer):
+    """
+    Valide la lecture NFC pour le paiement par QR Code.
+
+    Attend un payload JSON de type:
+      {
+        "tagSerial": "62:fe:16:01",
+        "ligne_article_uuid_hex": "c351ccd3a07b477ba1dcc8d5bcae72df"
+      }
+
+    Erreurs attendues:
+      - La carte n'existe pas
+      - le format du tag n'est pas bon
+      - Il n'y a pas assez de crédit sur la carte
+    """
+    tagSerial = serializers.CharField(allow_blank=False)
+    ligne_article_uuid_hex = serializers.CharField(allow_blank=False)
+
+    def _normalize_tag(self, value: str) -> str:
+        if value is None:
+            return ''
+        v = value.strip().lower().replace(':', '').replace('-', '')
+
+        # Doit être exactement 8 caractères hexadécimaux (4 octets)
+        if not re.match(r'^[0-9A-Fa-f]{8}$', v):
+            raise serializers.ValidationError(_("le format du tag NFC n\'est pas bon"))
+
+        return v.upper()
+
+    def validate_tagSerial(self, value: str):
+        tag_id = self._normalize_tag(value)
+        # stocke pour validate()
+        self.tag_id = tag_id
+
+        self.fedowAPI = FedowAPI()
+        card_serialized = self.fedowAPI.NFCcard.card_tag_id_retrieve(tag_id)
+        if not card_serialized:
+            raise serializers.ValidationError(_("La carte n'existe pas"))
+
+        if card_serialized.get('is_wallet_ephemere'):
+            raise serializers.ValidationError(
+                _("La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la personne propriétaire de la lier en flashant le qrcode au dos de la carte."))
+
+        wallet = Wallet.objects.get(uuid=card_serialized['wallet_uuid'])
+        if not wallet.user:
+            raise serializers.ValidationError(
+                _("Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à la personne propriétaire de la lier en flashant le qrcode au dos de la carte."))
+
+        self.wallet = wallet
+        return value
+
+    def validate_ligne_article_uuid_hex(self, value: str):
+        try:
+            la_uuid = UUID(value)
+            la = LigneArticle.objects.get(uuid=la_uuid, status=LigneArticle.CREATED,
+                                          payment_method=PaymentMethod.QRCODE_MA)
+        except Exception:
+            raise serializers.ValidationError(_('Paiement introuvable.'))
+        self.ligne_article = la
+        return value
+
+    def validate(self, attrs):
+        self.user_balance = self.fedowAPI.wallet.get_total_fiducial_and_all_federated_token(self.wallet.user)
+        if self.user_balance < self.ligne_article.amount:
+            raise serializers.ValidationError(_(f'Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille.'))
+
+        return attrs
+
+
+
+
+
+class EventQuickCreateSerializer(serializers.Serializer):
+    """Serializer DRF pour la création rapide d'un évènement simple via l'offcanvas HTMX.
+
+    Champs en entrée (POST):
+      - name: str (obligatoire)
+      - datetime_start: str (input type="datetime-local") (obligatoire)
+      - datetime_end: str (optionnel)
+      - short_description: str (optionnel, 250 char max côté modèle)
+      - long_description: str (optionnel, HTML autorisé mais nettoyé comme dans l'admin)
+      - postal_address: pk (optionnel)
+      - tags: str (liste séparée par virgules/point-virgule)
+      - img: InMemoryUploadedFile (optionnel) — doit être passé via request.FILES
+
+    Comportements:
+      - Parse les datetimes comme des dates locales (naïves) et les localise dans le fuseau de Configuration.
+      - Valide que datetime_end >= datetime_start si renseigné.
+      - Nettoie long_description via l'utilitaire d'admin pour éviter les injections JS/HTML.
+      - Crée l'Event publié et rattache les tags (création automatique si nécessaires).
+      - Utilise request.user (contexte) pour remplir created_by.
+    """
+
+    name = serializers.CharField(allow_blank=False, trim_whitespace=True, max_length=200)
+    datetime_start = serializers.CharField(allow_blank=False)
+    datetime_end = serializers.CharField(required=False, allow_blank=True)
+    short_description = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=250)
+    long_description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    postal_address = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    tags = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    jauge_max = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    # L'image arrive dans files; on la récupère dans create via self.context
+
+    def _get_tz(self):
+        config = Configuration.get_solo()
+        import pytz
+        return pytz.timezone(getattr(config, 'fuseau_horaire', 'UTC'))
+
+    def _parse_dt_local(self, raw: Optional[str]):
+        if not raw:
+            return None
+        from datetime import datetime
+        dt = datetime.fromisoformat(raw)
+        # Si naïf, on localise dans le fuseau horaire de la configuration
+        if dt.tzinfo is None:
+            tz = self._get_tz()
+            dt = tz.localize(dt)
+        return dt
+
+    def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        errors: Dict[str, List[str]] = {}
+
+        # Datetimes
+        try:
+            dt_start = self._parse_dt_local(attrs.get('datetime_start'))
+        except Exception:
+            errors.setdefault('datetime_start', []).append("Format de date invalide. Veuillez utiliser le sélecteur de date.")
+            dt_start = None
+
+        try:
+            dt_end = self._parse_dt_local(attrs.get('datetime_end')) if attrs.get('datetime_end') else None
+        except Exception:
+            errors.setdefault('datetime_end', []).append("Format de date invalide. Veuillez utiliser le sélecteur de date.")
+            dt_end = None
+
+        if dt_start and dt_end and dt_end < dt_start:
+            errors.setdefault('datetime_end', []).append("La fin doit être postérieure au début.")
+
+        # Adresse
+        postal_address = None
+        addr_pk = attrs.get('postal_address')
+        if addr_pk:
+            try:
+                postal_address = PostalAddress.objects.get(pk=addr_pk)
+            except PostalAddress.DoesNotExist:
+                errors.setdefault('postal_address', []).append("Adresse sélectionnée introuvable.")
+
+        # Long description sanitation
+        ld = attrs.get('long_description')
+        attrs['long_description'] = admin_clean_html(ld)
+
+        # Jauge maximale (capacité)
+        raw_jauge = attrs.get('jauge_max')
+        jauge_value: Optional[int] = None
+        if raw_jauge not in (None, ""):
+            try:
+                jauge_value = int(str(raw_jauge).strip())
+                if jauge_value < 1:
+                    raise ValueError()
+            except Exception:
+                errors.setdefault('jauge_max', []).append("Veuillez indiquer un nombre entier positif pour la jauge ou laisser vide.")
+
+        # Si une jauge est renseignée, on exige l'existence d'un produit "réservation gratuite"
+        free_res_product = None
+        if jauge_value is not None:
+            try:
+                free_res_product = Product.objects.filter(
+                    categorie_article=Product.FREERES,
+                    publish=True,
+                    archive=False,
+                ).first()
+            except Exception:
+                free_res_product = None
+
+            if not free_res_product:
+                errors.setdefault('jauge_max', []).append(
+                    "Aucun produit de réservation gratuite n'a été trouvé. Merci de créer d'abord un produit de réservation gratuite dans l'administration."
+                )
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        attrs['datetime'] = dt_start
+        attrs['end_datetime'] = dt_end
+        attrs['postal_address_obj'] = postal_address
+        attrs['jauge_value'] = jauge_value
+        attrs['free_res_product'] = free_res_product
+        return attrs
+
+    def create(self, validated_data: Dict[str, Any]) -> Event:
+        request = self.context.get('request')
+        name = validated_data.get('name').strip()
+        short_desc = (validated_data.get('short_description') or '').strip() or None
+        long_desc = validated_data.get('long_description') or None
+        postal_address = validated_data.get('postal_address_obj')  # peut être None -> remplacé au save
+        jauge_value = validated_data.get('jauge_value')
+        free_res_product: Optional[Product] = validated_data.get('free_res_product')
+
+        event = Event(
+            name=name,
+            datetime=validated_data['datetime'],
+            end_datetime=validated_data.get('end_datetime') or None,
+            short_description=short_desc,
+            long_description=long_desc,
+            postal_address=postal_address,
+            created_by=(request.user if request and getattr(request, 'user', None) and request.user.is_authenticated else None),
+            published=True,
+        )
+
+        # Image (si transmise)
+        if request and hasattr(request, 'FILES') and request.FILES.get('img'):
+            event.img = request.FILES['img']
+
+        # Capacité / jauge: si fournie, on l'applique et on affiche la jauge
+        if jauge_value is not None:
+            event.jauge_max = jauge_value
+            event.show_gauge = True
+
+        event.save()
+
+        # Tags
+        tags_input = self.initial_data.get('tags') if hasattr(self, 'initial_data') else None
+        if tags_input:
+            names = [t.strip() for t in re.split(r",|;", str(tags_input)) if t and t.strip()]
+            for tname in names:
+                # Ne pas utiliser "_" pour éviter d'écraser _() de traduction
+                tag_obj, created = Tag.objects.get_or_create(name=tname)
+                event.tag.add(tag_obj)
+
+        # Si jauge -> rattacher le produit de réservation gratuite à l'évènement
+        if jauge_value is not None and free_res_product:
+            event.products.add(free_res_product)
+
+        return event

@@ -1,0 +1,694 @@
+openapi: 3.0.3
+info:
+  title: TiBillet API v2
+  version: "2.0.0"
+  description: |
+    Semantic, schema.org-based API.
+servers:
+  - url: https://{tenant}.{domain}
+    variables:
+      tenant:
+        default: lespass
+      domain:
+        default: tibillet.localhost
+paths:
+  /api/v2/events/:
+    get:
+      operationId: listEvents
+      summary: List all published Events
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Event'
+    post:
+      operationId: createEvent
+      summary: Create an Event (schema.org/Event)
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Event'
+            examples:
+              musicCreate:
+                summary: Create a music event
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "MusicEvent"
+                  name: API v2 — Test create
+                  startDate: "2025-12-20T19:00:00Z"
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                '@context':
+                  type: string
+                  example: https://schema.org
+                '@type':
+                  type: string
+                  example: MusicEvent
+                name:
+                  type: string
+                startDate:
+                  type: string
+                  format: date-time
+                endDate:
+                  type: string
+                  format: date-time
+                maximumAttendeeCapacity:
+                  type: integer
+                disambiguatingDescription:
+                  type: string
+                description:
+                  type: string
+                eventStatus:
+                  type: string
+                audience:
+                  type: object
+                keywords:
+                  type: array
+                  items:
+                    type: string
+                img:
+                  type: string
+                  format: binary
+                sticker_img:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+  /api/v2/events/{uuid}/:
+    get:
+      operationId: retrieveEvent
+      summary: Retrieve a single Event
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+    delete:
+      operationId: deleteEvent
+      summary: Delete an Event by UUID
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+  /api/v2/events/{uuid}/link-address/:
+    post:
+      operationId: linkEventAddress
+      summary: Link a PostalAddress to an Event (by id or schema.org payload)
+      tags: [Event]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    postalAddressId:
+                      type: integer
+                - $ref: '#/components/schemas/PostalAddress'
+      responses:
+        '200':
+          description: Updated Event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Event'
+  /api/v2/postal-addresses/:
+    get:
+      operationId: listPostalAddresses
+      summary: List PostalAddresses
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PostalAddress'
+    post:
+      operationId: createPostalAddress
+      summary: Create PostalAddress (schema.org)
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostalAddress'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                '@type':
+                  type: string
+                  example: PostalAddress
+                name:
+                  type: string
+                streetAddress:
+                  type: string
+                addressLocality:
+                  type: string
+                addressRegion:
+                  type: string
+                postalCode:
+                  type: string
+                addressCountry:
+                  type: string
+                geo:
+                  type: object
+                  properties:
+                    '@type':
+                      type: string
+                      example: GeoCoordinates
+                    latitude:
+                      type: number
+                      format: float
+                    longitude:
+                      type: number
+                      format: float
+                img:
+                  type: string
+                  format: binary
+                sticker_img:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddress'
+  /api/v2/postal-addresses/{id}/:
+    get:
+      operationId: retrievePostalAddress
+      summary: Retrieve PostalAddress by id
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostalAddress'
+    delete:
+      operationId: deletePostalAddress
+      summary: Delete PostalAddress by id
+      tags: [PostalAddress]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Deleted
+  /api/v2/sales/:
+    get:
+      operationId: listSales
+      summary: List sales lines as schema.org Products (requires start/end, TZ-aware)
+      description: |
+        FR (FALC): Liste des ventes entre deux dates. Vous DEVEZ fournir
+        deux paramètres: `start` et `end` au format ISO‑8601 avec fuseau horaire
+        (exemple: 2025-01-31T23:59:59+01:00). La réponse est une `ItemList`
+        de `Product` (schema.org), avec des propriétés additionnelles utiles
+        (`sale_line_uuid`, `quantity`, `vat`, `payment_method`, `status`).
+
+        EN: List sales in a date window. Requires `start` and `end` query
+        parameters as ISO‑8601 TZ‑aware datetimes. Returns an `ItemList` of
+        schema.org `Product` items, each representing the sold product.
+      tags: [Sale]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: query
+          name: start
+          required: true
+          description: |
+            FR: Début de période (ISO‑8601, avec fuseau horaire). Exemple: 2025-01-01T00:00:00+01:00
+            EN: Period start (ISO‑8601 with timezone). Example: 2025-01-01T00:00:00+01:00
+          schema:
+            type: string
+            format: date-time
+          example: "2025-01-01T00:00:00+01:00"
+        - in: query
+          name: end
+          required: true
+          description: |
+            FR: Fin de période (ISO‑8601, avec fuseau horaire). Doit être ≥ start.
+            EN: Period end (ISO‑8601 with timezone). Must be ≥ start.
+          schema:
+            type: string
+            format: date-time
+          example: "2025-01-31T23:59:59+01:00"
+        - in: query
+          name: status
+          required: false
+          description: |
+            FR: Filtre sur le statut métier de la ligne. Par défaut, seules les lignes `VALID` sont renvoyées.
+            Utilisez `ALL` pour désactiver le filtre. Valeurs possibles: `ALL`, `CANCELED (C)`, `REFUNDED (R)`,
+            `CREATED (O)`, `UNPAID (U)`, `FREERES (F)`, `PAID (P)`, `VALID (V)`, `FAILED (D)`.
+
+            EN: Filter by line business status. Default returns only `VALID` lines. Use `ALL` to disable the filter.
+            Allowed values: `ALL`, `CANCELED (C)`, `REFUNDED (R)`, `CREATED (O)`, `UNPAID (U)`, `FREERES (F)`,
+            `PAID (P)`, `VALID (V)`, `FAILED (D)`.
+          schema:
+            type: string
+            example: VALID
+      responses:
+        '200':
+          description: OK — ItemList of Products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemList'
+              examples:
+                salesList:
+                  summary: Sales list example
+                  value:
+                    "@context": "https://schema.org"
+                    "@type": "ItemList"
+                    startDate: "2025-01-01T00:00:00+01:00"
+                    endDate: "2025-01-31T23:59:59+01:00"
+                    itemListElement:
+                      - "@type": "Product"
+                        name: "Billet Concert — Plein tarif"
+                        category: "Ticket booking"
+                        image: "https://example.test/media/images/abc_med.jpg"
+                        sku: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                        identifier: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                        offers:
+                          "@type": "Offer"
+                          price: "10.00"
+                          priceCurrency: "EUR"
+                        additionalProperty:
+                          - "@type": "PropertyValue"
+                            name: "sale_line_uuid"
+                            value: "6a1f2e8c-9c3b-4f1a-8e2d-7b6a5c4d3e2f"
+                          - "@type": "PropertyValue"
+                            name: "quantity"
+                            value: "1"
+                          - "@type": "PropertyValue"
+                            name: "vat"
+                            value: "20.00"
+                salesListAll:
+                  summary: Sales list without status filter
+                  value:
+                    "@context": "https://schema.org"
+                    "@type": "ItemList"
+                    startDate: "2025-01-01T00:00:00+01:00"
+                    endDate: "2025-01-31T23:59:59+01:00"
+                    itemListElement: []
+        '400':
+          description: Bad Request — missing/invalid start/end
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                detail: "Paramètres 'start' et 'end' obligatoires (ISO 8601, avec fuseau horaire)."
+        '401':
+          description: Unauthorized — API key missing/invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden — API key lacks "sale" permission or user not tenant admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v2/sales/{uuid}/:
+    get:
+      operationId: retrieveSale
+      summary: Retrieve one sale line as schema.org Product by UUID
+      description: |
+        FR (FALC): Donne le détail d’une ligne de vente sous forme de `Product` (schema.org).
+        Les propriétés additionnelles incluent l’UUID de la ligne, la quantité et la TVA.
+
+        EN: Returns a single sale line as a schema.org `Product` resource.
+      tags: [Sale]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK — Product
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+              examples:
+                oneSale:
+                  summary: One sale line as Product
+                  value:
+                    "@context": "https://schema.org"
+                    "@type": "Product"
+                    name: "Adhésion annuelle"
+                    category: "Subscription or membership"
+                    identifier: "6a1f2e8c-9c3b-4f1a-8e2d-7b6a5c4d3e2f"
+                    offers:
+                      "@type": "Offer"
+                      price: "5.00"
+                      priceCurrency: "EUR"
+                    additionalProperty:
+                      - "@type": "PropertyValue"
+                        name: "sale_line_uuid"
+                        value: "6a1f2e8c-9c3b-4f1a-8e2d-7b6a5c4d3e2f"
+                      - "@type": "PropertyValue"
+                        name: "quantity"
+                        value: "2"
+                      - "@type": "PropertyValue"
+                        name: "vat"
+                        value: "0.00"
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      bearerFormat: Api-Key
+      description: |
+        Pass your key as `Authorization: Api-Key <key>`.
+  schemas:
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: Unauthorized
+    PostalAddress:
+      type: object
+      properties:
+        '@type':
+          type: string
+          example: PostalAddress
+        name:
+          type: string
+        streetAddress:
+          type: string
+        addressLocality:
+          type: string
+        addressRegion:
+          type: string
+        postalCode:
+          type: string
+        addressCountry:
+          type: string
+        geo:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: GeoCoordinates
+            latitude:
+              type: number
+              format: float
+            longitude:
+              type: number
+              format: float
+        image:
+          type: array
+          description: Array of image URLs (main first, then sticker)
+          items:
+            type: string
+            format: uri
+    Place:
+      type: object
+      properties:
+        '@type':
+          type: string
+          example: Place
+        address:
+          $ref: '#/components/schemas/PostalAddress'
+    Event:
+      type: object
+      description: schema.org/Event JSON-LD representation
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Event
+        identifier:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+          nullable: true
+        location:
+          $ref: '#/components/schemas/Place'
+        url:
+          type: string
+          format: uri
+        additionalType:
+          type: string
+          description: Human-readable category label (schema.org/Thing.additionalType). Maps to internal category.
+        superEvent:
+          description: Parent event. Required when the resolved category is ACTION (Volunteering).
+          oneOf:
+            - type: string
+              format: uuid
+              description: UUID of the parent Event (recommended for create requests)
+            - type: object
+              properties:
+                '@type':
+                  type: string
+                  example: Event
+                identifier:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+        maximumAttendeeCapacity:
+          type: integer
+        disambiguatingDescription:
+          type: string
+        eventStatus:
+          type: string
+          description: e.g. https://schema.org/EventScheduled or https://schema.org/EventCancelled
+        audience:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Audience
+            audienceType:
+              type: string
+              example: private
+        keywords:
+          type: array
+          items:
+            type: string
+        sameAs:
+          type: string
+          format: uri
+        offers:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Offer
+            eligibleQuantity:
+              type: object
+              properties:
+                '@type':
+                  type: string
+                  example: QuantitativeValue
+                maxValue:
+                  type: integer
+            returnPolicy:
+              type: object
+              properties:
+                '@type':
+                  type: string
+                  example: MerchantReturnPolicy
+                merchantReturnDays:
+                  type: integer
+        additionalProperty:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: optionsRadio
+              value:
+                oneOf:
+                  - type: array
+                    items:
+                      type: string
+                  - type: string
+    Product:
+      type: object
+      description: schema.org/Product representation used for sales lines
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Product
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        image:
+          type: string
+          format: uri
+          nullable: true
+        category:
+          type: string
+          description: Human-readable product category
+        sku:
+          type: string
+          description: Product UUID
+        identifier:
+          type: string
+          description: Product UUID (alias)
+        offers:
+          $ref: '#/components/schemas/Offer'
+        additionalProperty:
+          type: array
+          items:
+            $ref: '#/components/schemas/PropertyValue'
+    Offer:
+      type: object
+      properties:
+        '@type':
+          type: string
+          example: Offer
+        price:
+          type: string
+          description: Unit price including VAT, as string
+          example: "10.00"
+        priceCurrency:
+          type: string
+          example: EUR
+    PropertyValue:
+      type: object
+      properties:
+        '@type':
+          type: string
+          example: PropertyValue
+        name:
+          type: string
+        value:
+          type: string
+    ItemList:
+      type: object
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: ItemList
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        itemListElement:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'

@@ -13,7 +13,8 @@
         {% component "unfold/components/card.html" with title=_("Validation manuelle") %}
             <div id="admin-accept-area-{{ instance.uuid }}">
                 <p class="mb-3 text-sm text-gray-600 dark:text-gray-300">{% trans "Cette adhésion est en attente de validation. Cliquez sur le bouton ci-dessous pour l'accepter et envoyer le lien de paiement à l'adhérent." %}</p>
-                <button class="btn btn-success" hx-post="/memberships/{{ instance.uuid }}/admin_accept/"
+                <button class="font-medium flex items-center gap-2 px-3 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer border border-base-200 bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900"
+                        hx-post="/memberships/{{ instance.uuid }}/admin_accept/"
                         hx-target="#admin-accept-area-{{ instance.uuid }}"
                         hx-swap="outerHTML" hx-confirm="Confirmer l'acceptation de cette adhésion ?">
                     {% trans "Accepter l'adhésion" %}

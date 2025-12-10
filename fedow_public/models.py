@@ -2,6 +2,7 @@ from django.db import models
 from uuid import uuid4
 from django.db.models import UniqueConstraint, Q
 from django.utils.translation import gettext_lazy as _
+from django.core.cache import cache
 
 
 class AssetFedowPublic(models.Model):
@@ -19,6 +20,7 @@ class AssetFedowPublic(models.Model):
     wallet_origin = models.ForeignKey('AuthBillet.Wallet', on_delete=models.PROTECT, related_name='assets_fedow_public')
     origin = models.ForeignKey('Customers.Client', on_delete=models.CASCADE,
                                related_name="assets_fedow_public")  # La bonne relation a utiliser au lieu des deux précédents, relicats de la migration
+    archive = models.BooleanField(default=False)
 
     STRIPE_FED_FIAT = 'FED'
     TOKEN_LOCAL_FIAT = 'TLF'
@@ -56,6 +58,10 @@ class AssetFedowPublic(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        cache.delete(f"federated_places")
+        super().save(*args, **kwargs)
 
     class Meta:
         # Only one can be true :

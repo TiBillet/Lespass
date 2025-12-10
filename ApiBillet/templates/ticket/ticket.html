@@ -1,4 +1,4 @@
-{% load static humanize i18n tz %}
+{% load static humanize i18n tz tibitags %}
 <html lang="fr">
 <head>
     <meta charset="utf-8">
@@ -118,9 +118,34 @@
             margin: 5mm;
         }
     </style>
+    {% if ticket.reservation.custom_form %}
+    <style>
+        /* Passer le ticket pleine largeur A4 si un formulaire existe */
+        @page { size: 210mm 297mm; margin: 5mm; }
+
+        /* Mise en page 2 colonnes: billet à gauche, formulaire à droite */
+        .ticket-layout { display: flex; gap: 8mm; align-items: flex-start; break-inside: avoid; page-break-inside: avoid; }
+        .ticket-left { flex: 1 1 60%; break-inside: avoid; page-break-inside: avoid; }
+        .ticket-right { flex: 1 1 40%; break-inside: avoid; page-break-inside: avoid; }
+
+        /* Bloc formulaire compact (sans tableau) */
+        .cf-list { display: block; font-size: 11px; }
+        .cf-item { margin-bottom: 3mm; break-inside: avoid; page-break-inside: avoid; }
+        .cf-key { font-weight: 700; margin: 0 0 1mm 0; }
+        .cf-value { font-weight: 400; line-height: 1.2; word-break: break-word; }
+        /* Sécurité anti-coupures */
+        .ticket-right, .cf-list { break-inside: avoid; page-break-inside: avoid; }
+        /* Titre du bloc formulaire plus discret pour gagner de la place */
+        .ticket-right .h4 { font-size: 1rem; margin-bottom: 4mm; }
+    </style>
+    {% endif %}
 </head>
 
 <body class="d-flex flex-column justify-content-center align-items-center min-vh-100 vw-100">
+{% if ticket.reservation.custom_form %}
+<div class="ticket-layout">
+  <div class="ticket-left">
+{% endif %}
 <section id="informations">
     {% with event=ticket.reservation.event %}
     <header class="mb-3">
@@ -212,5 +237,22 @@
         {% trans 'the collective organization toolbox.' %}
     </p>
 </section>
+{% if ticket.reservation.custom_form %}
+  </div> <!-- /.ticket-left -->
+  <div class="ticket-right">
+    <h2 class="h4 mb-3">{% trans "Form information" %}</h2>
+    <div class="cf-list">
+      {% for key, value in ticket.reservation.custom_form.items %}
+        <div class="cf-item">
+          <div class="cf-key">{{ key }}</div>
+          <div class="cf-value">{{ value|default_if_none:""|safe_join:", "|linebreaksbr }}</div>
+        </div>
+      {% empty %}
+        <p class="text-muted">{% trans "No additional information" %}</p>
+      {% endfor %}
+    </div>
+  </div> <!-- /.ticket-right -->
+</div> <!-- /.ticket-layout -->
+{% endif %}
 </body>
 </html>

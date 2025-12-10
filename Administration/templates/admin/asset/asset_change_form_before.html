@@ -32,7 +32,7 @@
                     </div>
                 {% endif %}
                 <div>
-                    <strong><a href="/fedow/asset/{{ asset_pk }}/retrieve_bank_deposits/">{% trans "-> Voir toute les remises en banques précédentes <-" %}</a></strong>
+                    <strong><a href="/fedow/asset/{{ asset_pk }}/retrieve_bank_deposits/">{% trans "-> Voir le detail des transactions et remises en banques <-" %}</a></strong>
                 </div>
             </div>
         {% endcomponent %}
@@ -51,6 +51,7 @@
                                 <th class="align-middle border-b border-base-200 font-semibold py-2 text-left whitespace-nowrap hidden px-3 lg:table-cell dark:border-base-800 dark:bg-white/[.02] first:pl-6 last:pr-6">{% trans "Action" %}</th>
                             </tr>
                             </thead>
+
 
                             <tbody class="block lg:table-row-group">
                             {% for item in total_by_place_with_uuid.total_by_place %}

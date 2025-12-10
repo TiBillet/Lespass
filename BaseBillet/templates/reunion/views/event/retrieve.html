@@ -6,11 +6,11 @@
 {% block og_type %}event{% endblock %}
 {% block og_title %}{{ event.name }}{% endblock %}
 {% block og_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block og_image %}{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_image %}{{ event.get_social_card }}{% endblock %}
 {% block og_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block twitter_title %}{{ event.name }}{% endblock %}
 {% block twitter_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block twitter_image %}{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_image %}{{ event.get_social_card }}{% endblock %}
 {% block twitter_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block extra_meta %}
     {% if event.postal_address %}
@@ -107,20 +107,13 @@
         <!-- tags -->
         <p>
             {% for tag  in event.tag.all %}
-                <span class="badge text-bg-info p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
+                <span style="{{ tag.style_attr }}" class="badge p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
             {% endfor %}
         </p>
 
         <p class="lead">{{ event.short_description | default:"" }}</p>
 
-        {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
-        {#    # Todo : Garder l'user d'un dns à l'autre #}
-        {% if not event_in_this_tenant %}
-            <a href="{{ event.full_url }}?openbookingPanel=true" target="_blank" class="btn btn-lg btn-primary d-block mt-3" role="button">
-                {% translate "I want to book one or more seats" %}
-                <i class="bi bi-box-arrow-up-right"></i>
-            </a>
-        {% elif event.complet %}
+        {% if event.complet %}
             <a href="#" class="btn btn-lg btn-danger d-block mt-3 disabled" role="button" aria-disabled="true">
                 {% translate "Full capacity: The event is sold out." %}
             </a>

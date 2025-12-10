@@ -8,7 +8,6 @@ import pytz
 import stripe
 from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 
 from django.db import connection
 from django.http import Http404, HttpResponse
@@ -32,8 +31,9 @@ from ApiBillet.serializers import EventSerializer, EventWriteSerializer, PriceSe
 from AuthBillet.models import HumanUser
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, Ticket, Paiement_stripe, \
-    OptionGenerale, Membership
-from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik
+    OptionGenerale, Membership, PaymentMethod, LigneArticle
+from BaseBillet.tasks import create_ticket_pdf, send_stripe_bank_deposit_to_laboutik, send_payment_refused_user
+from BaseBillet.tasks import send_membership_sepa_pending_user
 from Customers.models import Client
 from PaiementStripe.views import new_entry_from_stripe_subscription_invoice
 from TiBillet import settings
@@ -1030,8 +1030,16 @@ class Webhook_stripe(APIView):
         except KeyError:
             pass
 
+
+        ##################
+        # 4 Type de webhook possible :
+        # - Checkout session completed et async completed pour les SEPA
+        # - Transfert stripe compte à compte
+        # - invoice paid pour un paiement récurrent
+        ##################
+
         # c'est une requete depuis un webhook stripe
-        if payload.get('type') == "checkout.session.completed":
+        if payload.get('type') == "checkout.session.completed" or payload.get('type') == "checkout.session.async_payment_succeeded":
             if "return_refill_wallet" in payload["data"]["object"]["success_url"]:
                 return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
@@ -1054,8 +1062,60 @@ class Webhook_stripe(APIView):
                 if paiement_stripe.traitement_en_cours:
                     return Response(f"Traitement en cours : {paiement_stripe.get_status_display()}", status=status.HTTP_208_ALREADY_REPORTED)
 
-                paiement_stripe.update_checkout_status()
+                paiement_stripe.update_checkout_status() # mets à jour l'objet stripe.subscription si besoin
+
                 paiement_stripe.refresh_from_db()
+
+                # Si c'est un paiement SEPA en attente, on envoie un mail via Celery pour prévenir
+                if paiement_stripe.status == Paiement_stripe.PENDING:
+                    first_ligne = paiement_stripe.lignearticles.first()
+                    if first_ligne and first_ligne.payment_method == PaymentMethod.STRIPE_SEPA_NOFED:
+                        # Envoi d'un email FALC pour informer l'utilisateur.
+                        # Objectif: dire simplement que la demande est prise en compte
+                        # et que l'adhésion sera active après réception du prélèvement SEPA.
+                        try:
+                            # On peut avoir plusieurs lignes. On cible les lignes d'adhésion.
+                            memberships = set()
+                            for ligne in paiement_stripe.lignearticles.all():
+                                if getattr(ligne, 'membership', None):
+                                    memberships.add(ligne.membership)
+
+                            # Envoi un mail par adhésion (en pratique, souvent 1)
+                            for membership in memberships:
+                                send_membership_sepa_pending_user.delay(str(membership.uuid))
+                        except Exception as e:
+                            logger.error(f"Erreur envoi email SEPA pending: {e}")
+
+                return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
+
+        elif payload.get('type') == "checkout.session.async_payment_failed":
+            if not payload["data"]["object"]["metadata"].get('tenant'):
+                logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
+                return Response(f"Pas de tenant dans metadata, pas pour nous ? {payload}",
+                                status=status.HTTP_204_NO_CONTENT)
+
+            tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
+            if tenant_uuid_in_metadata == "payment_link" :
+                return Response(f"Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
+
+            tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
+            with tenant_context(tenant):
+                paiement_stripe = Paiement_stripe.objects.get(
+                    checkout_session_id_stripe=payload['data']['object']['id'])
+                logger.info(
+                    f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')} - with tenant_context({tenant}) -> paiment_stripe_validator")
+
+                if paiement_stripe.traitement_en_cours:
+                    return Response(f"Traitement en cours : {paiement_stripe.get_status_display()}", status=status.HTTP_208_ALREADY_REPORTED)
+
+
+                paiement_stripe.update_checkout_status() # mets à jour l'objet stripe.subscription si besoin
+                paiement_stripe.status = Paiement_stripe.FAILED
+                paiement_stripe.lignearticles.all().update(status=LigneArticle.FAILED)
+                paiement_stripe.save()
+
+                # envoyer ici le mail d'echec de paiement
+                send_payment_refused_user.delay(str(paiement_stripe.uuid))
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 
 
@@ -1074,6 +1134,8 @@ class Webhook_stripe(APIView):
             amount = transfer.amount
 
             # On est sur le tenant root. Il faut chercher le tenant correspondant.
+
+            #TODO : prendre le tenant dans le metadata ?
             for tenant in Client.objects.all().exclude(categorie__in=[Client.ROOT, Client.WAITING_CONFIG]):
                 with tenant_context(tenant): # Comment faire sans itérer dans tout les tenant ?
                     config = Configuration.get_solo()
@@ -1122,80 +1184,87 @@ class Webhook_stripe(APIView):
             # send_stripe_transfert_to_laboutik(payload)
 
 
-        # Prélèvement automatique d'un abonnement :
-        # elif payload.get('type') == "customer.subscription.updated":
-        #     # on récupère le don dans le paiement récurent si besoin
-        #     logger.info(f"Webhook_stripe customer.subscription.updated : {payload['data']['object']['id']}")
-        #     logger.info(f"")
-        #     logger.info(f"")
-        #     logger.info(f"{payload}")
-        #     logger.info(f"")
-        #     logger.info(f"")
-        #
-
         elif payload.get('type') == "invoice.paid": # Les abonnements
             # logger.info(f" ")
             # logger.info(payload)
             # logger.info(f" ")
 
             payload_object = payload['data']['object']
-            billing_reason = payload_object.get('billing_reason')
+            billing_reason = payload_object['billing_reason']
 
             # C'est un renouvellement d'abonnement
-            if billing_reason == 'subscription_cycle' \
-                    and payload_object.get('paid'):
+            if billing_reason == 'subscription_cycle':
+                if payload_object.get('paid') or payload_object.get('status') == 'paid' : # premier cas old code, second cas nouvelle api stripe ?
+                    logger.info(f"Webhook_stripe invoice.paid. billing_reason : {billing_reason}")
+                    # On va chercher le tenant de l'abonnement grâce au metadata inséré au moment de la création du checktout :
+                    # BaseBillet.validators.MembershipValidator.get_checkout_stripe
+                    try :
+                        # les metadata ont été généré lors de la création du checkout
+                        try :
+                            metadata = payload_object['subscription_details']['metadata']
+                        except KeyError: # nouvelle api ? les metadata sont dans l'objet parent
+                            metadata = payload_object['parent']['subscription_details']['metadata']
 
-                logger.info(f"Webhook_stripe invoice.paid. billing_reason : {billing_reason}")
-                # On va chercher le tenant de l'abonnement grâce au metadata inséré au moment de la création du checktout :
-                # BaseBillet.validators.MembershipValidator.get_checkout_stripe
-                try :
-                    # les metadata ont été généré lors de la création du checkout
-                    metadata = payload_object['subscription_details']['metadata']
-                    logger.info(f"Webhook_stripe metadata --> {metadata}")
+                        try :
+                            stripe_id_subscription = payload_object['subscription']
+                        except KeyError:
+                            stripe_id_subscription = payload_object['parent']['subscription_details']['subscription']
 
-                    tenant_uuid = metadata['tenant']
-                    membership_uuid = metadata['membership_uuid']
-                    price_uuid = metadata['price_uuid']
-                    tenant = Client.objects.get(uuid=tenant_uuid)
-                    logger.info(f"Webhook_stripe invoice.paid. tenant : {tenant.name}")
-                    with tenant_context(tenant):
-                        membership = Membership.objects.get(
-                            uuid=membership_uuid,
-                            stripe_id_subscription=payload_object['subscription'],
-                            price__uuid=price_uuid
-                        )
-                        logger.info(f"    get membership : {membership}")
-                        invoice = payload_object['id']
-                        last_stripe_invoice = membership.last_stripe_invoice
+                        logger.info(f"Webhook_stripe metadata --> {metadata}")
 
-                        # Même adhésion, mais facture différente :
-                        # C'est alors un renouvellement automatique.
-                        if invoice != last_stripe_invoice:
-                            logger.info((f'    nouvelle facture arrivée : {invoice}'))
-                            paiement_stripe = new_entry_from_stripe_subscription_invoice(
-                                user=membership.user, id_invoice=invoice, membership=membership)
+                        tenant_uuid = metadata['tenant']
+                        membership_uuid = metadata['membership_uuid']
+                        price_uuid = metadata['price_uuid']
+                        tenant = Client.objects.get(uuid=tenant_uuid)
+                        logger.info(f"Webhook_stripe invoice.paid. tenant : {tenant.name}")
+                        with tenant_context(tenant):
+                            #TODO:
+                            # envoyer un mail de renouvellement,
+                            # vérifier le versement clafoutil,
+                            # checker la ligne de vente,
+                            # checker la ligne adhésion,
+                            # checker le rapport pour la mairie
 
-                            return paiment_stripe_validator(request, paiement_stripe)
+                            membership = Membership.objects.get(
+                                uuid=membership_uuid,
+                                stripe_id_subscription=stripe_id_subscription,
+                                price__uuid=price_uuid
+                            )
 
-                        else:
-                            logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
+                            logger.info(f"    get membership uuid : {membership} {membership.uuid}")
+                            invoice = payload_object['id']
+                            last_stripe_invoice = membership.last_stripe_invoice
 
-                except Membership.DoesNotExist:
-                    logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
-                except Exception:
-                    logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
-                    raise Exception
+                            # Même adhésion, mais facture différente :
+                            # C'est alors un renouvellement automatique.
+                            if invoice != last_stripe_invoice:
+                                logger.info((f'    nouvelle facture arrivée : {invoice}'))
+
+                                # Fabrication de l'objet PaiementStripe en db avec un statu UNPAID
+                                paiement_stripe = new_entry_from_stripe_subscription_invoice(
+                                    user=membership.user, id_invoice=invoice, membership=membership)
+
+                                # Validation du paiement stripe ( va checker l'api stripe )
+                                # renvoie un objet request. TODO: Séparer la validation du renvoi HTTP...
+                                ret = paiment_stripe_validator(request, paiement_stripe)
+
+                                # 202 veut dire que la facture a été validée
+                                # les triggers ont été lancé :
+                                # if ret.status_code == status.HTTP_202_ACCEPTED:
+                                # import ipdb; ipdb.set_trace()
+                                return ret
+
+                            else:
+                                logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
+
+                    except Membership.DoesNotExist:
+                        logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
+                    except Exception:
+                        logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
+                        raise Exception
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.
         # logger.info(f"Webhook stripe bien reçu, mais aucune action lancée. --> {payload}")
         return Response('Webhook stripe bien reçu, mais aucune action lancée.', status=status.HTTP_207_MULTI_STATUS)
 
-    # def get(self, request, uuid_paiement):
-    #     logger.info("*" * 30)
-    #     logger.info(f"{datetime.now()} - Webhook_stripe GET : {uuid_paiement}")
-    #     logger.info("*" * 30)
-    #
-    #     paiement_stripe = get_object_or_404(Paiement_stripe,
-    #                                         uuid=uuid_paiement)
-    #     return paiment_stripe_validator(request, paiement_stripe)

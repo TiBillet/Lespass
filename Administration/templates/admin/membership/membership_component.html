@@ -9,14 +9,4 @@
         {{ pending|intcomma }}
     {% endif %}
 
-    <span class="flex flex-row gap-1 items-center font-normal text-sm tracking-tight {% if progress == "positive" %}text-green-700 dark:text-green-400{% elif progress == "negative" %}text-red-700 dark:text-red-400{% endif %}">
-        {% if progress == "positive" %}
-            <span class="material-symbols-outlined">arrow_circle_up</span>
-        {% elif progress == "negative" %}
-            <span class="material-symbols-outlined">arrow_circle_down</span>
-        {% else %}
-            <span class="material-symbols-outlined text-gray-500">remove_circle</span>
-        {% endif %}
-        <span class="font-medium">{{ percentage }}</span>
-    </span>
 </div>

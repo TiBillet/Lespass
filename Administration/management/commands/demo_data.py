@@ -31,9 +31,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # START MIGRATE AND INSTALL BEFORE THIS SCRIPT
         sub = os.environ['SUB']
-        tenant1 = Client.objects.get(name=sub)
-        tenant1.name = "Le Tiers-Lustre"
+        try :
+            tenant1 = Client.objects.get(name=sub)
+        except Client.DoesNotExist:
+            logger.info(f"No tenant found with {sub}. Name changed : demo data already installed")
+            return None
 
+        tenant1.name = "Le Tiers-Lustre"
         tenant1.save()
 
         # Fabrication d'un deuxième tenant pour de la fédération
@@ -329,11 +333,11 @@ class Command(BaseCommand):
                         categorie_article=Product.ADHESION,
                     )
 
-                    ssa_trimestrielle, created = Price.objects.get_or_create(
+                    ssa_abo, created = Price.objects.get_or_create(
                         product=ssa,
                         name="Mensuelle",
                         short_description="Adhésion pour 3 mois. Paiement mensuel récurent.",
-                        free_price=False,
+                        free_price=True,
                         prix=50,
                         recurring_payment=True,
                         iteration=3,
@@ -379,6 +383,23 @@ class Command(BaseCommand):
                                 "order": 4,
                                 "options": ["Cuisine", "Jardinage", "Musique", "Technologie", "Art", "Sport"],
                                 "help_text": "Sélectionnez autant d'options que vous le souhaitez.",
+                            },
+                            {
+                                "name": "contact_pref",
+                                "label": "Préférence de contact",
+                                "field_type": ProductFormField.FieldType.RADIO_SELECT,
+                                "required": True,
+                                "order": 5,
+                                "options": ["Email", "Téléphone", "Signal"],
+                                "help_text": "Choisissez un moyen de contact.",
+                            },
+                            {
+                                "name": "volunteer_ok",
+                                "label": "Je souhaite être contacté·e pour du bénévolat",
+                                "field_type": ProductFormField.FieldType.BOOLEAN,
+                                "required": False,
+                                "order": 6,
+                                "help_text": "Activez si vous êtes d'accord.",
                             },
                         ]
                         for f in fields:
@@ -597,6 +618,21 @@ class Command(BaseCommand):
                             "order": 4,
                             "options": ["Chant", "Danse", "Percussions", "Lumières", "Son"],
                             "help_text": "Choisissez autant d'options que vous voulez.",
+                        },
+                        {
+                            "label": "Préférence de place",
+                            "field_type": ProductFormField.FieldType.RADIO_SELECT,
+                            "required": True,
+                            "order": 5,
+                            "options": ["Debout", "Assis", "Sans préférence"],
+                            "help_text": "Sélectionnez votre préférence de placement.",
+                        },
+                        {
+                            "label": "Je souhaite recevoir les actualités de l'évènement",
+                            "field_type": ProductFormField.FieldType.BOOLEAN,
+                            "required": False,
+                            "order": 6,
+                            "help_text": "Activez si vous voulez des informations par email.",
                         },
                     ]
                     for f in demo_fields:

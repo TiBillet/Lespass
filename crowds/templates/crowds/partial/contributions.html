@@ -1,0 +1,69 @@
+{% load i18n tibitags %}
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th scope="col">{% translate 'Contributeur' %}</th>
+        <th scope="col">{% translate 'Description' %}</th>
+        <th scope="col" class="text-end">{% translate 'Montant' %}</th>
+        <th scope="col">{% translate 'Statut' %}</th>
+        <th scope="col">{% translate 'Date' %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% with total=contributions|length %}
+      {% for c in contributions %}
+        {% if forloop.counter == 5 %}
+    </tbody>
+    <tbody id="contrib-more-{{ initiative.uuid }}" class="collapse">
+        {% endif %}
+        <tr>
+          <td>{{ c.get_contriutor_name }}</td>
+          <td class="small">{{ c.description|default:""|linebreaksbr }}</td>
+          <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.currency }}</td>
+          <td>
+            {% if c.payment_status == 'pending' %}
+              {% if user.is_authenticated %}
+                {% if user|can_admin %}
+                  <button class="badge text-bg-warning border-0" style="cursor:pointer"
+                          title="{% translate 'Marquer comme payée' %}"
+                          onclick="crowdsConfirmMarkContributionPaid('{{ c.uuid }}')">
+                    {% translate 'En attente de paiement' %}
+                  </button>
+                {% else %}
+                  <span class="badge text-bg-warning">{% translate 'En attente de paiement' %}</span>
+                {% endif %}
+              {% else %}
+                <span class="badge text-bg-warning">{% translate 'En attente de paiement' %}</span>
+              {% endif %}
+            {% elif c.payment_status == 'paid' %}
+              <span class="badge text-bg-success">{% translate 'Payée en ligne' %}</span>
+            {% elif c.payment_status == 'admin_paid' %}
+              <span class="badge text-bg-success">{% translate 'Noté comme Payée' %}</span>
+            {% else %}
+              {{ c.payment_status }}
+            {% endif %}
+          </td>
+          <td>{{ c.created_at|date:'Y-m-d H:i' }}</td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
+        </tr>
+      {% endfor %}
+      {% endwith %}
+    </tbody>
+  </table>
+</div>
+{% with total=contributions|length %}
+{% if total > 4 %}
+<div class="text-center mt-2">
+  <button class="btn btn-sm btn-outline-secondary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#contrib-more-{{ initiative.uuid }}"
+          aria-expanded="false" aria-controls="contrib-more-{{ initiative.uuid }}"
+          onclick="this.dataset.altText=this.dataset.altText||this.innerText; const t=this.getAttribute('aria-expanded')==='true'?this.dataset.altText:'{% translate 'Afficher moins' %}'; this.innerText=t;">
+    {% translate 'Afficher plus' %}
+  </button>
+</div>
+{% endif %}
+{% endwith %}

@@ -95,6 +95,9 @@
                     {% endfor %}
                 </p>
                 {% endif %}
+                {% if resa.custom_form %}
+                {% include 'reunion/partials/account/custom_form_accordion.html' %}
+                {% endif %}
                 <div class="card-footer p-0">
                     {% include 'reunion/partials/account/ticket_accordion.html' %}
                 </div>

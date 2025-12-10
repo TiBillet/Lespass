@@ -22,7 +22,12 @@ class JSONKeyField(Field):
         if isinstance(data, dict):
             import json as _json
             value = data.get(self.key)
-            if isinstance(value, (dict, list)):
+            # Apply safe_join-like behavior for CSV readability
+            if isinstance(value, list):
+                return ", ".join(map(str, value))
+            if isinstance(value, bool):
+                return _("Yes") if value else _("No")
+            if isinstance(value, dict):
                 return _json.dumps(value, ensure_ascii=False)
             return value
         return None
@@ -41,10 +46,14 @@ class TicketExportResource(resources.ModelResource):
     reservation_datetime = Field(column_name='reservation_datetime')
     payment_method_display = Field(attribute='get_payment_method_display', column_name='payment_method')
 
+    # Ticket fields
+    numero_uuid = Field(attribute='numero_uuid', column_name='numero_uuid')
+
     # Formbricks fields
     email = Field(attribute='reservation__user_commande__email', column_name='email')
     user_id = Field(column_name='userId')
     reservation_uuid = Field(attribute='reservation__uuid', column_name='reservation_uuid')
+
 
     # --- Dynamic columns for Reservation.custom_form ---
     def before_export(self, queryset, *args, **kwargs):
@@ -107,6 +116,7 @@ class TicketExportResource(resources.ModelResource):
             'email',
             'user_id',
             'reservation_uuid',
+            'numero_uuid',
             # 'first_name',
             # 'last_name',
             'status_display',
@@ -116,7 +126,7 @@ class TicketExportResource(resources.ModelResource):
             'reservation_datetime',
             'payment_method_display',
         )
-        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'email', 'user_id', 'reservation_uuid')
+        export_order = ('event_name', 'event_datetime', 'first_name', 'last_name', 'email', 'user_id', 'reservation_uuid', 'numero_uuid')
 
     def dehydrate_event_datetime(self, ticket):
         """

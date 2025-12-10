@@ -1,0 +1,117 @@
+{% load i18n tibitags %}
+<div class="table-responsive">
+  <table class="table align-middle">
+    <thead>
+      <tr>
+        <th scope="col">{% translate 'Participant' %}</th>
+        <th scope="col">{% translate 'Description' %}</th>
+        <th scope="col" class="text-end">{% translate 'Montant demandé' %}</th>
+        <th scope="col">{% translate 'Statut' %}</th>
+        <th scope="col">{% translate 'Date' %}</th>
+        <th scope="col" class="text-end">{% translate 'Actions' %}</th>
+        <th scope="col" class="text-end">{% translate 'Admin' %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% with total=participations|length %}
+      {% for p in participations %}
+        {% if forloop.counter == 5 %}
+    </tbody>
+    <tbody id="parts-more-{{ initiative.uuid }}" class="collapse">
+        {% endif %}
+        <tr>
+          <td>{{ p.participant.email }}</td>
+          <td class="small">{{ p.description|linebreaksbr }}</td>
+          <td class="text-end">
+            {% if p.amount == None %}
+              <span class="text-muted">—</span>
+            {% else %}
+              {{ p.amount|dround|floatformat:2 }} {{ initiative.currency }}
+            {% endif %}
+          </td>
+          <td>
+            {% if p.state == 'requested' %}
+              <span class="badge text-bg-warning">{% translate 'Demande formulée' %}</span>
+            {% elif p.state == 'approved_admin' %}
+              <span class="badge text-bg-info">{% translate 'Demande validée : GO !' %}</span>
+            {% elif p.state == 'completed_user' %}
+              <span class="badge text-bg-secondary">{% translate 'Action terminée' %}</span>
+            {% elif p.state == 'validated_admin' %}
+              <span class="badge text-bg-success">{% translate 'Action validée' %}</span>
+            {% else %}
+              {{ p.state }}
+            {% endif %}
+          </td>
+          <td>{{ p.created_at|date:'Y-m-d H:i' }}</td>
+          <td class="text-end">
+            {% if user.is_authenticated and p.participant_id == user.id %}
+              {% if p.state == 'requested' or p.state == 'approved_admin' %}
+                <button class="btn btn-sm btn-outline-primary"
+                        title="{% translate 'Indiquer comme terminée' %}"
+                        onclick="crowdsMarkParticipationCompleted('{{ p.uuid }}')">
+                  {% translate 'Marquer terminé' %}
+                </button>
+              {% elif p.state == 'completed_user' or p.state == 'validated_admin' %}
+                {% if p.time_spent_minutes %}
+                  <span class="text-muted small">{{ p.time_spent_minutes }} {% translate 'min' %}</span>
+                {% endif %}
+              {% endif %}
+            {% else %}
+              {% if p.state == 'completed_user' or p.state == 'validated_admin' %}
+                {% if p.time_spent_minutes %}
+                  <span class="text-muted small">{{ p.time_spent_minutes }} {% translate 'min' %}</span>
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if user.is_authenticated %}
+              {% if user.is_staff or user.is_superuser %}
+                {% if p.state == 'requested' %}
+                  <button class="btn btn-sm btn-outline-success"
+                          title="{% translate 'Valider la demande' %}"
+                          hx-post="{{ initiative.get_absolute_url }}participations/{{ p.uuid }}/approve/"
+                          hx-target="#participations_list"
+                          hx-swap="innerHTML">
+                    {% translate 'Approuver' %}
+                  </button>
+                {% elif p.state == 'completed_user' %}
+                  <button class="btn btn-sm btn-outline-success"
+                          title="{% translate 'Valider la participation' %}"
+                          hx-post="{{ initiative.get_absolute_url }}participations/{{ p.uuid }}/validate/"
+                          hx-target="#participations_list"
+                          hx-swap="innerHTML">
+                    {% translate 'Valider' %}
+                  </button>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-4">{% translate 'Aucune participation pour le moment.' %}</td>
+        </tr>
+      {% endfor %}
+      {% endwith %}
+    </tbody>
+  </table>
+</div>
+{% with total=participations|length %}
+{% if total > 4 %}
+<div class="text-center mt-2">
+  <button class="btn btn-sm btn-outline-secondary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#parts-more-{{ initiative.uuid }}"
+          aria-expanded="false" aria-controls="parts-more-{{ initiative.uuid }}"
+          onclick="this.dataset.altText=this.dataset.altText||this.innerText; const t=this.getAttribute('aria-expanded')==='true'?this.dataset.altText:'{% translate 'Afficher moins' %}'; this.innerText=t;">
+    {% translate 'Afficher plus' %}
+  </button>
+</div>
+{% endif %}
+{% endwith %}

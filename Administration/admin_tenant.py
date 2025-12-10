@@ -4,7 +4,7 @@ import re
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional, Dict
-from unicodedata import category
+from urllib.parse import urlencode
 from uuid import UUID
 
 import requests
@@ -14,24 +14,24 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.contrib.admin import AdminSite
 from django.core.signing import TimestampSigner
 from django.db import models, connection, IntegrityError
 from django.db.models import Model, Count, Q, Prefetch
-from django.forms import ModelForm, Form
+from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
 from django.urls import reverse, re_path
-from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.http import require_POST
 from django.utils import timezone
-from django_tenants.utils import schema_context, tenant_context
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
+from django_htmx.http import HttpResponseClientRedirect
+from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
 from rest_framework import status
 from rest_framework.response import Response
@@ -61,11 +61,11 @@ from unfold.widgets import (
     UnfoldAdminColorInputWidget,
     UnfoldAdminSelectWidget,
     UnfoldAdminTextInputWidget,
+    UnfoldBooleanSwitchWidget,
 )
 
-from django_htmx.http import HttpResponseClientRedirect
-
 from Administration.importers.ticket_exporter import TicketExportResource
+from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
@@ -73,85 +73,24 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
-    PromotionalCode
+    PromotionalCode, Tva
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik
-from BaseBillet.validators import ReservationValidator
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
-from fedow_connect.fedow_api import AssetFedow, FedowAPI
+from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
+from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
-from fedow_connect.validators import validate_hex8
-
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
-import nh3
-from urllib.parse import urlparse, urlencode
 
 # from simple_history.admin import SimpleHistoryAdmin
 
 logger = logging.getLogger(__name__)
 
-## SANITIZER
 
 
-ALLOWED_TAGS = [
-    "p", "br", "strong", "em", "u",
-    "ul", "ol", "li",
-    "blockquote", "code", "pre",
-    "h1", "h2", "h3", "h4", "h5", "h6",
-    "a", "img", "span"
-]
-ALLOWED_ATTRIBUTES = {
-    "a": ["href", "title", "rel"],
-    "img": ["src", "alt", "title"],
-}
-
-# Disallow image URLs pointing to potentially dangerous internal routes
-DISALLOWED_IMAGE_PATH_PREFIXES = (
-    "/admin",
-    "/logout",
-    "/deconnexion",
-    "/signout",
-)
-
-
-def _attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
-    """Filter attributes during sanitization.
-    - For <img src>, remove the attribute if it targets problematic internal routes
-      like /admin or logout endpoints (even if relative URLs).
-    Returning None removes the attribute.
-    """
-    try:
-        if tag == "img" and attr == "src" and isinstance(value, str):
-            parsed = urlparse(value)
-            path = (parsed.path or "").lower()
-            # Only consider regular http/https/relative URLs; schemes are filtered elsewhere
-            for prefix in DISALLOWED_IMAGE_PATH_PREFIXES:
-                if path.startswith(prefix):
-                    return None  # drop src attribute
-        return value
-    except Exception:
-        # On any parsing error, drop the attribute to be safe
-        return None
-
-
-def clean_html(html: str) -> str:
-    # Use nh3 (ammonia) to sanitize HTML; explicitly restrict URL schemes and strip comments.
-    url_schemes = {"http", "https", "mailto", "tel"}
-    # nh3 expects sets for tags and attributes values
-    tags = set(ALLOWED_TAGS)
-    attributes = {k: set(v) for k, v in ALLOWED_ATTRIBUTES.items()}
-    return nh3.clean(
-        html,
-        tags=tags,
-        attributes=attributes,
-        url_schemes=url_schemes,
-        attribute_filter=_attribute_filter,
-        strip_comments=True,
-        link_rel=None,  # allow existing rel and don't auto-insert
-    )
 
 
 def sanitize_textfields(instance: models.Model) -> None:
@@ -194,6 +133,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         'reservation',
         'ticket',
         'wallet',
+        'sale',
     ]
 
     fields = [
@@ -203,7 +143,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
         # Les boutons de permissions :
         ('event', 'product',),
         ('reservation', 'ticket'),
-        ('wallet',),
+        ('wallet', 'sale'),
         'user',
         'key',
     ]
@@ -257,6 +197,7 @@ class ExternalApiKeyAdmin(ModelAdmin):
 class ScanAppAdmin(ModelAdmin):
     compressed_fields = True
     warn_unsaved_form = True
+    list_before_template = "admin/scanapp/list_before.html"
 
     list_display = [
         'name',
@@ -352,12 +293,12 @@ class WebhookAdmin(ModelAdmin):
             if webhook.event == Webhook.MEMBERSHIP_V:
                 # On va chercher le membership le plus récent
                 membership = Membership.objects.filter(contribution_value__isnull=False).first()
-                webhook_membership(membership.pk, solo_webhook_pk=object_id)
+                webhook_membership(membership.pk)
                 webhook.refresh_from_db()
             elif webhook.event == Webhook.RESERVATION_V:
                 # On va chercher le membership le plus récent
                 reservation = Reservation.objects.filter(status=Reservation.VALID).first()
-                webhook_reservation(reservation.pk, solo_webhook_pk=object_id)
+                webhook_reservation(reservation.pk)
                 webhook.refresh_from_db()
 
             messages.info(
@@ -389,10 +330,51 @@ class WebhookAdmin(ModelAdmin):
 
 
 ########################################################################
+# class ConfigurationAdminForm(ModelForm):
+#     """Admin form to add a 'Nom de domaine' input with live slug preview that maps to Configuration.slug."""
+#
+#     domain_name = forms.CharField(
+#         label=_("Sous domaine"),
+#         max_length=100,
+#         required=False,
+#         help_text=mark_safe('''<span>Attention ! Changer ceci changera l'adresse de touuuuut votre espace</span></br><small>Slug: <code id="slug-preview"></code></small>'''),
+#         widget=UnfoldAdminTextInputWidget(
+#             attrs={
+#                 # Live preview of slug using HTMX
+#                 "hx-post": "slugify_preview/",
+#                 "hx-trigger": "keyup changed delay:300ms",
+#                 "hx-target": "#slug-preview",
+#                 "hx-swap": "innerHTML",
+#             }
+#         ),
+#     )
+#
+#     class Meta:
+#         model = Configuration
+#         fields = '__all__'
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         # Initialize domain_name from current slug (best effort)
+#         if self.instance and getattr(self.instance, 'slug', ''):
+#             self.fields['domain_name'].initial = self.instance.slug
+#
+#     def save(self, commit=True):
+#         instance: Configuration = super().save(commit=False)
+#         domain = self.cleaned_data.get('domain_name')
+#         if domain:
+#             instance.slug = slugify(domain)
+#         if commit:
+#             instance.save()
+#             self.save_m2m()
+#         return instance
+#
+
 @admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+    # form = ConfigurationAdminForm
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -446,9 +428,14 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 # 'vat_taxe',
                 'onboard_stripe',
                 'stripe_invoice',
-                # 'stripe_mode_test',
+                'stripe_accept_sepa',
             ),
         }),
+        # ('Danger !', {
+        #     'fields': (
+        #         'domain_name',  # Virtual field to set slug
+        #     ),
+        # }),
     )
 
     readonly_fields = ['onboard_stripe', ]
@@ -459,6 +446,24 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             "widget": WysiwygWidget,
         }
     }
+    #
+    # def get_urls(self):
+    #     urls = super().get_urls()
+    #     custom_urls = [
+    #         re_path(
+    #             r'^slugify_preview/$',
+    #             self.admin_site.admin_view(csrf_protect(require_POST(self.slugify_preview))),
+    #             name='configuration-slugify-preview',
+    #         ),
+    #     ]
+    #     return custom_urls + urls
+    #
+    # def slugify_preview(self, request: HttpRequest):
+    #     """HTMX endpoint: returns the slugified version of posted domain_name."""
+    #     if not TenantAdminPermissionWithRequest(request):
+    #         return HttpResponse("", status=403)
+    #     value = request.POST.get('domain_name', '')
+    #     return HttpResponse(slugify(value))
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -642,6 +647,114 @@ class PriceInline(TabularInline):
         return TenantAdminPermissionWithRequest(request)
 
 
+class ProductFormFieldInlineForm(ModelForm):
+    """
+    Inline form that exposes a user-friendly CSV input for options on
+    RADIO_SELECT and MULTI_SELECT field types, while storing a JSON list
+    in the underlying `options` JSONField.
+    """
+    options_csv = forms.CharField(
+        required=False,
+        label=_("Choices"),
+        help_text=_('For Single select (menu), Radio or Multiple select, enter choices separated by commas. Example: Rock, Electro, Jazz'),
+        widget=UnfoldAdminTextInputWidget(attrs={"placeholder": "Rock, Electro, Jazz"}),
+    )
+
+    class Meta:
+        model = ProductFormField
+        # Exclude the real `options` field from the rendered form; it will be
+        # set from `options_csv` in `clean()`/`save()`.
+        fields = ("label", "field_type", "required", "help_text", "order")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize CSV proxy from existing JSON list
+        try:
+            opts = self.instance.options if getattr(self, 'instance', None) else None
+            if isinstance(opts, list) and all(isinstance(x, str) for x in opts):
+                self.fields["options_csv"].initial = ", ".join(opts)
+        except Exception:
+            pass
+        # Disable the Choices input unless type is Single/Radio/Multi select
+        # try:
+        #     ftype = getattr(self.instance, 'field_type', None)
+        #     selectable = ftype in (
+        #         ProductFormField.FieldType.SINGLE_SELECT,
+        #         ProductFormField.FieldType.RADIO_SELECT,
+        #         ProductFormField.FieldType.MULTI_SELECT,
+        #     )
+        #     if not selectable:
+        #         self.fields["options_csv"].widget.attrs["disabled"] = "disabled"
+        #         # self.fields["options_csv"].widget.attrs["placeholder"] = "Inutile"
+        #         # self.fields["options_csv"].widget.attrs["style"] = "display: none"
+        # except Exception:
+        #     pass
+
+    @staticmethod
+    def _parse_csv_or_json(value: str):
+        """Parse a CSV string or JSON array into a list of non-empty strings."""
+        if value is None:
+            return []
+        s = str(value).strip()
+        if not s:
+            return []
+        # If JSON-looking, try to parse first
+        if s.startswith("[") or s.startswith("{"):
+            try:
+                data = json.loads(s)
+                if isinstance(data, list):
+                    res = []
+                    for v in data:
+                        if v is None:
+                            continue
+                        sv = str(v).strip()
+                        if sv:
+                            # Collapse internal multiple spaces
+                            sv = re.sub(r"\s+", " ", sv)
+                            if sv not in res:
+                                res.append(sv)
+                    return res
+            except Exception:
+                # fall back to CSV parsing
+                pass
+        # CSV path
+        parts = [re.sub(r"\s+", " ", p.strip()) for p in s.split(",")]
+        res = []
+        for p in parts:
+            if p and p not in res:
+                res.append(p)
+        return res
+
+    def clean(self):
+        cleaned = super().clean()
+        ftype = cleaned.get("field_type")
+        csv_val = cleaned.get("options_csv")
+        # Manage options list for Single select, Radio and Multi select
+        if ftype in (
+            ProductFormField.FieldType.SINGLE_SELECT,
+            ProductFormField.FieldType.RADIO_SELECT,
+            ProductFormField.FieldType.MULTI_SELECT,
+        ):
+            options_list = self._parse_csv_or_json(csv_val)
+            cleaned["options"] = options_list if options_list else None
+        else:
+            # For non-choice types, clear options to avoid stale data
+            cleaned["options"] = None
+        return cleaned
+
+    def save(self, commit=True):
+        """Ensure the cleaned options are written to the instance even if the
+        underlying model field `options` is not rendered in the form/inline.
+        """
+        instance = super().save(commit=False)
+        # Use cleaned_data computed in clean()
+        if "options" in self.cleaned_data:
+            instance.options = self.cleaned_data.get("options")
+        if commit:
+            instance.save()
+        return instance
+
+
 class ProductFormFieldInline(TabularInline):
     """Sortable inline for dynamic membership form fields (ProductFormField)."""
     model = ProductFormField
@@ -659,20 +772,29 @@ class ProductFormFieldInline(TabularInline):
     # Columns in the inline rows (Unfold supports list_display for inlines)
     list_display = ["label", "field_type", "required", "order"]
 
+    # Use custom form with CSV proxy field
+    form = ProductFormFieldInlineForm
+
     # Fields displayed in the inline form (key is auto-generated from label)
     fields = (
         "label",
         "field_type",
         "required",
-        "options",
+        "options_csv",
         "help_text",
         "order",
     )
 
-    # Reduce JSONField textarea size (about one third of default)
+    # Keep JSON widget small for advanced/legacy editing
     formfield_overrides = {
-        models.JSONField: {"widget": forms.Textarea(attrs={"rows": 4})}
+        models.JSONField: {"widget": forms.Textarea(attrs={"rows": 3})}
     }
+
+    # Optional: show an information block before the inline (Unfold supports before templates on components)
+    # list_before_template = "admin/product/product_form_fields_inline_before.html"
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -690,7 +812,7 @@ class ProductAdminCustomForm(ModelForm):
         fields = (
             'name',
             'categorie_article',
-            # 'nominative',
+            'tva',
             'short_description',
             'long_description',
             'img',
@@ -705,6 +827,18 @@ class ProductAdminCustomForm(ModelForm):
         help_texts = {
             'img': _('Product image is displayed at a 16/9 ratio.'),
         }
+
+    categorie_article = forms.ChoiceField(
+        required=False,
+        choices=[
+            (Product.NONE, _('Select a category')),
+            (Product.BILLET, _('Ticket booking')),
+            (Product.FREERES, _('Free booking')),
+            (Product.ADHESION, _('Subscription or membership')),
+            ],
+        widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
+        label=_("Payment method"),
+    )
 
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data
@@ -745,6 +879,22 @@ class CheckStripeComponent(BaseComponent):
         )
         return context
 
+@admin.register(Tva, site=staff_admin_site)
+class TvaAdmin(ModelAdmin):
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return False
+
+
 
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
@@ -761,10 +911,12 @@ class ProductAdmin(ModelAdmin):
             'fields': (
                 'name',
                 'categorie_article',
+                'tva',
                 'img',
                 'poids',
                 'short_description',
                 'long_description',
+                'max_per_user',
                 'validate_button_text',
                 'legal_link',
                 'publish',
@@ -842,7 +994,31 @@ class ProductAdmin(ModelAdmin):
     def save_model(self, request, obj: Product, form, change):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
-        super().save_model(request, obj, form, change)
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError as err:
+            err_str = str(err)
+            # Handle unique_together = ("categorie_article", "name") on Product
+            if (
+                "BaseBillet_product_categorie_article_name" in err_str
+                or "BaseBillet_product_categorie_article_name_" in err_str
+                or "duplicate key value violates unique constraint" in err_str and "(categorie_article, name)" in err_str
+            ):
+                messages.error(
+                    request,
+                    _(
+                        "Un produit avec ce nom existe déjà dans cette catégorie.\n"
+                        "Merci de choisir un autre nom pour éviter les doublons."
+                    ),
+                )
+                # Stay on the same page
+                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
+            # Unknown integrity error: log and re-raise
+            logger.error(err)
+            raise err
+        except Exception as err:
+            logger.error(err)
+            raise err
 
     # def save_model(self, request, obj, form, change):
     #     try:
@@ -906,8 +1082,17 @@ class PromotionalCodeAdmin(ModelAdmin):
 
     list_filter = ['is_active', 'product']
     search_fields = ['name', 'product__name']
-    autocomplete_fields = ['product']
     ordering = ('-date_created',)
+
+    # pas d'auto complete sinon le formfield_for_foreignkey ne fonctionne pas, il faudra passer par le get_search_results coté ProductAdmin
+    # autocomplete_fields = ['product']
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'product':  # Replace 'user_field' with your actual field name
+            kwargs['queryset'] = Product.objects.filter(
+                archive=False, categorie_article=Product.BILLET
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     @display(description=_("Remaining uses"))
     def remaining_uses(self, obj):
@@ -938,14 +1123,14 @@ class PriceChangeForm(ModelForm):
             'product',
             'prix',
             'free_price',
-            'max_per_user',
             'subscription_type',
             'recurring_payment',
             'iteration',
             'order',
             'publish',
-            'adhesion_obligatoire',
+            'max_per_user',
             'stock',
+            'adhesion_obligatoire',
             # topup when paid :
             'fedow_reward_enabled',
             'fedow_reward_asset',
@@ -957,16 +1142,21 @@ class PriceChangeForm(ModelForm):
         recurring_payment = cleaned_data.get('recurring_payment')
         if recurring_payment:
             data = self.data  # récupère les data sans les avoir validé
-            if data.get('free_price'):
-                raise forms.ValidationError(_("Un tarif ne peut être récurent et libre."), code="invalid")
 
-            product: Product = self.cleaned_data['product']
-            if product.categorie_article != Product.ADHESION:
-                raise forms.ValidationError(
-                    _("Un tarif en mode paiement récurrent doit avoir un produit de type adhésion."), code="invalid")
+            if hasattr(self.instance, 'product'):
+                categorie_product = self.instance.product.categorie_article
+            elif self.cleaned_data.get('product'):
+                categorie_product = self.cleaned_data['product'].categorie_article
+            else :
+                raise forms.ValidationError(_("No product ?"), code="invalid")
+
+            if categorie_product :
+                if categorie_product != Product.ADHESION:
+                    raise forms.ValidationError(
+                    _("A recurring payment plan must have a membership-type product."), code="invalid")
 
             if data.get('subscription_type') not in [Price.DAY, Price.WEEK, Price.MONTH, Price.CAL_MONTH, Price.YEAR]:
-                raise forms.ValidationError(_("Un paiement récurent ne peut être que : day, week, month, year"),
+                raise forms.ValidationError(_("A recurring payment must have a membership term. Re-enter the term just above."),
                                             code="invalid")
 
         return recurring_payment
@@ -981,13 +1171,31 @@ class PriceChangeForm(ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # On cache les options réservés aux adhésions
+        try :
+            instance: Price = kwargs.get('instance')
+            if instance.product.categorie_article != Product.ADHESION:
+                self.fields['subscription_type'].widget = HiddenInput()
+                self.fields['recurring_payment'].widget = HiddenInput()
+                self.fields['iteration'].widget = HiddenInput()
+                self.fields['manual_validation'].widget = HiddenInput()
+                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                # Filtrage des produits : uniquement des produits adhésions.
+                # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
+                self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+                    categorie_article=Product.ADHESION,
+                    archive=False,
+                )
+            elif instance.product.categorie_article == Product.ADHESION : # si c'est un produit qui n'est pas l'adhésion
+                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                self.fields['adhesion_obligatoire'].widget = HiddenInput()
 
-        # Filtrage des produits : uniquement des produits adhésions.
-        # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
-        self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
-            categorie_article=Product.ADHESION,
-            archive=False,
-        )
+        except AttributeError as e :
+            # NoneType' object has no attribute 'product
+            logger.info(f"Formulaire add : {e} ")
+        except Exception as e :
+            logger.error(f"Error in PriceChangeForm __init__ : {e}")
+            raise e
 
 
         client: Client = connection.tenant
@@ -999,6 +1207,7 @@ class PriceChangeForm(ModelForm):
                 Asset.TIME,
                 Asset.FIDELITY,
             ],
+            archive=False,
             origin=client,
         )
 
@@ -1018,27 +1227,33 @@ class PriceAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
     form = PriceChangeForm
 
+    conditional_fields = {
+        "max_per_user": "free_price == false",
+        "iteration": "recurring_payment == true",
+        "commitment": "iteration > 0",
+    }
+
     fieldsets = (
         (_('General'), {
             'fields': (
                 'name',
                 'product',
-                'prix',
-                'free_price',
-                'max_per_user',
+                ('prix', 'free_price'),
                 'subscription_type',
-                ('recurring_payment', 'iteration'),
+                ('recurring_payment', 'iteration', 'commitment'),
                 'manual_validation',
                 'order',
-                'publish',
-                'adhesion_obligatoire',
+                'max_per_user',
                 'stock',
+                'adhesion_obligatoire',
+                'publish',
             ),
             'classes': ['tab'],
         }),
         (_('Triggers'), {
             'fields': (
                 'fedow_reward_enabled',
+                'reward_on_ticket_scanned',
                 'fedow_reward_asset',
                 'fedow_reward_amount',
             ),
@@ -1098,68 +1313,14 @@ USER
 """
 
 
-class MembershipInline(TabularInline):
-    model = Membership
-    # form = MembershipInlineForm
-    extra = 0
-    # show_change_link = True
-    can_delete = False
-    tab = True
 
-    fields = (
-        'first_name',
-        'last_name',
-        'last_contribution',
-        'price',
-        'contribution_value',
-        'deadline',
-        'is_valid',
-    )
-    readonly_fields = fields
-
-    def get_queryset(self, request):
-        # On ne rend pas visible les adhésion qui n'ont pas eu de last_contribution
-        return super().get_queryset(request).exclude(last_contribution=None)
-
-    def has_change_permission(self, request, obj=None):
-        return False  # On interdit la modification
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return False  # Autoriser l'ajout
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    # def formfield_for_foreignkey(self, db_field, request=None, **kwargs):
-    #     if db_field.name == "price":  # Filtre sur le champ ForeignKey "prix"
-    #         # Appliquez un filtre sur les objets accessibles via la ForeignKey
-    #         kwargs["queryset"] = Price.objects.filter(product__categorie_article=Product.ADHESION,
-    #                                                   publish=True)  # Exemple de filtre
-    #     return super().formfield_for_foreignkey(db_field, request, **kwargs)
-    #
-    # # pour retirer les petits boutons add/edit a coté de la foreign key
-    # def get_formset(self, request, obj=None, **kwargs):
-    #     formset = super().get_formset(request, obj, **kwargs)
-    #     price = formset.form.base_fields['price']
-    #
-    #     price.widget.can_add_related = False
-    #     price.widget.can_delete_related = False
-    #     price.widget.can_change_related = False
-    #     price.widget.can_view_related = False
-    #
-    #     return formset
-
-
-class is_tenant_admin(admin.SimpleListFilter):
+class is_tenant_admin_filter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
     title = _("Administrator")
 
     # Parameter for the filter that will be used in the URL query.
-    parameter_name = "is_admin"
+    parameter_name = "client_admin"
 
     def lookups(self, request, model_admin):
         return [("Y", _("Yes")), ("N", _("No"))]
@@ -1168,8 +1329,6 @@ class is_tenant_admin(admin.SimpleListFilter):
         if self.value() == "Y":
             return queryset.filter(
                 client_admin__in=[connection.tenant],
-                is_staff=True,
-                is_active=True,
                 espece=TibilletUser.TYPE_HUM
             ).distinct()
         if self.value() == "N":
@@ -1177,8 +1336,30 @@ class is_tenant_admin(admin.SimpleListFilter):
                 client_admin__in=[connection.tenant],
             ).distinct()
 
+class can_init_paiement_filter(admin.SimpleListFilter):
+    # Human-readable title which will be displayed in the
+    # right admin sidebar just above the filter options.
+    title = _("Can initiate payments")
 
-class MembershipValid(admin.SimpleListFilter):
+    # Parameter for the filter that will be used in the URL query.
+    parameter_name = "initiate_payment"
+
+    def lookups(self, request, model_admin):
+        return [("Y", _("Yes")), ("N", _("No"))]
+
+    def queryset(self, request, queryset):
+        if self.value() == "Y":
+            return queryset.filter(
+                initiate_payment__in=[connection.tenant],
+                espece=TibilletUser.TYPE_HUM
+            ).distinct()
+        if self.value() == "N":
+            return queryset.exclude(
+                initiate_payment__in=[connection.tenant],
+            ).distinct()
+
+
+class UserWithMembershipValid(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
     title = _("Valid subscription")
@@ -1223,35 +1404,32 @@ class MembershipValid(admin.SimpleListFilter):
             ).distinct()
 
 
+
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
 class HumanUserAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-    inlines = [MembershipInline, ]
+    warn_unsaved_form = False  # Default: False
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        return queryset.prefetch_related('memberships', 'client_admin', 'client_achat')
+        return queryset.prefetch_related('memberships', 'client_admin')
 
-    """
-    On affiche en haut du changelist un bouton pour pouvoir changer sa carte 
-    Change form view sert à donner le pk de l'user pour le bouton htmx
-    """
-    change_form_after_template = "admin/membership/get_wallet_info.html"
+    change_form_after_template = "admin/human_user/right_and_wallet_info.html"
 
+    # changeform_view sert à donner le pk de l'user pour le bouton htmx
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None) -> Any:
         extra_context = extra_context or {}
         extra_context['object_id'] = object_id
         return super().changeform_view(request, object_id, form_url, extra_context)
 
+
     list_display = [
         'email',
         'first_name',
         'last_name',
         'display_memberships_valid',
-        'is_active',
     ]
 
     search_fields = [
@@ -1260,69 +1438,67 @@ class HumanUserAdmin(ModelAdmin):
         'last_name',
     ]
 
-    fieldsets = [
+    fieldsets = (
         ('Général', {
-            'fields': [
+            'fields': (
                 'email',
                 ('first_name', 'last_name'),
-                "is_active",
-                ("email_valid", "email_error"),
-                "administre",
-            ],
+                "email_valid",
+            )
         }),
+    )
+
+    readonly_fields = [
+        "email",
+        "email_valid",
+        "administre",
     ]
-    readonly_fields = ["email", "email_valid", "email_error", "administre", "achat", "client_source"]
 
     list_filter = [
         "is_active",
-        "email_error",
-        MembershipValid,
-        "is_staff",
+        UserWithMembershipValid,
+        is_tenant_admin_filter,
+        can_init_paiement_filter,
         "email_valid",
-        "email_error",
-        # "is_hidden",
-        # ("salary", RangeNumericFilter),
-        # ("status", ChoicesDropdownFilter),
-        # ("created_at", RangeDateTimeFilter),
     ]
 
-    # Pour les bouton en haut de la vue change
-    # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["set_admin", "remove_admin"]
 
-    @action(
-        description=_("Give admin rights"),
-        url_path="set_admin",
-        permissions=["custom_actions_detail"],
-    )
-    def set_admin(self, request, object_id):
-        user = HumanUser.objects.get(pk=object_id)
-        if all([user.email_valid, user.is_active]) and not user.email_error:
-            user.set_staff(connection.tenant)
-            messages.success(request,
-                             _(f"With great power comes great responsibilities. {user.email} has been promoted to admin."))
-        else:
-            messages.error(request, _(f"Does not fulfill condition: {user.email} needs to confirm their email."))
+    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
+                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
+        extra_context = extra_context or {}
+        extra_context['object_id'] = object_id
+        # Provide initial states for rights toggles
+        if object_id:
+            try:
+                user = TibilletUser.objects.get(pk=object_id)
+                tenant = connection.tenant
+                # Admin (client_admin) initial state
+                extra_context['is_client_admin'] = user.client_admin.filter(pk=tenant.pk).exists()
+                extra_context['can_initiate_payment'] = user.initiate_payment.filter(pk=tenant.pk).exists()
+                extra_context['can_create_event'] = user.create_event.filter(pk=tenant.pk).exists()
+                extra_context['can_manage_crowd'] = user.manage_crowd.filter(pk=tenant.pk).exists()
+            except HumanUser.DoesNotExist:
+                extra_context['is_client_admin'] = False
+                extra_context['can_initiate_payment'] = False
+                extra_context['can_create_event'] = False
+                extra_context['can_manage_crowd'] = False
+            except ValidationError as e:
+                # c'est une requete post pour les actions
+                pass
+            except Exception as e:
+                raise e
 
-        return redirect(request.META["HTTP_REFERER"])
-
-    @action(
-        description=_("Strip admin rights"),
-        url_path="remove_admin",
-        permissions=["custom_actions_detail"],
-    )
-    def remove_admin(self, request, object_id):
-        user = HumanUser.objects.get(pk=object_id)
-        user.client_admin.remove(connection.tenant)
-        messages.success(request, _(f"{user.email} has been demoted."))
-        return redirect(request.META["HTTP_REFERER"])
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     # noinspection PyTypeChecker
     @display(description=_("Subscriptions"), label={None: "danger", True: "success"})
     def display_memberships_valid(self, instance: HumanUser):
         count = instance.memberships_valid()
         if count > 0:
-            return True, _(f"Valid: {count}")
+            # Lien cliquable vers la liste des adhésions filtrée par l'email
+            url = "/admin/BaseBillet/membership/"
+            query = urlencode({"q": instance.email})
+            return True, format_html('<a href="{}?{}">{}</a>', url, query, _(f"Valid: {count}"))
         return None, _("None")
 
     def has_view_permission(self, request, obj=None):
@@ -1338,7 +1514,9 @@ class HumanUserAdmin(ModelAdmin):
         return False  # Autoriser l'ajout
 
     def has_custom_actions_detail_permission(self, request, object_id):
-        return TenantAdminPermissionWithRequest(request)
+        perm = TenantAdminPermissionWithRequest(request)
+        logger.info(request.user, perm)
+        return perm
 
 
 ### ADHESION
@@ -1350,8 +1528,6 @@ from Administration.importers.membership_importers import (
 
 
 # from Administration.importers.event_importers import PostalAddressForeignKeyWidget
-
-
 class MembershipAddForm(ModelForm):
     '''
     Formulaire d'ajout d'adhésion sur l'interface d'administration.
@@ -1378,24 +1554,24 @@ class MembershipAddForm(ModelForm):
     contribution = forms.FloatField(
         required=False,
         widget=UnfoldAdminTextInputWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Contribution"),
+        label=_("Contribution (€)"),
     )
 
     payment_method = forms.ChoiceField(
         required=False,
-        choices=PaymentMethod.not_online(),  # on retire les choix stripe
+        choices=PaymentMethod.classic(),  # on retire les choix stripe
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Payment method"),
     )
 
-    # card_number = forms.CharField(
-    #     required=False,
-    #     min_length=8,
-    #     max_length=8,
-    #     label=_("Card number"),
-    #     validators=[validate_hex8],
-    #     widget=UnfoldAdminTextInputWidget(),
-    # )
+    card_number = forms.CharField(
+        required=False,
+        min_length=8,
+        max_length=8,
+        label=_("Card number"),
+        # validators=[validate_hex8],
+        widget=UnfoldAdminTextInputWidget(),
+    )
 
     class Meta:
         model = Membership
@@ -1405,9 +1581,38 @@ class MembershipAddForm(ModelForm):
             'option_generale',
         ]
 
-    # def clean_card_number(self):
-    #     cleaned_data = self.cleaned_data
-    #     prix = cleaned_data.get('prix')
+    def clean_email(self):
+        cleaned_data = self.cleaned_data
+        email = cleaned_data.get('email')
+        user = get_or_create_user(email, send_mail=False)
+        self.fedowAPI = FedowAPI()
+        self.fedowAPI.wallet.get_or_create_wallet(user)
+        self.user_wallet_serialized = self.fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        return email
+
+    def clean_card_number(self):
+        cleaned_data = self.cleaned_data
+        card_number = cleaned_data.get('card_number')
+        if card_number:
+
+            if self.user_wallet_serialized.get('has_user_card'):
+                raise forms.ValidationError(_("A card is already linked to this email address."))
+
+            if not re.match(r'^[0-9A-Fa-f]{8}$', card_number):
+                raise forms.ValidationError(_("Card number must be exactly 8 hexadecimal characters."))
+
+            fedowApi = FedowAPI()
+            card_serialized = fedowApi.NFCcard.card_number_retrieve(card_number)
+
+            if not card_serialized:
+                raise forms.ValidationError(_("Unknown card number"))
+            if not card_serialized.get('is_wallet_ephemere'):
+                raise forms.ValidationError(_("This card is already linked to a user."))
+
+            self.card_serialized = card_serialized
+        self.card_number = card_number
+        return card_number
+
 
     def clean(self):
         # On vérifie que le moyen de paiement est bien entré si > 0
@@ -1433,6 +1638,7 @@ class MembershipAddForm(ModelForm):
         # Associez l'utilisateur au champ 'user' du formulaire
         email = self.cleaned_data.pop('email')
         user = get_or_create_user(email)
+
         self.instance.user = user
 
         # Numéro de carte saisi (8 hexa) -> enregistré sur l'adhésion
@@ -1449,13 +1655,13 @@ class MembershipAddForm(ModelForm):
         self.instance.last_contribution = timezone.localtime()
         # self.instance.set_deadline()
 
-        # fedowAPI = FedowAPI()
-        # wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        # linked_serialized_card = fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=card_number)
+        if self.card_number:
+            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=self.card_number)
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)
+
 
 
 class MembershipChangeForm(ModelForm):
@@ -1468,9 +1674,7 @@ class MembershipChangeForm(ModelForm):
             'option_generale',
             'deadline',
             'commentaire',
-            'custom_form',
         )
-
 
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
@@ -1512,6 +1716,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     list_sections = [MembershipCustomFormSection]
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+    # Ajoute un bloc personnalisé après le formulaire dans la vue change
+    change_form_after_template = "admin/membership/custom_form.html"
 
     resource_classes = [MembershipExportResource, MembershipImportResource]
     export_form_class = ExportForm
@@ -1533,17 +1739,17 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'options',
         'last_contribution',
         'deadline',
-        'is_valid',
+        'display_is_valid',
         'status',
         'payment_method',
-        'state_display',
+        # 'state_display',
         # 'commentaire',
     )
 
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution',
                      'custom_form')
-    list_filter = ['price__product', 'last_contribution', 'deadline', 'state', ]
+    list_filter = ['price__product', 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -1601,15 +1807,17 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None):
         extra_context = extra_context or {}
-        show_validation_buttons = False
+        extra_context["show_validation_buttons"] = False
+
         if object_id:
             try:
                 membership = Membership.objects.get(pk=object_id)
+                extra_context['membership'] = membership
                 if membership.status == Membership.ADMIN_WAITING:
-                    show_validation_buttons = True
+                    extra_context["show_validation_buttons"] = True
             except Membership.DoesNotExist:
-                show_validation_buttons = False
-        extra_context["show_validation_buttons"] = show_validation_buttons
+                extra_context["show_validation_buttons"] = False
+
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     @action(
@@ -1635,7 +1843,11 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         membership = Membership.objects.get(pk=object_id)
         pdf_binary = create_membership_invoice_pdf(membership)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="facture.pdf"'
+        try :
+            paiement_id = f"-{membership.stripe_paiement.order_by('-datetime').first().invoice_number()}"
+        except:
+            paiement_id = ""
+        response['Content-Disposition'] = f'attachment; filename="receipt{paiement_id}.pdf"'
         return response
         # messages.success(
         #     request,
@@ -1683,10 +1895,14 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
         return redirect(f"{add_url}?{query}")
 
-    @display(description=_("State"))
-    def state_display(self, instance: Membership):
-        # Show human-readable label for state, possibly with icon/color later
-        return instance.get_state_display()
+    @display(description=_("Valid"), boolean=True)
+    def display_is_valid(self, instance: Membership):
+        return instance.is_valid()
+
+    # @display(description=_("State"))
+    # def state_display(self, instance: Membership):
+        #### Show human-readable label for state, possibly with icon/color later
+        # return instance.get_state_display()
 
     def has_custom_actions_detail_permission(self, request, object_id):
         return TenantAdminPermissionWithRequest(request)
@@ -1712,10 +1928,14 @@ class LigneArticleAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    list_filter = ('status', 'pricesold__productsold')
+    list_filter = ('status',
+                   'pricesold__productsold',
+                   ('datetime', RangeDateTimeFilter),
+                   )
 
     list_display = [
         'productsold',
+        'user_email',
         'datetime',
         'amount_decimal',
         '_qty',
@@ -1723,17 +1943,23 @@ class LigneArticleAdmin(ModelAdmin):
         'total_decimal',
         'display_status',
         'payment_method',
-        'sended_to_laboutik',
+        # 'sended_to_laboutik',
     ]
     # fields = "__all__"
     # readonly_fields = fields
-
+    search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name', 'paiement_stripe__user__email', 'membership__user__email')
     ordering = ('-datetime',)
 
     def get_queryset(self, request):
         # Utiliser select_related pour précharger pricesold et productsold
         queryset = super().get_queryset(request)
-        return queryset.select_related('pricesold__productsold')
+        return queryset.select_related('pricesold__productsold',
+                                       'pricesold__price',
+                                       'paiement_stripe',
+                                       'paiement_stripe__user',
+                                       'membership',
+                                       'membership__user',
+                                       )
 
     @display(description=_("Value"))
     def amount_decimal(self, obj):
@@ -1944,7 +2170,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
-
+    date_hierarchy = "datetime"
+    ordering = ("-datetime",)
     # Unfold sections (expandable rows)
     list_sections = [
         EventPricesSummaryTable,
@@ -1973,6 +2200,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'short_description',
                 'long_description',
                 'jauge_max',
+                'show_gauge',
                 'postal_address',
             )
         }),
@@ -1981,6 +2209,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'tag',
                 'options_radio',
                 'options_checkbox',
+                'reservation_button_name',
             ),
         }),
         (_('Bookings'), {
@@ -1998,12 +2227,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'private',
             ),
         }),
-        # ("Carrousel d'image", {
-        #     'fields': (
-        #         'carrousel',
-        #     ),
-        #     "classes": ["tab"],
-        # }),
     )
 
     list_display = [
@@ -2368,6 +2591,7 @@ class ReservationAddAdmin(ModelForm):
             # 'last_name',
         # ]
 
+
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
         pricesold = cleaned_data.get('pricesold')
@@ -2461,8 +2685,12 @@ class ReservationAdmin(ModelAdmin):
         'total_paid',
     )
     # readonly_fields = list_display
+
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
     list_filter = ['event', ReservationValidFilter, 'datetime', 'options']
+
+    # Bulk actions available in changelist
+    actions = ["action_cancel_refund_reservations"]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -2475,6 +2703,31 @@ class ReservationAdmin(ModelAdmin):
                 'tickets__pricesold__price__product__form_fields',
             )
         )
+
+    @admin.action(description=_("Cancel and refund selected reservations"))
+    def action_cancel_refund_reservations(self, request, queryset):
+        # Only operate on queryset of reservations; prefetch to reduce queries
+        qs = queryset.select_related('user_commande', 'event').prefetch_related('tickets')
+        success_count = 0
+        errors = []
+        for resa in qs:
+            try:
+                msg = resa.cancel_and_refund_resa()
+                try:
+                    send_reservation_cancellation_user.delay(str(resa.uuid))
+                except Exception as ce:
+                    logger.error(f"Failed to queue reservation cancellation email for {resa.uuid}: {ce}")
+                success_count += 1
+            except Exception as e:
+                errors.append(str(e))
+        if success_count:
+            messages.success(request, _("%(count)d reservation(s) cancelled and refunded.") % {"count": success_count})
+        if errors:
+            unique_errors = list(dict.fromkeys(errors))
+            preview = " | ".join(unique_errors[:5])
+            if len(unique_errors) > 5:
+                preview += _(" ... (%(more)d more)") % {"more": len(unique_errors) - 5}
+            messages.error(request, _("Some reservations failed to cancel/refund: %(errors)s") % {"errors": preview})
 
     @display(description=_("Ticket count"))
     def tickets_count(self, instance: Reservation):
@@ -2507,7 +2760,8 @@ class ReservationAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        # Allow bulk actions in changelist for authorized tenant admins
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -2567,17 +2821,15 @@ class TicketCustomFormSection(TemplateSection):
 
 @admin.register(Ticket, site=staff_admin_site)
 class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
-    resource_classes = [TicketExportResource]
-    export_form_class = ExportForm
-
-    # Expandable section to display parent reservation custom form answers
-    list_sections = [TicketCustomFormSection]
-
-    compressed_fields = True  # Default: False
-    warn_unsaved_form = True  # Default: False
-
-    # Formulaire de modification
-    form = TicketChangeAdmin
+    ordering = ('-reservation__datetime',)
+    list_filter = ["reservation__event", TicketValidFilter, "reservation__options"]
+    search_fields = (
+        'uuid',
+        'first_name',
+        'last_name',
+        'reservation__user_commande__email',
+        'reservation__custom_form',
+    )
 
     list_display = [
         'ticket',
@@ -2591,6 +2843,92 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         'scan',
         'reservation__datetime',
     ]
+
+
+    resource_classes = [TicketExportResource]
+    export_form_class = ExportForm
+
+    actions = ["action_unscan_selected", "action_cancel_refund_selected"]
+
+    # Expandable section to display parent reservation custom form answers
+    list_sections = [TicketCustomFormSection]
+
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    # Formulaire de modification
+    form = TicketChangeAdmin
+
+    @admin.action(description=_("Unscan selected tickets"))
+    def action_unscan_selected(self, request, queryset):
+        updated = 0
+        skipped = 0
+        for ticket in queryset.select_related('reservation'):
+            if ticket.status == Ticket.SCANNED:
+                ticket.status = Ticket.NOT_SCANNED
+                ticket.save()
+                updated += 1
+            else:
+                skipped += 1
+        if updated:
+            messages.success(request, _("%(count)d ticket(s) unscanned successfully.") % {"count": updated})
+        if skipped:
+            messages.info(request, _("%(count)d ticket(s) were not scanned and were skipped.") % {"count": skipped})
+
+    @admin.action(description=_("Cancel and refund"))
+    def action_cancel_refund_selected(self, request, queryset):
+        # Group selected tickets by reservation
+        tickets = queryset.select_related('reservation')
+        res_to_tickets: Dict[str, Dict[str, Any]] = {}
+        for t in tickets:
+            resa_id = str(t.reservation_id)
+            bucket = res_to_tickets.setdefault(resa_id, {"reservation": t.reservation, "tickets": []})
+            bucket["tickets"].append(t)
+
+        resa_success = 0
+        ticket_success = 0
+        errors = []
+
+        for resa_id, bucket in res_to_tickets.items():
+            resa = bucket["reservation"]
+            selected_tickets = bucket["tickets"]
+            try:
+                total_in_resa = resa.tickets.count()
+                if len(selected_tickets) == total_in_resa:
+                    # All tickets of reservation selected -> cancel whole reservation
+                    msg = resa.cancel_and_refund_resa()
+                    try:
+                        send_reservation_cancellation_user.delay(str(resa.uuid))
+                    except Exception as ce:
+                        logger.error(f"Failed to queue reservation cancellation email for {resa.uuid}: {ce}")
+                    resa_success += 1
+                else:
+                    # Partial selection -> cancel each selected ticket
+                    for t in selected_tickets:
+                        try:
+                            msg = resa.cancel_and_refund_ticket(t)
+                            try:
+                                send_ticket_cancellation_user.delay(str(t.uuid))
+                            except Exception as ce:
+                                logger.error(f"Failed to queue ticket cancellation email for {t.uuid}: {ce}")
+                            ticket_success += 1
+                        except Exception as te:
+                            errors.append(str(te))
+            except Exception as e:
+                errors.append(str(e))
+
+        if resa_success:
+            messages.success(request, _("%(count)d reservation(s) cancelled and refunded.") % {"count": resa_success})
+        if ticket_success:
+            messages.success(request, _("%(count)d ticket(s) cancelled and refunded.") % {"count": ticket_success})
+        if errors:
+            # Deduplicate and limit message length
+            unique_errors = list(dict.fromkeys(errors))
+            preview = " | ".join(unique_errors[:5])
+            if len(unique_errors) > 5:
+                preview += _(" ... (%(more)d more)") % {"more": len(unique_errors) - 5}
+            messages.error(request, _("Some items failed to cancel/refund: %(errors)s") % {"errors": preview})
+
 
     @admin.display(ordering='pricesold__price', description=_('Price'))
     def price_name(self, obj: Ticket):
@@ -2626,38 +2964,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             return f"{obj.reservation.event.parent} -> {obj.reservation.event}"
         return obj.reservation.event
 
-    # list_editable = ['status',]
-    # actions = [valider_ticket, ]
-    ordering = ('-reservation__datetime',)
-    # list_filter = [EventFilter, ]
-    # list_filter = (F
-    #     EventFilter,
-    # 'reservation__uuid'
-    # )
-    list_filter = ["reservation__event", TicketValidFilter, "reservation__options"]
-
-    search_fields = (
-        'uuid',
-        'first_name',
-        'last_name',
-        'reservation__user_commande__email',
-        'reservation__custom_form',
-    )
-
-    # def state(self, obj):
-    #     if obj.status == Ticket.NOT_SCANNED:
-    #         return format_html(
-    #             f'<button><a href="{reverse("staff_admin:ticket-scann", args=[obj.pk])}" class="button">Not scanned: scan ticket</a></button>&nbsp;',
-    #         )
-    #     elif obj.status == Ticket.SCANNED:
-    #         return 'Validated / scanned'
-    #     else:
-    #         for choice in Reservation.TYPE_CHOICES:
-    #             if choice[0] == obj.reservation.status:
-    #                 return choice[1]
-    #
-    # state.short_description = 'State'
-    # state.allow_tags = True
 
     # noinspection PyTypeChecker
     @display(description=_("State"), label={None: "danger", True: "success", 'scanned': "warning"})
@@ -2716,7 +3022,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     def ticket(self, instance: Ticket):
         return f"{instance.reservation.user_commande.email} {str(instance.uuid)[:8]}"
 
-    actions_row = ["get_pdf", "unscan", "cancel_refund_ticket", "cancel_refund_reservation"]
+    actions_row = ["get_pdf"]
 
     @action(description=_("PDF"),
             url_path="ticket_pdf",
@@ -2733,77 +3039,8 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
         return response
 
-    @action(
-        description=_("Unscan"),
-        url_path="unscan",
-        permissions=["custom_actions_row"],
-    )
-    def unscan(self, request, object_id):
-        ticket = Ticket.objects.get(pk=object_id)
-        if ticket.status == Ticket.SCANNED:
-            ticket.status = Ticket.NOT_SCANNED
-            ticket.save()
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                _("Ticket unscanned successfully.")
-            )
-        return redirect(request.META["HTTP_REFERER"])
 
-    @action(
-        description=_("Cancel ONE"),
-        url_path="cancel_refund_ticket",
-        permissions=["custom_actions_row"],
-    )
-    def cancel_refund_ticket(self, request, object_id):
-        ticket = get_object_or_404(Ticket, pk=object_id)
-        try:
-            msg = ticket.reservation.cancel_and_refund_ticket(ticket)
-            # Trigger email notification to the user via Celery
-            try:
-                send_ticket_cancellation_user.delay(str(ticket.uuid))
-            except Exception as ce:
-                logger.error(f"Failed to queue cancellation email for ticket {ticket.uuid}: {ce}")
 
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                _("Ticket cancelled and refund processed where applicable.") + (f" {msg}" if msg else "")
-            )
-        except Exception as e:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                _(f"Error while cancelling/refunding this ticket: {e}")
-            )
-        return redirect(request.META["HTTP_REFERER"])
-
-    @action(
-        description=_("Cancel ALL"),
-        url_path="cancel_refund_reservation",
-        permissions=["custom_actions_row"],
-    )
-    def cancel_refund_reservation(self, request, object_id):
-        ticket = get_object_or_404(Ticket, pk=object_id)
-        try:
-            msg = ticket.reservation.cancel_and_refund_resa()
-            # Trigger email notification to the user via Celery
-            try:
-                send_reservation_cancellation_user.delay(str(ticket.reservation.uuid))
-            except Exception as ce:
-                logger.error(f"Failed to queue cancellation email for reservation {ticket.reservation.uuid}: {ce}")
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                _("Reservation cancelled and refund processed where applicable.") + (f" {msg}" if msg else "")
-            )
-        except Exception as e:
-            messages.add_message(
-                request,
-                messages.ERROR,
-                _(f"Error while cancelling/refunding this reservation: {e}")
-            )
-        return redirect(request.META["HTTP_REFERER"])
 
 
     def has_custom_actions_row_permission(self, request, obj=None):
@@ -2813,7 +3050,8 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        # Allow bulk actions in changelist for authorized tenant admins
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -2842,7 +3080,22 @@ class TenantAdmin(ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Uniquement les client qui ont un domaine
-        return queryset.prefetch_related('domains').exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT])
+        return queryset.prefetch_related('domains').exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Pour la recherche de tenant dans la page Federation.
+        On est sur un autocomplete, il faut bidouiller la réponde de ce coté
+        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        """
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        if request.headers.get('Referer'):
+            logger.info(request.headers.get('Referer'))
+            if ("federatedplace" in request.headers['Referer']
+                    and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
+                queryset = queryset.exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META]).exclude(
+                pk=connection.tenant.pk) # on retire le client actuel
+        return queryset, use_distinct
 
     actions_row = ["go_admin", ]
 
@@ -2888,18 +3141,18 @@ class TenantAdmin(ModelAdmin):
 class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible", ]
     fields = ["tenant", "tag_filter", "tag_exclude", "membership_visible", ]
-    autocomplete_fields = ["tag_filter", "tag_exclude", ]
+    autocomplete_fields = ["tag_filter", "tag_exclude", "tenant" ]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         return queryset.select_related('tenant').prefetch_related('tag_filter', 'tag_exclude')
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
-            kwargs['queryset'] = Client.objects.all().exclude(
-                categorie__in=[Client.ROOT, Client.META, Client.WAITING_CONFIG]).exclude(
-                pk=connection.tenant.pk)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    # def formfield_for_foreignkey(self, db_field, request, **kwargs):
+    #     if db_field.name == 'tenant':  # Replace 'user_field' with your actual field name
+    #         kwargs['queryset'] = Client.objects.all().exclude(
+    #             categorie__in=[Client.ROOT, Client.META, Client.WAITING_CONFIG]).exclude(
+    #             pk=connection.tenant.pk)
+    #     return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     actions_row = ["connect_to", ]
 
@@ -3378,6 +3631,25 @@ class AssetAdmin(ModelAdmin):
         'pending_invitations',
     ]
 
+    actions_row = ["archive", ]
+
+    @action(
+        description=_("Archive"),
+        url_path="archive",
+        permissions=["changelist_row_action"],
+    )
+    def archive(self, request, object_id):
+        asset = get_object_or_404(Asset, pk=object_id)
+        fedowAPI = FedowAPI()
+        fedowAPI.asset.archive_asset(asset.uuid)
+        asset.archive = True
+        asset.save()
+        messages.success(request, _(f"{asset.name} Archived"))
+        return redirect(request.META["HTTP_REFERER"])
+
+    def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
+        return TenantAdminPermissionWithRequest(request)
+
     def _federated_with(self, obj):
         feds = [place.name for place in obj.federated_with.all()]
         feds.append(obj.origin.name)
@@ -3385,12 +3657,18 @@ class AssetAdmin(ModelAdmin):
 
     # On affiche que les assets non adhésions + origin + fédéré
     def get_queryset(self, request):
+        logger.info(f"get_queryset AssetAdmin : {request.user}")
+        fedowAPI = FedowAPI()
+        fedowAPI.asset.get_accepted_assets()
+        # On va mettre a jour les assets chez Fedow :
+
         tenant = connection.tenant
         queryset = (
             super()
             .get_queryset(request)
             .exclude(category__in=[AssetFedowPublic.BADGE, AssetFedowPublic.SUBSCRIPTION])
             .filter(Q(origin=tenant) | Q(federated_with=tenant))
+            .filter(archive=False)
             .distinct()
         )
         return queryset
@@ -3626,7 +3904,371 @@ class AssetAdmin(ModelAdmin):
         return False
 
 
-### UNFOLD ADMIN
+# ----------------------
+# ModelAdmins CROWDS
+# ----------------------
+
+
+@admin.register(CrowdConfig, site=staff_admin_site)
+class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
+
+    fieldsets = (
+        (_("Général"), {"fields": ("active",)}),
+        (_("Affichage"), {"fields": (
+            "title",
+            "description",
+            "vote_button_name",
+            "name_goal",
+            "name_funding",
+            "name_participations",
+        )}),
+    )
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def save_model(self, request, obj, form, change):
+        obj: CrowdConfig
+        # Sanitize all TextField inputs to avoid XSS via WYSIWYG/TextField
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+
+# @admin.register(CrowdTag, site=staff_admin_site)
+# class CrowdTagAdmin(ModelAdmin):
+#     list_display = ("name", "slug", "color_bg", "color_preview")
+#     search_fields = ("name", "slug")
+#     prepopulated_fields = {"slug": ("name",)}
+#     ordering = ("name",)
+#     fields = ("name", "slug", "color_bg")
+#
+#     def color_preview(self, obj):
+#         return format_html(
+#             '<span style="display:inline-block;width:2rem;height:1rem;border-radius:.25rem;vertical-align:middle;{}"></span> '
+#             '<span class="text-muted small">{}</span>',
+#             obj.style_attr + ';border:1px solid rgba(0,0,0,.2)',
+#             obj.color_bg,
+#         )
+#
+#     color_preview.short_description = _("Aperçu")
+
+# ----------------------
+# INITIATIVE CROWDS
+# ----------------------
+
+
+class ContributionInline(TabularInline):
+    model = Contribution
+    fk_name = 'initiative'
+    extra = 0
+    can_delete = True
+    show_change_link = True
+    # Evite de charger 200k users dans un select: champ en saisie par ID
+    raw_id_fields = ("contributor",)
+
+    fields = (
+        "contributor_name",
+        "contributor",
+        "description",
+        "amount",
+        "amount_eur_display",
+        "payment_status",
+        "paid_at",
+        "created_at",
+    )
+    readonly_fields = ("amount_eur_display", "created_at", "contributor")
+
+    def amount_eur_display(self, obj):
+        if not obj:
+            return ""
+        return f"{obj.amount_eur:.2f} {obj.initiative.currency}"
+
+    amount_eur_display.short_description = _("Montant")
+
+    # Permissions simples (FALC)
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("contributor", "initiative")
+
+
+class VoteInline(TabularInline):
+    model = Vote
+    fk_name = 'initiative'
+    extra = 0
+    can_delete = True
+    readonly_fields = ("created_at", "user")
+    fields = ("user", "created_at")
+    # Saisie par ID pour éviter l'autocomplete sur une très grande table user
+    raw_id_fields = ("user",)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        # Pas de modification du vote: on peut supprimer/ajouter
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("user")
+
+
+class BudgetItemInline(TabularInline):
+    model = BudgetItem
+    fk_name = 'initiative'
+    extra = 0
+    can_delete = True
+    show_change_link = True
+    # Evite les gros menus déroulants de users
+    raw_id_fields = ("contributor", "validator")
+
+    fields = (
+        "contributor",
+        "description",
+        "amount",
+        "state",
+        "validator",
+        "created_at",
+    )
+    readonly_fields = ("created_at", "contributor", "validator")
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("contributor", "validator")
+
+class ParticipationInline(TabularInline):
+    model = Participation
+    fk_name = 'initiative'
+    extra = 0
+    # Evite le chargement massif des users
+    raw_id_fields = ("participant",)
+    fields = (
+        "participant",
+        "description",
+        "amount",
+        "state",
+        "time_spent_minutes",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = ("created_at", "updated_at", "participant")
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related("participant")
+
+# class InitiativeAdminForm(ModelForm):
+#     funding_goal_eur = forms.DecimalField(
+#         label=_("Objectif"),
+#         help_text=_("Montant de l'objectif dans la devise de l'initiative (affiché en unités, enregistré en centimes)."),
+#         decimal_places=2,
+#         max_digits=12,
+#         min_value=0,
+#         required=True,
+#         widget=UnfoldAdminTextInputWidget,
+#     )
+#
+#     class Meta:
+#         model = Initiative
+#         fields = (
+#             "name",
+#             "short_description",
+#             "description",
+#             "funding_goal_eur",
+#             "currency",
+#             # "direct_debit",
+#             "img",
+#             "budget_contributif",
+#         )
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         inst: Initiative | None = getattr(self, "instance", None)
+#         if inst and getattr(inst, "pk", None):
+#             try:
+#                 self.fields["funding_goal_eur"].initial = (Decimal(inst.funding_goal or 0) / Decimal("100")).quantize(Decimal("0.01"))
+#             except Exception:
+#                 self.fields["funding_goal_eur"].initial = Decimal("0.00")
+#
+#     def save(self, commit=True):
+#         instance: Initiative = super().save(commit=False)
+#         # Convert euros to integer cents safely
+#         value_eur: Decimal = self.cleaned_data.get("funding_goal_eur") or Decimal("0")
+#         cents = int((value_eur.quantize(Decimal("0.01")) * 100).to_integral_value())
+#         instance.funding_goal = max(0, cents)
+#         if commit:
+#             instance.save()
+#             self.save_m2m()
+#         return instance
+
+
+@admin.register(Initiative, site=staff_admin_site)
+class InitiativeAdmin(ModelAdmin):
+    # form = InitiativeAdminForm
+    list_display = (
+        "name",
+        "created_at",
+        "funded_amount_display",
+        "funding_goal_display",
+        "progress_percent_int",
+        "currency",
+        "votes_count",
+        # "requested_total_display",
+    )
+
+    fields = (
+        "name",
+        "short_description",
+        "description",
+        "currency",
+        # "direct_debit",
+        "img",
+        "tags",
+        "archived",
+        "vote",
+        "budget_contributif",
+        "adaptative_funding_goal_on_participation",
+    )
+
+    list_filter = ("created_at", "tags")
+    search_fields = ("name", "description", "tags__name")
+    date_hierarchy = "created_at"
+    inlines = [VoteInline, BudgetItemInline, ContributionInline, ParticipationInline]
+    ordering = ("-created_at",)
+    filter_horizontal = ("tags",)
+    autocomplete_fields = ("tags", )
+    # Optimise les requêtes en changelist (FK direct)
+    list_select_related = ("asset",)
+
+    formfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    def get_queryset(self, request):
+        # Optimise les agrégations et évite les N+1 en liste admin
+        qs = super().get_queryset(request)
+        qs = (
+            qs
+            .select_related("asset")
+            .prefetch_related("tags")
+            .annotate(
+                funded_total=models.Sum("contributions__amount", distinct=True),
+                funding_goal_total=models.Sum(
+                    models.Case(
+                        models.When(budget_items__state="approved", then=models.F("budget_items__amount")),
+                        default=models.Value(0),
+                        output_field=models.IntegerField(),
+                    ),
+                    distinct=True,
+                ),
+                votes_total=models.Count("votes", distinct=True),
+            )
+        )
+        return qs
+
+    def save_model(self, request, obj, form, change):
+        obj: Initiative
+        # Sanitize all TextField inputs to avoid XSS via WYSIWYG/TextField
+        sanitize_textfields(obj)
+        super().save_model(request, obj, form, change)
+
+    def currency(self, obj: Initiative):
+        if obj.asset :
+            return obj.asset.currency_code
+        return obj.currency
+
+    currency.short_description = _("Devise")
+
+    def funded_amount_display(self, obj):
+        total = getattr(obj, "funded_total", None)
+        if total is None:
+            total = obj.total_funded_amount
+        decimal_amount = Decimal(total or 0) / Decimal("100")
+        return f"{decimal_amount:.2f}"
+
+    funded_amount_display.short_description = _("Financé")
+
+    def funding_goal_display(self, obj):
+        # Objectif = somme des lignes budgétaires approuvées
+        goal = getattr(obj, "funding_goal_total", None)
+        if goal is None:
+            goal = obj.total_funding_amount
+        decimal_amount = Decimal(goal or 0) / Decimal("100")
+        return f"{decimal_amount:.2f} {self.currency(obj)}"
+
+    funding_goal_display.short_description = _("Objectif")
+
+    # def requested_total_display(self, obj):
+        ## Seules les participations approuvées par un·e admin sont comptées dans le total (voir modèle)
+        # color = obj.requested_ratio_color
+        # value = f"{obj.requested_total_eur:.2f} {self.currency(obj)}"
+        # return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
+    #
+    # requested_total_display.short_description = _("Demandes validées")
+
+
+
+
+### UNFOLD ADMIN DASHBOARD
 def environment_callback(request):
     if settings.DEBUG:
         return [_("Development"), "primary"]

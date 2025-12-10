@@ -70,6 +70,7 @@ ALLOWED_HOSTS = [
     f'{os.environ["META"]}.{os.environ["DOMAIN"]}',
 ]
 
+
 CSRF_TRUSTED_ORIGINS = [
     f'https://{os.environ.get("DOMAIN")}',
     f'https://.{os.environ.get("DOMAIN")}',
@@ -78,6 +79,10 @@ CSRF_TRUSTED_ORIGINS = [
     f'https://{os.environ["SUB"]}.{os.environ["DOMAIN"]}',
     f'https://{os.environ["META"]}.{os.environ["DOMAIN"]}',
 ]
+
+if DEBUG: # pour l'inspecteur chrome sur android
+    ALLOWED_HOSTS += ['lespass.tibillet.localhost:8080', ]
+    CSRF_TRUSTED_ORIGINS += ['https://lespass.tibillet.localhost:8080', ]
 
 if os.environ.get('ADDITIONAL_DOMAINS'):
     for domain in os.environ.get('ADDITIONAL_DOMAINS').split(','):
@@ -167,10 +172,12 @@ TENANT_APPS = (
     # your tenant-specific apps
     'BaseBillet',
     'ApiBillet',
+    'api_v2',
     'PaiementStripe',
     'wsocket',
     'tibrss',
     'fedow_connect',
+    'crowds',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -285,7 +292,7 @@ REST_FRAMEWORK = {
     #     "rest_framework_simplejwt.authentication.JWTAuthentication",
     # ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10
+    'PAGE_SIZE': 10,
 }
 
 #
@@ -471,39 +478,6 @@ UNFOLD = {
         },
     ],
     "TABS": [
-        {
-            # Déclare dans quel affichage les tabs s'activent
-            "models": ["AuthBillet.humanuser", "BaseBillet.membership"],
-            "items": [
-                {
-                    "title": _("All"),
-                    # "icon": "sports_motorsports",
-                    "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
-                },
-                {
-                    "title": _("Active subscriptions"),
-                    # "icon": "sports_motorsports",
-                    "link": lambda
-                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=Y',
-                },
-                {
-                    "title": _("Non-suscribed members"),
-                    # "icon": "sports_motorsports",
-                    "link": lambda
-                        request: f'{reverse_lazy("staff_admin:AuthBillet_humanuser_changelist")}?membership_valid=N',
-                },
-                {
-                    "title": _("Subscriptions"),
-                    # "icon": "precision_manufacturing",
-                    "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
-                },
-                # {
-                #     "title": _("Custom page"),
-                #     "icon": "grade",
-                #     "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
-                # },
-            ],
-        },
         {
             # Déclare dans quel affichage les tabs s'activent
             "models": ["BaseBillet.formbricksconfig", "BaseBillet.formbricksforms"],
@@ -700,6 +674,27 @@ UNFOLD = {
                 ],
             },
             {
+                "title": _("Contributions"),
+                "separator": True,  # Top border
+                "collapsible": True,  # Collapsible group of links
+                "items": [
+                    {
+                        "title": _("Configuration"),
+                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                    {
+                        "title": _("Initiative"),
+                        "icon": "crowdsource",  # Supported icon set: https://fonts.google.com/icons
+                        "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
+                        # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    },
+                ],
+            },
+            {
                 "title": _("External tools"),
                 "separator": True,  # Top border
                 "collapsible": True,  # Collapsible group of links
@@ -800,3 +795,5 @@ if DEBUG:
         #
     ]
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"  # only use in development
+
+

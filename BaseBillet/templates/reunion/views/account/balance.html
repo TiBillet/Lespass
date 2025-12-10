@@ -77,10 +77,24 @@
             </div>
         </div>
 
+        {# La partie sur la création d'un paiement qrcode / nfc#}
         <div class="row g-0" id="button_tirelire">
             <div class="col-12 bg-body-tertiary p-3">
+                {% if profile.admin_this_tenant or profile.can_initiate_payment %}
+                <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 mb-3">
+                    <div class="mb-2 mb-md-0">
+                        Vous pouvez initier un paiement pour le compte de votre collectif : {{ config.organisation }}
+                    </div>
+                    <div>
+                        <a href="{% url 'qrcodescanpay-get-generator' %}"
+                           class="btn btn-warning square-btn w-100">
+                            <i class="bi bi-qr-code"></i>
+                            {% trans "Initiate a payment" %}
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
                 <h3>{% trans "Currencies" %}</h3>
-
 
                 <div class="row g-2">
                     <div class="col-6 col-md-auto me-md-2">
@@ -105,14 +119,7 @@
                             </a>
                         </div>
                     {% endif %}
-                    {% if profile.admin_this_tenant %}
-                        <div class="col-6 col-md-auto me-md-2">
-                            <a href="{% url 'qrcodescanpay-get-generator' %}" class="btn btn-warning square-btn w-100">
-                                <i class="bi bi-qr-code"></i>
-                                {% trans "Generate a payment QR Code" %}
-                            </a>
-                        </div>
-                    {% endif %}
+                    {# Initiate payment button moved above the Currencies heading for admins #}
                     <div class="col-6 col-md-auto me-md-2">
                         <a href="#detail-monnaies"
                            class="btn btn-secondary square-btn w-100 d-md-none">
@@ -134,7 +141,7 @@
                 </div>
 
                 <p class="opacity-50 m-0 mt-2">
-                    {% trans 'TiBillets are the only currency we can refund online. For local currencies, ask the collective that issued them.' %}
+                    {% trans 'The TiBillet, recharged online, are the only currency we can refund online. For local currencies (recharged in cash or at a bank terminal on site), please contact the collective that issued them.' %}
                 </p>
             </div>
 

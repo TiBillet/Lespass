@@ -2,61 +2,72 @@
 
 <!-- le bouton en fin de page -->
 <div class="row">
-{#    {% if event.easy_reservation and user.is_authenticated %} <!-- Le bouton reservation en un clic -->#}
-{#        <div class="col-md">#}
-{#            <button hx-get="/event/{{ event.pk }}/easy_reservation/"#}
-{#                    class="btn btn-lg btn-primary w-100 mt-3"#}
-{#                    type="button">#}
-{#                {% translate 'Je réserve ma place' %}#}
-{#            </button>#}
-{#        </div>#}
-{#        <div class="col-md">#}
-{#            <button#}
-{#                    class="btn btn-lg btn-secondary w-100 mt-3"#}
-{#                    type="button"#}
-{#                    data-bs-toggle="offcanvas"#}
-{#                    data-bs-target="#bookingPanel"#}
-{#                    aria-controls="bookingPanel">#}
-{#                {% translate "Plus d'options" %}#}
-{#            </button>#}
-{#        </div>#}
-{#    {% else %}#}
-        <div class="col-md">
-            <button
-                    class="btn btn-lg btn-primary w-100 my-3"
-                    type="button"
-                    data-bs-toggle="offcanvas"
-                    data-bs-target="#bookingPanel"
-                    aria-controls="bookingPanel">
-                {% translate "I want to book one or more seats" %}
-            </button>
+    {#    {% if event.easy_reservation and user.is_authenticated %} <!-- Le bouton reservation en un clic -->#}
+    {#        <div class="col-md">#}
+    {#            <button hx-get="/event/{{ event.pk }}/easy_reservation/"#}
+    {#                    class="btn btn-lg btn-primary w-100 mt-3"#}
+    {#                    type="button">#}
+    {#                {% translate 'Je réserve ma place' %}#}
+    {#            </button>#}
+    {#        </div>#}
+    {#        <div class="col-md">#}
+    {#            <button#}
+    {#                    class="btn btn-lg btn-secondary w-100 mt-3"#}
+    {#                    type="button"#}
+    {#                    data-bs-toggle="offcanvas"#}
+    {#                    data-bs-target="#bookingPanel"#}
+    {#                    aria-controls="bookingPanel">#}
+    {#                {% translate "Plus d'options" %}#}
+    {#            </button>#}
+    {#        </div>#}
+    {#    {% else %}#}
+    <div class="col-md">
+        <button
+                class="btn btn-lg btn-primary w-100 my-3"
+                type="button"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#bookingPanel"
+                aria-controls="bookingPanel">
+            {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
+        </button>
 
-            {% if not event.free_price %}
+        {% if not event.free_price %}
             {% if event.price_min or event.price_max %}
-            <p class="text-secondary">
-                {% if event.price_min is not event.price_max %}
-                {% blocktrans trimmed with min=event.price_min max=event.price_max %}
-                Prices ranging between {{ min }} and {{ max }} euros per ticket.
-                {% endblocktrans %}
+                <p class="text-secondary">
+                    {% if event.price_min is not event.price_max %}
+                        {% blocktrans trimmed with min=event.price_min max=event.price_max %}
+                            Prices ranging between {{ min }} and {{ max }} euros per ticket.
+                        {% endblocktrans %}
 
-                {% elif event.price_min is event.price_max and event.price_min > 0 %}
-                {% blocktrans trimmed with price=event.price_min %}
-                Priced at {{ price }} euros per ticket.
-                {% endblocktrans %}
-                {% endif %}
+                    {% elif event.price_min is event.price_max and event.price_min > 0 %}
+                        {% blocktrans trimmed with price=event.price_min %}
+                            Priced at {{ price }} euros per ticket.
+                        {% endblocktrans %}
+                    {% endif %}
+                </p>
+            {% endif %}
+        {% endif %}
+        {% if event.show_gauge %}
+            <p class="text-secondary">
+                {{ event.valid_tickets_count }} {% trans "reservations validées sur" %} {{ event.jauge_max }} {% trans "places disponibles" %}
             </p>
-            {% endif %}
-            {% endif %}
-        </div>
-{#    {% endif %}#}
+        {% endif %}
+    </div>
+    {#    {% endif %}#}
 </div>
 
 <!-- booking panel -->
 <style>
     /* Offcanvas responsive sizing: full width on mobile, double width on desktop */
-    #bookingPanel { --bs-offcanvas-width: 100vw; }
-    @media (min-width: 992px) { /* lg and up */
-        #bookingPanel { --bs-offcanvas-width: 800px; }
+    #bookingPanel {
+        --bs-offcanvas-width: 100vw;
+    }
+
+    @media (min-width: 992px) {
+        /* lg and up */
+        #bookingPanel {
+            --bs-offcanvas-width: 800px;
+        }
     }
 </style>
 
