@@ -256,7 +256,7 @@
                             <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
                                    class="form-control"
                                    placeholder="{{ field.label }}" {% if field.required %}required{% endif %}>
-                            <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
@@ -267,14 +267,14 @@
                                       style="height: 120px"
                                       placeholder="{{ field.label }}"
                                       {% if field.required %}required{% endif %}></textarea>
-                            <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
                         </div>
                     {% elif field.field_type == 'SS' %}
                         <div class="mb-3">
-                            <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %} <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
                                     {% if field.required %}required{% endif %}>
                                 <option value="" {% if field.required %}disabled selected{% endif %}>—</option>

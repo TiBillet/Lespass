@@ -677,15 +677,6 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
 
-    """
-    # Plus besoin : c'est le /my_account (list) qui prend le relai
-    @action(detail=False, methods=['GET'])
-    def wallet(self, request: HttpRequest) -> HttpResponse:
-        template_context = get_context(request)
-        # Pas de header sur cette page
-        template_context['header'] = False
-        return render(request, "htmx/views/my_account/my_account_wallet.html", context=template_context)
-    """
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
