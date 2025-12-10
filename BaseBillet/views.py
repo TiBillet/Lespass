@@ -330,7 +330,7 @@ def emailconfirmation(request, token):
         raise Http404("Error on email confirmation")
 
 
-class ScanQrCode(viewsets.ViewSet):  # /qr
+class ScanCardQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
     def resend_email_confirmation(self, request, pk):
@@ -348,7 +348,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         try :
             wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
             user: TibilletUser = wallet.user
-            user = get_or_create_user(email=user.email, send_mail=True, force_mail=True)
+            get_or_create_user(email=user.email, send_mail=True, force_mail=True)
 
             messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
                                                           "your email address. Don't forget to check your spam!"))
@@ -375,17 +375,57 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         # C'est fedow qui génère la demande de paiement à Stripe.
         # Il ajoute dans les metadonnée les infos du wallet, et le signe.
         # Lors du retour du paiement, la signature est vérifiée pour être sur que la demande de paiement vient bien de Fedow.
-        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+
+        # On a besoin de spécifier à Fedow d'envoyer le retour sur /qr plutôt que sur /my_account
+        tenant = connection.tenant
+        start_return_url = f"https://{tenant.get_primary_domain().domain}/qr/{qrcode_uuid}/return_refill_wallet_qrcode/"
+
+        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user, start_return_url)
         if stripe_checkout_url:
             # Redirection du client vers le lien stripe demandé par Fedow
             return HttpResponseClientRedirect(stripe_checkout_url)
         else:
             messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
-            return HttpResponseClientRedirect('/my_account/')
+            return HttpResponseClientRedirect(request.headers['Referer'])
+
+
+    @action(detail=True, methods=['GET'], url_path=r"return_refill_wallet_qrcode/(?P<checkout_uuid>[0-9a-f-]{36})")
+    def return_refill_wallet_qrcode(self, request, pk=None, checkout_uuid=None):
+        ## Même verif que sur My Account, mais dans la vue "basic card acces"
+
+        # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
+        # Fedow vérifie la signature du paiement dans les metada Stripe
+        # C'est Fedow entré le metadata signé, c'est lui qui vérifie.
+        qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
+        fedowAPI = FedowAPI()
+
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
+            raise Http404()
+
+        # La carte n'a pas d'user, on est sensé l'avoir créé juste avant : 404
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            raise Http404()
+
+        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        user: TibilletUser = wallet.user
+
+        try:
+            wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, checkout_uuid)
+            if wallet:
+                messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
+            else:
+                messages.add_message(request, messages.ERROR, _("Payment verification error"))
+        except Exception as e:
+            messages.add_message(request, messages.ERROR, _("Payment verification error"))
+
+        return redirect(f"/qr/{qrcode_uuid}/")
 
 
     @action(detail=True, methods=['GET'])
     def token_table_qrcode(self, request, pk=None):
+
         qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
         fedowAPI = FedowAPI()
 
@@ -411,13 +451,13 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             if token['asset']['place_origin']:
                 # L'asset fédéré n'a pas d'origin
                 place_uuid_origin = token['asset']['place_origin']['uuid']
-                place_info = self.get_place_cached_info(place_uuid_origin)
+                place_info = MyAccount.get_place_cached_info(place_uuid_origin)
                 token['asset']['logo'] = place_info.get('logo')
                 names_of_place_federated.append(place_info.get('organisation'))
             # Recherche des noms des lieux fédérés
 
             for place_federated in token['asset']['place_uuid_federated_with']:
-                place = self.get_place_cached_info(place_federated)
+                place = MyAccount.get_place_cached_info(place_federated)
                 if place:
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
@@ -966,6 +1006,7 @@ class MyAccount(viewsets.ViewSet):
     @staticmethod
     def get_place_cached_info(place_uuid):
         # Recherche des infos dans le cache :
+
         place_info = cache.get(f"place_uuid")
         if place_info:
             logger.info("place info from cache GET")
