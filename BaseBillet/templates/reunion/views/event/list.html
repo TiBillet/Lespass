@@ -29,39 +29,24 @@
         <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
             {% include "reunion/views/event/partial/search.html" %}
 
-            {# Barre de filtres par tags (inspirée de crowds) #}
+            {# Barre de filtres par tags (inspirée de crowds) - Sur mobile: collapse; Sur ≥ md: affichage direct #}
             <div class="mt-2" aria-label="Filtres par tags">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="text-muted me-2 small">
-                        <i class="bi bi-funnel" aria-hidden="true"></i>
+                {# Ligne d'entête avec libellé + zone d'actions (toggle mobile + bouton admin) #}
+                <div class="d-flex align-items-center">
+                    <span class="text-muted me-2 small d-flex align-items-center">
+                        <i class="bi bi-funnel me-1" aria-hidden="true"></i>
                         {% translate 'Filtrer par tags' %}:
                     </span>
-                    {% for tag in all_tags %}
-                        <a class="btn btn-sm mb-1"
-                           style="{{ tag.style_attr }}"
-                           href="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
-                           hx-get="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
-                           hx-target="body"
-                           hx-swap="innerHTML"
-                           hx-push-url="true"
-                           aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
-{#                            <i class="bi bi-tag" aria-hidden="true"></i>#}
-                            {{ tag.name }}
-                        </a>
-                    {% empty %}
-                        <span class="text-muted small">{% translate 'Aucun tag disponible.' %}</span>
-                    {% endfor %}
-                    {% if active_tag %}
-                        <a class="ms-auto small text-decoration-none" href="/event/"
-                           hx-get="/event/"
-                           hx-target="body" hx-push-url="true">
-                            <i class="bi bi-x-circle"></i> {% translate 'Effacer le filtre' %}
-                        </a>
-                    {% endif %}
-
-                    {# Bouton admin : Ajouter un évènement #}
-                    {% if user|can_admin %}
-                        <div class="ms-auto">
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <button class="btn btn-outline-secondary btn-sm d-inline-flex d-md-none"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#tagFiltersCollapse"
+                                aria-expanded="false"
+                                aria-controls="tagFiltersCollapse">
+                            <i class="bi bi-sliders"></i> {% translate 'Filtres' %}
+                        </button>
+                        {% if user|can_admin %}
                             <button
                                 class="btn btn-sm btn-success"
                                 type="button"
@@ -74,7 +59,33 @@
                                 <i class="bi bi-plus-circle"></i>
                                 {% translate 'Ajouter un évènement' %}
                             </button>
-                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Conteneur des tags: collapse sur xs/sm; visible sur ≥ md (d-md-flex) #}
+                <div class="collapse d-md-flex flex-wrap align-items-center gap-2 mt-2" id="tagFiltersCollapse">
+                    {% for tag in all_tags %}
+                        <a class="btn btn-sm mb-1"
+                           style="{{ tag.style_attr }}"
+                           href="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                           hx-get="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                           hx-target="body"
+                           hx-swap="innerHTML"
+                           hx-push-url="true"
+                            aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
+                            {{ tag.name }}
+                        </a>
+                    {% empty %}
+                        <span class="text-muted small">{% translate 'Aucun tag disponible.' %}</span>
+                    {% endfor %}
+
+                    {% if active_tag %}
+                        <a class="ms-auto small text-decoration-none" href="/event/"
+                           hx-get="/event/"
+                           hx-target="body" hx-push-url="true">
+                            <i class="bi bi-x-circle"></i> {% translate 'Effacer le filtre' %}
+                        </a>
                     {% endif %}
                 </div>
             </div>
