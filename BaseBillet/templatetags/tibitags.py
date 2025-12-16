@@ -92,6 +92,18 @@ def can_admin(user):
     return all([user.email_valid, user.is_active, admin_this])
 
 @register.filter
+def can_create_event_tag(user):
+    this_tenant = connection.tenant
+    if user.is_anonymous:
+        return False
+    elif can_admin(user):
+        return True
+    elif user.can_create_event(this_tenant) :
+        return True
+    return False
+
+@register.filter
+
 def first_eight(value):
     return str(value)[:8]
 

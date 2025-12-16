@@ -72,33 +72,33 @@
 
             {# Create event #}
 
-{#            <form method="post"#}
-{#                  hx-post="/specialadminaction/{{ object_id }}/toggle_user_right/?action=create_event"#}
-{#                  hx-trigger="change"#}
-{#                  hx-swap="none" id="form-create-event">#}
-{#                {% csrf_token %}#}
-{#                <div class="form-row field-row group/row ">#}
-{#                    <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">#}
-{#                        <div class="flex flex-col gap-2 py-2 lg:flex-row">#}
-{#                            <div class="font-medium flex items-start -ml-2 min-w-32 w-32 lg:min-w-56 lg:w-56">#}
-{#                                <label class="font-semibold ml-2 text-sm text-font-important-light dark:text-font-important-dark"#}
-{#                                       for="id_create_event">{% translate "Can create events" %}</label>#}
-{#                            </div>#}
-{##}
-{#                            <div class="grow">#}
-{#                                <div class="flex flex-col lg:flex-row">#}
-{#                                    <input type="checkbox" name="create_event" id="id_create_event"#}
-{#                                           class="hx-toggle appearance-none bg-base-300 block cursor-pointer h-5 relative rounded-full transition-colors w-8 min-w-8 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 after:absolute after:bg-white after:content-[''] after:h-3 after:rounded-full after:shadow-xs after:transition-all after:left-1 after:top-1 after:w-3 checked:bg-green-500 checked:after:left-4 dark:bg-base-600 dark:checked:bg-green-700"#}
-{#                                           {% if can_create_event %}checked{% endif %}>#}
-{#                                </div>#}
-{#                                <div class="leading-relaxed mt-2 text-xs">#}
-{#                                    Peut créer des évènements simples directement sur la page Agenda.#}
-{#                                </div>#}
-{#                            </div>#}
-{#                        </div>#}
-{#                    </div>#}
-{#                </div>#}
-{#            </form>#}
+            <form method="post"
+                  hx-post="/specialadminaction/{{ object_id }}/toggle_user_right/?action=create_event"
+                  hx-trigger="change"
+                  hx-swap="none" id="form-create-event">
+                {% csrf_token %}
+                <div class="form-row field-row group/row ">
+                    <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
+                        <div class="flex flex-col gap-2 py-2 lg:flex-row">
+                            <div class="font-medium flex items-start -ml-2 min-w-32 w-32 lg:min-w-56 lg:w-56">
+                                <label class="font-semibold ml-2 text-sm text-font-important-light dark:text-font-important-dark"
+                                       for="id_create_event">{% translate "Can create events" %}</label>
+                            </div>
+
+                            <div class="grow">
+                                <div class="flex flex-col lg:flex-row">
+                                    <input type="checkbox" name="create_event" id="id_create_event"
+                                           class="hx-toggle appearance-none bg-base-300 block cursor-pointer h-5 relative rounded-full transition-colors w-8 min-w-8 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 after:absolute after:bg-white after:content-[''] after:h-3 after:rounded-full after:shadow-xs after:transition-all after:left-1 after:top-1 after:w-3 checked:bg-green-500 checked:after:left-4 dark:bg-base-600 dark:checked:bg-green-700"
+                                           {% if can_create_event %}checked{% endif %}>
+                                </div>
+                                <div class="leading-relaxed mt-2 text-xs">
+                                    Peut créer des évènements simples directement sur la page Agenda.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
 
             {# Manage crowd #}
 {#            <form method="post"#}

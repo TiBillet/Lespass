@@ -2596,8 +2596,11 @@ class ReservationAddAdmin(ModelForm):
         cleaned_data = self.cleaned_data
         pricesold = cleaned_data.get('pricesold')
         payment_method = cleaned_data.get('payment_method')
-        if pricesold.productsold.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
-            raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
+        # pricesold peut être None si le champ a des erreurs de validation ou n'est pas renseigné
+        # On ne valide la méthode de paiement que si on a un produit
+        if pricesold and getattr(pricesold, 'productsold', None):
+            if pricesold.productsold.categorie_article == Product.FREERES and payment_method != PaymentMethod.FREE:
+                raise forms.ValidationError(_("Une reservation gratuite doit être en paiement OFFERT"), code="invalid")
         return payment_method
 
     def clean(self):

@@ -38,7 +38,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission
+from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
@@ -1559,6 +1559,15 @@ class HomeViewset(viewsets.ViewSet):
 
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
+    def get_permissions(self):
+        # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
+        if self.action in ['simple_add_event', 'simple_create_event', 'address_add_form', 'address_create']:
+            permission_classes = [CanCreateEventPermission]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+
 
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all():
@@ -1941,16 +1950,11 @@ class EventMVT(viewsets.ViewSet):
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
 
-    def get_permissions(self):
-        # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
-        if self.action in ['admin_add_form', 'admin_create']:
-            permission_classes = [TenantAdminPermission]
-        else:
-            permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
+
+    ### Simple add event
 
     @action(detail=False, methods=['GET'])
-    def admin_add_form(self, request: HttpRequest):
+    def simple_add_event(self, request: HttpRequest):
         """
         Offcanvas de création rapide d'un évènement SANS billetterie (gratuit ou sans réservation payante).
         - Accessible uniquement aux admins du tenant
@@ -1962,12 +1966,12 @@ class EventMVT(viewsets.ViewSet):
         context.update({
             'default_address': config.postal_address,
             'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
-            'all_tags': Tag.objects.all().order_by('name'),
         })
-        return render(request, "reunion/views/event/partial/admin_add_form.html", context=context)
+        return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
+
 
     @action(detail=False, methods=['POST'])
-    def admin_create(self, request: HttpRequest):
+    def simple_create_event(self, request: HttpRequest):
         """
         Crée un évènement simple à partir du formulaire Offcanvas (HTMX).
         Champs supportés:
@@ -2005,7 +2009,7 @@ class EventMVT(viewsets.ViewSet):
                     'jauge_max': request.POST.get('jauge_max', ''),
                 }
             })
-            return render(request, "reunion/views/event/partial/admin_add_form.html", context=context, status=400)
+            return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
 
         event = serializer.save()
 
@@ -2017,9 +2021,85 @@ class EventMVT(viewsets.ViewSet):
 
         context = get_context(request)
         context.update({'event': event})
+        # Réponse HTMX: après création, on reste dans le flux offcanvas et on recharge
         # Réponse HTMX: remplace le contenu de l'offcanvas par un message de succès
         # return render(request, "reunion/views/event/partial/admin_add_success.html", context=context)
         return HttpResponseClientRedirect("/event/")
+
+    @action(detail=False, methods=['GET'])
+    def address_add_form(self, request: HttpRequest):
+        """
+        Formulaire HTMX pour créer une nouvelle adresse (lieu) depuis l'ajout rapide d'évènement.
+        - Champs simples et noms FALC.
+        - Affiche les textes d'aide du modèle.
+        """
+        context = get_context(request)
+        # Passer un dict d'erreurs vide par défaut pour simplifier le template
+        context.update({'errors': {}, 'prefill': {}})
+        return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
+
+    @action(detail=False, methods=['POST'])
+    def address_create(self, request: HttpRequest):
+        """
+        Création d'une `PostalAddress` via HTMX avec champs FALC.
+        - Utilise le serializer schema.org existant en mappant nos noms de champs.
+        - En cas d'erreur: renvoie le même formulaire avec les erreurs (400).
+        - En cas de succès: redirige vers le formulaire d'ajout d'évènement.
+        """
+
+        # Mapping FALC -> schema.org pour réutiliser PostalAddressCreateSerializer de api_v2
+        data = {
+            'name': request.POST.get('name') or None,
+            'streetAddress': request.POST.get('street_address', ''),
+            'addressLocality': request.POST.get('address_locality', ''),
+            'postalCode': request.POST.get('postal_code', ''),
+            # Pays: si absent, on emprunte celui de l'adresse par défaut ou "FR"
+            'addressCountry': (getattr(Configuration.get_solo().postal_address, 'address_country', None) or 'FR'),
+        }
+
+        # Import tardif pour éviter les imports circulaires au chargement du module
+        from api_v2.serializers import PostalAddressCreateSerializer
+
+        pa_serializer = PostalAddressCreateSerializer(data=data, context={'request': request})
+        if not pa_serializer.is_valid():
+            # On renvoie le formulaire avec les erreurs structurées par champ
+            context = get_context(request)
+            context.update({
+                'errors': pa_serializer.errors,
+                'prefill': {
+                    'name': request.POST.get('name', ''),
+                    'street_address': request.POST.get('street_address', ''),
+                    'address_locality': request.POST.get('address_locality', ''),
+                    'postal_code': request.POST.get('postal_code', ''),
+                    'is_main': request.POST.get('is_main', ''),
+                }
+            })
+            return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
+
+        addr = pa_serializer.save()
+
+        # Gestion des fichiers images optionnels (img), et du flag is_main
+        updated_fields = []
+        if hasattr(request, 'FILES'):
+            f = request.FILES.get('img')
+            if f:
+                addr.img = f
+                updated_fields.append('img')
+        # Champ simple booléen
+        is_main_val = request.POST.get('is_main')
+        if is_main_val in ['on', 'true', 'True', '1']:
+            addr.is_main = True
+            updated_fields.append('is_main')
+        if updated_fields:
+            addr.save(update_fields=updated_fields)
+
+        try:
+            messages.add_message(request, messages.SUCCESS, _("Adresse créée !"))
+        except MessageFailure:
+            pass
+
+        # Redirige l'offcanvas vers le formulaire d'évènement
+        return self.simple_add_event(request)
 
 '''
 @require_GET

@@ -46,11 +46,11 @@
                                 aria-controls="tagFiltersCollapse">
                             <i class="bi bi-sliders"></i> {% translate 'Filtres' %}
                         </button>
-                        {% if user|can_admin %}
+                        {% if user|can_create_event_tag %}
                             <button
                                 class="btn btn-sm btn-success"
                                 type="button"
-                                hx-get="/event/admin_add_form/"
+                                hx-get="/event/simple_add_event/"
                                 hx-target="#offcanvas-event-admin"
                                 hx-swap="innerHTML"
                                 data-bs-toggle="offcanvas"

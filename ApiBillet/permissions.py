@@ -123,6 +123,33 @@ class CanInitiatePaymentPermission(permissions.BasePermission):
 
 
 
+# Mis à l'extérieur pour pouvoir être utilisé tout seul sans RESTframework
+# Par exemple utilisé par l'admin Unfold ( settings.UNFOLD.SIDEBAR )
+def CanCreateEventPermissionWithRequest(request):
+    # Vérifie que l'user existe et est admin du tenant ou peut créer des events
+    if not request.user:
+        return False
+
+    if (not request.user.is_active
+            or request.user.espece != TibilletUser.TYPE_HUM
+            or not request.user.is_authenticated):
+        return False
+
+    return any([
+        request.user.is_superuser,
+        request.user.is_tenant_admin(connection.tenant),
+        request.user.can_create_event(connection.tenant),
+    ])
+
+
+class CanCreateEventPermission(permissions.BasePermission):
+    message = _("Unauthorized user")
+    def has_permission(self, request, view):
+        return CanCreateEventPermissionWithRequest(request)
+
+
+
+
 
 """
 class TerminalScanPermission(permissions.BasePermission):
