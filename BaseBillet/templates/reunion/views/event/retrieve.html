@@ -118,8 +118,16 @@
 
         <!-- tags -->
         <p>
-            {% for tag  in event.tag.all %}
-                <span style="{{ tag.style_attr }}" class="badge p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
+            {% for tag in event.tag.all %}
+                <a class="btn btn-sm mb-1"
+                    style="{{ tag.style_attr }}"
+                    href="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                    hx-get="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                    hx-target="body"
+                    hx-swap="innerHTML"
+                    hx-push-url="true">
+                    {{ tag.name }}
+                </a>
             {% endfor %}
         </p>
 
