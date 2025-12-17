@@ -61,8 +61,7 @@
                                            {% if can_initiate_payment %}checked{% endif %}>
                                 </div>
                                 <div class="leading-relaxed mt-2 text-xs">
-                                    Peut générer des paiements pour l'organisation depuis l'espace "Monc Compte /
-                                    Tirelire".
+                                    {% trans "Can initiate payments on behalf of the location from My Account area" %}
                                 </div>
                             </div>
                         </div>
@@ -92,7 +91,7 @@
                                            {% if can_create_event %}checked{% endif %}>
                                 </div>
                                 <div class="leading-relaxed mt-2 text-xs">
-                                    Peut créer des évènements simples directement sur la page Agenda.
+                                    {%  trans "Can create event on agenda page" %}
                                 </div>
                             </div>
                         </div>
@@ -121,7 +120,7 @@
 {#                                           {% if can_manage_crowd %}checked{% endif %}>#}
 {#                                </div>#}
 {#                                <div class="leading-relaxed mt-2 text-xs">#}
-{#                                    Peut administrer des inititatives dans la section "Crowds".#}
+{#                                    {% trans "Can manage crowds initiative" %}.#}
 {#                                </div>#}
 {#                            </div>#}
 {#                        </div>#}
