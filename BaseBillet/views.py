@@ -501,6 +501,8 @@ class SpecialAdminAction(viewsets.ViewSet):
         if request.GET.get('action') == 'client_admin' :
             if user.client_admin.filter(pk=tenant.pk).exists():
                 user.client_admin.remove(tenant)
+                user.is_staff = False
+                user.save(update_fields=['is_staff'])
                 messages.info(request, _("Admin right removed"))
             else:
                 user.client_admin.add(tenant)

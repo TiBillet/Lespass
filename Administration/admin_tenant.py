@@ -115,6 +115,9 @@ class StaffAdminSite(UnfoldAdminSite):
         messages.add_message(request, messages.WARNING, _("Please login to access this page."))
         return HttpResponseRedirect('/')
 
+    def has_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
 
 staff_admin_site = StaffAdminSite(name='staff_admin')
 
@@ -329,46 +332,6 @@ class WebhookAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-########################################################################
-# class ConfigurationAdminForm(ModelForm):
-#     """Admin form to add a 'Nom de domaine' input with live slug preview that maps to Configuration.slug."""
-#
-#     domain_name = forms.CharField(
-#         label=_("Sous domaine"),
-#         max_length=100,
-#         required=False,
-#         help_text=mark_safe('''<span>Attention ! Changer ceci changera l'adresse de touuuuut votre espace</span></br><small>Slug: <code id="slug-preview"></code></small>'''),
-#         widget=UnfoldAdminTextInputWidget(
-#             attrs={
-#                 # Live preview of slug using HTMX
-#                 "hx-post": "slugify_preview/",
-#                 "hx-trigger": "keyup changed delay:300ms",
-#                 "hx-target": "#slug-preview",
-#                 "hx-swap": "innerHTML",
-#             }
-#         ),
-#     )
-#
-#     class Meta:
-#         model = Configuration
-#         fields = '__all__'
-#
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         # Initialize domain_name from current slug (best effort)
-#         if self.instance and getattr(self.instance, 'slug', ''):
-#             self.fields['domain_name'].initial = self.instance.slug
-#
-#     def save(self, commit=True):
-#         instance: Configuration = super().save(commit=False)
-#         domain = self.cleaned_data.get('domain_name')
-#         if domain:
-#             instance.slug = slugify(domain)
-#         if commit:
-#             instance.save()
-#             self.save_m2m()
-#         return instance
-#
 
 @admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):

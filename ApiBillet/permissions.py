@@ -64,7 +64,7 @@ def TenantAdminPermissionWithRequest(request):
         elif request.user.is_authenticated:
             return all([
                 request.user.is_tenant_admin(connection.tenant),
-                request.user.is_staff,
+                # request.user.is_staff, # encore utile ?
                 request.user.is_active,
                 request.user.espece == TibilletUser.TYPE_HUM
             ])
