@@ -10,7 +10,7 @@ from django.db import connection
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, activate
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import serializers
 
@@ -830,17 +830,12 @@ class TenantCreateValidator(serializers.Serializer):
             # get_or_create_user(admin_email, force_mail=True)
 
             # Création des articles par default :
-            freeres, created = Product.objects.get_or_create(
-                name="Réservation gratuite",
-                categorie_article=Product.FREERES,
-            )
-
-            freeres_p, created = Price.objects.get_or_create(
-                name="Tarif gratuit",
-                prix=0,
-                product=freeres,
-                max_per_user=10,
-            )
+            activate(config.language)
+            if not Product.objects.filter(categorie_article=Product.FREERES).exists():
+                freeres, created = Product.objects.get_or_create(
+                    name=_("Free booking"),
+                    categorie_article=Product.FREERES,
+                ) # le post save créera le price 0
 
         waiting_config.tenant = tenant
         waiting_config.created = True

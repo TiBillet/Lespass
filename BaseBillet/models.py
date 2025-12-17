@@ -27,7 +27,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.text import slugify
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, activate
 from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context
 from rest_framework_api_key.models import APIKey, AbstractAPIKey
@@ -775,7 +775,7 @@ class Product(models.Model):
 
     name = models.CharField(max_length=500, verbose_name=_("Name"))
     tva = models.ForeignKey(Tva, on_delete=models.PROTECT, null=True, blank=True,
-                            verbose_name=("TVA rate"), help_text=_("Leave if zero VAT"))
+                            verbose_name=_("TVA rate"), help_text=_("Leave if zero VAT"))
 
     short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"),
                                          help_text=_("Displayed only for membership/subscription products."))
@@ -975,8 +975,10 @@ def post_save_Product(sender, instance: Product, created, **kwargs):
 
     if instance.categorie_article == Product.FREERES:
         # On est sur un produit a réservation gratuite, on fabrique le price s'il n'existe pas ou s'il n'a pas été archivé
-        if not Price.objects.filter(product=instance, prix=0).exists():
-            Price.objects.create(product=instance, name="Tarif gratuit", prix=0, publish=True)
+        if not instance.prices.filter(prix=0).exists():
+            config = Configuration.get_solo()
+            activate(config.language)
+            Price.objects.create(product=instance, name=_("Free rate"), prix=0, publish=True)
 
 
 """

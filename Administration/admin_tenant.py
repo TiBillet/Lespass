@@ -800,7 +800,7 @@ class ProductAdminCustomForm(ModelForm):
             (Product.ADHESION, _('Subscription or membership')),
             ],
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
-        label=_("Payment method"),
+        label=_("Product type"),
     )
 
     def clean_categorie_article(self):

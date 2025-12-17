@@ -54,10 +54,7 @@
                                     </span>
                                 {% endif %}
                                 {% if price.iteration %}
-                                    <span class="badge rounded-pill text-bg-info">
-                                        {% blocktrans count it=price.iteration %}Up to {{ it }} installment{% plural %}
-                                            Up to {{ it }} installments{% endblocktrans %}
-                                    </span>
+                                    <span class="badge rounded-pill text-bg-info">{{ price.iteration }} {% trans "iteration(s)" %}</span>
                                 {% endif %}
                             </div>
                             {% if price.max_per_user_reached %}
