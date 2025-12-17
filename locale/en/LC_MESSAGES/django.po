@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-17 09:26+0000\n"
+"POT-Creation-Date: 2025-12-17 09:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -1558,8 +1558,8 @@ msgid "Collective name"
 msgstr ""
 
 #: BaseBillet/models.py:344 BaseBillet/models.py:780 BaseBillet/models.py:1204
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:76
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:80
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:62
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:66
 #: MetaBillet/models.py:49 crowds/models.py:52
 msgid "Short description"
 msgstr ""
@@ -3759,7 +3759,7 @@ msgid "Confirm the refund request?"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/account/balance.html:62
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:141
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:117
 msgid "Send request"
 msgstr ""
 
@@ -5213,25 +5213,7 @@ msgstr ""
 msgid "Name of your collective"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:60
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:64
-msgid "Website"
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:89
-msgid ""
-"\n"
-"                                I want to use a\n"
-"                                <a href=\"https://tibillet.org/fr/docs/"
-"presentation/demonstration/#caisse-enregistreuse--cashless--"
-"httpslaboutikdemotibilletorg\"\n"
-"                                   target=\"_blank\">\n"
-"                                    LaBoutik cash register\n"
-"                                </a>\n"
-"                            "
-msgstr ""
-
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:102
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:75
 msgid ""
 "\n"
 "                                I agree to\n"
@@ -5242,7 +5224,11 @@ msgid ""
 "                            "
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:113
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:82
+msgid "Easy to read and understand, be sure to read them!"
+msgstr ""
+
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:89
 #: MetaBillet/models.py:44
 msgid "Domain name choice"
 msgstr ""
@@ -5374,40 +5360,40 @@ msgstr ""
 msgid "This product is limited in quantity per person."
 msgstr ""
 
-#: BaseBillet/validators.py:746
+#: BaseBillet/validators.py:744
 msgid "Please accept terms and conditions."
 msgstr ""
 
-#: BaseBillet/validators.py:751 BaseBillet/validators.py:753
-#: BaseBillet/validators.py:755
+#: BaseBillet/validators.py:749 BaseBillet/validators.py:751
+#: BaseBillet/validators.py:753
 msgid "This name is not available"
 msgstr ""
 
-#: BaseBillet/validators.py:883
+#: BaseBillet/validators.py:881
 msgid "le format du tag NFC n'est pas bon"
 msgstr ""
 
-#: BaseBillet/validators.py:895
+#: BaseBillet/validators.py:893
 msgid "La carte n'existe pas"
 msgstr ""
 
-#: BaseBillet/validators.py:899
+#: BaseBillet/validators.py:897
 msgid ""
 "La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la "
 "personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:904
+#: BaseBillet/validators.py:902
 msgid ""
 "Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à "
 "la personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:915
+#: BaseBillet/validators.py:913
 msgid "Paiement introuvable."
 msgstr ""
 
-#: BaseBillet/validators.py:922
+#: BaseBillet/validators.py:920
 msgid ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 msgstr ""

@@ -2500,11 +2500,7 @@ class Tenant(viewsets.ViewSet):
         waiting_configuration = WaitingConfiguration.objects.create(
             organisation=validated_data['name'],
             email=validated_data['email'],
-            laboutik_wanted=validated_data['laboutik'],
-            payment_wanted=validated_data['payment_wanted'],
-            # id_acc_connect=id_acc_connect,
             dns_choice=validated_data['dns_choice'],
-            site_web=validated_data['website'],
             short_description=validated_data['short_description'],
         )
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
@@ -2536,7 +2532,8 @@ class Tenant(viewsets.ViewSet):
             # Idempotent behavior: if the tenant was already created, redirect directly
             if wc.tenant:
                 primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
-                user = get_or_create_user(wc.email, send_mail=True)
+                # Le tenant existe déja, on envoi un mail de connection
+                get_or_create_user(wc.email, send_mail=True)
                 return redirect(primary_domain)
 
             # Si assez de tenant en attentent de création existent :

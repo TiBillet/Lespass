@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-17 09:26+0000\n"
+"POT-Creation-Date: 2025-12-17 09:40+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -1582,8 +1582,8 @@ msgid "Collective name"
 msgstr "Nom du collectif"
 
 #: BaseBillet/models.py:344 BaseBillet/models.py:780 BaseBillet/models.py:1204
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:76
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:80
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:62
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:66
 #: MetaBillet/models.py:49 crowds/models.py:52
 msgid "Short description"
 msgstr "Description courte"
@@ -3876,7 +3876,7 @@ msgid "Confirm the refund request?"
 msgstr "Confirmer la demande de remboursement ?"
 
 #: BaseBillet/templates/reunion/views/account/balance.html:62
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:141
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:117
 msgid "Send request"
 msgstr "Envoyer la demande"
 
@@ -4686,8 +4686,13 @@ msgid "Hourly payment"
 msgstr "Paiement horaire"
 
 #: BaseBillet/templates/reunion/views/membership/form.html:58
+#, fuzzy, python-format
+#| msgid "Up to %(it)s installment"
+#| msgid_plural "Up to %(it)s installments"
 msgid "Up to %(it)s installment"
-msgid_plural "Up to %(it)s installments"
+msgid_plural ""
+"\n"
+"                                            Up to %(it)s installments"
 msgstr[0] "%(it)s récurrence"
 msgstr[1] "%(it)s récurrences"
 
@@ -5409,31 +5414,7 @@ msgstr "Adresse mail d'administration"
 msgid "Name of your collective"
 msgstr "Nom de votre collectif"
 
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:60
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:64
-msgid "Website"
-msgstr "Site internet"
-
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:89
-msgid ""
-"\n"
-"                                I want to use a\n"
-"                                <a href=\"https://tibillet.org/fr/docs/"
-"presentation/demonstration/#caisse-enregistreuse--cashless--"
-"httpslaboutikdemotibilletorg\"\n"
-"                                   target=\"_blank\">\n"
-"                                    LaBoutik cash register\n"
-"                                </a>\n"
-"                            "
-msgstr ""
-"\n"
-"Je veux utiliser une\n"
-"<a href=\"https://tibillet.org/fr/docs/presentation/demonstration/#caisse-"
-"enregistreuse--cashless--httpslaboutikdemotibilletorg\">\n"
-"    caisse enregistreuse LaBoutik\n"
-"</a>"
-
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:102
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:75
 msgid ""
 "\n"
 "                                I agree to\n"
@@ -5449,7 +5430,12 @@ msgstr ""
 "    les conditions d'utilisation\n"
 "</a>"
 
-#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:113
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:82
+msgid "Easy to read and understand, be sure to read them!"
+msgstr ""
+"Simple, rapide, facile à lire et à comprendre, N'hésitez pas à les lire !"
+
+#: BaseBillet/templates/reunion/views/tenant/new_tenant.html:89
 #: MetaBillet/models.py:44
 msgid "Domain name choice"
 msgstr "Choix du nom de domaine"
@@ -5583,40 +5569,40 @@ msgstr "Le montant doit être supérieur au montant minimum."
 msgid "This product is limited in quantity per person."
 msgstr "Ce produit est disponible en quantité limitée par personne."
 
-#: BaseBillet/validators.py:746
+#: BaseBillet/validators.py:744
 msgid "Please accept terms and conditions."
 msgstr "Merci d'accepter les conditions d'utilisation"
 
-#: BaseBillet/validators.py:751 BaseBillet/validators.py:753
-#: BaseBillet/validators.py:755
+#: BaseBillet/validators.py:749 BaseBillet/validators.py:751
+#: BaseBillet/validators.py:753
 msgid "This name is not available"
 msgstr "Ce nom n'est pas disponible"
 
-#: BaseBillet/validators.py:883
+#: BaseBillet/validators.py:881
 msgid "le format du tag NFC n'est pas bon"
 msgstr ""
 
-#: BaseBillet/validators.py:895
+#: BaseBillet/validators.py:893
 msgid "La carte n'existe pas"
 msgstr ""
 
-#: BaseBillet/validators.py:899
+#: BaseBillet/validators.py:897
 msgid ""
 "La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la "
 "personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:904
+#: BaseBillet/validators.py:902
 msgid ""
 "Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à "
 "la personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:915
+#: BaseBillet/validators.py:913
 msgid "Paiement introuvable."
 msgstr ""
 
-#: BaseBillet/validators.py:922
+#: BaseBillet/validators.py:920
 msgid ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 msgstr ""
@@ -6951,6 +6937,27 @@ msgstr ""
 #: fedow_public/templates/fedow_public/transactions_table.html:57
 msgid "Aucune transaction trouvée pour cette période."
 msgstr ""
+
+#~ msgid "Website"
+#~ msgstr "Site internet"
+
+#~ msgid ""
+#~ "\n"
+#~ "                                I want to use a\n"
+#~ "                                <a href=\"https://tibillet.org/fr/docs/"
+#~ "presentation/demonstration/#caisse-enregistreuse--cashless--"
+#~ "httpslaboutikdemotibilletorg\"\n"
+#~ "                                   target=\"_blank\">\n"
+#~ "                                    LaBoutik cash register\n"
+#~ "                                </a>\n"
+#~ "                            "
+#~ msgstr ""
+#~ "\n"
+#~ "Je veux utiliser une\n"
+#~ "<a href=\"https://tibillet.org/fr/docs/presentation/demonstration/#caisse-"
+#~ "enregistreuse--cashless--httpslaboutikdemotibilletorg\">\n"
+#~ "    caisse enregistreuse LaBoutik\n"
+#~ "</a>"
 
 #~ msgid "You are not authorized to access this page."
 #~ msgstr "Vous n'êtes pas autorisé à accéder à cette page."

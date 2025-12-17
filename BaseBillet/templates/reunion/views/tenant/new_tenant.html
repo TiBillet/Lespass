@@ -52,20 +52,6 @@
                     </div>
                     {% include 'reunion/partials/field_errors.html' %}
 
-                    <div class="row">
-                        <div class="col">
-                            <div class="form-floating mb-3">
-                                <input name="website" type="url" class="form-control" id="website-input"
-                                       placeholder="" role="textbox" maxlength="200"
-                                       aria-label="{% trans 'Website' %}" required
-                                        {% if name_query_params %}
-                                       value="{{ name_query_params }}"
-                                        {% endif %}>
-                                <label for="name">{% trans 'Website' %}</label>
-                            </div>
-                        </div>
-                    </div>
-                    {% include 'reunion/partials/field_errors.html' %}
 
                     <div class="row">
                         <div class="col">
@@ -83,19 +69,6 @@
                     </div>
                     {% include 'reunion/partials/field_errors.html' %}
 
-                    <div class="form-check form-switch mt-5 mb-3">
-                        <input class="form-check-input" type="checkbox" role="switch" name="laboutik" id="laboutik">
-                        <label class="form-check-label" for="laboutik">
-                            {% blocktranslate %}
-                                I want to use a
-                                <a href="https://tibillet.org/fr/docs/presentation/demonstration/#caisse-enregistreuse--cashless--httpslaboutikdemotibilletorg"
-                                   target="_blank">
-                                    LaBoutik cash register
-                                </a>
-                            {% endblocktranslate %}
-                        </label>
-                    </div>
-
                     <div class="form-check form-switch mb-5">
                         <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
                         <label class="form-check-label" for="cgu">
@@ -105,6 +78,9 @@
                                     the terms and conditions
                                 </a>
                             {% endblocktranslate %}
+                            <p>
+                                {% trans "Easy to read and understand, be sure to read them!" %}
+                            </p>
                         </label>
                     </div>
                     {% include 'reunion/partials/field_errors.html' %}

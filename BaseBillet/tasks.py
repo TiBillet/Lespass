@@ -1233,13 +1233,10 @@ def connexion_celery_mailer(self, user_email,
 @app.task
 def new_tenant_mailer(waiting_config_uuid: str):
     try:
-        # Génération du lien qui va créer la redirection vers l'url onboard
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
         time.sleep(2)  # Attendre que la db soit bien a jour
-        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
 
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
         signer = TimestampSigner()
         token = urlsafe_base64_encode(signer.sign(f"{waiting_config.uuid}").encode('utf8'))
 
@@ -1252,6 +1249,9 @@ def new_tenant_mailer(waiting_config_uuid: str):
         p_domain = connection.tenant.get_primary_domain().domain
         connexion_url = f"https://{p_domain}/tenant/{token}/emailconfirmation_tenant"
 
+        # on indique la future adresse :
+        future_url = f"https://{waiting_config.slug}.{waiting_config.dns_choice}/"
+
         config = Configuration.get_solo()
         activate(config.language)
 
@@ -1262,8 +1262,8 @@ def new_tenant_mailer(waiting_config_uuid: str):
             context={
                 'waiting_config': waiting_config,
                 'orga_name': f"{waiting_config.organisation.capitalize()}",
-                'tenant_url': tenant_url,
                 'connexion_url': connexion_url,
+                'future_url': future_url,
             }
         )
         mail.send()
