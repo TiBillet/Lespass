@@ -190,21 +190,40 @@
         });
     </script>
     <script>
-        (function() {
-            try {
-                // Petits nombres entre 1 et 9
-                var x = Math.floor(Math.random() * 9) + 1;
-                var y = Math.floor(Math.random() * 9) + 1;
-                var sx = document.getElementById('captcha-x');
-                var sy = document.getElementById('captcha-y');
-                var hx = document.getElementById('captcha-hidden-x');
-                var hy = document.getElementById('captcha-hidden-y');
-                if (sx) sx.textContent = x;
-                if (sy) sy.textContent = y;
-                if (hx) hx.value = x;
-                if (hy) hy.value = y;
-            } catch (e) {
-                // En cas d'erreur JS, on laisse les valeurs par défaut, la validation serveur bloquera
+        (function () {
+            function initCaptcha(root) {
+                try {
+                    // Petits nombres entre 1 et 9
+                    var x = Math.floor(Math.random() * 9) + 1;
+                    var y = Math.floor(Math.random() * 9) + 1;
+
+                    var scope = root || document;
+                    var sx = scope.querySelector('#captcha-x');
+                    var sy = scope.querySelector('#captcha-y');
+                    var hx = scope.querySelector('#captcha-hidden-x');
+                    var hy = scope.querySelector('#captcha-hidden-y');
+
+                    if (sx) sx.textContent = x;
+                    if (sy) sy.textContent = y;
+                    if (hx) hx.value = x;
+                    if (hy) hy.value = y;
+                } catch (e) {
+                    // En cas d'erreur JS, on laisse les valeurs par défaut, la validation serveur bloquera
+                }
+            }
+
+            // Initialisation au chargement initial de la page
+            document.addEventListener('DOMContentLoaded', function () {
+                var form = document.getElementById('new-tenant');
+                if (form) initCaptcha(form);
+            });
+
+            // Ré-initialisation après un swap HTMX (quand le formulaire est renvoyé avec erreurs)
+            if (window.htmx && typeof window.htmx.onLoad === 'function') {
+                window.htmx.onLoad(function (el) {
+                    var form = (el && el.id === 'new-tenant') ? el : el.querySelector && el.querySelector('#new-tenant');
+                    if (form) initCaptcha(form);
+                });
             }
         })();
     </script>
