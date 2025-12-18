@@ -941,6 +941,14 @@ msgstr "Je vais m'en sortir avec la documentation"
 msgid "No custom form answers for this ticket's reservation."
 msgstr "Pas de réponse sur mesure pour cette réservation"
 
+#: Administration/templates/admin/event/change_form.html:8
+msgid "Copy the public url of the event"
+msgstr "Copier l'url public de l'événement"
+
+#: Administration/templates/admin/event/change_form.html:10
+msgid "Copied !"
+msgstr "Copié !"
+
 #: ApiBillet/permissions.py:119 ApiBillet/permissions.py:146
 msgid "Unauthorized user"
 msgstr "Utilisateur·ice non autorisé"

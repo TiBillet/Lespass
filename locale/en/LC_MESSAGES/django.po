@@ -924,6 +924,14 @@ msgstr ""
 msgid "No custom form answers for this ticket's reservation."
 msgstr ""
 
+#: Administration/templates/admin/event/change_form.html:8
+msgid "Copy the public url of the event"
+msgstr ""
+
+#: Administration/templates/admin/event/change_form.html:10
+msgid "Copied !"
+msgstr ""
+
 #: ApiBillet/permissions.py:119 ApiBillet/permissions.py:146
 msgid "Unauthorized user"
 msgstr ""
