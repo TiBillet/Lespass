@@ -2673,6 +2673,8 @@ class Membership(models.Model):
                                              blank=True,
                                              related_name="membership_options")
 
+    archiver = models.BooleanField(default=False)
+
     class Meta:
         # unique_together = ('user', 'price')
         verbose_name = _('Subscription')

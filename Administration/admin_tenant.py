@@ -1865,12 +1865,24 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     def display_is_valid(self, instance: Membership):
         return instance.is_valid()
 
+
+    # actions_row = ["archiver", ]
+    # @action(
+    #     description=_("Archiver"),
+    #     permissions=["custom_actions_detail"],
+    # )
+    # def archiver(self, request, object_id):
+    #     logger.info(object_id)
+    #     membership = Membership.objects.get(pk=object_id)
+    #     return redirect(request.META["HTTP_REFERER"])
+
+
     # @display(description=_("State"))
     # def state_display(self, instance: Membership):
         #### Show human-readable label for state, possibly with icon/color later
         # return instance.get_state_display()
 
-    def has_custom_actions_detail_permission(self, request, object_id):
+    def has_custom_actions_detail_permission(self, request, object_id=None):
         return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
