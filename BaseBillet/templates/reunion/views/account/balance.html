@@ -6,104 +6,112 @@
 
 {% block account_page %}
 
+
+    {# La partie sur la création d'un paiement qrcode / nfc#}
+    {% if profile.admin_this_tenant or profile.can_initiate_payment %}
+        <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 mb-3">
+            <div class="mb-2 mb-md-0">
+                Vous pouvez initier un paiement pour le compte de votre collectif : {{ config.organisation }}
+            </div>
+            <div>
+                <a href="{% url 'qrcodescanpay-get-generator' %}"
+                   class="btn btn-warning square-btn w-100">
+                    <i class="bi bi-qr-code"></i>
+                    {% trans "Initiate a payment" %}
+                </a>
+            </div>
+        </div>
+    {% endif %}
+
     <section class="card mb-3 pt-3">
         <div class="card-body">
             <h1 class="card-title">{% trans 'My balance' %}</h1>
             <p class="lead">
-                {% trans 'Here I can review my TiBillet currencies, access my transaction history and see which currencies are accepted by this collective.' %}
+                {% trans 'Here I can review my currencies, access my transaction history and see which currencies are accepted by this collective.' %}
             </p>
         </div>
 
-        <!-- refund panel -->
-        <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
-            <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Request a refund" %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
-                        aria-label="{% trans 'Close' %}"></button>
-            </div>
-            <div class="offcanvas-body">
-                <div class="d-flex flex-column justify-content-between h-100">
-                    <div>
-                        <div class="alert  alert-primary" role="alert">
-                            <h4>{% trans "Don't panic! You've got time left…" %}</h4>
-                            {% blocktranslate %}
-                                <p>
-                                    TiBillet works on a
-                                    <a href="https://tibillet.org/docs/presentation/philosophy/">
-                                        melting funds
-                                    </a> principle.
-                                    You can get your leftover balance back for 14
-                                    months after your last Pass card use. We send a
-                                    reminder a month before expiration.
-                                </p>
-                                <p>
-                                    You will also soon be able to donate the leftover
-                                    balance to the collective that issued this card.
-                                </p>
-                                <p>
-                                    Your Pass card itself and your account are yours
-                                    for life and can be used with every TiBillet
-                                    collective!
-                                </p>
-                            {% endblocktranslate %}
-                        <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
+        {% if config.show_refill_button %}
+            <!-- Si pas possible de recharger, alors pas possible de se faire rembourser -->
+            <!-- refund panel -->
+            <div class="offcanvas-start offcanvas" tabindex="-1" id="refundPanel" aria-labelledby="refundPanelLabel">
+                <div class="offcanvas-header">
+                    <h5 class="offcanvas-title" id="refundPanelLabel">{% trans "Request a refund" %}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"
+                            aria-label="{% trans 'Close' %}"></button>
+                </div>
+                <div class="offcanvas-body">
+                    <div class="d-flex flex-column justify-content-between h-100">
+                        <div>
+                            <div class="alert  alert-primary" role="alert">
+                                <h4>{% trans "Don't panic! You've got time left…" %}</h4>
+                                {% blocktranslate %}
+                                    <p>
+                                        TiBillet works on a
+                                        <a href="https://tibillet.org/docs/presentation/philosophy/">
+                                            melting funds
+                                        </a> principle.
+                                        You can get your leftover balance back for 14
+                                        months after your last Pass card use. We send a
+                                        reminder a month before expiration.
+                                    </p>
+                                    <p>
+                                        You will also soon be able to donate the leftover
+                                        balance to the collective that issued this card.
+                                    </p>
+                                    <p>
+                                        Your Pass card itself and your account are yours
+                                        for life and can be used with every TiBillet
+                                        collective!
+                                    </p>
+                                {% endblocktranslate %}
+                                <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
+                            </div>
+                        </div>
+
+                        <div class="p-3">
+                            <p class="lead">
+                                {# TODO: montant remboursement #}
+                                {% trans "Confirm the refund request?" %}
+                            </p>
+
+                            <button type="button" class="btn btn-primary d-block w-100 mb-3"
+                                    data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
+                                    hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
+                                {% trans "Send request" %}</button>
+                            {# TODO: lien don #}
+                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"
+                                    {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
+                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}
+                            </button>
+                            <p class="alert alert-warning">
+                                {% trans "The collective donation feature is being developed, coming soon!" %}
+                            </p>
+                            <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
+                                    aria-label="{% trans 'Close' %}">
+                                {% trans "Cancel" %}
+                            </button>
                         </div>
                     </div>
-
-                    <div class="p-3">
-                        <p class="lead">
-                            {# TODO: montant remboursement #}
-                            {% trans "Confirm the refund request?" %}
-                        </p>
-
-                        <button type="button" class="btn btn-primary d-block w-100 mb-3"
-                                data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
-                                hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
-                            {% trans "Send request" %}</button>
-                        {# TODO: lien don #}
-                        <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"
-                                {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
-                            {% trans "Gift my leftover balance to" %} {{ config.organisation }}
-                        </button>
-                        <p class="alert alert-warning">
-                            {% trans "The collective donation feature is being developed, coming soon!" %}
-                        </p>
-                        <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
-                                aria-label="{% trans 'Close' %}">
-                            {% trans "Cancel" %}
-                        </button>
-                    </div>
                 </div>
             </div>
-        </div>
 
-        {# La partie sur la création d'un paiement qrcode / nfc#}
+        {% endif %}
+
         <div class="row g-0" id="button_tirelire">
             <div class="col-12 bg-body-tertiary p-3">
-                {% if profile.admin_this_tenant or profile.can_initiate_payment %}
-                <div class="alert alert-info d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2 mb-3">
-                    <div class="mb-2 mb-md-0">
-                        Vous pouvez initier un paiement pour le compte de votre collectif : {{ config.organisation }}
-                    </div>
-                    <div>
-                        <a href="{% url 'qrcodescanpay-get-generator' %}"
-                           class="btn btn-warning square-btn w-100">
-                            <i class="bi bi-qr-code"></i>
-                            {% trans "Initiate a payment" %}
-                        </a>
-                    </div>
-                </div>
-                {% endif %}
-                <h3>{% trans "Currencies" %}</h3>
-
                 <div class="row g-2">
-                    <div class="col-6 col-md-auto me-md-2">
-                        <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
-                           class="btn btn-primary square-btn w-100">
-                            <i class="bi bi-plus-circle"></i>
-                            {% trans "Refill TiBillets" %}
-                        </a>
-                    </div>
+                    {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
+
+                        <div class="col-6 col-md-auto me-md-2">
+                            <a href="#" hx-get="/my_account/refill_wallet" hx-indicator="#tibillet-spinner"
+                               class="btn btn-primary square-btn w-100">
+                                <i class="bi bi-plus-circle"></i>
+                                {% trans "Refill TiBillets" %}
+                            </a>
+                        </div>
+                    {% endif %}
+
                     {% if user.email_valid %}
                         <div class="col-6 col-md-auto me-md-2">
                             <a href="{% url 'qrcodescanpay-get-scanner' %}" class="btn btn-primary square-btn w-100">
@@ -119,6 +127,7 @@
                             </a>
                         </div>
                     {% endif %}
+
                     {# Initiate payment button moved above the Currencies heading for admins #}
                     <div class="col-6 col-md-auto me-md-2">
                         <a href="#detail-monnaies"
@@ -127,22 +136,29 @@
                             {% trans "Show currency list" %}
                         </a>
                     </div>
-                    <div class="col-6 col-md-auto">
-                        <button class="btn btn-secondary square-btn w-100"
-                                type="button"
-                                id="button-filters"
-                                data-bs-toggle="offcanvas"
-                                data-bs-target="#refundPanel"
-                                aria-controls="refundPanel">
-                            <i class="bi bi-arrow-return-left"></i>
-                            {% trans "Request a refund" %}
-                        </button>
-                    </div>
+
+
+                    {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
+                        <div class="col-6 col-md-auto">
+                            <button class="btn btn-secondary square-btn w-100"
+                                    type="button"
+                                    id="button-filters"
+                                    data-bs-toggle="offcanvas"
+                                    data-bs-target="#refundPanel"
+                                    aria-controls="refundPanel">
+                                <i class="bi bi-arrow-return-left"></i>
+                                {% trans "Request a refund" %}
+                            </button>
+                        </div>
+
+                    {% endif %}
                 </div>
 
-                <p class="opacity-50 m-0 mt-2">
-                    {% trans 'The TiBillet, recharged online, are the only currency we can refund online. For local currencies (recharged in cash or at a bank terminal on site), please contact the collective that issued them.' %}
-                </p>
+                {% if config.show_refill_button %} <!-- Si pas possible de recharger -->
+                    <p class="opacity-50 m-0 mt-2">
+                        {% trans 'The TiBillet, recharged online, are the only currency we can refund online. For local currencies (recharged in cash or at a bank terminal on site), please contact the collective that issued them.' %}
+                    </p>
+                {% endif %}
             </div>
 
             {% comment %} HIDE: monnaie-temps

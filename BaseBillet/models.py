@@ -702,6 +702,19 @@ class Configuration(SingletonModel):
         PriceSold.objects.all().update(id_price_stripe=None)
         return True
 
+
+    hide_refill_button = models.BooleanField(default=False, verbose_name=_("Hide refill button"))
+    force_show_refill_button = models.BooleanField(default=False, verbose_name=_("Force show refill button"))
+
+    def show_refill_button(self):
+        if self.hide_refill_button:
+            return False
+        if self.force_show_refill_button:
+            return True
+        elif not self.stripe_payouts_enabled:
+            return False
+        return True
+
     """
     ### FEDERATION
     """

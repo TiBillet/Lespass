@@ -470,8 +470,8 @@ class Command(BaseCommand):
                 "phone": fake.phone_number()[:20],
                 "email": os.environ.get('ADMIN_EMAIL').replace("@", "+cf@", 1),
                 "stripe_mode_test": True,
-                "stripe_connect_account_test": "",
-                "stripe_payouts_enabled": True,
+                "stripe_connect_account_test": None,
+                "stripe_payouts_enabled": False,
                 "site_web": "https://tibillet.org/lowcow",
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {

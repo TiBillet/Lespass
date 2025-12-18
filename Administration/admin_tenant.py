@@ -1100,6 +1100,7 @@ class PriceChangeForm(ModelForm):
             'fedow_reward_amount',
         )
 
+
     def clean_recurring_payment(self):
         cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
         recurring_payment = cleaned_data.get('recurring_payment')
@@ -1191,6 +1192,8 @@ class PriceAdmin(ModelAdmin):
     form = PriceChangeForm
 
     conditional_fields = {
+        # un seul prix libre par personne possible pour éviter d'en prendre deux ( stripe plante sinon ) mais ça impacte aussi le total de prix libre possible.
+        # Todo : Passer tout les prix libre en input direct et non pas en choix coté stripe
         "max_per_user": "free_price == false",
         "iteration": "recurring_payment == true",
         "commitment": "iteration > 0",

@@ -678,6 +678,7 @@ class MembershipValidator(serializers.Serializer):
         self.user = get_or_create_user(attrs['email'])
 
         # Vérififaction du max par user sur le produit :
+        # import ipdb; ipdb.set_trace()
         if self.price.product.max_per_user_reached(user=self.user):
                 raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
