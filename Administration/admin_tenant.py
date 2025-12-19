@@ -4238,14 +4238,17 @@ class InitiativeAdmin(ModelAdmin):
 
     funding_goal_display.short_description = _("Objectif")
 
-    # def requested_total_display(self, obj):
-        ## Seules les participations approuvées par un·e admin sont comptées dans le total (voir modèle)
-        # color = obj.requested_ratio_color
-        # value = f"{obj.requested_total_eur:.2f} {self.currency(obj)}"
-        # return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
-    #
-    # requested_total_display.short_description = _("Demandes validées")
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
 

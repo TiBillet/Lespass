@@ -689,24 +689,20 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
-        tenant = request.tenant
-        admin = request.user
-        if admin.is_tenant_admin(tenant):
-            fedowAPI = FedowAPI()
-            user = get_object_or_404(HumanUser, pk=pk)
-            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-            tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+        fedowAPI = FedowAPI()
+        user = get_object_or_404(HumanUser, pk=pk)
+        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
-            context = {
-                'cards': cards,
-                'tokens': tokens,
-                'user_pk': pk,
-            }
-            return render(request, "admin/membership/wallet_info.html", context=context)
-        return HttpResponse("No cards")
+        context = {
+            'cards': cards,
+            'tokens': tokens,
+            'user_pk': pk,
+        }
+        return render(request, "admin/membership/wallet_info.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
