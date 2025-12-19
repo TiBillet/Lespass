@@ -2598,6 +2598,7 @@ class Membership(models.Model):
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Presence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
+
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
 
@@ -2628,21 +2629,8 @@ class Membership(models.Model):
     # Dynamic membership form data
     custom_form = models.JSONField(null=True, blank=True, verbose_name=_('Custom Form'))
 
-    CANCELED, AUTO, ONCE, ADMIN, IMPORT, LABOUTIK = 'C', 'A', 'O', 'D', 'I', 'L'
-    STATUS_CHOICES = [
-        (ADMIN, _("Saved through the admin")),
-        (IMPORT, _("Import from file")),
-        (ONCE, _('Single online stripe payment')),
-        (AUTO, _('Automatic stripe renewal')),
-        (CANCELED, _('Cancelled')),
-        (LABOUTIK, _('LaBoutik')),
-    ]
-
-    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
-                              verbose_name=_("Origin"))
-
     ### Pour le cas des adhésions à validation manuelle
-    # need_admin_validation = models.BooleanField(default=False)
+    # TODO: A VIRER, un seul state ?
     WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "WP", "CA", "VA", "WA", "PA", "AU"
     STATE_CHOICES = [
         (WAITING_PAYMENT, _("Waiting for payment")),
@@ -2654,6 +2642,33 @@ class Membership(models.Model):
     ]
     state = models.CharField(max_length=2, choices=STATE_CHOICES, default=WAITING_PAYMENT,
                              verbose_name=_("State"))
+
+
+    WAITING_PAYMENT = 'WP'
+    ADMIN, IMPORT, LABOUTIK = 'D', 'I', 'L'
+    ADMIN_WAITING, ADMIN_VALID = 'AW', 'AV'
+    ONCE, AUTO =  'A', 'O'
+    CANCELED, ADMIN_CANCELED = 'C', 'AC'
+    STATUS_CHOICES = [
+        (WAITING_PAYMENT, _("En attente de paiement")),
+
+        (ADMIN, _("Créé via l'administration")),
+        (IMPORT, _("Importé depuis un fichier")),
+        (LABOUTIK, _('Créé via la caisse')),
+
+        # Pour les validations manuelles
+        (ADMIN_WAITING, _('En attente de validation par un admin')),
+        (ADMIN_VALID, _('Confirmé par un admin, en attente de paiement')),
+
+        (ONCE, _('Payé en ligne')),
+        (AUTO, _('Payé en ligne (récurrent)')),
+
+        (CANCELED, _("Annulé par l'utilisateur")),
+        (ADMIN_CANCELED, _('Annulé par un admin')),
+    ]
+
+    status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=ONCE,
+                              verbose_name=_("Origin"))
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
     stripe_id_subscription = models.CharField(

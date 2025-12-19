@@ -689,24 +689,20 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
-        tenant = request.tenant
-        admin = request.user
-        if admin.is_tenant_admin(tenant):
-            fedowAPI = FedowAPI()
-            user = get_object_or_404(HumanUser, pk=pk)
-            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-            tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+        fedowAPI = FedowAPI()
+        user = get_object_or_404(HumanUser, pk=pk)
+        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
-            context = {
-                'cards': cards,
-                'tokens': tokens,
-                'user_pk': pk,
-            }
-            return render(request, "admin/membership/wallet_info.html", context=context)
-        return HttpResponse("No cards")
+        context = {
+            'cards': cards,
+            'tokens': tokens,
+            'user_pk': pk,
+        }
+        return render(request, "admin/membership/wallet_info.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
@@ -1210,7 +1206,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['GET'], permission_classes=[
-        permissions.AllowAny, ])  # on permet a tout le monde de scanner un qrcode, mais si tu n'est pas loggué, on te redirige
+        permissions.AllowAny, ])  # on permet a tout le monde de scanner un qrcode, mais si tu n'es pas loggué, on te redirige
     def process_qrcode(self, request: HttpRequest, pk):
         user = request.user
         if not user.is_authenticated:
@@ -2189,9 +2185,6 @@ class Badge(viewsets.ViewSet):
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    # def get_federated_products(self, tags=None, search=None, page=1):
-    #     pass
-
     def create(self, request):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
@@ -2215,42 +2208,22 @@ class MembershipMVT(viewsets.ViewSet):
                        'membership': membership,
                        'checkout_stripe': checkout_stripe,
                        }
-
             return render(request, "reunion/views/membership/formbricks.html", context=context)
-        #
-        # if formbricks.api_host and formbricks.api_key:
-        # Une configuration formbricks à été trouvé.
 
-        # Validation manuelle demandée ?
-        logger.info(f"membership_validator.price.manual_validation : {membership_validator.price.manual_validation}")
         if membership_validator.price.manual_validation:
-            membership: Membership = membership_validator.membership
-            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
-            membership.state = Membership.ADMIN_WAITING
-            membership.save(update_fields=["state"])
-
-            # Envoyer un mail à l'admin et à l'utilisateur pour les prévenir (via Celery)
-            try:
-                send_membership_pending_admin.delay(str(membership.uuid))
-            except Exception as e:
-                logger.error(f"Erreur d'enqueue send_membership_pending_admin: {e}")
-            try:
-                send_membership_pending_user.delay(str(membership.uuid))
-            except Exception as e:
-                logger.error(f"Erreur d'enqueue send_membership_pending_user: {e}")
-
-            # Message de confirmation à l'utilisateur
-            try:
-                messages.add_message(request, messages.SUCCESS,
-                                     _("Votre demande d'adhésion a bien été enregistrée et est en attente de validation."))
-            except Exception:
-                pass
-
             # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
+            membership: Membership = membership_validator.membership
             context = {'membership': membership}
             return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
 
-        return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+        # Le lien de paiement a été généré, on envoi sur Stripe
+        elif membership_validator.checkout_stripe_url :
+            return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+
+        else:
+            msg = "Une erreur lors de la gestion de vos adhésion est survenue, merci de contacter un administrateur."
+            logger.error(f"MembershipViewset ERROR {msg} : {membership_validator.membership}")
+            raise ValueError(msg)
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
@@ -2350,6 +2323,9 @@ class MembershipMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):
+        """
+        Pour validation manuelle, redirige le lien reçu par l'user vers Stripe
+        """
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
         if membership.state != Membership.ADMIN_VALID:
             raise Exception("not admin valid state")

@@ -21,6 +21,7 @@ from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, PostalAddress, Tag, Configuration
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
     PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod
+from BaseBillet.tasks import send_membership_pending_admin, send_membership_pending_user
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -687,29 +688,36 @@ class MembershipValidator(serializers.Serializer):
             user_membeshipr_count = Membership.objects.filter(
                 user=self.user,
                 price=self.price,
-                deadline__gt=timezone.localtime()).count()
+                deadline__gt=timezone.localtime()).exclude(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]).count()
             if user_membeshipr_count >= self.price.max_per_user:
                 logger.info("max per user")
                 raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
 
         ### CREATION DE LA FICHE MEMBRE
-        # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
+        # On fait create, car il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
         membership = Membership.objects.create(
             user=self.user,
             price=self.price,
-            contribution_value=custom_amount,
-            # None si pas de contribution value, sera rempli par la validation du paiement
+            contribution_value=custom_amount, # None si pas de contribution value, sera rempli par la validation du paiement
+            status=Membership.WAITING_PAYMENT,
+            first_name = attrs['firstname'],
+            last_name = attrs['lastname'],
+            newsletter = not attrs.get('newsletter'), # TODO: A virer, utiliser les options ou les formulaires dynamiques : laisser le choix à l'admin
         )
 
+        # Vérification de la validation manuelle
+        if self.price.manual_validation:
+            logger.info(f"membership_validator.price.manual_validation")
+            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
+            membership.status = Membership.ADMIN_WAITING
+            # Envoi des mails pour prévenir les users
+            send_membership_pending_admin.delay(str(membership.uuid))
+            send_membership_pending_user.delay(str(membership.uuid))
+
+        # Inititation des itérations de récurrence maximales
         if self.price.recurring_payment and self.price.iteration :
             membership.max_iteration = self.price.iteration
-
-        membership.first_name = attrs['firstname']
-        membership.last_name = attrs['lastname']
-
-        # Sur le form, on coche pour NE PAS recevoir la news
-        membership.newsletter = not attrs.get('newsletter')
 
         # Set remplace les options existantes, accepte les listes
         options = attrs.get('options', [])
@@ -725,8 +733,11 @@ class MembershipValidator(serializers.Serializer):
 
         membership.save()
         self.membership = membership
+
         # Création du lien de paiement
-        self.checkout_stripe_url = self.get_checkout_stripe(membership, custom_amount=custom_amount)
+        self.checkout_stripe_url = None
+        if membership.status == Membership.WAITING_PAYMENT:
+            self.checkout_stripe_url = self.get_checkout_stripe(membership, custom_amount=custom_amount)
 
         return attrs
 

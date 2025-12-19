@@ -3874,7 +3874,7 @@ msgstr ""
 "    </a>.\n"
 "    Vous pouvez récupérer votre solde restant pendant 14 mois après la\n"
 "    dernière utilisation de votre carte TiBillet. Nous envoyons un rappel "
-"par mail un mois avanc expiration.\n"
+"par mail un mois avan expiration.\n"
 "</p>\n"
 "<p>\n"
 " Vous pourrez aussi bientôt faire don de votre solde restant au collectif "
@@ -5916,11 +5916,9 @@ msgid "PDF generation error"
 msgstr "Erreur de génération PDF"
 
 #: BaseBillet/views.py:2505
-#, fuzzy
-#| msgid "An error occurred while cancelling your reservation."
 msgid "An error occurred. Please try again."
 msgstr ""
-"Une erreur s'est produite pendant l'annulation de votre réservation, merci "
+"Une erreur s'est produite, merci "
 "de contacter un·e administrateur·ice."
 
 #: BaseBillet/views.py:2585

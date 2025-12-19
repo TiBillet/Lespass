@@ -1707,7 +1707,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'deadline',
         'display_is_valid',
         'status',
-        'payment_method',
+        'state',
+        # 'payment_method',
         # 'state_display',
         # 'commentaire',
     )
@@ -1722,6 +1723,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         return (
             qs.select_related('user', 'price', 'price__product')
             .prefetch_related('option_generale', 'price__product__form_fields')
+            # .exclude(archiver=True)
         )
 
     ### FORMULAIRES
@@ -1866,15 +1868,19 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         return instance.is_valid()
 
 
-    # actions_row = ["archiver", ]
-    # @action(
-    #     description=_("Archiver"),
-    #     permissions=["custom_actions_detail"],
-    # )
-    # def archiver(self, request, object_id):
-    #     logger.info(object_id)
-    #     membership = Membership.objects.get(pk=object_id)
-    #     return redirect(request.META["HTTP_REFERER"])
+    actions_row = ["archiver", ]
+    @action(
+        description=_("Archiver"),
+        permissions=["custom_actions_detail"],
+    )
+    def archiver(self, request, object_id):
+        logger.info(object_id)
+        membership = Membership.objects.get(pk=object_id)
+        membership.archiver = True
+        membership.status = Membership.CANCELED
+        membership.state = Membership.ADMIN_CANCELED
+        membership.save()
+        return redirect(request.META["HTTP_REFERER"])
 
 
     # @display(description=_("State"))
@@ -4245,6 +4251,7 @@ class InitiativeAdmin(ModelAdmin):
         # return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
     #
     # requested_total_display.short_description = _("Demandes validées")
+
 
 
 
