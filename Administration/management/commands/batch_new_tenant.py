@@ -67,10 +67,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--file', '-f', required=True, help='Chemin du fichier JSON ou CSV')
         parser.add_argument('--federation', '-r', required=False, help='On fédère les tenants sur cette instance')
+        parser.add_argument('--mail', '-m', action='store_true', help='On envoie les mails aux adresses fournies')
 
 
     def handle(self, *args, **options):
         input_path = options['file']
+        send_mail = options['mail']  # True si -m est présent, False sinon
 
         base_domain = os.getenv('DOMAIN', 'tibillet.coop')
         if not base_domain:
@@ -162,7 +164,7 @@ class Command(BaseCommand):
                         secondary = emails[1] if len(emails) > 1 else None
 
                         # Admin principal
-                        admin_user = get_or_create_user(primary, send_mail=False)
+                        admin_user = get_or_create_user(primary, send_mail=send_mail)
                         if admin_user is None:
                             self.stderr.write(self.style.ERROR(f"{meta['slug']}: impossible de créer l'admin principal {primary}"))
                             raise CommandError(f"Impossible de créer l'admin principal {primary} pour {meta['slug']}")
@@ -172,7 +174,7 @@ class Command(BaseCommand):
 
                         # Second admin (ajout au client_admin)
                         if secondary:
-                            second_user = get_or_create_user(primary, send_mail=False)
+                            second_user = get_or_create_user(primary, send_mail=send_mail)
                             if second_user:
                                 second_user.client_admin.add(client)
                                 second_user.save()
