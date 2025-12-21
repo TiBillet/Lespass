@@ -11,7 +11,7 @@ from django.utils.text import slugify
 from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration
+from BaseBillet.models import Configuration, FederatedPlace
 from Customers.models import Client, Domain
 
 logger = logging.getLogger(__name__)
@@ -66,55 +66,49 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--file', '-f', required=True, help='Chemin du fichier JSON ou CSV')
+        parser.add_argument('--federation', '-r', required=False, help='On fédère les tenants sur cette instance')
+
 
     def handle(self, *args, **options):
         input_path = options['file']
 
-        base_domain = os.getenv('DOMAIN')
+        base_domain = os.getenv('DOMAIN', 'tibillet.coop')
         if not base_domain:
             raise CommandError("Variable d'environnement DOMAIN manquante")
 
         created_clients: List[Tuple[Client, dict]] = []
+        # Exemple : [(<Client: tenant1>, {'Name': 'Mon Org', 'slug': 'mon-org', 'emails': ['admin@ex.com']}), ...]
 
         # Phase 1: création des tenants en attente dans PUBLIC + schéma (pas de domaine ici)
         with schema_context('public'):
             for row in _iter_input_rows(input_path):
                 name = (row.get('Name') or '').strip()
                 if not name:
-                    self.stderr.write(self.style.WARNING("Ligne ignorée: 'Name' manquant"))
-                    continue
+                    self.stderr.write(self.style.WARNING("erreur : 'Name' manquant"))
+                    raise CommandError("erreur : 'Name' manquant")
 
                 description = row.get('description') or ''
                 emails = _norm_emails(row.get('email'))
                 if not emails:
-                    self.stderr.write(self.style.WARNING(f"{name}: aucun email fourni — ligne ignorée"))
-                    continue
+                    self.stderr.write(self.style.WARNING(f"{name}: aucun email fourni"))
+                    raise CommandError(f"{name}: aucun email fourni")
 
                 slug = slugify(name)
                 if not slug:
-                    self.stderr.write(self.style.WARNING(f"{name}: slug vide — ligne ignorée"))
-                    continue
+                    self.stderr.write(self.style.WARNING(f"{name}: slug vide"))
+                    raise CommandError(f"{name}: slug vide")
 
-                # Crée ou récupère le Client en mode WAITING_CONFIG
-                client, created = Client.objects.get_or_create(
-                    schema_name=slug,
-                    defaults={
-                        'name': slug,
-                        'on_trial': False,
-                        'categorie': Client.WAITING_CONFIG,
-                    }
-                )
+                # Étape 1: création/maj du tenant sans auto_create_schema
+                client = Client.objects.filter(schema_name=slug).exists()
+                if client:
+                    raise CommandError(f"{name}: client avec ce nom existe déjà")
 
-                if not created:
-                    # Met à jour la catégorie si besoin pour le pipeline d'init
-                    if client.categorie != Client.WAITING_CONFIG:
-                        client.categorie = Client.WAITING_CONFIG
-                        client.save()
-                    msg = f"Client déjà existant pour {slug}, on continue"
-                    logger.info(msg)
-                    self.stdout.write(self.style.WARNING(msg))
-                else:
-                    # Empêche l'auto-creation car on gère le schéma à la main
+                if not client:
+                    client = Client(
+                        schema_name=slug,
+                        name=name,
+                        categorie=Client.SALLE_SPECTACLE,
+                    )
                     client.auto_create_schema = False
                     client.save()
                     self.stdout.write(self.style.SUCCESS(f"Client WAITING_CONFIG créé: {slug}"))
@@ -122,6 +116,18 @@ class Command(BaseCommand):
                 # Crée le schéma si nécessaire
                 with connection.cursor() as cursor:
                     cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{slug}";')
+
+                # Domaine principal idempotent et rattaché au tenant
+                try:
+                    domain_str = f"{slug}.{base_domain}"
+                    domain_obj, _ = Domain.objects.get_or_create(
+                        domain=domain_str,
+                        tenant=client,
+                        is_primary=True,
+                    )
+                except Exception as e:
+                    logger.warning(f"Impossible d'assurer le domaine principal pour {name}: {e}")
+                    raise CommandError(f"Impossible d'assurer le domaine principal pour {name}: {e}")
 
                 # Mémorise les infos pour la finalisation
                 created_clients.append((client, {
@@ -149,38 +155,24 @@ class Command(BaseCommand):
         if created_clients:
             for client, meta in created_clients:
                 try:
-                    # Domaine primaire (créé après migrations)
-                    with schema_context('public'):
-                        domain_str = f"{meta['slug']}.{base_domain}"
-                        Domain.objects.get_or_create(
-                            domain=domain_str,
-                            tenant=client,
-                            defaults={'is_primary': True}
-                        )
-
                     with tenant_context(client):
                         # Group staff
-                        from django.contrib.auth.models import Group
-                        staff_group, _ = Group.objects.get_or_create(name="staff")
-
                         emails = meta['emails']
                         primary = emails[0]
                         secondary = emails[1] if len(emails) > 1 else None
 
                         # Admin principal
-                        admin_user = get_or_create_user(primary)
+                        admin_user = get_or_create_user(primary, send_mail=False)
                         if admin_user is None:
                             self.stderr.write(self.style.ERROR(f"{meta['slug']}: impossible de créer l'admin principal {primary}"))
+                            raise CommandError(f"Impossible de créer l'admin principal {primary} pour {meta['slug']}")
                         else:
                             admin_user.client_admin.add(client)
-                            admin_user.is_staff = True
-                            admin_user.is_superuser = True
-                            admin_user.groups.add(staff_group)
                             admin_user.save()
 
                         # Second admin (ajout au client_admin)
                         if secondary:
-                            second_user = get_or_create_user(secondary)
+                            second_user = get_or_create_user(primary, send_mail=False)
                             if second_user:
                                 second_user.client_admin.add(client)
                                 second_user.save()
@@ -211,3 +203,18 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Aucun tenant traité"))
         else:
             self.stdout.write(self.style.SUCCESS(f"Tenants traités: {', '.join(m['slug'] for _, m in created_clients)}"))
+
+        # On va fédérer les events et les adhésions dans la fédération :
+        federation_slug = options.get('federation')
+        if federation_slug:
+            try:
+                fed_client = Client.objects.get(schema_name=federation_slug)
+                with tenant_context(fed_client):
+                    for client, meta in created_clients:
+                        FederatedPlace.objects.update_or_create(
+                            tenant=client,
+                            defaults={'membership_visible': True}
+                        )
+                        self.stdout.write(self.style.SUCCESS(f"{meta['slug']}: fédération OK with {federation_slug}"))
+            except Client.DoesNotExist:
+                self.stderr.write(self.style.ERROR(f"Federation {federation_slug} introuvable."))
