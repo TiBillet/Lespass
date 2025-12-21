@@ -69,12 +69,29 @@ class Command(BaseCommand):
         parser.add_argument('--federation', '-r', required=False, help='On fédère les tenants sur cette instance')
         parser.add_argument('--mail', '-m', action='store_true', help='On envoie les mails aux adresses fournies')
 
+    def _federate_clients(self, federation_slug: str, clients: List[Client]):
+        """S'assure que les clients fournis sont enregistrés comme lieux fédérés dans le tenant cible."""
+        try:
+            # schema_name est utilisé pour identifier le tenant de la fédération
+            fed_client = Client.objects.get(schema_name=federation_slug)
+            with tenant_context(fed_client):
+                from BaseBillet.models import FederatedPlace
+                for client in clients:
+                    FederatedPlace.objects.update_or_create(
+                        tenant=client,
+                        defaults={'membership_visible': True}
+                    )
+                    self.stdout.write(self.style.SUCCESS(f"Fédération OK : {client.name} ajouté à {federation_slug}"))
+        except Client.DoesNotExist:
+            self.stderr.write(self.style.ERROR(f"Fédération impossible : le tenant '{federation_slug}' n'existe pas."))
+        except Exception as e:
+            self.stderr.write(self.style.ERROR(f"Erreur lors de la fédération : {e}"))
 
     def handle(self, *args, **options):
         input_path = options['file']
         send_mail = options['mail']  # True si -m est présent, False sinon
 
-        base_domain = os.getenv('DOMAIN', 'tibillet.coop')
+        base_domain = 'tibillet.coop'
         if not base_domain:
             raise CommandError("Variable d'environnement DOMAIN manquante")
 
@@ -201,22 +218,14 @@ class Command(BaseCommand):
                     logger.exception("Finalisation échouée pour %s", meta.get('slug'))
                     self.stderr.write(self.style.ERROR(f"{meta.get('slug')}: erreur de finalisation — {e}"))
 
+        # Phase 4: Fédération (optionnel)
+        federation_slug = options.get('federation')
+        if federation_slug and created_clients:
+            # On extrait juste la liste des objets Client de created_clients
+            clients_only = [c for c, _ in created_clients]
+            self._federate_clients(federation_slug, clients_only)
+
         if not created_clients:
             self.stdout.write(self.style.WARNING("Aucun tenant traité"))
         else:
             self.stdout.write(self.style.SUCCESS(f"Tenants traités: {', '.join(m['slug'] for _, m in created_clients)}"))
-
-        # On va fédérer les events et les adhésions dans la fédération :
-        federation_slug = options.get('federation')
-        if federation_slug:
-            try:
-                fed_client = Client.objects.get(schema_name=federation_slug)
-                with tenant_context(fed_client):
-                    for client, meta in created_clients:
-                        FederatedPlace.objects.update_or_create(
-                            tenant=client,
-                            defaults={'membership_visible': True}
-                        )
-                        self.stdout.write(self.style.SUCCESS(f"{meta['slug']}: fédération OK with {federation_slug}"))
-            except Client.DoesNotExist:
-                self.stderr.write(self.style.ERROR(f"Federation {federation_slug} introuvable."))
