@@ -23,133 +23,164 @@
 
         <!-- prix -->
         <div class="mb-3 has-validation">
-            {% for price in product.prices.all %}
-                {% if price.publish %}
-                    {% if price.free_price and price.recurring_payment %}
-                        <!-- Prix libre ET récurrent : input décimal avec incrémentation par 10 cts -->
-                        <!-- Utilise des classes compatibles mode clair/sombre (Bootstrap 5.3 color modes) -->
-                        <div class="mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary">
-                            <!-- Titre + badges alignés sur la même ligne -->
-                            <div class="d-flex align-items-center gap-2 flex-wrap mb-2"
-                                 aria-label="{% trans 'Payment information' %}">
-                                <label class="form-label fw-bold text-primary mb-0 me-1" for="price-{{ price.uuid }}">
-                                    {{ price.name }}
-                                </label>
-                                {% if price.recurring_payment %}
-                                    <span class="badge rounded-pill text-bg-warning">
-                                        {# Remplace "récurrent" par une périodicité claire #}
-                                        {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
-                                            {% trans 'Monthly payment' %}
-                                        {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
-                                            {% trans 'Annual payment' %}
-                                        {% elif price.subscription_type == 'D' %}
-                                            {% trans 'Daily payment' %}
-                                        {% elif price.subscription_type == 'W' %}
-                                            {% trans 'Weekly payment' %}
-                                        {% elif price.subscription_type == 'H' %}
-                                            {% trans 'Hourly payment' %}
-                                        {% else %}
-                                            {% trans 'Recurring payment' %}
-                                        {% endif %}
-                                    </span>
-                                {% endif %}
-                                {% if price.iteration %}
-                                    <span class="badge rounded-pill text-bg-info">{{ price.iteration }} {% trans "iteration(s)" %}</span>
-                                {% endif %}
-                            </div>
-                            {% if price.max_per_user_reached %}
-                                <div class="alert alert-danger" role="alert">
-                                    {% trans "You are already subscribed to this rate." %}
-                                </div>
-                            {% else %}
-                                <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
-                                <input id="custom_amount-{{ price.uuid }}"
-                                       class="form-control form-control-lg"
-                                       type="number"
-                                       name="custom_amount"
-                                       min="{{ price.prix }}"
-                                       step="0.10"
-                                       placeholder="{% trans "Enter the amount (minimum" %} {{ min }}€)"
-                                       aria-describedby="custom-amount-help-{{ price.uuid }}"
-                                       required>
-                                <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
-                                    {# Aide contextualisée selon la périodicité du paiement #}
-                                    {% if price.recurring_payment %}
-                                        {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
-                                            {% trans 'Monthly payment — Enter your desired amount' %}
-                                        {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
-                                            {% trans 'Annual payment — Enter your desired amount' %}
-                                        {% elif price.subscription_type == 'D' %}
-                                            {% trans 'Daily payment — Enter your desired amount' %}
-                                        {% elif price.subscription_type == 'W' %}
-                                            {% trans 'Weekly payment — Enter your desired amount' %}
-                                        {% elif price.subscription_type == 'H' %}
-                                            {% trans 'Hourly payment — Enter your desired amount' %}
-                                        {% else %}
-                                            {% trans 'Recurring payment — Enter your desired amount' %}
-                                        {% endif %}
+            {% for price in published_prices %}
+                {% if published_prices_count == 1 and price.free_price %}
+                    <!-- Prix libre SEUL : on affiche directement l'input -->
+                    <div class="mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary">
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                            <label class="form-label fw-bold text-primary mb-0 me-1" for="price-{{ price.uuid }}">
+                                {{ price.name }}
+                            </label>
+                            {% if price.recurring_payment %}
+                                <span class="badge rounded-pill text-bg-warning">
+                                    {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                        {% trans 'Monthly payment' %}
+                                    {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                        {% trans 'Annual payment' %}
+                                    {% elif price.subscription_type == 'D' %}
+                                        {% trans 'Daily payment' %}
+                                    {% elif price.subscription_type == 'W' %}
+                                        {% trans 'Weekly payment' %}
+                                    {% elif price.subscription_type == 'H' %}
+                                        {% trans 'Hourly payment' %}
                                     {% else %}
-                                        {% trans "Enter your desired amount" %}
+                                        {% trans 'Recurring payment' %}
                                     {% endif %}
-                                </small>
-                                {% if price.fedow_reward_enabled %}
-                                    <div class="mt-2">
-                                        <em class="text-success">
-                                            {% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
-                                            {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
-                                    </div>
-                                {% endif %}
+                                </span>
+                            {% endif %}
+                            {% if price.iteration %}
+                                <span class="badge rounded-pill text-bg-info">{{ price.iteration }} {% trans "iteration(s)" %}</span>
                             {% endif %}
                         </div>
-                    {% else %}
-                        <!-- Prix standard : bouton radio classique -->
-                        <div class="form-check me-3 mb-2">
-                            <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
-                                   value="{{ price.uuid }}" required {% if price.out_of_stock %}disabled{% endif %}>
-                            <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
-                                   for="price-{{ price.uuid }}">
-                                {% if price.free_price %}
-                                    {{ price.name }}
+                        {% if price.max_per_user_reached %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "You are already subscribed to this rate." %}
+                            </div>
+                        {% else %}
+                            <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg custom-amount-input"
+                                   type="number"
+                                   name="custom_amount"
+                                   min="{{ price.prix }}"
+                                   step="0.10"
+                                   placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}"
+                                   required>
+                            <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                {% if price.recurring_payment %}
+                                    {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                        {% trans 'Monthly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                        {% trans 'Annual payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'D' %}
+                                        {% trans 'Daily payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'W' %}
+                                        {% trans 'Weekly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'H' %}
+                                        {% trans 'Hourly payment — Enter your desired amount' %}
+                                    {% else %}
+                                        {% trans 'Recurring payment — Enter your desired amount' %}
+                                    {% endif %}
                                 {% else %}
-                                    {{ price.name }} - {{ price.prix }}€
+                                    {% trans "Enter your desired amount" %}
                                 {% endif %}
-                                <!-- Badges d'information récurrence / itérations -->
-                                {% if price.recurring_payment or price.iteration %}
-                                    <span class="ms-2 d-inline-flex gap-2 flex-wrap align-items-center align-middle">
-                                        {% if price.recurring_payment %}
-                                            <span class="badge rounded-pill text-bg-warning">
-                                                {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
-                                                    {% trans 'Monthly payment' %}
-                                                {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
-                                                    {% trans 'Annual payment' %}
-                                                {% elif price.subscription_type == 'D' %}
-                                                    {% trans 'Daily payment' %}
-                                                {% elif price.subscription_type == 'W' %}
-                                                    {% trans 'Weekly payment' %}
-                                                {% elif price.subscription_type == 'H' %}
-                                                    {% trans 'Hourly payment' %}
-                                                {% else %}
-                                                    {% trans 'Recurring payment' %}
-                                                {% endif %}
-                                            </span>
-                                        {% endif %}
-                                        {% if price.iteration %}
-                                            <span class="badge rounded-pill text-bg-info">
-                                                {% blocktrans count it=price.iteration %}Up to {{ it }}
-                                                    installment{% plural %}Up to {{ it }}
-                                                    installments{% endblocktrans %}
-                                            </span>
-                                        {% endif %}
-                                    </span>
-                                {% endif %}
-                                {% if price.fedow_reward_enabled %}
-                                    <span>
-                                        <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                            </small>
+                            {% if price.fedow_reward_enabled %}
+                                <div class="mt-2">
+                                    <em class="text-success">
+                                        {% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
                                         {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
-                                    </span>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <!-- Plusieurs prix OU un seul prix fixe -->
+                    <div class="form-check me-3 mb-2">
+                        <input id="price-{{ price.uuid }}"
+                               class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                               type="radio" name="price"
+                               value="{{ price.uuid }}"
+                               required
+                               {% if price.out_of_stock %}disabled{% endif %}
+                               {% if published_prices_count == 1 %}checked{% endif %}
+                               {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}>
+                        <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                               for="price-{{ price.uuid }}">
+                            {% if price.free_price %}
+                                {{ price.name }}
+                            {% else %}
+                                {{ price.name }} - {{ price.prix }}€
+                            {% endif %}
+                            {% if price.recurring_payment or price.iteration %}
+                                <span class="ms-2 d-inline-flex gap-2 flex-wrap align-items-center align-middle">
+                                    {% if price.recurring_payment %}
+                                        <span class="badge rounded-pill text-bg-warning">
+                                            {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                                {% trans 'Monthly payment' %}
+                                            {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                                {% trans 'Annual payment' %}
+                                            {% elif price.subscription_type == 'D' %}
+                                                {% trans 'Daily payment' %}
+                                            {% elif price.subscription_type == 'W' %}
+                                                {% trans 'Weekly payment' %}
+                                            {% elif price.subscription_type == 'H' %}
+                                                {% trans 'Hourly payment' %}
+                                            {% else %}
+                                                {% trans 'Recurring payment' %}
+                                            {% endif %}
+                                        </span>
+                                    {% endif %}
+                                    {% if price.iteration %}
+                                        <span class="badge rounded-pill text-bg-info">
+                                            {% blocktrans count it=price.iteration %}Up to {{ it }}
+                                                installment{% plural %}Up to {{ it }}
+                                                installments{% endblocktrans %}
+                                        </span>
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                            {% if price.fedow_reward_enabled %}
+                                <span>
+                                    <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                                    {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
+                                </span>
+                            {% endif %}
+                            {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                        </label>
+                    </div>
+                    {% if price.free_price %}
+                        <div id="custom-amount-container-{{ price.uuid }}"
+                             class="custom-amount-container mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary"
+                             style="display: none;">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg custom-amount-input"
+                                   type="number"
+                                   name="custom_amount"
+                                   min="{{ price.prix }}"
+                                   step="0.10"
+                                   placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}">
+                            <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                {% if price.recurring_payment %}
+                                    {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                        {% trans 'Monthly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                        {% trans 'Annual payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'D' %}
+                                        {% trans 'Daily payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'W' %}
+                                        {% trans 'Weekly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'H' %}
+                                        {% trans 'Hourly payment — Enter your desired amount' %}
+                                    {% else %}
+                                        {% trans 'Recurring payment — Enter your desired amount' %}
+                                    {% endif %}
+                                {% else %}
+                                    {% trans "Enter your desired amount" %}
                                 {% endif %}
-                                {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
-                            </label>
+                            </small>
                         </div>
                     {% endif %}
                 {% endif %}
@@ -422,10 +453,63 @@
                 form.addEventListener('htmx:configRequest', function (event) {
                     const okMs = validateMsRequired();
                     const okBl = validateBlRequired();
-                    if (!(okMs && okBl)) {
+
+                    // Validation du prix libre
+                    let okFreePrice = true;
+                    const selectedRadio = form.querySelector('input[name="price"]:checked') || form.querySelector('input[name="price"][type="hidden"]');
+                    if (selectedRadio && (selectedRadio.classList.contains('free-price-radio') || selectedRadio.type === 'hidden')) {
+                        // On cherche l'input custom_amount correspondant au prix sélectionné
+                        // Si c'est un input hidden (un seul prix), on prend le premier .custom-amount-input qu'on trouve
+                        const container = selectedRadio.type === 'hidden' ? 
+                                          form.querySelector('.custom-amount-input')?.closest('.bg-body-tertiary') :
+                                          document.getElementById(selectedRadio.getAttribute('data-target'));
+                        
+                        if (container) {
+                            const input = container.querySelector('.custom-amount-input');
+                            if (input && !input.value) {
+                                okFreePrice = false;
+                                input.classList.add('is-invalid');
+                                input.focus();
+                            } else if (input) {
+                                input.classList.remove('is-invalid');
+                            }
+                        }
+                    }
+
+                    if (!(okMs && okBl && okFreePrice)) {
                         event.preventDefault();
                     }
                 });
+
+                // Gestion de l'affichage des inputs de prix libre
+                const allRadios = form.querySelectorAll('input[name="price"]');
+                const customAmountContainers = form.querySelectorAll('.custom-amount-container');
+
+                function updateCustomAmounts() {
+                    customAmountContainers.forEach(container => {
+                        container.style.display = 'none';
+                        const input = container.querySelector('.custom-amount-input');
+                        if (input) input.required = false;
+                    });
+
+                    const selectedRadio = form.querySelector('input[name="price"]:checked');
+                    if (selectedRadio && selectedRadio.classList.contains('free-price-radio')) {
+                        const targetId = selectedRadio.getAttribute('data-target');
+                        const targetContainer = document.getElementById(targetId);
+                        if (targetContainer) {
+                            targetContainer.style.display = 'block';
+                            const input = targetContainer.querySelector('.custom-amount-input');
+                            if (input) input.required = true;
+                        }
+                    }
+                }
+
+                allRadios.forEach(radio => {
+                    radio.addEventListener('change', updateCustomAmounts);
+                });
+
+                // Appel initial pour régler l'affichage au chargement
+                updateCustomAmounts();
 
                 // Live update on change within a required MS/BL group
                 form.addEventListener('change', function (e) {

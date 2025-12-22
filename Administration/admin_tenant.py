@@ -1707,7 +1707,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'deadline',
         'display_is_valid',
         'status',
-        'state',
+        # 'state',
         # 'payment_method',
         # 'state_display',
         # 'commentaire',

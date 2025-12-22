@@ -2668,7 +2668,7 @@ class Membership(models.Model):
     ]
 
     status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=ONCE,
-                              verbose_name=_("Origin"))
+                              verbose_name=_("State"))
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
     stripe_id_subscription = models.CharField(

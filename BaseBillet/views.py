@@ -2293,6 +2293,11 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             context['product'] = product
 
+            # On prépare les prix publiés pour le template
+            published_prices = product.prices.filter(publish=True).order_by('order', 'prix')
+            context['published_prices'] = published_prices
+            context['published_prices_count'] = published_prices.count()
+
             # On check que l'user n'a pas déja prix un abonnement limité
             if request.user.is_authenticated:
                 if product.max_per_user_reached(user=request.user):

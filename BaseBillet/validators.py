@@ -608,7 +608,7 @@ class MembershipValidator(serializers.Serializer):
     newsletter = serializers.BooleanField()
 
     @staticmethod
-    def get_checkout_stripe(membership: Membership, custom_amount: Decimal = None):
+    def get_checkout_stripe(membership: Membership):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -624,12 +624,10 @@ class MembershipValidator(serializers.Serializer):
             'user': f"{user.email}",
         }
 
-        amount = int(price.prix * 100)
-        if custom_amount:
-            amount = int(custom_amount * 100)
+        amount = int(membership.contribution_value * 100)
 
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price, custom_amount=custom_amount),
+            pricesold=get_or_create_price_sold(price, custom_amount=membership.contribution_value),
             membership=membership,
             payment_method=PaymentMethod.STRIPE_NOFED,
             amount=amount,
@@ -663,14 +661,15 @@ class MembershipValidator(serializers.Serializer):
         return checkout_stripe_url
 
     def validate(self, attrs):
-        self.price = attrs['price']
-        custom_amount = None
-        if self.price.recurring_payment and self.price.free_price:
-            custom_amount = dround(attrs['custom_amount'])
+        self.price: Price = attrs['price']
 
+        # On va chercher le montant si c'est un prix libre
+        amount: Decimal = self.price.prix
         if self.price.free_price:
+            amount = attrs.get('custom_amount', None)
+
             if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
-                contribution = custom_amount or self.price.prix
+                contribution: Decimal = amount or self.price.prix
                 if contribution < self.price.prix:
                     logger.info("prix inférieur au minimum")
                     raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
@@ -688,7 +687,9 @@ class MembershipValidator(serializers.Serializer):
             user_membeshipr_count = Membership.objects.filter(
                 user=self.user,
                 price=self.price,
-                deadline__gt=timezone.localtime()).exclude(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]).count()
+                deadline__gt=timezone.localtime()).exclude(
+                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
+            ).count()
             if user_membeshipr_count >= self.price.max_per_user:
                 logger.info("max per user")
                 raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
@@ -699,7 +700,7 @@ class MembershipValidator(serializers.Serializer):
         membership = Membership.objects.create(
             user=self.user,
             price=self.price,
-            contribution_value=custom_amount, # None si pas de contribution value, sera rempli par la validation du paiement
+            contribution_value=amount,
             status=Membership.WAITING_PAYMENT,
             first_name = attrs['firstname'],
             last_name = attrs['lastname'],
@@ -737,7 +738,7 @@ class MembershipValidator(serializers.Serializer):
         # Création du lien de paiement
         self.checkout_stripe_url = None
         if membership.status == Membership.WAITING_PAYMENT:
-            self.checkout_stripe_url = self.get_checkout_stripe(membership, custom_amount=custom_amount)
+            self.checkout_stripe_url = self.get_checkout_stripe(membership)
 
         return attrs
 
