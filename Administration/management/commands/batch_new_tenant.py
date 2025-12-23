@@ -13,6 +13,8 @@ from django_tenants.utils import schema_context, tenant_context
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, FederatedPlace
 from Customers.models import Client, Domain
+from fedow_connect.fedow_api import FedowAPI
+from django.utils.translation import gettext_lazy as _
 
 logger = logging.getLogger(__name__)
 
@@ -189,12 +191,6 @@ class Command(BaseCommand):
                             admin_user.client_admin.add(client)
                             admin_user.save()
 
-                        # Second admin (ajout au client_admin)
-                        if secondary:
-                            second_user = get_or_create_user(primary, send_mail=send_mail)
-                            if second_user:
-                                second_user.client_admin.add(client)
-                                second_user.save()
 
                         # Configuration de base
                         cfg = Configuration.get_solo()
@@ -211,6 +207,24 @@ class Command(BaseCommand):
                         if not cfg.email:
                             cfg.email = primary
                         cfg.save()
+
+                        fedowAPI = FedowAPI(admin=admin_user)
+                        fedowAPI.asset.get_accepted_assets()  # on récupère l'asset FED
+
+                        # Second admin (ajout au client_admin)
+                        if secondary:
+                            second_user = get_or_create_user(primary, send_mail=send_mail)
+                            if second_user:
+                                second_user.client_admin.add(client)
+                                second_user.save()
+
+                        # Création des articles par default :
+                        activate(config.language)
+                        if not Product.objects.filter(categorie_article=Product.FREERES).exists():
+                            freeres, created = Product.objects.get_or_create(
+                                name=_("Free booking"),
+                                categorie_article=Product.FREERES,
+                            )  # le post save créera le price 0
 
                         self.stdout.write(self.style.SUCCESS(f"{meta['slug']}: finalisation OK"))
 
