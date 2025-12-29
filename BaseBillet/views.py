@@ -1827,6 +1827,10 @@ class EventMVT(viewsets.ViewSet):
             else:
                 event = self.federated_events_get(slug)
 
+        except Event.MultipleObjectsReturned :
+            logger.info("Url de lien mal formé, plusieurs events ?")
+            return redirect("/event/")
+
         if not event:  # Event pas trouvé, on redirige vers la page d'évènement complète
             logger.info("Event.DoesNotExist on federation, redirect")
             return redirect("/event/")
