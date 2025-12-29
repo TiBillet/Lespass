@@ -1100,6 +1100,7 @@ class PriceChangeForm(ModelForm):
             'fedow_reward_amount',
         )
 
+
     def clean_recurring_payment(self):
         cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
         recurring_payment = cleaned_data.get('recurring_payment')
@@ -1191,6 +1192,8 @@ class PriceAdmin(ModelAdmin):
     form = PriceChangeForm
 
     conditional_fields = {
+        # un seul prix libre par personne possible pour éviter d'en prendre deux ( stripe plante sinon ) mais ça impacte aussi le total de prix libre possible.
+        # Todo : Passer tout les prix libre en input direct et non pas en choix coté stripe
         "max_per_user": "free_price == false",
         "iteration": "recurring_payment == true",
         "commitment": "iteration > 0",
@@ -1862,12 +1865,24 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     def display_is_valid(self, instance: Membership):
         return instance.is_valid()
 
+
+    # actions_row = ["archiver", ]
+    # @action(
+    #     description=_("Archiver"),
+    #     permissions=["custom_actions_detail"],
+    # )
+    # def archiver(self, request, object_id):
+    #     logger.info(object_id)
+    #     membership = Membership.objects.get(pk=object_id)
+    #     return redirect(request.META["HTTP_REFERER"])
+
+
     # @display(description=_("State"))
     # def state_display(self, instance: Membership):
         #### Show human-readable label for state, possibly with icon/color later
         # return instance.get_state_display()
 
-    def has_custom_actions_detail_permission(self, request, object_id):
+    def has_custom_actions_detail_permission(self, request, object_id=None):
         return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
@@ -4225,14 +4240,17 @@ class InitiativeAdmin(ModelAdmin):
 
     funding_goal_display.short_description = _("Objectif")
 
-    # def requested_total_display(self, obj):
-        ## Seules les participations approuvées par un·e admin sont comptées dans le total (voir modèle)
-        # color = obj.requested_ratio_color
-        # value = f"{obj.requested_total_eur:.2f} {self.currency(obj)}"
-        # return format_html('<span class="badge text-bg-{}">{}</span>', color, value)
-    #
-    # requested_total_display.short_description = _("Demandes validées")
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
 

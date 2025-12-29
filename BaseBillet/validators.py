@@ -678,6 +678,7 @@ class MembershipValidator(serializers.Serializer):
         self.user = get_or_create_user(attrs['email'])
 
         # Vérififaction du max par user sur le produit :
+        # import ipdb; ipdb.set_trace()
         if self.price.product.max_per_user_reached(user=self.user):
                 raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
@@ -737,6 +738,10 @@ class TenantCreateValidator(serializers.Serializer):
     cgu = serializers.BooleanField(required=True)
     dns_choice = serializers.ChoiceField(choices=["tibillet.coop", "tibillet.re"])
     short_description = serializers.CharField(max_length=250)
+    # Anti-spam très léger (même mécanisme que le formulaire de contact): x + y == answer
+    x = serializers.IntegerField(required=True, min_value=0)
+    y = serializers.IntegerField(required=True, min_value=0)
+    answer = serializers.IntegerField(required=True)
 
     def validate_cgu(self, value):
         if not value:
@@ -752,6 +757,20 @@ class TenantCreateValidator(serializers.Serializer):
             raise serializers.ValidationError(f"{value}. " + _('This name is not available'))
 
         return value
+
+    def validate(self, attrs):
+        # Validation anti-spam: vérifier que answer == x + y (identique à ContactValidator)
+        try:
+            x = int(attrs.get('x', 0))
+            y = int(attrs.get('y', 0))
+            answer = int(attrs.get('answer', -1))
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({'answer': [_('Please answer the anti-spam question.')]})
+
+        if x + y != answer:
+            raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
+
+        return attrs
 
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):

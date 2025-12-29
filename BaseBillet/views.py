@@ -689,24 +689,20 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
-        tenant = request.tenant
-        admin = request.user
-        if admin.is_tenant_admin(tenant):
-            fedowAPI = FedowAPI()
-            user = get_object_or_404(HumanUser, pk=pk)
-            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-            tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+        fedowAPI = FedowAPI()
+        user = get_object_or_404(HumanUser, pk=pk)
+        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
-            context = {
-                'cards': cards,
-                'tokens': tokens,
-                'user_pk': pk,
-            }
-            return render(request, "admin/membership/wallet_info.html", context=context)
-        return HttpResponse("No cards")
+        context = {
+            'cards': cards,
+            'tokens': tokens,
+            'user_pk': pk,
+        }
+        return render(request, "admin/membership/wallet_info.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
@@ -2491,9 +2487,41 @@ class Tenant(viewsets.ViewSet):
         new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
         logger.info(new_tenant.initial_data)
         if not new_tenant.is_valid():
-            for error in new_tenant.errors:
-                messages.add_message(request, messages.ERROR, f"{error} : {new_tenant.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            # Construire une liste d'erreurs FALC par champ pour le partial `field_errors.html`
+            errors = []
+            try:
+                for field, msgs in new_tenant.errors.items():
+                    if isinstance(msgs, (list, tuple)):
+                        for msg in msgs:
+                            errors.append({'id': field, 'msg': str(msg)})
+                    else:
+                        errors.append({'id': field, 'msg': str(msgs)})
+            except Exception:
+                # En cas d'erreur inattendue, on met un message générique
+                errors.append({'id': 'form', 'msg': _('An error occurred. Please try again.')})
+
+            # Pré-remplissage des champs avec les valeurs envoyées
+            form_values = {
+                'email': request.POST.get('email', ''),
+                'emailConfirmation': request.POST.get('emailConfirmation', ''),
+                'name': request.POST.get('name', ''),
+                'short_description': request.POST.get('short_description', ''),
+                'dns_choice': request.POST.get('dns_choice', 'tibillet.coop'),
+                'cgu': request.POST.get('cgu') in ['true', 'True', 'on', '1'],
+                # On ne pré-remplit pas answer volontairement (captcha), il sera régénéré côté JS
+            }
+
+            context = get_context(request)
+            context.update({
+                'errors': errors,
+                'form_values': form_values,
+                # Conserver les query params existants si présents pour compat
+                'email_query_params': request.query_params.get('email') if request.query_params.get('email') else "",
+                'name_query_params': request.query_params.get('name') if request.query_params.get('name') else "",
+            })
+
+            # Réponse partielle HTMX: on renvoie le même template avec les erreurs et valeurs pré-remplies
+            return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
         # Création d'un objet waiting_configuration
         validated_data = new_tenant.validated_data

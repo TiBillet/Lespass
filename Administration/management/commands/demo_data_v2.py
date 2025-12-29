@@ -470,8 +470,8 @@ class Command(BaseCommand):
                 "phone": fake.phone_number()[:20],
                 "email": os.environ.get('ADMIN_EMAIL').replace("@", "+cf@", 1),
                 "stripe_mode_test": True,
-                "stripe_connect_account_test": "",
-                "stripe_payouts_enabled": True,
+                "stripe_connect_account_test": None,
+                "stripe_payouts_enabled": False,
                 "site_web": "https://tibillet.org/lowcow",
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
@@ -963,6 +963,7 @@ class Command(BaseCommand):
                         cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}";')
                 except Exception as e:
                     logger.warning(f"Impossible de créer le schéma '{schema}' pour le tenant {name}: {e}")
+                    raise ValueError(f"Impossible de créer le schéma '{schema}' pour le tenant {name}: {e}")
 
                 # Domaine principal idempotent et rattaché au tenant
                 try:

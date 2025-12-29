@@ -18,7 +18,9 @@
                         <input name="email" type="email" class="form-control"
                                placeholder="adresse@exemple.fr"
                                role="textbox" aria-label="{% trans 'Administrator email' %}" required
-                                {% if user.is_authenticated %}
+                                {% if form_values.email %}
+                               value="{{ form_values.email }}"
+                                {% elif user.is_authenticated %}
                                value="{{ user.email }}"
                                 {% elif email_query_params %}
                                value="{{ email_query_params }}"
@@ -30,12 +32,15 @@
                         <input name="emailConfirmation" type="email" class="form-control"
                                placeholder="adresse@exemple.fr" role="textbox"
                                aria-label="{% trans 'Email confirmation' %}" required
-                                {% if user.is_authenticated %}
+                                {% if form_values.emailConfirmation %}
+                               value="{{ form_values.emailConfirmation }}"
+                                {% elif user.is_authenticated %}
                                value="{{ user.email }}"
                                 {% endif %}>
                         <label for="emailConfirmation">{% trans 'Email confirmation' %}</label>
                     </div>
-                    {% include 'reunion/partials/field_errors.html' %}
+                    {% include 'reunion/partials/field_errors.html' with id='email' %}
+                    {% include 'reunion/partials/field_errors.html' with id='emailConfirmation' %}
 
                     <div class="row">
                         <div class="col">
@@ -43,14 +48,16 @@
                                 <input name="name" type="text" class="form-control" id="name-input"
                                        placeholder="" role="textbox" maxlength="50"
                                        aria-label="{% trans 'Name of your collective' %}" required
-                                        {% if name_query_params %}
+                                        {% if form_values.name %}
+                                       value="{{ form_values.name }}"
+                                        {% elif name_query_params %}
                                        value="{{ name_query_params }}"
                                         {% endif %}>
                                 <label for="name">{% trans 'Name of your collective' %}</label>
                             </div>
                         </div>
                     </div>
-                    {% include 'reunion/partials/field_errors.html' %}
+                    {% include 'reunion/partials/field_errors.html' with id='name' %}
 
 
                     <div class="row">
@@ -60,17 +67,18 @@
                                        id="short-description-input"
                                        placeholder="" role="textbox"
                                        aria-label="{% trans 'Short description' %}" required
-                                        {% if name_query_params %}
-                                       value="{{ name_query_params }}"
+                                        {% if form_values.short_description %}
+                                       value="{{ form_values.short_description }}"
                                         {% endif %}>
                                 <label for="name">{% trans 'Short description' %}</label>
                             </div>
                         </div>
                     </div>
-                    {% include 'reunion/partials/field_errors.html' %}
+                    {% include 'reunion/partials/field_errors.html' with id='short_description' %}
 
                     <div class="form-check form-switch mb-5">
-                        <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required>
+                        <input class="form-check-input" type="checkbox" role="switch" name="cgu" id="cgu" required
+                               {% if form_values.cgu %}checked{% endif %}>
                         <label class="form-check-label" for="cgu">
                             {% blocktranslate %}
                                 I agree to
@@ -83,7 +91,7 @@
                             </p>
                         </label>
                     </div>
-                    {% include 'reunion/partials/field_errors.html' %}
+                    {% include 'reunion/partials/field_errors.html' with id='cgu' %}
 
                     <p>
                         {% trans "Domain name choice" %}
@@ -93,7 +101,7 @@
                             <input class="form-check-input" type="radio"
                                    name="dns_choice"
                                    id="options-radio-coop"
-                                   value="tibillet.coop" checked="checked">
+                                   value="tibillet.coop" {% if form_values.dns_choice == 'tibillet.coop' or not form_values.dns_choice %}checked="checked"{% endif %}>
                             <label class="custom-control-label ms-0"
                                    for="options-radio-coop" id="label-coop">
                                 tibillet.coop
@@ -103,15 +111,28 @@
                             <input class="form-check-input" type="radio"
                                    name="dns_choice"
                                    id="options-radio-re"
-                                   value="tibillet.re">
+                                   value="tibillet.re" {% if form_values.dns_choice == 'tibillet.re' %}checked="checked"{% endif %}>
                             <label class="custom-control-label ms-0"
                                    for="options-radio-re" id="label-re">
                                 tibillet.re
                             </label>
                         </div>
                     </div>
+                    {% include 'reunion/partials/field_errors.html' with id='dns_choice' %}
 
                     <input type="hidden" name="qrcode_uuid" value="{{ qrcode_uuid }}">
+                    <!-- Captcha léger anti-spam: question arithmétique (identique à forms/contact.html) -->
+                    <div class="mb-3">
+                        <label for="answer" class="form-label">
+                            {% trans "Anti-spam" %} — {% trans "How much is" %}
+                            <span id="captcha-x">0</span> + <span id="captcha-y">0</span> ?
+                        </label>
+                        <input type="number" class="form-control" id="answer" name="answer" required inputmode="numeric" pattern="[0-9]*">
+                        <input type="hidden" id="captcha-hidden-x" name="x" value="0">
+                        <input type="hidden" id="captcha-hidden-y" name="y" value="0">
+                        <div class="form-text">{% trans "Please answer this simple question to prove you are human." %}</div>
+                    </div>
+                    {% include 'reunion/partials/field_errors.html' with id='answer' %}
                     <button type="submit"
                             class="btn btn-primary w-100 mb-3 test-return-validate-link-card"
                     >{% translate "Send request" %}
@@ -167,5 +188,43 @@
                 nameInput.addEventListener('change', updateDnsLabels);
             }
         });
+    </script>
+    <script>
+        (function () {
+            function initCaptcha(root) {
+                try {
+                    // Petits nombres entre 1 et 9
+                    var x = Math.floor(Math.random() * 9) + 1;
+                    var y = Math.floor(Math.random() * 9) + 1;
+
+                    var scope = root || document;
+                    var sx = scope.querySelector('#captcha-x');
+                    var sy = scope.querySelector('#captcha-y');
+                    var hx = scope.querySelector('#captcha-hidden-x');
+                    var hy = scope.querySelector('#captcha-hidden-y');
+
+                    if (sx) sx.textContent = x;
+                    if (sy) sy.textContent = y;
+                    if (hx) hx.value = x;
+                    if (hy) hy.value = y;
+                } catch (e) {
+                    // En cas d'erreur JS, on laisse les valeurs par défaut, la validation serveur bloquera
+                }
+            }
+
+            // Initialisation au chargement initial de la page
+            document.addEventListener('DOMContentLoaded', function () {
+                var form = document.getElementById('new-tenant');
+                if (form) initCaptcha(form);
+            });
+
+            // Ré-initialisation après un swap HTMX (quand le formulaire est renvoyé avec erreurs)
+            if (window.htmx && typeof window.htmx.onLoad === 'function') {
+                window.htmx.onLoad(function (el) {
+                    var form = (el && el.id === 'new-tenant') ? el : el.querySelector && el.querySelector('#new-tenant');
+                    if (form) initCaptcha(form);
+                });
+            }
+        })();
     </script>
 {% endblock %}
