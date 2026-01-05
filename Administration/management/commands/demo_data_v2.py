@@ -963,6 +963,7 @@ class Command(BaseCommand):
                         cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}";')
                 except Exception as e:
                     logger.warning(f"Impossible de créer le schéma '{schema}' pour le tenant {name}: {e}")
+                    raise ValueError(f"Impossible de créer le schéma '{schema}' pour le tenant {name}: {e}")
 
                 # Domaine principal idempotent et rattaché au tenant
                 try:
