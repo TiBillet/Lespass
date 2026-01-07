@@ -1228,7 +1228,7 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
-    # archived = models.BooleanField(default=False, verbose_name=_("Archive"))
+    archived = models.BooleanField(default=False, verbose_name=_("Archive"))
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
 

@@ -2247,6 +2247,25 @@ class ChildActionsSummaryTable(TableSection):
         return super().render()
 
 
+
+class EventArchiveFilter(admin.SimpleListFilter):
+    title = _("Archived")
+    parameter_name = "archived"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("archived", _("Archived")),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        # Filtrage par défaut
+        if value is None:
+            return queryset.exclude(archived=True)
+        if value == "archived":
+            return queryset.filter(archived=True)
+        return queryset
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
@@ -2267,7 +2286,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     inlines = [EventChildrenInline, ]
 
     actions_row = ["duplicate_day_plus_one", "duplicate_week_plus_one", "duplicate_week_plus_two",
-                   "duplicate_month_plus_one"]
+                   "duplicate_month_plus_one", "archive"]
 
     fieldsets = (
         (None, {
@@ -2307,6 +2326,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             'fields': (
                 'published',
                 'private',
+                'archived',
             ),
         }),
     )
@@ -2326,6 +2346,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     search_fields = ['name']
     list_filter = [
+        EventArchiveFilter,
         ('datetime', RangeDateTimeFilter),
         'published',
     ]
@@ -2406,6 +2427,19 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         if count is None:
             count = instance.valid_tickets_count()
         return f"{count} / {instance.jauge_max}"
+
+    @action(
+        description=_("Archive"),
+        permissions=["custom_actions_row"],
+    )
+    def archive(self, request, object_id):
+        event = Event.objects.get(pk=object_id)
+        event.archived = True
+        event.published = False
+        event.save(update_fields=['archived', 'published'])
+        return redirect(request.META["HTTP_REFERER"])
+
+
 
     @action(
         description=_("Duplicate (day+1)"),
@@ -2746,6 +2780,59 @@ class ReservationCustomFormSection(TemplateSection):
     verbose_name = _("Custom form answers")
 
 
+class EventArchivedFilter(admin.SimpleListFilter):
+    title = _("Archived Event")
+    parameter_name = 'event_archived'
+
+    def lookups(self, request, model_admin):
+        events = Event.objects.filter(archived=True).order_by('-datetime')
+        return [(str(e.pk), str(e)) for e in events]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            if queryset.model == Reservation:
+                return queryset.filter(event_id=self.value())
+            elif queryset.model == Ticket:
+                return queryset.filter(reservation__event_id=self.value())
+        return queryset
+
+
+class EventFutureFilter(admin.SimpleListFilter):
+    title = _("-> Future event")
+    parameter_name = 'event_future'
+
+    def lookups(self, request, model_admin):
+        now = timezone.now() - timedelta(days=1)
+        events = Event.objects.filter(archived=False, datetime__gte=now).order_by('datetime')
+        return [(str(e.pk), str(e)) for e in events]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            if queryset.model == Reservation:
+                return queryset.filter(event_id=self.value())
+            elif queryset.model == Ticket:
+                return queryset.filter(reservation__event_id=self.value())
+        return queryset
+
+
+class EventPastFilter(admin.SimpleListFilter):
+    title = _("<- Past event")
+    parameter_name = 'event_past'
+
+    def lookups(self, request, model_admin):
+        now = timezone.now()
+        events = Event.objects.filter(archived=False, datetime__lt=now).order_by('-datetime')
+        return [(str(e.pk), str(e)) for e in events]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            if queryset.model == Reservation:
+                return queryset.filter(event_id=self.value())
+            elif queryset.model == Ticket:
+                return queryset.filter(reservation__event_id=self.value())
+        return queryset
+
+
 @admin.register(Reservation, site=staff_admin_site)
 class ReservationAdmin(ModelAdmin):
     # Expandable section to display custom form answers in changelist
@@ -2774,7 +2861,14 @@ class ReservationAdmin(ModelAdmin):
     # readonly_fields = list_display
 
     search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
-    list_filter = ['event', ReservationValidFilter, 'datetime', 'options']
+    list_filter = [
+        EventFutureFilter,
+        ReservationValidFilter,
+        'datetime',
+        'options',
+        EventPastFilter,
+        EventArchivedFilter,
+    ]
 
     # Bulk actions available in changelist
     actions = ["action_cancel_refund_reservations"]
@@ -2875,7 +2969,7 @@ class TicketValidFilter(admin.SimpleListFilter):
 
     def lookups(self, request, model_admin):
         return [
-            ("Y", _("Yes")),
+            # ("Y", _("Yes")),
             ("N", _("No")),
         ]
 
@@ -2885,7 +2979,7 @@ class TicketValidFilter(admin.SimpleListFilter):
         provided in the query string and retrievable via
         `self.value()`.
         """
-        if self.value() == "Y":
+        if self.value() == None :
             return queryset.filter(
                 status__in=[
                     Ticket.NOT_SCANNED,
@@ -2909,7 +3003,14 @@ class TicketCustomFormSection(TemplateSection):
 @admin.register(Ticket, site=staff_admin_site)
 class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
     ordering = ('-reservation__datetime',)
-    list_filter = ["reservation__event", TicketValidFilter, "reservation__options"]
+    list_filter = [
+        EventFutureFilter,
+        EventPastFilter,
+        TicketValidFilter,
+        "reservation__datetime",
+        "reservation__options",
+        EventArchivedFilter,
+    ]
     search_fields = (
         'uuid',
         'first_name',

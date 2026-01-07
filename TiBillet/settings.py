@@ -614,8 +614,7 @@ UNFOLD = {
                     {
                         "title": _("Tickets"),
                         "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
-                        "link": lambda
-                            request: f'{reverse_lazy("staff_admin:BaseBillet_ticket_changelist")}?status_valid=Y',
+                        "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },

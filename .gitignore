@@ -168,3 +168,4 @@ tempo/
 .documentation_v2
 documentation_v2
 /tests/playwright/.yarn/
+/.aiassistant/
