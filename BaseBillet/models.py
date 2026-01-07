@@ -77,10 +77,14 @@ class SaleOrigin(models.TextChoices):
     LABOUTIK = "LB", _("Cash register")
     ADMIN = "AD", _("Administration")
     EXTERNAL = "EX", _("External")
-    QRCODE_MA = "QR", _("QrCode or NFC")
+    QRCODE_MA = "QR", _("QrCode online")
+    NFC_MA = "NF", _("NFC online")
+    API = "AP", _("API")
+    WEBHOOK = "WK", _("Webhook Stripe")
 
 
 class PaymentMethod(models.TextChoices):
+    UNKNOWN = "UK", _("Unknown")
     FREE = "NA", _("Offered")
     CC = "CC", _("Credit card: POS terminal")
     CASH = "CA", _("Cash")
@@ -93,6 +97,7 @@ class PaymentMethod(models.TextChoices):
     STRIPE_RECURENT = "SR", _("Recurring: Stripe")
     LOCAL_EURO = 'LE', _("Asset local fiat")
     LOCAL_GIFT = 'LG', _("Asset local gift")
+
 
     @classmethod
     def online(cls):
@@ -1794,6 +1799,10 @@ class PriceSold(models.Model):
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
+        config = Configuration.get_solo()
+        currency_code = config.currency_code.lower()
+        stripe_account = Configuration.get_solo().get_stripe_connect_account()
+
         stripe_key = RootConfiguration.get_solo().get_stripe_api()
         stripe.api_key = stripe_key
 
@@ -1805,9 +1814,9 @@ class PriceSold(models.Model):
 
         data_stripe = {
             "unit_amount": f"{int(Decimal(self.prix) * 100)}",
-            "currency": "eur",
+            "currency": currency_code,
             "product": product_stripe,
-            "stripe_account": Configuration.get_solo().get_stripe_connect_account(),
+            "stripe_account": stripe_account,
             "nickname": f"{self.price.name}",
         }
 
@@ -1826,7 +1835,10 @@ class PriceSold(models.Model):
             elif self.price.subscription_type == Price.YEAR:
                 data_stripe["recurring"]["interval"] = "year"
 
-        elif self.price.free_price:  # Si c'est récurrent et free price, le if précédent s'applique
+        """ Les prix libres sont maintenant géré par le front
+        # Si c'est récurrent et free price, le if précédent s'applique et celui non
+        # Impossible de faire des prix libre et recurrent sur Stripe
+        elif self.price.free_price:  
             data_stripe.pop('unit_amount')
             data_stripe['billing_scheme'] = "per_unit"
             data_stripe['custom_unit_amount'] = {
@@ -1834,6 +1846,7 @@ class PriceSold(models.Model):
                 "minimum": f"{int(Decimal(self.prix) * 100)}",
                 # "preset": f"{int(Decimal(self.prix) * 100)}",
             }
+        """
 
         price = stripe.Price.create(**data_stripe)
 
@@ -1982,6 +1995,7 @@ class Reservation(models.Model):
                             status=LigneArticle.CREATED,
                             sended_to_laboutik=False,
                             metadata=metadata,
+                            sale_origin=SaleOrigin.LESPASS,
                         )
                         refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
                         refunded_line.save()
@@ -2065,6 +2079,7 @@ class Reservation(models.Model):
                             status=LigneArticle.CREATED,
                             sended_to_laboutik=False,
                             metadata=metadata,
+                            sale_origin=SaleOrigin.LESPASS,
                         )
                         refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
                         refunded_line.save()
@@ -2434,22 +2449,22 @@ class LigneArticle(models.Model):
     amount = models.IntegerField(default=0, verbose_name=_("Value"))  # Centimes en entier (50.10€ = 5010)
 
     vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("VAT"))
+    promotional_code = models.ForeignKey(PromotionalCode, on_delete=models.PROTECT, blank=True, null=True,
+                                         verbose_name=_("Promotional code"), related_name="lignearticles")
 
-    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
                                         related_name="lignearticles")
     membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
                                    verbose_name=_("Linked subscription"), related_name="lignearticles")
 
+    ### INFO DE PAIEMENT
+    sale_origin = models.CharField(max_length=2, choices=SaleOrigin.choices, default=SaleOrigin.LESPASS,
+                                   verbose_name=_("Payment source"))
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
-
-    promotional_code = models.ForeignKey(PromotionalCode, on_delete=models.PROTECT, blank=True, null=True,
-                                         verbose_name=_("Promotional code"), related_name="lignearticles")
-
     asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
-
+    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 
@@ -2588,7 +2603,7 @@ class Membership(models.Model):
     asset_fedow = models.UUIDField(null=True, blank=True)
     card_number = models.CharField(max_length=16, null=True, blank=True)
 
-    date_added = models.DateTimeField(auto_now_add=True)
+    date_added = models.DateTimeField(auto_now_add=True, verbose_name=_('Date added'))
 
     last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
     first_contribution = models.DateTimeField(null=True, blank=True)  # utilisé dans le cas des iterations max
@@ -2811,7 +2826,9 @@ class Membership(models.Model):
         return None
 
     def is_valid(self):
-        if self.get_deadline():
+        if self.status in [Membership.CANCELED, Membership.ADMIN_CANCELED]:
+            return False
+        elif self.get_deadline():
             if timezone.localtime() <= self.deadline:
                 return True
         return False

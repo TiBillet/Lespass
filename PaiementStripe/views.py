@@ -10,7 +10,7 @@ from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, \
-    PaymentMethod, Membership
+    PaymentMethod, SaleOrigin
 from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
@@ -241,6 +241,7 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
             amount=line.amount,
             qty=line.quantity,
             membership=membership,
+            sale_origin=SaleOrigin.WEBHOOK,
         )
         lignes_articles.append(ligne_article)
         logger.info(f"new_entry_from_stripe_subscription_invoice. ligne_article : {ligne_article.uuid} {ligne_article.payment_method}")

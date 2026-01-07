@@ -90,9 +90,6 @@ from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 logger = logging.getLogger(__name__)
 
 
-
-
-
 def sanitize_textfields(instance: models.Model) -> None:
     """Sanitize all TextField values on a model instance in-place using clean_html.
     Only string values are sanitized; None and non-string values are ignored.
@@ -332,11 +329,11 @@ class WebhookAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
-
 @admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+
     # form = ConfigurationAdminForm
 
     def get_queryset(self, request):
@@ -409,6 +406,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             "widget": WysiwygWidget,
         }
     }
+
     #
     # def get_urls(self):
     #     urls = super().get_urls()
@@ -619,7 +617,8 @@ class ProductFormFieldInlineForm(ModelForm):
     options_csv = forms.CharField(
         required=False,
         label=_("Choices"),
-        help_text=_('For Single select (menu), Radio or Multiple select, enter choices separated by commas. Example: Rock, Electro, Jazz'),
+        help_text=_(
+            'For Single select (menu), Radio or Multiple select, enter choices separated by commas. Example: Rock, Electro, Jazz'),
         widget=UnfoldAdminTextInputWidget(attrs={"placeholder": "Rock, Electro, Jazz"}),
     )
 
@@ -694,9 +693,9 @@ class ProductFormFieldInlineForm(ModelForm):
         csv_val = cleaned.get("options_csv")
         # Manage options list for Single select, Radio and Multi select
         if ftype in (
-            ProductFormField.FieldType.SINGLE_SELECT,
-            ProductFormField.FieldType.RADIO_SELECT,
-            ProductFormField.FieldType.MULTI_SELECT,
+                ProductFormField.FieldType.SINGLE_SELECT,
+                ProductFormField.FieldType.RADIO_SELECT,
+                ProductFormField.FieldType.MULTI_SELECT,
         ):
             options_list = self._parse_csv_or_json(csv_val)
             cleaned["options"] = options_list if options_list else None
@@ -798,7 +797,7 @@ class ProductAdminCustomForm(ModelForm):
             (Product.BILLET, _('Ticket booking')),
             (Product.FREERES, _('Free booking')),
             (Product.ADHESION, _('Subscription or membership')),
-            ],
+        ],
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Product type"),
     )
@@ -842,6 +841,7 @@ class CheckStripeComponent(BaseComponent):
         )
         return context
 
+
 @admin.register(Tva, site=staff_admin_site)
 class TvaAdmin(ModelAdmin):
 
@@ -856,7 +856,6 @@ class TvaAdmin(ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         return False
-
 
 
 @admin.register(Product, site=staff_admin_site)
@@ -963,9 +962,9 @@ class ProductAdmin(ModelAdmin):
             err_str = str(err)
             # Handle unique_together = ("categorie_article", "name") on Product
             if (
-                "BaseBillet_product_categorie_article_name" in err_str
-                or "BaseBillet_product_categorie_article_name_" in err_str
-                or "duplicate key value violates unique constraint" in err_str and "(categorie_article, name)" in err_str
+                    "BaseBillet_product_categorie_article_name" in err_str
+                    or "BaseBillet_product_categorie_article_name_" in err_str
+                    or "duplicate key value violates unique constraint" in err_str and "(categorie_article, name)" in err_str
             ):
                 messages.error(
                     request,
@@ -1100,7 +1099,6 @@ class PriceChangeForm(ModelForm):
             'fedow_reward_amount',
         )
 
-
     def clean_recurring_payment(self):
         cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
         recurring_payment = cleaned_data.get('recurring_payment')
@@ -1111,17 +1109,18 @@ class PriceChangeForm(ModelForm):
                 categorie_product = self.instance.product.categorie_article
             elif self.cleaned_data.get('product'):
                 categorie_product = self.cleaned_data['product'].categorie_article
-            else :
+            else:
                 raise forms.ValidationError(_("No product ?"), code="invalid")
 
-            if categorie_product :
+            if categorie_product:
                 if categorie_product != Product.ADHESION:
                     raise forms.ValidationError(
-                    _("A recurring payment plan must have a membership-type product."), code="invalid")
+                        _("A recurring payment plan must have a membership-type product."), code="invalid")
 
             if data.get('subscription_type') not in [Price.DAY, Price.WEEK, Price.MONTH, Price.CAL_MONTH, Price.YEAR]:
-                raise forms.ValidationError(_("A recurring payment must have a membership term. Re-enter the term just above."),
-                                            code="invalid")
+                raise forms.ValidationError(
+                    _("A recurring payment must have a membership term. Re-enter the term just above."),
+                    code="invalid")
 
         return recurring_payment
 
@@ -1136,31 +1135,30 @@ class PriceChangeForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # On cache les options réservés aux adhésions
-        try :
+        try:
             instance: Price = kwargs.get('instance')
             if instance.product.categorie_article != Product.ADHESION:
                 self.fields['subscription_type'].widget = HiddenInput()
                 self.fields['recurring_payment'].widget = HiddenInput()
                 self.fields['iteration'].widget = HiddenInput()
                 self.fields['manual_validation'].widget = HiddenInput()
-                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+                self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
                 # Filtrage des produits : uniquement des produits adhésions.
                 # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
                 self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
                     categorie_article=Product.ADHESION,
                     archive=False,
                 )
-            elif instance.product.categorie_article == Product.ADHESION : # si c'est un produit qui n'est pas l'adhésion
-                self.fields['product'].widget = HiddenInput() # caché sauf si bouton + en haut a droite
+            elif instance.product.categorie_article == Product.ADHESION:  # si c'est un produit qui n'est pas l'adhésion
+                self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
                 self.fields['adhesion_obligatoire'].widget = HiddenInput()
 
-        except AttributeError as e :
+        except AttributeError as e:
             # NoneType' object has no attribute 'product
             logger.info(f"Formulaire add : {e} ")
-        except Exception as e :
+        except Exception as e:
             logger.error(f"Error in PriceChangeForm __init__ : {e}")
             raise e
-
 
         client: Client = connection.tenant
         # Limit the Asset choices to local tokens, time, and fidelity
@@ -1279,7 +1277,6 @@ USER
 """
 
 
-
 class is_tenant_admin_filter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
@@ -1301,6 +1298,7 @@ class is_tenant_admin_filter(admin.SimpleListFilter):
             return queryset.exclude(
                 client_admin__in=[connection.tenant],
             ).distinct()
+
 
 class can_init_paiement_filter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
@@ -1370,7 +1368,6 @@ class UserWithMembershipValid(admin.SimpleListFilter):
             ).distinct()
 
 
-
 # Tout les utilisateurs de type HUMAIN
 @admin.register(HumanUser, site=staff_admin_site)
 class HumanUserAdmin(ModelAdmin):
@@ -1389,7 +1386,6 @@ class HumanUserAdmin(ModelAdmin):
         extra_context = extra_context or {}
         extra_context['object_id'] = object_id
         return super().changeform_view(request, object_id, form_url, extra_context)
-
 
     list_display = [
         'email',
@@ -1427,7 +1423,6 @@ class HumanUserAdmin(ModelAdmin):
         can_init_paiement_filter,
         "email_valid",
     ]
-
 
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None) -> Any:
@@ -1579,7 +1574,6 @@ class MembershipAddForm(ModelForm):
         self.card_number = card_number
         return card_number
 
-
     def clean(self):
         # On vérifie que le moyen de paiement est bien entré si > 0
         cleaned_data = self.cleaned_data
@@ -1622,12 +1616,12 @@ class MembershipAddForm(ModelForm):
         # self.instance.set_deadline()
 
         if self.card_number:
-            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user, card_number=self.card_number)
+            linked_serialized_card = self.fedowAPI.NFCcard.linkwallet_card_number(user=user,
+                                                                                  card_number=self.card_number)
 
         # Le post save BaseBillet.signals.create_lignearticle_if_membership_created_on_admin s'executera
         # # Création de la ligne Article vendu qui envera à la caisse si besoin
         return super().save(commit=commit)
-
 
 
 class MembershipChangeForm(ModelForm):
@@ -1642,22 +1636,67 @@ class MembershipChangeForm(ModelForm):
             'commentaire',
         )
 
+
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
 
 
+class MembershipStatusFilter(admin.SimpleListFilter):
+    title = _("Statut d'adhésion (par défaut filtré)")
+    parameter_name = "membership_status"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("valid", _("Valids")),
+            ("wa", _("Attente de validation")),
+            ("wp", _("Attente de paiement")),
+            ("canceled", _("Canceled")),
+            ("all", _("Sans distinction")),
+        ]
+
+
+    def queryset(self, request, queryset):
+        value = self.value()
+
+        # Filtrage par défaut
+        if value is None:
+            return queryset.exclude(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED])
+
+        if value == "valid":
+            # On masque les annulées
+            return queryset.exclude(
+                Q(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]) |
+                Q(deadline__lt=timezone.localtime()))
+
+        if value == "wa":
+            return queryset.filter(status=Membership.ADMIN_WAITING)
+
+        if value == "wp":
+            return queryset.filter(status__in=[Membership.WAITING_PAYMENT, Membership.ADMIN_VALID])
+
+        if value == "canceled":
+            return queryset.filter(status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED])
+
+        if value == "all":
+            return queryset
+        return queryset
+
 @register_component
 class MembershipComponent(BaseComponent):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Les adhésions en cours :
-        active_count = Membership.objects.filter(deadline__gte=timezone.localtime()).count()
+        active_count = Membership.objects.filter(deadline__gte=timezone.localtime()).exclude(
+            status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]).count()
         # Les user qui n'ont pas d'adhésion en cours :
         inactive_count = HumanUser.objects.exclude(
-            memberships__deadline__gte=timezone.localtime()
+            memberships__deadline__gte=timezone.localtime(),
+            memberships__status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
         ).distinct().count()
+
+        pending_count = Membership.objects.filter(status=Membership.ADMIN_WAITING).count()
 
         context["children"] = render_to_string(
             "admin/membership/membership_component.html",
@@ -1665,7 +1704,7 @@ class MembershipComponent(BaseComponent):
                 "type": kwargs.get('type'),
                 "active": active_count,
                 "inactive": inactive_count,
-                "pending": Membership.objects.filter(state=Membership.ADMIN_WAITING).count(),
+                "pending": pending_count,
             },
         )
         return context
@@ -1676,8 +1715,60 @@ class MembershipCustomFormSection(TemplateSection):
     verbose_name = _("Custom form answers")
 
 
+class LigneArticleInline(TabularInline):
+    model = LigneArticle
+    fk_name = "membership"
+    extra = 0
+    show_change_link = True
+    can_delete = False
+    verbose_name = _("Ventes / Ligne comptables")
+    verbose_name_plural = _("Ventes / Ligne comptables")
+
+    fields = (
+        "datetime",
+        "amount_decimal",
+        "qty_decimal",
+        "vat",
+        "total_decimal",
+        "display_status",
+        "payment_method",
+        "sale_origin",
+    )
+    readonly_fields = fields
+
+    @display(description=_("Value"))
+    def amount_decimal(self, obj):
+        return obj.amount_decimal()
+
+    @display(description=_("Quantité"))
+    def qty_decimal(self, obj):
+        return dround(obj.qty)
+
+    @display(description=_("TVA"))
+    def vat(self, obj):
+        return obj.vat
+
+    @display(description=_("Total"))
+    def total_decimal(self, obj):
+        return obj.total_decimal()
+
+    @display(description=_("Statut"), label={None: "danger", True: "success"})
+    def display_status(self, instance: LigneArticle):
+        return instance.get_status_display()
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Membership, site=staff_admin_site)
 class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
+    inlines = [LigneArticleInline]
     # Expandable section to display custom form answers in changelist
     list_sections = [MembershipCustomFormSection]
     compressed_fields = True  # Default: False
@@ -1698,6 +1789,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     list_display = (
         'email',
+        'date_added',
         'first_name',
         'last_name',
         'price',
@@ -1707,6 +1799,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'deadline',
         'display_is_valid',
         'status',
+        'recurrence',
         # 'state',
         # 'payment_method',
         # 'state_display',
@@ -1716,14 +1809,13 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     ordering = ('-date_added',)
     search_fields = ('user__email', 'user__first_name', 'user__last_name', 'card_number', 'last_contribution',
                      'custom_form')
-    list_filter = ['price__product', 'last_contribution', 'deadline', ]
+    list_filter = [MembershipStatusFilter, 'price__product', 'last_contribution', 'deadline', ]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return (
             qs.select_related('user', 'price', 'price__product')
             .prefetch_related('option_generale', 'price__product__form_fields')
-            # .exclude(archiver=True)
         )
 
     ### FORMULAIRES
@@ -1811,7 +1903,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         membership = Membership.objects.get(pk=object_id)
         pdf_binary = create_membership_invoice_pdf(membership)
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        try :
+        try:
             paiement_id = f"-{membership.stripe_paiement.order_by('-datetime').first().invoice_number()}"
         except:
             paiement_id = ""
@@ -1867,26 +1959,30 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     def display_is_valid(self, instance: Membership):
         return instance.is_valid()
 
+    @display(description=_("Recurence"), ordering="current_iteration")
+    def recurrence(self, instance: Membership):
+        if instance.max_iteration and instance.current_iteration:
+            return f"{instance.current_iteration}/{instance.max_iteration}"
+        elif instance.current_iteration:
+            return f"{instance.current_iteration}"
+        elif instance.stripe_id_subscription:
+            return "∞"
+        return ""
 
-    actions_row = ["archiver", ]
+    actions_row = ["cancel", ]
+
     @action(
-        description=_("Archiver"),
+        description=_("Cancel"),
         permissions=["custom_actions_detail"],
     )
-    def archiver(self, request, object_id):
+    def cancel(self, request, object_id):
         logger.info(object_id)
         membership = Membership.objects.get(pk=object_id)
         membership.archiver = True
-        membership.status = Membership.CANCELED
-        membership.state = Membership.ADMIN_CANCELED
+        membership.status = Membership.ADMIN_CANCELED
+        # membership.state = Membership.ADMIN_CANCELED
         membership.save()
         return redirect(request.META["HTTP_REFERER"])
-
-
-    # @display(description=_("State"))
-    # def state_display(self, instance: Membership):
-        #### Show human-readable label for state, possibly with icon/color later
-        # return instance.get_state_display()
 
     def has_custom_actions_detail_permission(self, request, object_id=None):
         return TenantAdminPermissionWithRequest(request)
@@ -1927,11 +2023,13 @@ class LigneArticleAdmin(ModelAdmin):
         'total_decimal',
         'display_status',
         'payment_method',
+        'sale_origin',
         # 'sended_to_laboutik',
     ]
     # fields = "__all__"
     # readonly_fields = fields
-    search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name', 'paiement_stripe__user__email', 'membership__user__email')
+    search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name',
+                     'paiement_stripe__user__email', 'membership__user__email')
     ordering = ('-datetime',)
 
     def get_queryset(self, request):
@@ -2487,8 +2585,8 @@ class ReservationValidFilter(admin.SimpleListFilter):
 
     def lookups(self, request, model_admin):
         return [
-            ("Y", _("Yes")),
-            ("N", _("No")),
+            # ("Y", _("Yes")),
+            ("N", _("Invalids")),
         ]
 
     def queryset(self, request, queryset):
@@ -2497,7 +2595,8 @@ class ReservationValidFilter(admin.SimpleListFilter):
         provided in the query string and retrievable via
         `self.value()`.
         """
-        if self.value() == "Y":
+        value = self.value()
+        if value == None : # valeur par défault
             return queryset.exclude(
                 status__in=[
                     Reservation.CANCELED,
@@ -2505,7 +2604,8 @@ class ReservationValidFilter(admin.SimpleListFilter):
                     Reservation.UNPAID,
                 ]
             ).distinct()
-        if self.value() == "N":
+
+        if value == "N":
             return queryset.filter(
                 status__in=[
                     Reservation.CANCELED,
@@ -2513,7 +2613,6 @@ class ReservationValidFilter(admin.SimpleListFilter):
                     Reservation.UNPAID,
                 ]
             ).distinct()
-
 
 
 class ReservationAddAdmin(ModelForm):
@@ -2571,10 +2670,9 @@ class ReservationAddAdmin(ModelForm):
     class Meta:
         model = Reservation
         fields = []
-            # 'first_name',
-            # 'last_name',
+        # 'first_name',
+        # 'last_name',
         # ]
-
 
     def clean_payment_method(self):
         cleaned_data = self.cleaned_data
@@ -2602,7 +2700,7 @@ class ReservationAddAdmin(ModelForm):
         reservation: Reservation = self.instance
         reservation.user_commande = user
         reservation.event = event
-        reservation.status = Reservation.VALID # automatiquement en VALID,on est sur l'admin
+        reservation.status = Reservation.VALID  # automatiquement en VALID,on est sur l'admin
         # On va chercher les options
         options_checkbox = cleaned_data.pop('options_checkbox')
         if options_checkbox:
@@ -2632,6 +2730,7 @@ class ReservationAddAdmin(ModelForm):
             amount=int(pricesold.prix * quantity * 100),
             payment_method=payment_method,
             status=LigneArticle.VALID,
+            sale_origin=SaleOrigin.ADMIN,
         )
         # envoie à Laboutik
         send_sale_to_laboutik.delay(vente.pk)
@@ -2639,8 +2738,8 @@ class ReservationAddAdmin(ModelForm):
         # Envoie des ticket par mail
         ticket_celery_mailer.delay(reservation.pk)
 
-
         return reservation
+
 
 class ReservationCustomFormSection(TemplateSection):
     template_name = "admin/reservation/custom_form_section.html"
@@ -2654,6 +2753,7 @@ class ReservationAdmin(ModelAdmin):
 
     # Formulaire de création. A besoin de get_form pour fonctionner
     add_form = ReservationAddAdmin
+
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie le formulaire"""
         defaults = {}
@@ -2831,7 +2931,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         'reservation__datetime',
     ]
 
-
     resource_classes = [TicketExportResource]
     export_form_class = ExportForm
 
@@ -2916,7 +3015,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
                 preview += _(" ... (%(more)d more)") % {"more": len(unique_errors) - 5}
             messages.error(request, _("Some items failed to cancel/refund: %(errors)s") % {"errors": preview})
 
-
     @admin.display(ordering='pricesold__price', description=_('Price'))
     def price_name(self, obj: Ticket):
         if obj.pricesold:
@@ -2950,7 +3048,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         if obj.reservation.event.parent:
             return f"{obj.reservation.event.parent} -> {obj.reservation.event}"
         return obj.reservation.event
-
 
     # noinspection PyTypeChecker
     @display(description=_("State"), label={None: "danger", True: "success", 'scanned': "warning"})
@@ -3026,10 +3123,6 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         response['Content-Disposition'] = f'attachment; filename="{ticket.pdf_filename()}"'
         return response
 
-
-
-
-
     def has_custom_actions_row_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
@@ -3067,7 +3160,8 @@ class TenantAdmin(ModelAdmin):
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
         # Uniquement les client qui ont un domaine
-        return queryset.prefetch_related('domains').exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
+        return queryset.prefetch_related('domains').exclude(
+            categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META])
 
     def get_search_results(self, request, queryset, search_term):
         """
@@ -3081,7 +3175,7 @@ class TenantAdmin(ModelAdmin):
             if ("federatedplace" in request.headers['Referer']
                     and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
                 queryset = queryset.exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META]).exclude(
-                pk=connection.tenant.pk) # on retire le client actuel
+                    pk=connection.tenant.pk)  # on retire le client actuel
         return queryset, use_distinct
 
     actions_row = ["go_admin", ]
@@ -3128,7 +3222,7 @@ class TenantAdmin(ModelAdmin):
 class FederatedPlaceAdmin(ModelAdmin):
     list_display = ["tenant", "str_tag_filter", "str_tag_exclude", "membership_visible", ]
     fields = ["tenant", "tag_filter", "tag_exclude", "membership_visible", ]
-    autocomplete_fields = ["tag_filter", "tag_exclude", "tenant" ]
+    autocomplete_fields = ["tag_filter", "tag_exclude", "tenant"]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -3935,7 +4029,6 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
         return False
 
 
-
 # @admin.register(CrowdTag, site=staff_admin_site)
 # class CrowdTagAdmin(ModelAdmin):
 #     list_display = ("name", "slug", "color_bg", "color_preview")
@@ -4068,6 +4161,7 @@ class BudgetItemInline(TabularInline):
         qs = super().get_queryset(request)
         return qs.select_related("contributor", "validator")
 
+
 class ParticipationInline(TabularInline):
     model = Participation
     fk_name = 'initiative'
@@ -4100,6 +4194,7 @@ class ParticipationInline(TabularInline):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.select_related("participant")
+
 
 # class InitiativeAdminForm(ModelForm):
 #     funding_goal_eur = forms.DecimalField(
@@ -4180,7 +4275,7 @@ class InitiativeAdmin(ModelAdmin):
     inlines = [VoteInline, BudgetItemInline, ContributionInline, ParticipationInline]
     ordering = ("-created_at",)
     filter_horizontal = ("tags",)
-    autocomplete_fields = ("tags", )
+    autocomplete_fields = ("tags",)
     # Optimise les requêtes en changelist (FK direct)
     list_select_related = ("asset",)
 
@@ -4219,7 +4314,7 @@ class InitiativeAdmin(ModelAdmin):
         super().save_model(request, obj, form, change)
 
     def currency(self, obj: Initiative):
-        if obj.asset :
+        if obj.asset:
             return obj.asset.currency_code
         return obj.currency
 
@@ -4255,8 +4350,6 @@ class InitiativeAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
-
 
 
 ### UNFOLD ADMIN DASHBOARD

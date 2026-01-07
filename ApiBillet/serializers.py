@@ -13,7 +13,7 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode, SaleOrigin
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.utils import dround
@@ -821,7 +821,8 @@ def create_ticket(pricesold, customer, reservation):
 
 @atomic
 def get_or_create_price_sold(price: Price, event: Event = None,
-                             promo_code:PromotionalCode = None, custom_amount: Decimal = None,):
+                             promo_code:PromotionalCode = None,
+                             custom_amount: Decimal = None,):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -1182,6 +1183,7 @@ class ApiReservationValidator(serializers.Serializer):
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
+                sale_origin=SaleOrigin.API,
                 # pas d'objet reservation ?
                 qty=qty,
             )

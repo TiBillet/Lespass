@@ -431,6 +431,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
             amount=int(membership.contribution_value * 100),
             payment_method=membership.payment_method,
             status=LigneArticle.CREATED,
+            sale_origin=SaleOrigin.ADMIN,
         )
 
         # On lance les post_save et triggers associés au adhésions en passant en PAID

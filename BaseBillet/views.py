@@ -45,7 +45,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod, PostalAddress
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
@@ -1075,7 +1075,8 @@ class QrCodeScanPay(viewsets.ViewSet):
             amount=amount,
             payment_method=PaymentMethod.QRCODE_MA,
             status=LigneArticle.CREATED,
-            metadata=json.dumps({"admin": str(request.user.email)})
+            metadata=json.dumps({"admin": str(request.user.email)}),
+            sale_origin=SaleOrigin.QRCODE_MA,
         )
 
         # Use the UUID directly in the QR code
@@ -1177,6 +1178,7 @@ class QrCodeScanPay(viewsets.ViewSet):
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
                     asset=transaction['asset'],
                     wallet=wallet,
+                    sale_origin=SaleOrigin.NFC_MA,
                 )
 
                 # import ipdb; ipdb.set_trace()
@@ -1373,6 +1375,7 @@ class QrCodeScanPay(viewsets.ViewSet):
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
                     asset=transaction['asset'],
                     wallet=wallet,
+                    sale_origin=SaleOrigin.QRCODE_MA,
                 )
 
                 # import ipdb; ipdb.set_trace()
@@ -2335,10 +2338,8 @@ class MembershipMVT(viewsets.ViewSet):
         """
         Pour validation manuelle, redirige le lien reçu par l'user vers Stripe
         """
-        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
-        if membership.state != Membership.ADMIN_VALID:
-            raise Exception("not admin valid state")
-        checkout_url = MembershipValidator.get_checkout_stripe(membership, custom_amount=membership.contribution_value)
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk), status=Membership.ADMIN_VALID)
+        checkout_url = MembershipValidator.get_checkout_stripe(membership)
         logger.info(f"get_checkout_for_membership : {checkout_url}")
         return redirect(checkout_url)
         # return HttpResponseClientRedirect(checkout_url)
@@ -2360,13 +2361,13 @@ class MembershipMVT(viewsets.ViewSet):
 
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
         # Update state to admin validated
-        if membership.state != Membership.ADMIN_WAITING:
+        if membership.status != Membership.ADMIN_WAITING:
             messages.add_message(request, messages.WARNING, _("Membership not in waiting state."))
             referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
             return HttpResponseClientRedirect(referer)
 
-        membership.state = Membership.ADMIN_VALID
-        membership.save(update_fields=["state"])
+        membership.status = Membership.ADMIN_VALID
+        membership.save(update_fields=["status"])
 
         # Send payment link email to user via Celery
         try:

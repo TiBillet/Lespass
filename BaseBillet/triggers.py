@@ -45,6 +45,7 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
 
+    """ les prix libres sont gérés par le front maintenant 
     if price.free_price and ligne_article.payment_method != PaymentMethod.STRIPE_RECURENT : # pas de paiement récurrent.
         # Le montant a été entré dans stripe, on ne l'a pas entré à la création
         stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
@@ -57,6 +58,7 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
         ligne_article.amount = checkout_session['amount_total']
         contribution = dround(checkout_session['amount_total'])
         membership.contribution_value = contribution
+    """
 
     if not membership.first_contribution:
         membership.first_contribution = timezone.now()
@@ -65,9 +67,7 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     membership.stripe_paiement.add(paiement_stripe)
 
-    # Si c'est une adhésion à validation manuelle :
-    if membership.state == Membership.ADMIN_VALID:
-        membership.state = Membership.PAID_BY_USER
+    membership.status = Membership.ONCE
 
     if paiement_stripe.invoice_stripe:
         membership.last_stripe_invoice = paiement_stripe.invoice_stripe

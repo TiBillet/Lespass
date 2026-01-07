@@ -20,7 +20,7 @@ from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, PostalAddress, Tag, Configuration
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
-    PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod
+    PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod, SaleOrigin
 from BaseBillet.tasks import send_membership_pending_admin, send_membership_pending_user
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
@@ -279,6 +279,7 @@ class TicketCreator():
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
                 promotional_code=self.promo_code,
+                sale_origin=SaleOrigin.LESPASS,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -632,6 +633,7 @@ class MembershipValidator(serializers.Serializer):
             payment_method=PaymentMethod.STRIPE_NOFED,
             amount=amount,
             qty=1,
+            sale_origin=SaleOrigin.LESPASS,
         )
 
         # Création de l'objet paiement stripe en base de donnée
@@ -678,9 +680,8 @@ class MembershipValidator(serializers.Serializer):
         self.user = get_or_create_user(attrs['email'])
 
         # Vérififaction du max par user sur le produit :
-        # import ipdb; ipdb.set_trace()
         if self.price.product.max_per_user_reached(user=self.user):
-                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+            raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
         # Vérification du max per user
         if self.price.max_per_user:

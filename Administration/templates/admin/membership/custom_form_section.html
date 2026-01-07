@@ -9,7 +9,7 @@
     {% else %}
         <em class="text-sm text-gray-500 dark:text-gray-400">{% translate "No custom form answers for this membership." %}</em>
     {% endif %}
-    {% if instance.state == 'WA' %}
+    {% if instance.status == 'AW' %}
         {% component "unfold/components/card.html" with title=_("Validation manuelle") %}
             <div id="admin-accept-area-{{ instance.uuid }}">
                 <p class="mb-3 text-sm text-gray-600 dark:text-gray-300">{% trans "Cette adhésion est en attente de validation. Cliquez sur le bouton ci-dessous pour l'accepter et envoyer le lien de paiement à l'adhérent." %}</p>
