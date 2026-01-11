@@ -65,6 +65,7 @@ from unfold.widgets import (
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
+from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold
@@ -1902,7 +1903,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 ### VENTES ###
 
 @admin.register(LigneArticle, site=staff_admin_site)
-class LigneArticleAdmin(ModelAdmin):
+class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -1927,6 +1928,9 @@ class LigneArticleAdmin(ModelAdmin):
     # readonly_fields = fields
     search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name', 'paiement_stripe__user__email', 'membership__user__email')
     ordering = ('-datetime',)
+
+    resource_classes = [LigneArticleExportResource]
+    export_form_class = ExportForm
 
     def get_queryset(self, request):
         # Utiliser select_related pour précharger pricesold et productsold
