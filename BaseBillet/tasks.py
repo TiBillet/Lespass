@@ -295,6 +295,7 @@ def send_membership_pending_admin(membership_uuid: str):
     time.sleep(1)
 
     attempts, max_attempts, wait_time = 0, 10, 2
+    membership = None
     while attempts < max_attempts:
         try:
             membership = Membership.objects.get(uuid=membership_uuid)
@@ -340,6 +341,7 @@ def send_membership_pending_admin(membership_uuid: str):
         'table_info': {
             _('Adhérent'): f'{membership.member_name()}',
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Contribution'): f'{membership.contribution_value} - {config.currency_code}',
             _('Email'): f"{membership.user.email if membership.user else ''}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },

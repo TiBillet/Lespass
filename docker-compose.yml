@@ -117,6 +117,7 @@ volumes:
 
 # Pour test stripe :
 # stripe listen --forward-to https://fedow.tibillet.localhost/api/webhook_stripe/ --skip-verify
+# stripe listen --forward-to https://tibillet.localhost/api/webhook_stripe/ --skip-verify
 
 # poetry shell
 # django-admin makemessages -l fr && django-admin makemessages -l en

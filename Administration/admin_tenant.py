@@ -1637,7 +1637,6 @@ class MembershipChangeForm(ModelForm):
         )
 
 
-
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
@@ -1656,7 +1655,6 @@ class MembershipStatusFilter(admin.SimpleListFilter):
             ("canceled", _("Canceled")),
             ("all", _("Sans distinction")),
         ]
-
 
     def queryset(self, request, queryset):
         value = self.value()
@@ -1683,6 +1681,7 @@ class MembershipStatusFilter(admin.SimpleListFilter):
         if value == "all":
             return queryset
         return queryset
+
 
 @register_component
 class MembershipComponent(BaseComponent):
@@ -1819,7 +1818,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             .prefetch_related('option_generale', 'price__product__form_fields')
         )
 
-    @display(description=_("Email"))
+    @display(description=_("User"))
     def user_email_link(self, obj):
         if obj.user:
             url = reverse("staff_admin:AuthBillet_humanuser_change", args=[obj.user.pk])
@@ -2273,7 +2272,6 @@ class ChildActionsSummaryTable(TableSection):
         return super().render()
 
 
-
 class EventArchiveFilter(admin.SimpleListFilter):
     title = _("Archived")
     parameter_name = "archived"
@@ -2291,6 +2289,7 @@ class EventArchiveFilter(admin.SimpleListFilter):
         if value == "archived":
             return queryset.filter(archived=True)
         return queryset
+
 
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
@@ -2464,8 +2463,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         event.published = False
         event.save(update_fields=['archived', 'published'])
         return redirect(request.META["HTTP_REFERER"])
-
-
 
     @action(
         description=_("Duplicate (day+1)"),
@@ -2656,7 +2653,7 @@ class ReservationValidFilter(admin.SimpleListFilter):
         `self.value()`.
         """
         value = self.value()
-        if value == None : # valeur par défault
+        if value == None:  # valeur par défault
             return queryset.exclude(
                 status__in=[
                     Reservation.CANCELED,
@@ -3005,7 +3002,7 @@ class TicketValidFilter(admin.SimpleListFilter):
         provided in the query string and retrievable via
         `self.value()`.
         """
-        if self.value() == None :
+        if self.value() == None:
             return queryset.filter(
                 status__in=[
                     Ticket.NOT_SCANNED,

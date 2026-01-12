@@ -3,20 +3,20 @@ import calendar
 import json
 import logging
 import uuid
-from calendar import month
-from datetime import timedelta, datetime, tzinfo
+from datetime import timedelta, datetime
 from decimal import Decimal
-from time import localtime
 from uuid import uuid4
-from functools import lru_cache
 
 import pytz
 import requests
 import stripe
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from dateutil.relativedelta import relativedelta
+from django.core.cache import cache
 from django.db import connection
 from django.db import models
-from django.db.models import JSONField, SET_NULL, Sum
+from django.db.models import JSONField, SET_NULL
 # Create your models here.
 from django.db.models import Q
 from django.db.models.query import QuerySet
@@ -31,10 +31,7 @@ from django.utils.translation import gettext_lazy as _, activate
 from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context
 from rest_framework_api_key.models import APIKey, AbstractAPIKey
-from django.core.cache import cache
-
 from solo.models import SingletonModel
-
 from stdimage import StdImageField
 from stdimage.validators import MinSizeValidator
 from stripe import InvalidRequestError
@@ -44,13 +41,9 @@ from AuthBillet.models import HumanUser, RsaKey
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
-from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64, sign_utf8_string
+from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64
 from root_billet.models import RootConfiguration
 from root_billet.utils import fernet_decrypt, fernet_encrypt
-
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 logger = logging.getLogger(__name__)
 
@@ -1529,7 +1522,7 @@ class Event(models.Model):
 
     @property
     def pricesold_for_sections(self):
-        from django.db.models import Q, F, Count, Sum, Window
+        from django.db.models import F, Count, Sum, Window
         # Tickets-based rows: one row per price (using Ticket queryset with window aggregates)
         valid_statuses = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         return (
@@ -2379,9 +2372,14 @@ class Paiement_stripe(models.Model):
 
         # On vérifie le moyen de paiement. C'est peut être un SEPA
         if checkout_session.get('payment_method_types'):
+            logger.info(f"checkout_session.get('payment_method_types') : {checkout_session.get('payment_method_types')}")
             if 'sepa_debit' in checkout_session.get('payment_method_types'):
+                logger.info(f"sepa_debit detected")
+
+                # uniquement si paiement direct.
                 payment_intent_id = checkout_session.get('payment_intent')
                 if payment_intent_id:
+                    logger.info(f"payment_intent_id : {payment_intent_id}")
                     payment_intent = stripe.PaymentIntent.retrieve(
                         payment_intent_id,
                         stripe_account=self.config.get_stripe_connect_account()
@@ -2389,6 +2387,22 @@ class Paiement_stripe(models.Model):
                     if 'sepa_debit' in payment_intent.get(
                             'payment_method_options') and 'sepa_debit' in payment_intent.get('payment_method_types'):
                         self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
+                        logger.info(f"lignearticles set to PaymentMethod.STRIPE_SEPA_NOFED : {self.lignearticles}")
+
+                # Pour subscription :
+                elif checkout_session.mode == 'subscription':
+                    subscription_stripe = stripe.Subscription.retrieve(
+                        checkout_session.subscription,
+                        stripe_account=self.config.get_stripe_connect_account()
+                    )
+                    paiement_method = stripe.PaymentMethod.retrieve(
+                        subscription_stripe.default_payment_method,
+                        stripe_account=self.config.get_stripe_connect_account(),
+                    )
+                    if paiement_method.type == 'sepa_debit':
+                        self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
+
+
 
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
@@ -2415,8 +2429,10 @@ class Paiement_stripe(models.Model):
                         stripe_account=Configuration.get_solo().get_stripe_connect_account(),
                         metadata=metadata,
                     )
-
                     self.invoice_stripe = subscription.latest_invoice
+
+                    # check si sepa ?
+
 
         else:
             self.status = Paiement_stripe.CANCELED
