@@ -1637,6 +1637,7 @@ class MembershipChangeForm(ModelForm):
         )
 
 
+
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
@@ -1817,6 +1818,31 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             qs.select_related('user', 'price', 'price__product')
             .prefetch_related('option_generale', 'price__product__form_fields')
         )
+
+    @display(description=_("Email"))
+    def user_email_link(self, obj):
+        if obj.user:
+            url = reverse("staff_admin:AuthBillet_humanuser_change", args=[obj.user.pk])
+            return format_html(
+                '<a href="{}" class="font-medium text-primary-600 underline decoration-primary-500 decoration-2 underline-offset-4 hover:text-primary-800 dark:text-primary-500 dark:decoration-primary-600 dark:hover:text-primary-400">{}</a>',
+                url,
+                obj.user.email
+            )
+        return "-"
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = super().get_readonly_fields(request, obj)
+        if obj:  # On est en train de modifier
+            return list(readonly_fields) + ['user_email_link']
+        return readonly_fields
+
+    def get_fields(self, request, obj=None):
+        fields = super().get_fields(request, obj)
+        if obj:
+            # Si on est en modif, on s'assure que user_email_link est présent et au début
+            if 'user_email_link' not in fields:
+                fields = ['user_email_link'] + list(fields)
+        return fields
 
     ### FORMULAIRES
     autocomplete_fields = ['option_generale', ]
