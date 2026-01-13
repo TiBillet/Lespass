@@ -868,30 +868,7 @@ def get_or_create_price_sold(price: Price, event: Event = None,
     return pricesold
 
 
-"""
 
-def line_article_recharge(carte, qty):
-    product, created = Product.objects.get_or_create(
-        name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
-        categorie_article=Product.RECHARGE_CASHLESS,
-        img=carte.detail.img,
-    )
-
-    price, created = Price.objects.get_or_create(
-        product=product,
-        name=f"{qty}€",
-        prix=int(qty),
-    )
-
-    # noinspection PyTypeChecker
-    ligne_article_recharge = LigneArticle.objects.create(
-        pricesold=get_or_create_price_sold(price),
-        amount=dec_to_int(price.prix),
-        qty=1,
-        carte=carte,
-    )
-    return ligne_article_recharge
-"""
 
 """
 class DetailCashlessCardsValidator(serializers.ModelSerializer):

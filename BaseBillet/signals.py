@@ -406,17 +406,6 @@ def trigger_product_update(sender, instance: Product, created, **kwargs):
     trigger_product_update_tasks.delay(product_pk)
 
 
-@receiver(pre_save, sender=Price)
-def price_if_free_set_t_1(sender, instance: Price, **kwargs):
-    if instance.free_price:
-        if instance.prix:  # On met le prix a minimum à 1.
-            if instance.prix < 1:
-                instance.prix = 1
-        else:
-            instance.prix = 1
-        instance.max_per_user = 1
-
-
 @receiver(post_save, sender=Membership)
 def create_lignearticle_if_membership_created_on_admin(sender, instance: Membership, created, **kwargs):
     membership: Membership = instance
@@ -442,14 +431,4 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     # On envoi un webhook. Si deadline, ça veut dire que l'adhésion est valide
     if membership.deadline:
         webhook_membership.delay(membership.pk)
-
-
-# @receiver(post_save, sender=Ticket)
-# def create_lignearticle_if_ticket_created_on_admin(sender, instance: Ticket, created, **kwargs):
-#     ticket: Ticket = instance
-#     # Pour une nouvelle adhésion réalisée sur l'admin et non offerte, une vente est enregitrée.
-#     if created and ticket.sale_origin == SaleOrigin.ADMIN:
-#         logger.info(f"POST SAVE TICKET : ticket.sale_origin == SaleOrigin.ADMIN")
-#         logger.info(f"POST SAVE TICKET : create_lignearticle_if_ticket_created_on_admin {instance} {created}")
-#
 

@@ -1769,6 +1769,7 @@ class EventMVT(viewsets.ViewSet):
         prices = []
         product_max_per_user_reached = []
         price_max_per_user_reached = []
+        event_max_per_user_reached = False
 
         try:
             if hex8:
@@ -1800,15 +1801,19 @@ class EventMVT(viewsets.ViewSet):
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
             product_max_per_user_reached = []
             price_max_per_user_reached = []
+            event_max_per_user_reached = False
 
             if request.user.is_authenticated:
                 for product in products:
                     if product.max_per_user_reached(user=request.user, event=event):
+                        logger.info(f"product.max_per_user_reached : {product.name} {product.max_per_user_reached(user=request.user, event=event)}")
                         product_max_per_user_reached.append(product)
                 for price in prices:
                     logger.info(f"price.max_per_user_reached : {price.name} {price.max_per_user_reached(user=request.user, event=event)}")
                     if price.max_per_user_reached(user=request.user, event=event):
                         price_max_per_user_reached.append(price)
+
+                event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
 
             tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
@@ -1845,6 +1850,7 @@ class EventMVT(viewsets.ViewSet):
         template_context['price_max_per_user_reached'] = price_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+        template_context['event_max_per_user_reached'] = event_max_per_user_reached
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS

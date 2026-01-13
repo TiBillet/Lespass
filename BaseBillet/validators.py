@@ -175,11 +175,12 @@ class LoginEmailValidator(serializers.Serializer):
 
 class TicketCreator():
 
-    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None):
+    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
         self.promo_code = promo_code
+        self.custom_amounts = custom_amounts or {}
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -270,7 +271,8 @@ class TicketCreator():
             pricesold: PriceSold = get_or_create_price_sold(
                 price_generique,
                 event=event,
-                promo_code=self.promo_code)
+                promo_code=self.promo_code,
+                custom_amount=self.custom_amounts.get(price_generique.uuid))
 
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(
@@ -353,7 +355,7 @@ class ReservationValidator(serializers.Serializer):
         event = self.event
         products_dict = {}
         self.products = []  # Pour checker si un formulaire forbricks est présent
-        self.free_price = False  # Pour vérification plus bas que le prix libre est bien seul
+        self.custom_amounts = {} # Stockage des montants personnalisés par prix
 
         for product in event.products.all():
             for price in product.prices.all():
@@ -374,8 +376,21 @@ class ReservationValidator(serializers.Serializer):
                     if qty <= 0:  # Skip zero or negative quantities
                         continue
 
-                    if price.free_price:  # Pour vérification plus bas que le prix libre est bien seul
-                        self.free_price = True
+                    if price.free_price:
+                        # Récupération du montant personnalisé si prix libre
+                        custom_amount_key = f"custom_amount_{price.uuid}"
+                        custom_amount_val = self.initial_data.get(custom_amount_key)
+                        if custom_amount_val:
+                            try:
+                                if isinstance(custom_amount_val, list):
+                                    custom_amount_val = custom_amount_val[-1]
+                                self.custom_amounts[price.uuid] = Decimal(str(custom_amount_val).replace(',', '.'))
+                            except Exception:
+                                raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
+                        else:
+                            # Si prix libre et quantité > 0, on pourrait lever une erreur ici ou laisser TicketCreator gérer
+                            pass
+
                     self.products.append(product)
                     if products_dict.get(product):
                         # On ajoute le prix a la liste des articles choisi
@@ -486,6 +501,9 @@ class ReservationValidator(serializers.Serializer):
                 )
             logger.info(f"Promotional code {promo_code.name} validated for product {promo_code.product.name}")
 
+        if event.max_per_user_reached_on_this_event(user):
+            raise serializers.ValidationError(_(f'You have reached the maximum number of tickets for this event.'))
+
         for product, price_dict in products_dict.items():
             # Si le maximum par user produit est déja atteint :
             if product.max_per_user_reached(user, event=event):
@@ -527,11 +545,6 @@ class ReservationValidator(serializers.Serializer):
             if total_ticket_qty > event.max_per_user:
                 raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
-        # Pour vérification plus bas que le prix libre est bien seul
-        if hasattr(self, 'free_price'):
-            if self.free_price:
-                if len(self.products) > 1:
-                    raise serializers.ValidationError(_(f'A free price must be selected alone.'))
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
@@ -581,6 +594,7 @@ class ReservationValidator(serializers.Serializer):
             reservation=reservation,
             products_dict=products_dict,
             promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
+            custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {}
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :

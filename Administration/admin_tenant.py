@@ -1190,12 +1190,10 @@ class PriceAdmin(ModelAdmin):
     form = PriceChangeForm
 
     conditional_fields = {
-        # un seul prix libre par personne possible pour éviter d'en prendre deux ( stripe plante sinon ) mais ça impacte aussi le total de prix libre possible.
-        # Todo : Passer tout les prix libre en input direct et non pas en choix coté stripe
-        "max_per_user": "free_price == false",
         "iteration": "recurring_payment == true",
         "commitment": "iteration > 0",
     }
+
 
     fieldsets = (
         (_('General'), {

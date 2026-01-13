@@ -885,12 +885,13 @@ class Product(models.Model):
         # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
         elif self.categorie_article in [self.BILLET, self.FREERES] and event:
             # Compte direct des tickets liés aux réservations de l'utilisateur
-            return Ticket.objects.filter(
+            count = (Ticket.objects.filter(
                 reservation__user_commande=user,
                 reservation__event=event,
                 pricesold__price__product__pk=self.pk,
                 status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
-            ).count() >= self.max_per_user
+            ).count())
+            return count >= self.max_per_user
 
         return False
 
@@ -1206,11 +1207,10 @@ class Event(models.Model):
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
 
-    max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_(
+    max_per_user = models.PositiveSmallIntegerField(verbose_name=_(
                                                         "Maximum bookings per user"),
-                                                    help_text=_("The same email can be used for multiple tickets.")
-                                                    )
+                                                    help_text=_("The same email can be used for multiple tickets."),
+                                                    null=True, blank=True)
 
     postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
@@ -1501,9 +1501,15 @@ class Event(models.Model):
         else:
             return False
 
-    # def check_serveur_cashless(self):
-    #     config = Configuration.get_solo()
-    #     return config.check_serveur_cashless()
+    def max_per_user_reached_on_this_event(self, user):
+        if not self.max_per_user:
+            return False  # Aucune limite
+
+        return Ticket.objects.filter(
+            reservation__user_commande=user,
+            reservation__event__pk=self.pk,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
+        ).count() >= self.max_per_user
 
     def next_datetime(self):
         # Création de la liste des prochaines récurences
@@ -1827,19 +1833,6 @@ class PriceSold(models.Model):
                 data_stripe["recurring"]["interval"] = "month"
             elif self.price.subscription_type == Price.YEAR:
                 data_stripe["recurring"]["interval"] = "year"
-
-        """ Les prix libres sont maintenant géré par le front
-        # Si c'est récurrent et free price, le if précédent s'applique et celui non
-        # Impossible de faire des prix libre et recurrent sur Stripe
-        elif self.price.free_price:  
-            data_stripe.pop('unit_amount')
-            data_stripe['billing_scheme'] = "per_unit"
-            data_stripe['custom_unit_amount'] = {
-                "enabled": "true",
-                "minimum": f"{int(Decimal(self.prix) * 100)}",
-                # "preset": f"{int(Decimal(self.prix) * 100)}",
-            }
-        """
 
         price = stripe.Price.create(**data_stripe)
 
@@ -2184,13 +2177,29 @@ class Ticket(models.Model):
         last_name = f"{self.last_name.upper()}" if self.last_name else ""
 
         config = Configuration.get_solo()
-        return f"{config.organisation.upper()} " \
-               f"{self.reservation.event.name} " \
-               f"{self.reservation.event.datetime.astimezone().strftime('%d/%m/%Y')} " \
-               f"{first_name}" \
-               f"{last_name}" \
-               f"{self.status}-{self.numero_uuid()}-{self.seat}" \
-               f".pdf"
+        organisation = config.organisation.upper()
+        event_name = self.reservation.event.name
+        event_date = self.reservation.event.datetime.astimezone().strftime('%d-%m-%Y')
+        status = self.status
+        uuid_short = self.numero_uuid()
+        seat = self.seat if self.seat else ""
+
+        filename = f"{organisation} {event_name} {event_date} {first_name} {last_name} {status}-{uuid_short}-{seat}.pdf"
+
+        # Remove non-ascii characters and other problematic characters for filenames in email headers
+        import unicodedata
+        import re
+        # Normalize to decomposed form to separate accents from letters
+        filename = unicodedata.normalize('NFKD', filename)
+        # Keep only ascii, replace spaces with underscores or just keep them if they are safe
+        # But safest is to remove everything non-ascii and non-alphanumeric (keeping spaces and dots/dashes)
+        filename = filename.encode('ascii', 'ignore').decode('ascii')
+        # Replace problematic characters for headers: ; , ? : @ = & /
+        filename = re.sub(r'[;,?:@=&/]', '', filename)
+        # Replace multiple spaces with one
+        filename = re.sub(r'\s+', ' ', filename).strip()
+
+        return filename
 
     def pdf_url(self):
         domain = connection.tenant.domains.all().first().domain
@@ -2550,11 +2559,6 @@ class LigneArticle(models.Model):
         super().save(*args, **kwargs)
 
     def total(self) -> int:
-        # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
-        if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price:
-            if self.paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID]:
-                logger.info("Total == 0. free price ? go -> update_amount()")
-                self.update_amount()
         return int(self.amount * self.qty)
 
     def total_decimal(self):
@@ -2564,13 +2568,6 @@ class LigneArticle(models.Model):
         paiement_stripe = self.paiement_stripe
         checkout_session = paiement_stripe.get_checkout_session()
         return checkout_session
-
-    def update_amount(self):
-        '''Dans le cas d'un prix libre, la somme payée n'est pas connu d'avance'''
-        checkout_session = self.get_stripe_checkout_session()
-        self.amount = checkout_session['amount_total']
-        self.save()
-        return self.amount
 
     def amount_decimal(self):
         return dround(self.amount)

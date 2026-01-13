@@ -15,25 +15,6 @@ from root_billet.models import RootConfiguration
 logger = logging.getLogger(__name__)
 
 
-def update_sale_if_free_price(ligne_article):
-    price: Price = ligne_article.pricesold.price
-    paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
-
-    if price.free_price and paiement_stripe : # pas de paiement stripe si c'est un ticket généré par l'admin
-        logger.info("    START update_sale_if_free_price : mise à jour de la valeur ligne_article.amount")
-        # Le montant a été entré dans stripe, on ne l'a pas entré à la création
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # recherche du checkout
-        checkout_session = stripe.checkout.Session.retrieve(
-            paiement_stripe.checkout_session_id_stripe,
-            stripe_account=Configuration.get_solo().get_stripe_connect_account()
-        )
-        # Mise à jour du montant
-        ligne_article.amount = checkout_session['amount_total']
-        logger.info(f"    END update_sale_if_free_price. ligne_article.amount = {checkout_session['amount_total']}")
-
-    return ligne_article
-
 def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
@@ -44,21 +25,6 @@ def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
-
-    """ les prix libres sont gérés par le front maintenant 
-    if price.free_price and ligne_article.payment_method != PaymentMethod.STRIPE_RECURENT : # pas de paiement récurrent.
-        # Le montant a été entré dans stripe, on ne l'a pas entré à la création
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # recherche du checkout
-        checkout_session = stripe.checkout.Session.retrieve(
-            paiement_stripe.checkout_session_id_stripe,
-            stripe_account=Configuration.get_solo().get_stripe_connect_account()
-        )
-        # Mise à jour du montant
-        ligne_article.amount = checkout_session['amount_total']
-        contribution = dround(checkout_session['amount_total'])
-        membership.contribution_value = contribution
-    """
 
     if not membership.first_contribution:
         membership.first_contribution = timezone.now()
@@ -139,13 +105,6 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         if self.categorie == Product.NONE:
             self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
-        # self.data_for_cashless = {}
-        # if ligne_article.paiement_stripe:
-        #     self.data_for_cashless = {
-        #         'uuid_commande': ligne_article.paiement_stripe.uuid,
-        #         'email': ligne_article.paiement_stripe.user.email
-        #     }
-
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
             trigger_name = f"_{self.categorie.upper()}"
@@ -169,9 +128,6 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
     # Category BILLET
     def trigger_B(self):
         # Envoi de la vente à LaBoutik
-        logger.info(f"    START TRIGGER_B BILLET PAID -> update_sale_if_free_price?")
-        self.ligne_article = update_sale_if_free_price(self.ligne_article)
-
         logger.info(f"        TRIGGER_B BILLET PAID -> envoi à LaBoutik?")
         send_sale_to_laboutik.delay(self.ligne_article.pk)
 

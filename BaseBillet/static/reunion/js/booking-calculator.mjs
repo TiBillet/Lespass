@@ -4,34 +4,49 @@
  * @param {string} price
  * @returns {integer}
  */
-const parsePrice100 = price =>
-    price
-        .replace(' ', '')
-        .split(',')
-        .reduce((acc, x) => acc > 0 ? acc + Number(x) : Number(x) * 100, 0)
+const parsePrice100 = price => {
+    if (typeof price === 'string') {
+        return price
+            .replace(' ', '')
+            .split(',')
+            .reduce((acc, x) => acc > 0 ? acc + Number(x) : Number(x) * 100, 0)
+    }
+    return Number(price) * 100
+}
 
 /**
  * 
- * @param {Array<{amount: HTMLInputElement, price: HTMLElement}>} orders 
+ * @param {Array<{amount: HTMLInputElement, price: HTMLElement, customPrice: HTMLInputElement}>} orders 
  * @param {HTMLElement} totalAmount
  * @param {HTMLElement} totalPrice
  */
 const updateTotal = (orders, totalAmount, totalPrice) => _ => {
     let ta = 0
     let tp = 0
-    const openOrders = orders.filter(({ amount }) =>
-        amount.closest('details').open
-    )
 
-    if (openOrders.some(({ price }) => Number(price === null )))
-        totalPrice.closest('.js-total-has-price').classList.add('d-none')
-    else
-        totalPrice.closest('.js-total-has-price').classList.remove('d-none')
-
-    openOrders
-        .forEach(({ amount, price }) => {
+    orders
+        .forEach(({ amount, price, customPrice }) => {
             let a = Number(amount.value)
-            let p = price ? parsePrice100(price.textContent) : 0
+            
+            // Gestion de l'affichage du container de prix libre
+            const customContainer = customPrice?.closest('.custom-amount-container')
+            if (customContainer) {
+                if (a > 0) {
+                    customContainer.style.display = 'block'
+                    customPrice.required = true
+                } else {
+                    customContainer.style.display = 'none'
+                    customPrice.required = false
+                    customPrice.value = ''
+                }
+            }
+
+            let p = 0
+            if (customPrice && a > 0) {
+                p = parsePrice100(customPrice.value || 0)
+            } else if (price) {
+                p = parsePrice100(price.textContent)
+            }
 
             ta += a
             tp += a * p
@@ -43,33 +58,24 @@ const updateTotal = (orders, totalAmount, totalPrice) => _ => {
         totalPrice.textContent = (tp / 100).toLocaleString('fr-FR')
 }
 
-const clearGroup = group => {
-    group.querySelectorAll('.js-order-amount').forEach(amount => {
-        amount.value = ''
-    })
-} 
-
 export const init = () => {
     const totalAmount = document.querySelector('.js-total-amount')
     const totalPrice = document.querySelector('.js-total-price')
-    const priceGroups = document.querySelectorAll('.js-price-group')
     const orders = [...document.querySelectorAll('.js-order')]
         .map(el => ({
             price: el.querySelector('.js-order-price'),
-            amount: el.querySelector('.js-order-amount')
+            amount: el.querySelector('.js-order-amount'),
+            customPrice: el.querySelector('.js-order-custom-price')
         }))
         .filter(({ amount }) => amount !== null )
     
-    orders.forEach(({ amount }) => {
-        amount.addEventListener('bs-counter:update', updateTotal(orders, totalAmount, totalPrice))
+    orders.forEach(({ amount, customPrice }) => {
+        const update = updateTotal(orders, totalAmount, totalPrice)
+        amount.addEventListener('bs-counter:update', update)
+        if (customPrice) {
+            customPrice.addEventListener('input', update)
+        }
     })
-    
-    priceGroups.forEach(group => group.addEventListener('toggle', _ => {
-        if (! group.open)
-            clearGroup(group)
-        
-        updateTotal(orders, totalAmount, totalPrice)()
-    }))
 
     updateTotal(orders, totalAmount, totalPrice)()
 }
