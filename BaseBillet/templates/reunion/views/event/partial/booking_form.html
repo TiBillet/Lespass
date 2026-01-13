@@ -103,11 +103,7 @@
                                                 id="amount-{{ price.uuid }}"
                                                 name="{{ price.uuid }}"
                                                 step="1" min="0"
-                                                max="{% if price.max_per_user > event.max_per_user %}
-                                                            {{ event.max_per_user }}
-                                                       {% else %}
-                                                            {{ price.max_per_user }}
-                                                       {% endif %}"
+                                                max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
                                                 class="flex-grow-1 js-order-amount">
                                         </bs-counter>
                                         {% trans 'ticket(s)' %}
@@ -120,11 +116,7 @@
                                             id="amount-{{ price.uuid }}"
                                             name="{{ price.uuid }}"
                                             step="1" min="0"
-                                            max="{% if price.max_per_user > event.max_per_user %}
-                                                        {{ event.max_per_user }}
-                                                    {% else %}
-                                                        {{ price.max_per_user }}
-                                                    {% endif %}"
+                                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
                                             class="flex-grow-1 js-order-amount"
                                     ></bs-counter>
                                     {% trans 'ticket(s)' %}
