@@ -7,7 +7,7 @@
             <a href="{{ original.full_url }}" onclick="copyLinkToClipboard(event)" class="prevent-link bg-primary-600 flex flex-row font-medium gap-2 items-center h-[38px] justify-center px-3 py-2 rounded-default text-white lg:w-auto">
                 <span class="material-symbols-outlined text-white">content_copy</span> {{ _("Copy the public url of the event") }}
             </a>
-            <div id="tooltip-default" class="transition px-3 py-2 text-white duration-300 bg-dark shadow-xs opacity-0">{{ _("Copied !") }}</div>
+            <div id="tooltip-default" class="transition px-3 py-2 text-white duration-300 bg-dark opacity-0">{{ _("Copied !") }}</div>
         </div>
     {% endif %}
 
@@ -28,4 +28,12 @@
             },1000)
         }
     </script>
+    <style>
+        html.dark #tooltip-default{
+            color:white;
+        }
+        #tooltip-default{
+            color:black;
+        }
+    </style>
 {% endblock %}
