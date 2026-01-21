@@ -23,6 +23,7 @@ def pytest_addoption(parser):
     )
 
 
+
 @pytest.fixture(autouse=True, scope="session")
 def _inject_cli_env(request):
     """Autouse session fixture to export CLI options into environment vars.
@@ -31,6 +32,8 @@ def _inject_cli_env(request):
     this allows passing them via pytest CLI flags without editing tests.
     """
     api_key = request.config.getoption("--api-key")
+    print(f"API key: {api_key}")
+
     if api_key:
         os.environ["API_KEY"] = api_key
     base = request.config.getoption("--api-base-url")

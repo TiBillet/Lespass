@@ -420,23 +420,29 @@ class EventCreateSerializer(serializers.Serializer):
             slug_value = f"{base_slug}{suffix}"
 
         # Create Event
-        event = Event.objects.create(
-            name=name,
-            slug=slug_value,
-            datetime=start,
-            end_datetime=end,
-            full_url=full_url,
-            is_external=is_external,
-            jauge_max=max_cap if max_cap is not None else Event.jauge_max.field.default,
-            short_description=short_desc,
-            long_description=long_desc,
-            published=published,
-            private=private,
-            max_per_user=max_per_user if max_per_user is not None else Event.max_per_user.field.default,
-            refund_deadline=refund_days if refund_days is not None else Event.refund_deadline.field.default,
-            categorie=cat_code,
-            parent=parent_obj,
-        )
+        create_kwargs = {
+            "name": name,
+            "slug": slug_value,
+            "datetime": start,
+            "end_datetime": end,
+            "full_url": full_url,
+            "is_external": is_external,
+            "short_description": short_desc,
+            "long_description": long_desc,
+            "published": published,
+            "archived": False,
+            "private": private,
+            "categorie": cat_code,
+            "parent": parent_obj,
+        }
+        if max_cap is not None:
+            create_kwargs["jauge_max"] = max_cap
+        if max_per_user is not None:
+            create_kwargs["max_per_user"] = max_per_user
+        if refund_days is not None:
+            create_kwargs["refund_deadline"] = refund_days
+
+        event = Event.objects.create(**create_kwargs)
 
         # keywords → tags
         if keywords:

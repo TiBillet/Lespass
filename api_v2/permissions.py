@@ -2,6 +2,8 @@ from rest_framework.permissions import BasePermission
 from rest_framework.viewsets import ViewSet
 
 from ApiBillet.permissions import get_apikey_valid
+import logging
+logger = logging.getLogger(__name__)
 
 
 class SemanticApiKeyPermission(BasePermission):
@@ -16,6 +18,7 @@ class SemanticApiKeyPermission(BasePermission):
 
     def has_permission(self, request, view: ViewSet) -> bool:
         api_key = get_apikey_valid(view)
+
         if not api_key:
             return False
         # Attach the key user for later usage

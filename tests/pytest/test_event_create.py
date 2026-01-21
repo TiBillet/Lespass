@@ -25,6 +25,8 @@ import requests
 def test_event_create_and_retrieve(request):
     base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
     api_key = os.getenv("API_KEY")
+    print(api_key)
+
     if not api_key:
         raise Exception("API key not set")
 
