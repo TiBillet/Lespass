@@ -7,12 +7,13 @@ import requests
 import stripe
 from PIL import Image
 from django.db import connection
+from django.db.transaction import atomic
 from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode, SaleOrigin
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.utils import dround
@@ -239,175 +240,6 @@ class ConfigurationSerializer(serializers.ModelSerializer):
             "categorie",
         ]
         read_only_fields = fields
-
-    # def to_representation(self, instance):
-    #     representation = super().to_representation(instance)
-    #     representation['domain'] = connection.tenant.get_primary_domain().domain
-    #     representation['categorie'] = connection.tenant.categorie
-    #     return representation
-
-
-# class WaitingConfigSerializer(serializers.Serializer):
-#     email = serializers.EmailField()
-#     name = serializers.CharField(max_length=50)
-#     short_description = serializers.CharField(max_length=250)
-#
-#     adress = serializers.CharField(max_length=250)
-#     city = serializers.CharField(max_length=250)
-#     # img
-#     # logo
-#
-#     phone = serializers.CharField(max_length=20, required=True)
-#     postal_code = serializers.IntegerField(required=True)
-#
-#     contribution_value = serializers.FloatField()
-
-
-
-
-
-# class CheckMailSerializer(serializers.Serializer):
-#     email = serializers.EmailField()
-#
-#     def validate_email(self, value):
-#         self.user = get_or_create_user(value, send_mail=False)
-#         return value
-
-
-"""
-Ex Methode
-class WaitingConfigSerializer(serializers.ModelSerializer):
-    stripe = serializers.BooleanField()
-
-    class Meta:
-        model = WaitingConfiguration
-        fields = [
-            "organisation",
-            "short_description",
-            "long_description",
-            # "stripe_connect_account",
-            "img",
-            "logo",
-            "email",
-            "stripe",
-        ]
-
-    def create(self, validated_data):
-        stripe = validated_data.pop('stripe', None)
-        waiting_config = WaitingConfiguration.objects.create(**validated_data)
-
-        # Pour le cas ou les images sont des url, on a créé nous même les binaires.
-        if getattr(self, 'img_img', None):
-            waiting_config.img.save(self.img_name, self.img_img.fp)
-        if getattr(self, 'logo_img', None):
-            waiting_config.logo.save(self.logo_name, self.logo_img.fp)
-
-        return waiting_config
-
-    def validate_stripe(self, value):
-        if value:
-            self.stripe_onboard = create_account_link_for_onboard()
-        return value
-
-    def validate_organisation(self, value):
-        # Le slug est-il disponible ?
-        slug = slugify(value)
-        if Client.objects.filter(schema_name=slug).exists():
-            logger.warning(f"{slug} exist : Conflict")
-            raise serializers.ValidationError({f"{slug} existe déja : Conflit de nom"})
-
-        if WaitingConfiguration.objects.filter(slug=slug).exists():
-            logger.warning(f"{slug} exist : Conflict")
-            raise serializers.ValidationError({f"{slug} existe déja : Conflit de nom"})
-
-        return value
-
-    def validate_email(self, value):
-        self.user = get_or_create_user(value, send_mail=True)
-        return value
-
-    def validate_stripe_connect_account(self, value):
-        rootConf = RootConfiguration.get_solo()
-        stripe.api_key = rootConf.get_stripe_api()
-
-        try:
-            info_stripe = stripe.Account.retrieve(value)
-            details_submitted = info_stripe.details_submitted
-
-            if not details_submitted:
-
-                meta = Client.objects.filter(categorie=Client.META)[0]
-                meta_url = meta.get_primary_domain().domain
-
-                try:
-                    account_link = stripe.AccountLink.create(
-                        account=value,
-                        refresh_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
-                        return_url=f"https://{meta_url}/api/onboard_stripe_return/{value}",
-                        type="account_onboarding",
-                    )
-
-                    url_onboard = account_link.get('url')
-                    raise serializers.ValidationError(
-                        _(f'{url_onboard}'))
-                except:
-                    raise serializers.ValidationError(
-                        _(f'stripe account valid but no detail submitted'))
-
-            # un seul tenant par compte stripe, sauf en test
-            if not rootConf.stripe_mode_test:
-                for tenant in Client.objects.all().exclude(categorie__in=[Client.META, Client.ROOT]):
-                    with tenant_context(tenant):
-                        config = Configuration.get_solo()
-                        if config.stripe_connect_account == value:
-                            raise serializers.ValidationError(
-                                _(f'Stripe account already connected to one Tenant. Please send mail to contact@tibillet.re to upgrade your plan.'))
-
-            if not info_stripe.email:
-                raise serializers.ValidationError(
-                    _(f'Please set email in your stripe account'))
-            if not info_stripe.business_profile.support_phone:
-                raise serializers.ValidationError(
-                    _(f'Please set phone number in your stripe account'))
-            if not info_stripe.business_profile.url:
-                raise serializers.ValidationError(
-                    _(f'Please set website in your stripe account'))
-
-            self.info_stripe = info_stripe
-
-            return value
-
-        except Exception as e:
-            raise serializers.ValidationError(
-                _(f'stripe account not valid : {e}'))
-
-    def validate(self, attrs):
-        logger.info(f"validate : {attrs}")
-
-        # if not attrs.get('stripe_connect_account') or not getattr(self, 'info_stripe', None):
-        #     raise serializers.ValidationError(
-        #         _(f'stripe account not send nor valid'))
-
-
-        # On cherche la source de l'image principale :
-        img_url = self.initial_data.get('img_url')
-        if not attrs.get('img') and img_url:
-            self.img_name, self.img_img = get_img_from_url(img_url)
-        if not attrs.get('img') and not img_url:
-            raise serializers.ValidationError(
-                _(f'img doit contenir un fichier, ou img_url doit contenir une url valide'))
-
-
-        # On cherche la source de l'image du logo :
-        logo_url = self.initial_data.get('logo_url')
-        if not attrs.get('logo') and logo_url:
-            self.logo_name, self.logo_img = get_img_from_url(logo_url)
-        if not attrs.get('logo') and not logo_url:
-            raise serializers.ValidationError(
-                _(f'img doit contenir un fichier, ou logo_url doit contenir une url valide'))
-
-        return super().validate(attrs)
-"""
 
 
 class ArtistEventCreateSerializer(serializers.Serializer):
@@ -987,9 +819,10 @@ def create_ticket(pricesold, customer, reservation):
 
     return ticket
 
-
+@atomic
 def get_or_create_price_sold(price: Price, event: Event = None,
-                             promo_code:PromotionalCode = None, custom_amount: Decimal = None,):
+                             promo_code:PromotionalCode = None,
+                             custom_amount: Decimal = None,):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -998,59 +831,44 @@ def get_or_create_price_sold(price: Price, event: Event = None,
     On lie le prix générique à l'event
     pour générer la clé et afficher le bon nom sur stripe
     """
-
-    productsold, created = ProductSold.objects.get_or_create(
-        event=event,
-        product=price.product
-    )
-
-    if created:
-        logger.info(f"get_or_create_price_sold -> Demande de productsold {productsold.nickname()} created : {created}")
-        productsold.get_id_product_stripe()
-
     prix = price.prix
     if custom_amount:
         prix = dround(custom_amount)
     if promo_code:
         prix = dround(prix - (prix * promo_code.discount_rate / 100))
 
-    pricesold, created = PriceSold.objects.get_or_create(
-        productsold=productsold,
-        prix=prix,
-        price=price,
-    )
+    try :
+        pricesold = PriceSold.objects.get(
+            productsold__product=price.product,
+            productsold__event=event,
+            prix=prix, price=price)
+    except PriceSold.MultipleObjectsReturned:
+        pricesold = PriceSold.objects.filter(
+            productsold__product=price.product,
+            productsold__event=event,
+            prix=prix, price=price).first()
+    except PriceSold.DoesNotExist:
+        try :
+            productsold = ProductSold.objects.get(product=price.product, event=event)
+        except ProductSold.DoesNotExist:
+            productsold = ProductSold.objects.create(
+                event=event,
+                product=price.product
+            )
+        pricesold = PriceSold.objects.create(
+            productsold=productsold,
+            prix=prix,
+            price=price,
+        )
 
-    if created:
-        logger.info(f"pricesold {pricesold.price.name} created : {created}")
+    if not pricesold.id_price_stripe and price.product.categorie_article not in [Product.FREERES, Product.BADGE]:
         pricesold.get_id_price_stripe()
 
+    logger.info(f"GET_OR_CREATE_PRICESOLD {price.product.categorie_article} - prix : {pricesold.prix}, id_price_stripe : {pricesold.id_price_stripe}")
     return pricesold
 
 
-"""
 
-def line_article_recharge(carte, qty):
-    product, created = Product.objects.get_or_create(
-        name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
-        categorie_article=Product.RECHARGE_CASHLESS,
-        img=carte.detail.img,
-    )
-
-    price, created = Price.objects.get_or_create(
-        product=product,
-        name=f"{qty}€",
-        prix=int(qty),
-    )
-
-    # noinspection PyTypeChecker
-    ligne_article_recharge = LigneArticle.objects.create(
-        pricesold=get_or_create_price_sold(price),
-        amount=dec_to_int(price.prix),
-        qty=1,
-        carte=carte,
-    )
-    return ligne_article_recharge
-"""
 
 """
 class DetailCashlessCardsValidator(serializers.ModelSerializer):
@@ -1342,6 +1160,7 @@ class ApiReservationValidator(serializers.Serializer):
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
+                sale_origin=SaleOrigin.API,
                 # pas d'objet reservation ?
                 qty=qty,
             )

@@ -2,64 +2,73 @@
 {% load tibitags i18n %}
 
 {% block title %}{% translate 'Local network' %}{% endblock %}
-{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} -
+    {% translate 'Bienvenue sur TiBillet' %}{% endblock %}
 {% block og_title %}{{ config.organisation }}{% endblock %}
-{% block og_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+{% block og_description %}{{ config.short_description|striptags|default:config.organisation }} -
+    {% translate 'Bienvenue sur TiBillet' %}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 {% block twitter_title %}{{ config.organisation }}{% endblock %}
-{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Welcome to our platform' %}{% endblock %}
+{% block twitter_description %}{{ config.short_description|striptags|default:config.organisation }} -
+    {% translate 'Bienvenue sur TiBillet' %}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}
-<main class="container-lg py-5">
-    <h1>{% translate 'Local network members' %}</h1>
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
-        {% for place in federated_places %}
-        <div class="col">
-            <article class="card h-100">
-                {% include 'reunion/partials/picture.html' with img=event.img alt=event.name class='card-img-top' %}
-                <div class="card-body">
-                    <h3 class="card-title">{{ place.organisation }}</h3>
-                    <p class="card-text">
-                        {{ place.short_description }}
-                    </p>
+    <main class="container-lg py-5">
+        <h1>{% translate 'Network members' %}</h1>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
+            {% for place in federated_places %}
+                <div class="col">
+                    <article class="card h-100">
+                        {% if place.img %}
+                            {% include 'reunion/partials/picture_url_string.html' with img_url=place.img alt=place.name class='card-img-top' %}
+                        {% endif %}
+                        <div class="card-body">
+                            <h3 class="card-title">{{ place.organisation }}</h3>
+                            {% if place.short_description %}
+                                <p class="card-text">
+                                    {{ place.short_description }}
+                                </p>
+                            {% endif %}
+                        </div>
+                        <div class="card-footer p-0">
+                            {% if place.assets %}
+                                <table class="table mb-0">
+                                    <tbody>
+                                    <tr>
+                                        <th scope="row">{% trans "Accepts" %}</th>
+                                        <td>
+                                            {% for asset in place.assets %}
+                                                <span class="badge text-bg-info">
+                                                    <i class="bi bi-cash"></i>
+                                                    {{ asset.name }}
+                                                </span>
+                                            {% endfor %}
+                                            <!--
+																						<span class="badge text-bg-info">
+																								<i class="bi bi-hourglass"></i>
+																								Heure Lumière
+																						</span>
+																						<span class="badge text-bg-warning">
+																								<i class="bi bi-person-badge"></i>
+																								Adhésion Chantefrein
+																						</span> -->
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            {% endif %}
+                            {% if place.url %}
+                                <div class="p-3">
+                                    <a href="{{ place.url }}" target="_blank" class="btn btn-primary d-block my-3">
+                                        Visitez {{ place.organisation }}
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </article>
                 </div>
-                <div class="card-footer p-0">
-                    <table class="table mb-0">
-                        <tbody>
-                            <tr>
-                                <th scope="row">{% trans "Accepts" %}</th>
-                                <td>
-                                    {% for asset in place.assets %}
-                                    <span class="badge text-bg-info">
-                                        <i class="bi bi-cash"></i>
-                                        {{ asset }}
-                                    </span>
-                                    {% endfor %}
-                                    <!-- 
-                                    <span class="badge text-bg-info">
-                                        <i class="bi bi-hourglass"></i>
-                                        Heure Lumière
-                                    </span>
-                                    <span class="badge text-bg-warning">
-                                        <i class="bi bi-person-badge"></i>
-                                        Adhésion Chantefrein
-                                    </span> -->
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    {% if place.url %}
-                    <div class="p-3">
-                        <a href="{{ place.url }}" target="_blank" class="btn btn-primary d-block my-3">
-                            Lèspass {{ place.organisation }}
-                        </a>
-                    </div>
-                    {% endif %}
-                </div>
-            </article>
+            {% endfor %}
         </div>
-        {%  endfor %}
-    </div>
-</main>
+    </main>
 {% endblock main %}

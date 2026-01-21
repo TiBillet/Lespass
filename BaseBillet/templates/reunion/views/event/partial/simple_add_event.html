@@ -1,0 +1,159 @@
+{% load i18n %}
+
+{# Formulaire Offcanvas d'ajout rapide d'évènement (admin uniquement) #}
+{# Objectif FALC: créer vite un évènement simple (gratuit ou sans billetterie). #}
+{# Utilise HTMX pour éviter de recharger toute la page. #}
+
+{% if form_errors %}
+  <div class="alert alert-danger" role="alert">
+    <ul class="mb-0">
+      {% for err in form_errors %}
+        <li>{{ err }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<div class="mb-3">
+  <p class="lead mb-1">{% translate "Ajouter un évènement simple" %}</p>
+  <ul class="small text-muted mb-2">
+    <li>{% translate "Pour des évènements sans réservation ou à réservation gratuite." %}</li>
+    <li>{% translate "Pour créer un évènement avec billetterie (tickets payants, quotas, etc.), merci d'aller dans l'administration." %}</li>
+  </ul>
+  <p class="small text-muted mb-0">
+    <span class="text-danger" aria-hidden="true">*</span>
+    <span class="visually-hidden">{% translate 'Champ obligatoire' %}</span>
+    {% translate "signale un champ obligatoire." %}
+  </p>
+  
+</div>
+
+<form
+  hx-post="/event/simple_create_event/"
+  hx-encoding="multipart/form-data"
+  hx-target="#offcanvas-event-admin"
+  hx-swap="innerHTML"
+  method="post"
+  enctype="multipart/form-data"
+>
+  {% csrf_token %}
+
+  {# Adresse en premier (demande) #}
+  <div class="mt-1">
+    <label for="postal_address" class="form-label d-flex align-items-center gap-2">
+      <span>{% translate 'Adresse' %}</span>
+    </label>
+    <div class="d-flex gap-2">
+      <select id="postal_address" name="postal_address" class="form-select flex-grow-1">
+        <option value="">{% translate "Utiliser l'adresse par défaut" %}</option>
+        {% for a in addresses %}
+          <option value="{{ a.pk }}"
+            {% if prefill.postal_address %}
+              {% if prefill.postal_address|stringformat:"s" == a.pk|stringformat:"s" %}selected{% endif %}
+            {% else %}
+              {% if default_address and default_address.pk == a.pk %}selected{% endif %}
+            {% endif %}>
+            {{ a.name|default:a.address_locality }}{% if a.postal_code %} ({{ a.postal_code }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <button type="button"
+              class="btn btn-outline-secondary"
+              title="{% translate 'Créer un nouveau lieu' %}"
+              aria-label="{% translate 'Créer un nouveau lieu' %}"
+              hx-get="/event/address_add_form/"
+              hx-target="#offcanvas-event-admin"
+              hx-swap="innerHTML">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i>
+      </button>
+    </div>
+    <div class="form-text">{% translate "Par défaut: l'adresse de la configuration du lieu." %}</div>
+  </div>
+
+  <div class="mt-3">
+    <label for="name" class="form-label">
+      {% translate "Nom de l'évènement" %}
+      <span class="text-danger" aria-hidden="true">*</span>
+      <span class="visually-hidden">{% translate 'Champ obligatoire' %}</span>
+    </label>
+    <input type="text" class="form-control" id="name" name="name" required
+           value="{{ prefill.name|default:'' }}"
+           placeholder="{% translate 'Ex: Réunion mensuelle' %}">
+  </div>
+
+  <div class="row g-3 mt-1">
+    <div class="col-md-6">
+      <label for="datetime_start" class="form-label">
+        {% translate 'Date et heure de début' %}
+        <span class="text-danger" aria-hidden="true">*</span>
+        <span class="visually-hidden">{% translate 'Champ obligatoire' %}</span>
+      </label>
+      <input type="datetime-local" class="form-control" id="datetime_start" name="datetime_start"
+             required value="{{ prefill.datetime_start|default:'' }}">
+    </div>
+    <div class="col-md-6">
+      <label for="datetime_end" class="form-label">{% translate 'Date et heure de fin (optionnel)' %}</label>
+      <input type="datetime-local" class="form-control" id="datetime_end" name="datetime_end"
+             value="{{ prefill.datetime_end|default:'' }}">
+    </div>
+  </div>
+
+  {# Jauge maximale / capacité #}
+  <div class="mt-3">
+    <label for="jauge_max" class="form-label">{% translate 'Jauge maximale (capacité)' %}</label>
+    <input
+      type="number"
+      class="form-control"
+      id="jauge_max"
+      name="jauge_max"
+      min="1"
+      step="1"
+      inputmode="numeric"
+      value="{{ prefill.jauge_max|default:'' }}"
+    >
+    <div class="form-text">
+        {% translate 'Laissez vide si pas besoin de réservation.' %}
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <label for="short_description" class="form-label">{% translate 'Description courte' %}</label>
+    <input type="text" class="form-control" id="short_description" name="short_description"
+           maxlength="250" value="{{ prefill.short_description|default:'' }}"
+           placeholder="{% translate 'Quelques mots pour présenter' %}">
+  </div>
+
+  <div class="mt-3">
+    <label for="long_description" class="form-label">{% translate 'Description détaillée' %}</label>
+    <textarea class="form-control" id="long_description" name="long_description" rows="4"
+              placeholder="{% translate 'Texte libre (programme, infos pratiques...)' %}">{{ prefill.long_description|default:'' }}</textarea>
+  </div>
+
+  {# Déplacer les tags sous les descriptions, en pleine largeur (plus pratique) #}
+  <div class="mt-3">
+    <label for="tags" class="form-label">{% translate 'Tags (séparés par des virgules)' %}</label>
+    <input type="text" class="form-control" id="tags" name="tags" list="tags-list"
+           value="{{ prefill.tags|default:'' }}" placeholder="{% translate 'Ex: Gratuit, Atelier, Enfants' %}">
+    <datalist id="tags-list">
+      {% for t in all_tags %}
+        <option value="{{ t.name }}">{{ t.name }}</option>
+      {% endfor %}
+    </datalist>
+    <div class="form-text">{% translate "Les tags inexistants seront créés automatiquement." %}</div>
+  </div>
+
+  <div class="mt-3">
+    <label for="img" class="form-label">{% translate "Image de l'évènement (optionnel)" %}</label>
+    <input class="form-control" type="file" id="img" name="img" accept="image/*">
+    <div class="form-text">{% translate "Si vide, l'image de l'adresse s'affichera." %}</div>
+  </div>
+
+  <div class="d-flex gap-2 mt-4">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check2-circle"></i> {% translate "Créer l'évènement" %}
+    </button>
+    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">
+      {% translate 'Annuler' %}
+    </button>
+  </div>
+</form>

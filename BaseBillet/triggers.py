@@ -5,7 +5,7 @@ from django.db import connection
 from django.utils import timezone
 
 from AuthBillet.models import TibilletUser
-from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe
+from BaseBillet.models import LigneArticle, Product, Membership, Price, Configuration, Paiement_stripe, PaymentMethod
 from BaseBillet.tasks import send_to_ghost, send_membership_invoice_to_email, send_sale_to_laboutik, webhook_membership, \
     send_to_brevo, refill_from_lespass_to_user_wallet_from_price_solded
 from BaseBillet.templatetags.tibitags import dround
@@ -15,28 +15,10 @@ from root_billet.models import RootConfiguration
 logger = logging.getLogger(__name__)
 
 
-def update_sale_if_free_price(ligne_article):
-    price: Price = ligne_article.pricesold.price
-    paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
-
-    if price.free_price and paiement_stripe : # pas de paiement stripe si c'est un ticket généré par l'admin
-        logger.info("    START update_sale_if_free_price : mise à jour de la valeur ligne_article.amount")
-        # Le montant a été entré dans stripe, on ne l'a pas entré à la création
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # recherche du checkout
-        checkout_session = stripe.checkout.Session.retrieve(
-            paiement_stripe.checkout_session_id_stripe,
-            stripe_account=Configuration.get_solo().get_stripe_connect_account()
-        )
-        # Mise à jour du montant
-        ligne_article.amount = checkout_session['amount_total']
-        logger.info(f"    END update_sale_if_free_price. ligne_article.amount = {checkout_session['amount_total']}")
-
-    return ligne_article
-
-def update_membership_state_after_stripe_paiement(ligne_article):
+def update_membership_state_after_stripe_paiement(ligne_article: LigneArticle):
 
     paiement_stripe: Paiement_stripe = ligne_article.paiement_stripe
+
     membership: Membership = paiement_stripe.membership.first()
     if not membership:
         membership = ligne_article.membership
@@ -44,25 +26,14 @@ def update_membership_state_after_stripe_paiement(ligne_article):
     price: Price = ligne_article.pricesold.price
     membership.contribution_value = ligne_article.pricesold.prix
 
-    if price.free_price:
-        # Le montant a été entré dans stripe, on ne l'a pas entré à la création
-        stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
-        # recherche du checkout
-        checkout_session = stripe.checkout.Session.retrieve(
-            paiement_stripe.checkout_session_id_stripe,
-            stripe_account=Configuration.get_solo().get_stripe_connect_account()
-        )
-        # Mise à jour du montant
-        ligne_article.amount = checkout_session['amount_total']
-        contribution = dround(checkout_session['amount_total'])
-        membership.contribution_value = contribution
+    if not membership.first_contribution:
+        membership.first_contribution = timezone.now()
 
     membership.last_contribution = timezone.now()
+
     membership.stripe_paiement.add(paiement_stripe)
 
-    # Si c'est une adhésion à validation manuelle :
-    if membership.state == Membership.ADMIN_VALID:
-        membership.state = Membership.PAID_BY_USER
+    membership.status = Membership.ONCE
 
     if paiement_stripe.invoice_stripe:
         membership.last_stripe_invoice = paiement_stripe.invoice_stripe
@@ -70,6 +41,24 @@ def update_membership_state_after_stripe_paiement(ligne_article):
     if paiement_stripe.subscription:
         membership.stripe_id_subscription = paiement_stripe.subscription
         membership.status = Membership.AUTO
+
+        # Si c'est un paiement récurrent :
+        if price.recurring_payment :
+            try :
+                membership.current_iteration += 1
+            except TypeError: # il est a None
+                membership.current_iteration = 1
+            except Exception as exc:
+                raise exc
+
+            # On dit a stripe d'annuler les prochaines itérations
+            if membership.max_iteration:
+                if membership.current_iteration == membership.max_iteration:
+                    subscription = stripe.Subscription.modify(
+                        f"{membership.stripe_id_subscription}",
+                        stripe_account=Configuration.get_solo().get_stripe_connect_account(),
+                        cancel_at_period_end=True
+                    )
 
     membership.save()
     logger.info(f"    update_membership_state_after_paiement : Mise à jour de la fiche membre OK")
@@ -116,13 +105,6 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         if self.categorie == Product.NONE:
             self.categorie = self.ligne_article.pricesold.productsold.product.categorie_article
 
-        # self.data_for_cashless = {}
-        # if ligne_article.paiement_stripe:
-        #     self.data_for_cashless = {
-        #         'uuid_commande': ligne_article.paiement_stripe.uuid,
-        #         'email': ligne_article.paiement_stripe.user.email
-        #     }
-
         try:
             # on met en majuscule et on rajoute _ au début du nom de la catégorie.
             trigger_name = f"_{self.categorie.upper()}"
@@ -146,9 +128,6 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
     # Category BILLET
     def trigger_B(self):
         # Envoi de la vente à LaBoutik
-        logger.info(f"    START TRIGGER_B BILLET PAID -> update_sale_if_free_price?")
-        self.ligne_article = update_sale_if_free_price(self.ligne_article)
-
         logger.info(f"        TRIGGER_B BILLET PAID -> envoi à LaBoutik?")
         send_sale_to_laboutik.delay(self.ligne_article.pk)
 
@@ -171,10 +150,10 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
 
     # Categorie ADHESION
     def trigger_A(self):
-        logger.info(f"    START TRIGGER_A ADHESION PAID")
+        ligne_article: LigneArticle = self.ligne_article
+        logger.info(f"    START TRIGGER_A ADHESION PAID ligne_article.uuid : {ligne_article.uuid}")
 
         # On va chercher l'article vendu et l'adhésion associéé
-        ligne_article: LigneArticle = self.ligne_article
         membership = ligne_article.membership
 
         # Refresh en cas de prix libre, le prix est mis à jour par le update membership.
@@ -187,7 +166,8 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
 
         # On lie le tenant à l'user, pour qu'iel soit visible dans l'admin et que les adéhsion et reservations soient visible dans my_account
         user: TibilletUser = membership.user
-        user.client_achat.add(connection.tenant)
+        if connection.tenant not in user.client_achat.all():
+            user.client_achat.add(connection.tenant)
 
         # Si l'user n'a pas de nom/prenom, on lui colle celui de l'adhésion
         if not user.first_name or not user.last_name:

@@ -82,5 +82,36 @@
     {% else %}
         <p>{% trans "Aucune remise en banque trouvée." %}</p>
     {% endif %}
+
+    <h2>{% trans "Afficher les transactions" %}</h2>
+
+    <form id="transactions-filter-form"
+          class="no-print"
+          hx-post="{% url 'asset-retrieve-transactions' %}"
+          hx-target="#transactions-results"
+          hx-swap="innerHTML"
+          hx-indicator="#transactions-spinner">
+        {% csrf_token %}
+        <input type="hidden" name="asset_uuid" value="{{ asset.uuid }}">
+
+        <label for="start_date">{% trans "Du" %}</label>
+        <input type="datetime-local" id="start_date" name="start_date" required value="{{ start_of_month|date:'Y-m-d\\TH:i' }}">
+
+        <label for="end_date" style="margin-left:1rem;">{% trans "Au" %}</label>
+        <input type="datetime-local" id="end_date" name="end_date" required value="{{ now|date:'Y-m-d\\TH:i' }}">
+
+        <button type="submit" style="margin-left:1rem;">{% trans "Afficher" %}</button>
+        <span id="transactions-spinner" class="indicator" aria-live="polite" aria-busy="true" style="margin-left:.5rem;">⏳</span>
+    </form>
+
+    <div id="transactions-results" aria-live="polite" style="margin-top:1rem;"></div>
+
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+      .indicator { display: none; }
+      /* htmx adds the class htmx-request to the indicator element referenced by hx-indicator */
+      .indicator.htmx-request { display: inline-block; }
+    </style>
+
 </body>
 </html>

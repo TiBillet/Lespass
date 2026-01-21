@@ -1,14 +1,12 @@
-from django.contrib import admin
-from django.urls import path, include, re_path
-from django.conf.urls.static import static
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from Administration.admin_tenant import staff_admin_site
+from django.urls import path, include, re_path
 
+from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
 from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
-from BaseBillet.views import handler500
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
@@ -31,6 +29,10 @@ urlpatterns = [
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
+
+    # New semantic API v2
+    re_path(r'api/v2/', include('api_v2.urls')),
+
     re_path(r'api/', include('ApiBillet.urls')),
     # re_path(r'qr/', include('QrcodeCashless.urls')),
     re_path(r'rss/', include('tibrss.urls')),
@@ -40,6 +42,7 @@ urlpatterns = [
     # fwh : fedow Webhook
     re_path(r'fwh/', include('fedow_connect.urls')),
     re_path(r'fedow/', include('fedow_public.urls')),
+    re_path(r'crowd/', include('crowds.urls')),
 
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),

@@ -36,6 +36,7 @@ from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
     GhostConfig, BrevoConfig, Product, Price, Paiement_stripe
+from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from TiBillet.celery import app
 from fedow_connect.fedow_api import FedowAPI
@@ -137,16 +138,7 @@ class CeleryMailerClass():
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
-def report_to_pdf(report):
-    template_name = 'report/ticketz.html'
-    font_config = FontConfiguration()
-    template = get_template(template_name)
-    html = template.render(report)
-    pdf_binary = HTML(string=html).write_pdf(
-        font_config=font_config,
-    )
-    logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
-    return pdf_binary
+
 
 
 def create_membership_invoice_pdf(membership: Membership):
@@ -303,6 +295,7 @@ def send_membership_pending_admin(membership_uuid: str):
     time.sleep(1)
 
     attempts, max_attempts, wait_time = 0, 10, 2
+    membership = None
     while attempts < max_attempts:
         try:
             membership = Membership.objects.get(uuid=membership_uuid)
@@ -348,6 +341,7 @@ def send_membership_pending_admin(membership_uuid: str):
         'table_info': {
             _('Adhérent'): f'{membership.member_name()}',
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
+            _('Contribution'): f'{membership.contribution_value} - {config.currency_code}',
             _('Email'): f"{membership.user.email if membership.user else ''}",
             _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
         },
@@ -458,6 +452,334 @@ def send_membership_pending_user(membership_uuid: str):
         return True
     except Exception as e:
         logger.error(f"send_membership_pending_user: erreur d'envoi {e}")
+        return False
+
+
+@app.task
+def send_membership_sepa_pending_user(membership_uuid: str):
+    """
+    Email SEPA (FALC) pour l'utilisateur.
+    Objectif: informer simplement que la demande est prise en compte
+    et que l'adhésion sera activée après réception du prélèvement SEPA.
+
+    - Ton simple et clair (FALC).
+    - Pas de jargon technique.
+    - Utilise le template générique 'emails/email_generique.html'.
+    """
+    # Attendre légèrement au cas où la transaction/membership vient juste d'être créée
+    time.sleep(1)
+    # Récupération du membership
+    try:
+        membership = Membership.objects.get(uuid=UUID(membership_uuid))
+    except Membership.DoesNotExist:
+        logging.getLogger(__name__).warning(
+            f"send_membership_sepa_pending_user: membership {membership_uuid} introuvable")
+        return False
+
+
+@app.task
+def send_payment_error_user(paiement_stripe_uuid: str, reason: str = None):
+    """
+    Envoie un email (FALC) à l'utilisateur pour l'informer que son paiement n'a pas abouti.
+
+    - Texte simple et clair.
+    - Utilise le template dédié: 'emails/payment_error.html'.
+
+    Paramètres:
+    - paiement_stripe_uuid: UUID de l'objet Paiement_stripe (en texte)
+    - reason: texte optionnel pour préciser la raison affichée (ex: erreur technique Stripe)
+    """
+    time.sleep(1)
+    try:
+        paiement: Paiement_stripe = Paiement_stripe.objects.get(uuid=UUID(paiement_stripe_uuid))
+    except Paiement_stripe.DoesNotExist:
+        logger.error(f"send_payment_error_user: paiement {paiement_stripe_uuid} introuvable")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    try:
+        domain = tenant.get_primary_domain().domain
+    except Exception:
+        domain = os.environ.get('DOMAIN', 'tibillet.org')
+
+    # On essaye de récupérer l'utilisateur depuis le paiement, sinon depuis la première adhésion liée
+    user = paiement.user
+    membership = None
+    if not user:
+        try:
+            membership = paiement.lignearticles.filter(membership__isnull=False).first()
+            if membership:
+                membership = membership.membership
+                user = membership.user
+        except Exception:
+            membership = None
+
+    if not user or not getattr(user, 'email', None):
+        logger.warning("send_payment_error_user: aucun destinataire")
+        return False
+
+    # Logo: celui du lieu si disponible, sinon logo TiBillet
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    # Textes FALC
+    title = _(f"{config.organisation} : Paiement non abouti")
+    main_text = _("Votre paiement n'a pas abouti.")
+    # Messages complémentaires
+    main_text_2 = _("Vous pouvez réessayer plus tard.")
+    if reason:
+        main_text_2 = f"{main_text_2} " + _(f"Raison: {reason}")
+    main_text_3 = _("Vérifiez vos informations bancaires si besoin.")
+
+    # Bouton simple: Ouvrir mon espace
+    try:
+        button = {
+            'text': _("Ouvrir mon espace"),
+            'url': forge_connexion_url(user, f"https://{domain}")
+        }
+    except Exception:
+        button = None
+
+    # Informations utiles
+    # Produit/adhésion si présent
+    produit_label = None
+    if membership and getattr(membership, 'price', None):
+        try:
+            produit_label = f"{membership.price.product.name} - {membership.price.name}"
+        except Exception:
+            produit_label = _("Adhésion")
+    else:
+        try:
+            # Fallback: liste des articles
+            produit_label = paiement.articles()
+        except Exception:
+            produit_label = _("Commande")
+
+    table_info = {
+        _('Produit'): produit_label,
+        _('Montant'): f"{dround(paiement.total())} {config.currency_code}",
+        _('Date'): date_format(paiement.order_date, format='DATETIME_FORMAT', use_l10n=True),
+        _('Référence'): paiement.uuid_8(),
+    }
+
+    context = {
+        'username': (membership.member_name() if membership else None) or getattr(user, 'full_name', lambda: None)() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Paiement"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'main_text_3': main_text_3,
+        'table_info': table_info,
+        'button_color': "#cc4b37",
+        'button': button,
+        'next_text_1': _("Besoin d'aide ? Répondez à cet email."),
+        'end_text': _("Merci"),
+        'signature': _("Marvin, le robot TiBillet"),
+    }
+
+    try:
+        mail = CeleryMailerClass(
+            email=f"{user.email}",
+            title=f"{context.get('title')}",
+            template='emails/payment_error.html',
+            context=context,
+        )
+        mail.send()
+        logger.info("send_payment_error_user: mail envoyé")
+        return True
+    except Exception as e:
+        logger.error(f"send_payment_error_user: erreur d'envoi {e}")
+        return False
+
+
+@app.task
+def send_payment_refused_user(paiement_stripe_uuid: str, reason: str = None):
+    """
+    Envoie un email (FALC) lorsque la banque a refusé le paiement.
+
+    - Texte simple et clair.
+    - Utilise le template dédié: 'emails/payment_refused.html'.
+
+    Paramètres:
+    - paiement_stripe_uuid: UUID de l'objet Paiement_stripe (en texte)
+    - reason: texte optionnel pour préciser la raison affichée (ex: fonds insuffisants)
+    """
+    time.sleep(1)
+    try:
+        paiement: Paiement_stripe = Paiement_stripe.objects.get(uuid=UUID(paiement_stripe_uuid))
+    except Paiement_stripe.DoesNotExist:
+        logger.error(f"send_payment_refused_user: paiement {paiement_stripe_uuid} introuvable")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    try:
+        domain = tenant.get_primary_domain().domain
+    except Exception:
+        domain = os.environ.get('DOMAIN', 'tibillet.org')
+
+    # Utilisateur depuis le paiement, sinon depuis l'adhésion liée
+    user = paiement.user
+    membership = None
+    if not user:
+        try:
+            membership = paiement.lignearticles.filter(membership__isnull=False).first()
+            if membership:
+                membership = membership.membership
+                user = membership.user
+        except Exception:
+            membership = None
+
+    if not user or not getattr(user, 'email', None):
+        logger.warning("send_payment_refused_user: aucun destinataire")
+        return False
+
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    title = _(f"{config.organisation} : Paiement refusé par la banque")
+    main_text = _("La banque a refusé le paiement.")
+    main_text_2 = _("Cela peut arriver en cas de fonds insuffisants ou d'un blocage.")
+    if reason:
+        main_text_2 = f"{main_text_2} " + _(f"Raison: {reason}")
+    main_text_3 = _("Vous pouvez vérifier votre compte ou essayer un autre moyen de paiement.")
+
+    try:
+        button = {
+            'text': _("Ouvrir mon espace"),
+            'url': forge_connexion_url(user, f"https://{domain}")
+        }
+    except Exception:
+        button = None
+
+    produit_label = None
+    if membership and getattr(membership, 'price', None):
+        try:
+            produit_label = f"{membership.price.product.name} - {membership.price.name}"
+        except Exception:
+            produit_label = _("Adhésion")
+    else:
+        try:
+            produit_label = paiement.articles()
+        except Exception:
+            produit_label = _("Commande")
+
+    table_info = {
+        _('Produit'): produit_label,
+        _('Montant'): f"{dround(paiement.total())} {config.currency_code}",
+        _('Date'): date_format(paiement.order_date, format='DATETIME_FORMAT', use_l10n=True),
+        _('Référence'): paiement.uuid_8(),
+    }
+
+    context = {
+        'username': (membership.member_name() if membership else None) or getattr(user, 'full_name', lambda: None)() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Paiement"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'main_text_3': main_text_3,
+        'table_info': table_info,
+        'button_color': "#cc4b37",
+        'button': button,
+        'next_text_1': _("Besoin d'aide ? Répondez à cet email."),
+        'end_text': _("Merci"),
+        'signature': _("Marvin, le robot TiBillet"),
+    }
+
+    try:
+        mail = CeleryMailerClass(
+            email=f"{user.email}",
+            title=f"{context.get('title')}",
+            template='emails/payment_refused.html',
+            context=context,
+        )
+        mail.send()
+        logger.info("send_payment_refused_user: mail envoyé")
+        return True
+    except Exception as e:
+        logger.error(f"send_payment_refused_user: erreur d'envoi {e}")
+        return False
+
+    config = Configuration.get_solo()
+    activate(config.language)
+    tenant = connection.tenant
+    domain = tenant.get_primary_domain().domain
+
+    user = membership.user
+    if not user or not getattr(user, 'email', None):
+        logging.getLogger(__name__).warning(
+            "send_membership_sepa_pending_user: aucun destinataire (user/email manquant)")
+        return False
+
+    # Logo: celui du lieu si disponible, sinon logo TiBillet
+    image_url = "https://tibillet.org/fr/img/design/logo-couleur.svg"
+    try:
+        if hasattr(config, 'img') and hasattr(config.img, 'med') and config.img.med:
+            image_url = f"https://{domain}{config.img.med.url}"
+    except Exception:
+        pass
+
+    # Contenus FALC
+    title = _(f"{config.organisation} : Votre demande est prise en compte (SEPA)")
+    main_text = _(
+        "Nous avons bien reçu votre demande d’adhésion."
+    )
+    main_text_2 = _(
+        "Vous avez choisi de payer par prélèvement SEPA. Le prélèvement peut prendre quelques jours."
+    )
+    main_text_3 = _(
+        "Votre adhésion sera active après réception du prélèvement."
+    )
+
+    # Bouton simple: Ouvrir mon espace (si l'email n'est pas validé, cela permettra aussi de se connecter)
+    button = None
+
+    # Tableau d’infos simples
+    table_info = {
+        _('Produit'): f'{membership.price.product.name} - {membership.price.name}' if membership.price else _('Adhésion'),
+        _('Montant'): f"{dround(membership.contribution_value)} {config.currency_code}",
+        _('Date de demande'): date_format(membership.date_added, format='DATETIME_FORMAT', use_l10n=True),
+    }
+
+    context = {
+        'username': membership.member_name() or user.full_name() or user.email,
+        'now': timezone.now(),
+        'title': title,
+        'image_url': image_url,
+        'sub_title': _("Adhésion"),
+        'main_text': main_text,
+        'main_text_2': main_text_2,
+        'main_text_3': main_text_3,
+        'table_info': table_info,
+        'button_color': "#009058",
+        'button': button,
+        'next_text_1': _("Vous n’avez rien à faire. Nous vous écrirons quand ce sera validé."),
+        'end_text': _("Merci et à bientôt !"),
+        'signature': _("Marvin, le robot TiBillet"),
+    }
+
+    try:
+        send_email_generique(context=context, email=f"{user.email}")
+        logging.getLogger(__name__).info("send_membership_sepa_pending_user: mail envoyé")
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).error(
+            f"send_membership_sepa_pending_user: erreur d'envoi {e}")
         return False
 
 
@@ -575,7 +897,15 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
 def send_refund_to_laboutik(self, ligne_article_pk):
     # Le max de temps entre deux retries : 24 heures
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
+    logger.info(f"send_refund_to_laboutik - waiting for save: {ligne_article_pk}")
+    time.sleep(5)
     config = Configuration.get_solo()
+
+    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
+    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    if ligne_article.sended_to_laboutik:
+        logger.info("refund déjà envoyé à Laboutik – skip")
+        return True
 
     # On check si le serveur cashless est bien opérationnel :
     try:
@@ -590,8 +920,6 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
-    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
-    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
     logger.info(f"send_refund_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
 
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
@@ -608,7 +936,7 @@ def send_refund_to_laboutik(self, ligne_article_pk):
             },
             data=json_data,
             verify=bool(not settings.DEBUG),
-            timeout=2,
+            timeout=(5, 10),  # 5s de connexion, 10s de lecture
         )
 
         # Si la réponse est 404, on déclenche un retry
@@ -616,10 +944,14 @@ def send_refund_to_laboutik(self, ligne_article_pk):
             logger.info("sended_to_laboutik = True")
             ligne_article.sended_to_laboutik = True
             ligne_article.save()
-        if response.status_code == 404:
-            # Augmente le délai de retry avec un backoff exponentiel
+            return True
+        elif response.status_code == 429 or 500 <= response.status_code < 600:
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
             raise self.retry(countdown=retry_delay)
+        if response.status_code == 404:
+            # Augmente le délai de retry avec un backoff exponentiel
+            logger.error("Serveur down ?")
+            return False
 
     except requests.exceptions.RequestException as exc:
         # Log et retry en cas d’erreur réseau ou autre exception
@@ -640,6 +972,23 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     config = Configuration.get_solo()
 
+    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
+    try :
+        ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    except LigneArticle.DoesNotExist:
+        sleep(3)
+        ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
+    except Exception as exc:
+        logger.error(f"Erreur lors de get ligne_article {ligne_article_pk} : {exc}")
+        raise exc
+
+    if getattr(ligne_article, "sended_to_laboutik", False) or ligne_article.status == LigneArticle.REFUNDED:
+        logger.info("refund déjà envoyé à Laboutik – skip")
+        return True
+
+    logger.info(f"send_sale_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
+
+
     # On check si le serveur cashless est bien opérationnel :
     try:
         if not config.check_serveur_cashless():
@@ -653,13 +1002,12 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     except MaxRetriesExceededError:
         logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
-    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
-    ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
-    logger.info(f"send_sale_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
 
     # On va relancer la requete vers la db tant que ligne_article n'est pas valide
-    while ligne_article.status != LigneArticle.VALID:
+    timed = 0
+    while ligne_article.status != LigneArticle.VALID and timed < 100:
         time.sleep(1)
+        timed += 1
         ligne_article.refresh_from_db()
         logger.info(f"send_sale_to_laboutik -> Ligne Article is Valid ? : {ligne_article.get_status_display()}")
 
@@ -677,7 +1025,7 @@ def send_sale_to_laboutik(self, ligne_article_pk):
             },
             data=json_data,
             verify=bool(not settings.DEBUG),
-            timeout=2,
+            timeout=(5, 10),
         )
         if response.status_code == 200:
             logger.info("sended_to_laboutik = True")
@@ -887,13 +1235,10 @@ def connexion_celery_mailer(self, user_email,
 @app.task
 def new_tenant_mailer(waiting_config_uuid: str):
     try:
-        # Génération du lien qui va créer la redirection vers l'url onboard
-        tenant = connection.tenant
-        tenant_url = tenant.get_primary_domain().domain
-
         time.sleep(2)  # Attendre que la db soit bien a jour
-        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
 
+        # Génération du lien qui va créer la redirection vers l'url onboard
+        waiting_config = WaitingConfiguration.objects.get(uuid=waiting_config_uuid)
         signer = TimestampSigner()
         token = urlsafe_base64_encode(signer.sign(f"{waiting_config.uuid}").encode('utf8'))
 
@@ -906,6 +1251,9 @@ def new_tenant_mailer(waiting_config_uuid: str):
         p_domain = connection.tenant.get_primary_domain().domain
         connexion_url = f"https://{p_domain}/tenant/{token}/emailconfirmation_tenant"
 
+        # on indique la future adresse :
+        future_url = f"https://{waiting_config.slug}.{waiting_config.dns_choice}/"
+
         config = Configuration.get_solo()
         activate(config.language)
 
@@ -916,8 +1264,8 @@ def new_tenant_mailer(waiting_config_uuid: str):
             context={
                 'waiting_config': waiting_config,
                 'orga_name': f"{waiting_config.organisation.capitalize()}",
-                'tenant_url': tenant_url,
                 'connexion_url': connexion_url,
+                'future_url': future_url,
             }
         )
         mail.send()
@@ -925,7 +1273,7 @@ def new_tenant_mailer(waiting_config_uuid: str):
 
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour new_tenant_mailer : {e}")
         raise e
 
 
@@ -950,9 +1298,22 @@ def new_tenant_after_stripe_mailer(waiting_config_uuid: str):
 
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour new_tenant_after_stripe_mailer : {e}")
         raise e
 
+
+"""
+#TODO : A degager, pas utilisé ?
+def report_to_pdf(report):
+    template_name = 'report/ticketz.html'
+    font_config = FontConfiguration()
+    template = get_template(template_name)
+    html = template.render(report)
+    pdf_binary = HTML(string=html).write_pdf(
+        font_config=font_config,
+    )
+    logger.info(f"  WORKER CELERY : report_to_pdf - {report.get('organisation')} {report.get('date')} bytes")
+    return pdf_binary
 
 @app.task
 def report_celery_mailer(data_report_list: list):
@@ -983,6 +1344,7 @@ def report_celery_mailer(data_report_list: list):
         except smtplib.SMTPRecipientsRefused as e:
             logger.error(
                 f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+"""
 
 
 @app.task
@@ -1001,7 +1363,7 @@ def send_email_generique(context: dict = None, email: str = None, attached_files
 
     except smtplib.SMTPRecipientsRefused as e:
         logger.error(
-            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour report_celery_mailer : {e}")
+            f"ERROR {timezone.now()} Erreur mail SMTPRecipientsRefused pour send_email_generique : {e}")
 
 
 @app.task
@@ -1081,17 +1443,10 @@ def ticket_celery_mailer(reservation_uuid: str):
 
 
 @app.task
-def webhook_reservation(reservation_pk, solo_webhook_pk=None):
+def webhook_reservation(reservation_pk):
     logger.info(f"webhook_reservation : {reservation_pk}")
-
-    # On lance tous les webhook ou juste un seul ?
-    webhooks = []
-    if solo_webhook_pk:
-        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
-    else:
-        webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
-
-    if len(webhooks) > 0:
+    webhooks = Webhook.objects.filter(event=Webhook.RESERVATION_V, active=True)
+    if webhooks.exists():
         reservation = Reservation.objects.get(pk=reservation_pk)
         json = {
             "object": "reservation",
@@ -1101,6 +1456,7 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
         }
 
         for webhook in webhooks:
+            logger.info(f"webhook_reservation : {webhook.url}")
             try:
                 response = requests.request("POST", webhook.url, data=json, timeout=2, verify=bool(not settings.DEBUG))
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
@@ -1115,23 +1471,16 @@ def webhook_reservation(reservation_pk, solo_webhook_pk=None):
 
 
 @app.task
-def webhook_membership(membership_pk, solo_webhook_pk=None):
+def webhook_membership(membership_pk):
     logger.info(f"webhook_membership : {membership_pk}")
-
     # On lance tous les webhook ou juste un seul ?
-    webhooks = []
-    if solo_webhook_pk:
-        webhooks.append(Webhook.objects.get(pk=solo_webhook_pk))
-    else:
-        webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
-
-    if len(webhooks) > 0:
+    webhooks = Webhook.objects.filter(event=Webhook.MEMBERSHIP_V, active=True)
+    if webhooks.exists():
         membership = Membership.objects.get(pk=membership_pk)
-        # Build payload with DRF serializer
         data_sended = json.dumps(MembershipSerializer(membership).data, cls=DjangoJSONEncoder)
 
-        # Si plusieurs webhook :
         for webhook in webhooks:
+            logger.info(f"webhook_membership : {webhook.url}")
             try:
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             headers={"Content-type": "application/json"},
@@ -1356,34 +1705,42 @@ def membership_renewal_reminder():
                                                     price__recurring_payment=False, # on ne prend pas les adhésions avec paiement récurents
                                                     )
 
-            for membership in memberships:
-                config = Configuration.get_solo()
-                user = membership.user
-                email = user.email
+            if memberships.exists():
+                count = memberships.count()
+                progress = 0
+                logger.info(f"membership_renewal_reminder : {count} memberships to renew - tenant :{tenant.schema_name}")
 
-                context = {
-                    'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
-                    'membership': membership,
-                    'now': timezone.now(),
-                    'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
-                    'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
-                    'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
-                }
+                for membership in memberships:
+                    progress += 1
+                    logger.info(f'    progress : {progress}/{count}')
 
-                try:
-                    mail = CeleryMailerClass(
-                        email,
-                        f"{context.get('title')}",
-                        template="emails/membership_renewal_reminder.html",
-                        context=context,
-                    )
-                    mail.send()
-                    logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
-                    return mail.sended
-                except Exception as e:
-                    logger.error(
-                        f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
-                    return False
+                    config = Configuration.get_solo()
+                    user = membership.user
+                    email = user.email
+
+                    context = {
+                        'title': _(f"Votre adhésion au collectif {config.organisation} arrive à expiration"),
+                        'membership': membership,
+                        'now': timezone.now(),
+                        'objet': _(f"Votre adhésion {config.organisation} arrive à expiration"),
+                        'image_url': "https://tibillet.org/fr/img/design/logo-couleur.svg",
+                        'renewal_url': f"https://{tenant.get_primary_domain().domain}/memberships/"
+                    }
+
+                    try:
+                        mail = CeleryMailerClass(
+                            email,
+                            f"{context.get('title')}",
+                            template="emails/membership_renewal_reminder.html",
+                            context=context,
+                        )
+                        mail.send()
+                        logger.info(f"send_welcome_email : mail.sended : {mail.sended}")
+                        return mail.sended
+                    except Exception as e:
+                        logger.error(
+                            f"ERROR {timezone.now()} Erreur lors de l'envoi de membership_renewal_reminder à {email}: {e}")
+                        return False
 
 
 @app.task
@@ -1408,6 +1765,55 @@ def trigger_product_update_tasks(product_pk):
 
 
 @app.task
+def refill_from_lespass_to_user_wallet_from_ticket_scanned(ticket_pk):
+    time.sleep(1)  # wait for trigger pre_save
+    ticket = Ticket.objects.get(pk=ticket_pk, status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED])
+    metadata = ticket.metadata if ticket.metadata else {}
+
+    if metadata.get('rewarded_from_ticket_scanned'):
+        logger.info("    TASKS TICKET SCANNED -> Fedow reward already sent for this ticket, skipping")
+        return "Fedow reward already sent for this ticket"
+
+    metadata['rewarded_from_ticket_scanned'] = {
+        "sent_at": timezone.now().isoformat()
+    }
+
+    try:
+        price: Price = ticket.pricesold.price
+
+        if price.reward_on_ticket_scanned and price.fedow_reward_asset and price.fedow_reward_amount:
+            fedowAPI = FedowAPI()
+            asset = price.fedow_reward_asset
+            float_amount = price.fedow_reward_amount
+            amount = int(dround(float_amount) * 100)
+            user = ticket.reservation.user_commande
+
+
+            from fedow_connect.models import FedowConfig
+            if FedowConfig.get_solo().can_fedow():
+                logger.info("    TASKS TICKET SCANNED -> Fedow reward enabled: sending tokens to user wallet")
+                reward_tx = fedowAPI.transaction.refill_from_lespass_to_user_wallet(
+                    user=user,
+                    amount=amount,
+                    asset=asset,
+                    metadata=metadata,
+                )
+
+                # add to metadata for trace
+                ticket.metadata["rewarded_from_ticket_scanned"] = {
+                    "transaction_uuid": str(reward_tx.get("uuid")),
+                    "hash": reward_tx.get("hash"),
+                    "asset": str(asset.uuid),
+                    "amount": int(amount),
+                    "sent_at": timezone.now().isoformat(),
+                }
+                logger.info(f"    TASKS TICKET SCANNED -> Fedow reward sent: {ticket.metadata['fedow_reward']}")
+                ticket.save(update_fields=["metadata"])
+
+    except Exception as e:
+        logger.error(f"refill_from_lespass_to_user_wallet_from_ticket_scanned error: {e}")
+
+@app.task
 def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
     time.sleep(1)  # wait for trigger pre_save
     ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
@@ -1416,10 +1822,10 @@ def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
         product: Product = ligne_article.pricesold.productsold.product
         price: Price = ligne_article.pricesold.price
 
-        if getattr(price, "fedow_reward_enabled", False) and getattr(price, "fedow_reward_asset", None) and getattr(
-                price, "fedow_reward_amount", None):
+        if price.fedow_reward_enabled and price.fedow_reward_asset and price.fedow_reward_amount:
+        # if getattr(price, "fedow_reward_enabled", False) and getattr(price, "fedow_reward_asset", None) and getattr(
+        #         price, "fedow_reward_amount", None):
             fedowAPI = FedowAPI()
-
             asset = getattr(price, "fedow_reward_asset", None)
             float_amount = getattr(price, "fedow_reward_amount", None)
             amount = int(dround(float_amount) * 100)
@@ -1428,9 +1834,13 @@ def refill_from_lespass_to_user_wallet_from_price_solded(ligne_article_pk):
             if asset and amount and membership.user:
                 from fedow_connect.models import FedowConfig
                 if FedowConfig.get_solo().can_fedow():
-                    logger.info("    TRIGGER_A ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
-                    checkout_session_id_stripe = ligne_article.paiement_stripe.checkout_session_id_stripe
-                    invoice_stripe_id = ligne_article.paiement_stripe.invoice_stripe # on est peut être sur un renouvellement
+                    logger.info("    TASK ADHESION PAID -> Fedow reward enabled: sending tokens to user wallet")
+
+                    checkout_session_id_stripe, invoice_stripe_id = None, None # Restera None si adhésion réalisé depuis l'admin
+                    if ligne_article.paiement_stripe :
+                        checkout_session_id_stripe = ligne_article.paiement_stripe.checkout_session_id_stripe
+                        invoice_stripe_id = ligne_article.paiement_stripe.invoice_stripe # on est peut être sur un renouvellement
+
                     metadata = {
                         "ligne_article_uuid": str(ligne_article.uuid),
                         "membership_uuid": str(membership.uuid),
@@ -1489,9 +1899,18 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
     """
     config = Configuration.get_solo()
     activate(config.language)
-    admin_email = config.email
-    title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Payment received via QR code.")
+    tenant : Client = connection.tenant
 
+    emails = sorted({
+        e.strip().lower()
+        for e in (
+                [u.email for u in tenant.user_admin.all()] +
+                [u.email for u in tenant.initiate_payment.all()]
+        )
+        if e and e.strip()
+    })
+
+    title = f"{config.organisation.capitalize()} - {str(dround(amount))}€ : " + _("Payment received.")
     # Variables sémantiques pour le template
     try:
         dt = datetime.datetime.strptime(payment_time_str, '%d/%m/%Y %H:%M')
@@ -1499,6 +1918,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
         payment_time_iso = aware_dt.isoformat()
     except Exception:
         payment_time_iso = timezone.now().isoformat()
+
     currency_symbol = "€"
     context = {
         'title': title,
@@ -1513,7 +1933,7 @@ def send_payment_success_admin(amount: int, payment_time_str: str, place: str, u
         'currency_symbol': currency_symbol,
     }
     mail = CeleryMailerClass(
-        admin_email,
+        emails,
         title,
         template="reunion/views/qrcode_scan_pay/email/payment_success_admin.html",
         context=context,

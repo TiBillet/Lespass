@@ -190,6 +190,7 @@ class WaitingConfiguration(models.Model):
         tenant = TenantCreateValidator.create_tenant(self)
         return tenant
 
+
     def __str__(self):
         return f"{self.organisation} - {self.email} -> {self.slug}"
 

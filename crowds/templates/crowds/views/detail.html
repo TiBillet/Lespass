@@ -1,0 +1,652 @@
+{% extends base_template %}
+{% load i18n tibitags %}
+
+{% block title %}{{ initiative.name }}{% endblock %}
+{% block meta_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}
+    {% elif initiative.description %}{{ initiative.description|safe|striptags|truncatechars:150 }}{% else %}
+    {{ initiative.name }}{% endif %} - {{ config.organisation }}{% endblock %}
+{% block og_title %}{{ initiative.name }}{% endblock %}
+{% block og_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}
+    {% elif initiative.description %}{{ initiative.description|safe|striptags|truncatechars:150 }}{% else %}
+    {{ initiative.name }}{% endif %} - {{ config.organisation }}{% endblock %}
+{% block og_image %}{% with image=initiative.get_img %}{% if image and image.social_card %}{{ image.social_card.url }}
+{% elif image and image.hdr %}{{ image.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endwith %}{% endblock %}
+{% block og_image_alt %}{{ initiative.name }} - {{ config.organisation }}{% endblock %}
+{% block twitter_title %}{{ initiative.name }}{% endblock %}
+{% block twitter_description %}{% if initiative.short_description %}{{ initiative.short_description|striptags }}
+    {% elif initiative.description %}{{ initiative.description|safe|striptags|truncatechars:150 }}{% else %}
+    {{ initiative.name }}{% endif %} - {{ config.organisation }}{% endblock %}
+{% block twitter_image %}{% with image=initiative.get_img %}{% if image and image.social_card %}
+    {{ image.social_card.url }}{% elif image and image.hdr %}{{ image.hdr.url }}{% else %}{{ block.super }}{% endif %}
+{% endwith %}{% endblock %}
+{% block twitter_image_alt %}{{ initiative.name }} - {{ config.organisation }}{% endblock %}
+
+{% block main %}
+    <main class="container-lg pb-5">
+        <header class="mb-3">
+            {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='max-height: 33vh' %}
+            <h1 class="mt-3">{{ initiative.name }}
+                {% if initiative.vote %}
+                    {# compteur de votes #}
+                    <span class="ms-sm-2">
+                    {% include 'crowds/partial/votes_badge.html' with initiative=initiative %}
+                </span>
+                {% endif %}
+            </h1>
+
+            {# Tags de l’initiative #}
+            {% if initiative.tags.all %}
+                <p class="mt-2" aria-label="Tags de l’initiative">
+                    {% for tag in initiative.tags.all %}
+                        <a class="badge rounded-pill text-decoration-none me-1 mb-1"
+                           style="{{ tag.style_attr }}"
+                           href="{% url 'crowds-list' %}?tag={{ tag.slug }}"
+                           hx-get="{% url 'crowds-list' %}?tag={{ tag.slug }}"
+                           hx-target="body"
+                           hx-swap="innerHTML"
+                           hx-push-url="true">
+                            <i class="bi bi-tag" aria-hidden="true"></i> {{ tag.name }}
+                        </a>
+                    {% endfor %}
+                </p>
+            {% endif %}
+
+        </header>
+
+        <p class="lead">{{ initiative.description |safe |default:"" }}</p>
+
+        {# 1) Votes #}
+        {% if initiative.vote %}
+            <section id="votes" class="mt-5 p-3 p-sm-4 rounded-3 bg-body-tertiary shadow-sm">
+                <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                    <span>{% translate 'Votes' %}</span>
+                    <span>
+                    {% if user.is_authenticated %}
+                        <button
+                                class="btn btn-sm btn-primary"
+                                title="{% translate 'Voter pour la pertinence' %}"
+                                hx-post="{{ initiative.get_absolute_url }}vote/"
+                                hx-trigger="click"
+                                hx-target="#votes-{{ initiative.uuid }}"
+                                hx-swap="outerHTML">
+                            👍 {% translate 'Voter' %}
+                        </button>
+                    {% else %}
+                        <button
+                                class="btn btn-sm btn-primary"
+                                title="{% translate 'Voter pour la pertinence' %}"
+                                onclick="crowdsVoteRequireLogin()">
+                            👍 {% translate 'Voter' %}
+                        </button>
+                    {% endif %}
+                </span>
+                </h2>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                        <tr>
+                            <th scope="col">{% translate 'Votant·e' %}</th>
+                            <th scope="col">{% translate 'Date' %}</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% with total=votes|length %}
+                            {% for v in votes %}
+                                {% if forloop.counter == 5 %}
+                                    </tbody>
+                                    <tbody id="votes-more-{{ initiative.uuid }}" class="collapse">
+                                {% endif %}
+                                <tr>
+                                    <td>{{ v.user.email }}</td>
+                                    <td>{{ v.created_at|date:'Y-m-d H:i' }}</td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="2"
+                                        class="text-center text-muted py-4">{% translate 'Aucun vote pour le moment.' %}</td>
+                                </tr>
+                            {% endfor %}
+                        {% endwith %}
+                        </tbody>
+                    </table>
+                </div>
+                {% with total=votes|length %}
+                    {% if total > 4 %}
+                        <div class="text-center mt-2">
+                            <button class="btn btn-sm btn-outline-secondary" type="button"
+                                    data-bs-toggle="collapse" data-bs-target="#votes-more-{{ initiative.uuid }}"
+                                    aria-expanded="false" aria-controls="votes-more-{{ initiative.uuid }}"
+                                    onclick="this.dataset.altText=this.dataset.altText||this.innerText; const t=this.getAttribute('aria-expanded')==='true'?this.dataset.altText:'{% translate 'Afficher moins' %}'; this.innerText=t;">
+                                {% translate 'Afficher plus' %}
+                            </button>
+                        </div>
+                    {% endif %}
+                {% endwith %}
+            </section>
+        {% endif %}
+
+        {# 2) Lignes budgétaires #}
+        <section id="budget" class="mt-4 p-3 p-sm-4 rounded-3 bg-body-secondary shadow-sm">
+            <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                <span>{% translate 'Lignes budgétaires' %}</span>
+                <span>
+                    <button class="btn btn-sm btn-primary"
+                            onclick="return (window.crowdsOpenBudgetItemProposal ? crowdsOpenBudgetItemProposal() : (window.crowdsShowBudgetProposalFallback ? crowdsShowBudgetProposalFallback() : alert('Module non charge')))">
+                        💡 {% translate 'Proposer' %}
+                    </button>
+                </span>
+            </h2>
+            <p class="text-muted small mb-2">
+                {% translate 'Total à financer' %}:
+                <strong>{{ initiative.total_funding_amount|dround }} {{ initiative.currency }}</strong>
+            </p>
+            <div id="budget_items_list">
+                {% include 'crowds/partial/budget_items.html' %}
+            </div>
+        </section>
+
+        {# 3) Financement #}
+        <section id="financement" class="my-4 p-3 p-sm-4 rounded-3 bg-body-tertiary shadow-sm">
+            <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                <span>{% translate 'Financement' %} {{ initiative.progress_percent_int }}%</span>
+                <span>
+                    {% if user.is_authenticated %}
+                        <button type="button" class="btn btn-sm btn-primary" title="{% translate 'Financer' %}"
+                                onclick="openContributionModal()">
+                            💸 {% translate 'Financer' %}
+                        </button>
+                    {% else %}
+                        <button type="button" class="btn btn-sm btn-primary" title="{% translate 'Financer' %}"
+                                onclick="crowdsVoteRequireLogin()">
+                            💸 {% translate 'Financer' %}
+                        </button>
+                    {% endif %}
+                </span>
+            </h2>
+            <div class="progress">
+                <div class="progress-bar bg-{{ initiative.progress_percent_color }}" role="progressbar" aria-valuemin="0"
+                     aria-valuemax="100" aria-valuenow="{{ initiative.progress_percent_int }}" style="width: 0%"
+                     data-requested-bar="1" data-width-int="{{ initiative.progress_percent_int }}">
+                    <span class="visually-hidden">{{ initiative.requested_percent_int }}%</span>
+                </div>
+            </div>
+            <p class="mt-2 mb-3 text-center text-muted small">
+                {% translate "Financé" %}:
+                <strong>{{ initiative.total_funded_amount|dround }} / {{ initiative.total_funding_amount|dround }} </strong>{{ initiative.currency }}
+            </p>
+
+            <div id="contributions_list">
+                {% include 'crowds/partial/contributions.html' %}
+            </div>
+        </section>
+
+
+        <script>
+            (function () {
+                // Remplit toutes les barres ayant data-requested-bar (financement + réalisations)
+                function applyRequestedBars() {
+                    try {
+                        document.querySelectorAll('[data-requested-bar]')?.forEach(function (el) {
+                            var v = parseInt(el.getAttribute('data-width-int') || '0', 10);
+                            if (isNaN(v) || v < 0) v = 0;
+                            if (v > 100) v = 100;
+                            el.style.width = v + '%';
+                        });
+                    } catch (e) { /* noop */
+                    }
+                }
+
+                // Appel immédiat si le DOM est déjà prêt, sinon à DOMContentLoaded
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', applyRequestedBars, {once: true});
+                } else {
+                    applyRequestedBars();
+                }
+                // Après les remplacements HTMX sur la page (ex: rafraîchissement de listes)
+                document.body.addEventListener('htmx:afterSwap', applyRequestedBars);
+                document.body.addEventListener('htmx:afterSettle', applyRequestedBars);
+                // Expose pour debug éventuel
+                window.crowdsApplyRequestedBars = applyRequestedBars;
+            })();
+        </script>
+
+        {% if initiative.budget_contributif %}
+            {# 4) Réalisation #}
+            <section id="realisation" class="mt-5 p-3 p-sm-4 rounded-3 bg-body-secondary shadow-sm">
+                <h2 class="h4 mb-3 d-flex align-items-center justify-content-between">
+                    <span>{% translate 'Réalisation' %} : {{ initiative.requested_vs_funded_percent_int }}%</span>
+                    <span>
+                        {% if user.is_authenticated %}
+                            <button class="btn btn-sm btn-primary" onclick="crowdsOpenParticipate()">
+                                🛠️ {% translate 'Participer' %}
+                            </button>
+                        {% else %}
+                            <button class="btn btn-sm btn-primary" onclick="crowdsVoteRequireLogin()">
+                                🛠️ {% translate 'Participer' %}
+                            </button>
+                        {% endif %}
+                    </span>
+                </h2>
+                {# Barre de progression des demandes de participations vs financements #}
+                <div class="progress" style="height: .5rem;">
+                    <div class="progress-bar bg-{{ initiative.requested_vs_funded_color }}" role="progressbar" aria-valuemin="0"
+                         aria-valuemax="100" aria-valuenow="{{ initiative.requested_vs_funded_percent_int }}" style="width: 0%"
+                         data-requested-bar="1" data-width-int="{{ initiative.requested_vs_funded_percent_int }}">
+                        <span class="visually-hidden">{{ initiative.requested_vs_funded_percent_int }}%</span>
+                    </div>
+                </div>
+                <p class="mt-2 mb-3 text-center text-muted small">
+                    {% translate "Demandé par les contributeur·ices" %}:
+                    <strong>{{ initiative.total_participation_amount|dround }} / {{ initiative.total_funded_amount|dround }} </strong>{{ initiative.currency }}
+                </p>
+                <h6 class="h6 mb-3">Pour en savoir plus sur les budgets contributifs, <a
+                        href="https://movilab.org/wiki/Coremuneration_et_budget_contributif" target="_blank">visitez
+                    movilab !</a></h6>
+                <div id="participations_list">
+                    {% include 'crowds/partial/participations.html' %}
+                </div>
+            </section>
+        {% endif %}
+
+        <section id="retour">
+            <div class="d-grid gap-2 d-sm-flex justify-content-sm-start align-items-center my-4">
+                <a href="{% url 'crowds-list' %}"
+                   class="btn btn-outline-secondary"
+                   hx-get="{% url 'crowds-list' %}"
+                   hx-target="body"
+                   hx-swap="innerHTML"
+                   hx-push-url="true">
+                    ← {% translate 'Retour' %}
+                </a>
+            </div>
+
+        </section>
+
+        {# Helpers JS pour actions de la page détail #}
+        {% translate "Proposer une ligne budgétaire" as t_bi_title %}
+        {% translate "Le module n'est pas encore chargé. Réessayez ou rechargez la page." as t_bi_not_loaded %}
+        {% translate "Décrivez la dépense proposée" as t_bi_desc %}
+        {% translate "Montant proposé" as t_bi_amount_prompt %}
+        {% translate "Proposition envoyée" as t_bi_sent %}
+        {% translate "Impossible d'envoyer" as t_bi_send_fail %}
+        {% translate "Erreur réseau" as t_bi_net_err %}
+        {% translate "Montant" as t_bi_amount_label %}
+        {% translate "Description" as t_bi_desc_label %}
+        {% translate "Envoyer" as t_bi_send %}
+        {% translate "Annuler" as t_bi_cancel %}
+        {% translate "Veuillez indiquer un montant valide." as t_bi_amount_invalid %}
+        {% translate "Veuillez décrire en quelques mots (min 5 caractères)." as t_bi_desc_invalid %}
+        {% translate "Une erreur est survenue." as t_bi_error %}
+        <script>
+            (function () {
+                const isAuth = {{ user.is_authenticated|yesno:"true,false" }};
+                // Safely expose i18n strings for JS (already escaped for JS context)
+                const T = Object.freeze({
+                    bi_title: '{{ t_bi_title|escapejs }}',
+                    not_loaded: '{{ t_bi_not_loaded|escapejs }}',
+                    bi_desc: '{{ t_bi_desc|escapejs }}',
+                    bi_amount_prompt: '{{ t_bi_amount_prompt|escapejs }}',
+                    sent: '{{ t_bi_sent|escapejs }}',
+                    send_fail: '{{ t_bi_send_fail|escapejs }}',
+                    net_err: '{{ t_bi_net_err|escapejs }}',
+                    amount_label: '{{ t_bi_amount_label|escapejs }}',
+                    desc_label: '{{ t_bi_desc_label|escapejs }}',
+                    send: '{{ t_bi_send|escapejs }}',
+                    cancel: '{{ t_bi_cancel|escapejs }}',
+                    amount_invalid: '{{ t_bi_amount_invalid|escapejs }}',
+                    desc_invalid: '{{ t_bi_desc_invalid|escapejs }}',
+                    error_generic: '{{ t_bi_error|escapejs }}',
+                });
+
+                function getCookie(name) {
+                    const value = `; ${document.cookie}`;
+                    const parts = value.split(`; ${name}=`);
+                    if (parts.length === 2) return parts.pop().split(';').shift();
+                    return null;
+                }
+
+                // Fallback used by the inline onclick if the main function isn't loaded
+                window.crowdsShowBudgetProposalFallback = function () {
+                    try {
+                        if (window.Swal && typeof Swal.fire === 'function') {
+                            Swal.fire({icon: 'info', title: T.bi_title, text: T.not_loaded});
+                        } else {
+                            alert(T.not_loaded);
+                        }
+                    } catch (e) { /* noop */
+                    }
+                };
+
+                window.crowdsOpenBudgetItemProposal = function () {
+                    try {
+                        if (!isAuth) {
+                            if (typeof window.crowdsVoteRequireLogin === 'function') {
+                                return window.crowdsVoteRequireLogin();
+                            }
+                        }
+                        if (!(window.Swal && typeof window.Swal.fire === 'function')) {
+                            const desc = prompt(T.bi_desc);
+                            if (!desc) return;
+                            const amount = prompt(T.bi_amount_prompt);
+                            if (!amount) return;
+                            const formData = new URLSearchParams();
+                            formData.set('description', desc);
+                            formData.set('amount_eur', amount);
+                            fetch("{{ initiative.get_absolute_url }}budget/propose/", {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                    'X-CSRFToken': getCookie('csrftoken') || ''
+                                },
+                                body: formData.toString()
+                            }).then(async (r) => {
+                                if (r.status === 401) {
+                                    window.crowdsVoteRequireLogin && crowdsVoteRequireLogin();
+                                    return;
+                                }
+                                const data = await r.json().catch(() => ({}));
+                                if (r.ok && data && data.html) {
+                                    const target = document.getElementById('budget_items_list');
+                                    if (target) target.innerHTML = data.html;
+                                    if (window.Swal) Swal.fire({
+                                        toast: true,
+                                        position: 'top',
+                                        timer: 1600,
+                                        showConfirmButton: false,
+                                        icon: 'success',
+                                        title: T.sent
+                                    });
+                                } else {
+                                    if (window.Swal) Swal.fire({
+                                        icon: 'error',
+                                        title: T.send_fail,
+                                        text: (data && data.error) ? data.error : ''
+                                    });
+                                }
+                            }).catch(() => {
+                                if (window.Swal) Swal.fire({icon: 'error', title: T.net_err});
+                            });
+                            return;
+                        }
+
+                        Swal.fire({
+                            title: T.bi_title,
+                            html:
+                                '<div class="mb-2 text-start">' +
+                                '<label class="form-label">' + T.amount_label + '</label>' +
+                                '<input id="swal_amount" type="number" step="0.01" min="0.01" class="form-control" placeholder="0.00" />' +
+                                '</div>' +
+                                '<div class="mb-2 text-start">' +
+                                '<label class="form-label">' + T.desc_label + '</label>' +
+                                '<textarea id="swal_desc" class="form-control" rows="3" placeholder="' + T.bi_desc + '"></textarea>' +
+                                '</div>',
+                            showCancelButton: true,
+                            confirmButtonText: T.send,
+                            cancelButtonText: T.cancel,
+                            preConfirm: () => {
+                                const amount = document.getElementById('swal_amount').value.trim();
+                                const desc = document.getElementById('swal_desc').value.trim();
+                                if (!amount || parseFloat(amount) <= 0) {
+                                    Swal.showValidationMessage(T.amount_invalid);
+                                    return false;
+                                }
+                                if (!desc || desc.length < 5) {
+                                    Swal.showValidationMessage(T.desc_invalid);
+                                    return false;
+                                }
+                                return {amount, desc};
+                            }
+                        }).then((res) => {
+                            if (!res.isConfirmed) return;
+                            if (!isAuth) {
+                                window.crowdsVoteRequireLogin && crowdsVoteRequireLogin();
+                                return;
+                            }
+                            const {amount, desc} = res.value || {};
+                            const formData = new URLSearchParams();
+                            formData.set('description', desc);
+                            formData.set('amount_eur', amount);
+                            fetch("{{ initiative.get_absolute_url }}budget/propose/", {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                    'X-CSRFToken': getCookie('csrftoken') || ''
+                                },
+                                body: formData.toString()
+                            }).then(async (r) => {
+                                if (r.status === 401) {
+                                    window.crowdsVoteRequireLogin && crowdsVoteRequireLogin();
+                                    return;
+                                }
+                                const data = await r.json().catch(() => ({}));
+                                if (r.ok && data && data.html) {
+                                    const target = document.getElementById('budget_items_list');
+                                    if (target) target.innerHTML = data.html;
+                                    Swal.fire({
+                                        toast: true,
+                                        position: 'top',
+                                        timer: 1600,
+                                        showConfirmButton: false,
+                                        icon: 'success',
+                                        title: T.sent
+                                    });
+                                } else {
+                                    Swal.fire({
+                                        icon: 'error',
+                                        title: T.send_fail,
+                                        text: (data && data.error) ? data.error : ''
+                                    });
+                                }
+                            }).catch(() => {
+                                Swal.fire({icon: 'error', title: T.net_err});
+                            });
+                        });
+                    } catch (e) {
+                        alert(T.error_generic);
+                    }
+                }
+            })();
+        </script>
+
+
+        <script>
+            function crowdsConfirmMarkContributionPaid(cid) {
+                Swal.fire({
+                    title: '{% translate "Confirmer le paiement" %}',
+                    text: '{% translate "Marquer cette contribution comme payée ?" %}',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: '{% translate "Oui, marquer payée" %}',
+                    cancelButtonText: '{% translate "Annuler" %}'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        htmx.ajax('POST', `{{ initiative.get_absolute_url }}contributions/${cid}/mark-paid/`, {
+                            target: '#contributions_list',
+                            swap: 'innerHTML'
+                        })
+                    }
+                })
+            }
+
+            function openContributionModal() {
+                Swal.fire({
+                    title: '{% translate "Contribuer financièrement" %}',
+                    html: `
+                        <div class="mb-3 text-start">
+                            <label for="contrib-name" class="form-label">{% translate "Nom du contributeur ou de l'organisation" %}</label>
+                            <input id="contrib-name" type="text" class="form-control" placeholder="{% translate "Votre nom" %}">
+                            <div class="form-text">{{ contrib_name_help }}</div>
+                        </div>
+                        <div class="mb-3 text-start">
+                            <label for="contrib-desc" class="form-label">{% translate "Message / description" %}</label>
+                            <textarea id="contrib-desc" class="form-control" rows="3" placeholder="{% translate "Un mot pour l'équipe (optionnel)" %}"></textarea>
+                            <div class="form-text">{{ contrib_desc_help }}</div>
+                        </div>
+                        <div class="mb-0 text-start">
+                            <label for="contrib-amt" class="form-label">{% blocktrans with cur=initiative.currency %}
+                        Montant (en {{ cur }}){% endblocktrans %}</label>
+                            <input id="contrib-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+                        </div>
+                    `,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    cancelButtonText: '{% translate "Annuler" %}',
+                    confirmButtonText: '{% translate "Valider la contribution" %}',
+                    preConfirm: () => {
+                        const name = document.getElementById('contrib-name').value.trim();
+                        const desc = document.getElementById('contrib-desc').value.trim();
+                        const amtStr = document.getElementById('contrib-amt').value;
+                        const amt = Math.round(parseFloat(amtStr || '0') * 100);
+                        if (!name) {
+                            Swal.showValidationMessage('{% translate "Veuillez indiquer votre nom." %}');
+                            return false;
+                        }
+                        if (!amt || amt <= 0) {
+                            Swal.showValidationMessage('{% translate "Veuillez indiquer un montant valide (> 0)." %}');
+                            return false;
+                        }
+                        htmx.ajax('POST', '{{ initiative.get_absolute_url }}contribute/', {
+                            target: '#contributions_list',
+                            swap: 'innerHTML',
+                            values: {
+                                contributor_name: name,
+                                description: desc,
+                                amount: amt
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Gère uniquement les réponses JSON (paiement) et ignore le HTML (ex: vote badge)
+            document.body.addEventListener('htmx:afterOnLoad', function (event) {
+                try {
+                    const xhr = event.detail.xhr;
+                    const ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
+                    if (!ctype.includes('application/json')) {
+                        return; // rien à faire pour les réponses HTML (partials HTMX)
+                    }
+                    const data = JSON.parse(xhr.responseText || 'null');
+                    if (!data) return;
+                    if (data.stripe_url) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Redirection vers le paiement...',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        setTimeout(() => window.location.href = data.stripe_url, 1200);
+                    } else if (data.error) {
+                        Swal.fire('Erreur', data.error, 'error');
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            });
+
+            // --- Vote (detail page): only login helper, swap handled by HTMX returning HTML ---
+            window.crowdsVoteRequireLogin = window.crowdsVoteRequireLogin || function () {
+                Swal.fire({
+                    icon: 'info',
+                    title: '{% translate "Connexion requise" %}',
+                    text: '{% translate "Veuillez vous connecter pour continuer." %}',
+                    showCancelButton: true,
+                    confirmButtonText: '{% translate "Se connecter" %}',
+                    cancelButtonText: '{% translate "Annuler" %}'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const panel = document.getElementById('loginPanel');
+                        if (panel) {
+                            const offcanvas = new bootstrap.Offcanvas(panel);
+                            offcanvas.show();
+                        } else {
+                            window.location.href = '/accounts/login/';
+                        }
+                    }
+                });
+            };
+
+            // Feedback visuel après vote via HX-Trigger
+            document.body.addEventListener('crowds:vote', function (e) {
+                const created = !!(e && e.detail && e.detail.created);
+                Swal.fire({
+                    toast: true,
+                    position: 'top',
+                    timer: 1600,
+                    showConfirmButton: false,
+                    icon: created ? 'success' : 'info',
+                    title: created ? '{% translate "Merci pour votre vote !" %}' : '{% translate "Votre vote est déjà pris en compte." %}'
+                });
+            });
+
+            // --- Participations: dialog + POST via HTMX to update partial ---
+            window.crowdsOpenParticipate = function () {
+                Swal.fire({
+                    title: '{% translate "Proposer une participation" %}',
+                    html: `
+                        <div class="mb-3 text-start">
+                            <label class="form-label">{% translate "Description de la participation" %}</label>
+                            <textarea id="part-desc" class="form-control" rows="4" placeholder="{% translate "Décrivez votre apport, rôle, tâches…" %}"></textarea>
+                        </div>
+                        <div class="mb-0 text-start">
+                            <label class="form-label">{% blocktrans with cur=initiative.currency %}
+                        Montant sollicité (en {{ cur }}){% endblocktrans %}</label>
+                            <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé." %} {% translate "Laissez vide si bénévolat." %}</div>
+                        </div>
+                    `,
+                    focusConfirm: false,
+                    showCancelButton: true,
+                    cancelButtonText: '{% translate "Annuler" %}',
+                    confirmButtonText: '{% translate "Envoyer la demande" %}',
+                    preConfirm: () => {
+                        const desc = document.getElementById('part-desc').value.trim();
+                        const amtStr = document.getElementById('part-amt').value;
+                        if (!desc) {
+                            Swal.showValidationMessage('{% translate "Veuillez décrire votre participation." %}');
+                            return false;
+                        }
+                        // Post via HTMX and update the participations list without blink
+                        const values = {description: desc};
+                        if (amtStr > 0) {
+                            values.requested_amount = amtStr;
+                        }
+                        htmx.ajax('POST', '{{ initiative.get_absolute_url }}participate/', {
+                            target: '#participations_list',
+                            swap: 'innerHTML',
+                            values: values
+                        });
+                    }
+                });
+            };
+
+            window.crowdsMarkParticipationCompleted = function (pid) {
+                Swal.fire({
+                    title: '{% translate "Marquer la participation comme terminée" %}',
+                    input: 'number',
+                    inputLabel: '{% translate "Temps passé (en minutes)" %}',
+                    inputAttributes: {min: 1, step: 1},
+                    showCancelButton: true,
+                    cancelButtonText: '{% translate "Annuler" %}',
+                    confirmButtonText: '{% translate "Valider" %}',
+                    preConfirm: (value) => {
+                        const minutes = parseInt(value || '0');
+                        if (!minutes || minutes <= 0) {
+                            Swal.showValidationMessage('{% translate "Veuillez saisir une durée valide (> 0)." %}');
+                            return false;
+                        }
+                        htmx.ajax('POST', `{{ initiative.get_absolute_url }}participations/${pid}/complete/`, {
+                            target: '#participations_list',
+                            swap: 'innerHTML',
+                            values: {time_spent_minutes: minutes}
+                        });
+                    }
+                });
+            };
+
+        </script>
+
+    </main>
+
+
+{% endblock %}

@@ -143,7 +143,7 @@ class check_ticket(APIView):
             return Response({
                 "success": True,
                 "message": "Ticket information retrieved",
-                "ticket": {
+                "ticket": { #TODO: utiliser un serializer
                     "uuid": str(ticket.uuid),
                     "status": ticket.get_status_display(),
                     "is_scanned": ticket.status == Ticket.SCANNED,
@@ -153,7 +153,8 @@ class check_ticket(APIView):
                     "price": ticket.pricesold.price.name if ticket.pricesold else None,
                     "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
                         ticket.pricesold, 'productsold') else None,
-                    "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
+                    "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None,
+                    "custom_form": ticket.reservation.custom_form
                 },
                 "reservation": {
                     "uuid": str(ticket.reservation.uuid),
@@ -260,7 +261,8 @@ class ticket(APIView):
                         "price": ticket.pricesold.price.name if ticket.pricesold else None,
                         "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
                             ticket.pricesold, 'productsold') else None,
-                        "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None
+                        "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None,
+                        "custom_form": ticket.reservation.custom_form # dans le futur serializer, rendre le custom form avec les clé non sluggé
                     },
                     "reservation": {
                         "uuid": str(ticket.reservation.uuid),
@@ -286,7 +288,9 @@ class ticket(APIView):
                     "last_name": ticket.last_name,
                     "price": ticket.pricesold.price.name if ticket.pricesold else None,
                     "product": ticket.pricesold.productsold.product.name if ticket.pricesold and hasattr(
-                        ticket.pricesold, 'productsold') else None
+                        ticket.pricesold, 'productsold') else None,
+                    "scanned_by": str(ticket.scanned_by.uuid) if ticket.scanned_by else None,
+                    "custom_form": ticket.reservation.custom_form # dans le futur serializer, rendre le custom form avec les clé non sluggé
                 },
                 "reservation": {
                     "uuid": str(ticket.reservation.uuid),
@@ -310,7 +314,7 @@ ALLOWED_ORDER_FIELDS = (
     'reservation__uuid',
 )
 
-class ListTicketsSerializer(serializers.Serializer):
+class ListTicketsValidator(serializers.Serializer):
     event_uuid = serializers.UUIDField(required=True)
     page = serializers.IntegerField(required=False, min_value=1, default=1)
     page_size = serializers.IntegerField(required=False, min_value=1, max_value=200, default=40)
@@ -349,7 +353,7 @@ class list_tickets(APIView):
         Réponse: JSON avec métadonnées de pagination et liste des tickets.
         """
         try:
-            serializer = ListTicketsSerializer(data=request.data)
+            serializer = ListTicketsValidator(data=request.data)
             if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -375,6 +379,7 @@ class list_tickets(APIView):
 
             results = []
             for t in items:
+                #TODO: Faire un serializer
                 results.append({
                     "uuid": str(t.uuid),
                     "first_name": t.first_name,
@@ -385,6 +390,8 @@ class list_tickets(APIView):
                     "reservation_uuid": str(t.reservation.uuid),
                     "status": t.get_status_display(),
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
+                    "qrcode_data": t.qrcode(),
+                    "custom_form": t.reservation.custom_form, # dans le futur serializer, rendre le custom form avec les clé non sluggé
                 })
 
             total_pages = (total + page_size - 1) // page_size if page_size else 1
@@ -453,6 +460,7 @@ class search_ticket(APIView):
 
             results = []
             for t in qs:
+                # TODO: Faire un serializer
                 results.append({
                     "uuid": str(t.uuid),
                     "first_name": t.first_name,
@@ -462,6 +470,9 @@ class search_ticket(APIView):
                     "product": t.pricesold.productsold.product.name if t.pricesold and getattr(t.pricesold, 'productsold', None) else None,
                     "reservation_uuid": str(t.reservation.uuid),
                     "status": t.get_status_display(),
+                    "reservation_datetime": getattr(t.reservation, 'datetime', None),
+                    "qrcode_data": t.qrcode(),
+                    "custom_form": t.reservation.custom_form, # dans le futur serializer, rendre le custom form avec les clé non sluggé
                 })
 
             return Response({

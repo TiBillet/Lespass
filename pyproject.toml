@@ -42,6 +42,9 @@ django-unfold = "^0"
 django-import-export = "^4.3"
 sib-api-v3-sdk = "^7.6.0"
 nh3 = "^0.3.0"
+pytest = "^8.4.2"
+django-simple-captcha = "^0.6.2"
+djangorestframework-stubs = "^3.16.6"
 
 [tool.poetry.group.dev.dependencies]
 django-debug-toolbar = "^4.2.0"
@@ -51,6 +54,7 @@ ipdb = "^0.13.13"
 ipython = "^8.18.0"
 django-browser-reload = "^1.12.1"
 faker = "^23.2.1"
+pytest = "8.4.2"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,14 +1,13 @@
 {% extends base_template %}
-{% load static %}
-{% load i18n %}
+{% load static i18n tibitags %}
 
 {% block title %}{% translate 'Agenda' %}{% endblock %}
-{% block meta_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block meta_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block og_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
-{% block og_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
 {% block twitter_title %}{% translate 'Agenda' %} | {{ config.organisation }}{% endblock %}
-{% block twitter_description %}{% translate 'Discover all our upcoming events and activities' %} - {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ config.organisation }} : {% translate 'Découvrez tous nos événements et activités à venir' %} - {{ config.short_description }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Events calendar' %}{% endblock %}
 
 {% block main %}
@@ -29,10 +28,86 @@
         <!-- search bar and filtering -->
         <section class="container-lg p-3 sticky-top bg-body" style="height: fit-content;">
             {% include "reunion/views/event/partial/search.html" %}
+
+            {# Barre de filtres par tags (inspirée de crowds) - Sur mobile: collapse; Sur ≥ md: affichage direct #}
+            <div class="mt-2" aria-label="Filtres par tags">
+                {# Ligne d'entête avec libellé + zone d'actions (toggle mobile + bouton admin) #}
+                <div class="d-flex align-items-center">
+                    <span class="text-muted me-2 small d-flex align-items-center">
+                        <i class="bi bi-funnel me-1" aria-hidden="true"></i>
+                        {% translate 'Filtrer par tags' %}:
+                    </span>
+                    <div class="ms-auto d-flex align-items-center gap-2">
+                        <button class="btn btn-outline-secondary btn-sm d-inline-flex d-md-none"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#tagFiltersCollapse"
+                                aria-expanded="false"
+                                aria-controls="tagFiltersCollapse">
+                            <i class="bi bi-sliders"></i> {% translate 'Filtres' %}
+                        </button>
+                        {% if user|can_create_event_tag %}
+                            <button
+                                class="btn btn-sm btn-success"
+                                type="button"
+                                hx-get="/event/simple_add_event/"
+                                hx-target="#offcanvas-event-admin"
+                                hx-swap="innerHTML"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#adminAddEventPanel"
+                                aria-controls="adminAddEventPanel">
+                                <i class="bi bi-plus-circle"></i>
+                                {% translate 'Ajouter un évènement' %}
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Conteneur des tags: collapse sur xs/sm; visible sur ≥ md (d-md-flex) #}
+                <div class="collapse d-md-flex flex-wrap align-items-center gap-2 mt-2" id="tagFiltersCollapse">
+                    {% for tag in all_tags %}
+                        <a class="btn btn-sm mb-1"
+                           style="{{ tag.style_attr }}"
+                           href="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                           hx-get="?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                           hx-target="body"
+                           hx-swap="innerHTML"
+                           hx-push-url="true"
+                            aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
+                            {{ tag.name }}
+                        </a>
+                    {% empty %}
+                        <span class="text-muted small">{% translate 'Aucun tag disponible.' %}</span>
+                    {% endfor %}
+
+                    {% if active_tag %}
+                        <a class="ms-auto small text-decoration-none" href="/event/"
+                           hx-get="/event/"
+                           hx-target="body" hx-push-url="true">
+                            <i class="bi bi-x-circle"></i> {% translate 'Effacer le filtre' %}
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
         </section>
     {% endif %}
     <!-- event list -->
     <main class="container-lg" id="event_list">
         {% include "reunion/views/event/partial/list.html" %}
     </main>
+
+    {# Offcanvas admin pour la création rapide d'évènements #}
+    <style>
+        #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
+        @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
+    </style>
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="adminAddEventPanel" aria-labelledby="adminAddEventPanelLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+        </div>
+        <div class="offcanvas-body" id="offcanvas-event-admin">
+            {# Le contenu du formulaire est chargé ici via HTMX #}
+        </div>
+    </div>
 {% endblock %}

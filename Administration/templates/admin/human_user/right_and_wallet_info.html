@@ -1,0 +1,153 @@
+{% load i18n %}
+
+<div class="flex flex-col gap-8 py-3">
+    {# Fieldset: Right (Unfold layout) #}
+    <fieldset class="module relative ">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+            {% translate "User rights" %}
+        </h2>
+
+        <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800">
+{#            BUG htmx sur le premier form... j'ai mis celui ci et ça passe...#}
+            <form></form>
+
+            <form method="post"
+                  hx-post="/specialadminaction/{{ object_id }}/toggle_user_right/?action=client_admin"
+                  hx-trigger="change"
+                  hx-swap="none" id="form-client-admin">
+                {% csrf_token %}
+                <div class="form-row field-row group/row ">
+                    <div class="field-line border-b px-3 lg:first:border-l-0 field-is_admin lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
+                        <div class="flex flex-col gap-2 py-2 lg:flex-row">
+                            <div class="font-medium flex items-start -ml-2 min-w-32 w-32 lg:min-w-56 lg:w-56">
+                                <label class="font-semibold ml-2 text-sm text-font-important-light dark:text-font-important-dark"
+                                       for="id_client_admin">{% translate "Administrator" %}</label>
+                            </div>
+
+                            <div class="grow">
+                                <div class="flex flex-col lg:flex-row">
+                                    <input type="checkbox" name="client_admin" id="id_client_admin"
+                                           class="hx-toggle appearance-none bg-base-300 block cursor-pointer h-5 relative rounded-full transition-colors w-8 min-w-8 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 after:absolute after:bg-white after:content-[''] after:h-3 after:rounded-full after:shadow-xs after:transition-all after:left-1 after:top-1 after:w-3 checked:bg-green-500 checked:after:left-4 dark:bg-base-600 dark:checked:bg-green-700"
+                                           {% if is_client_admin %}checked{% endif %}>
+                                </div>
+                                <div class="leading-relaxed mt-2 text-xs">
+                                    Peut accéder à l'interface d'administration et possède tous les droits. (Si cochée, pas besoin d'activer les droits suivants)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+
+            {# Initiate payment #}
+            <form method="post"
+                  hx-post="/specialadminaction/{{ object_id }}/toggle_user_right/?action=initiate_payment"
+                  hx-trigger="change"
+                  hx-swap="none" id="form-initiate-payment">
+                {% csrf_token %}
+                <div class="form-row field-row group/row ">
+                    <div class="field-line border-b px-3 lg:first:border-l-0 field-is_active lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
+                        <div class="flex flex-col gap-2 py-2 lg:flex-row">
+                            <div class="font-medium flex items-start -ml-2 min-w-32 w-32 lg:min-w-56 lg:w-56">
+                                <label class="font-semibold ml-2 text-sm text-font-important-light dark:text-font-important-dark"
+                                       for="id_initiate_payment">{% translate "Can initiate payments" %}</label>
+                            </div>
+
+                            <div class="grow">
+                                <div class="flex flex-col lg:flex-row">
+                                    <input type="checkbox" name="initiate_payment" id="id_initiate_payment"
+                                           class="hx-toggle appearance-none bg-base-300 block cursor-pointer h-5 relative rounded-full transition-colors w-8 min-w-8 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 after:absolute after:bg-white after:content-[''] after:h-3 after:rounded-full after:shadow-xs after:transition-all after:left-1 after:top-1 after:w-3 checked:bg-green-500 checked:after:left-4 dark:bg-base-600 dark:checked:bg-green-700"
+                                           {% if can_initiate_payment %}checked{% endif %}>
+                                </div>
+                                <div class="leading-relaxed mt-2 text-xs">
+                                    {% trans "Can initiate payments on behalf of the location from My Account area" %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            {# Create event #}
+
+            <form method="post"
+                  hx-post="/specialadminaction/{{ object_id }}/toggle_user_right/?action=create_event"
+                  hx-trigger="change"
+                  hx-swap="none" id="form-create-event">
+                {% csrf_token %}
+                <div class="form-row field-row group/row ">
+                    <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
+                        <div class="flex flex-col gap-2 py-2 lg:flex-row">
+                            <div class="font-medium flex items-start -ml-2 min-w-32 w-32 lg:min-w-56 lg:w-56">
+                                <label class="font-semibold ml-2 text-sm text-font-important-light dark:text-font-important-dark"
+                                       for="id_create_event">{% translate "Can create events" %}</label>
+                            </div>
+
+                            <div class="grow">
+                                <div class="flex flex-col lg:flex-row">
+                                    <input type="checkbox" name="create_event" id="id_create_event"
+                                           class="hx-toggle appearance-none bg-base-300 block cursor-pointer h-5 relative rounded-full transition-colors w-8 min-w-8 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 after:absolute after:bg-white after:content-[''] after:h-3 after:rounded-full after:shadow-xs after:transition-all after:left-1 after:top-1 after:w-3 checked:bg-green-500 checked:after:left-4 dark:bg-base-600 dark:checked:bg-green-700"
+                                           {% if can_create_event %}checked{% endif %}>
+                                </div>
+                                <div class="leading-relaxed mt-2 text-xs">
+                                    {%  trans "Can create event on agenda page" %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            {# Manage crowd #}
+{#            <form method="post"#}
+{#                  hx-post="/specialadminaction/{{ object_id }}/toggle_user_right/?action=manage_crowd"#}
+{#                  hx-trigger="change"#}
+{#                  hx-swap="none" id="form-manage-crowd">#}
+{#                {% csrf_token %}#}
+{#                <div class="form-row field-row group/row last">#}
+{#                    <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">#}
+{#                        <div class="flex flex-col gap-2 py-2 lg:flex-row">#}
+{#                            <div class="font-medium flex items-start -ml-2 min-w-32 w-32 lg:min-w-56 lg:w-56">#}
+{#                                <label class="font-semibold ml-2 text-sm text-font-important-light dark:text-font-important-dark"#}
+{#                                       for="id_manage_crowd">{% translate "Can manage crowds" %}</label>#}
+{#                            </div>#}
+{##}
+{#                            <div class="grow">#}
+{#                                <div class="flex flex-col lg:flex-row">#}
+{#                                    <input type="checkbox" name="manage_crowd" id="id_manage_crowd"#}
+{#                                           class="hx-toggle appearance-none bg-base-300 block cursor-pointer h-5 relative rounded-full transition-colors w-8 min-w-8 focus:outline-2 focus:outline-offset-2 focus:outline-primary-600 after:absolute after:bg-white after:content-[''] after:h-3 after:rounded-full after:shadow-xs after:transition-all after:left-1 after:top-1 after:w-3 checked:bg-green-500 checked:after:left-4 dark:bg-base-600 dark:checked:bg-green-700"#}
+{#                                           {% if can_manage_crowd %}checked{% endif %}>#}
+{#                                </div>#}
+{#                                <div class="leading-relaxed mt-2 text-xs">#}
+{#                                    {% trans "Can manage crowds initiative" %}.#}
+{#                                </div>#}
+{#                            </div>#}
+{#                        </div>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </form>#}
+        </div>
+    </fieldset>
+
+    {# Fieldset: Tirelire (wallet info button) #}
+    <fieldset class="module relative " x-show="activeTab == 'general'">
+        <h2 class="bg-base-100 font-semibold mb-6 px-4 py-3 rounded-default text-font-important-light text-sm @min-[1570px]:-mx-4 dark:bg-white/[.02] dark:text-font-important-dark ">
+            {% translate "Tirelire" %}
+        </h2>
+
+        <div class="shadow-xs rounded-default aligned border-base-200 border dark:border-base-800">
+            <div class="form-row field-row group/row last">
+                <div class="field-line border-b px-3 lg:first:border-l-0 lg:flex-row border-dashed lg:border-l group group-[.last]/row:border-b-0 border-base-200 grow dark:border-base-800 flex flex-col group/line py-2.5">
+                    <div class="grow relative">
+                        <button class="border font-medium px-3 py-2 rounded-default text-center whitespace-nowrap bg-primary-600 border-transparent text-white"
+                                hx-get="/my_account/{{ object_id }}/admin_my_cards/" hx-swap="outerHTML">
+                            {% translate "Get cards and wallet information" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </fieldset>
+</div>
+

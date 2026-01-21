@@ -11,7 +11,7 @@ export PGPASSWORD=$POSTGRES_PASSWORD
 export PGUSER=$POSTGRES_USER
 export PGHOST=lespass_postgres
 
-# borg init --encryption=repokey-blake2 .
+# borg init --encryption=repokey-blake2 $BORG_REPO
 # borg init --encryption=repokey-blake2 /Backup/borg
 
 DATE_NOW=$(date +%Y-%m-%d-%H-%M)

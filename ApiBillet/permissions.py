@@ -1,15 +1,15 @@
+import logging
+
 from django.db import connection
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext_lazy as _
 from rest_framework import permissions
 from rest_framework.viewsets import ViewSet
 from rest_framework_api_key.models import AbstractAPIKey, APIKey
-from urllib3 import request
 
 from AuthBillet.models import TibilletUser
 from AuthBillet.utils import get_client_ip
 from BaseBillet.models import ExternalApiKey
-from Customers.models import Client
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ def get_apikey_valid(view: ViewSet) -> AbstractAPIKey or None:
     try:
         # Récupération de la clé API et vérification qu'elle existe pour le tenant
         key = view.request.META["HTTP_AUTHORIZATION"].split()[1]
+
         api_key = APIKey.objects.get_from_key(key)
         tenant_apikey = get_object_or_404(ExternalApiKey, key=api_key)
 
@@ -42,7 +43,8 @@ def get_apikey_valid(view: ViewSet) -> AbstractAPIKey or None:
         if tenant_apikey.api_permissions().get(view.basename):
             return tenant_apikey
 
-    except:
+    except Exception as e:
+        logger.error(f"get_apikey_valid : {e}")
         return None
 
 
@@ -64,7 +66,7 @@ def TenantAdminPermissionWithRequest(request):
         elif request.user.is_authenticated:
             return all([
                 request.user.is_tenant_admin(connection.tenant),
-                request.user.is_staff,
+                # request.user.is_staff, # encore utile ?
                 request.user.is_active,
                 request.user.espece == TibilletUser.TYPE_HUM
             ])
@@ -94,6 +96,62 @@ class TenantAdminPermission(permissions.BasePermission):
     message = 'User no admin in tenant'
     def has_permission(self, request, view):
         return TenantAdminPermissionWithRequest(request)
+
+
+# Mis à l'extérieur pour pouvoir être utilisé tout seul sans RESTframework
+# Par exemple utilisé par l'admin Unfold ( settings.UNFOLD.SIDEBAR )
+def CanInitiatePaymentPermissionWithRequest(request):
+    # Vérifie que l'user existe et est admin du tenant ou peut initier des paiements via NFC/QRcode
+    if not request.user:
+        return False
+
+    if (not request.user.is_active
+            or request.user.espece != TibilletUser.TYPE_HUM
+            or not request.user.is_authenticated):
+        return False
+
+    return any([
+        request.user.is_superuser,
+        request.user.is_tenant_admin(connection.tenant),
+        request.user.can_initiate_payment(connection.tenant),
+    ])
+
+
+class CanInitiatePaymentPermission(permissions.BasePermission):
+    message = _("Unauthorized user")
+    def has_permission(self, request, view):
+        return CanInitiatePaymentPermissionWithRequest(request)
+
+
+
+
+# Mis à l'extérieur pour pouvoir être utilisé tout seul sans RESTframework
+# Par exemple utilisé par l'admin Unfold ( settings.UNFOLD.SIDEBAR )
+def CanCreateEventPermissionWithRequest(request):
+    # Vérifie que l'user existe et est admin du tenant ou peut créer des events
+    if not request.user:
+        return False
+
+    if (not request.user.is_active
+            or request.user.espece != TibilletUser.TYPE_HUM
+            or not request.user.is_authenticated):
+        return False
+
+    return any([
+        request.user.is_superuser,
+        request.user.is_tenant_admin(connection.tenant),
+        request.user.can_create_event(connection.tenant),
+    ])
+
+
+class CanCreateEventPermission(permissions.BasePermission):
+    message = _("Unauthorized user")
+    def has_permission(self, request, view):
+        return CanCreateEventPermissionWithRequest(request)
+
+
+
+
 
 """
 class TerminalScanPermission(permissions.BasePermission):

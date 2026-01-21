@@ -1,0 +1,18 @@
+{# même composant que picture.html, mais on a pas l'objet img #}
+{# (car récupéré dans un tenant exterieur, le rendu du html ne se fait pas dans le bon contexte. #}
+{#On envoi donc la string depuise le controleur #}
+
+{% load tibitags %}
+
+{# img: StdImageField #}
+{# alt: string #}
+{# class: string|null #}
+{# style: string|null #}
+{# ratio: string|null #}
+<picture class="d-block {% if ratio %}ratio ratio-{{ ratio }}{% else %}h-100{% endif %}">
+    <img
+            class="object-fit-cover w-100 h-100{% if class %} {{ class }}{% endif %}"
+            {% if style %}style="{{ style }}"{% endif %}
+            src="{{ img_url | randImg }}" alt="{{ alt }}"
+    />
+</picture>

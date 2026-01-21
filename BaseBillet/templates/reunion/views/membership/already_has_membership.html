@@ -1,0 +1,61 @@
+{% load i18n static %}
+
+<!-- Contenu pour remplacement de l'offcanvas quand l'utilisateur a déjà atteint la limite -->
+<div id="membership-already-has-content" class="p-3">
+    <div class="d-flex flex-column gap-3">
+        <div class="alert alert-warning mb-0" role="alert">
+            <h5 class="alert-heading mb-1">{% trans "Adhésion déjà active" %}</h5>
+            <p class="mb-0">
+                {% trans "Vous possédez déjà une adhésion ou un abonnement actif pour ce produit." %}
+            </p>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-2">{% trans "Produit" %}</h6>
+                <p class="card-text mb-0">
+                    {% if product %}
+                        <strong>{{ product.name }}</strong>
+                    {% else %}
+                        {% trans "Adhésion" %}
+                    {% endif %}
+                </p>
+                {% if product.short_description %}
+                    <small class="text-muted">{{ product.short_description }}</small>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="alert alert-info mb-0" role="alert">
+            {% trans "Pour en savoir plus sur vos adhésions, consultez votre espace personnel." %}
+        </div>
+
+        <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">
+                {% trans "Fermer" %}
+            </button>
+            <a href="/my_account/membership/" class="btn btn-primary">
+                {% trans "Voir mes adhésions" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
+    // hide spinner if present
+    try { Spinner.hideSpinner && Spinner.hideSpinner(); } catch (e) {}
+
+    // Déplace le contenu dans l'offcanvas pour remplacer le formulaire
+    const content = document.getElementById('membership-already-has-content');
+    const container = document.getElementById('offcanvas-membership');
+    if (content && container) {
+        container.innerHTML = '';
+        container.appendChild(content);
+        // S'assurer que l'offcanvas est bien visible
+        try {
+            const oc = bootstrap.Offcanvas.getOrCreateInstance('#subscribePanel');
+            oc && oc.show();
+        } catch (e) {}
+    }
+</script>

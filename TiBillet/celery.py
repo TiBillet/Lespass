@@ -51,9 +51,9 @@ def setup_periodic_tasks(sender, **kwargs):
 
     # sender.add_periodic_task(30.0, cron_morning.s(), name='test cron')
 
-    logger.info(f'setup_periodic_tasks cron_morning at 3AM UTC')
+    logger.info(f'setup_periodic_tasks cron_morning at 5AM UTC')
     sender.add_periodic_task(
-        crontab(hour=3, minute=0),
+        crontab(hour=5, minute=0),
         cron_morning.s(),
     )
     logger.info(f'setup_periodic_tasks DONE')

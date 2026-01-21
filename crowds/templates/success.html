@@ -1,0 +1,18 @@
+{% extends 'reunion/base.html' %}
+{% load i18n %}
+
+{% block title %}{% translate 'Paiement reçu' %}{% endblock %}
+
+{% block main %}
+  <main class="container-lg py-5">
+    <div class="card p-4">
+      <h1>{% translate 'Merci' %} 🎉</h1>
+      <p>
+        {% blocktrans with amount=contrib.amount_eur|floatformat:2 name=project.name %}
+        Votre contribution de <strong>{{ amount }} €</strong> a bien été enregistrée pour le projet <strong>{{ name }}</strong>.
+        {% endblocktrans %}
+      </p>
+      <a href="{% url 'crowds-list' %}" class="btn btn-primary">{% translate 'Retour aux projets' %}</a>
+    </div>
+  </main>
+{% endblock %}

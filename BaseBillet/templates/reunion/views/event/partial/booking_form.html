@@ -50,75 +50,81 @@
             </div>
         {% endif %}
 
-        <div class="accordion mb-3">
-            {% regroup event.published_prices by free_price as price_groups %}
-            {% for free_price, published_prices in price_groups %}
-                <details class="accordion-item js-price-group" name="price_groups"
-                         {% if forloop.first %}open{% endif %}>
-                    <summary class="text-secondary p-3">
-                        {% if free_price %}
-                            {% trans 'Open price (one ticket)' %}
-                        {% else %}
-                            {% trans 'Specific prices' %}
-                        {% endif %}
-                    </summary>
-                    {% for price in published_prices %}
-                        {% if price.free_price == free_price %}
-                            <div class="p-3 js-order">
-                                <label for="amount-{{ price.uuid }}" class="form-label">
-                                    <strong>{{ price.name }}</strong>{% if not free_price and price.prix > 0 %}&nbsp;:
-                                    <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
-                                {% elif free_price %}
-                                    <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
-                                {% endif %}
-                                </label>
-                                <!-- Adhésion obligatoire pour selectionner ce produit ! -->
-                                {% if price.adhesion_obligatoire %}
-                                    {% if not user.is_authenticated %}
-                                        <div class="alert alert-danger" role="alert">
-                                            {% trans "Log in to access this rate." %}
-                                        </div>
-                                    {% elif not user|is_membership:price.adhesion_obligatoire %}
-                                        <div class="alert alert-danger" role="alert">
-                                            {% trans "Suscribe to access this rate." %}
-                                        </div>
-                                    {% else %}
-                                        <span class="d-flex align-items-baseline gap-3">
-                                        <bs-counter
-                                                id="amount-{{ price.uuid }}"
-                                                name="{{ price.uuid }}"
-                                                step="1" min="0"
-                                                max="{% if price.max_per_user > event.max_per_user %}
-                                                            {{ event.max_per_user }}
-                                                       {% else %}
-                                                            {{ price.max_per_user }}
-                                                       {% endif %}"
-                                                class="flex-grow-1 js-order-amount">
-                                        </bs-counter>
-                                        {% trans 'ticket(s)' %}
-                                    </span>
-                                    {% endif %}
-                                    <!-- Adhésion non obligatoire -->
-                                {% else %}
-                                    <span class="d-flex align-items-baseline gap-3">
-                                    <bs-counter
-                                            id="amount-{{ price.uuid }}"
-                                            name="{{ price.uuid }}"
-                                            step="1" min="0"
-                                            max="{% if price.max_per_user > event.max_per_user %}
-                                                        {{ event.max_per_user }}
-                                                    {% else %}
-                                                        {{ price.max_per_user }}
-                                                    {% endif %}"
-                                            class="flex-grow-1 js-order-amount"
-                                    ></bs-counter>
-                                    {% trans 'ticket(s)' %}
-                                </span>
-                                {% endif %}
+        <div class="mb-3">
+            {% for price in event.published_prices %}
+                <div class="p-3 js-order">
+                    <label for="amount-{{ price.uuid }}" class="form-label">
+                        <strong>{{ price.name }}</strong>{% if not price.free_price and price.prix > 0 %}&nbsp;:
+                        <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
+                    {% elif price.free_price %}
+                        <span class="js-order-price-alt d-none">{% trans 'at an open price' %}</span>
+                    {% endif %}
+                    </label>
+                    {% if price.product|in_list:product_max_per_user_reached %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "You have reached the maximum number of reservations possible for this event." %}
+                        </div>
+                    {% elif price|in_list:price_max_per_user_reached %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "You have reached the maximum number of reservations possible for this price." %}
+                        </div>
+                    {% elif price|price_out_of_stock:event %}
+                        <div class="alert alert-danger" role="alert">
+                            {% trans "This price is no longer available." %}
+                        </div>
+                    {% elif price.adhesion_obligatoire %}
+                        {% if not user.is_authenticated %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "Log in to access this rate." %}
                             </div>
+                        {% elif not user|is_membership:price.adhesion_obligatoire %}
+                            <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "Suscribe to access this rate." %}
+                            </div>
+                        {% else %}
+                            <span class="d-flex align-items-baseline gap-3">
+                                <bs-counter
+                                        id="amount-{{ price.uuid }}"
+                                        name="{{ price.uuid }}"
+                                        step="1" min="0"
+                                        max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                        class="flex-grow-1 js-order-amount">
+                                </bs-counter>
+                                {% trans 'ticket(s)' %}
+                            </span>
                         {% endif %}
-                    {% endfor %}
-                </details>
+                    {% else %}
+                        <span class="d-flex align-items-baseline gap-3">
+                            <bs-counter
+                                    id="amount-{{ price.uuid }}"
+                                    name="{{ price.uuid }}"
+                                    step="1" min="0"
+                                    max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                    class="flex-grow-1 js-order-amount"
+                            ></bs-counter>
+                            {% trans 'ticket(s)' %}
+                        </span>
+                    {% endif %}
+
+                    {% if price.free_price %}
+                        <div id="custom-amount-container-{{ price.uuid }}"
+                             class="custom-amount-container mt-3 p-3 border border-primary-subtle rounded bg-body-tertiary"
+                             style="display: none;">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg custom-amount-input js-order-custom-price"
+                                   type="number"
+                                   name="custom_amount_{{ price.uuid }}"
+                                   min="{{ price.prix }}"
+                                   step="0.10"
+                                   placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}">
+                            <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                {% trans "Enter the desired amount per ticket" %}
+                            </small>
+                        </div>
+                    {% endif %}
+                </div>
             {% endfor %}
         </div>
         {% for option in event.options_radio.all %}
@@ -160,7 +166,8 @@
                                            class="form-control"
                                            placeholder="{{ field.placeholder|default:field.label }}"
                                            {% if field.required %}required{% endif %}>
-                                    <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                    <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                        <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
@@ -171,14 +178,16 @@
                                               class="form-control" style="height: 120px"
                                               placeholder="{{ field.placeholder|default:field.label }}"
                                               {% if field.required %}required{% endif %}></textarea>
-                                    <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                    <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                        <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                                     {% if field.help_text %}
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
                                 </div>
                             {% elif field.field_type == 'SS' %}
                                 <div class="mb-3">
-                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                                    <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                        <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                                     <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
                                             {% if field.required %}required{% endif %}>
                                         <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
@@ -190,14 +199,18 @@
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
                                 </div>
-                            {% elif field.field_type == 'MS' %}
+                            {% elif field.field_type == 'SR' %}
                                 <div class="mb-3">
-                                    <div class="form-label">{{ field.label }}</div>
+                                    <div class="form-label">
+                                        {{ field.label }}{% if field.required %}
+                                            <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                    </div>
                                     {% for opt in field.options %}
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox"
+                                            <input class="form-check-input" type="radio"
                                                    id="ff-{{ field.uuid }}-{{ forloop.counter }}"
-                                                   name="form__{{ field.name }}" value="{{ opt }}">
+                                                   name="form__{{ field.name }}" value="{{ opt }}"
+                                                   {% if field.required and forloop.first %}required{% endif %}>
                                             <label class="form-check-label"
                                                    for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                         </div>
@@ -206,12 +219,157 @@
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
                                 </div>
+                            {% elif field.field_type == 'BL' %}
+                                <div class="form-check form-switch mb-3" {% if field.required %}data-bl-required="true"
+                                     data-input-id="ff-{{ field.uuid }}"
+                                     data-error-message="{% translate 'Please check this box.' %}"{% endif %}>
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                           id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on"
+                                           {% if field.required %}required aria-required="true"{% endif %}>
+                                    <label class="form-check-label" for="ff-{{ field.uuid }}">
+                                        {{ field.label }}{% if field.required %}
+                                            <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                    </label>
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.required %}
+                                        <div class="text-danger small mt-1" data-bl-error style="display:none;"></div>
+                                    {% endif %}
+                                </div>
+                            {% elif field.field_type == 'MS' %}
+                                <div class="mb-3" {% if field.required %}data-ms-required="true"
+                                     data-input-name="form__{{ field.name }}"
+                                     data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}>
+                                    <div class="form-label">
+                                        {{ field.label }}{% if field.required %}
+                                            <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                                    </div>
+                                    {% for opt in field.options %}
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                                   name="form__{{ field.name }}" value="{{ opt }}"
+                                                   {% if field.required %}aria-required="true"{% endif %}>
+                                            <label class="form-check-label"
+                                                   for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                        </div>
+                                    {% endfor %}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.required %}
+                                        <div class="text-danger small mt-1" data-ms-error style="display:none;"></div>
+                                    {% endif %}
+                                </div>
                             {% endif %}
                         {% endfor %}
                     {% endif %}
                 {% endwith %}
             {% endfor %}
         {% endwith %}
+
+        <script>
+            (function () {
+                const form = document.getElementById('reservation_form');
+                if (!form) return;
+
+                function validateMsRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-ms-required="true"]');
+                    groups.forEach(group => {
+                        const inputName = group.getAttribute('data-input-name');
+                        const boxes = group.querySelectorAll('input[type="checkbox"][name="' + inputName + '"]');
+                        const anyChecked = Array.from(boxes).some(cb => cb.checked);
+                        const error = group.querySelector('[data-ms-error]');
+                        if (!anyChecked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher au moins une option.';
+                                error.style.display = 'block';
+                            }
+                            boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            boxes.forEach(cb => cb.removeAttribute('aria-invalid'));
+                        }
+                    });
+                    return ok;
+                }
+
+                function validateBlRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-bl-required="true"]');
+                    groups.forEach(group => {
+                        const input = group.querySelector('input[type="checkbox"]');
+                        const error = group.querySelector('[data-bl-error]');
+                        if (!input) return;
+                        if (!input.checked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher cette case.';
+                                error.style.display = 'block';
+                            }
+                            input.setAttribute('aria-invalid', 'true');
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            input.removeAttribute('aria-invalid');
+                        }
+                    });
+                    return ok;
+                }
+
+                // Validate before HTMX sends the request
+                form.addEventListener('htmx:configRequest', function (event) {
+                    const okMs = validateMsRequired();
+                    const okBl = validateBlRequired();
+                    if (!(okMs && okBl)) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Live update on change within a required MS/BL group
+                form.addEventListener('change', function (e) {
+                    if (e.target && e.target.closest('[data-ms-required="true"]')) {
+                        validateMsRequired();
+                    }
+                    if (e.target && e.target.closest('[data-bl-required="true"]')) {
+                        validateBlRequired();
+                    }
+                });
+
+                // Validation des prix libres : s'assurer qu'un montant est saisi pour chaque prix libre sélectionné
+                function validateFreePrices() {
+                    let ok = true;
+                    const orders = form.querySelectorAll('.js-order');
+                    orders.forEach(order => {
+                        const amountInput = order.querySelector('.js-order-amount');
+                        const customPriceInput = order.querySelector('.js-order-custom-price');
+                        if (amountInput && customPriceInput && parseInt(amountInput.value) > 0) {
+                            if (!customPriceInput.value || parseFloat(customPriceInput.value) < parseFloat(customPriceInput.min || 0)) {
+                                ok = false;
+                                customPriceInput.classList.add('is-invalid');
+                            } else {
+                                customPriceInput.classList.remove('is-invalid');
+                            }
+                        }
+                    });
+                    return ok;
+                }
+
+                form.addEventListener('htmx:configRequest', function (event) {
+                    if (!validateFreePrices()) {
+                        event.preventDefault();
+                    }
+                });
+            })();
+        </script>
 
         <h4>
             {% trans 'Total&nbsp;:' %} <span class="js-total-amount">0</span> {% trans 'ticket(s)' %}

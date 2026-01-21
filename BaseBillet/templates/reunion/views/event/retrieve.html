@@ -2,24 +2,33 @@
 {% load tibitags i18n static %}
 
 {% block title %}{{ event.name }}{% endblock %}
-{% block meta_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
+{% block meta_description %}{% if event.short_description %}{{ event.short_description|striptags }}
+{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
+{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
 {% block og_type %}event{% endblock %}
 {% block og_title %}{{ event.name }}{% endblock %}
-{% block og_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block og_image %}{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block og_description %}{% if event.short_description %}{{ event.short_description|striptags }}
+{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
+{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
+{% block og_image %}{{ event.get_social_card }}{% endblock %}
 {% block og_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block twitter_title %}{{ event.name }}{% endblock %}
-{% block twitter_description %}{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
-{% block twitter_image %}{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ block.super }}{% endif %}{% endblock %}
+{% block twitter_description %}{% if event.short_description %}{{ event.short_description|striptags }}
+{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
+{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
+{% block twitter_image %}{{ event.get_social_card }}{% endblock %}
 {% block twitter_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
 {% block extra_meta %}
     {% if event.postal_address %}
         {% if event.postal_address.latitude and event.postal_address.longitude %}
-        <meta name="geo.position" content="{{ event.postal_address.latitude }};{{ event.postal_address.longitude }}">
-        <meta name="ICBM" content="{{ event.postal_address.latitude }}, {{ event.postal_address.longitude }}">
+            <meta name="geo.position"
+                  content="{{ event.postal_address.latitude }};{{ event.postal_address.longitude }}">
+            <meta name="ICBM" content="{{ event.postal_address.latitude }}, {{ event.postal_address.longitude }}">
         {% endif %}
-        <meta name="geo.placename" content="{{ event.postal_address.address_locality }}, {{ event.postal_address.address_country }}">
-        <meta name="geo.region" content="{{ event.postal_address.address_country }}{% if event.postal_address.address_region %}-{{ event.postal_address.address_region }}{% endif %}">
+        <meta name="geo.placename"
+              content="{{ event.postal_address.address_locality }}, {{ event.postal_address.address_country }}">
+        <meta name="geo.region" content="
+                {{ event.postal_address.address_country }}{% if event.postal_address.address_region %}-{{ event.postal_address.address_region }}{% endif %}">
     {% endif %}
 {% endblock %}
 
@@ -34,7 +43,7 @@
 
         // Check if openbookingPanel parameter exists in URL and open booking panel if it does
         // Example URL: https://example.com/event/123/?openbookingPanel=true
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.has('openbookingPanel')) {
                 const bookingPanel = document.getElementById('bookingPanel');
@@ -48,11 +57,13 @@
 
     <!-- Schema.org Event structured data -->
     <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "Event",
-        "name": "{{ event.name }}",
-        "description": "{% if event.short_description %}{{ event.short_description|striptags }}{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet",
+        {
+						"@context": "https://schema.org",
+						"@type": "Event",
+						"name": "{{ event.name }}",
+        "description": "{% if event.short_description %}
+        {{ event.short_description|striptags }}{% elif event.long_description %}
+        {{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet",
         "image": "{% if event.img %}{{ event.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}",
         "startDate": "{{ event.datetime|date:'c' }}",
         {% if event.end_datetime %}"endDate": "{{ event.end_datetime|date:'c' }}",{% endif %}
@@ -61,10 +72,10 @@
         "location": {
             "@type": "Place",
             "name": "{{ config.organisation }}",
-            {% if event.postal_address %}"address": {
+        {% if event.postal_address %}"address": {
                 "@type": "PostalAddress",
-                {% if event.postal_address.name %}"name": "{{ event.postal_address.name }}",{% endif %}
-                "streetAddress": "{{ event.postal_address.street_address }}",
+            {% if event.postal_address.name %}"name": "{{ event.postal_address.name }}",{% endif %}
+            "streetAddress": "{{ event.postal_address.street_address }}",
                 "addressLocality": "{{ event.postal_address.address_locality }}",
                 "postalCode": "{{ event.postal_address.postal_code }}",
                 "addressCountry": "{{ event.postal_address.address_country }}"
@@ -84,10 +95,11 @@
             "@type": "Offer",
             "price": "{{ event.price_min }}",
             "priceCurrency": "EUR",
-            "availability": "{% if event.complet %}https://schema.org/SoldOut{% else %}https://schema.org/InStock{% endif %}",
+            "availability": "{% if event.complet %}https://schema.org/SoldOut{% else %}https://schema.org/InStock
+        {% endif %}",
             "url": "{{ request.build_absolute_uri }}"
         }{% endif %}
-    }
+        }
     </script>
 {% endblock %}
 
@@ -106,28 +118,34 @@
 
         <!-- tags -->
         <p>
-            {% for tag  in event.tag.all %}
-                <span class="badge text-bg-info p-2 me-1 fs-6 fw-medium">{{ tag }}</span>
+            {% for tag in event.tag.all %}
+                <a class="btn btn-sm mb-1"
+                    style="{{ tag.style_attr }}"
+                    href="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                    hx-get="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
+                    hx-target="body"
+                    hx-swap="innerHTML"
+                    hx-push-url="true">
+                    {{ tag.name }}
+                </a>
             {% endfor %}
         </p>
 
-        <p class="lead">{{ event.short_description | default:"" }}</p>
-
-        {#    Si l'évènement n'est pas de ce tenant, il provient d'une fédération, le bouton redigire vers la page du tenant.#}
-        {#    # Todo : Garder l'user d'un dns à l'autre #}
-        {% if not event_in_this_tenant %}
-            <a href="{{ event.full_url }}?openbookingPanel=true" target="_blank" class="btn btn-lg btn-primary d-block mt-3" role="button">
-                {% translate "I want to book one or more seats" %}
-                <i class="bi bi-box-arrow-up-right"></i>
-            </a>
-        {% elif event.complet %}
+        {% if event.short_description %}
+            <p class="lead">{{ event.short_description | default:"" }}</p>
+        {% endif %}
+        {% if event.complet %}
             <a href="#" class="btn btn-lg btn-danger d-block mt-3 disabled" role="button" aria-disabled="true">
                 {% translate "Full capacity: The event is sold out." %}
             </a>
+        {% elif event_max_per_user_reached %}
+            <a href="#" class="btn btn-lg btn-danger d-block mt-3 disabled" role="button" aria-disabled="true">
+                {% translate "You have reached the maximum number of tickets for this event." %}
+            </a>
         {% elif event.products.count %}
             {% include 'reunion/views/event/partial/booking.html' %}
-{#        {% else %}#}
-{#            {% translate "Free admission" %}#}
+            {#        {% else %}#}
+            {#            {% translate "Free admission" %}#}
         {% endif %}
 
         {% if action_total_jauge %}

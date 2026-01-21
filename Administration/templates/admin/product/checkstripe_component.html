@@ -3,9 +3,9 @@
 
 {% if stripe_payouts_enabled %} {#On affiche une alerte si le compte stripe n'est pas activé#}
 
-    <div class="flex flex-row items-center gap-3">
+    <span class="text-sm text-gray-500 dark:text-gray-400">
         {% trans "Votre compte stripe est connecté ! Vous pouvez créer ici des produits de type adhésion et billet payant ou de type reservation gratuite." %}
-    </div>
+    </span>
 
 {% else %}
     <div class="flex flex-row items-center gap-3 mt-2">
@@ -21,8 +21,10 @@
 {% endif %}
 
 <div class="flex flex-row items-center gap-3 mt-2">
+    <span class="text-sm text-gray-500 dark:text-gray-400">
     {% trans "Pour plus d'information, n'hésitez pas à consulter la documentation :" %}
     <a href="https://tibillet.org/fr/docs/category/billetterie/" target="_blank">
         {% trans "https://tibillet.org/fr/docs/category/billetterie/" %}
     </a>
+    </span>
 </div>

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import uuid
 from datetime import timedelta
 from decimal import Decimal
@@ -37,24 +38,25 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ApiBillet.permissions import TenantAdminPermission
+from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
-from BaseBillet.models import Configuration, Ticket, Product, Event, Paiement_stripe, Membership, Reservation, \
+from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator, ContactValidator
+    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
+from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_connect.utils import dround
@@ -95,7 +97,12 @@ def encode_uid(pk):
 
 
 def get_context(request):
+    # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
+    # if context_cached:
+    #     return context_cached
+
     config = Configuration.get_solo()
+    crowd_config = CrowdConfig.get_solo()
     # logger.debug("request.htmx") if request.htmx else None
     base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
@@ -118,6 +125,7 @@ def get_context(request):
         "user": request.user,
         "profile": serialized_user,
         "config": config,
+        "crowd_config": crowd_config,
         "meta_url": meta_url,
         "header": True,
         # "tenant": connection.tenant,
@@ -131,9 +139,25 @@ def get_context(request):
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
-            {'name': 'federation', 'url': '/federation/', 'label': 'Local network', 'icon': 'diagram-2-fill'},
         ]
     }
+
+    navbar: list = context["main_nav"]
+    agenda_federation_active = FederatedPlace.objects.exists()
+    asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
+    if agenda_federation_active or asset_federation_active:
+        navbar.append(
+            {'name': 'federation', 'url': '/federation/',
+             'label': 'Local network', 'icon': 'diagram-2-fill'}
+        )
+
+    if crowd_config.active and Initiative.objects.exists():
+        navbar.append(
+            {'name': f'crowd-list', 'url': '/crowd/',
+             'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
+        )
+
+    # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
 
 
@@ -270,7 +294,9 @@ def connexion(request):
             # Création de l'user et envoie du mail de validation
             email = validator.validated_data['email']
             user = get_or_create_user(email=email, send_mail=True, force_mail=True)
-
+            if not user.wallet:
+                fedowAPI = FedowAPI()
+                fedowAPI.wallet.get_or_create_wallet(user)
             messages.add_message(request, messages.SUCCESS, _("To access your space, please validate\n"
                                                               "your email address. Don't forget to check your spam!"))
 
@@ -290,7 +316,7 @@ def connexion(request):
 
 
 def emailconfirmation(request, token):
-    try :
+    try:
         activate(request, token)
         next_url = request.GET.get('next', None)
         if next_url:
@@ -302,6 +328,7 @@ def emailconfirmation(request, token):
         return redirect('index')
     except Exception as e:
         raise Http404("Error on email confirmation")
+
 
 class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
@@ -446,19 +473,71 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
         card_number = linked_serialized_card.get('number_printed')
         if card_number:
             for membership in Membership.objects.filter(
-                user__isnull=True,
-                card_number=card_number):
+                    user__isnull=True,
+                    card_number=card_number):
                 membership.user = user
                 membership.first_name = user.first_name
                 membership.last_name = user.last_name
                 membership.save()
-
 
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+
+class SpecialAdminAction(viewsets.ViewSet):
+    authentication_classes = [SessionAuthentication, ]
+    permission_classes = [TenantAdminPermission, ]
+
+    @action(detail=True, methods=['POST'])
+    def toggle_user_right(self, request, pk):
+        user = get_object_or_404(HumanUser, pk=pk)
+        tenant = connection.tenant
+        referer = request.headers.get('Referer') or f"/admin/AuthBillet/humanuser/{pk}/change/"
+        logger.info(f"toggle_user_right : {request.data}")
+
+        if request.GET.get('action') == 'client_admin' :
+            if user.client_admin.filter(pk=tenant.pk).exists():
+                user.client_admin.remove(tenant)
+                user.is_staff = False
+                user.save(update_fields=['is_staff'])
+                messages.info(request, _("Admin right removed"))
+            else:
+                user.client_admin.add(tenant)
+                messages.success(request, _("Admin right granted: with great power comes great responsibility."))
+
+        elif request.GET.get('action') == 'initiate_payment' :
+            if user.initiate_payment.filter(pk=tenant.pk).exists():
+                user.initiate_payment.remove(tenant)
+                messages.info(request, _("Right removed: initiate payment"))
+            else:
+                user.initiate_payment.add(tenant)
+                messages.success(request, _("Right granted: initiate payment"))
+
+        elif request.GET.get('action') == 'create_event' :
+            if user.create_event.filter(pk=tenant.pk).exists():
+                user.create_event.remove(tenant)
+                messages.info(request, _("Right removed: Event create"))
+            else:
+                user.create_event.add(tenant)
+                messages.success(request, _("Right granted: Event create"))
+
+        elif request.GET.get('action') == 'manage_crowd' :
+            if user.manage_crowd.filter(pk=tenant.pk).exists():
+                user.manage_crowd.remove(tenant)
+                messages.info(request, _("Right removed: Manage crowds"))
+            else:
+                user.manage_crowd.add(tenant)
+                messages.success(request, _("Right granted: Manage crowds"))
+
+        else:
+            messages.error(request, _("No right selected"))
+
+        return HttpResponseClientRedirect(referer)
+
+
 
 
 class TiBilletLogin(viewsets.ViewSet):
@@ -476,7 +555,6 @@ class TiBilletLogin(viewsets.ViewSet):
             if request.htmx:
                 return render(request, "reunion/views/login/partials/fullpage_inner.html", context=template_context)
             return render(request, "reunion/views/login/fullpage.html", context=template_context)
-
 
         # POST: email submitted
         validator = LoginEmailValidator(data=request.POST)
@@ -572,6 +650,11 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.WARNING,
                                  _("Please login to access this page."))
             return redirect('/')
+
+        # check que le wallet existe bien :
+        if not request.user.wallet:
+            fedowAPI = FedowAPI()
+            fedowAPI.wallet.get_or_create_wallet(request.user)
         return super().dispatch(request, *args, **kwargs)
 
     def list(self, request: HttpRequest):
@@ -587,7 +670,6 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/views/account/index.html", context=template_context)
 
-
     @action(detail=False, methods=['GET'])
     def balance(self, request: HttpRequest):
         template_context = get_context(request)
@@ -597,15 +679,6 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
 
-    """
-    # Plus besoin : c'est le /my_account (list) qui prend le relai
-    @action(detail=False, methods=['GET'])
-    def wallet(self, request: HttpRequest) -> HttpResponse:
-        template_context = get_context(request)
-        # Pas de header sur cette page
-        template_context['header'] = False
-        return render(request, "htmx/views/my_account/my_account_wallet.html", context=template_context)
-    """
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
@@ -616,24 +689,20 @@ class MyAccount(viewsets.ViewSet):
         }
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
-    @action(detail=True, methods=['GET'])
+    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
-        tenant = request.tenant
-        admin = request.user
-        if admin.is_tenant_admin(tenant):
-            fedowAPI = FedowAPI()
-            user = get_object_or_404(HumanUser, pk=pk)
-            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-            tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+        fedowAPI = FedowAPI()
+        user = get_object_or_404(HumanUser, pk=pk)
+        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
 
-            context = {
-                'cards': cards,
-                'tokens': tokens,
-                'user_pk': pk,
-            }
-            return render(request, "admin/membership/wallet_info.html", context=context)
-        return HttpResponse("No cards")
+        context = {
+            'cards': cards,
+            'tokens': tokens,
+            'user_pk': pk,
+        }
+        return render(request, "admin/membership/wallet_info.html", context=context)
 
     @action(detail=False, methods=['GET'])
     def my_reservations(self, request):
@@ -663,8 +732,9 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         # Mark reservation as canceled
         try:
-            cancel_text =resa.cancel_and_refund_resa()
-            messages.add_message(request, messages.SUCCESS, _("Your reservation has been cancelled.") + f" {cancel_text}")
+            cancel_text = resa.cancel_and_refund_resa()
+            messages.add_message(request, messages.SUCCESS,
+                                 _("Your reservation has been cancelled.") + f" {cancel_text}")
             # Trigger email notification to the user via Celery
             try:
                 send_reservation_cancellation_user.delay(str(resa.uuid))
@@ -673,7 +743,8 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         except Exception as e:
             logger.error(f"Error canceling reservation {pk}: {e}")
-            messages.add_message(request, messages.ERROR, _("An error occurred while cancelling your reservation.") + f" : {e}")
+            messages.add_message(request, messages.ERROR,
+                                 _("An error occurred while cancelling your reservation.") + f" : {e}")
             return HttpResponseClientRedirect('/my_account/my_reservations/')
 
     @action(detail=True, methods=['POST'])
@@ -681,7 +752,8 @@ class MyAccount(viewsets.ViewSet):
         ticket = get_object_or_404(Ticket, pk=pk, reservation__user_commande=request.user)
         try:
             msg = ticket.reservation.cancel_and_refund_ticket(ticket)
-            messages.add_message(request, messages.SUCCESS, _("Your ticket has been cancelled.") + (f" {msg}" if msg else ""))
+            messages.add_message(request, messages.SUCCESS,
+                                 _("Your ticket has been cancelled.") + (f" {msg}" if msg else ""))
             # Trigger email notification to the user via Celery
             try:
                 send_ticket_cancellation_user.delay(str(ticket.uuid))
@@ -692,7 +764,8 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/my_reservations/')
         except Exception as e:
             logger.error(f"Error canceling ticket {pk}: {e}")
-            messages.add_message(request, messages.ERROR, _("An error occurred while cancelling your ticket.") + f" : {e}")
+            messages.add_message(request, messages.ERROR,
+                                 _("An error occurred while cancelling your ticket.") + f" : {e}")
             if request.headers.get('HX-Request'):
                 return HttpResponse("", status=400)
             return HttpResponseClientRedirect('/my_account/my_reservations/')
@@ -769,7 +842,7 @@ class MyAccount(viewsets.ViewSet):
                 'title': f"Remboursement de {amount_eur} € initié",
                 'sub_title': "TiBillet",
                 'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
-                'main_text_2': "Environ 10 jours peuvent s'écouler avant qu'il n'apparaisse sur votre relevé. Si passé ce délai vous n'avez pas été remboursé, veuillez nous contacter sur contact@tibillet.re.",
+                'main_text_2': f"Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
                 'table_info': {'Montant remboursé': f'{amount_eur} €'},
                 'end_text': "À bientôt !",
                 'signature': "Marvin, le robot TiBillet",
@@ -858,9 +931,8 @@ class MyAccount(viewsets.ViewSet):
         next_url = paginated_list_by_wallet_signature.get('next')
         previous_url = paginated_list_by_wallet_signature.get('previous')
 
-
         context = {
-            'actions_choices':  TransactionSimpleValidator.TYPE_ACTION,
+            'actions_choices': TransactionSimpleValidator.TYPE_ACTION,
             'config': config,
             'transactions': transactions,
             'next_url': next_url,
@@ -946,17 +1018,12 @@ class MyAccount(viewsets.ViewSet):
         return redirect('/my_account/')
 
 
-
-
 class QrCodeScanPay(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission, ])
+    @action(detail=True, methods=['GET'], permission_classes=[CanInitiatePaymentPermission, ])
     def check_payment(self, request: HttpRequest, pk=None):
         user = request.user
-        this_tenant: Client = connection.tenant
-        if not user.is_tenant_admin(this_tenant):
-            return HttpResponse(status=403)
 
         la_uuid = uuid.UUID(pk)
         is_valid = False
@@ -971,33 +1038,24 @@ class QrCodeScanPay(viewsets.ViewSet):
         }
         return render(request, "reunion/views/qrcode_scan_pay/fragments/check_payment.html", context=context)
 
-    @action(detail=False, methods=['GET'], permission_classes=[TenantAdminPermission, ])
+    @action(detail=False, methods=['GET'], permission_classes=[CanInitiatePaymentPermission, ])
     def get_generator(self, request: HttpRequest):
 
         user = request.user
-        this_tenant: Client = connection.tenant
-        if not user.is_tenant_admin(this_tenant):
-            messages.add_message(request, messages.ERROR, _("You are not authorized to access this page."))
-            return redirect('/')
         # GET de la route /qrcodegenerator
         # On livre le template qui permet de générer un qrcode
         template_context = get_context(request)
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
-    @action(detail=False, methods=['POST'], permission_classes=[TenantAdminPermission, ])
+    @action(detail=False, methods=['POST'], permission_classes=[CanInitiatePaymentPermission, ])
     def generate_qrcode(self, request: HttpRequest):
         # POST de la route /qrcodegenerator qui génère le qrcode
         data = request.POST
         logger.info(f"QRCODEGENERATOR POST : {data}")
         user = request.user
 
-        this_tenant: Client = connection.tenant
-        if not user.is_tenant_admin(this_tenant):
-            messages.add_message(request, messages.ERROR, _("You are not authorized to access this page."))
-            return redirect('/')
-
         # Get the form data
-        amount = int(dround(Decimal(data.get('amount'))) *100)
+        amount = int(dround(Decimal(data.get('amount'))) * 100)
         asset_type = data.get('asset_type', 'EUR')
 
         if not amount or not asset_type:
@@ -1009,7 +1067,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         product_sold = ProductSold.objects.get_or_create(product=product)[0]
         price = Price.objects.get_or_create(name=f"{dround(amount)}€", product=product, prix=dround(amount))[0]
         price_sold = PriceSold.objects.get_or_create(productsold=product_sold, price=price, prix=dround(amount))[0]
-        
+
         # Create LigneArticle with metadata containing admin email
         ligne_article = LigneArticle.objects.create(
             pricesold=price_sold,
@@ -1017,7 +1075,8 @@ class QrCodeScanPay(viewsets.ViewSet):
             amount=amount,
             payment_method=PaymentMethod.QRCODE_MA,
             status=LigneArticle.CREATED,
-            metadata=json.dumps({"admin": str(request.user.email)})
+            metadata=json.dumps({"admin": str(request.user.email)}),
+            sale_origin=SaleOrigin.QRCODE_MA,
         )
 
         # Use the UUID directly in the QR code
@@ -1037,9 +1096,9 @@ class QrCodeScanPay(viewsets.ViewSet):
 
         return render(request, "reunion/views/qrcode_scan_pay/generator.html", context=template_context)
 
-    @action(detail=False, methods=['GET', 'POST'], permission_classes=[permissions.IsAuthenticated, ])
+    @action(detail=False, methods=['GET'], permission_classes=[permissions.IsAuthenticated, ])
     def get_scanner(self, request: HttpRequest):
-        if request.method == 'GET': # On demande le scanner
+        if request.method == 'GET':  # On demande le scanner
             user = request.user
             if not user.email_valid:
                 messages.add_message(request, messages.ERROR, _("Please validate your email address."))
@@ -1050,58 +1109,111 @@ class QrCodeScanPay(viewsets.ViewSet):
             template_context = get_context(request)
             return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
 
-        if request.method == 'POST' : # C'est le résultat du scanner
-            import ipdb; ipdb.set_trace()
+        # if request.method == 'POST' : # C'est le résultat du scanner
+        #     import ipdb; ipdb.set_trace()
 
-    @action(methods=['POST'], detail=False, permission_classes=[permissions.IsAuthenticated, ])
+    @action(methods=['POST'], detail=False, permission_classes=[CanInitiatePaymentPermission, ])
     def process_with_nfc(self, request):
-        user = request.user
-        # Accept JSON or form data
+        nfc_validator = QrCodeScanPayNfcValidator(data=request.data, context={'request': request})
+        if not nfc_validator.is_valid():
+            logger.info(f"NFC validation failed: {nfc_validator.errors}")
+            return Response(nfc_validator.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Si c'est valid, alors tout est passé, même la vérification du solde du portefeuille.
+        ligne_article: LigneArticle = nfc_validator.ligne_article
+        tag_id = nfc_validator.tag_id
+        wallet = nfc_validator.wallet
+
+        # Attache les infos NFC et la carte sur la ligne article
+        # metadata peut être déjà un dict (JSONField) ou une chaîne JSON
+        if isinstance(ligne_article.metadata, dict):
+            metadata = ligne_article.metadata
+        else:
+            metadata = json.loads(ligne_article.metadata) if ligne_article.metadata else {}
+        metadata['nfc'] = {
+            'tag_id': tag_id,
+            'read_at': timezone.now().isoformat(),
+            'reader': request.user.email,
+            'user': wallet.user.email,
+        }
+        ligne_article.metadata = json.dumps(metadata, cls=DjangoJSONEncoder) if not isinstance(metadata,
+                                                                                               dict) else metadata
+        ligne_article.save(update_fields=['metadata'])
+
+        # lancement de la transaction via Fedow api
         try:
-            data = request.data
-        except Exception:
+            fedowAPI = nfc_validator.fedowAPI
+            transactions = fedowAPI.transaction.to_place_from_qrcode(
+                metadata=metadata,
+                amount=ligne_article.amount,
+                asset_type="EURO",
+                user=wallet.user,
+            )
+            assert transactions is not None
+            assert type(transactions) is list
+            # on supprime la ligne article pour la recréer en fonction de la ou des transactions
+            total_amount = ligne_article.amount
+            metadata['transactions'] = transactions
+            pricesold = ligne_article.pricesold
+            ex_ligne_article_uuid = ligne_article.uuid
+            ligne_article.delete()
+            for transaction in transactions:
+                # On récupère les infos de l'asset :
+                asset_used = fedowAPI.asset.retrieve(str(transaction['asset']))
+                if asset_used['category'] == 'FED':
+                    mp = PaymentMethod.STRIPE_FED
+                elif asset_used['category'] == 'TLF':
+                    mp = PaymentMethod.LOCAL_EURO
+                else:
+                    raise Exception("Unknown asset category")
+
+                # Create LigneArticle with metadata containing admin email
+                ligne_article = LigneArticle.objects.create(
+                    uuid=ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
+                    pricesold=pricesold,
+                    qty=dround(Decimal(transaction['amount'] / total_amount)),
+                    amount=transaction['amount'],
+                    payment_method=mp,
+                    status=LigneArticle.VALID,
+                    metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
+                    asset=transaction['asset'],
+                    wallet=wallet,
+                    sale_origin=SaleOrigin.NFC_MA,
+                )
+
+                # import ipdb; ipdb.set_trace()
+                # Chaque transaction doit être bien enregistré sur LaBoutik avec le bon Asset indiqué
+                send_sale_to_laboutik.delay(ligne_article.uuid)
+
+            # Envoi des emails de confirmation (admin et utilisateur)
             try:
-                data = json.loads(request.body.decode('utf-8'))
-            except Exception:
-                data = {}
+                place = connection.tenant.name
+                # Email admin
+                send_payment_success_admin.delay(total_amount, timezone.now(), place, request.user.email)
+                # Email user
+                send_payment_success_user.delay(wallet.user.email, total_amount, timezone.now(), place)
+            except Exception as e_mail:
+                logger.error(f"Error sending payment confirmation emails: {e_mail}")
 
-        tag_serial = data.get('tagSerial') or data.get('serialNumber') or None
-        records = data.get('records') or []
-        la_hex = data.get('ligne_article_uuid_hex') or data.get('ligne_article') or None
+        except Exception as e:
+            logger.error(f"Error validating payment: {str(e)}")
+            raise f"Error validating payment: {str(e)}"
 
-        logger.info(f"NFC read by {user.email if user.is_authenticated else 'anonymous'}: serial={tag_serial}, la={la_hex}, records={records}")
-
-        updated = False
-        if la_hex:
-            try:
-                la_uuid = uuid.UUID(la_hex)
-                la = LigneArticle.objects.get(uuid=la_uuid)
-                metadata = json.loads(la.metadata) if la.metadata else {}
-                metadata['nfc'] = {
-                    'tagSerial': tag_serial,
-                    'records': records,
-                    'read_at': timezone.now().isoformat(),
-                    'reader': user.email if user.is_authenticated else None,
-                }
-                la.metadata = json.dumps(metadata, cls=DjangoJSONEncoder)
-                la.save(update_fields=['metadata'])
-                updated = True
-            except Exception as e:
-                logger.error(f"Failed to attach NFC info to LigneArticle {la_hex}: {e}")
-
+        # C'est un retour vers une swal alert -> on fait pas de HTML pour une fois
         return Response({
-            'status': 'ok',
-            'tagSerial': tag_serial,
-            'ligne_article_uuid_hex': la_hex,
-            'updated': updated,
-        })
+            'status': 'Paiement OK',
+            'user_email': wallet.user.email,
+            'amount_paid': dround(ligne_article.amount),
+            'balance': dround(nfc_validator.user_balance - ligne_article.amount),
+        }, status=status.HTTP_202_ACCEPTED)
 
-    @action(detail=True, methods=['GET'], permission_classes=[permissions.AllowAny, ]) # on permet a tout le monde de scanner un qrcode, mais si tu n'est pas loggué, on te redirige
+    @action(detail=True, methods=['GET'], permission_classes=[
+        permissions.AllowAny, ])  # on permet a tout le monde de scanner un qrcode, mais si tu n'es pas loggué, on te redirige
     def process_qrcode(self, request: HttpRequest, pk):
         user = request.user
         if not user.is_authenticated:
             # On redirige vers la page de login full page avec un next vers ici
-            signed_next_url =  signing.dumps(request.get_full_path())
+            signed_next_url = signing.dumps(request.get_full_path())
             logger.info(f"process_qrcode no auth, need redirect. signed_next_url : {signed_next_url}")
             return redirect(f'/login/login_fullpage?next={signed_next_url}')
 
@@ -1115,7 +1227,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         if not ligne_article_uuid_hex:
             messages.add_message(request, messages.ERROR, _("No QR code content received"))
             return render(request, "reunion/views/qrcode_scan_pay/scanner.html", context=template_context)
-        
+
         # Process the QR code content
         try:
             from uuid import UUID
@@ -1152,7 +1264,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             logger.error(f"No LigneArticle found with UUID: {ligne_article_uuid_hex}")
             template_context['error_message'] = _("Invalid QR code: payment not found")
             return render(request, "reunion/views/qrcode_scan_pay/payment_error.html", context=template_context)
-            
+
         except Exception as e:
             logger.error(f"Error processing QR code: {str(e)}")
             messages.add_message(request, messages.ERROR, _("Invalid QR code format"))
@@ -1203,7 +1315,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         if not ligne_article_uuid_hex:
             messages.add_message(request, messages.ERROR, _("Missing QR code content"))
             return redirect('qrcodescanpay-list')
-        
+
         # Get payment information from LigneArticle
         amount = ligne_article.amount
         asset_type = "EURO"  # Default to EURO
@@ -1227,8 +1339,7 @@ class QrCodeScanPay(viewsets.ViewSet):
             return render(request, "reunion/views/qrcode_scan_pay/insufficient_funds.html", context=template_context)
 
         # lancement de la transaction via Fedow api
-
-        try :
+        try:
             transactions = fedow_api.transaction.to_place_from_qrcode(
                 metadata=metadata,
                 amount=amount,
@@ -1255,21 +1366,21 @@ class QrCodeScanPay(viewsets.ViewSet):
 
                 # Create LigneArticle with metadata containing admin email
                 ligne_article = LigneArticle.objects.create(
-                    uuid = ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
+                    uuid=ex_ligne_article_uuid if transactions.index(transaction) == 0 else uuid.uuid4(),
                     pricesold=pricesold,
-                    qty=dround(Decimal(transaction['amount']/total_amount)),
+                    qty=dround(Decimal(transaction['amount'] / total_amount)),
                     amount=transaction['amount'],
                     payment_method=mp,
                     status=LigneArticle.VALID,
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
                     asset=transaction['asset'],
                     wallet=wallet,
+                    sale_origin=SaleOrigin.QRCODE_MA,
                 )
 
                 # import ipdb; ipdb.set_trace()
                 # Chaque transaction doit être bien enregistré sur LaBoutik avec le bon Asset indiqué
                 send_sale_to_laboutik.delay(ligne_article.uuid)
-
 
             # Set the payment details in the template context
             tenant = connection.tenant
@@ -1313,6 +1424,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         return [permission() for permission in permission_classes]
     '''
 
+
 @require_GET
 def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
@@ -1324,7 +1436,6 @@ def index(request):
     return render(request, "reunion/views/home.html", context=template_context)
 
 
-
 class FederationViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.AllowAny]
@@ -1333,38 +1444,89 @@ class FederationViewset(viewsets.ViewSet):
         template_context = get_context(request)
 
         def build_federated_places():
-            results = []
-            for place in FederatedPlace.objects.all():
-                with tenant_context(place.tenant):
+            results = list()
+            tenants = list()
+            assets = list()
+
+            actual_tenant: Client = connection.tenant
+            tenants.append(actual_tenant)
+            # Les lieux fédéré en agenda
+            for fed in FederatedPlace.objects.all():
+                if fed.tenant not in tenants:
+                    tenants.append(fed.tenant)
+
+            for asset in AssetFedowPublic.objects.filter(
+                    origin=actual_tenant, archive=False
+            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT):
+                assets.append(asset)
+
+            for asset in AssetFedowPublic.objects.filter(
+                    federated_with=actual_tenant, archive=False
+            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT):
+                assets.append(asset)
+
+            # Les lieux fédéré en Asset
+            for asset in assets:
+                tenant_origin = asset.origin
+                if tenant_origin not in tenants:
+                    tenants.append(tenant_origin)
+                for tenant in asset.federated_with.all():
+                    if tenant not in tenants:
+                        tenants.append(tenant)
+
+            for tenant in tenants:
+                if tenant.categorie == Client.ROOT:
+                    tenants.remove(tenant)
+            # logger.info(f"Tenants: {tenants}")
+
+            for client in list(set(tenants)):
+                with tenant_context(client):
+                    # logger.info(f"with tenant_context(client): {client}")
+                    # logger.info(f"with tenant: {client}")
+                    # logger.info(f"with categorie: {client.categorie}")
+
                     config = Configuration.get_solo()
-                    assets = AssetFedowPublic.objects.filter(category__in=[
-                        AssetFedowPublic.STRIPE_FED_FIAT,
-                        AssetFedowPublic.TOKEN_LOCAL_FIAT,
-                        AssetFedowPublic.TOKEN_LOCAL_NOT_FIAT,
-                        AssetFedowPublic.TIME,
-                        AssetFedowPublic.FIDELITY,
-                    ])
+
+                    assets = list()
+
+                    # les assets fédérés
+                    for asset in client.federated_assets_fedow_public.exclude(
+                            category__in=[
+                                AssetFedowPublic.BADGE,
+                                AssetFedowPublic.SUBSCRIPTION,
+                            ], archive=False):
+                        assets.append(asset)
+
+                    # Les assets créés
+                    for asset in client.assets_fedow_public.exclude(
+                            category__in=[
+                                AssetFedowPublic.BADGE,
+                                AssetFedowPublic.SUBSCRIPTION,
+                            ], archive=False):
+                        if asset not in assets:
+                            assets.append(asset)
+
                     results.append({
                         "organisation": config.organisation,
                         "slug": config.slug,
                         "short_description": config.short_description,
                         "long_description": config.long_description,
-                        "img": config.img,
-                        "logo": config.logo,
-                        "assets": assets,
-                        "url" : config.full_url(),
+                        "img": config.get_med_img,
+                        "assets": [{"name": f"{asset.name}", "category": f"{asset.category}"} for asset in assets],
+                        "url": config.full_url(),
                     })
+
+            logger.info(f"Mse en cache : federated places: {results}")
             return results
 
-        federated_places = cache.get_or_set(
-            f"federated_places_{connection.tenant.uuid}",
-            build_federated_places,
-            60 * 60  # cache for 1 hour
-        )
+        # federated_places = None
+        federated_places = cache.get(f'federated_places_{connection.tenant.uuid}')
+        if not federated_places:
+            federated_places = build_federated_places()
+            cache.set(f'federated_places_{connection.tenant.uuid}', federated_places, 60)
 
         template_context['federated_places'] = federated_places
         return render(request, "reunion/views/federation/list.html", context=template_context)
-
 
 
 class HomeViewset(viewsets.ViewSet):
@@ -1398,6 +1560,15 @@ class HomeViewset(viewsets.ViewSet):
 
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
+    def get_permissions(self):
+        # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
+        if self.action in ['simple_add_event', 'simple_create_event', 'address_add_form', 'address_create']:
+            permission_classes = [CanCreateEventPermission]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+
 
     def federated_events_get(self, slug):
         for place in FederatedPlace.objects.all():
@@ -1409,6 +1580,24 @@ class EventMVT(viewsets.ViewSet):
                     ).prefetch_related(
                         'tag', 'products', 'products__prices',
                     ).get(slug=slug)
+                    event.img = event.get_img()
+                    event.sticker_img = event.get_sticker_img()
+                    return event
+                except Event.DoesNotExist:
+                    continue
+
+        return None
+
+    def federated_events_get_hex8(self, hex8):
+        for place in FederatedPlace.objects.all():
+            tenant = place.tenant
+            with tenant_context(tenant):
+                try:
+                    event = Event.objects.select_related(
+                        'postal_address',
+                    ).prefetch_related(
+                        'tag', 'products', 'products__prices',
+                    ).get(uuid__startswith=hex8)
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
                     return event
@@ -1452,10 +1641,12 @@ class EventMVT(viewsets.ViewSet):
                     'tag', 'products', 'products__prices',
                 ).filter(
                     published=True,
-                    datetime__gte=timezone.localtime() - timedelta(days=1),
-                ).exclude(tag__slug__in=tenant['tag_filter']  # On prend les évènement d'aujourd'hui
-                          ).exclude(
-                    categorie=Event.ACTION)  # Les Actions sont affichés dans la page de l'evenement parent
+                    datetime__gte=timezone.localtime() - timedelta(days=1), # On prend les évènement a partir d'hier
+                ).exclude(
+                    tag__slug__in=tenant['tag_filter']
+                ).exclude(
+                    categorie=Event.ACTION
+                )  # Les Actions sont affichés dans la page de l'evenement parent
 
                 if tenant['tenant'] != this_tenant:  # on est pas sur le tenant d'origine, on filtre le bool private
                     events = events.filter(
@@ -1535,9 +1726,16 @@ class EventMVT(viewsets.ViewSet):
         # - passer sur du partial render avec HTMX
         context = get_context(request)
         tags = request.GET.getlist('tag')
-        # search = str(request.data['search'])  # on s'assure que c'est bien une string. Todo : Validator !
+        search = request.GET.get('search')
+        if search:
+            search = str(search)
         page = request.GET.get('page', 1)
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, page=page)
+        # Data for tag filters UI
+        context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
+        context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
+        context['tags'] = tags
+        context['search'] = search
+        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
 
@@ -1556,40 +1754,103 @@ class EventMVT(viewsets.ViewSet):
 
     def retrieve(self, request, pk=None):
         slug = pk
+        hex8 = None
+        match = re.search(r'([0-9a-fA-F]{8})(?:/)?$', pk)
+        if match:
+            hex8 = match.group(1)
+
+        logger.info(f"slug : {slug}")
+        logger.info(f"hex8 : {hex8}")
 
         # Si False, alors le bouton reserver renvoi vers la page event du tenant.
         event_in_this_tenant = False
+        # Defaults to prevent UnboundLocalError when event is retrieved from federation
+        products = []
+        prices = []
+        product_max_per_user_reached = []
+        price_max_per_user_reached = []
+        event_max_per_user_reached = False
+
         try:
-            event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
-                                                                                      'products__prices').get(slug=slug)
+            if hex8:
+                event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
+                                                                                          'products__prices').get(
+                    uuid__startswith=hex8)
+                logger.info(f"event avec hex8 trouvé : {event}")
+            else:
+                event = Event.objects.select_related('postal_address', ).prefetch_related('tag', 'products',
+                                                                                          'products__prices').get(
+                    slug__startswith=slug)
+                logger.info(f"event avec slug trouvé : {event}")
+
             # selection et mise en cache des images
             event.img = event.get_img()
             event.sticker_img = event.get_sticker_img()
 
+            # Récupération des produits et des prix pour :
+            # - afficher le min / max
+            # - vérifier le max par user
+
+            # Précharger les prix en même temps que les produits
+            event_products = event.products.prefetch_related("prices")
+            products = list(event_products)
+
             # Récupération des prix
-            event.prices = [price for product in event.products.all() for price in product.prices.all()]
-            tarifs = [price.prix for price in event.prices]
+            prices = [price for product in products for price in product.prices.all()]
+
+            # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
+            product_max_per_user_reached = []
+            price_max_per_user_reached = []
+            event_max_per_user_reached = False
+
+            if request.user.is_authenticated:
+                for product in products:
+                    if product.max_per_user_reached(user=request.user, event=event):
+                        logger.info(f"product.max_per_user_reached : {product.name} {product.max_per_user_reached(user=request.user, event=event)}")
+                        product_max_per_user_reached.append(product)
+                for price in prices:
+                    logger.info(f"price.max_per_user_reached : {price.name} {price.max_per_user_reached(user=request.user, event=event)}")
+                    if price.max_per_user_reached(user=request.user, event=event):
+                        price_max_per_user_reached.append(price)
+
+                event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
+
+            tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
             event.price_min = min(tarifs) if tarifs else None
             event.price_max = max(tarifs) if tarifs else None
-            # Vérification de l'existence d'un prix libre
+
+            # Vérification de l'existence d'un prix libre (sans requêtes supplémentaires)
             event.free_price = any(
-                price.free_price for product in event.products.all() for price in product.prices.all())
+                price.free_price for product in products for price in product.prices.all()
+            )
 
             event_in_this_tenant = True
 
         except Event.DoesNotExist:
             # L'évent n'est pas
             logger.info("Event.DoesNotExist on tenant, check to federation")
-            event = self.federated_events_get(slug)
+            if hex8:
+                event = self.federated_events_get_hex8(hex8)
+            else:
+                event = self.federated_events_get(slug)
+
+        except Event.MultipleObjectsReturned :
+            logger.info("Url de lien mal formé, plusieurs events ?")
+            return redirect("/event/")
 
         if not event:  # Event pas trouvé, on redirige vers la page d'évènement complète
             logger.info("Event.DoesNotExist on federation, redirect")
             return redirect("/event/")
 
         template_context = get_context(request)
+        # Attribution directe à l'event (en mémoire, pas en base)
+        event.prices = prices
+        template_context['product_max_per_user_reached'] = product_max_per_user_reached
+        template_context['price_max_per_user_reached'] = price_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+        template_context['event_max_per_user_reached'] = event_max_per_user_reached
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
@@ -1633,8 +1894,8 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):
         # Vérification que l'évent existe bien sur ce tenant.
-        event = get_object_or_404(Event, slug=pk)
-        logger.info(f"Event Reservation : {request.data}")
+        # event = get_object_or_404(Event, slug=pk)
+        logger.debug(f"Event Reservation : {request.data}")
         validator = ReservationValidator(data=request.data, context={'request': request})
 
         if not validator.is_valid():
@@ -1642,7 +1903,6 @@ class EventMVT(viewsets.ViewSet):
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers['Referer'])
-
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -1662,7 +1922,7 @@ class EventMVT(viewsets.ViewSet):
 
         # SI on a un besoin de paiement, on redirige vers :
         if validator.checkout_link:
-            logger.info("validator reservation OK, get checkout link -> redirect")
+            logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
         return render(request, "reunion/views/event/reservation_ok.html", context={
@@ -1701,13 +1961,156 @@ class EventMVT(viewsets.ViewSet):
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
 
-    def get_permissions(self):
-        # if self.action in ['create']:
-        #     permission_classes = [permissions.IsAuthenticated]
-        # else:
-        permission_classes = [permissions.AllowAny]
-        return [permission() for permission in permission_classes]
 
+    ### Simple add event
+
+    @action(detail=False, methods=['GET'])
+    def simple_add_event(self, request: HttpRequest):
+        """
+        Offcanvas de création rapide d'un évènement SANS billetterie (gratuit ou sans réservation payante).
+        - Accessible uniquement aux admins du tenant
+        - Préremplit l'adresse avec la valeur par défaut de la Configuration
+        - Propose l'autocomplétion des tags (datalist), avec création automatique côté serveur
+        """
+        context = get_context(request)
+        config = Configuration.get_solo()
+        context.update({
+            'default_address': config.postal_address,
+            'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
+        })
+        return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
+
+
+    @action(detail=False, methods=['POST'])
+    def simple_create_event(self, request: HttpRequest):
+        """
+        Crée un évènement simple à partir du formulaire Offcanvas (HTMX).
+        Champs supportés:
+        - name, datetime_start, datetime_end, short_description, long_description
+        - postal_address (pk) optionnel
+        - img (image) optionnelle
+        - tags (liste séparée par des virgules)
+        """
+        # Utilise un Serializer DRF pour valider, nettoyer et créer l'évènement
+        serializer = EventQuickCreateSerializer(data=request.POST, context={'request': request})
+        if not serializer.is_valid():
+            # Transformer les erreurs structurées du serializer en liste simple FALC
+            form_errors = []
+            for field, msgs in serializer.errors.items():
+                if isinstance(msgs, (list, tuple)):
+                    for msg in msgs:
+                        form_errors.append(str(msg))
+                else:
+                    form_errors.append(str(msgs))
+
+            context = get_context(request)
+            context.update({
+                'form_errors': form_errors,
+                'default_address': Configuration.get_solo().postal_address,
+                'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
+                'all_tags': Tag.objects.all().order_by('name'),
+                'prefill': {
+                    'name': request.POST.get('name', ''),
+                    'datetime_start': request.POST.get('datetime_start', ''),
+                    'datetime_end': request.POST.get('datetime_end', ''),
+                    'short_description': request.POST.get('short_description', ''),
+                    'long_description': request.POST.get('long_description', ''),
+                    'postal_address': request.POST.get('postal_address', ''),
+                    'tags': request.POST.get('tags', ''),
+                    'jauge_max': request.POST.get('jauge_max', ''),
+                }
+            })
+            return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
+
+        event = serializer.save()
+
+        # Message succès utilisateur
+        try:
+            messages.add_message(request, messages.SUCCESS, _("Évènement créé !"))
+        except MessageFailure:
+            pass
+
+        context = get_context(request)
+        context.update({'event': event})
+        # Réponse HTMX: après création, on reste dans le flux offcanvas et on recharge
+        # Réponse HTMX: remplace le contenu de l'offcanvas par un message de succès
+        # return render(request, "reunion/views/event/partial/admin_add_success.html", context=context)
+        return HttpResponseClientRedirect("/event/")
+
+    @action(detail=False, methods=['GET'])
+    def address_add_form(self, request: HttpRequest):
+        """
+        Formulaire HTMX pour créer une nouvelle adresse (lieu) depuis l'ajout rapide d'évènement.
+        - Champs simples et noms FALC.
+        - Affiche les textes d'aide du modèle.
+        """
+        context = get_context(request)
+        # Passer un dict d'erreurs vide par défaut pour simplifier le template
+        context.update({'errors': {}, 'prefill': {}})
+        return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
+
+    @action(detail=False, methods=['POST'])
+    def address_create(self, request: HttpRequest):
+        """
+        Création d'une `PostalAddress` via HTMX avec champs FALC.
+        - Utilise le serializer schema.org existant en mappant nos noms de champs.
+        - En cas d'erreur: renvoie le même formulaire avec les erreurs (400).
+        - En cas de succès: redirige vers le formulaire d'ajout d'évènement.
+        """
+
+        # Mapping FALC -> schema.org pour réutiliser PostalAddressCreateSerializer de api_v2
+        data = {
+            'name': request.POST.get('name') or None,
+            'streetAddress': request.POST.get('street_address', ''),
+            'addressLocality': request.POST.get('address_locality', ''),
+            'postalCode': request.POST.get('postal_code', ''),
+            # Pays: si absent, on emprunte celui de l'adresse par défaut ou "FR"
+            'addressCountry': (getattr(Configuration.get_solo().postal_address, 'address_country', None) or 'FR'),
+        }
+
+        # Import tardif pour éviter les imports circulaires au chargement du module
+        from api_v2.serializers import PostalAddressCreateSerializer
+
+        pa_serializer = PostalAddressCreateSerializer(data=data, context={'request': request})
+        if not pa_serializer.is_valid():
+            # On renvoie le formulaire avec les erreurs structurées par champ
+            context = get_context(request)
+            context.update({
+                'errors': pa_serializer.errors,
+                'prefill': {
+                    'name': request.POST.get('name', ''),
+                    'street_address': request.POST.get('street_address', ''),
+                    'address_locality': request.POST.get('address_locality', ''),
+                    'postal_code': request.POST.get('postal_code', ''),
+                    'is_main': request.POST.get('is_main', ''),
+                }
+            })
+            return render(request, "reunion/views/event/partial/address_simple_add.html", context=context)
+
+        addr = pa_serializer.save()
+
+        # Gestion des fichiers images optionnels (img), et du flag is_main
+        updated_fields = []
+        if hasattr(request, 'FILES'):
+            f = request.FILES.get('img')
+            if f:
+                addr.img = f
+                updated_fields.append('img')
+        # Champ simple booléen
+        is_main_val = request.POST.get('is_main')
+        if is_main_val in ['on', 'true', 'True', '1']:
+            addr.is_main = True
+            updated_fields.append('is_main')
+        if updated_fields:
+            addr.save(update_fields=updated_fields)
+
+        try:
+            messages.add_message(request, messages.SUCCESS, _("Adresse créée !"))
+        except MessageFailure:
+            pass
+
+        # Redirige l'offcanvas vers le formulaire d'évènement
+        return self.simple_add_event(request)
 
 '''
 @require_GET
@@ -1795,9 +2198,6 @@ class Badge(viewsets.ViewSet):
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    # def get_federated_products(self, tags=None, search=None, page=1):
-    #     pass
-
     def create(self, request):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
@@ -1821,41 +2221,22 @@ class MembershipMVT(viewsets.ViewSet):
                        'membership': membership,
                        'checkout_stripe': checkout_stripe,
                        }
-
             return render(request, "reunion/views/membership/formbricks.html", context=context)
-        #
-        # if formbricks.api_host and formbricks.api_key:
-        # Une configuration formbricks à été trouvé.
 
-        # Validation manuelle demandée ?
-        logger.info(f"membership_validator.price.manual_validation : {membership_validator.price.manual_validation}")
         if membership_validator.price.manual_validation:
-            membership: Membership = membership_validator.membership
-            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
-            membership.state = Membership.ADMIN_WAITING
-            membership.save(update_fields=["state"])
-
-            # Envoyer un mail à l'admin et à l'utilisateur pour les prévenir (via Celery)
-            try:
-                send_membership_pending_admin.delay(str(membership.uuid))
-            except Exception as e:
-                logger.error(f"Erreur d'enqueue send_membership_pending_admin: {e}")
-            try:
-                send_membership_pending_user.delay(str(membership.uuid))
-            except Exception as e:
-                logger.error(f"Erreur d'enqueue send_membership_pending_user: {e}")
-
-            # Message de confirmation à l'utilisateur
-            try:
-                messages.add_message(request, messages.SUCCESS, _("Votre demande d'adhésion a bien été enregistrée et est en attente de validation."))
-            except Exception:
-                pass
-
             # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
+            membership: Membership = membership_validator.membership
             context = {'membership': membership}
             return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
-            
-        return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+
+        # Le lien de paiement a été généré, on envoi sur Stripe
+        elif membership_validator.checkout_stripe_url :
+            return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+
+        else:
+            msg = "Une erreur lors de la gestion de vos adhésion est survenue, merci de contacter un administrateur."
+            logger.error(f"MembershipViewset ERROR {msg} : {membership_validator.membership}")
+            raise ValueError(msg)
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
@@ -1922,6 +2303,21 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             # On essaye sur ce tenant :
             product = Product.objects.get(uuid=pk, categorie_article=Product.ADHESION, publish=True)
+            context = get_context(request)
+            context['product'] = product
+
+            # On prépare les prix publiés pour le template
+            published_prices = product.prices.filter(publish=True).order_by('order', 'prix')
+            context['published_prices'] = published_prices
+            context['published_prices_count'] = published_prices.count()
+
+            # On check que l'user n'a pas déja prix un abonnement limité
+            if request.user.is_authenticated:
+                if product.max_per_user_reached(user=request.user):
+                    return render(request, "reunion/views/membership/already_has_membership.html", context=context)
+
+            return render(request, "reunion/views/membership/form.html", context=context)
+
         except Product.DoesNotExist:
             try:
                 # Il est possible que ça soit sur un autre tenant ?
@@ -1941,20 +2337,18 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             return render(request, "reunion/views/membership/404.html", context=context, status=404)
 
-        context = get_context(request)
-        context['product'] = product
-        return render(request, "reunion/views/membership/form.html", context=context)
+
 
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):
-        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
-        if membership.state != Membership.ADMIN_VALID:
-            raise Exception("not admin valid state")
-        checkout_url = MembershipValidator.get_checkout_stripe(membership, custom_amount=membership.contribution_value)
+        """
+        Pour validation manuelle, redirige le lien reçu par l'user vers Stripe
+        """
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk), status=Membership.ADMIN_VALID)
+        checkout_url = MembershipValidator.get_checkout_stripe(membership)
         logger.info(f"get_checkout_for_membership : {checkout_url}")
         return redirect(checkout_url)
         # return HttpResponseClientRedirect(checkout_url)
-
 
     @action(detail=True, methods=['POST'])
     def admin_accept(self, request, pk):
@@ -1973,13 +2367,13 @@ class MembershipMVT(viewsets.ViewSet):
 
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
         # Update state to admin validated
-        if membership.state != Membership.ADMIN_WAITING:
+        if membership.status != Membership.ADMIN_WAITING:
             messages.add_message(request, messages.WARNING, _("Membership not in waiting state."))
             referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
             return HttpResponseClientRedirect(referer)
 
-        membership.state = Membership.ADMIN_VALID
-        membership.save(update_fields=["state"])
+        membership.status = Membership.ADMIN_VALID
+        membership.save(update_fields=["status"])
 
         # Send payment link email to user via Celery
         try:
@@ -1988,13 +2382,15 @@ class MembershipMVT(viewsets.ViewSet):
             logger.error(f"Erreur d'enqueue send_membership_payment_link_user: {e}")
 
         try:
-            messages.add_message(request, messages.SUCCESS, _("L'adhésion a été acceptée. Un email de paiement a été envoyé."))
+            messages.add_message(request, messages.SUCCESS,
+                                 _("L'adhésion a été acceptée. Un email de paiement a été envoyé."))
         except Exception:
             pass
 
         # If HTMX request, return success partial to replace the button area
         if request.headers.get('HX-Request'):
-            return render(request, "admin/membership/partials/admin_accept_success.html", context={"membership": membership})
+            return render(request, "admin/membership/partials/admin_accept_success.html",
+                          context={"membership": membership})
 
         referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
         return HttpResponseClientRedirect(referer)
@@ -2053,8 +2449,8 @@ class MembershipMVT(viewsets.ViewSet):
         return Response("sended", status=status.HTTP_200_OK)
 
     def get_permissions(self):
-        if self.action in ['invoice_to_mail', 'admin_accept' ]:
-            permission_classes = [TenantAdminPermission,]
+        if self.action in ['invoice_to_mail', 'admin_accept']:
+            permission_classes = [TenantAdminPermission, ]
 
         else:
             permission_classes = [permissions.AllowAny]
@@ -2087,20 +2483,48 @@ class Tenant(viewsets.ViewSet):
         new_tenant = TenantCreateValidator(data=request.data, context={'request': request})
         logger.info(new_tenant.initial_data)
         if not new_tenant.is_valid():
-            for error in new_tenant.errors:
-                messages.add_message(request, messages.ERROR, f"{error} : {new_tenant.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            # Construire une liste d'erreurs FALC par champ pour le partial `field_errors.html`
+            errors = []
+            try:
+                for field, msgs in new_tenant.errors.items():
+                    if isinstance(msgs, (list, tuple)):
+                        for msg in msgs:
+                            errors.append({'id': field, 'msg': str(msg)})
+                    else:
+                        errors.append({'id': field, 'msg': str(msgs)})
+            except Exception:
+                # En cas d'erreur inattendue, on met un message générique
+                errors.append({'id': 'form', 'msg': _('An error occurred. Please try again.')})
+
+            # Pré-remplissage des champs avec les valeurs envoyées
+            form_values = {
+                'email': request.POST.get('email', ''),
+                'emailConfirmation': request.POST.get('emailConfirmation', ''),
+                'name': request.POST.get('name', ''),
+                'short_description': request.POST.get('short_description', ''),
+                'dns_choice': request.POST.get('dns_choice', 'tibillet.coop'),
+                'cgu': request.POST.get('cgu') in ['true', 'True', 'on', '1'],
+                # On ne pré-remplit pas answer volontairement (captcha), il sera régénéré côté JS
+            }
+
+            context = get_context(request)
+            context.update({
+                'errors': errors,
+                'form_values': form_values,
+                # Conserver les query params existants si présents pour compat
+                'email_query_params': request.query_params.get('email') if request.query_params.get('email') else "",
+                'name_query_params': request.query_params.get('name') if request.query_params.get('name') else "",
+            })
+
+            # Réponse partielle HTMX: on renvoie le même template avec les erreurs et valeurs pré-remplies
+            return render(request, "reunion/views/tenant/new_tenant.html", context=context)
 
         # Création d'un objet waiting_configuration
         validated_data = new_tenant.validated_data
         waiting_configuration = WaitingConfiguration.objects.create(
             organisation=validated_data['name'],
             email=validated_data['email'],
-            laboutik_wanted=validated_data['laboutik'],
-            payment_wanted=validated_data['payment_wanted'],
-            # id_acc_connect=id_acc_connect,
             dns_choice=validated_data['dns_choice'],
-            site_web=validated_data['website'],
             short_description=validated_data['short_description'],
         )
         # Envoi d'un mail pour vérifier le compte. Un lien vers stripe sera créé
@@ -2132,7 +2556,8 @@ class Tenant(viewsets.ViewSet):
             # Idempotent behavior: if the tenant was already created, redirect directly
             if wc.tenant:
                 primary_domain = f"https://{wc.tenant.get_primary_domain().domain}"
-                user = get_or_create_user(wc.email, send_mail=True)
+                # Le tenant existe déja, on envoi un mail de connection
+                get_or_create_user(wc.email, send_mail=True)
                 return redirect(primary_domain)
 
             # Si assez de tenant en attentent de création existent :
@@ -2301,6 +2726,3 @@ class Tenant(viewsets.ViewSet):
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
         # return redirect('/tenant/new/')
-
-
-

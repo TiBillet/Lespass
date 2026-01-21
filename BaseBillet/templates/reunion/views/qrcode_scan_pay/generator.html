@@ -12,27 +12,27 @@
                     <!-- Display generated QR code -->
                     <div class="card">
                         <div class="card-header bg-success text-white">
-                            <h3 class="text-center">{% translate 'QR Code Generated' %}</h3>
+                            <h3 class="text-center">Paiement</h3>
                         </div>
                         <div class="card-body">
                             <div class="alert alert-success mb-4">
                                 <h5 class="mb-3">💳 Paiement simple</h5>
                                 <p class="mb-2">Montant: <strong class="fs-4">{{ amount | dround }}</strong> — Devise: <strong class="fs-5">{{ asset_type }}</strong></p>
                                 <hr>
-                                <p class="mb-2">Il y a 2 façons de faire payer la personne:</p>
+                                <p class="mb-2">Il y a 3 façons de réaliser la transaction :</p>
                                 <ul class="mb-3 ps-3">
-                                    <li class="mb-1">📷 Lui faire scanner le QR code ci‑dessous.</li>
+                                    <li class="mb-1">📷 Faire scanner le QR code ci‑dessous.</li>
                                     <li class="mb-1">🔗 Copier le lien de paiement et l’envoyer par message.</li>
-{#                                    <li class="mb-1">🪪 Lire sa carte TiBillet si possible (Chrome ou Opera sous Android).</li>#}
+                                    <li class="mb-1">🪪 Lire une carte TiBillet (Chrome ou Opera sous Android).</li>
                                 </ul>
                                 <div class="d-grid gap-2">
                                     <button id="copy-pay-link-btn" type="button" class="btn btn-outline-success btn-lg fw-bold" aria-label="Copier le lien de paiement" data-link="{{ qrcode_content }}">
                                         🔗 Copier le lien de paiement
                                     </button>
                                     <small class="text-muted">Astuce: collez ensuite dans SMS, WhatsApp, Signal, etc.</small>
-{#                                    <button id="nfc-scan-btn" type="button" class="btn btn-outline-primary btn-lg fw-bold" aria-label="Lire la carte TiBillet (NFC)" disabled>#}
-{#                                        🪪 Lire la carte TiBillet (NFC)#}
-{#                                    </button>#}
+                                    <button id="nfc-scan-btn" type="button" class="btn btn-outline-primary btn-lg fw-bold" aria-label="Lire la carte TiBillet (NFC)">
+                                        🪪 Lire la carte TiBillet (NFC)
+                                    </button>
                                 </div>
                             </div>
                             
@@ -124,77 +124,121 @@
                             </div>
 
                             <!-- SweetAlert2 and NFC logic -->
-{#                            <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>#}
-{#                            <script>#}
-{#                            (function(){#}
-{#                              const btn = document.getElementById('nfc-scan-btn');#}
-{#                              if(!btn) return;#}
-{#                              const supported = 'NDEFReader' in window;#}
-{#                              if(!supported){#}
-{#                                btn.disabled = true;#}
-{#                                btn.textContent = 'NFC: marche sur Android avec Chrome ou Opéra.';#}
-{#                                return;#}
-{#                              }#}
-{#                              function getCookie(name){#}
-{#                                const value = `; ${document.cookie}`;#}
-{#                                const parts = value.split(`; ${name}=`);#}
-{#                                if(parts.length === 2) return parts.pop().split(';').shift();#}
-{#                              }#}
-{#                              btn.addEventListener('click', async ()=>{#}
-{#                                try{#}
-{#                                  const ndef = new NDEFReader();#}
-{#                                  ndef.addEventListener('reading', async (event)=>{#}
-{#                                    try{#}
-{#                                      const records = [];#}
-{#                                      const dec = new TextDecoder();#}
-{#                                      for(const rec of (event.message && event.message.records) || []){#}
-{#                                        let dataText = '';#}
-{#                                        try{#}
-{#                                          if(rec.data){ dataText = dec.decode(rec.data); }#}
-{#                                        }catch(_){/* ignore */}#}
-{#                                        records.push({#}
-{#                                          recordType: rec.recordType,#}
-{#                                          mediaType: rec.mediaType || null,#}
-{#                                          id: rec.id || null,#}
-{#                                          data: dataText#}
-{#                                        });#}
-{#                                      }#}
-{#                                      const payload = {#}
-{#                                        tagSerial: event.serialNumber || null,#}
-{#                                        records: records,#}
-{#                                        ligne_article_uuid_hex: '{{ ligne_article_uuid_hex|default:"" }}'#}
-{#                                      };#}
-{#                                      const res = await fetch("{% url 'qrcodescanpay-process-with-nfc' %}", {#}
-{#                                        method: 'POST',#}
-{#                                        headers: {#}
-{#                                          'Content-Type': 'application/json',#}
-{#                                          'X-CSRFToken': getCookie('csrftoken') || ''#}
-{#                                        },#}
-{#                                        body: JSON.stringify(payload),#}
-{#                                        credentials: 'same-origin'#}
-{#                                      });#}
-{#                                      let out = {};#}
-{#                                      try{ out = await res.json(); }catch(e){}#}
-{#                                      Swal.fire('Lecture confirmée', 'Carte lue: ' + (out.tagSerial || payload.tagSerial || 'OK'), 'success');#}
-{#                                    }catch(e){#}
-{#                                      Swal.fire('Erreur', 'Lecture NFC échouée: ' + (e && e.message ? e.message : e), 'error');#}
-{#                                    }#}
-{#                                  }, { once: true });#}
-{#                                  Swal.fire({#}
-{#                                    title: 'Lecteur NFC',#}
-{#                                    html: 'attente de lecteur de carte TiBillet',#}
-{#                                    allowOutsideClick: false,#}
-{#                                    allowEscapeKey: false,#}
-{#                                    didOpen: () => { Swal.showLoading(); }#}
-{#                                  });#}
-{#                                  await ndef.scan();#}
-{#                                }catch(err){#}
-{#                                  Swal.fire('Erreur', 'Impossible de démarrer la lecture NFC: ' + (err && err.message ? err.message : err), 'error');#}
-{#                                  return;#}
-{#                                }#}
-{#                              });#}
-{#                            })();#}
-{#                            </script>#}
+                            <script src="{% static 'mvt_htmx/js/sweetalert2@11.js' %}"></script>
+                            <script>
+                            (function(){
+                              const btn = document.getElementById('nfc-scan-btn');
+                              if(!btn) return;
+                              const supported = 'NDEFReader' in window;
+                              if(!supported){
+                                btn.disabled = true;
+                                btn.textContent = 'NFC : fonctionne sur Android avec Chrome ou Opéra uniquement.';
+                                return;
+                              }
+                              function getCookie(name){
+                                const value = `; ${document.cookie}`;
+                                const parts = value.split(`; ${name}=`);
+                                if(parts.length === 2) return parts.pop().split(';').shift();
+                              }
+                              btn.addEventListener('click', async ()=>{
+                                try{
+                                  const ndef = new NDEFReader();
+                                  ndef.addEventListener('reading', async (event)=>{
+                                    try{
+                                      const records = [];
+                                      const dec = new TextDecoder();
+                                      for(const rec of (event.message && event.message.records) || []){
+                                        let dataText = '';
+                                        try{
+                                          if(rec.data){ dataText = dec.decode(rec.data); }
+                                        }catch(_){/* ignore */}
+                                        records.push({
+                                          recordType: rec.recordType,
+                                          mediaType: rec.mediaType || null,
+                                          id: rec.id || null,
+                                          data: dataText
+                                        });
+                                      }
+                                      const payload = {
+                                        tagSerial: event.serialNumber || null,
+                                        records: records,
+                                        ligne_article_uuid_hex: '{{ ligne_article_uuid_hex|default:"" }}'
+                                      };
+                                      const res = await fetch("{% url 'qrcodescanpay-process-with-nfc' %}", {
+                                        method: 'POST',
+                                        headers: {
+                                          'Content-Type': 'application/json',
+                                          'X-CSRFToken': getCookie('csrftoken') || ''
+                                        },
+                                        body: JSON.stringify(payload),
+                                        credentials: 'same-origin'
+                                      });
+                                      let out = {};
+                                      try{ out = await res.json(); }catch(e){}
+                                      function firstErrorMessage(o){
+                                        if(!o) return null;
+                                        if(o.detail) return o.detail;
+                                        if(o.error) return o.error;
+                                        if(o.message) return o.message;
+                                        if(Array.isArray(o.non_field_errors) && o.non_field_errors.length){ return o.non_field_errors[0]; }
+                                        const keys = Object.keys(o || {});
+                                        for(const k of keys){
+                                          const v = o[k];
+                                          if(Array.isArray(v) && v.length){ return v[0]; }
+                                          if(typeof v === 'string' && v){ return v; }
+                                        }
+                                        return null;
+                                      }
+                                      if(!res.ok){
+                                        const msg = firstErrorMessage(out) || 'Une erreur est survenue : ' + res.status + ' ' + res.statusText + '';
+                                        Swal.fire('Erreur', msg, 'error');
+                                      }else{
+                                        const nf = (v)=>{
+                                          const n = typeof v === 'string' ? parseFloat(v) : (typeof v === 'number' ? v : NaN);
+                                          if(!isNaN(n)) return new Intl.NumberFormat('fr-FR', {style:'currency', currency:'EUR'}).format(n);
+                                          return v;
+                                        };
+                                        const statusTxt = out.status || 'Paiement OK';
+                                        const email = out.user_email || out.email || null;
+                                        const amount = nf(out.amount_paid);
+                                        const balance = nf(out.balance);
+                                        const tagShown = out.tag_id || out.tagSerial || payload.tagSerial || null;
+                                        const details = [
+                                          (amount !== undefined && amount !== null) ? 'Montant payé: ' + amount : null,
+                                          email ? 'Compte: ' + email : null,
+                                          (balance !== undefined && balance !== null) ? '<br>Solde restant: ' + balance : null,
+                                        ].filter(Boolean).join('<br>');
+                                        const redirectUrl = "{% url 'qrcodescanpay-get-generator' %}";
+                                        Swal.fire({
+                                          icon: 'success',
+                                          title: statusTxt,
+                                          html: details || 'Opération réalisée avec succès.',
+                                          confirmButtonText: 'OK'
+                                        }).then((result)=>{
+                                          if(result && result.isConfirmed){
+                                            window.location.href = redirectUrl;
+                                          }
+                                        });
+                                      }
+                                    }catch(e){
+                                      Swal.fire('Erreur', 'Lecture NFC échouée: ' + (e && e.message ? e.message : e), 'error');
+                                    }
+                                  }, { once: true });
+                                  Swal.fire({
+                                    title: 'Lecteur NFC',
+                                    html: 'attente de lecteur de carte TiBillet',
+                                    allowOutsideClick: false,
+                                    allowEscapeKey: false,
+                                    didOpen: () => { Swal.showLoading(); }
+                                  });
+                                  await ndef.scan();
+                                }catch(err){
+                                  Swal.fire('Erreur', 'Impossible de démarrer la lecture NFC: ' + (err && err.message ? err.message : err), 'error');
+                                  return;
+                                }
+                              });
+                            })();
+                            </script>
 
                             <script>
                             (function(){
@@ -268,11 +312,11 @@
                     <!-- QR Code Generator Form -->
                     <div class="card">
                         <div class="card-header bg-primary text-white">
-                            <h3 class="text-center">{% translate 'Generate Payment QR Code' %}</h3>
+                            <h3 class="text-center">Initier un paiement</h3>
                         </div>
                         <div class="card-body">
                             <p class="lead text-center mb-4">
-                                {% translate 'Fill in the details below to generate a payment QR code' %}
+                                Remplissez les informations ci-dessous pour initier un paiement.
                             </p>
                             
                             <form method="post" action="{% url 'qrcodescanpay-generate-qrcode' %}">
@@ -307,7 +351,7 @@
                                 <div class="d-grid gap-2">
                                     <button type="submit" class="btn btn-success btn-lg">
                                         <i class="bi bi-qr-code me-2"></i>
-                                        {% translate 'Generate QR Code' %}
+                                        Initier un paiement
                                     </button>
                                     
                                     <a href="{% url 'my_account-list' %}" class="btn btn-outline-secondary">

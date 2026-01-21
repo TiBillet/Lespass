@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; line-height: 1.5; color:#212529 }
+    .card { border:1px solid #e9ecef; border-radius:8px; padding:16px; }
+    .muted { color:#6c757d }
+    .small { font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1 style="margin:0 0 .5rem 0;">{{ organisation }} — {{ title }}</h1>
+  <p class="muted small" style="margin-top:0">{{ now|date:"Y-m-d H:i" }}</p>
+
+  <div class="card">
+    <p>
+      Une contribution financière a été marquée comme <strong>payée</strong> pour le projet <strong>{{ initiative.name }}</strong>.
+    </p>
+    <ul>
+      <li><strong>Contributeur·ice :</strong> {{ contributor_name }} <span class="muted">({{ contributor_email }})</span></li>
+      <li><strong>Montant :</strong> {{ amount_eur|floatformat:2 }} {{ currency }}</li>
+      <li><strong>Statut :</strong> {{ payment_status }}</li>
+      <li><strong>Payée le :</strong> {{ paid_at|date:"Y-m-d H:i" }}</li>
+    </ul>
+  </div>
+
+  <p class="small muted">
+    Lien public : {{ initiative.get_absolute_url }}
+  </p>
+</body>
+</html>

@@ -14,18 +14,36 @@
         {% endcomment %}
 
         {% if tags %}
+        {# Tags actifs intégrés à gauche dans la barre de recherche #}
         <div id="filterTags" class="btn-group">
+            {# Desktop (≥ md): mêmes boutons qu'avant #}
             {% for tag in tags %}
             <a href="." class="btn btn-info d-none d-md-block py-3 rounded-0{% if forloop.first %} rounded-start{% endif %}" type="button" id="button-tag-{{ tag }}">
                 {{ tag }} <i class="bi bi-x"></i>
             </a>
             {% endfor %}
         </div>
+        {# Mobile (xs/sm): version compacte dans l'input-group, scroll horizontal si trop de tags #}
+        <div class="d-flex d-md-none flex-nowrap overflow-auto align-items-stretch">
+            <div class="btn-group">
+                {% for tag in tags %}
+                <a href= "." class="btn btn-info py-3 d-inline-flex align-items-center rounded-0{% if forloop.first %} rounded-start{% endif %}" type="button" id="button-tag-xs-{{ tag }}">
+                    {{ tag }} <i class="bi bi-x"></i>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
         {% endif %}
 
         <div class="form-floating" id="search_form">
-            <input type="text" class="form-control" id="search" placeholder="{% trans 'an event, a artist, a location…' %}" name="search">
+            <input type="text" class="form-control" id="search" placeholder="{% trans 'an event, a artist, a location…' %}" name="search" value="{{ search|default:'' }}">
             <label for="exampleFormControlInput1" class="form-label"> {% translate "I'm looking for" %} </label>
+            {# Preserve selected tags when searching #}
+            {% if tags %}
+                {% for t in tags %}
+                    <input type="hidden" name="tag" value="{{ t }}">
+                {% endfor %}
+            {% endif %}
         </div>
 
         <button class="btn btn-outline-primary" id="submit_event_search" type="submit"
@@ -34,6 +52,7 @@
         </button>
 
     </div>
+    {# Bloc mobile séparé supprimé: les tags sont maintenant intégrés dans la barre elle-même #}
 </form>
 
 <!-- filtering panel -->

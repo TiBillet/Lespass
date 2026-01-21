@@ -59,7 +59,12 @@ class JSONKeyField(Field):
         data = getattr(obj, 'custom_form', None)
         if isinstance(data, dict):
             value = data.get(self.key)
-            if isinstance(value, (dict, list)):
+            # Apply safe_join-like behavior for CSV readability
+            if isinstance(value, list):
+                return ", ".join(map(str, value))
+            if isinstance(value, bool):
+                return _("Yes") if value else _("No")
+            if isinstance(value, dict):
                 return json.dumps(value, ensure_ascii=False)
             return value
         return None

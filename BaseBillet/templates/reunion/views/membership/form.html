@@ -4,7 +4,9 @@
     <div>
 
         <h3>{{ product.name }}</h3>
-        <p>{{ product.short_description }}</p>
+        {% if product.short_description %}
+            <p>{{ product.short_description }}</p>
+        {% endif %}
         {% if product.long_description %}
             <p>{{ product.long_description | safe }}</p>
         {% endif %}
@@ -21,59 +23,164 @@
 
         <!-- prix -->
         <div class="mb-3 has-validation">
-            {% for price in product.prices.all %}
-                {% if price.publish %}
-                    {% if price.free_price and price.recurring_payment %}
-                        <!-- Prix libre ET récurrent : input décimal avec incrémentation par 10 cts -->
-                        <div class="mb-4 p-3 border border-primary rounded bg-light">
-                            <label class="form-label fw-bold text-primary" for="price-{{ price.uuid }}">
+            {% for price in published_prices %}
+                {% if published_prices_count == 1 and price.free_price %}
+                    <!-- Prix libre SEUL : on affiche directement l'input -->
+                    <div class="mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary">
+                        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                            <label class="form-label fw-bold text-primary mb-0 me-1" for="price-{{ price.uuid }}">
                                 {{ price.name }}
                             </label>
-                            {% if price.out_of_stock %}
-                                <div class="alert alert-danger" role="alert">
-                                    {% trans "Out of stock." %}
-                                </div>
-                            {% else %}
-                                <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
-                                <input id="custom_amount-{{ price.uuid }}"
-                                       class="form-control form-control-lg"
-                                       type="number"
-                                       name="custom_amount"
-                                       min="{{ price.prix }}"
-                                       step="0.10"
-                                       placeholder="{% trans 'Enter the amount (minimum' %} {{ price.prix }}€)"
-                                       required>
-                                <small class="form-text text-muted">
-                                    {% trans "Recurring payment - Enter your desired amount" %}
-                                </small>
-                                {% if price.fedow_reward_enabled %}
-                                    <div class="mt-2">
-                                        <em class="text-success">
-                                            {% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
-                                            {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
-                                    </div>
-                                {% endif %}
+                            {% if price.recurring_payment %}
+                                <span class="badge rounded-pill text-bg-warning">
+                                    {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                        {% trans 'Monthly payment' %}
+                                    {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                        {% trans 'Annual payment' %}
+                                    {% elif price.subscription_type == 'D' %}
+                                        {% trans 'Daily payment' %}
+                                    {% elif price.subscription_type == 'W' %}
+                                        {% trans 'Weekly payment' %}
+                                    {% elif price.subscription_type == 'H' %}
+                                        {% trans 'Hourly payment' %}
+                                    {% else %}
+                                        {% trans 'Recurring payment' %}
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                            {% if price.iteration %}
+                                <span class="badge rounded-pill text-bg-info">{{ price.iteration }} {% trans "iteration(s)" %}</span>
                             {% endif %}
                         </div>
-                    {% else %}
-                        <!-- Prix standard : bouton radio classique -->
-                        <div class="form-check me-3">
-                            <input id="price-{{ price.uuid }}" class="form-check-input" type="radio" name="price"
-                                   value="{{ price.uuid }}" required {% if price.out_of_stock %}disabled{% endif %}>
-                            <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}" for="price-{{ price.uuid }}">
-                                {% if price.free_price %}
-                                    {{ price.name }}
+                        {% if price.max_per_user_reached %}
+                            <div class="alert alert-danger" role="alert">
+                                {% trans "You are already subscribed to this rate." %}
+                            </div>
+                        {% else %}
+                            <input id="price-{{ price.uuid }}" hidden name="price" value="{{ price.uuid }}">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg custom-amount-input"
+                                   type="number"
+                                   name="custom_amount"
+                                   min="{{ price.prix }}"
+                                   step="0.10"
+                                   placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}"
+                                   required>
+                            <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                {% if price.recurring_payment %}
+                                    {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                        {% trans 'Monthly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                        {% trans 'Annual payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'D' %}
+                                        {% trans 'Daily payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'W' %}
+                                        {% trans 'Weekly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'H' %}
+                                        {% trans 'Hourly payment — Enter your desired amount' %}
+                                    {% else %}
+                                        {% trans 'Recurring payment — Enter your desired amount' %}
+                                    {% endif %}
                                 {% else %}
-                                    {{ price.name }} - {{ price.prix }}€
+                                    {% trans "Enter your desired amount" %}
                                 {% endif %}
-                                {% if price.fedow_reward_enabled %}
-                                    <span>
-                                        <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                            </small>
+                            {% if price.fedow_reward_enabled %}
+                                <div class="mt-2">
+                                    <em class="text-success">
+                                        {% trans "This price will give you " %}{{ price.fedow_reward_amount | dround }}
                                         {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
-                                    </span>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <!-- Plusieurs prix OU un seul prix fixe -->
+                    <div class="form-check me-3 mb-2">
+                        <input id="price-{{ price.uuid }}"
+                               class="form-check-input {% if price.free_price %}free-price-radio{% endif %}"
+                               type="radio" name="price"
+                               value="{{ price.uuid }}"
+                               required
+                               {% if price.out_of_stock %}disabled{% endif %}
+                               {% if published_prices_count == 1 %}checked{% endif %}
+                               {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}>
+                        <label class="custom-control-label {% if price.out_of_stock %}text-muted{% endif %}"
+                               for="price-{{ price.uuid }}">
+                            {% if price.free_price %}
+                                {{ price.name }}
+                            {% else %}
+                                {{ price.name }} - {{ price.prix }}€
+                            {% endif %}
+                            {% if price.recurring_payment or price.iteration %}
+                                <span class="ms-2 d-inline-flex gap-2 flex-wrap align-items-center align-middle">
+                                    {% if price.recurring_payment %}
+                                        <span class="badge rounded-pill text-bg-warning">
+                                            {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                                {% trans 'Monthly payment' %}
+                                            {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                                {% trans 'Annual payment' %}
+                                            {% elif price.subscription_type == 'D' %}
+                                                {% trans 'Daily payment' %}
+                                            {% elif price.subscription_type == 'W' %}
+                                                {% trans 'Weekly payment' %}
+                                            {% elif price.subscription_type == 'H' %}
+                                                {% trans 'Hourly payment' %}
+                                            {% else %}
+                                                {% trans 'Recurring payment' %}
+                                            {% endif %}
+                                        </span>
+                                    {% endif %}
+                                    {% if price.iteration %}
+                                        <span class="badge rounded-pill text-bg-info">
+                                            {% blocktrans count it=price.iteration %}Up to {{ it }}
+                                                installment{% plural %}Up to {{ it }}
+                                                installments{% endblocktrans %}
+                                        </span>
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                            {% if price.fedow_reward_enabled %}
+                                <span>
+                                    <em>{% trans " : This price will give you " %}{{ price.fedow_reward_amount | dround }}
+                                    {{ price.fedow_reward_asset.name }} {% trans "credited to your TiBillet wallet !" %}</em>
+                                </span>
+                            {% endif %}
+                            {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                        </label>
+                    </div>
+                    {% if price.free_price %}
+                        <div id="custom-amount-container-{{ price.uuid }}"
+                             class="custom-amount-container mb-4 p-3 border border-primary-subtle rounded bg-body-tertiary"
+                             style="display: none;">
+                            <input id="custom_amount-{{ price.uuid }}"
+                                   class="form-control form-control-lg custom-amount-input"
+                                   type="number"
+                                   name="custom_amount"
+                                   min="{{ price.prix }}"
+                                   step="0.10"
+                                   placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}">
+                            <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
+                                {% if price.recurring_payment %}
+                                    {% if price.subscription_type == 'M' or price.subscription_type == 'O' %}
+                                        {% trans 'Monthly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'Y' or price.subscription_type == 'C' or price.subscription_type == 'S' %}
+                                        {% trans 'Annual payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'D' %}
+                                        {% trans 'Daily payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'W' %}
+                                        {% trans 'Weekly payment — Enter your desired amount' %}
+                                    {% elif price.subscription_type == 'H' %}
+                                        {% trans 'Hourly payment — Enter your desired amount' %}
+                                    {% else %}
+                                        {% trans 'Recurring payment — Enter your desired amount' %}
+                                    {% endif %}
+                                {% else %}
+                                    {% trans "Enter your desired amount" %}
                                 {% endif %}
-                                {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
-                            </label>
+                            </small>
                         </div>
                     {% endif %}
                 {% endif %}
@@ -83,14 +190,14 @@
         {% if user.is_anonymous %}
             <div class="form-floating mb-3">
                 <input id="membership-email" name="email" type="email" class="form-control"
-                       placeholder="adresse@exemple.fr" role="textbox"
+                       placeholder="{% trans 'address@example.com' %}" role="textbox"
                        aria-label="{% trans 'Email address' %}" required>
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
 
             <div class="form-floating mb-3">
                 <input id="confirm-email" name="confirm-email" type="email" class="form-control"
-                       placeholder="adresse@exemple.fr"
+                       placeholder="{% trans 'address@example.com' %}"
                        role="textbox"
                        aria-label="{% trans 'Email confirmation' %}" required>
                 <label for="confirm-email">{% trans 'Email confirmation' %}</label>
@@ -107,7 +214,7 @@
 
                     if (email !== confirmEmail) {
                         event.preventDefault(); // empêche l’envoi de la requête HTMX
-                        errorDiv.textContent = "Les emails ne correspondent pas.";
+                        errorDiv.textContent = "{% trans 'Email addresses do not match.' %}";
                     } else {
                         errorDiv.textContent = ""; // nettoyage si c’est bon
                     }
@@ -116,7 +223,8 @@
 
         {% elif user.is_active %}
             <div class="form-floating mb-3">
-                <input name="email" type="email" class="form-control" placeholder="adresse@exemple.fr" role="textbox"
+                <input name="email" type="email" class="form-control" placeholder="{% trans 'address@example.com' %}"
+                       role="textbox"
                        aria-label="{% trans 'Email address' %}" value="{{ user.email }}" readonly>
                 <label for="email">{% trans 'Email address' %}</label>
             </div>
@@ -184,7 +292,8 @@
                             <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
                                    class="form-control"
                                    placeholder="{{ field.label }}" {% if field.required %}required{% endif %}>
-                            <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
@@ -195,14 +304,16 @@
                                       style="height: 120px"
                                       placeholder="{{ field.label }}"
                                       {% if field.required %}required{% endif %}></textarea>
-                            <label for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             {% if field.help_text %}
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
                         </div>
                     {% elif field.field_type == 'SS' %}
                         <div class="mb-3">
-                            <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}</label>
+                            <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
+                                <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
                                     {% if field.required %}required{% endif %}>
                                 <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
@@ -214,14 +325,18 @@
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
                         </div>
-                    {% elif field.field_type == 'MS' %}
+                    {% elif field.field_type == 'SR' %}
                         <div class="mb-3">
-                            <div class="form-label">{{ field.label }}</div>
+                            <div class="form-label">
+                                {{ field.label }}{% if field.required %}
+                                    <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </div>
                             {% for opt in field.options %}
                                 <div class="form-check">
-                                    <input class="form-check-input" type="checkbox"
+                                    <input class="form-check-input" type="radio"
                                            id="ff-{{ field.uuid }}-{{ forloop.counter }}"
-                                           name="form__{{ field.name }}" value="{{ opt }}">
+                                           name="form__{{ field.name }}" value="{{ opt }}"
+                                           {% if field.required and forloop.first %}required{% endif %}>
                                     <label class="form-check-label"
                                            for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                 </div>
@@ -230,10 +345,183 @@
                                 <div class="form-text">{{ field.help_text }}</div>
                             {% endif %}
                         </div>
+                    {% elif field.field_type == 'BL' %}
+                        <div class="form-check form-switch mb-3" {% if field.required %}data-bl-required="true"
+                             data-input-id="ff-{{ field.uuid }}"
+                             data-error-message="{% translate 'Please check this box.' %}"{% endif %}>
+                            <input class="form-check-input" type="checkbox" role="switch"
+                                   id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on"
+                                   {% if field.required %}required aria-required="true"{% endif %}>
+                            <label class="form-check-label" for="ff-{{ field.uuid }}">
+                                {{ field.label }}{% if field.required %}
+                                    <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </label>
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% if field.required %}
+                                <div class="text-danger small mt-1" data-bl-error style="display:none;"></div>
+                            {% endif %}
+                        </div>
+                    {% elif field.field_type == 'MS' %}
+                        <div class="mb-3" {% if field.required %}data-ms-required="true"
+                             data-input-name="form__{{ field.name }}"
+                             data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}>
+                            <div class="form-label">
+                                {{ field.label }}{% if field.required %}
+                                    <span class="text-danger" aria-hidden="true">*</span>{% endif %}
+                            </div>
+                            {% for opt in field.options %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           id="ff-{{ field.uuid }}-{{ forloop.counter }}"
+                                           name="form__{{ field.name }}" value="{{ opt }}"
+                                           {% if field.required %}aria-required="true"{% endif %}>
+                                    <label class="form-check-label"
+                                           for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
+                                </div>
+                            {% endfor %}
+                            {% if field.help_text %}
+                                <div class="form-text">{{ field.help_text }}</div>
+                            {% endif %}
+                            {% if field.required %}
+                                <div class="text-danger small mt-1" data-ms-error style="display:none;"></div>
+                            {% endif %}
+                        </div>
                     {% endif %}
                 {% endfor %}
             {% endif %}
         {% endwith %}
+
+        <script>
+            (function () {
+                const form = document.getElementById('membership-form');
+                if (!form) return;
+
+                function validateMsRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-ms-required="true"]');
+                    groups.forEach(group => {
+                        const inputName = group.getAttribute('data-input-name');
+                        const boxes = group.querySelectorAll('input[type="checkbox"][name="' + inputName + '"]');
+                        const anyChecked = Array.from(boxes).some(cb => cb.checked);
+                        const error = group.querySelector('[data-ms-error]');
+                        if (!anyChecked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || '{% translate "Please check at least one option." %}';
+                                error.style.display = 'block';
+                            }
+                            boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            boxes.forEach(cb => cb.removeAttribute('aria-invalid'));
+                        }
+                    });
+                    return ok;
+                }
+
+                function validateBlRequired() {
+                    let ok = true;
+                    const groups = form.querySelectorAll('[data-bl-required="true"]');
+                    groups.forEach(group => {
+                        const input = group.querySelector('input[type="checkbox"]');
+                        const error = group.querySelector('[data-bl-error]');
+                        if (!input) return;
+                        if (!input.checked) {
+                            ok = false;
+                            if (error) {
+                                error.textContent = group.getAttribute('data-error-message') || '{% translate "Please check this box." %}';
+                                error.style.display = 'block';
+                            }
+                            input.setAttribute('aria-invalid', 'true');
+                        } else {
+                            if (error) {
+                                error.textContent = '';
+                                error.style.display = 'none';
+                            }
+                            input.removeAttribute('aria-invalid');
+                        }
+                    });
+                    return ok;
+                }
+
+                // Validate before HTMX sends the request
+                form.addEventListener('htmx:configRequest', function (event) {
+                    const okMs = validateMsRequired();
+                    const okBl = validateBlRequired();
+
+                    // Validation du prix libre
+                    let okFreePrice = true;
+                    const selectedRadio = form.querySelector('input[name="price"]:checked') || form.querySelector('input[name="price"][type="hidden"]');
+                    if (selectedRadio && (selectedRadio.classList.contains('free-price-radio') || selectedRadio.type === 'hidden')) {
+                        // On cherche l'input custom_amount correspondant au prix sélectionné
+                        // Si c'est un input hidden (un seul prix), on prend le premier .custom-amount-input qu'on trouve
+                        const container = selectedRadio.type === 'hidden' ? 
+                                          form.querySelector('.custom-amount-input')?.closest('.bg-body-tertiary') :
+                                          document.getElementById(selectedRadio.getAttribute('data-target'));
+                        
+                        if (container) {
+                            const input = container.querySelector('.custom-amount-input');
+                            if (input && !input.value) {
+                                okFreePrice = false;
+                                input.classList.add('is-invalid');
+                                input.focus();
+                            } else if (input) {
+                                input.classList.remove('is-invalid');
+                            }
+                        }
+                    }
+
+                    if (!(okMs && okBl && okFreePrice)) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Gestion de l'affichage des inputs de prix libre
+                const allRadios = form.querySelectorAll('input[name="price"]');
+                const customAmountContainers = form.querySelectorAll('.custom-amount-container');
+
+                function updateCustomAmounts() {
+                    customAmountContainers.forEach(container => {
+                        container.style.display = 'none';
+                        const input = container.querySelector('.custom-amount-input');
+                        if (input) input.required = false;
+                    });
+
+                    const selectedRadio = form.querySelector('input[name="price"]:checked');
+                    if (selectedRadio && selectedRadio.classList.contains('free-price-radio')) {
+                        const targetId = selectedRadio.getAttribute('data-target');
+                        const targetContainer = document.getElementById(targetId);
+                        if (targetContainer) {
+                            targetContainer.style.display = 'block';
+                            const input = targetContainer.querySelector('.custom-amount-input');
+                            if (input) input.required = true;
+                        }
+                    }
+                }
+
+                allRadios.forEach(radio => {
+                    radio.addEventListener('change', updateCustomAmounts);
+                });
+
+                // Appel initial pour régler l'affichage au chargement
+                updateCustomAmounts();
+
+                // Live update on change within a required MS/BL group
+                form.addEventListener('change', function (e) {
+                    if (e.target && e.target.closest('[data-ms-required="true"]')) {
+                        validateMsRequired();
+                    }
+                    if (e.target && e.target.closest('[data-bl-required="true"]')) {
+                        validateBlRequired();
+                    }
+                });
+            })();
+        </script>
 
         <!-- newsletter opt-out -->
         <div class="form-check form-switch mb-3">

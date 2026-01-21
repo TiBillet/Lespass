@@ -144,7 +144,7 @@ class AssetFedow():
     #         logger.error(serialized_assets.errors)
     #         raise Exception(f"{serialized_assets.errors}")
 
-    def retrieve_bank_deposits(self, asset:AssetFedowPublic):
+    def retrieve_bank_deposits(self, asset: AssetFedowPublic):
         response = _get(self.fedow_config, path=f'asset/{asset.uuid}/retrieve_bank_deposits')
         if response.status_code == 200:
             serialized_transaction = TransactionValidator(data=response.json(), many=True)
@@ -170,6 +170,17 @@ class AssetFedow():
 
         if response_asset.status_code == 200:
             serialized_assets = AssetValidator(data=response_asset.json(), many=False)
+            if serialized_assets.is_valid():
+                return serialized_assets.validated_data
+            logger.error(serialized_assets.errors)
+            raise Exception(f"{serialized_assets.errors}")
+        logger.warning(response_asset)
+        raise Exception(f"{response_asset.status_code}")
+
+    def get_accepted_assets(self):
+        response_asset = _get(self.fedow_config, path=f'asset/get_accepted_assets')
+        if response_asset.status_code == 200:
+            serialized_assets = AssetValidator(data=response_asset.json(), many=True)
             if serialized_assets.is_valid():
                 return serialized_assets.validated_data
             logger.error(serialized_assets.errors)
@@ -233,8 +244,8 @@ class AssetFedow():
             logger.error(response_asset)
             raise Exception(f"{response_asset.status_code} {response_asset.content}")
 
-    def archive_asset(self, product: Product):
-        response_archive_asset = _get(self.fedow_config, path=f'asset/{product.uuid}/archive_asset')
+    def archive_asset(self, asset_uuid: UUID):
+        response_archive_asset = _get(self.fedow_config, path=f'asset/{asset_uuid}/archive_asset')
         if response_archive_asset.status_code != 200:
             logger.error(f"archive_asset ERROR {response_archive_asset.status_code} {response_archive_asset.content}")
             raise Exception(
@@ -392,7 +403,6 @@ class WalletFedow():
         else:
             logger.error(tr_reponse.json())
             raise Exception(f"{tr_reponse.json()}")
-
 
     def global_asset_bank_stripe_deposit(self, payload: dict):
         '''
@@ -671,7 +681,7 @@ class PlaceFedow():
         if admin is None:
             # Un seul admin lors de la création du lieu est présent.
             User: TibilletUser = get_user_model()
-            admin = User.objects.get(client_admin=tenant)
+            admin = User.objects.filter(client_admin=tenant).first()
 
         # Pour la création, on prend la clé "create_place_apikey" de Root
         apikey = self.fedow_config.get_fedow_create_place_apikey()
@@ -726,15 +736,15 @@ class NFCcardFedow():
         )
 
         if not response_get_card.status_code == 200:
-            logger.error(f"retrieve_by_signature ERRORS : {response_get_card.status_code}")
-            raise Exception(f"retrieve_by_signature ERRORS : {response_get_card.status_code}")
+            logger.error(f"retrieve_card_by_signature ERRORS : {response_get_card.status_code}")
+            raise Exception(f"retrieve_card_by_signature ERRORS : {response_get_card.status_code}")
 
         card_serialized = CardValidator(data=response_get_card.json(), many=True)
         if card_serialized.is_valid():
             return card_serialized.validated_data
         else:
-            logger.error(f"retrieve_by_signature card_serialized ERRORS : {card_serialized.errors}")
-            raise Exception(f"retrieve_by_signature card_serialized ERRORS : {card_serialized.errors}")
+            logger.error(f"retrieve_card_by_signature card_serialized ERRORS : {card_serialized.errors}")
+            raise Exception(f"retrieve_card_by_signature card_serialized ERRORS : {card_serialized.errors}")
 
     def lost_my_card_by_signature(self, user, number_printed):
         response_lost_my_card = _post(
@@ -745,9 +755,33 @@ class NFCcardFedow():
         )
 
         if not response_lost_my_card.status_code == 200:
-            logger.error(f"retrieve_by_signature ERRORS : {response_lost_my_card.status_code}")
-            raise Exception(f"retrieve_by_signature ERRORS : {response_lost_my_card.status_code}")
+            logger.error(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
+            raise Exception(f"lost_my_card_by_signature ERRORS : {response_lost_my_card.status_code}")
         return True
+
+    def card_tag_id_retrieve(self, card_number: str):
+        response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_tag_id_retrieve')
+        if not response_qr.status_code == 200:
+            return None
+
+        serialized_card = QrCardValidator(data=response_qr.json())
+        if not serialized_card.is_valid():
+            logger.error(serialized_card.errors)
+            raise Exception(serialized_card.errors)
+
+        return serialized_card.validated_data
+
+    def card_number_retrieve(self, card_number: str):
+        response_qr = _get(self.fedow_config, path=f'card/{card_number}/card_number_retrieve')
+        if not response_qr.status_code == 200:
+            return None
+
+        serialized_card = QrCardValidator(data=response_qr.json())
+        if not serialized_card.is_valid():
+            logger.error(serialized_card.errors)
+            raise Exception(serialized_card.errors)
+
+        return serialized_card.validated_data
 
     def qr_retrieve(self, qrcode_uuid: uuid4):
         # On vérifie que l'uuid soit bien un uuid :
@@ -764,10 +798,6 @@ class NFCcardFedow():
         return serialized_card.validated_data
 
     def linkwallet_card_number(self, user: TibilletUser = None, card_number: str = None):
-        card_number = validate_hex8(card_number)
-        if card_number is None:
-            return None
-
         response_link = _post(
             fedow_config=self.fedow_config,
             user=user,
@@ -780,12 +810,12 @@ class NFCcardFedow():
 
         if response_link.status_code != 200:
             logger.error(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
-            return False
+            raise Exception(f"linkwallet_card_number : {response_link.status_code} {response_link.json()}")
 
         validated_card = CardValidator(data=response_link.json())
         if not validated_card.is_valid():
             logger.error(validated_card.errors)
-            return False
+            raise Exception(validated_card.errors)
 
         return validated_card.validated_data
 
@@ -935,6 +965,36 @@ class TransactionFedow():
         else:
             logger.error(response_w2w.json())
             raise Exception(response_w2w.json())
+
+
+    def list_by_asset(self,
+                            asset: AssetFedowPublic = None,
+                            start_date: datetime = None,
+                            end_date: datetime = None,
+                            user: TibilletUser = None
+                            ):
+
+        response = _post(
+            fedow_config=self.fedow_config,
+            user=user,
+            data={
+                "asset_uuid": f"{asset.uuid}",
+                "start_date": f"{start_date}",
+                "end_date": f"{end_date}",
+            },
+            path='transaction/list_by_asset')
+
+        if response.status_code == 200:
+            serialized_transaction = TransactionValidator(data=response.json(), many=True)
+            if serialized_transaction.is_valid():
+                return serialized_transaction.validated_data
+            logger.error(serialized_transaction.errors)
+            raise Exception(response.json())
+        else:
+            logger.error(response.json())
+            raise Exception(response.json())
+
+
 
     def refill_from_lespass_to_user_wallet(self,
                                            user: TibilletUser = None,
