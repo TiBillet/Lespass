@@ -799,6 +799,7 @@ class TenantCreateValidator(serializers.Serializer):
 
         return attrs
 
+
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):
         name = waiting_config.organisation
