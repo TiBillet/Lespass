@@ -3,20 +3,20 @@ import calendar
 import json
 import logging
 import uuid
-from calendar import month
-from datetime import timedelta, datetime, tzinfo
+from datetime import timedelta, datetime
 from decimal import Decimal
-from time import localtime
 from uuid import uuid4
-from functools import lru_cache
 
 import pytz
 import requests
 import stripe
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from dateutil.relativedelta import relativedelta
+from django.core.cache import cache
 from django.db import connection
 from django.db import models
-from django.db.models import JSONField, SET_NULL, Sum
+from django.db.models import JSONField, SET_NULL
 # Create your models here.
 from django.db.models import Q
 from django.db.models.query import QuerySet
@@ -31,10 +31,7 @@ from django.utils.translation import gettext_lazy as _, activate
 from django_tenants.postgresql_backend.base import FakeTenant
 from django_tenants.utils import tenant_context
 from rest_framework_api_key.models import APIKey, AbstractAPIKey
-from django.core.cache import cache
-
 from solo.models import SingletonModel
-
 from stdimage import StdImageField
 from stdimage.validators import MinSizeValidator
 from stripe import InvalidRequestError
@@ -44,13 +41,9 @@ from AuthBillet.models import HumanUser, RsaKey
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
 from TiBillet import settings
-from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64, sign_utf8_string
+from fedow_connect.utils import dround, sign_message, verify_signature, data_to_b64
 from root_billet.models import RootConfiguration
 from root_billet.utils import fernet_decrypt, fernet_encrypt
-
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +70,14 @@ class SaleOrigin(models.TextChoices):
     LABOUTIK = "LB", _("Cash register")
     ADMIN = "AD", _("Administration")
     EXTERNAL = "EX", _("External")
-    QRCODE_MA = "QR", _("QrCode or NFC")
+    QRCODE_MA = "QR", _("QrCode online")
+    NFC_MA = "NF", _("NFC online")
+    API = "AP", _("API")
+    WEBHOOK = "WK", _("Webhook Stripe")
 
 
 class PaymentMethod(models.TextChoices):
+    UNKNOWN = "UK", _("Unknown")
     FREE = "NA", _("Offered")
     CC = "CC", _("Credit card: POS terminal")
     CASH = "CA", _("Cash")
@@ -93,6 +90,7 @@ class PaymentMethod(models.TextChoices):
     STRIPE_RECURENT = "SR", _("Recurring: Stripe")
     LOCAL_EURO = 'LE', _("Asset local fiat")
     LOCAL_GIFT = 'LG', _("Asset local gift")
+
 
     @classmethod
     def online(cls):
@@ -887,12 +885,13 @@ class Product(models.Model):
         # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
         elif self.categorie_article in [self.BILLET, self.FREERES] and event:
             # Compte direct des tickets liés aux réservations de l'utilisateur
-            return Ticket.objects.filter(
+            count = (Ticket.objects.filter(
                 reservation__user_commande=user,
                 reservation__event=event,
                 pricesold__price__product__pk=self.pk,
                 status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
-            ).count() >= self.max_per_user
+            ).count())
+            return count >= self.max_per_user
 
         return False
 
@@ -1208,11 +1207,10 @@ class Event(models.Model):
     jauge_max = models.PositiveSmallIntegerField(default=50, verbose_name=_("Maximum capacity"))
     show_gauge = models.BooleanField(default=False, verbose_name=_("Show gauge"))
 
-    max_per_user = models.PositiveSmallIntegerField(default=10,
-                                                    verbose_name=_(
+    max_per_user = models.PositiveSmallIntegerField(verbose_name=_(
                                                         "Maximum bookings per user"),
-                                                    help_text=_("The same email can be used for multiple tickets.")
-                                                    )
+                                                    help_text=_("The same email can be used for multiple tickets."),
+                                                    null=True, blank=True)
 
     postal_address = models.ForeignKey(PostalAddress, on_delete=SET_NULL, blank=True, null=True)
 
@@ -1223,7 +1221,7 @@ class Event(models.Model):
     full_url = models.URLField(blank=True, null=True)
 
     published = models.BooleanField(default=True, verbose_name=_("Publish"))
-    # archived = models.BooleanField(default=False, verbose_name=_("Archive"))
+    archived = models.BooleanField(default=False, verbose_name=_("Archive"))
     private = models.BooleanField(default=False, verbose_name=_("Non-federable event"),
                                   help_text=_("Will not be displayed on shared calendars."))
 
@@ -1503,9 +1501,15 @@ class Event(models.Model):
         else:
             return False
 
-    # def check_serveur_cashless(self):
-    #     config = Configuration.get_solo()
-    #     return config.check_serveur_cashless()
+    def max_per_user_reached_on_this_event(self, user):
+        if not self.max_per_user:
+            return False  # Aucune limite
+
+        return Ticket.objects.filter(
+            reservation__user_commande=user,
+            reservation__event__pk=self.pk,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
+        ).count() >= self.max_per_user
 
     def next_datetime(self):
         # Création de la liste des prochaines récurences
@@ -1524,7 +1528,7 @@ class Event(models.Model):
 
     @property
     def pricesold_for_sections(self):
-        from django.db.models import Q, F, Count, Sum, Window
+        from django.db.models import F, Count, Sum, Window
         # Tickets-based rows: one row per price (using Ticket queryset with window aggregates)
         valid_statuses = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         return (
@@ -1794,6 +1798,10 @@ class PriceSold(models.Model):
         if self.id_price_stripe and not force:
             return self.id_price_stripe
 
+        config = Configuration.get_solo()
+        currency_code = config.currency_code.lower()
+        stripe_account = Configuration.get_solo().get_stripe_connect_account()
+
         stripe_key = RootConfiguration.get_solo().get_stripe_api()
         stripe.api_key = stripe_key
 
@@ -1805,9 +1813,9 @@ class PriceSold(models.Model):
 
         data_stripe = {
             "unit_amount": f"{int(Decimal(self.prix) * 100)}",
-            "currency": "eur",
+            "currency": currency_code,
             "product": product_stripe,
-            "stripe_account": Configuration.get_solo().get_stripe_connect_account(),
+            "stripe_account": stripe_account,
             "nickname": f"{self.price.name}",
         }
 
@@ -1825,15 +1833,6 @@ class PriceSold(models.Model):
                 data_stripe["recurring"]["interval"] = "month"
             elif self.price.subscription_type == Price.YEAR:
                 data_stripe["recurring"]["interval"] = "year"
-
-        elif self.price.free_price:  # Si c'est récurrent et free price, le if précédent s'applique
-            data_stripe.pop('unit_amount')
-            data_stripe['billing_scheme'] = "per_unit"
-            data_stripe['custom_unit_amount'] = {
-                "enabled": "true",
-                "minimum": f"{int(Decimal(self.prix) * 100)}",
-                # "preset": f"{int(Decimal(self.prix) * 100)}",
-            }
 
         price = stripe.Price.create(**data_stripe)
 
@@ -1982,6 +1981,7 @@ class Reservation(models.Model):
                             status=LigneArticle.CREATED,
                             sended_to_laboutik=False,
                             metadata=metadata,
+                            sale_origin=SaleOrigin.LESPASS,
                         )
                         refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
                         refunded_line.save()
@@ -2065,6 +2065,7 @@ class Reservation(models.Model):
                             status=LigneArticle.CREATED,
                             sended_to_laboutik=False,
                             metadata=metadata,
+                            sale_origin=SaleOrigin.LESPASS,
                         )
                         refunded_line.status = LigneArticle.REFUNDED  # pour envoyer le trigger qui va informer LaBoutik
                         refunded_line.save()
@@ -2176,13 +2177,29 @@ class Ticket(models.Model):
         last_name = f"{self.last_name.upper()}" if self.last_name else ""
 
         config = Configuration.get_solo()
-        return f"{config.organisation.upper()} " \
-               f"{self.reservation.event.name} " \
-               f"{self.reservation.event.datetime.astimezone().strftime('%d/%m/%Y')} " \
-               f"{first_name}" \
-               f"{last_name}" \
-               f"{self.status}-{self.numero_uuid()}-{self.seat}" \
-               f".pdf"
+        organisation = config.organisation.upper()
+        event_name = self.reservation.event.name
+        event_date = self.reservation.event.datetime.astimezone().strftime('%d-%m-%Y')
+        status = self.status
+        uuid_short = self.numero_uuid()
+        seat = self.seat if self.seat else ""
+
+        filename = f"{organisation} {event_name} {event_date} {first_name} {last_name} {status}-{uuid_short}-{seat}.pdf"
+
+        # Remove non-ascii characters and other problematic characters for filenames in email headers
+        import unicodedata
+        import re
+        # Normalize to decomposed form to separate accents from letters
+        filename = unicodedata.normalize('NFKD', filename)
+        # Keep only ascii, replace spaces with underscores or just keep them if they are safe
+        # But safest is to remove everything non-ascii and non-alphanumeric (keeping spaces and dots/dashes)
+        filename = filename.encode('ascii', 'ignore').decode('ascii')
+        # Replace problematic characters for headers: ; , ? : @ = & /
+        filename = re.sub(r'[;,?:@=&/]', '', filename)
+        # Replace multiple spaces with one
+        filename = re.sub(r'\s+', ' ', filename).strip()
+
+        return filename
 
     def pdf_url(self):
         domain = connection.tenant.domains.all().first().domain
@@ -2364,9 +2381,14 @@ class Paiement_stripe(models.Model):
 
         # On vérifie le moyen de paiement. C'est peut être un SEPA
         if checkout_session.get('payment_method_types'):
+            logger.info(f"checkout_session.get('payment_method_types') : {checkout_session.get('payment_method_types')}")
             if 'sepa_debit' in checkout_session.get('payment_method_types'):
+                logger.info(f"sepa_debit detected")
+
+                # uniquement si paiement direct.
                 payment_intent_id = checkout_session.get('payment_intent')
                 if payment_intent_id:
+                    logger.info(f"payment_intent_id : {payment_intent_id}")
                     payment_intent = stripe.PaymentIntent.retrieve(
                         payment_intent_id,
                         stripe_account=self.config.get_stripe_connect_account()
@@ -2374,6 +2396,22 @@ class Paiement_stripe(models.Model):
                     if 'sepa_debit' in payment_intent.get(
                             'payment_method_options') and 'sepa_debit' in payment_intent.get('payment_method_types'):
                         self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
+                        logger.info(f"lignearticles set to PaymentMethod.STRIPE_SEPA_NOFED : {self.lignearticles}")
+
+                # Pour subscription :
+                elif checkout_session.mode == 'subscription':
+                    subscription_stripe = stripe.Subscription.retrieve(
+                        checkout_session.subscription,
+                        stripe_account=self.config.get_stripe_connect_account()
+                    )
+                    paiement_method = stripe.PaymentMethod.retrieve(
+                        subscription_stripe.default_payment_method,
+                        stripe_account=self.config.get_stripe_connect_account(),
+                    )
+                    if paiement_method.type == 'sepa_debit':
+                        self.lignearticles.update(payment_method=PaymentMethod.STRIPE_SEPA_NOFED)
+
+
 
         # Pas payé, on le met en attente
         if checkout_session.payment_status == "unpaid":
@@ -2400,8 +2438,10 @@ class Paiement_stripe(models.Model):
                         stripe_account=Configuration.get_solo().get_stripe_connect_account(),
                         metadata=metadata,
                     )
-
                     self.invoice_stripe = subscription.latest_invoice
+
+                    # check si sepa ?
+
 
         else:
             self.status = Paiement_stripe.CANCELED
@@ -2434,22 +2474,22 @@ class LigneArticle(models.Model):
     amount = models.IntegerField(default=0, verbose_name=_("Value"))  # Centimes en entier (50.10€ = 5010)
 
     vat = models.DecimalField(max_digits=4, decimal_places=2, default=0, verbose_name=_("VAT"))
+    promotional_code = models.ForeignKey(PromotionalCode, on_delete=models.PROTECT, blank=True, null=True,
+                                         verbose_name=_("Promotional code"), related_name="lignearticles")
 
-    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
                                         related_name="lignearticles")
     membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
                                    verbose_name=_("Linked subscription"), related_name="lignearticles")
 
+    ### INFO DE PAIEMENT
+    sale_origin = models.CharField(max_length=2, choices=SaleOrigin.choices, default=SaleOrigin.LESPASS,
+                                   verbose_name=_("Payment source"))
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
-
-    promotional_code = models.ForeignKey(PromotionalCode, on_delete=models.PROTECT, blank=True, null=True,
-                                         verbose_name=_("Promotional code"), related_name="lignearticles")
-
     asset = models.UUIDField(blank=True, null=True, verbose_name=_("Asset"))
-
+    carte = models.ForeignKey(CarteCashless, on_delete=models.PROTECT, blank=True, null=True)
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 
@@ -2519,11 +2559,6 @@ class LigneArticle(models.Model):
         super().save(*args, **kwargs)
 
     def total(self) -> int:
-        # Mise à jour de amount en cas de paiement stripe pour prix libre ( a virer après les migration ? )
-        if self.amount == 0 and self.paiement_stripe and self.pricesold.price.free_price:
-            if self.paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID]:
-                logger.info("Total == 0. free price ? go -> update_amount()")
-                self.update_amount()
         return int(self.amount * self.qty)
 
     def total_decimal(self):
@@ -2533,13 +2568,6 @@ class LigneArticle(models.Model):
         paiement_stripe = self.paiement_stripe
         checkout_session = paiement_stripe.get_checkout_session()
         return checkout_session
-
-    def update_amount(self):
-        '''Dans le cas d'un prix libre, la somme payée n'est pas connu d'avance'''
-        checkout_session = self.get_stripe_checkout_session()
-        self.amount = checkout_session['amount_total']
-        self.save()
-        return self.amount
 
     def amount_decimal(self):
         return dround(self.amount)
@@ -2588,7 +2616,7 @@ class Membership(models.Model):
     asset_fedow = models.UUIDField(null=True, blank=True)
     card_number = models.CharField(max_length=16, null=True, blank=True)
 
-    date_added = models.DateTimeField(auto_now_add=True)
+    date_added = models.DateTimeField(auto_now_add=True, verbose_name=_('Date added'))
 
     last_contribution = models.DateTimeField(null=True, blank=True, verbose_name=_("Payment date"))
     first_contribution = models.DateTimeField(null=True, blank=True)  # utilisé dans le cas des iterations max
@@ -2598,6 +2626,7 @@ class Membership(models.Model):
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Presence"))
     contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
+
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
                                       verbose_name=_("Payment method"))
 
@@ -2628,21 +2657,8 @@ class Membership(models.Model):
     # Dynamic membership form data
     custom_form = models.JSONField(null=True, blank=True, verbose_name=_('Custom Form'))
 
-    CANCELED, AUTO, ONCE, ADMIN, IMPORT, LABOUTIK = 'C', 'A', 'O', 'D', 'I', 'L'
-    STATUS_CHOICES = [
-        (ADMIN, _("Saved through the admin")),
-        (IMPORT, _("Import from file")),
-        (ONCE, _('Single online stripe payment')),
-        (AUTO, _('Automatic stripe renewal')),
-        (CANCELED, _('Cancelled')),
-        (LABOUTIK, _('LaBoutik')),
-    ]
-
-    status = models.CharField(max_length=1, choices=STATUS_CHOICES, default=ONCE,
-                              verbose_name=_("Origin"))
-
     ### Pour le cas des adhésions à validation manuelle
-    # need_admin_validation = models.BooleanField(default=False)
+    # TODO: A VIRER, un seul state ?
     WAITING_PAYMENT, ADMIN_CANCELED, ADMIN_VALID, ADMIN_WAITING, PAID_BY_USER, NO_ADMIN_VALID = "WP", "CA", "VA", "WA", "PA", "AU"
     STATE_CHOICES = [
         (WAITING_PAYMENT, _("Waiting for payment")),
@@ -2654,6 +2670,33 @@ class Membership(models.Model):
     ]
     state = models.CharField(max_length=2, choices=STATE_CHOICES, default=WAITING_PAYMENT,
                              verbose_name=_("State"))
+
+
+    WAITING_PAYMENT = 'WP'
+    ADMIN, IMPORT, LABOUTIK = 'D', 'I', 'L'
+    ADMIN_WAITING, ADMIN_VALID = 'AW', 'AV'
+    ONCE, AUTO =  'A', 'O'
+    CANCELED, ADMIN_CANCELED = 'C', 'AC'
+    STATUS_CHOICES = [
+        (WAITING_PAYMENT, _("En attente de paiement")),
+
+        (ADMIN, _("Créé via l'administration")),
+        (IMPORT, _("Importé depuis un fichier")),
+        (LABOUTIK, _('Créé via la caisse')),
+
+        # Pour les validations manuelles
+        (ADMIN_WAITING, _('En attente de validation par un admin')),
+        (ADMIN_VALID, _('Confirmé par un admin, en attente de paiement')),
+
+        (ONCE, _('Payé en ligne')),
+        (AUTO, _('Payé en ligne (récurrent)')),
+
+        (CANCELED, _("Annulé par l'utilisateur")),
+        (ADMIN_CANCELED, _('Annulé par un admin')),
+    ]
+
+    status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=ONCE,
+                              verbose_name=_("State"))
 
     stripe_paiement = models.ManyToManyField(Paiement_stripe, blank=True, related_name="membership")
     stripe_id_subscription = models.CharField(
@@ -2796,7 +2839,9 @@ class Membership(models.Model):
         return None
 
     def is_valid(self):
-        if self.get_deadline():
+        if self.status in [Membership.CANCELED, Membership.ADMIN_CANCELED]:
+            return False
+        elif self.get_deadline():
             if timezone.localtime() <= self.deadline:
                 return True
         return False

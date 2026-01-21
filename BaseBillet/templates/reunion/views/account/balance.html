@@ -45,31 +45,24 @@
                         <div>
                             <div class="alert  alert-primary" role="alert">
                                 <h4>{% trans "Don't panic! You've got time left…" %}</h4>
-                                {% blocktranslate %}
-                                    <p>
-                                        TiBillet works on a
-                                        <a href="https://tibillet.org/docs/presentation/philosophy/">
-                                            melting funds
-                                        </a> principle.
-                                        You can get your leftover balance back for 14
-                                        months after your last Pass card use. We send a
-                                        reminder a month before expiration.
-                                    </p>
-                                    <p>
-                                        You will also soon be able to donate the leftover
-                                        balance to the collective that issued this card.
-                                    </p>
-                                    <p>
-                                        Your Pass card itself and your account are yours
-                                        for life and can be used with every TiBillet
-                                        collective!
-                                    </p>
-                                {% endblocktranslate %}
-                                <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
+                                <p>
+                                    {% translate 'TiBillet works on a <a href="https://tibillet.org/docs/presentation/philosophy/">melting funds</a> principle.' %}
+                                    {% translate "You can get your leftover balance back for 14 months after your last Pass card use." %}
+                                    {% translate "We send a reminder a month before expiration." %}
+                                </p>
+                                <p>
+                                    {% translate "You will also soon be able to donate the leftover balance to the collective that issued this card." %}
+                                </p>
+                                <p>
+                                    {% translate "Your Pass card itself and your account are yours for life and can be used with every TiBillet collective!" %}
+                                </p>
                             </div>
                         </div>
 
                         <div class="p-3">
+                            <div class="alert  alert-warning" role="alert">
+                                <p>{% translate "You can only obtain online refunds for amounts topped up online or via card payment terminal named ‘TiBillet’. For amounts topped up in cash, please contact the collective or return to their next event!" %}</p>
+                            </div>
                             <p class="lead">
                                 {# TODO: montant remboursement #}
                                 {% trans "Confirm the refund request?" %}
@@ -79,14 +72,14 @@
                                     data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"
                                     hx-get="/my_account/refund_online/" hx-indicator="#tibillet-spinner">
                                 {% trans "Send request" %}</button>
-                            {# TODO: lien don #}
-                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"
-                                    {# data-bs-dismiss="offcanvas" aria-label="Close" #}>
-                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}
-                            </button>
-                            <p class="alert alert-warning">
-                                {% trans "The collective donation feature is being developed, coming soon!" %}
-                            </p>
+
+{#                            <button disabled type="button" class="btn btn-secondary d-block w-100 mb-3"#}
+{#                                {% trans "Gift my leftover balance to" %} {{ config.organisation }}#}
+{#                            </button>#}
+{#                            <p class="alert alert-warning">#}
+{#                                {% trans "The collective donation feature is being developed, coming soon!" %}#}
+{#                            </p>#}
+
                             <button type="button" class="btn btn-danger d-block w-100" data-bs-dismiss="offcanvas"
                                     aria-label="{% trans 'Close' %}">
                                 {% trans "Cancel" %}

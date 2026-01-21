@@ -13,7 +13,7 @@ from django_tenants.utils import tenant_context
 from rest_framework import serializers
 from rest_framework.generics import get_object_or_404
 from BaseBillet.models import Event, Price, Product, Reservation, Configuration, LigneArticle, Ticket, Paiement_stripe, \
-    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode
+    PriceSold, ProductSold, Artist_on_event, OptionGenerale, Tag, Membership, PostalAddress, PromotionalCode, SaleOrigin
 from Customers.models import Client
 from PaiementStripe.views import CreationPaiementStripe
 from fedow_connect.utils import dround
@@ -821,7 +821,8 @@ def create_ticket(pricesold, customer, reservation):
 
 @atomic
 def get_or_create_price_sold(price: Price, event: Event = None,
-                             promo_code:PromotionalCode = None, custom_amount: Decimal = None,):
+                             promo_code:PromotionalCode = None,
+                             custom_amount: Decimal = None,):
     """
     Générateur des objets PriceSold pour envoi à Stripe.
     Price + Event = PriceSold
@@ -867,30 +868,7 @@ def get_or_create_price_sold(price: Price, event: Event = None,
     return pricesold
 
 
-"""
 
-def line_article_recharge(carte, qty):
-    product, created = Product.objects.get_or_create(
-        name=f"Recharge Carte {carte.detail.origine.name} v{carte.detail.generation}",
-        categorie_article=Product.RECHARGE_CASHLESS,
-        img=carte.detail.img,
-    )
-
-    price, created = Price.objects.get_or_create(
-        product=product,
-        name=f"{qty}€",
-        prix=int(qty),
-    )
-
-    # noinspection PyTypeChecker
-    ligne_article_recharge = LigneArticle.objects.create(
-        pricesold=get_or_create_price_sold(price),
-        amount=dec_to_int(price.prix),
-        qty=1,
-        carte=carte,
-    )
-    return ligne_article_recharge
-"""
 
 """
 class DetailCashlessCardsValidator(serializers.ModelSerializer):
@@ -1182,6 +1160,7 @@ class ApiReservationValidator(serializers.Serializer):
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
+                sale_origin=SaleOrigin.API,
                 # pas d'objet reservation ?
                 qty=qty,
             )

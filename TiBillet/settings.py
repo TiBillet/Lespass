@@ -607,16 +607,14 @@ UNFOLD = {
                     {
                         "title": _("Bookings"),
                         "icon": "event_upcoming",  # Supported icon set: https://fonts.google.com/icons
-                        "link": lambda
-                            request: f'{reverse_lazy("staff_admin:BaseBillet_reservation_changelist")}?status_valid=Y',
+                        "link": reverse_lazy("staff_admin:BaseBillet_reservation_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
                     {
                         "title": _("Tickets"),
                         "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
-                        "link": lambda
-                            request: f'{reverse_lazy("staff_admin:BaseBillet_ticket_changelist")}?status_valid=Y',
+                        "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
@@ -637,20 +635,19 @@ UNFOLD = {
                     {
                         "title": _("Entries"),
                         "icon": "receipt_long",  # Supported icon set: https://fonts.google.com/icons
-                        "link": lambda
-                            request: f'{reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist")}',
+                        "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     },
-                    {
-                        "title": _("Stripe payments"),
-                        "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
-                        "link": lambda
-                            request: f'{reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist")}?status__exact=V',
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                    }
+                    # {
+                    #     "title": _("Stripe payments"),
+                    #     "icon": "price_change",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": lambda
+                    #         request: f'{reverse_lazy("staff_admin:BaseBillet_paiement_stripe_changelist")}?status__exact=V',
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    #
+                    # }
                 ],
             },
             {

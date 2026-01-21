@@ -20,7 +20,8 @@ from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Event, PostalAddress, Tag, Configuration
 from BaseBillet.models import Price, Product, OptionGenerale, Membership, Paiement_stripe, LigneArticle, Reservation, \
-    PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod
+    PriceSold, Ticket, ProductSold, ProductFormField, PromotionalCode, PaymentMethod, SaleOrigin
+from BaseBillet.tasks import send_membership_pending_admin, send_membership_pending_user
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from PaiementStripe.views import CreationPaiementStripe
@@ -174,11 +175,12 @@ class LoginEmailValidator(serializers.Serializer):
 
 class TicketCreator():
 
-    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None):
+    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
         self.promo_code = promo_code
+        self.custom_amounts = custom_amounts or {}
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -269,7 +271,8 @@ class TicketCreator():
             pricesold: PriceSold = get_or_create_price_sold(
                 price_generique,
                 event=event,
-                promo_code=self.promo_code)
+                promo_code=self.promo_code,
+                custom_amount=self.custom_amounts.get(price_generique.uuid))
 
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(
@@ -278,6 +281,7 @@ class TicketCreator():
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
                 promotional_code=self.promo_code,
+                sale_origin=SaleOrigin.LESPASS,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -351,7 +355,7 @@ class ReservationValidator(serializers.Serializer):
         event = self.event
         products_dict = {}
         self.products = []  # Pour checker si un formulaire forbricks est présent
-        self.free_price = False  # Pour vérification plus bas que le prix libre est bien seul
+        self.custom_amounts = {} # Stockage des montants personnalisés par prix
 
         for product in event.products.all():
             for price in product.prices.all():
@@ -372,8 +376,21 @@ class ReservationValidator(serializers.Serializer):
                     if qty <= 0:  # Skip zero or negative quantities
                         continue
 
-                    if price.free_price:  # Pour vérification plus bas que le prix libre est bien seul
-                        self.free_price = True
+                    if price.free_price:
+                        # Récupération du montant personnalisé si prix libre
+                        custom_amount_key = f"custom_amount_{price.uuid}"
+                        custom_amount_val = self.initial_data.get(custom_amount_key)
+                        if custom_amount_val:
+                            try:
+                                if isinstance(custom_amount_val, list):
+                                    custom_amount_val = custom_amount_val[-1]
+                                self.custom_amounts[price.uuid] = Decimal(str(custom_amount_val).replace(',', '.'))
+                            except Exception:
+                                raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
+                        else:
+                            # Si prix libre et quantité > 0, on pourrait lever une erreur ici ou laisser TicketCreator gérer
+                            pass
+
                     self.products.append(product)
                     if products_dict.get(product):
                         # On ajoute le prix a la liste des articles choisi
@@ -484,6 +501,9 @@ class ReservationValidator(serializers.Serializer):
                 )
             logger.info(f"Promotional code {promo_code.name} validated for product {promo_code.product.name}")
 
+        if event.max_per_user_reached_on_this_event(user):
+            raise serializers.ValidationError(_(f'You have reached the maximum number of tickets for this event.'))
+
         for product, price_dict in products_dict.items():
             # Si le maximum par user produit est déja atteint :
             if product.max_per_user_reached(user, event=event):
@@ -525,11 +545,6 @@ class ReservationValidator(serializers.Serializer):
             if total_ticket_qty > event.max_per_user:
                 raise serializers.ValidationError(_(f'Order quantity surpasses maximum allowed per user.'))
 
-        # Pour vérification plus bas que le prix libre est bien seul
-        if hasattr(self, 'free_price'):
-            if self.free_price:
-                if len(self.products) > 1:
-                    raise serializers.ValidationError(_(f'A free price must be selected alone.'))
 
         # Vérification de la jauge
         valid_tickets_count = event.valid_tickets_count()
@@ -579,6 +594,7 @@ class ReservationValidator(serializers.Serializer):
             reservation=reservation,
             products_dict=products_dict,
             promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
+            custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {}
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
@@ -607,7 +623,7 @@ class MembershipValidator(serializers.Serializer):
     newsletter = serializers.BooleanField()
 
     @staticmethod
-    def get_checkout_stripe(membership: Membership, custom_amount: Decimal = None):
+    def get_checkout_stripe(membership: Membership):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -623,16 +639,15 @@ class MembershipValidator(serializers.Serializer):
             'user': f"{user.email}",
         }
 
-        amount = int(price.prix * 100)
-        if custom_amount:
-            amount = int(custom_amount * 100)
+        amount = int(membership.contribution_value * 100)
 
         ligne_article_adhesion = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(price, custom_amount=custom_amount),
+            pricesold=get_or_create_price_sold(price, custom_amount=membership.contribution_value),
             membership=membership,
             payment_method=PaymentMethod.STRIPE_NOFED,
             amount=amount,
             qty=1,
+            sale_origin=SaleOrigin.LESPASS,
         )
 
         # Création de l'objet paiement stripe en base de donnée
@@ -662,14 +677,15 @@ class MembershipValidator(serializers.Serializer):
         return checkout_stripe_url
 
     def validate(self, attrs):
-        self.price = attrs['price']
-        custom_amount = None
-        if self.price.recurring_payment and self.price.free_price:
-            custom_amount = dround(attrs['custom_amount'])
+        self.price: Price = attrs['price']
 
+        # On va chercher le montant si c'est un prix libre
+        amount: Decimal = self.price.prix
         if self.price.free_price:
+            amount = attrs.get('custom_amount', None)
+
             if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
-                contribution = custom_amount or self.price.prix
+                contribution: Decimal = amount or self.price.prix
                 if contribution < self.price.prix:
                     logger.info("prix inférieur au minimum")
                     raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
@@ -678,38 +694,46 @@ class MembershipValidator(serializers.Serializer):
         self.user = get_or_create_user(attrs['email'])
 
         # Vérififaction du max par user sur le produit :
-        # import ipdb; ipdb.set_trace()
         if self.price.product.max_per_user_reached(user=self.user):
-                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+            raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
         # Vérification du max per user
         if self.price.max_per_user:
             user_membeshipr_count = Membership.objects.filter(
                 user=self.user,
                 price=self.price,
-                deadline__gt=timezone.localtime()).count()
+                deadline__gt=timezone.localtime()).exclude(
+                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
+            ).count()
             if user_membeshipr_count >= self.price.max_per_user:
                 logger.info("max per user")
                 raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
 
 
         ### CREATION DE LA FICHE MEMBRE
-        # Il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
+        # On fait create, car il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
         membership = Membership.objects.create(
             user=self.user,
             price=self.price,
-            contribution_value=custom_amount,
-            # None si pas de contribution value, sera rempli par la validation du paiement
+            contribution_value=amount,
+            status=Membership.WAITING_PAYMENT,
+            first_name = attrs['firstname'],
+            last_name = attrs['lastname'],
+            newsletter = not attrs.get('newsletter'), # TODO: A virer, utiliser les options ou les formulaires dynamiques : laisser le choix à l'admin
         )
 
+        # Vérification de la validation manuelle
+        if self.price.manual_validation:
+            logger.info(f"membership_validator.price.manual_validation")
+            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
+            membership.status = Membership.ADMIN_WAITING
+            # Envoi des mails pour prévenir les users
+            send_membership_pending_admin.delay(str(membership.uuid))
+            send_membership_pending_user.delay(str(membership.uuid))
+
+        # Inititation des itérations de récurrence maximales
         if self.price.recurring_payment and self.price.iteration :
             membership.max_iteration = self.price.iteration
-
-        membership.first_name = attrs['firstname']
-        membership.last_name = attrs['lastname']
-
-        # Sur le form, on coche pour NE PAS recevoir la news
-        membership.newsletter = not attrs.get('newsletter')
 
         # Set remplace les options existantes, accepte les listes
         options = attrs.get('options', [])
@@ -725,8 +749,11 @@ class MembershipValidator(serializers.Serializer):
 
         membership.save()
         self.membership = membership
+
         # Création du lien de paiement
-        self.checkout_stripe_url = self.get_checkout_stripe(membership, custom_amount=custom_amount)
+        self.checkout_stripe_url = None
+        if membership.status == Membership.WAITING_PAYMENT:
+            self.checkout_stripe_url = self.get_checkout_stripe(membership)
 
         return attrs
 
@@ -771,6 +798,7 @@ class TenantCreateValidator(serializers.Serializer):
             raise serializers.ValidationError({'answer': [_('Wrong answer to the anti-spam question.')]})
 
         return attrs
+
 
     @staticmethod
     def create_tenant(waiting_config: WaitingConfiguration):

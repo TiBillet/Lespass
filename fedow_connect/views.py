@@ -1,5 +1,7 @@
+import json
 import logging
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.utils.timezone import localtime
 from uuid import UUID
 
@@ -8,8 +10,9 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import Wallet, TibilletUser
-from BaseBillet.models import Membership, FedowTransaction, Product, Price
+from BaseBillet.models import Membership, FedowTransaction, Product, Price, LigneArticle, PaymentMethod, SaleOrigin
 from BaseBillet.templatetags.tibitags import dround
 from fedow_connect.fedow_api import FedowAPI
 from django.utils.translation import gettext_lazy as _
@@ -61,7 +64,7 @@ class Membership_fwh(viewsets.ViewSet):
 
         # Création de l'objet membership associé
         now = localtime()
-        new_membership = Membership.objects.create(
+        membership = Membership.objects.create(
             user=user,
             first_name=user.first_name if user else None,
             last_name=user.last_name if user else None,
@@ -74,12 +77,35 @@ class Membership_fwh(viewsets.ViewSet):
             first_contribution=now,
             last_contribution=now,
             contribution_value=amount,
-            status=Membership.LABOUTIK, # Provenance de Fedow = Laboutik
+            status=Membership.LABOUTIK, # Provenance de Fedow = LaBoutik
         )
-        new_membership.fedow_transactions.add(transaction)
+        membership.fedow_transactions.add(transaction)
 
         # On rajoute la deadline en fonction du prix choisi :
-        new_membership.set_deadline()
+        membership.set_deadline()
+
+        # Création de la ligne vente
+        metadata = None
+        try :
+            metadata = json.dumps(transaction_serialized, cls=DjangoJSONEncoder)
+        except Exception as e:
+            logger.error(f"Erreur de création metadata depuis transaction fedow : {e}")
+
+        try :
+            #TODO : Ajouter toute les infos de wallet, card, asset, moyen de paiement quand Laboutik sera intégrée :
+            # beaucoup d'info dans le metadata
+            vente = LigneArticle.objects.create(
+                pricesold=get_or_create_price_sold(price),
+                qty=1,
+                membership=membership,
+                amount=int(membership.contribution_value * 100),
+                payment_method=PaymentMethod.UNKNOWN,
+                status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.LABOUTIK,
+                metadata=metadata,
+            )
+        except Exception as e:
+            logger.error(f"Erreur de création ligne article depuis membership from wallet fedow : {e}")
 
         return Response(status=status.HTTP_201_CREATED)
 

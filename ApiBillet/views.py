@@ -1218,13 +1218,6 @@ class Webhook_stripe(APIView):
                         tenant = Client.objects.get(uuid=tenant_uuid)
                         logger.info(f"Webhook_stripe invoice.paid. tenant : {tenant.name}")
                         with tenant_context(tenant):
-                            #TODO:
-                            # envoyer un mail de renouvellement,
-                            # vérifier le versement clafoutil,
-                            # checker la ligne de vente,
-                            # checker la ligne adhésion,
-                            # checker le rapport pour la mairie
-
                             membership = Membership.objects.get(
                                 uuid=membership_uuid,
                                 stripe_id_subscription=stripe_id_subscription,

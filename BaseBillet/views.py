@@ -45,7 +45,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod, PostalAddress
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
@@ -1075,7 +1075,8 @@ class QrCodeScanPay(viewsets.ViewSet):
             amount=amount,
             payment_method=PaymentMethod.QRCODE_MA,
             status=LigneArticle.CREATED,
-            metadata=json.dumps({"admin": str(request.user.email)})
+            metadata=json.dumps({"admin": str(request.user.email)}),
+            sale_origin=SaleOrigin.QRCODE_MA,
         )
 
         # Use the UUID directly in the QR code
@@ -1177,6 +1178,7 @@ class QrCodeScanPay(viewsets.ViewSet):
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
                     asset=transaction['asset'],
                     wallet=wallet,
+                    sale_origin=SaleOrigin.NFC_MA,
                 )
 
                 # import ipdb; ipdb.set_trace()
@@ -1206,7 +1208,7 @@ class QrCodeScanPay(viewsets.ViewSet):
         }, status=status.HTTP_202_ACCEPTED)
 
     @action(detail=True, methods=['GET'], permission_classes=[
-        permissions.AllowAny, ])  # on permet a tout le monde de scanner un qrcode, mais si tu n'est pas loggué, on te redirige
+        permissions.AllowAny, ])  # on permet a tout le monde de scanner un qrcode, mais si tu n'es pas loggué, on te redirige
     def process_qrcode(self, request: HttpRequest, pk):
         user = request.user
         if not user.is_authenticated:
@@ -1373,6 +1375,7 @@ class QrCodeScanPay(viewsets.ViewSet):
                     metadata=json.dumps(metadata, cls=DjangoJSONEncoder),
                     asset=transaction['asset'],
                     wallet=wallet,
+                    sale_origin=SaleOrigin.QRCODE_MA,
                 )
 
                 # import ipdb; ipdb.set_trace()
@@ -1766,6 +1769,7 @@ class EventMVT(viewsets.ViewSet):
         prices = []
         product_max_per_user_reached = []
         price_max_per_user_reached = []
+        event_max_per_user_reached = False
 
         try:
             if hex8:
@@ -1797,15 +1801,19 @@ class EventMVT(viewsets.ViewSet):
             # Si l'user est connecté, on vérifie qu'il n'a pas déja reservé
             product_max_per_user_reached = []
             price_max_per_user_reached = []
+            event_max_per_user_reached = False
 
             if request.user.is_authenticated:
                 for product in products:
                     if product.max_per_user_reached(user=request.user, event=event):
+                        logger.info(f"product.max_per_user_reached : {product.name} {product.max_per_user_reached(user=request.user, event=event)}")
                         product_max_per_user_reached.append(product)
                 for price in prices:
                     logger.info(f"price.max_per_user_reached : {price.name} {price.max_per_user_reached(user=request.user, event=event)}")
                     if price.max_per_user_reached(user=request.user, event=event):
                         price_max_per_user_reached.append(price)
+
+                event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
 
             tarifs = [price.prix for price in prices]
             # Calcul des prix min et max
@@ -1827,6 +1835,10 @@ class EventMVT(viewsets.ViewSet):
             else:
                 event = self.federated_events_get(slug)
 
+        except Event.MultipleObjectsReturned :
+            logger.info("Url de lien mal formé, plusieurs events ?")
+            return redirect("/event/")
+
         if not event:  # Event pas trouvé, on redirige vers la page d'évènement complète
             logger.info("Event.DoesNotExist on federation, redirect")
             return redirect("/event/")
@@ -1838,6 +1850,7 @@ class EventMVT(viewsets.ViewSet):
         template_context['price_max_per_user_reached'] = price_max_per_user_reached
         template_context['event'] = event
         template_context['event_in_this_tenant'] = event_in_this_tenant
+        template_context['event_max_per_user_reached'] = event_max_per_user_reached
 
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
@@ -2185,9 +2198,6 @@ class Badge(viewsets.ViewSet):
 class MembershipMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
-    # def get_federated_products(self, tags=None, search=None, page=1):
-    #     pass
-
     def create(self, request):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
@@ -2211,42 +2221,22 @@ class MembershipMVT(viewsets.ViewSet):
                        'membership': membership,
                        'checkout_stripe': checkout_stripe,
                        }
-
             return render(request, "reunion/views/membership/formbricks.html", context=context)
-        #
-        # if formbricks.api_host and formbricks.api_key:
-        # Une configuration formbricks à été trouvé.
 
-        # Validation manuelle demandée ?
-        logger.info(f"membership_validator.price.manual_validation : {membership_validator.price.manual_validation}")
         if membership_validator.price.manual_validation:
-            membership: Membership = membership_validator.membership
-            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
-            membership.state = Membership.ADMIN_WAITING
-            membership.save(update_fields=["state"])
-
-            # Envoyer un mail à l'admin et à l'utilisateur pour les prévenir (via Celery)
-            try:
-                send_membership_pending_admin.delay(str(membership.uuid))
-            except Exception as e:
-                logger.error(f"Erreur d'enqueue send_membership_pending_admin: {e}")
-            try:
-                send_membership_pending_user.delay(str(membership.uuid))
-            except Exception as e:
-                logger.error(f"Erreur d'enqueue send_membership_pending_user: {e}")
-
-            # Message de confirmation à l'utilisateur
-            try:
-                messages.add_message(request, messages.SUCCESS,
-                                     _("Votre demande d'adhésion a bien été enregistrée et est en attente de validation."))
-            except Exception:
-                pass
-
             # Dans le cas d'une validation manuelle, on affiche un message dans l'offcanvas via un template partiel
+            membership: Membership = membership_validator.membership
             context = {'membership': membership}
             return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
 
-        return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+        # Le lien de paiement a été généré, on envoi sur Stripe
+        elif membership_validator.checkout_stripe_url :
+            return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
+
+        else:
+            msg = "Une erreur lors de la gestion de vos adhésion est survenue, merci de contacter un administrateur."
+            logger.error(f"MembershipViewset ERROR {msg} : {membership_validator.membership}")
+            raise ValueError(msg)
 
     def list(self, request: HttpRequest):
         template_context = get_context(request)
@@ -2316,6 +2306,11 @@ class MembershipMVT(viewsets.ViewSet):
             context = get_context(request)
             context['product'] = product
 
+            # On prépare les prix publiés pour le template
+            published_prices = product.prices.filter(publish=True).order_by('order', 'prix')
+            context['published_prices'] = published_prices
+            context['published_prices_count'] = published_prices.count()
+
             # On check que l'user n'a pas déja prix un abonnement limité
             if request.user.is_authenticated:
                 if product.max_per_user_reached(user=request.user):
@@ -2346,10 +2341,11 @@ class MembershipMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):
-        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
-        if membership.state != Membership.ADMIN_VALID:
-            raise Exception("not admin valid state")
-        checkout_url = MembershipValidator.get_checkout_stripe(membership, custom_amount=membership.contribution_value)
+        """
+        Pour validation manuelle, redirige le lien reçu par l'user vers Stripe
+        """
+        membership = get_object_or_404(Membership, uuid=uuid.UUID(pk), status=Membership.ADMIN_VALID)
+        checkout_url = MembershipValidator.get_checkout_stripe(membership)
         logger.info(f"get_checkout_for_membership : {checkout_url}")
         return redirect(checkout_url)
         # return HttpResponseClientRedirect(checkout_url)
@@ -2371,13 +2367,13 @@ class MembershipMVT(viewsets.ViewSet):
 
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
         # Update state to admin validated
-        if membership.state != Membership.ADMIN_WAITING:
+        if membership.status != Membership.ADMIN_WAITING:
             messages.add_message(request, messages.WARNING, _("Membership not in waiting state."))
             referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
             return HttpResponseClientRedirect(referer)
 
-        membership.state = Membership.ADMIN_VALID
-        membership.save(update_fields=["state"])
+        membership.status = Membership.ADMIN_VALID
+        membership.save(update_fields=["status"])
 
         # Send payment link email to user via Celery
         try:
