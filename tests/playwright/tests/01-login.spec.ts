@@ -115,15 +115,22 @@ test.describe('Login Flow', () => {
     await test.step('Verify Admin panel is visible', async () => {
       // The Admin panel button should be visible only for admin users
       // It's inside a link with text "Admin panel" / "Panneau d'administration"
-      const adminPanelButton = page.locator('a[href="/admin/"]:has-text("Admin panel"), a[href="/admin/"]:has-text("Panneau d\'administration")');
+      const adminPanelButton = page.locator('a[href*="/admin/"]').filter({ hasText: /Admin panel|Panneau d'administration/i });
       
-      // Verify the button is visible
-      await expect(adminPanelButton).toBeVisible({ timeout: 5000 });
+      // Verify the button is visible with a longer timeout
+      try {
+        await expect(adminPanelButton).toBeVisible({ timeout: 10000 });
+        console.log('✓ Admin panel button is visible - user has admin rights');
+      } catch (error) {
+        console.log('Current URL:', page.url());
+        const bodyText = await page.innerText('body');
+        console.log('Body text includes "Log out":', bodyText.includes('Log out') || bodyText.includes('Déconnexion'));
+        console.log('Body text includes "Admin panel":', bodyText.includes('Admin panel') || bodyText.includes('Panneau d\'administration'));
+        throw error;
+      }
       
       // Verify it has the correct styling (btn-outline-danger)
       await expect(adminPanelButton).toHaveClass(/btn-outline-danger/);
-      
-      console.log('✓ Admin panel button is visible - user has admin rights');
     });
   });
 

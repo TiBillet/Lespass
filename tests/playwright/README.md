@@ -132,6 +132,48 @@ Test de la configuration générale de l'organisation (Section 2 de demo_data_op
 - Sauvegarde de la configuration
 - Vérification que la configuration est visible sur la page d'accueil
 
+### 03-memberships.spec.ts
+Création du produit d'adhésion principal "Adhésion (Le Tiers-Lustre)" :
+- Connexion admin
+- Création du produit avec catégorie "Adhésion"
+- Ajout de 3 tarifs :
+  - Annuelle (20€, non récurrent)
+  - Mensuelle (2€, récurrent)
+  - Prix libre (1€ minimum)
+- Upload de l'image du produit
+- Vérification de la visibilité sur la page /memberships
+
+### 04-membership-recurring.spec.ts
+Création du produit "Adhésion récurrente (Le Tiers-Lustre)" :
+- Ajout de 4 tarifs récurrents : Journalière, Hebdomadaire, Mensuelle, Annuelle
+- Activation de l'option "Membre actif.ve"
+- Vérification sur /memberships
+
+### 05-membership-validation.spec.ts
+Création du produit "Adhésion à validation sélective" :
+- Ajout de 2 tarifs : Solidaire (soumis à validation) et Plein tarif
+- Vérification sur /memberships
+
+### 06-membership-amap.spec.ts
+Création du produit "Panier AMAP (Le Tiers-Lustre)" :
+- Ajout de tarifs Annuel et Mensuel
+- Configuration des options de livraison (Livraison à l'asso / à la maison) via des options radio
+
+### 07-fix-solidaire-manual-validation.spec.ts
+Action corrective sur le produit à validation sélective :
+- Recherche du produit existant
+- Modification du tarif "Solidaire" pour activer explicitement la case "Validation manuelle"
+- Sauvegarde et vérification
+
+### 08-membership-ssa-with-forms.spec.ts
+Création du produit complexe "Caisse de sécurité sociale alimentaire" (SSA) :
+- Ajout d'un tarif mensuel avec prix libre et engagement de 3 mois
+- Ajout de 4 champs de formulaire dynamiques :
+  1. Pseudonyme (Texte court, requis)
+  2. À propos de vous (Texte long, optionnel)
+  3. Style préféré (Sélection unique, requis, avec options JSON)
+  4. Centres d'intérêt (Sélection multiple, optionnel, avec options JSON)
+
 ## Développement de nouveaux tests
 
 Pour créer un nouveau test :
@@ -174,20 +216,14 @@ Le module `tests/utils/env.ts` fournit un accès type-safe aux variables :
 
 ## Roadmap
 
-D'après le document `demo_data/demo_data_operations.md`, les prochains tests à implémenter sont :
+D'après le document `demo_data/demo_data_operations.md`, les tests implémentés sont :
 
 1. ✅ Section 1 : Initialisation et configuration des tenants (via `demo_data_minimal.py`)
-2. ✅ Section 2 : Authentification et vérification des droits admin (login flow complet)
-3. ✅ Section 3 : Configuration générale de l'organisation (champs principaux : nom, descriptions, contact)
-   - ⏳ Création des adresses postales
-   - ⏳ Configuration de Formbricks
-   - ⏳ Liaison avec Fedow
-4. ⏳ Section 4 : Création des options générales
-5. ⏳ Section 5 : Produits d'adhésion (Memberships)
-6. ⏳ Section 6 : Produit de badgeuse (Co-working)
-7. ⏳ Section 7 : Création des tags d'événements
-8. ⏳ Section 8 : Événements
-9. ⏳ Section 9 : Intégration Formbricks (optionnelle)
+2. ✅ Section 2 : Authentification et vérification des droits admin (01-login.spec.ts)
+3. ✅ Section 3 : Configuration générale de l'organisation (02-admin-configuration.spec.ts)
+4. ✅ Section 5 : Produits d'adhésion (03, 04, 05, 06, 07, 08-membership*.spec.ts)
+5. ⏳ Section 6 : Produit de badgeuse (Co-working)
+6. ⏳ Section 8 : Événements
 
 ## Ressources
 
