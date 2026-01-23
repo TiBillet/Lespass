@@ -9,7 +9,6 @@ from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 from stripe.error import InvalidRequestError
 
-from ApiBillet.serializers import get_or_create_price_sold
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, \
     PaymentMethod, SaleOrigin
 from root_billet.models import RootConfiguration
@@ -237,7 +236,8 @@ def new_entry_from_stripe_subscription_invoice(user, id_invoice, membership):
     for line in lines['data']:
         # id_price_stripe = line.pricing.price_details.price
         ligne_article = LigneArticle.objects.create(
-            pricesold=get_or_create_price_sold(membership.price, custom_amount=line.amount), #PriceSold.objects.get(id_price_stripe=id_price_stripe)
+            pricesold=PriceSold.objects.get(id_price_stripe=id_price_stripe),
+            # pricesold=get_or_create_price_sold(membership.price, custom_amount=line.amount), #PriceSold.objects.get(id_price_stripe=id_price_stripe)
             payment_method=PaymentMethod.STRIPE_RECURENT,
             amount=line.amount,
             qty=line.quantity,
