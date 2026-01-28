@@ -76,7 +76,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     PromotionalCode, Tva
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
-    send_reservation_cancellation_user, send_sale_to_laboutik
+    send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
@@ -86,6 +86,7 @@ from fedow_connect.utils import dround
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 
 # from simple_history.admin import SimpleHistoryAdmin
+from stripe._error import InvalidRequestError
 
 logger = logging.getLogger(__name__)
 
@@ -1476,6 +1477,31 @@ class HumanUserAdmin(ModelAdmin):
         perm = TenantAdminPermissionWithRequest(request)
         logger.info(request.user, perm)
         return perm
+
+    actions_row = ["login_as_user", ]
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    @action(
+        description=_("Login as this user"),
+        permissions=["custom_actions_row"],
+    )
+    def login_as_user(self, request, object_id):
+        if not RootPermissionWithRequest(request):
+            messages.error(request, _("You do not have permission to perform this action."))
+            return redirect(request.META.get("HTTP_REFERER", "/admin/"))
+
+        user = get_object_or_404(HumanUser, pk=object_id)
+        tenant = connection.tenant
+        try:
+            domain = tenant.get_primary_domain().domain
+            base_url = f"https://{domain}"
+        except Exception:
+            base_url = "https://tibillet.org"
+
+        connexion_url = forge_connexion_url(user, base_url)
+        return redirect(connexion_url)
 
 
 ### ADHESION

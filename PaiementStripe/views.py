@@ -7,7 +7,7 @@ from django.db import connection
 from django.http import HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
-from stripe.error import InvalidRequestError
+from stripe._error import InvalidRequestError
 
 from BaseBillet.models import Configuration, LigneArticle, Paiement_stripe, Reservation, Price, PriceSold, \
     PaymentMethod, SaleOrigin
