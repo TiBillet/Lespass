@@ -2357,21 +2357,15 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'jauge_max',
                 'show_gauge',
                 'postal_address',
-            )
-        }),
-        (_('Tags and forms'), {
-            'fields': (
                 'tag',
-                # 'options_radio',
-                # 'options_checkbox',
-                'reservation_button_name',
-            ),
+            )
         }),
         (_('Bookings'), {
             'fields': (
                 # 'easy_reservation',
-                'max_per_user',
                 'products',
+                'max_per_user',
+                'reservation_button_name',
                 'custom_confirmation_message',
                 'refund_deadline',
             ),
