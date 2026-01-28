@@ -4,21 +4,23 @@ from django.db import migrations
 from django_tenants.utils import tenant_context
 from django.db import connection
 def remove_stripe_id_from_free_price_sold(apps, schema_editor):
-    try:
-        Client = apps.get_model('Customers', 'Client')
-        PriceSold = apps.get_model('BaseBillet', 'PriceSold')
-        Price = apps.get_model('BaseBillet', 'Price')
+    pass
 
-        # On cherche les PriceSold dont le prix (Price) associé a free_price = True
-        # Et on met à jour id_price_stripe à None
-        PriceSold.objects.filter(price__free_price=True).update(id_price_stripe=None)
-        Price.objects.filter(free_price=True, recurring_payment=False).update(max_per_user=None)
-        print(f"migration OK sur {connection.tenant.schema_name}")
-
-    except Exception as e:
-        print(f"migration PAS OK : {e}")
-        print(f"migration PAS OK sur : {connection.tenant.schema_name}")
-        pass
+    # try:
+    #     Client = apps.get_model('Customers', 'Client')
+    #     PriceSold = apps.get_model('BaseBillet', 'PriceSold')
+    #     Price = apps.get_model('BaseBillet', 'Price')
+    #
+    #     # On cherche les PriceSold dont le prix (Price) associé a free_price = True
+    #     # Et on met à jour id_price_stripe à None
+    #     PriceSold.objects.filter(price__free_price=True).update(id_price_stripe=None)
+    #     Price.objects.filter(free_price=True, recurring_payment=False).update(max_per_user=None)
+    #     print(f"migration OK sur {connection.tenant.schema_name}")
+    #
+    # except Exception as e:
+    #     print(f"migration PAS OK : {e}")
+    #     print(f"migration PAS OK sur : {connection.tenant.schema_name}")
+    #     pass
 
 class Migration(migrations.Migration):
 
@@ -27,6 +29,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(remove_stripe_id_from_free_price_sold, migrations.RunPython.noop),
+        migrations.RunPython(migrations.RunPython.noop, migrations.RunPython.noop),
     ]
 
