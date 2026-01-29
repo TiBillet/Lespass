@@ -61,7 +61,7 @@
                             <input id="custom_amount-{{ price.uuid }}"
                                    class="form-control form-control-lg custom-amount-input"
                                    type="number"
-                                   name="custom_amount"
+                                   name="custom_amount_{{ price.uuid }}"
                                    min="{{ price.prix }}"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
@@ -157,7 +157,7 @@
                             <input id="custom_amount-{{ price.uuid }}"
                                    class="form-control form-control-lg custom-amount-input"
                                    type="number"
-                                   name="custom_amount"
+                                   name="custom_amount_{{ price.uuid }}"
                                    min="{{ price.prix }}"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
@@ -489,7 +489,10 @@
                     customAmountContainers.forEach(container => {
                         container.style.display = 'none';
                         const input = container.querySelector('.custom-amount-input');
-                        if (input) input.required = false;
+                        if (input) {
+                            input.required = false;
+                            input.value = ''; // Reset value when hidden
+                        }
                     });
 
                     const selectedRadio = form.querySelector('input[name="price"]:checked');

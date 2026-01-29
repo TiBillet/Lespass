@@ -360,18 +360,26 @@ class ReservationValidator(serializers.Serializer):
         for product in event.products.all():
             for price in product.prices.all():
                 # Un input possède l'uuid du prix ?
-                raw_val = self.initial_data.get(str(price.uuid))
-                if raw_val not in [None, '']:
+                price_key = str(price.uuid)
+                if hasattr(self.initial_data, 'getlist'):
+                    raw_vals = self.initial_data.getlist(price_key)
+                else:
+                    v = self.initial_data.get(price_key)
+                    raw_vals = v if isinstance(v, list) else ([v] if v not in [None, ''] else [])
+
+                if raw_vals:
+                    # Prendre la dernière valeur non vide
+                    raw_val = next((v for v in reversed(raw_vals) if v not in [None, '', 'null']), None)
+                    if raw_val is None:
+                        continue
+                    
                     # Certains frontends envoient des nombres comme "15.00" → normaliser en int de manière sûre
                     try:
-                        # Depuis une QueryDict, la valeur peut être une liste
-                        if isinstance(raw_val, list):
-                            raw_val = raw_val[-1] if raw_val else ''
                         sval = str(raw_val).strip().replace(',', '.')
                         # Autoriser les décimales mais caster en entier (quantité)
                         qty = int(Decimal(sval))
                     except Exception:
-                        raise serializers.ValidationError({str(price.uuid): [_('Invalid quantity.')]})
+                        raise serializers.ValidationError({price_key: [_('Invalid quantity.')]})
 
                     if qty <= 0:  # Skip zero or negative quantities
                         continue
@@ -379,12 +387,26 @@ class ReservationValidator(serializers.Serializer):
                     if price.free_price:
                         # Récupération du montant personnalisé si prix libre
                         custom_amount_key = f"custom_amount_{price.uuid}"
-                        custom_amount_val = self.initial_data.get(custom_amount_key)
-                        if custom_amount_val:
+                        if hasattr(self.initial_data, 'getlist'):
+                            ca_vals = self.initial_data.getlist(custom_amount_key)
+                        else:
+                            v = self.initial_data.get(custom_amount_key)
+                            ca_vals = v if isinstance(v, list) else ([v] if v not in [None, ''] else [])
+                        
+                        if ca_vals:
                             try:
-                                if isinstance(custom_amount_val, list):
-                                    custom_amount_val = custom_amount_val[-1]
-                                self.custom_amounts[price.uuid] = Decimal(str(custom_amount_val).replace(',', '.'))
+                                # Prendre la dernière valeur non vide
+                                ca_val = next((v for v in reversed(ca_vals) if v not in [None, '', 'null']), None)
+                                if ca_val is not None:
+                                    amount = Decimal(str(ca_val).replace(',', '.'))
+                                    # Validation du montant minimum
+                                    if price.prix and amount < price.prix:
+                                        raise serializers.ValidationError({custom_amount_key: [_('The amount must be greater than the minimum amount.')]})
+                                    self.custom_amounts[price.uuid] = amount
+                            except (TypeError, ValueError, Decimal.InvalidOperation):
+                                raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
+                            except serializers.ValidationError:
+                                raise
                             except Exception:
                                 raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
                         else:
@@ -622,6 +644,38 @@ class MembershipValidator(serializers.Serializer):
 
     newsletter = serializers.BooleanField()
 
+    def to_internal_value(self, data):
+        # Gestion des montants personnalisés préfixés par l'uuid du prix (pour éviter les collisions)
+        # Et gestion des doublons envoyés par le front (ex: custom_amount=['20', ''])
+        if hasattr(data, 'getlist'):
+            # On cherche d'abord si un montant spécifique au prix est présent
+            # Sécurisation de la récupération de l'UUID du prix (gestion des doublons éventuels)
+            price_uuids = data.getlist('price')
+            price_uuid = next((v for v in reversed(price_uuids) if v not in [None, '', 'null']), None)
+            
+            if price_uuid:
+                specific_field = f"custom_amount_{price_uuid}"
+                if specific_field in data:
+                    values = data.getlist(specific_field)
+                    real_val = next((v for v in reversed(values) if v not in [None, '', 'null']), None)
+                    if real_val is not None:
+                        if not hasattr(data, '_mutable') or not data._mutable:
+                            data = data.copy()
+                        data.setlist('custom_amount', [real_val])
+                        return super().to_internal_value(data)
+
+            # Sinon, gestion classique du champ custom_amount (compatibilité)
+            for field in ['custom_amount']:
+                values = data.getlist(field)
+                if len(values) > 1:
+                    # On cherche la valeur significative (non vide)
+                    real_val = next((v for v in reversed(values) if v not in [None, '', 'null']), None)
+                    if real_val is not None:
+                        if not hasattr(data, '_mutable') or not data._mutable:
+                            data = data.copy()
+                        data.setlist(field, [real_val])
+        return super().to_internal_value(data)
+
     @staticmethod
     def get_checkout_stripe(membership: Membership):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
@@ -639,7 +693,7 @@ class MembershipValidator(serializers.Serializer):
             'user': f"{user.email}",
         }
 
-        amount = int(membership.contribution_value * 100)
+        amount = dec_to_int(membership.contribution_value)
 
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price, custom_amount=membership.contribution_value),
@@ -680,12 +734,12 @@ class MembershipValidator(serializers.Serializer):
         self.price: Price = attrs['price']
 
         # On va chercher le montant si c'est un prix libre
-        amount: Decimal = self.price.prix
+        amount: Decimal = self.price.prix or Decimal('0.00')
         if self.price.free_price:
-            amount = attrs.get('custom_amount', None)
+            amount = attrs.get('custom_amount', None) or self.price.prix or Decimal('0.00')
 
             if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
-                contribution: Decimal = amount or self.price.prix
+                contribution: Decimal = amount or self.price.prix or Decimal('0.00')
                 if contribution < self.price.prix:
                     logger.info("prix inférieur au minimum")
                     raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))

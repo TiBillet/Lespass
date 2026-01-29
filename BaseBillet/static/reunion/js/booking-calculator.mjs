@@ -69,9 +69,23 @@ export const init = () => {
         }))
         .filter(({ amount }) => amount !== null )
     
-    orders.forEach(({ amount, customPrice }) => {
+    orders.forEach((order) => {
+        const { amount, customPrice } = order;
         const update = updateTotal(orders, totalAmount, totalPrice)
-        amount.addEventListener('bs-counter:update', update)
+        amount.addEventListener('bs-counter:update', () => {
+            // Mutual exclusion for free prices: if this is a free price and quantity > 0, 
+            // reset all other free prices.
+            if (customPrice && Number(amount.value) > 0) {
+                orders.forEach(other => {
+                    if (other !== order && other.customPrice && Number(other.amount.value) > 0) {
+                        other.amount.value = 0;
+                        // Trigger update on the other counter so its UI refreshes
+                        other.amount.dispatchEvent(new CustomEvent('bs-counter:update'));
+                    }
+                });
+            }
+            update();
+        })
         if (customPrice) {
             customPrice.addEventListener('input', update)
         }

@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 def dec_to_int(value):
+    if value is None:
+        return 0
     return int(value * 100)
 
 
@@ -1031,6 +1033,7 @@ class ApiReservationValidator(serializers.Serializer):
                 price_object = {
                     'price': price,
                     'qty': float(entry['qty']),
+                    'custom_amount': entry.get('custom_amount'),
                 }
 
                 if price.max_per_user:
@@ -1152,9 +1155,21 @@ class ApiReservationValidator(serializers.Serializer):
             price_generique: Price = price_object['price']
             product: Product = price_generique.product
             qty = price_object.get('qty')
-            total_checkout += Decimal(qty) * price_generique.prix
+            custom_amount = price_object.get('custom_amount')
 
-            pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event)
+            # Calcul du prix à utiliser (custom ou base)
+            prix_unitaire = price_generique.prix
+            if custom_amount is not None:
+                try:
+                    prix_unitaire = Decimal(str(custom_amount))
+                    if price_generique.prix and prix_unitaire < price_generique.prix:
+                         raise serializers.ValidationError(_(f'The amount for {price_generique.name} must be greater than the minimum amount.'))
+                except (TypeError, ValueError, Decimal.InvalidOperation):
+                    raise serializers.ValidationError(_(f'Invalid custom amount for {price_generique.name}.'))
+
+            total_checkout += Decimal(qty) * prix_unitaire
+
+            pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event, custom_amount=custom_amount)
 
             # les lignes articles pour la vente
             line_article = LigneArticle.objects.create(

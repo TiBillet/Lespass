@@ -10,7 +10,7 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from ApiBillet.serializers import get_or_create_price_sold
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import Wallet, TibilletUser
 from BaseBillet.models import Membership, FedowTransaction, Product, Price, LigneArticle, PaymentMethod, SaleOrigin
 from BaseBillet.templatetags.tibitags import dround
@@ -98,7 +98,7 @@ class Membership_fwh(viewsets.ViewSet):
                 pricesold=get_or_create_price_sold(price),
                 qty=1,
                 membership=membership,
-                amount=int(membership.contribution_value * 100),
+                amount=dec_to_int(membership.contribution_value),
                 payment_method=PaymentMethod.UNKNOWN,
                 status=LigneArticle.VALID,
                 sale_origin=SaleOrigin.LABOUTIK,
