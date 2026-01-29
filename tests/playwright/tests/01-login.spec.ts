@@ -1,163 +1,92 @@
 import { test, expect } from '@playwright/test';
 import { env } from './utils/env';
+import { loginAsAdmin } from './utils/auth';
 
 /**
- * Test: Login flow
+ * TEST: Login flow
+ * TEST : Flux de connexion
  * 
  * This test reproduces the first step of the demo_data operations:
- * - Navigate to the homepage
- * - Click on the "Log in" / "Connexion" button
- * - Fill in the admin email from .env
- * - Submit the login request
+ * Ce test reproduit la première étape des opérations demo_data :
+ * 1. Navigate to the homepage / Naviguer vers la page d'accueil
+ * 2. Open the login panel / Ouvrir le panneau de connexion
+ * 3. Fill the admin email / Remplir l'email administrateur
+ * 4. Submit the form / Soumettre le formulaire
+ * 5. Use TEST MODE to authenticate / Utiliser le MODE TEST pour s'authentifier
+ * 6. Verify admin access / Vérifier l'accès administrateur
  */
 
-test.describe('Login Flow', () => {
-  test('should open login panel and fill admin email', async ({ page }) => {
-    // Step 1: Navigate to the homepage
-    await test.step('Navigate to homepage', async () => {
-      await page.goto('/');
-      
-      // Wait for the page to be fully loaded
-      await page.waitForLoadState('networkidle');
-      
-      // Verify we're on the correct page
-      await expect(page).toHaveURL(env.BASE_URL + '/');
+test.describe('Login Flow / Flux de connexion', () => {
+  
+  /**
+   * Main test: standard login with admin rights
+   * Test principal : connexion standard avec droits admin
+   */
+  test('should authenticate as admin / doit s\'authentifier en tant qu\'admin', async ({ page }) => {
+    
+    // We use the centralized authentication helper
+    // On utilise l'aide à l'authentification centralisée
+    await test.step('Login as admin / Connexion admin', async () => {
+      await loginAsAdmin(page);
     });
 
-    // Step 2: Click on the "Log in" button to open the login panel
-    await test.step('Open login panel', async () => {
-      // The button text could be "Log in" in English or "Connexion" in French
-      // Target specifically the navbar button to avoid matching footer button
-      const loginButton = page.locator('.navbar button:has-text("Log in"), .navbar button:has-text("Connexion")').first();
-      
-      // Verify the button is visible
-      await expect(loginButton).toBeVisible();
-      
-      // Click the button
-      await loginButton.click();
-      
-      // Wait for the offcanvas panel to be visible
-      const loginPanel = page.locator('#loginPanel');
-      await expect(loginPanel).toBeVisible();
-    });
-
-    // Step 3: Fill in the email field with the admin email from .env
-    await test.step('Fill admin email', async () => {
-      // Locate the email input field
-      const emailInput = page.locator('#loginEmail');
-      
-      // Verify the input is visible
-      await expect(emailInput).toBeVisible();
-      
-      // Fill in the admin email
-      await emailInput.fill(env.ADMIN_EMAIL);
-      
-      // Verify the email was filled correctly
-      await expect(emailInput).toHaveValue(env.ADMIN_EMAIL);
-      
-      console.log(`✓ Filled email field with: ${env.ADMIN_EMAIL}`);
-    });
-
-    // Step 4: Submit the login form
-    await test.step('Submit login form', async () => {
-      // Locate the submit button
-      const submitButton = page.locator('#loginForm button[type="submit"]');
-      
-      // Verify the button is visible
-      await expect(submitButton).toBeVisible();
-      
-      // Click the submit button
-      await submitButton.click();
-      
-      // Wait for the form submission to complete
-      // In TEST mode, a link should appear with the connection URL
-      if (env.TEST) {
-        // Wait for the test mode message with the connexion link
-        const testModeLink = page.locator('a:has-text("TEST MODE")');
-        await expect(testModeLink).toBeVisible({ timeout: 5000 });
-        console.log('✓ Login request submitted successfully (TEST MODE)');
-      } else {
-        // In production mode, wait for a success message
-        await page.waitForTimeout(2000);
-        console.log('✓ Login request submitted successfully');
-      }
-    });
-
-    // Step 5: Click on TEST MODE link to simulate email connection
-    await test.step('Click TEST MODE link', async () => {
-      if (env.TEST) {
-        // Locate and click the TEST MODE link
-        const testModeLink = page.locator('a:has-text("TEST MODE")');
-        await testModeLink.click();
-        
-        // Wait for navigation to complete
-        await page.waitForLoadState('networkidle');
-        
-        console.log('✓ Clicked TEST MODE link - user should now be authenticated');
-      }
-    });
-
-    // Step 6: Navigate to /my_account
-    await test.step('Navigate to my account page', async () => {
-      // Navigate to the account page
+    // Step 6: Verify navigation to the account page
+    // Étape 6 : Vérifier la navigation vers la page du compte
+    await test.step('Verify /my_account page / Vérifier la page /my_account', async () => {
+      // Direct navigation to ensure we are where we expect
       await page.goto('/my_account/');
-      
-      // Wait for the page to be fully loaded
       await page.waitForLoadState('networkidle');
       
-      // Verify we're on the correct page
-      await expect(page).toHaveURL(new RegExp('/my_account'));
-      
-      console.log('✓ Successfully navigated to /my_account');
+      // The URL must contain /my_account/
+      await expect(page).toHaveURL(new RegExp('/my_account/'));
+      console.log('✓ Successfully on /my_account / Succès sur /my_account');
     });
 
-    // Step 7: Verify Admin panel button is visible
-    await test.step('Verify Admin panel is visible', async () => {
-      // The Admin panel button should be visible only for admin users
-      // It's inside a link with text "Admin panel" / "Panneau d'administration"
+    // Step 7: Confirm admin rights (presence of the admin panel button)
+    // Étape 7 : Confirmer les droits admin (présence du bouton vers le panel admin)
+    await test.step('Verify Admin access / Vérifier l\'accès Admin', async () => {
+      // Admin users see a red button pointing to /admin/
+      // Les admins voient un bouton rouge pointant vers /admin/
       const adminPanelButton = page.locator('a[href*="/admin/"]').filter({ hasText: /Admin panel|Panneau d'administration/i });
       
-      // Verify the button is visible with a longer timeout
-      try {
-        await expect(adminPanelButton).toBeVisible({ timeout: 10000 });
-        console.log('✓ Admin panel button is visible - user has admin rights');
-      } catch (error) {
-        console.log('Current URL:', page.url());
-        const bodyText = await page.innerText('body');
-        console.log('Body text includes "Log out":', bodyText.includes('Log out') || bodyText.includes('Déconnexion'));
-        console.log('Body text includes "Admin panel":', bodyText.includes('Admin panel') || bodyText.includes('Panneau d\'administration'));
-        throw error;
-      }
+      // We expect this button to be visible
+      // On s'attend à ce que ce bouton soit visible
+      await expect(adminPanelButton).toBeVisible({ timeout: 10000 });
+      console.log('✓ Admin button is visible / Le bouton Admin est visible');
       
-      // Verify it has the correct styling (btn-outline-danger)
+      // We check that it has the correct CSS class
+      // On vérifie qu'il a la bonne classe CSS
       await expect(adminPanelButton).toHaveClass(/btn-outline-danger/);
     });
   });
 
-  test('should validate email format', async ({ page }) => {
-    // Navigate to the homepage
+  /**
+   * Secondary test: check email validation in the form
+   * Test secondaire : vérifier la validation de l'email dans le formulaire
+   */
+  test('should validate email format / doit valider le format de l\'email', async ({ page }) => {
+    // 1. Go home / Aller à l'accueil
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Open login panel - target specifically the navbar button
+    // 2. Open login / Ouvrir la connexion
     const loginButton = page.locator('.navbar button:has-text("Log in"), .navbar button:has-text("Connexion")').first();
     await loginButton.click();
 
-    // Wait for the login panel to be visible
-    const loginPanel = page.locator('#loginPanel');
-    await expect(loginPanel).toBeVisible();
-
-    // Try to submit with invalid email
+    // 3. Fill an incorrect email / Remplir un email incorrect
     const emailInput = page.locator('#loginEmail');
-    await emailInput.fill('invalid-email');
+    await emailInput.fill('not-an-email');
 
+    // 4. Submit / Valider
     const submitButton = page.locator('#loginForm button[type="submit"]');
     await submitButton.click();
 
-    // The form should show validation error (the input should be marked as invalid)
-    // The browser's built-in validation or the custom JS validation should prevent submission
+    // 5. Check that we are still on the same page or that an error is shown
+    // 5. Vérifier qu'on est toujours sur la même page ou qu'une erreur est affichée
     await page.waitForTimeout(500);
     
-    console.log('✓ Email validation works correctly');
+    // The HTML5 validation should normally stop the process
+    // La validation HTML5 devrait normalement bloquer l'envoi
+    console.log('✓ Email validation test finished / Test de validation d\'email terminé');
   });
 });

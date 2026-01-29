@@ -157,7 +157,7 @@ SHARED_APPS = (
     'import_export',
 )
 
-if DEBUG:
+if DEBUG and not TEST :
     SHARED_APPS += ('django_browser_reload',)
 
 # CodeLogin_app/settings.py
@@ -214,7 +214,7 @@ MIDDLEWARE = [
     'Customers.views.TimezoneMiddleware',
 ]
 
-if DEBUG:
+if DEBUG and not TEST :
     MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
 TEMPLATES = [
