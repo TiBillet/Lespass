@@ -385,33 +385,38 @@ class ReservationValidator(serializers.Serializer):
                         continue
 
                     if price.free_price:
-                        # Récupération du montant personnalisé si prix libre
+                        # --- GESTION DU PRIX LIBRE / OPEN PRICE MANAGEMENT ---
+                        # On cherche un montant spécifique au tarif : custom_amount_{uuid}
+                        # We look for a rate-specific amount: custom_amount_{uuid}
                         custom_amount_key = f"custom_amount_{price.uuid}"
-                        if hasattr(self.initial_data, 'getlist'):
-                            ca_vals = self.initial_data.getlist(custom_amount_key)
-                        else:
-                            v = self.initial_data.get(custom_amount_key)
-                            ca_vals = v if isinstance(v, list) else ([v] if v not in [None, ''] else [])
                         
-                        if ca_vals:
+                        # Récupération de la valeur brute (on supporte QueryDict ou dict classique)
+                        # Retrieve raw value (QueryDict or plain dict supported)
+                        if hasattr(self.initial_data, 'get'):
+                            raw_custom = self.initial_data.get(custom_amount_key)
+                        else:
+                            raw_custom = self.initial_data.get(custom_amount_key)
+
+                        if raw_custom not in [None, '', 'null']:
                             try:
-                                # Prendre la dernière valeur non vide
-                                ca_val = next((v for v in reversed(ca_vals) if v not in [None, '', 'null']), None)
-                                if ca_val is not None:
-                                    amount = Decimal(str(ca_val).replace(',', '.'))
-                                    # Validation du montant minimum
-                                    if price.prix and amount < price.prix:
-                                        raise serializers.ValidationError({custom_amount_key: [_('The amount must be greater than the minimum amount.')]})
-                                    self.custom_amounts[price.uuid] = amount
+                                # Conversion en Decimal (supporte virgule et point)
+                                # Convert to Decimal (supports comma and dot)
+                                amount = Decimal(str(raw_custom).replace(',', '.'))
+                                
+                                # Validation du montant minimum / Minimum amount validation
+                                if price.prix and amount < price.prix:
+                                    raise serializers.ValidationError({
+                                        custom_amount_key: [_('The amount must be greater than the minimum amount.')]
+                                    })
+                                
+                                self.custom_amounts[price.uuid] = amount
+                                
                             except (TypeError, ValueError, Decimal.InvalidOperation):
                                 raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
                             except serializers.ValidationError:
                                 raise
                             except Exception:
                                 raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
-                        else:
-                            # Si prix libre et quantité > 0, on pourrait lever une erreur ici ou laisser TicketCreator gérer
-                            pass
 
                     self.products.append(product)
                     if products_dict.get(product):
@@ -645,35 +650,29 @@ class MembershipValidator(serializers.Serializer):
     newsletter = serializers.BooleanField()
 
     def to_internal_value(self, data):
-        # Gestion des montants personnalisés préfixés par l'uuid du prix (pour éviter les collisions)
-        # Et gestion des doublons envoyés par le front (ex: custom_amount=['20', ''])
-        if hasattr(data, 'getlist'):
-            # On cherche d'abord si un montant spécifique au prix est présent
-            # Sécurisation de la récupération de l'UUID du prix (gestion des doublons éventuels)
-            price_uuids = data.getlist('price')
-            price_uuid = next((v for v in reversed(price_uuids) if v not in [None, '', 'null']), None)
+        """
+        Interception des données brutes avant validation.
+        Intercept raw data before validation.
+        
+        S'assure que le champ générique 'custom_amount' contient la bonne valeur 
+        extraite du champ spécifique au tarif 'custom_amount_{uuid}'.
+        Ensures 'custom_amount' field contains the correct value extracted from
+        the rate-specific field 'custom_amount_{uuid}'.
+        """
+        # On identifie le tarif sélectionné / Identify selected rate
+        price_uuid = data.get('price')
+        
+        if price_uuid:
+            # Recherche du montant spécifique / Look for specific amount
+            specific_field = f"custom_amount_{price_uuid}"
+            raw_val = data.get(specific_field)
             
-            if price_uuid:
-                specific_field = f"custom_amount_{price_uuid}"
-                if specific_field in data:
-                    values = data.getlist(specific_field)
-                    real_val = next((v for v in reversed(values) if v not in [None, '', 'null']), None)
-                    if real_val is not None:
-                        if not hasattr(data, '_mutable') or not data._mutable:
-                            data = data.copy()
-                        data.setlist('custom_amount', [real_val])
-                        return super().to_internal_value(data)
+            # Si une valeur est trouvée, on l'utilise / If value found, use it
+            if raw_val not in [None, '', 'null']:
+                if not hasattr(data, '_mutable') or not data._mutable:
+                    data = data.copy()
+                data['custom_amount'] = raw_val
 
-            # Sinon, gestion classique du champ custom_amount (compatibilité)
-            for field in ['custom_amount']:
-                values = data.getlist(field)
-                if len(values) > 1:
-                    # On cherche la valeur significative (non vide)
-                    real_val = next((v for v in reversed(values) if v not in [None, '', 'null']), None)
-                    if real_val is not None:
-                        if not hasattr(data, '_mutable') or not data._mutable:
-                            data = data.copy()
-                        data.setlist(field, [real_val])
         return super().to_internal_value(data)
 
     @staticmethod
@@ -731,80 +730,89 @@ class MembershipValidator(serializers.Serializer):
         return checkout_stripe_url
 
     def validate(self, attrs):
+        """
+        Validation finale et création de l'objet Membership.
+        Final validation and creation of the Membership object.
+        """
+        # Identification du tarif / Rate identification
         self.price: Price = attrs['price']
 
-        # On va chercher le montant si c'est un prix libre
+        # Détermination du montant de la contribution / Contribution amount determination
+        # Par défaut, on utilise le prix de base / Default to base price
         amount: Decimal = self.price.prix or Decimal('0.00')
+        
+        # Si c'est un prix libre, on récupère la valeur personnalisée
+        # If it's an open price, retrieve the custom value
         if self.price.free_price:
-            amount = attrs.get('custom_amount', None) or self.price.prix or Decimal('0.00')
+            amount = attrs.get('custom_amount') or self.price.prix or Decimal('0.00')
 
-            if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
-                contribution: Decimal = amount or self.price.prix or Decimal('0.00')
-                if contribution < self.price.prix:
-                    logger.info("prix inférieur au minimum")
-                    raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
+            # Validation du montant minimum / Minimum amount validation
+            if self.price.prix and amount < self.price.prix:
+                logger.info(f"Open price {amount} below minimum {self.price.prix}")
+                raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 
-        # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
+        # Création/Récupération de l'utilisateur après validation des champs
+        # Create/Retrieve user after field validation (anti-spam)
         self.user = get_or_create_user(attrs['email'])
 
-        # Vérififaction du max par user sur le produit :
+        # Vérifications des limites par utilisateur / User limit checks
         if self.price.product.max_per_user_reached(user=self.user):
-            raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+            raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
-        # Vérification du max per user
         if self.price.max_per_user:
-            user_membeshipr_count = Membership.objects.filter(
+            user_membership_count = Membership.objects.filter(
                 user=self.user,
                 price=self.price,
-                deadline__gt=timezone.localtime()).exclude(
+                deadline__gt=timezone.localtime()
+            ).exclude(
                 status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
             ).count()
-            if user_membeshipr_count >= self.price.max_per_user:
-                logger.info("max per user")
-                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+            
+            if user_membership_count >= self.price.max_per_user:
+                logger.info(f"Max per user reached for {self.user.email} on price {self.price.uuid}")
+                raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
-
-        ### CREATION DE LA FICHE MEMBRE
-        # On fait create, car il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
+        # Création de la fiche membre / Membership record creation
+        # On autorise plusieurs adhésions (ex: famille) / Multiple memberships allowed
         membership = Membership.objects.create(
             user=self.user,
             price=self.price,
             contribution_value=amount,
             status=Membership.WAITING_PAYMENT,
-            first_name = attrs['firstname'],
-            last_name = attrs['lastname'],
-            newsletter = not attrs.get('newsletter'), # TODO: A virer, utiliser les options ou les formulaires dynamiques : laisser le choix à l'admin
+            first_name=attrs['firstname'],
+            last_name=attrs['lastname'],
+            # Note: newsletter is an opt-out in the form / opt-out dans le formulaire
+            newsletter=not attrs.get('newsletter'), 
         )
 
-        # Vérification de la validation manuelle
+        # Gestion de la validation manuelle / Manual validation handling
         if self.price.manual_validation:
-            logger.info(f"membership_validator.price.manual_validation")
-            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
+            logger.info(f"Membership {membership.uuid} requires manual validation")
             membership.status = Membership.ADMIN_WAITING
-            # Envoi des mails pour prévenir les users
+            # Notification asynchrone / Async notification
             send_membership_pending_admin.delay(str(membership.uuid))
             send_membership_pending_user.delay(str(membership.uuid))
 
-        # Inititation des itérations de récurrence maximales
-        if self.price.recurring_payment and self.price.iteration :
+        # Configuration de la récurrence / Recurrence setup
+        if self.price.recurring_payment and self.price.iteration:
             membership.max_iteration = self.price.iteration
 
-        # Set remplace les options existantes, accepte les listes
+        # Association des options / Options association
         options = attrs.get('options', [])
         if options:
-            membership.option_generale.set(attrs['options'])
+            membership.option_generale.set(options)
 
-        # Build validated custom_form from dynamic fields (prefixed with 'form__') for the membership product
+        # Traitement du formulaire dynamique / Dynamic form processing
         request = self.context.get('request')
         req_data = request.data if request else {}
-        product = self.price.product
-        custom_form = build_custom_form_from_request(req_data, [product], prefix='form__')
+        custom_form = build_custom_form_from_request(req_data, [self.price.product], prefix='form__')
         membership.custom_form = custom_form or None
 
         membership.save()
         self.membership = membership
 
-        # Création du lien de paiement
+        # Initialisation du paiement Stripe si nécessaire
+        # Initiate Stripe payment if required
         self.checkout_stripe_url = None
         if membership.status == Membership.WAITING_PAYMENT:
             self.checkout_stripe_url = self.get_checkout_stripe(membership)

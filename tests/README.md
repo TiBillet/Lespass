@@ -1,9 +1,9 @@
 # 🧪 Guide des Tests - Lespass (TiBillet) / Tests Guide
 
-Bienvenue dans le dossier des tests du projet Lespass ! 
+Bienvenue dans le dossier des tests du projet Lespass !
 *Welcome to the test folder of the Lespass project!*
 
-Ce document explique comment vérifier que l'application fonctionne bien. 
+Ce document explique comment vérifier que l'application fonctionne bien.
 Il est écrit pour être facile à comprendre, même si vous débutez.
 *This document explains how to check if the app works correctly. It is easy to read, even for beginners.*
 
@@ -14,10 +14,10 @@ Il est écrit pour être facile à comprendre, même si vous débutez.
 Nous avons deux façons de tester l'application :
 *We have two ways to test the application:*
 
-1.  **Tests API (Backend)** : On teste les données et les serveurs (Rapide). 
-    *On utilise `pytest`.*
-2.  **Tests Bout-en-bout (Frontend/E2E)** : On simule un utilisateur sur un navigateur (Chrome/Firefox).
-    *On utilise `playwright`.*
+1. **Tests API (Backend)** : On teste les données et les serveurs (Rapide).
+   *On utilise `pytest`.*
+2. **Tests Bout-en-bout (Frontend/E2E)** : On simule un utilisateur sur un navigateur (Chrome/Firefox).
+   *On utilise `playwright`.*
 
 ---
 
@@ -27,19 +27,26 @@ Ces tests vérifient que le serveur répond correctement aux demandes de donnée
 *These tests check that the server responds correctly to data requests.*
 
 ### Comment les lancer ? / How to run them?
+
 Vous devez être à la racine du projet (là où il y a le fichier `pyproject.toml`).
 *Run these from the project root:*
 
 ```bash
-# Lancer tous les tests API
+# Lancer tous les tests API direct depuis l'hote, pas besoin d'entrer dans le conteneur
 # Run all API tests
-poetry run pytest tests/pytest/ --api-key <VOTRE_CLE_API>
+poetry run pytest tests/pytest/
 ```
 
 ### Ce qu'ils testent / What they check:
+
 - La création et la suppression d'événements.
 - La gestion des adresses postales.
-- Le fonctionnement des ventes (Sales).
+
+### TEST A FAIRE (Terminés / Completed) :
+
+- Lister les ventes
+- Lister les reservations et les billets
+- Lister les adhésions
 
 ---
 
@@ -49,6 +56,7 @@ Ces tests ouvrent un vrai navigateur et cliquent sur les boutons comme un humain
 *These tests open a real browser and click buttons like a human would.*
 
 ### Prérequis / Prerequisites
+
 Il faut avoir installé les outils Node.js (Yarn).
 *You need Node.js tools (Yarn) installed.*
 
@@ -59,6 +67,7 @@ yarn playwright install
 ```
 
 ### Comment les lancer ? / How to run them?
+
 Allez dans le dossier `tests/playwright` :
 *Go to the `tests/playwright` folder:*
 
@@ -69,38 +78,48 @@ yarn test:chromium:console --workers=1
 
 # Voir ce qui se passe en temps réel (Mode "Headed")
 # See what happens in real time
-yarn playwright test --project=chromium --headed --workers=1
+yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
 ```
 
 ### Ce qu'ils testent / What they check:
+
 Les tests sont numérotés dans l'ordre logique :
 *Tests are numbered in logical order:*
 
-1.  `01-login.spec.ts` : Vérifie que l'on peut se connecter.
-2.  `02-admin-configuration.spec.ts` : Vérifie que l'on peut changer le nom de l'asso.
-3.  `03-memberships.spec.ts` : Crée une adhésion simple.
-4.  `04-membership-recurring.spec.ts` : Crée une adhésion avec paiement tous les mois.
-5.  `05-membership-validation.spec.ts` : Crée une adhésion qui demande l'accord d'un admin.
-6.  `06-membership-amap.spec.ts` : Crée un panier légume (AMAP) avec options.
-7.  `07-fix-solidaire-manual-validation.spec.ts` : Modifie un tarif existant.
-8.  `08-membership-ssa-with-forms.spec.ts` : Crée un produit complexe avec un questionnaire.
-9.  `09-anonymous-events.spec.ts` : Réservation d'événements gratuit et payant (Anonyme) + Vérification DB.
+1. `01-login.spec.ts` : Vérifie que l'on peut se connecter.
+2. `02-admin-configuration.spec.ts` : Vérifie que l'on peut changer le nom de l'asso.
+3. `03-memberships.spec.ts` : Crée une adhésion simple.
+4. `04-membership-recurring.spec.ts` : Crée une adhésion avec paiement tous les mois.
+5. `05-membership-validation.spec.ts` : Crée une adhésion qui demande l'accord d'un admin.
+6. `06-membership-amap.spec.ts` : Crée un panier légume (AMAP) avec options.
+7. `07-fix-solidaire-manual-validation.spec.ts` : Modifie un tarif existant.
+8. `08-membership-ssa-with-forms.spec.ts` : Crée un produit complexe avec un questionnaire.
+9. `09-anonymous-events.spec.ts` : Réservation d'événements gratuit et payant (Anonyme) + Vérification DB.
 10. `10-anonymous-event-dynamic-form.spec.ts` : Réservation payante avec formulaire dynamique + Vérification DB.
 11. `11-anonymous-membership.spec.ts` : Achat d'adhésion standard + Vérification DB.
 12. `12-anonymous-membership-dynamic-form.spec.ts` : Achat d'adhésion avec formulaire dynamique + Vérification DB.
-13. `13-ssa-membership-tokens.spec.ts` : Adhésion SSA, paiement Stripe et vérification des jetons (MonaLocalim) dans la tirelire et en DB.
-14. `14-membership-manual-validation.spec.ts` : Demande d'adhésion soumise à validation, puis approbation par l'administrateur dans le panel admin.
+13. `13-ssa-membership-tokens.spec.ts` : Adhésion SSA, paiement Stripe et vérification des jetons (MonaLocalim) dans la
+    tirelire et en DB.
+14. `14-membership-manual-validation.spec.ts` : Demande d'adhésion soumise à validation, puis approbation par
+    l'administrateur dans le panel admin.
 15. `15-membership-free-price.spec.ts` : Achat d'adhésion à prix libre et vérification du montant sur Stripe.
-16. `16-user-account-summary.spec.ts` : Vérification que toutes les adhésions et réservations d'un utilisateur sont bien listées dans son compte.
+16. `16-user-account-summary.spec.ts` : Vérification que toutes les adhésions et réservations d'un utilisateur sont bien
+    listées dans son compte.
+17. `17-membership-free-price-multi.spec.ts` : Achat d'adhésion sur un produit à plusieurs prix libres (vérification de
+    la non-collision des montants et de la réinitialisation des champs).
 
 ### Vérification en Base de Données (DB) / Database Verification
-Pour garantir que les tests ne sont pas de simples "façades" visuelles, nous utilisons une commande Django personnalisée appelée depuis les tests Playwright via Docker :
+
+Pour garantir que les tests ne sont pas de simples "façades" visuelles, nous utilisons une commande Django personnalisée
+appelée depuis les tests Playwright via Docker :
 *To ensure tests are not just visual "façades", we use a custom Django command called from Playwright tests via Docker:*
 
 ```bash
 docker exec lespass_django poetry run python manage.py verify_test_data --type reservation --email <EMAIL>
 ```
-Cette commande permet de confirmer que les données (réservations, adhésions, formulaires) sont correctement enregistrées dans la base de données PostgreSQL du conteneur.
+
+Cette commande permet de confirmer que les données (réservations, adhésions, formulaires) sont correctement enregistrées
+dans la base de données PostgreSQL du conteneur.
 
 ### TEST A FAIRE (Terminés / Completed) :
 
@@ -111,17 +130,19 @@ Cette commande permet de confirmer que les données (réservations, adhésions, 
 - ✅ reserver un evenement payant avec un formulaire dynamique + DB.
 - ✅ prendre une adhésion et payer sur stripe avec la carte bancaire 4242 + DB.
 - ✅ prendre une ahdésion avec un formulaire dynamique et payer sur stripe avec la carte bancaire 4242 + DB.
-- ✅ prendre une adhésion caisse sociale alimentaire et payer sur stripe avec la carte bancaire 4242, se connecter et vérifier qu'on a bien reçu les token dans la partie mon compte / ma tirelire + DB.
+- ✅ prendre une adhésion caisse sociale alimentaire et payer sur stripe avec la carte bancaire 4242, se connecter et
+  vérifier qu'on a bien reçu les token dans la partie mon compte / ma tirelire + DB.
 - ✅ prendre une adhésion a validation manuelle, se connecter en tant qu'admin et accepter l'adhésion + DB.
 - ✅ prendre une ahdésion a prix libre, vérifier que le tarif sur stripe est bien le prix libre.
 - ✅ prendre une ahdésion a prix libre, vérifier que le tarif sur stripe est bien le prix libre, payer + DB.
+- ✅ prendre une adhésion sur un produit multi-prix libre, vérifier que les montants ne se mélangent pas et que les
+  champs se réinitialisent.
 - ✅ se connecter, aller sur mon compte et vérifier que toute les adhésions et les reservations sont présentes.
 
 Sur stripe, on peut payer avec la carte 4242 4242 4242 4242, nom : Douglas Adams, date : 12/42 et code 424
 les events sont sur /events
-vas y de façon incrémentielle et doucement, d'abord, réalise des curl pour comprendre la structure des pages. ensuite fabrique le test.
-
-
+vas y de façon incrémentielle et doucement, d'abord, réalise des curl pour comprendre la structure des pages. ensuite
+fabrique le test.
 
 
 
@@ -132,23 +153,28 @@ vas y de façon incrémentielle et doucement, d'abord, réalise des curl pour co
 Si vous devez ajouter un test, suivez ces conseils :
 *If you need to add a test, follow these tips:*
 
-1.  **Soyez Atomique** : Un test doit faire une seule chose précise.
-    *One test = one specific action.*
-2.  **Soyez Verbeux** : Donnez des noms de fonctions longs et clairs.
-    *Use long and clear function names.*
-3.  **Bilingue** : Écrivez les commentaires en Français et en Anglais.
-    *Write comments in both French and English.*
-4.  **FALC** : Utilisez des mots simples pour que tout le monde comprenne.
-    *Use simple words (Easy-to-read format).*
+1. **Soyez Atomique** : Un test doit faire une seule chose précise.
+   *One test = one specific action.*
+2. **Soyez Verbeux** : Donnez des noms de fonctions longs et clairs.
+   *Use long and clear function names.*
+3. **Bilingue** : Écrivez les commentaires en Français et en Anglais.
+   *Write comments in both French and English.*
+4. **FALC** : Utilisez des mots simples pour que tout le monde comprenne.
+   *Use simple words (Easy-to-read format).*
+5. **Script post test** : Si vous avez besoin d'un script python pour vérifier la base de donnée après avoir fait un
+   test E2E ou créer un objet au préalable, utilisez le dossier script en nommant verify_<nom du test>.py ou
+   post_<nom du test>.py. Puis, lancez le avec docker exec lespass_django poetry run python manage.py tests/script/<nom du script>.py.
+   *If you need a python script to verify the database after a test E2E, use the script folder and name it verify
+   _<test name>.py.*
 
 ---
 
 ## 📊 État actuel des tests / Current status
 
-| Type | Succès / Passed | Échecs / Failed | Note |
-| :--- | :--- | :--- | :--- |
-| API (Pytest) | ✅ 10 | 0 | Tout est vert ! |
-| E2E (Playwright) | ✅ 10 | 0 | Tout est vert ! |
+| Type             | Succès / Passed | Échecs / Failed | Note            |
+|:-----------------|:----------------|:----------------|:----------------|
+| API (Pytest)     | ✅ 10            | 0               | Tout est vert ! |
+| E2E (Playwright) | ✅ 11            | 0               | Tout est vert ! |
 
 ---
 
