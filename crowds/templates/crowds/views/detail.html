@@ -86,6 +86,9 @@
                         <thead>
                         <tr>
                             <th scope="col">{% translate 'Votant·e' %}</th>
+                            {% if show_votes_origin %}
+                                <th scope="col">{% translate 'Origine' %}</th>
+                            {% endif %}
                             <th scope="col">{% translate 'Date' %}</th>
                         </tr>
                         </thead>
@@ -97,12 +100,15 @@
                                     <tbody id="votes-more-{{ initiative.uuid }}" class="collapse">
                                 {% endif %}
                                 <tr>
-                                    <td>{{ v.user.email }}</td>
-                                    <td>{{ v.created_at|date:'Y-m-d H:i' }}</td>
+                                    <td>{{ v.user.full_name_or_email_trunc }}</td>
+                                    {% if show_votes_origin %}
+                                        <td>{{ v.user.client_source.name|default:"—" }}</td>
+                                    {% endif %}
+                                    <td>{{ v.created_at|date:'d/m/y' }}</td>
                                 </tr>
                             {% empty %}
                                 <tr>
-                                    <td colspan="2"
+                                    <td colspan="{% if show_votes_origin %}3{% else %}2{% endif %}"
                                         class="text-center text-muted py-4">{% translate 'Aucun vote pour le moment.' %}</td>
                                 </tr>
                             {% endfor %}
@@ -266,17 +272,22 @@
         {% translate "Proposer une ligne budgétaire" as t_bi_title %}
         {% translate "Le module n'est pas encore chargé. Réessayez ou rechargez la page." as t_bi_not_loaded %}
         {% translate "Décrivez la dépense proposée" as t_bi_desc %}
-        {% translate "Montant proposé" as t_bi_amount_prompt %}
+        {% blocktrans with cur=initiative.currency asvar t_bi_amount_prompt %}Montant proposé (en {{ cur }}){% endblocktrans %}
         {% translate "Proposition envoyée" as t_bi_sent %}
         {% translate "Impossible d'envoyer" as t_bi_send_fail %}
         {% translate "Erreur réseau" as t_bi_net_err %}
-        {% translate "Montant" as t_bi_amount_label %}
+        {% blocktrans with cur=initiative.currency asvar t_bi_amount_label %}Montant (en {{ cur }}){% endblocktrans %}
         {% translate "Description" as t_bi_desc_label %}
         {% translate "Envoyer" as t_bi_send %}
         {% translate "Annuler" as t_bi_cancel %}
         {% translate "Veuillez indiquer un montant valide." as t_bi_amount_invalid %}
         {% translate "Veuillez décrire en quelques mots (min 5 caractères)." as t_bi_desc_invalid %}
         {% translate "Une erreur est survenue." as t_bi_error %}
+        {% translate "J'accepte les règles de contribution" as t_part_covenant %}
+        {% translate "Veuillez accepter les règles de contribution." as t_part_covenant_required %}
+        {% blocktrans with cur=initiative.currency asvar t_part_amount_label %}Montant estimé (en {{ cur }}){% endblocktrans %}
+        {% translate "Vous pourrez le changer lors de votre validation, ou le mettre à zero." as t_part_amount_help %}
+        {% translate "Veuillez saisir un montant avec au maximum deux décimales." as t_part_amount_decimals %}
         <script>
             (function () {
                 const isAuth = {{ user.is_authenticated|yesno:"true,false" }};
@@ -296,7 +307,20 @@
                     amount_invalid: '{{ t_bi_amount_invalid|escapejs }}',
                     desc_invalid: '{{ t_bi_desc_invalid|escapejs }}',
                     error_generic: '{{ t_bi_error|escapejs }}',
+                    part_covenant: '{{ t_part_covenant|escapejs }}',
+                    part_covenant_required: '{{ t_part_covenant_required|escapejs }}',
+                    part_amount_label: '{{ t_part_amount_label|escapejs }}',
+                    part_amount_help: '{{ t_part_amount_help|escapejs }}',
+                    part_amount_decimals: '{{ t_part_amount_decimals|escapejs }}',
+                    pro_bono_name: '{{ crowd_config.pro_bono_name|default:"Pro-bono"|escapejs }}',
                 });
+                const partCovenantUrl = '{{ crowd_config.contributor_covenant|default:"https://movilab.org/wiki/Coremuneration_et_budget_contributif"|escapejs }}';
+                window.CROWDS_I18N = T;
+                window.CROWDS_CONFIG = Object.freeze({
+                    partCovenantUrl: partCovenantUrl,
+                    proBonoName: T.pro_bono_name || 'Pro-bono',
+                });
+                window.T = T;
 
                 function getCookie(name) {
                     const value = `; ${document.cookie}`;
@@ -495,10 +519,16 @@
                     preConfirm: () => {
                         const name = document.getElementById('contrib-name').value.trim();
                         const desc = document.getElementById('contrib-desc').value.trim();
-                        const amtStr = document.getElementById('contrib-amt').value;
-                        const amt = Math.round(parseFloat(amtStr || '0') * 100);
+                        const amtStr = document.getElementById('contrib-amt').value.trim();
+                        const amtNorm = amtStr.replace(',', '.');
+                        const amtValid = /^\d+(\.\d{1,2})?$/.test(amtNorm);
+                        const amt = Math.round(parseFloat(amtNorm || '0') * 100);
                         if (!name) {
                             Swal.showValidationMessage('{% translate "Veuillez indiquer votre nom." %}');
+                            return false;
+                        }
+                        if (!amtValid) {
+                            Swal.showValidationMessage('{% translate "Veuillez saisir un montant avec au maximum deux décimales." %}');
                             return false;
                         }
                         if (!amt || amt <= 0) {
@@ -581,6 +611,8 @@
 
             // --- Participations: dialog + POST via HTMX to update partial ---
             window.crowdsOpenParticipate = function () {
+                const I18N = window.CROWDS_I18N || {};
+                const CROWDS = window.CROWDS_CONFIG || {};
                 Swal.fire({
                     title: '{% translate "Proposer une participation" %}',
                     html: `
@@ -589,33 +621,74 @@
                             <textarea id="part-desc" class="form-control" rows="4" placeholder="{% translate "Décrivez votre apport, rôle, tâches…" %}"></textarea>
                         </div>
                         <div class="mb-0 text-start">
-                            <label class="form-label">{% blocktrans with cur=initiative.currency %}
-                        Montant sollicité (en {{ cur }}){% endblocktrans %}</label>
-                            <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
-                            <div class="form-text">{% translate "Ce montant correspond à votre part du budget estimé." %} {% translate "Laissez vide si bénévolat." %}</div>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="part-pro-bono" checked>
+                                <label class="form-check-label" for="part-pro-bono">${CROWDS.proBonoName || I18N.pro_bono_name || 'Pro-bono'}</label>
+                            </div>
+                            <div id="part-amt-wrap">
+                                <label class="form-label">${I18N.part_amount_label || ''}</label>
+                                <input id="part-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
+                                <div class="form-text">${I18N.part_amount_help || ''}</div>
+                            </div>
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="part-covenant">
+                                <label class="form-check-label" for="part-covenant">
+                                    ${I18N.part_covenant || ''} <a href="${CROWDS.partCovenantUrl || 'https://movilab.org/wiki/Coremuneration_et_budget_contributif'}" target="_blank" rel="noopener noreferrer">{% translate "Règles de contribution" %}</a>
+                                </label>
+                            </div>
                         </div>
                     `,
                     focusConfirm: false,
                     showCancelButton: true,
                     cancelButtonText: '{% translate "Annuler" %}',
                     confirmButtonText: '{% translate "Envoyer la demande" %}',
+                    didOpen: () => {
+                        const proBono = document.getElementById('part-pro-bono');
+                        const amtWrap = document.getElementById('part-amt-wrap');
+                        if (proBono && amtWrap) {
+                            const sync = () => {
+                                amtWrap.style.display = proBono.checked ? 'none' : 'block';
+                            };
+                            proBono.addEventListener('change', sync);
+                            sync();
+                        }
+                    },
                     preConfirm: () => {
                         const desc = document.getElementById('part-desc').value.trim();
-                        const amtStr = document.getElementById('part-amt').value;
+                        const proBono = document.getElementById('part-pro-bono');
+                        const amtStr = document.getElementById('part-amt')?.value.trim() || '';
+                        const covenantOk = document.getElementById('part-covenant')?.checked;
                         if (!desc) {
                             Swal.showValidationMessage('{% translate "Veuillez décrire votre participation." %}');
                             return false;
                         }
+                        if (!covenantOk) {
+                            Swal.showValidationMessage(I18N.part_covenant_required || '');
+                            return false;
+                        }
+                        if (!proBono?.checked) {
+                            const amtNorm = amtStr.replace(',', '.');
+                            const amtValid = amtNorm !== '' && /^\d+(\.\d{1,2})?$/.test(amtNorm);
+                            if (!amtValid) {
+                                Swal.showValidationMessage(I18N.part_amount_decimals || '');
+                                return false;
+                            }
+                        }
                         // Post via HTMX and update the participations list without blink
                         const values = {description: desc};
-                        if (amtStr > 0) {
-                            values.requested_amount = amtStr;
+                        if (!proBono?.checked && amtStr) {
+                            const amtNorm = amtStr.replace(',', '.');
+                            if (parseFloat(amtNorm) > 0) {
+                                values.requested_amount = amtNorm;
+                            }
                         }
                         htmx.ajax('POST', '{{ initiative.get_absolute_url }}participate/', {
                             target: '#participations_list',
                             swap: 'innerHTML',
                             values: values
                         });
+                        Swal.close();
+                        return true;
                     }
                 });
             };
@@ -623,14 +696,28 @@
             window.crowdsMarkParticipationCompleted = function (pid) {
                 Swal.fire({
                     title: '{% translate "Marquer la participation comme terminée" %}',
-                    input: 'number',
-                    inputLabel: '{% translate "Temps passé (en minutes)" %}',
-                    inputAttributes: {min: 1, step: 1},
+                    html: `
+                        <div class="mb-0 text-start">
+                            <label class="form-label">{% translate "Temps passé" %}</label>
+                            <div class="input-group">
+                                <input id="part-time-value" type="number" min="1" step="1" class="form-control" />
+                                <select id="part-time-unit" class="form-select">
+                                    <option value="minutes">{% translate "Minutes" %}</option>
+                                    <option value="hours">{% translate "Heures" %}</option>
+                                    <option value="days">{% translate "Jours (8h)" %}</option>
+                                </select>
+                            </div>
+                        </div>
+                    `,
                     showCancelButton: true,
                     cancelButtonText: '{% translate "Annuler" %}',
                     confirmButtonText: '{% translate "Valider" %}',
                     preConfirm: (value) => {
-                        const minutes = parseInt(value || '0');
+                        const rawValue = document.getElementById('part-time-value')?.value || '';
+                        const unit = document.getElementById('part-time-unit')?.value || 'minutes';
+                        const base = parseInt(rawValue, 10);
+                        const multipliers = {minutes: 1, hours: 60, days: 8 * 60};
+                        const minutes = (multipliers[unit] || 1) * base;
                         if (!minutes || minutes <= 0) {
                             Swal.showValidationMessage('{% translate "Veuillez saisir une durée valide (> 0)." %}');
                             return false;

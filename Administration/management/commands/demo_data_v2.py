@@ -1747,3 +1747,33 @@ class Command(BaseCommand):
                                     fp.tag_exclude.set(tag_objs)
                         except Exception as e:
                             logger.warning(f"Erreur lors de la configuration d'une fédération pour {tenant.name}: {e}")
+
+        # -----------------------------
+        # 3) Diversité des origines utilisateurs (demo)
+        # -----------------------------
+        try:
+            user_emails = set()
+            for fx in fixtures:
+                for init in (fx.get('initiatives') or []):
+                    for v in (init.get('votes') or []):
+                        email = (v.get('user_email') or '').strip()
+                        if email:
+                            user_emails.add(email)
+                    for p in (init.get('participations') or []):
+                        email = (p.get('user_email') or '').strip()
+                        if email:
+                            user_emails.add(email)
+            if user_emails and created_tenants:
+                seed_tenant = created_tenants[0]
+                with tenant_context(seed_tenant):
+                    for email in user_emails:
+                        get_or_create_user(email, send_mail=False)
+                with schema_context('public'):
+                    for email in user_emails:
+                        user = TibilletUser.objects.filter(email=email).first()
+                        if not user:
+                            continue
+                        user.client_source = random.choice(created_tenants)
+                        user.save(update_fields=['client_source'])
+        except Exception as e:
+            logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")

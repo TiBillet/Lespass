@@ -202,6 +202,29 @@ def format_answer(value):
         return value
 
 
+@register.filter
+def minutes_to_human(value):
+    try:
+        total_minutes = int(value)
+    except (TypeError, ValueError):
+        return ""
+    if total_minutes <= 0:
+        return f"0 {_('min')}"
+    minutes_per_day = 8 * 60
+    days = total_minutes // minutes_per_day
+    rem = total_minutes % minutes_per_day
+    hours = rem // 60
+    mins = rem % 60
+    parts = []
+    if days:
+        parts.append(f"{days} {_('j')}")
+    if hours:
+        parts.append(f"{hours} {_('h')}")
+    if mins or not parts:
+        parts.append(f"{mins} {_('min')}")
+    return " ".join(parts)
+
+
 @register.filter(name='custom_form_table')
 def custom_form_table(custom_form, obj=None):
     """

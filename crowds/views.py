@@ -10,6 +10,8 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 
 from django.core.paginator import Paginator
+from django.core.cache import cache
+from django.db import connection
 from django.db.models import Count, Q
 from django.utils import timezone
 import json
@@ -40,25 +42,57 @@ class InitiativeViewSet(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.AllowAny]
 
+    def _should_show_user_source(self, initiative, list_name, users):
+        tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
+        list_size = len(users)
+        cache_key = f"crowds:user-source:{initiative.pk}:{list_name}:{tenant_id}:{list_size}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+        source_ids = {u.client_source_id for u in users if u and u.client_source_id}
+        show = len(source_ids) > 1 or (tenant_id is not None and any(sid != tenant_id for sid in source_ids))
+        cache.set(cache_key, show, 60)
+        return show
+
     def _participations_context(self, initiative):
-        participations = initiative.participations.select_related("participant").order_by("-created_at")
+        participations = list(
+            initiative.participations.select_related("participant__client_source").order_by("-created_at")
+        )
+        show_participations_origin = self._should_show_user_source(
+            initiative, "participations", [p.participant for p in participations]
+        )
         return {
             "participations": participations,
             "initiative": initiative,
+            "show_participations_origin": show_participations_origin,
         }
 
     def _contributions_context(self, initiative):
-        contributions = initiative.contributions.select_related("contributor").order_by("-created_at")
+        contributions = list(
+            initiative.contributions.select_related("contributor__client_source").order_by("-created_at")
+        )
+        show_contributions_origin = self._should_show_user_source(
+            initiative, "contributions", [c.contributor for c in contributions if c.contributor_id]
+        )
         return {
             "contributions": contributions,
             "initiative": initiative,
+            "show_contributions_origin": show_contributions_origin,
         }
 
     def _budget_items_context(self, initiative):
-        items = initiative.budget_items.select_related("contributor", "validator").order_by("-created_at")
+        items = list(
+            initiative.budget_items.select_related(
+                "contributor__client_source", "validator__client_source"
+            ).order_by("-created_at")
+        )
+        show_budget_items_origin = self._should_show_user_source(
+            initiative, "budget_items", [bi.contributor for bi in items if bi.contributor_id]
+        )
         return {
             "budget_items": items,
             "initiative": initiative,
+            "show_budget_items_origin": show_budget_items_origin,
         }
 
     # ------------------------
@@ -125,13 +159,16 @@ class InitiativeViewSet(viewsets.ViewSet):
         initiative = get_object_or_404(
             Initiative.objects.prefetch_related("tags"), pk=pk
         )
-        contributions = initiative.contributions.select_related("contributor").order_by("-created_at")
-        budget_items = initiative.budget_items.select_related("contributor", "validator").order_by("-created_at")
+        contributions_context = self._contributions_context(initiative)
+        budget_items_context = self._budget_items_context(initiative)
 
         context = get_context(request)
         # Précharger les votants pour éviter le N+1
-        votes = initiative.votes.select_related("user").order_by("-created_at")
-        participations = initiative.participations.select_related("participant").order_by("-created_at")
+        votes = list(initiative.votes.select_related("user__client_source").order_by("-created_at"))
+        show_votes_origin = self._should_show_user_source(
+            initiative, "votes", [v.user for v in votes]
+        )
+        participations_context = self._participations_context(initiative)
         # Help texts for Contribution form in Swal
         from django.utils.translation import gettext as _
         name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
@@ -140,13 +177,14 @@ class InitiativeViewSet(viewsets.ViewSet):
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
             "initiative": initiative,
-            "contributions": contributions,
-            "budget_items": budget_items,
             "contrib_name_help": name_help,
             "contrib_desc_help": desc_help,
             "votes": votes,
-            "participations": participations,
+            "show_votes_origin": show_votes_origin,
         })
+        context.update(contributions_context)
+        context.update(budget_items_context)
+        context.update(participations_context)
 
         return render(request, "crowds/views/detail.html", context)
 

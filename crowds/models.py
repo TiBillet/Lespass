@@ -39,6 +39,13 @@ class CrowdConfig(SingletonModel):
                                            help_text=_(
                                                "C'est le nom par defaut que vous pouvez changer ici. Vous pouvez aussi le changer dans chaque initiative."))
 
+    contributor_covenant = models.URLField(verbose_name=_("Lien vers le code de contribution à valider à chaque participation"), blank=True, null=True,
+                                           help_text=_("Si vide : https://movilab.org/wiki/Coremuneration_et_budget_contributif"))
+
+    pro_bono_name = models.CharField(max_length=255, blank=True, verbose_name=_("Mot pour 'Pro-bono'"),
+                                     help_text=_(
+                                         "Si vide : Pro-bono. C'est le nom par defaut que vous pouvez changer ici. Ex : Bénévolat, Mécénat de compétence..."))
+
 
 class Initiative(models.Model):
     """
@@ -291,7 +298,7 @@ class BudgetItem(models.Model):
 
     @property
     def validator_name(self) -> str:
-        return self.validator.full_name_or_email()
+        return self.validator.full_name_or_email_trunc()
 
 
 class Contribution(models.Model):
