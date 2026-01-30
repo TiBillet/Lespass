@@ -2166,8 +2166,6 @@ class Ticket(models.Model):
 
     def paid(self):
         if self.pricesold:
-            if self.pricesold.price.free_price:
-                return self.reservation.total_paid()
             return self.pricesold.price.prix
         return 0
         # return 666
