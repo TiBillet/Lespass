@@ -151,7 +151,7 @@
             </div>
             {% if user.is_staff or user.is_superuser %}
             <button type="button" class="btn btn-outline-primary w-100 d-flex justify-content-between align-items-center"
-                    data-crowds-funding-alloc="true">
+                    data-crowds-funding-alloc="true" data-testid="crowds-summary-funding-allocate-button">
               <span>{% translate "Financement à répartir" %}</span>
               <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
             </button>

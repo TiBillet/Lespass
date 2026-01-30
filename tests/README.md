@@ -128,8 +128,9 @@ Les tests sont numérotés dans l'ordre logique :
 20. `20-membership-validations.spec.ts` : Vérifie les erreurs de formulaire d'adhésion (email, prix libre, champs
     dynamiques).
 21. `21-membership-account-states.spec.ts` : Vérifie "déjà actif" et "expiré + renew" dans le compte.
-22. `22-membership-recurring-cancel.spec.ts` : Vérifie l'affichage du bouton d'annulation récurrente et le message
-    d'erreur.
+22. `22-membership-recurring-cancel.spec.ts` : Vérifie l'affichage du bouton d'annulation récurrente et le message d'erreur.
+23. `23-crowds-participation.spec.ts` : Vérifie le flux de participation aux projets Crowds (pro-bono, règles, durée).
+24. `24-crowds-summary.spec.ts` : Vérifie l'affichage du résumé financier et temporel dans Crowds.
 
 ### TODO E2E a couvrir / TODO E2E to cover
 

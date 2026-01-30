@@ -8,6 +8,7 @@ from rest_framework_api_key.models import APIKey
 import logging
 
 from BaseBillet.models import ExternalApiKey
+from AuthBillet.utils import get_or_create_user
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,19 @@ class Command(BaseCommand):
                 if key[0].isupper() == False:
                     api_key.delete()
 
+            user = get_or_create_user(
+                email=f"api-test-{randuuid}@example.org",
+                set_active=True,
+                send_mail=False,
+            )
+            if user:
+                user.is_staff = True
+                user.is_superuser = True
+                user.save(update_fields=["is_staff", "is_superuser"])
+
             ext_api_key = ExternalApiKey.objects.create(
                 name=f"test_{randuuid}",
-                user=None,
+                user=user,
                 event=True,
                 product=True,
                 reservation=True,
@@ -42,6 +53,7 @@ class Command(BaseCommand):
                 wallet=True,
                 sale=True,
                 membership=True,
+                crowd=True,
                 key=api_key,
             )
 

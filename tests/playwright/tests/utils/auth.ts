@@ -30,21 +30,16 @@ export async function loginAs(page: Page, email: string) {
   await submitButton.click();
   console.timeEnd('login:submit');
   
-  // 5. In TEST mode, click the magic link
-  if (env.TEST) {
-    const testModeLink = page.locator('a:has-text("TEST MODE")');
-    console.time('login:test-mode-visible');
-    await expect(testModeLink).toBeVisible({ timeout: 10000 });
-    console.timeEnd('login:test-mode-visible');
-    console.time('login:test-mode-click');
-    await testModeLink.click();
-    await page.waitForLoadState('networkidle');
-    console.timeEnd('login:test-mode-click');
-  } else {
-    console.time('login:wait-timeout');
-    await page.waitForTimeout(2000);
-    console.timeEnd('login:wait-timeout');
-  }
+  // 5. Click the magic link (Must be visible as we are in test environment)
+  const testModeLink = page.locator('a:has-text("TEST MODE")');
+  console.time('login:test-mode-visible');
+  await expect(testModeLink).toBeVisible({ timeout: 10000 });
+  console.timeEnd('login:test-mode-visible');
+
+  console.time('login:test-mode-click');
+  await testModeLink.click();
+  await page.waitForLoadState('networkidle');
+  console.timeEnd('login:test-mode-click');
   
   // 6. Verification (fast, API check)
   const accountResponse = await page.request.get('/my_account/');

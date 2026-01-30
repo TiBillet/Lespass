@@ -44,6 +44,8 @@ def _inject_cli_env(request):
             [
                 "docker",
                 "exec",
+                "-e",
+                "TEST=1",
                 "lespass_django",
                 "poetry",
                 "run",

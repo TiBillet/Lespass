@@ -9,6 +9,7 @@ from django.core.cache import cache
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
 from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership
+from crowds.models import Initiative, BudgetItem, Participation, Vote
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
     EventSchemaSerializer,
@@ -21,7 +22,102 @@ from .serializers import (
     ReservationSchemaSerializer,
     MembershipCreateSerializer,
     MembershipSchemaSerializer,
+    InitiativeSchemaSerializer,
+    InitiativeCreateSerializer,
+    BudgetItemSchemaSerializer,
+    BudgetItemCreateSerializer,
+    ParticipationSchemaSerializer,
+    ParticipationCreateSerializer,
 )
+
+
+class CrowdInitiativeViewSet(viewsets.ViewSet):
+    """
+    Semantic Project API for Crowds initiatives.
+
+    Header: Authorization: Api-Key <key>
+    Response: schema.org/Project-like JSON.
+    """
+
+    permission_classes = [SemanticApiKeyPermission]
+    lookup_field = "uuid"
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def list(self, request):
+        queryset = Initiative.objects.filter(archived=False)
+        serializer = InitiativeSchemaSerializer(queryset, many=True)
+        return Response({"results": serializer.data})
+
+    def retrieve(self, request, uuid=None):
+        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        serializer = InitiativeSchemaSerializer(initiative)
+        return Response(serializer.data)
+
+    def create(self, request):
+        input_serializer = InitiativeCreateSerializer(data=request.data, context={"request": request})
+        input_serializer.is_valid(raise_exception=True)
+        initiative = input_serializer.save()
+        output_serializer = InitiativeSchemaSerializer(initiative)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+    def destroy(self, request, uuid=None):
+        initiative = get_object_or_404(Initiative, uuid=uuid)
+        initiative.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["get", "post"], url_path="budget-items")
+    def budget_items(self, request, uuid=None):
+        initiative = get_object_or_404(Initiative, uuid=uuid)
+        if request.method.lower() == "get":
+            items = initiative.budget_items.all().order_by("-created_at")
+            serializer = BudgetItemSchemaSerializer(items, many=True)
+            return Response({"results": serializer.data})
+
+        input_serializer = BudgetItemCreateSerializer(data=request.data, context={"request": request})
+        input_serializer.is_valid(raise_exception=True)
+        state = input_serializer.validated_data.get("actionStatus") or BudgetItem.State.REQUESTED
+        if state in [BudgetItem.State.APPROVED, BudgetItem.State.REJECTED]:
+            if not (request.user.is_staff or request.user.is_superuser):
+                state = BudgetItem.State.REQUESTED
+        item = BudgetItem.objects.create(
+            initiative=initiative,
+            contributor=request.user,
+            description=input_serializer.validated_data.get("description") or "",
+            amount=input_serializer.amount or 0,
+            state=state,
+            validator=request.user if state == BudgetItem.State.APPROVED else None,
+        )
+        serializer = BudgetItemSchemaSerializer(item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get", "post"], url_path="votes")
+    def votes(self, request, uuid=None):
+        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        if request.method.lower() == "post":
+            obj, created = Vote.objects.get_or_create(initiative=initiative, user=request.user)
+            count = Vote.objects.filter(initiative=initiative).count()
+            return Response({"count": count, "created": created}, status=status.HTTP_201_CREATED)
+        count = Vote.objects.filter(initiative=initiative).count()
+        return Response({"count": count})
+
+    @action(detail=True, methods=["get", "post"], url_path="participations")
+    def participations(self, request, uuid=None):
+        initiative = get_object_or_404(Initiative, uuid=uuid, archived=False)
+        if request.method.lower() == "post":
+            input_serializer = ParticipationCreateSerializer(data=request.data, context={"request": request})
+            input_serializer.is_valid(raise_exception=True)
+            participation = Participation.objects.create(
+                initiative=initiative,
+                participant=request.user,
+                description=input_serializer.validated_data.get("description") or "",
+                amount=getattr(input_serializer, "amount", None),
+                state=Participation.State.REQUESTED,
+            )
+            serializer = ParticipationSchemaSerializer(participation)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        items = initiative.participations.select_related("participant").all()
+        serializer = ParticipationSchemaSerializer(items, many=True)
+        return Response({"results": serializer.data})
 
 
 class EventViewSet(viewsets.ViewSet):

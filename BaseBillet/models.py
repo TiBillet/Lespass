@@ -2931,6 +2931,7 @@ class ExternalApiKey(models.Model):
     wallet = models.BooleanField(default=False, verbose_name=_("Wallets"))
     # Nouvelle route API pour les ventes (LigneArticle)
     sale = models.BooleanField(default=False, verbose_name=_("Sales"))
+    crowd = models.BooleanField(default=False, verbose_name=_("Crowds"))
 
     def api_permissions(self):
         return {
@@ -2946,6 +2947,7 @@ class ExternalApiKey(models.Model):
             "wallet": self.wallet,
             # Basename de la route des ventes
             "sale": self.sale,
+            "crowd": self.crowd,
         }
 
     class Meta:

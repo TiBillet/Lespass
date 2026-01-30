@@ -9,6 +9,9 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
+from crowds.models import Initiative, BudgetItem, Participation, Vote
+from fedow_connect.utils import dround
+from Administration.utils import clean_html
 
 # Image validation utilities
 from PIL import Image, UnidentifiedImageError
@@ -1288,3 +1291,153 @@ class MembershipSchemaSerializer(serializers.Serializer):
             },
             "validUntil": instance.deadline.isoformat() if instance.deadline else None,
         }
+
+
+class InitiativeSchemaSerializer(serializers.Serializer):
+    """
+    schema.org/Project output serializer for Crowds initiatives.
+    """
+
+    def to_representation(self, instance: Initiative) -> Dict[str, Any]:
+        tags = list(instance.tags.values_list("name", flat=True))
+        additional = [
+            {"@type": "PropertyValue", "name": "voteEnabled", "value": bool(instance.vote)},
+            {"@type": "PropertyValue", "name": "budgetContributif", "value": bool(instance.budget_contributif)},
+            {"@type": "PropertyValue", "name": "directDebit", "value": bool(instance.direct_debit)},
+        ]
+        return {
+            "@context": "https://schema.org",
+            "@type": "Project",
+            "identifier": str(instance.uuid),
+            "name": instance.name,
+            "description": instance.description,
+            "disambiguatingDescription": instance.short_description,
+            "dateCreated": instance.created_at.isoformat() if instance.created_at else None,
+            "currency": instance.currency,
+            "keywords": tags,
+            "additionalProperty": additional,
+        }
+
+
+class InitiativeCreateSerializer(serializers.Serializer):
+    """
+    Input serializer for schema.org/Project creation.
+    """
+    name = serializers.CharField()
+    description = serializers.CharField(required=False, allow_blank=True)
+    disambiguatingDescription = serializers.CharField(required=False, allow_blank=True)
+    keywords = serializers.ListField(child=serializers.CharField(), required=False)
+    currency = serializers.CharField(required=False, allow_blank=True)
+    voteEnabled = serializers.BooleanField(required=False)
+    budgetContributif = serializers.BooleanField(required=False)
+    directDebit = serializers.BooleanField(required=False)
+
+    def validate_name(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_disambiguatingDescription(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def save(self, **kwargs) -> Initiative:
+        data = self.validated_data
+        initiative = Initiative.objects.create(
+            name=data["name"],
+            description=data.get("description") or "",
+            short_description=data.get("disambiguatingDescription") or "",
+            currency=data.get("currency") or "€",
+            vote=bool(data.get("voteEnabled", False)),
+            budget_contributif=bool(data.get("budgetContributif", False)),
+            direct_debit=bool(data.get("directDebit", False)),
+        )
+        keywords = data.get("keywords") or []
+        for tag_name in keywords:
+            if not str(tag_name).strip():
+                continue
+            tag, _ = Tag.objects.get_or_create(name=str(tag_name).strip())
+            initiative.tags.add(tag)
+        return initiative
+
+
+class BudgetItemSchemaSerializer(serializers.Serializer):
+    """
+    Output serializer for BudgetItem using schema.org MonetaryAmount-like structure.
+    """
+
+    def to_representation(self, instance: BudgetItem) -> Dict[str, Any]:
+        amount = dround(instance.amount)
+        return {
+            "@type": "MonetaryAmount",
+            "identifier": str(instance.uuid),
+            "name": instance.description,
+            "value": str(amount) if amount is not None else None,
+            "currency": instance.initiative.currency,
+            "actionStatus": instance.state,
+            "dateCreated": instance.created_at.isoformat() if instance.created_at else None,
+        }
+
+
+class BudgetItemCreateSerializer(serializers.Serializer):
+    description = serializers.CharField(min_length=1)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    actionStatus = serializers.ChoiceField(
+        choices=[c[0] for c in BudgetItem.State.choices],
+        required=False,
+    )
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        self.amount = int(Decimal(value) * 100)
+        return value
+
+
+class ParticipationSchemaSerializer(serializers.Serializer):
+    """
+    Output serializer for Participation using schema.org Action-like fields.
+    """
+
+    def to_representation(self, instance: Participation) -> Dict[str, Any]:
+        amount = dround(instance.amount) if instance.amount is not None else None
+        payload = {
+            "@type": "Action",
+            "identifier": str(instance.uuid),
+            "description": instance.description,
+            "actionStatus": instance.state,
+            "object": {
+                "@type": "Project",
+                "identifier": str(instance.initiative.uuid),
+                "name": instance.initiative.name,
+            },
+            "agent": {
+                "@type": "Person",
+                "name": instance.participant.full_name_or_email_trunc(),
+                "email": instance.participant.email,
+            },
+            "dateCreated": instance.created_at.isoformat() if instance.created_at else None,
+        }
+        if amount is not None:
+            payload["amount"] = {
+                "@type": "MonetaryAmount",
+                "value": str(amount),
+                "currency": instance.initiative.currency,
+            }
+        if instance.time_spent_minutes:
+            payload["timeSpentMinutes"] = int(instance.time_spent_minutes)
+        return payload
+
+
+class ParticipationCreateSerializer(serializers.Serializer):
+    description = serializers.CharField(min_length=1)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value is not None:
+            self.amount = int(Decimal(value) * 100)
+        return value

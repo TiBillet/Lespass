@@ -165,6 +165,226 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Event'
+  /api/v2/initiatives/:
+    get:
+      operationId: listInitiatives
+      summary: List Crowds initiatives
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Initiative'
+    post:
+      operationId: createInitiative
+      summary: Create a Crowds initiative (schema.org/Project)
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Initiative'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Initiative'
+  /api/v2/initiatives/{uuid}/:
+    get:
+      operationId: retrieveInitiative
+      summary: Retrieve a Crowds initiative
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Initiative'
+    delete:
+      operationId: deleteInitiative
+      summary: Delete a Crowds initiative by UUID
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Deleted
+  /api/v2/initiatives/{uuid}/budget-items/:
+    get:
+      operationId: listInitiativeBudgetItems
+      summary: List budget items for an initiative
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BudgetItem'
+    post:
+      operationId: createInitiativeBudgetItem
+      summary: Create a budget item for an initiative
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetItemCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetItem'
+  /api/v2/initiatives/{uuid}/votes/:
+    get:
+      operationId: getInitiativeVotes
+      summary: Retrieve vote count for an initiative
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoteCount'
+    post:
+      operationId: createInitiativeVote
+      summary: Cast a vote for an initiative (idempotent)
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '201':
+          description: Created or already existed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoteCount'
+  /api/v2/initiatives/{uuid}/participations/:
+    get:
+      operationId: listInitiativeParticipations
+      summary: List participations for an initiative
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Participation'
+    post:
+      operationId: createInitiativeParticipation
+      summary: Create a participation for an initiative
+      tags: [Initiative]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipationCreate'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Participation'
   /api/v2/postal-addresses/:
     get:
       operationId: listPostalAddresses
@@ -872,6 +1092,148 @@ components:
           type: array
           items:
             type: object
+    Initiative:
+      type: object
+      description: schema.org/Project representation for Crowds initiatives
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Project
+        identifier:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        disambiguatingDescription:
+          type: string
+        dateCreated:
+          type: string
+          format: date-time
+        currency:
+          type: string
+          example: EUR
+        keywords:
+          type: array
+          items:
+            type: string
+        additionalProperty:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+              value:
+                oneOf:
+                  - type: string
+                  - type: boolean
+                  - type: number
+    BudgetItem:
+      type: object
+      description: MonetaryAmount-like representation for budget items
+      properties:
+        '@type':
+          type: string
+          example: MonetaryAmount
+        identifier:
+          type: string
+          format: uuid
+        name:
+          type: string
+        value:
+          type: string
+          example: "120.00"
+        currency:
+          type: string
+          example: EUR
+        actionStatus:
+          type: string
+          example: approved
+        dateCreated:
+          type: string
+          format: date-time
+    BudgetItemCreate:
+      type: object
+      properties:
+        description:
+          type: string
+        amount:
+          type: string
+          example: "120.00"
+        actionStatus:
+          type: string
+          example: approved
+    Participation:
+      type: object
+      description: schema.org/Action-like representation for participations
+      properties:
+        '@type':
+          type: string
+          example: Action
+        identifier:
+          type: string
+          format: uuid
+        description:
+          type: string
+        actionStatus:
+          type: string
+        object:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Project
+            identifier:
+              type: string
+              format: uuid
+            name:
+              type: string
+        agent:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Person
+            name:
+              type: string
+            email:
+              type: string
+        amount:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: MonetaryAmount
+            value:
+              type: string
+            currency:
+              type: string
+        timeSpentMinutes:
+          type: integer
+        dateCreated:
+          type: string
+          format: date-time
+    ParticipationCreate:
+      type: object
+      properties:
+        description:
+          type: string
+        amount:
+          type: string
+          example: "45.00"
+    VoteCount:
+      type: object
+      properties:
+        count:
+          type: integer
             properties:
               '@type':
                 type: string
