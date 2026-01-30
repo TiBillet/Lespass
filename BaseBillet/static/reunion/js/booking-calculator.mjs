@@ -107,7 +107,7 @@ export const init = () => {
         const { amount, customPrice } = order;
         const update = updateTotal(orders, totalAmount, totalPrice)
         amount.addEventListener('bs-counter:update', () => {
-            // Mutual exclusion for free prices: if this is a free price and quantity > 0, 
+            // Mutual exclusion for free prices: if this is a free price and quantity > 0,
             // reset all other free prices.
             if (customPrice && Number(amount.value) > 0) {
                 orders.forEach(other => {

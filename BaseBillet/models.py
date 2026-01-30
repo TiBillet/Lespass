@@ -2166,7 +2166,7 @@ class Ticket(models.Model):
 
     def paid(self):
         if self.pricesold:
-            return self.pricesold.price.prix
+            return self.pricesold.prix
         return 0
         # return 666
 

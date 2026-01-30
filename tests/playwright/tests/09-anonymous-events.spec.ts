@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
 import { createEvent, createProduct } from './utils/api';
+import { loginAs } from './utils/auth';
 
 /**
  * TEST: Anonymous Event Bookings
@@ -274,6 +275,164 @@ test.describe('Anonymous Event Bookings / Réservations d\'événements anonymes
         expect(dbResult?.status).toBe('success');
         // Paid tickets should have status 'V' (Valid) or 'P' (Paid) depending on flow
         console.log(`✓ Ticket status in DB: ${dbResult?.ticket_status}`);
+    });
+  });
+
+  test('should book mixed free price and fixed price tickets / doit réserver prix libres + prix fixe', async ({ page, request }) => {
+    const randomId = generateRandomId();
+    const eventName = `Prix Libre Mix ${randomId}`;
+    const productName = `Billets Mix ${randomId}`;
+    const startDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    const accountEmail = `jturbeaux+mix${generateRandomId()}@pm.me`;
+
+    const freePriceNameA = 'Tarif libre';
+    const fixedPriceName = 'Tarif fixe';
+
+    const freeAmountA = '7.50';
+    const fixedAmount = '12.00';
+
+    let eventSlug = '';
+    let freePriceUuidA = '';
+    let fixedPriceUuid = '';
+
+    await test.step('Create mixed price event and product / Creer event mixte', async () => {
+      const eventResponse = await createEvent({
+        request,
+        name: eventName,
+        startDate,
+        maxPerUser: 2,
+      });
+      expect(eventResponse.ok).toBeTruthy();
+      eventSlug = eventResponse.slug || '';
+
+      const productResponse = await createProduct({
+        request,
+        name: productName,
+        description: 'Produit mixte pour test prix libre.',
+        category: 'Ticket booking',
+        eventUuid: eventResponse.uuid,
+        offers: [
+          { name: freePriceNameA, price: '1.00', freePrice: true },
+          { name: fixedPriceName, price: fixedAmount },
+        ],
+      });
+      expect(productResponse.ok).toBeTruthy();
+
+      freePriceUuidA = productResponse.offers?.find((offer: any) => offer.name === freePriceNameA)?.identifier || '';
+      fixedPriceUuid = productResponse.offers?.find((offer: any) => offer.name === fixedPriceName)?.identifier || '';
+
+      expect(freePriceUuidA).not.toBe('');
+      expect(fixedPriceUuid).not.toBe('');
+    });
+
+    await test.step('Open booking form / Ouvrir le formulaire', async () => {
+      await page.goto(`/event/${eventSlug}/`);
+      await page.waitForLoadState('domcontentloaded');
+
+      const reserveButton = page.locator('button:has-text("book one or more seats"), button:has-text("réserver")').first();
+      await reserveButton.click();
+      await page.waitForSelector('#bookingPanel.show, .offcanvas.show', { state: 'visible' });
+    });
+
+    await test.step('Fill email and select tickets / Remplir email et billets', async () => {
+      const emailInput = page.locator('#bookingPanel input[name="email"], #bookingEmail').first();
+      await emailInput.fill(accountEmail);
+
+      const confirmEmailInput = page.locator('#bookingPanel input[name="email-confirm"]').first();
+      if (await confirmEmailInput.isVisible()) {
+        await confirmEmailInput.fill(accountEmail);
+      }
+
+      const setTicketQuantity = async (priceUuid: string, qty: number) => {
+        await page.evaluate(({ priceUuid, qty }) => {
+          const counter = document.querySelector(`[data-testid="booking-amount-${priceUuid}"]`) as any;
+          if (!counter) return;
+          counter.value = qty;
+
+          const input = counter.shadowRoot?.querySelector('input#counter') as HTMLInputElement | null;
+          if (input) {
+            input.value = String(qty);
+            input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+          }
+        }, { priceUuid, qty });
+      };
+
+      await setTicketQuantity(freePriceUuidA, 1);
+      const amountContainerA = page.locator(`[data-testid="booking-custom-amount-container-${freePriceUuidA}"]`).first();
+      await amountContainerA.waitFor({ state: 'visible' });
+      const amountInputA = page.locator(`[data-testid="booking-custom-amount-${freePriceUuidA}"]`).first();
+      await amountInputA.fill(freeAmountA);
+      expect(await amountInputA.inputValue()).toBe(freeAmountA);
+
+      await setTicketQuantity(fixedPriceUuid, 1);
+
+      const submitButton = page.locator('#bookingPanel button[type="submit"]:has-text("booking request"), #bookingPanel button[type="submit"]:has-text("réserver")').first();
+      await submitButton.click();
+    });
+
+    await test.step('Stripe Payment / Paiement Stripe', async () => {
+      await page.waitForURL(/checkout.stripe.com/, { timeout: 30000 });
+
+      const cardNumberInput = page.locator('input#cardNumber');
+      await cardNumberInput.waitFor({ state: 'visible', timeout: 20000 });
+
+      await page.locator('input#cardNumber').fill('4242424242424242');
+      await page.locator('input#cardExpiry').fill('12/42');
+      await page.locator('input#cardCvc').fill('424');
+
+      const billingName = page.locator('input#billingName');
+      if (await billingName.count() > 0) {
+        await billingName.fill('Douglas Adams');
+      } else {
+        const label = page.getByLabel(/Nom|Name|Nom sur la carte/i).first();
+        if (await label.count() > 0) {
+          await label.fill('Douglas Adams');
+        }
+      }
+
+      await page.locator('button[type="submit"]').click();
+    });
+
+    await test.step('Verify success and account values / Vérifier succès et montants', async () => {
+      await page.waitForURL(url => url.hostname.includes('tibillet.localhost'), { timeout: 30000 });
+      await expect(page.locator('text=/merci|confirmée|succès|success/i')).toBeVisible({ timeout: 15000 });
+
+      await loginAs(page, accountEmail);
+      await page.goto('/my_account/my_reservations/');
+      await page.waitForLoadState('domcontentloaded');
+
+      const reservationCard = page.locator('.reservation-card', { hasText: eventName }).first();
+      await expect(reservationCard).toBeVisible();
+
+      const ticketItems = reservationCard.locator('.accordion-item');
+      const ticketCount = await ticketItems.count();
+      expect(ticketCount).toBeGreaterThanOrEqual(2);
+
+      for (let i = 0; i < ticketCount; i += 1) {
+        const item = ticketItems.nth(i);
+        const toggle = item.locator('.accordion-button').first();
+        await toggle.click();
+      }
+
+      const expectTicketValue = async (rateName: string, expectedValue: string) => {
+        let found = false;
+        for (let i = 0; i < ticketCount; i += 1) {
+          const item = ticketItems.nth(i);
+          const rateCell = item.locator('tr:has(th:has-text("Rate name")) td').first();
+          const rateText = (await rateCell.innerText()).trim();
+          if (rateText.includes(rateName)) {
+            const valueCell = item.locator('tr:has(th:has-text("Value")) td').first();
+            const valueText = (await valueCell.innerText()).replace(',', '.').trim();
+            expect(valueText).toContain(expectedValue);
+            found = true;
+            break;
+          }
+        }
+        expect(found).toBeTruthy();
+      };
+
+      await expectTicketValue(freePriceNameA, freeAmountA);
+      await expectTicketValue(fixedPriceName, fixedAmount);
     });
   });
 
