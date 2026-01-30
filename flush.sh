@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-if [ "$TEST" = "1" ]; then
+if [ "$DEBUG" = "1" ]; then
   export PGPASSWORD=$POSTGRES_PASSWORD
   export PGUSER=$POSTGRES_USER
   export PGHOST=postgres
@@ -22,5 +22,5 @@ if [ "$TEST" = "1" ]; then
   echo "start dev server : https://"$SUB"."$DOMAIN"/"
   poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002
 else
-  echo "TEST environment variable is not set"
+  echo "DEBUG environment variable is not set"
 fi
