@@ -77,7 +77,8 @@
 
                                             data-bs-toggle="offcanvas"
                                             data-bs-target="#subscribePanel"
-                                            aria-controls="subscribePanel">
+                                            aria-controls="subscribePanel"
+                                            data-testid="membership-open-{{ product.uuid }}">
                                         <i class="bi bi-plus"></i>
                                         {% if product.validate_button_text %}
                                             {{ product.validate_button_text }}{% else %}

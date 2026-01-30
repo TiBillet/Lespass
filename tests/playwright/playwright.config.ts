@@ -10,6 +10,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
  */
 export default defineConfig({
   testDir: './tests',
+  globalSetup: './global-setup.ts',
   /* Maximum time one test can run for. */
   timeout: 60000,
   expect: {

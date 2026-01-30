@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
+import { fillStripeCard } from './utils/stripe';
 
 /**
  * TEST: Anonymous Membership Purchase
@@ -19,7 +20,7 @@ test.describe('Anonymous Membership / Adhésion anonyme', () => {
     // Step 1: Navigate to memberships / Naviguer vers les adhésions
     await test.step('Navigate to memberships / Naviguer vers les adhésions', async () => {
       await page.goto('/memberships/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       console.log('✓ On memberships page / Sur la page des adhésions');
     });
 
@@ -69,9 +70,6 @@ test.describe('Anonymous Membership / Adhésion anonyme', () => {
       const submitButton = page.locator('#membership-submit');
       await expect(submitButton).toBeEnabled();
       
-      // Delay to ensure JS is ready
-      await page.waitForTimeout(1000);
-      
       await submitButton.click();
 
       // Wait for Stripe redirection
@@ -90,16 +88,7 @@ test.describe('Anonymous Membership / Adhésion anonyme', () => {
       }
       
       // Fill Stripe details
-      await page.locator('input#cardNumber').waitFor({ state: 'visible', timeout: 20000 });
-      await page.locator('input#cardNumber').fill('4242424242424242');
-      await page.locator('input#cardExpiry').fill('12/42');
-      await page.locator('input#cardCvc').fill('424');
-      
-      const billingName = page.locator('input#billingName');
-      if (await billingName.count() > 0) {
-          await billingName.fill('Douglas Adams');
-      }
-      
+      await fillStripeCard(page, userEmail);
       await page.locator('button[type="submit"]').click();
     });
 

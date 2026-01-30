@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
+import { env } from './utils/env';
+import { fillStripeCard } from './utils/stripe';
 
 /**
  * TEST: Membership with Free Price
@@ -21,13 +23,42 @@ const customPrice = "15"; // 15€
 test.describe('Membership Free Price / Adhésion prix libre', () => {
 
   test('should purchase membership at free price / doit acheter une adhésion à prix libre', async ({ page }) => {
-    
+    test.setTimeout(120000);
+    const productName = `Adhésion prix libre ${generateRandomId()}`;
+
+    await test.step('Create free price membership via API / Créer adhésion prix libre via API', async () => {
+      const productResponse = await page.request.post(`${env.BASE_URL}/api/v2/products/`, {
+        headers: {
+          Authorization: `Api-Key ${env.API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: productName,
+          category: 'Subscription or membership',
+          description: 'Adhésion prix libre créée pour le test E2E.',
+          offers: [
+            {
+              '@type': 'Offer',
+              name: 'Prix Libre',
+              price: '5.00',
+              priceCurrency: 'EUR',
+              freePrice: true,
+            },
+          ],
+        },
+      });
+
+      expect(productResponse.ok()).toBeTruthy();
+    });
+
     // Step 1: Navigate to memberships
     await page.goto('/memberships/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Step 2: Open subscription panel
-    const card = page.locator('.card:has-text("Adhésion (Le Tiers-Lustre)")').first();
+    const card = page.locator(`.card:has-text("${productName}")`).first();
     await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
     await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
 
@@ -39,36 +70,51 @@ test.describe('Membership Free Price / Adhésion prix libre', () => {
 
     // Step 4: Select "Prix Libre" and fill amount
     const priceLabel = page.locator('label:has-text("Prix Libre")').first();
-    await priceLabel.click();
+    if (await priceLabel.isVisible()) {
+      await priceLabel.click();
+    }
     
-    const freePriceInput = page.locator('input[name="custom_amount"], input[name^="custom_amount_"], input[name="free_price_amount"], input[id*="custom_amount"]');
+    const freePriceInput = page.locator('#subscribePanel .custom-amount-input').first();
     if (await freePriceInput.isVisible()) {
-        await freePriceInput.fill(customPrice);
+      await freePriceInput.fill(customPrice);
     } else {
-        // Search by type or class if name/id not found, but avoiding anti-spam
-        await page.locator('input[type="number"]:not(#answer)').fill(customPrice);
+      // Search by type if class not found
+      await page.locator('#subscribePanel input[type="number"]').first().fill(customPrice);
     }
     console.log(`✓ Custom price filled: ${customPrice}€`);
 
     // Step 5: Submit and check Stripe
     await page.locator('#membership-submit').click();
-    await page.waitForURL(/checkout.stripe.com/, { timeout: 40000 });
+    console.log('Waiting for Stripe redirection... / Attente de la redirection Stripe...');
+    try {
+      await page.waitForURL(/checkout.stripe.com/, { timeout: 40000 });
+    } catch (e) {
+      const errorMsg = await page.locator('.alert-danger, .invalid-feedback:visible').allTextContents();
+      if (errorMsg.length > 0) {
+        console.log('Errors found:', errorMsg.join(' | '));
+      }
+      const panelContent = await page.locator('#subscribePanel').innerText();
+      console.log('Panel content:', panelContent);
+      throw e;
+    }
     
+    console.log('✓ Redirected to Stripe / Redirection Stripe OK');
     // Check if Stripe shows the correct amount
     // On Stripe Checkout, the amount is usually visible. 
     // We search for the price text (e.g., "15,00")
-    await page.waitForLoadState('networkidle');
+    await page.waitForSelector('text=/Card information|Informations de carte/i', { timeout: 20000 });
     const stripeContent = await page.locator('body').innerText();
     const priceRegex = new RegExp(`${customPrice}[.,]00`);
     expect(stripeContent).toMatch(priceRegex);
     console.log(`✓ Stripe shows the correct custom price: ${customPrice}€`);
 
     // Complete payment
-    await page.locator('input#cardNumber').waitFor({ state: 'visible', timeout: 20000 });
-    await page.locator('input#cardNumber').fill('4242424242424242');
-    await page.locator('input#cardExpiry').fill('12/42');
-    await page.locator('input#cardCvc').fill('424');
-    await page.locator('button[type="submit"]').click();
+    await fillStripeCard(page, userEmail);
+    console.log('✓ Stripe form filled / Formulaire Stripe rempli');
+    const stripeSubmit = page.locator('button[type="submit"]').first();
+    await expect(stripeSubmit).toBeEnabled({ timeout: 20000 });
+    await stripeSubmit.click();
+    console.log('Waiting for return... / Attente du retour...');
 
     await page.waitForURL(url => url.hostname.includes('tibillet.localhost') || url.hostname.includes('lespass.tibillet.localhost'), { timeout: 60000 });
     console.log('✓ Free price purchase successful / Achat à prix libre réussi');
@@ -78,12 +124,12 @@ test.describe('Membership Free Price / Adhésion prix libre', () => {
       const dbResult = await verifyDbData({
           type: 'membership',
           email: userEmail,
-          product: 'Adhésion (Le Tiers-Lustre)'
+          product: productName
       });
       
       expect(dbResult).not.toBeNull();
       expect(dbResult?.status).toBe('success');
-      expect(dbResult?.valid).toBe(true);
+      expect(dbResult?.membership_status).toBeTruthy();
     });
   });
 

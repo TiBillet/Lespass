@@ -35,12 +35,18 @@ Vous devez être à la racine du projet (là où il y a le fichier `pyproject.to
 # Lancer tous les tests API direct depuis l'hote, pas besoin d'entrer dans le conteneur
 # Run all API tests
 poetry run pytest tests/pytest/
+
+# Lancer uniquement les tests d'integration API v2
+# Run only API v2 integration tests
+poetry run pytest -m integration tests/pytest/
 ```
 
 ### Ce qu'ils testent / What they check:
 
 - La création et la suppression d'événements.
 - La gestion des adresses postales.
+- La création et la lecture des reservations (schema.org/Reservation).
+- La création et la lecture des adhésions (schema.org/ProgramMembership).
 
 ### TEST A FAIRE (Terminés / Completed) :
 
@@ -76,10 +82,19 @@ Allez dans le dossier `tests/playwright` :
 # Run all tests (recommended)
 yarn test:chromium:console --workers=1
 
-# Voir ce qui se passe en temps réel (Mode "Headed")
-# See what happens in real time
-yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
+    # Voir ce qui se passe en temps réel (Mode "Headed")
+    # See what happens in real time
+    yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
 ```
+
+Note:
+- Some E2E tests create Products/Events via API v2 before running.
+- The API key is generated at test startup (Playwright `global-setup`) and injected in `process.env.API_KEY`.
+- API v2 can now set `membershipRequiredProduct` and recurring fields on offers.
+- API v2 now supports creating Reservations and Memberships (schema.org) for test setup.
+ 
+Note API (pytest):
+- Les tests utilisent `verify=False` pour HTTPS local. Les warnings TLS sont filtres via `pytest.ini`.
 
 ### Ce qu'ils testent / What they check:
 
@@ -107,6 +122,45 @@ Les tests sont numérotés dans l'ordre logique :
     listées dans son compte.
 17. `17-membership-free-price-multi.spec.ts` : Achat d'adhésion sur un produit à plusieurs prix libres (vérification de
     la non-collision des montants et de la réinitialisation des champs).
+18. `18-reservation-validations.spec.ts` : Vérifie les erreurs de formulaire sur réservation (email, prix libre, champs
+    dynamiques, code promo).
+19. `19-reservation-limits.spec.ts` : Vérifie stock épuisé, max par utilisateur, et tarif réservé aux adhésions.
+20. `20-membership-validations.spec.ts` : Vérifie les erreurs de formulaire d'adhésion (email, prix libre, champs
+    dynamiques).
+21. `21-membership-account-states.spec.ts` : Vérifie "déjà actif" et "expiré + renew" dans le compte.
+22. `22-membership-recurring-cancel.spec.ts` : Vérifie l'affichage du bouton d'annulation récurrente et le message
+    d'erreur.
+
+### TODO E2E a couvrir / TODO E2E to cover
+
+Ces points sont des comportements visibles dans les pages "reservation" et "adhesion".
+*These are behaviors visible in "reservation" and "membership" pages.*
+
+- Reservation: page "reservation_ok" (email valide vs email non valide).  
+  *Reservation: "reservation_ok" page (valid email vs unconfirmed email).*
+- Reservation: event complet (sold out).  
+  *Reservation: sold out event.*
+- Reservation: flow Formbricks pour event.  
+  *Reservation: Formbricks flow for event.*
+- Reservation: annulation d'une reservation et d'un ticket depuis "Mon compte".  
+  *Reservation: cancel a reservation and a ticket from "My account".*
+- Reservation: affichage et ouverture des tickets dans "Mon compte".  
+  *Reservation: display and open tickets in "My account".*
+
+- Adhesion: prix libre multiple -> affiche/masque champ montant, erreurs.  
+  *Membership: multiple free prices -> show/hide amount field, errors.*
+- Adhesion: prix hors stock et max_per_user atteint (message).  
+  *Membership: out of stock and max_per_user reached (message).*
+- Adhesion: flow Formbricks.  
+  *Membership: Formbricks flow.*
+- Adhesion: validation manuelle -> page "pending_manual_validation".  
+  *Membership: manual validation -> "pending_manual_validation" page.*
+- Adhesion: statut recurrent (actif / annule) dans "Mon compte" avec annulation reussie.  
+  *Membership: recurring status (active / canceled) with successful cancel.*
+- Adhesion: page "embed" et redirection vers tenant federation.  
+  *Membership: embed page and federated tenant redirect.*
+- Adhesion: retours Stripe (valid / pending / error).  
+  *Membership: Stripe returns (valid / pending / error).*
 
 ### Vérification en Base de Données (DB) / Database Verification
 
@@ -120,6 +174,17 @@ docker exec lespass_django poetry run python manage.py verify_test_data --type r
 
 Cette commande permet de confirmer que les données (réservations, adhésions, formulaires) sont correctement enregistrées
 dans la base de données PostgreSQL du conteneur.
+
+### Setup DB pour les tests / DB setup for tests
+
+Pour préparer des cas specifiques (stock, max par utilisateur, adhesion obligatoire), on utilise un script de setup :
+*To prepare specific cases (stock, max per user, membership required), we use a setup script:*
+
+```bash
+docker exec -w /DjangoFiles -e PYTHONPATH=/DjangoFiles lespass_django \
+  poetry run python tests/scripts/setup_test_data.py --action create_ticket \
+  --event "<EVENT>" --product "<PRODUCT>" --price "<PRICE>" --email "<EMAIL>" --qty 1
+```
 
 ### TEST A FAIRE (Terminés / Completed) :
 
@@ -174,7 +239,7 @@ Si vous devez ajouter un test, suivez ces conseils :
 | Type             | Succès / Passed | Échecs / Failed | Note            |
 |:-----------------|:----------------|:----------------|:----------------|
 | API (Pytest)     | ✅ 10            | 0               | Tout est vert ! |
-| E2E (Playwright) | ✅ 11            | 0               | Tout est vert ! |
+| E2E (Playwright) | ✅ 16            | 0               | Tout est vert ! |
 
 ---
 

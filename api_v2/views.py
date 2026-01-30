@@ -8,13 +8,19 @@ from django.core.cache import cache
 
 from ApiBillet.permissions import TenantAdminApiPermission
 from ApiBillet.views import get_permission_Api_ALL_Admin
-from BaseBillet.models import Event, PostalAddress, LigneArticle
+from BaseBillet.models import Event, PostalAddress, LigneArticle, Product, Reservation, Membership
 from .permissions import SemanticApiKeyPermission
 from .serializers import (
     EventSchemaSerializer,
     EventCreateSerializer,
     PostalAddressAsSchemaSerializer,
     PostalAddressCreateSerializer, SemanticProductFromSaleLineSerializer,
+    ProductCreateSerializer,
+    ProductSchemaSerializer,
+    ReservationCreateSerializer,
+    ReservationSchemaSerializer,
+    MembershipCreateSerializer,
+    MembershipSchemaSerializer,
 )
 
 
@@ -144,6 +150,82 @@ class PostalAddressViewSet(viewsets.ViewSet):
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+class ProductViewSet(viewsets.ViewSet):
+    """
+    Semantic Product API (list + retrieve + create).
+    API Produit semantique (liste + detail + creation).
+
+    Header: Authorization: Api-Key <key>
+    Response: JSON-LD compliant with https://schema.org/Product
+    """
+
+    permission_classes = [SemanticApiKeyPermission]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+
+    def list(self, request):
+        queryset = Product.objects.filter(archive=False, publish=True)
+        serializer = ProductSchemaSerializer(queryset, many=True)
+        return Response({"results": serializer.data})
+
+    def retrieve(self, request, uuid=None):
+        product = get_object_or_404(Product, uuid=uuid, archive=False)
+        serializer = ProductSchemaSerializer(product)
+        return Response(serializer.data)
+
+    def create(self, request):
+        input_serializer = ProductCreateSerializer(data=request.data, context={"request": request})
+        input_serializer.is_valid(raise_exception=True)
+        product = input_serializer.save()
+        output_serializer = ProductSchemaSerializer(product)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+
+
+class ReservationViewSet(viewsets.ViewSet):
+    """
+    Semantic Reservation API (create + retrieve).
+    API Reservation semantique (creation + detail).
+    """
+
+    permission_classes = [SemanticApiKeyPermission]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    lookup_field = "uuid"
+
+    def create(self, request):
+        input_serializer = ReservationCreateSerializer(data=request.data, context={"request": request})
+        input_serializer.is_valid(raise_exception=True)
+        reservation = input_serializer.save()
+        output_serializer = ReservationSchemaSerializer(reservation)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, uuid=None):
+        reservation = get_object_or_404(Reservation, uuid=uuid)
+        serializer = ReservationSchemaSerializer(reservation)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class MembershipViewSet(viewsets.ViewSet):
+    """
+    Semantic Membership API (create + retrieve).
+    API Adhesion semantique (creation + detail).
+    """
+
+    permission_classes = [SemanticApiKeyPermission]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    lookup_field = "uuid"
+
+    def create(self, request):
+        input_serializer = MembershipCreateSerializer(data=request.data, context={"request": request})
+        input_serializer.is_valid(raise_exception=True)
+        membership = input_serializer.save()
+        output_serializer = MembershipSchemaSerializer(membership)
+        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+    def retrieve(self, request, uuid=None):
+        membership = get_object_or_404(Membership, uuid=uuid)
+        serializer = MembershipSchemaSerializer(membership)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class SaleViewSet(viewsets.ViewSet):
@@ -298,4 +380,3 @@ class SaleViewSet(viewsets.ViewSet):
         # - clé API valide avec droit "sale"
         # - utilisateur admin du tenant
         return get_permission_Api_ALL_Admin(self)
-

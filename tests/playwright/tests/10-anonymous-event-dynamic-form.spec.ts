@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
+import { env } from './utils/env';
 
 /**
  * TEST: Anonymous Event Booking with Dynamic Form
@@ -10,16 +11,120 @@ function generateRandomId() {
   return Math.random().toString(36).substring(2, 10);
 }
 
+function slugifyName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 const userEmail = `jturbeaux+form${generateRandomId()}@pm.me`;
 
 test.describe('Anonymous Event with Form / Événement anonyme avec formulaire', () => {
 
   test('should book a paid event with dynamic form / doit réserver un événement payant avec formulaire dynamique', async ({ page }) => {
+
+    const eventName = `API v2 Form Event ${generateRandomId()}`;
+    const eventSlug = slugifyName(eventName);
+    const eventStart = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    await test.step('Create event and product via API / Créer l\'événement et le produit via API', async () => {
+      const eventResponse = await page.request.post(`${env.BASE_URL}/api/v2/events/`, {
+        headers: {
+          Authorization: `Api-Key ${env.API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'EducationEvent',
+          name: eventName,
+          startDate: eventStart,
+        },
+      });
+
+      expect(eventResponse.ok()).toBeTruthy();
+      const eventData = await eventResponse.json();
+      const eventUuid = eventData?.identifier;
+      expect(eventUuid).toBeTruthy();
+
+      const productResponse = await page.request.post(`${env.BASE_URL}/api/v2/products/`, {
+        headers: {
+          Authorization: `Api-Key ${env.API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        data: {
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: `Billets ${eventName}`,
+          category: 'Ticket booking',
+          description: 'Billets avec formulaire dynamique pour test E2E.',
+          isRelatedTo: {
+            '@type': 'Event',
+            identifier: eventUuid,
+          },
+          offers: [
+            {
+              '@type': 'Offer',
+              name: 'Tarif Soutien',
+              price: '10.00',
+              priceCurrency: 'EUR',
+            },
+          ],
+          additionalProperty: [
+            {
+              '@type': 'PropertyValue',
+              name: 'formFields',
+              value: [
+                { label: 'Nom', fieldType: 'shortText', required: true, order: 1 },
+                { label: 'Prénom', fieldType: 'shortText', required: true, order: 2 },
+                { label: 'Téléphone', fieldType: 'shortText', required: true, order: 3 },
+                {
+                  label: 'Type de lieu',
+                  fieldType: 'multiSelect',
+                  options: ['Salle', 'Extérieur'],
+                  order: 4,
+                },
+                {
+                  label: 'Centres d\'intérêt',
+                  fieldType: 'multiSelect',
+                  options: ['Musique', 'Culture'],
+                  order: 5,
+                },
+                {
+                  label: 'Thématique principale',
+                  fieldType: 'singleSelect',
+                  options: ['Découverte', 'Approfondissement'],
+                  order: 6,
+                },
+                {
+                  label: 'Préférence de contact',
+                  fieldType: 'radioSelect',
+                  options: ['Email', 'Téléphone'],
+                  order: 7,
+                },
+                {
+                  label: 'Je veux être bénévole',
+                  fieldType: 'boolean',
+                  order: 8,
+                },
+                {
+                  label: 'Votre motivation',
+                  fieldType: 'longText',
+                  order: 9,
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(productResponse.ok()).toBeTruthy();
+    });
     
     // Step 1: Navigate to the event page / Naviguer vers la page de l'événement
     await test.step('Navigate to event / Naviguer vers l\'événement', async () => {
       // Use the identified slug
-      await page.goto('/event/journee-apprenante-decouverte-tibillet-270709-0806-79462196/');
+      await page.goto(`/event/${eventSlug}/`);
       await page.waitForLoadState('networkidle');
       console.log('✓ On event page / Sur la page de l\'événement');
     });
@@ -161,7 +266,7 @@ test.describe('Anonymous Event with Form / Événement anonyme avec formulaire',
         const dbResult = await verifyDbData({
             type: 'reservation',
             email: userEmail,
-            event: 'Journée apprenante'
+            event: eventName
         });
         expect(dbResult).not.toBeNull();
         expect(dbResult?.status).toBe('success');

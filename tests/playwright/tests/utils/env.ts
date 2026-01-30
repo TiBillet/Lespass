@@ -64,4 +64,15 @@ export const env = {
   get DEBUG(): boolean {
     return process.env.DEBUG === '1';
   },
+
+  /**
+   * API key for API v2 calls
+   */
+  get API_KEY(): string {
+    const key = process.env.API_KEY;
+    if (!key) {
+      throw new Error('API_KEY environment variable is not set');
+    }
+    return key;
+  },
 };

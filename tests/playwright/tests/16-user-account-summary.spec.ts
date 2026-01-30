@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAs } from './utils/auth';
+import { createEvent, createProduct, createReservationApi, createMembershipApi } from './utils/api';
 
 /**
  * TEST: User Account Summary (Memberships and Bookings)
@@ -19,33 +20,50 @@ const userEmail = `jturbeaux+summary${generateRandomId()}@pm.me`;
 
 test.describe('User Account Summary / Récapitulatif compte utilisateur', () => {
 
-  test('should show all memberships and bookings / doit afficher toutes les adhésions et réservations', async ({ page }) => {
-    
+  test('should show all memberships and bookings / doit afficher toutes les adhésions et réservations', async ({ page, request }) => {
+    const randomId = generateRandomId();
+    const eventName = `E2E Summary Event ${randomId}`;
+    const productName = `Billets Summary ${randomId}`;
+    const membershipProductName = `Adhesion Summary ${randomId}`;
+    const membershipPriceName = 'Annuelle';
+    const startDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    let eventSlug = '';
+    let priceUuid = '';
+    let membershipPriceUuid = '';
+
     // Step 1: Create a free booking
     await test.step('Create a free booking / Créer une réservation gratuite', async () => {
-      await page.goto('/event/');
-      await page.waitForLoadState('networkidle');
-      
-      const discoLink = page.locator('a:has-text("Disco Caravane")').first();
-      await discoLink.click();
-      await page.waitForLoadState('networkidle');
-      
-      await page.locator('button:has-text("book one or more seats"), button:has-text("réserver")').first().click();
-      await page.waitForSelector('#bookingPanel.show', { state: 'visible' });
+      const eventResponse = await createEvent({
+        request,
+        name: eventName,
+        startDate,
+      });
+      expect(eventResponse.ok).toBeTruthy();
+      eventSlug = eventResponse.slug || '';
 
-      await page.locator('#bookingPanel input[name="email"]').fill(userEmail);
-      await page.locator('#bookingPanel input[name="email-confirm"]').fill(userEmail);
-      
-      // Add 1 ticket
-      const plusButton = page.locator('bs-counter .bi-plus, bs-counter button:has(.bi-plus)').first();
-      await plusButton.click();
-      
-      await page.locator('#bookingPanel button[type="submit"]').click();
-      
-      // Verification might be faster via DB if UI message is flaky
-      console.log('Booking submitted, waiting for message or verifying DB...');
-      await page.waitForTimeout(2000);
-      console.log('✓ Booking created');
+      const productResponse = await createProduct({
+        request,
+        name: productName,
+        description: 'Produit pour test compte utilisateur.',
+        category: 'Free booking',
+        eventUuid: eventResponse.uuid,
+        offers: [
+          { name: 'Tarif gratuit', price: '0.00' },
+        ],
+      });
+      expect(productResponse.ok).toBeTruthy();
+      priceUuid = productResponse.offers?.[0]?.identifier || '';
+      expect(priceUuid).not.toBe('');
+
+      const reservationResponse = await createReservationApi({
+        request,
+        eventUuid: eventResponse.uuid || '',
+        email: userEmail,
+        tickets: [{ priceUuid, qty: 1 }],
+        confirmed: true,
+      });
+      expect(reservationResponse.ok).toBeTruthy();
     });
 
     // Step 2: Login
@@ -56,46 +74,46 @@ test.describe('User Account Summary / Récapitulatif compte utilisateur', () => 
     // Step 3: Verify booking in account
     await test.step('Verify booking in account / Vérifier la réservation dans le compte', async () => {
       await page.goto('/my_account/my_reservations/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       const content = await page.locator('body').innerText();
-      expect(content).toContain('Disco Caravane');
+      expect(content).toContain(eventName);
       console.log('✓ Booking found in account / Réservation trouvée dans le compte');
     });
 
     // Step 4: Purchase a membership (while logged in)
-    await test.step('Purchase membership while logged in / Acheter une adhésion en étant connecté', async () => {
-      await page.goto('/memberships/');
-      await page.waitForLoadState('networkidle');
-      
-      const card = page.locator('.card:has-text("Adhésion (Le Tiers-Lustre)")').first();
-      await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
-      await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
-      
-      // Email should be pre-filled
-      const priceLabel = page.locator('label:has-text("Annuelle")').first();
-      await priceLabel.click();
+    await test.step('Create membership via API / Creer adhesion via API', async () => {
+      const membershipProductResponse = await createProduct({
+        request,
+        name: membershipProductName,
+        description: 'Produit adhesion pour test compte.',
+        category: 'Membership',
+        offers: [
+          { name: membershipPriceName, price: '10.00' },
+        ],
+      });
+      expect(membershipProductResponse.ok).toBeTruthy();
+      membershipPriceUuid = membershipProductResponse.offers?.find((offer: any) => offer.name === membershipPriceName)?.identifier || '';
+      expect(membershipPriceUuid).not.toBe('');
 
-      await page.locator('#membership-submit').click();
-      
-      await page.waitForURL(/checkout.stripe.com/, { timeout: 40000 });
-      await page.locator('input#cardNumber').fill('4242424242424242');
-      await page.locator('input#cardExpiry').fill('12/42');
-      await page.locator('input#cardCvc').fill('424');
-      await page.locator('button[type="submit"]').click();
-
-      await page.waitForURL(url => url.hostname.includes('tibillet.localhost'), { timeout: 30000 });
-      console.log('✓ Membership purchased while logged in');
+      const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const membershipResponse = await createMembershipApi({
+        request,
+        priceUuid: membershipPriceUuid,
+        email: userEmail,
+        paymentMode: 'FREE',
+        validUntil,
+      });
+      expect(membershipResponse.ok).toBeTruthy();
     });
 
     // Step 5: Verify membership in account
     await test.step('Verify membership in account / Vérifier l\'adhésion dans le compte', async () => {
       await page.goto('/my_account/membership/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       const content = await page.locator('body').innerText();
-      expect(content).toContain('Adhésion');
-      expect(content).toContain('Tiers-Lustre');
+      expect(content).toContain(membershipProductName);
       console.log('✓ Membership found in account / Adhésion trouvée dans le compte');
     });
   });

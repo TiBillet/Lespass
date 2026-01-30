@@ -2927,6 +2927,7 @@ class ExternalApiKey(models.Model):
 
     reservation = models.BooleanField(default=False, verbose_name=_("Bookings"))
     ticket = models.BooleanField(default=False, verbose_name=_("Tickets"))
+    membership = models.BooleanField(default=False, verbose_name=_("Memberships"))
 
     wallet = models.BooleanField(default=False, verbose_name=_("Wallets"))
     # Nouvelle route API pour les ventes (LigneArticle)
@@ -2941,6 +2942,7 @@ class ExternalApiKey(models.Model):
             "product": self.product,
             "price": self.product,
             "reservation": self.reservation,
+            "membership": self.membership,
             "ticket": self.ticket,
             "wallet": self.wallet,
             # Basename de la route des ventes

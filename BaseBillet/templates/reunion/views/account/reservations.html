@@ -78,7 +78,8 @@
                             hx-post="/my_account/{{ resa.uuid }}/cancel_reservation/"
                             hx-confirm="{% if resa.total_paid > 0 %}{{ resa.cancel_text }}{% else %}J'annule ma reservation{% endif %}"
                             hx-target="closest .reservation-card"
-                            hx-swap="delete">
+                            hx-swap="delete"
+                            data-testid="reservation-cancel-{{ resa.uuid }}">
                             J'annule ma reservation
                         </button>
                     </div>

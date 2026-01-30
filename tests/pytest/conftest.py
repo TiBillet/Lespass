@@ -2,6 +2,11 @@ import os
 import subprocess
 import pytest
 
+try:
+    import urllib3
+except Exception:  # pragma: no cover - optional dependency for warnings
+    urllib3 = None
+
 
 def pytest_addoption(parser):
     """Add CLI options to inject API key and base URL into the test session.
@@ -64,6 +69,10 @@ def _inject_cli_env(request):
         )
 
     os.environ["API_KEY"] = api_key
+
+    # Silence HTTPS warnings in test environment (self-signed certs on localhost)
+    if urllib3 is not None:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     base = request.config.getoption("--api-base-url")
     if base:

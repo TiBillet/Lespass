@@ -1,8 +1,9 @@
+import argparse
 import json
+import os
+
+import django
 from django.core.management.base import BaseCommand
-from django_tenants.utils import schema_context
-from BaseBillet.models import Reservation, Membership, Ticket, Product, LigneArticle
-from AuthBillet.models import TibilletUser
 
 class Command(BaseCommand):
     help = "Vérifie les données en base de données pour les tests E2E / Verify DB data for E2E tests"
@@ -15,13 +16,19 @@ class Command(BaseCommand):
         parser.add_argument('--tenant', type=str, default='lespass', help='Schéma du tenant / Tenant schema')
 
     def handle(self, *args, **options):
+        from django_tenants.utils import get_tenant_model, tenant_context
+        from BaseBillet.models import Membership, Ticket
+        from AuthBillet.models import TibilletUser
+
         email = options['email']
         check_type = options['type']
         event_name = options.get('event')
         product_name = options.get('product')
         tenant = options['tenant']
 
-        with schema_context(tenant):
+        tenant_model = get_tenant_model()
+        tenant_obj = tenant_model.objects.get(schema_name=tenant)
+        with tenant_context(tenant_obj):
             result = {"status": "error", "message": "Unknown error"}
 
             if check_type == 'reservation':
@@ -57,6 +64,7 @@ class Command(BaseCommand):
                     result = {
                         "status": "success",
                         "count": count,
+                        "uuid": str(m.uuid),
                         "product": m.price.product.name,
                         "valid": m.is_valid(),
                         "membership_status": m.status,
@@ -70,16 +78,14 @@ class Command(BaseCommand):
                 # Wallet/Tokens verification
                 try:
                     user = TibilletUser.objects.get(email=email)
-                    wallet = user.wallet
-                    
                     from fedow_connect.fedow_api import FedowAPI
                     api = FedowAPI()
-                    balance = api.wallet.get_total_fiducial_and_all_federated_token(wallet)
+                    balance = api.wallet.get_total_fiducial_and_all_federated_token(user)
                     
                     result = {
                         "status": "success",
                         "email": email,
-                        "has_wallet": bool(wallet),
+                        "has_wallet": bool(user.wallet),
                         "balance": balance
                     }
                 except TibilletUser.DoesNotExist:
@@ -88,3 +94,33 @@ class Command(BaseCommand):
                     result = {"status": "error", "message": str(e)}
 
             self.stdout.write(json.dumps(result, indent=2))
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="Verify DB data for E2E tests",
+    )
+    parser.add_argument('--email', type=str, required=True, help='User email')
+    parser.add_argument(
+        '--type',
+        dest='type',
+        type=str,
+        choices=['reservation', 'membership', 'tokens'],
+        required=True,
+        help='Type of verification',
+    )
+    parser.add_argument('--event', type=str, required=False, help='Event name')
+    parser.add_argument('--product', type=str, required=False, help='Product name')
+    parser.add_argument('--tenant', type=str, default='lespass', help='Tenant schema')
+    return parser.parse_args()
+
+
+def main():
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
+    django.setup()
+    args = _parse_args()
+    Command().handle(**vars(args))
+
+
+if __name__ == "__main__":
+    main()

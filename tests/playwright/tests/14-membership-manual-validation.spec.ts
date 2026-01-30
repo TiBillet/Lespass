@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
 import { loginAsAdmin } from './utils/auth';
+import { env } from './utils/env';
+import { fillStripeCard } from './utils/stripe';
 
 /**
  * TEST: Membership Manual Validation by Admin
@@ -16,11 +18,12 @@ const userEmail = `jturbeaux+val${generateRandomId()}@pm.me`;
 test.describe('Membership Manual Validation / Validation manuelle d\'adhésion', () => {
 
   test('should request and approve membership / doit demander et approuver l\'adhésion', async ({ page }) => {
+    let membershipUuid = '';
     
     // Step 1: User requests membership
     await test.step('User request / Demande de l\'utilisateur', async () => {
       await page.goto('/memberships/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       const card = page.locator('.card:has-text("Adhésion à validation sélective")').first();
       await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
@@ -48,10 +51,7 @@ test.describe('Membership Manual Validation / Validation manuelle d\'adhésion',
       ]).then(async (result) => {
           if (result === 'stripe') {
               console.log('Redirected to Stripe');
-              await page.locator('input#cardNumber').waitFor({ state: 'visible' });
-              await page.locator('input#cardNumber').fill('4242424242424242');
-              await page.locator('input#cardExpiry').fill('12/42');
-              await page.locator('input#cardCvc').fill('424');
+              await fillStripeCard(page, userEmail);
               await page.locator('button[type="submit"]').click();
               await page.waitForURL(url => url.hostname.includes('tibillet.localhost'), { timeout: 30000 });
           } else {
@@ -64,32 +64,33 @@ test.describe('Membership Manual Validation / Validation manuelle d\'adhésion',
 
     // Step 2: Admin validates in admin panel
     await test.step('Admin validation / Validation par l\'admin', async () => {
+      // Fetch the membership UUID from DB first
+      // Recuperer l'UUID de l'adhesion en base
+      const preValidation = await verifyDbData({
+          type: 'membership',
+          email: userEmail,
+          product: 'Adhésion à validation sélective'
+      });
+      expect(preValidation).not.toBeNull();
+      membershipUuid = preValidation?.uuid || '';
+      expect(membershipUuid).toBeTruthy();
+
       await loginAsAdmin(page);
-      
-      // Navigate to membership validation list or use search in admin
-      await page.goto('/admin/BaseBillet/membership/');
-      await page.waitForLoadState('networkidle');
-      
-      // Search for the user email
-      const searchInput = page.locator('#searchbar, input[name="q"]');
-      if (await searchInput.isVisible()) {
-          await searchInput.fill(userEmail);
-          await page.keyboard.press('Enter');
-      }
 
-      // Click on the membership
-      await page.waitForLoadState('networkidle');
-      const userLink = page.locator('#result_list a, .result-list a').filter({ hasText: userEmail }).first();
-      await userLink.click();
-      
-      // Check the "Valid" checkbox
-      const validCheckbox = page.locator('input[name="valid"], input[name="validated"], input[id*="id_valid"]');
-      if (await validCheckbox.count() > 0 && !(await validCheckbox.isChecked())) {
-          await validCheckbox.check();
-      }
+      // Use admin_accept endpoint (reliable for the AW -> AV transition)
+      // Utiliser l'endpoint admin_accept (fiable pour passer de AW a AV)
+      const cookies = await page.context().cookies();
+      const csrfToken = cookies.find(cookie => cookie.name === 'csrftoken')?.value;
+      expect(csrfToken).toBeTruthy();
+      const acceptResponse = await page.request.post(`/memberships/${membershipUuid}/admin_accept/`, {
+          headers: {
+              'HX-Request': 'true',
+              'X-CSRFToken': csrfToken as string,
+              'Referer': `${env.BASE_URL}/admin/`,
+          },
+      });
+      expect(acceptResponse.ok()).toBeTruthy();
 
-      // Save
-      await page.locator('button[type="submit"][name="_save"], input[type="submit"][name="_save"], button:has-text("Save")').first().click();
       console.log('✓ Membership approved by admin / Adhésion approuvée par l\'admin');
     });
 
@@ -103,8 +104,9 @@ test.describe('Membership Manual Validation / Validation manuelle d\'adhésion',
       
       expect(dbResult).not.toBeNull();
       expect(dbResult?.status).toBe('success');
-      // We check for the 'valid' boolean field which we just set in admin
-      expect(dbResult?.valid).toBe(true);
+      // Manual validation sets ADMIN_VALID (AV); payment comes later
+      // La validation manuelle met le statut ADMIN_VALID (AV), le paiement vient apres
+      expect(dbResult?.membership_status).toBe('AV');
 
       console.log('✓ DB verification successful: Membership is validated');
     });

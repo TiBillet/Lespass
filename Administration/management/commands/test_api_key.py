@@ -41,6 +41,7 @@ class Command(BaseCommand):
                 ticket=True,
                 wallet=True,
                 sale=True,
+                membership=True,
                 key=api_key,
             )
 

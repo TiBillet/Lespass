@@ -275,6 +275,222 @@ paths:
       responses:
         '204':
           description: Deleted
+  /api/v2/products/:
+    get:
+      operationId: listProducts
+      summary: List Products
+      tags: [Product]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+    post:
+      operationId: createProduct
+      summary: Create Product with offers and optional form fields
+      tags: [Product]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+            examples:
+              ticketCreate:
+                summary: Create ticket product with prices and form fields
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "Product"
+                  name: "Billets - Test Event"
+                  category: "Ticket booking"
+                  isRelatedTo:
+                    "@type": "Event"
+                    identifier: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                  offers:
+                    - "@type": "Offer"
+                      name: "Tarif Soutien"
+                      price: "10.00"
+                      priceCurrency: "EUR"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "formFields"
+                      value:
+                        - label: "Nom"
+                          fieldType: "shortText"
+                          required: true
+                        - label: "Votre motivation"
+                          fieldType: "longText"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  /api/v2/products/{uuid}/:
+    get:
+      operationId: retrieveProduct
+      summary: Retrieve Product by UUID
+      tags: [Product]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+  /api/v2/reservations/:
+    post:
+      operationId: createReservation
+      summary: Create Reservation (schema.org/Reservation)
+      description: |
+        FR: Creation d'une reservation (schema.org/Reservation) via API v2.
+        Cette route requiert une cle API avec permission `reservation`.
+
+        EN: Create a Reservation (schema.org/Reservation) using API v2.
+        This route requires an API key with `reservation` permission.
+      tags: [Reservation]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+            examples:
+              reservationCreate:
+                summary: Create a free reservation (confirmed)
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "Reservation"
+                  reservationFor:
+                    "@type": "Event"
+                    identifier: "c2a9f2a2-3e6a-4c1e-8d5c-3f8b2d6a9b01"
+                  underName:
+                    "@type": "Person"
+                    email: "test@example.org"
+                  reservedTicket:
+                    - "@type": "Ticket"
+                      identifier: "f66b3c1b-0b6f-4d8c-9e2c-4c9df2d2a111"
+                      ticketQuantity: 1
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "confirmed"
+                      value: true
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+  /api/v2/reservations/{uuid}/:
+    get:
+      operationId: retrieveReservation
+      summary: Retrieve Reservation by UUID
+      tags: [Reservation]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+  /api/v2/memberships/:
+    post:
+      operationId: createMembership
+      summary: Create Membership (schema.org/ProgramMembership)
+      description: |
+        FR: Creation d'une adhesion (schema.org/ProgramMembership) via API v2.
+        Cette route requiert une cle API avec permission `membership`.
+
+        EN: Create a ProgramMembership using API v2.
+        This route requires an API key with `membership` permission.
+      tags: [Membership]
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramMembershipCreate'
+            examples:
+              membershipCreate:
+                summary: Create a free membership (API)
+                value:
+                  "@context": "https://schema.org"
+                  "@type": "ProgramMembership"
+                  member:
+                    "@type": "Person"
+                    email: "test@example.org"
+                    givenName: "Ada"
+                    familyName: "Lovelace"
+                  membershipPlan:
+                    "@type": "Offer"
+                    identifier: "b2e7b7a0-8b0b-4a1f-8c9b-9d1f0a55e001"
+                  additionalProperty:
+                    - "@type": "PropertyValue"
+                      name: "paymentMode"
+                      value: "FREE"
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramMembership'
+  /api/v2/memberships/{uuid}/:
+    get:
+      operationId: retrieveMembership
+      summary: Retrieve Membership by UUID
+      tags: [Membership]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - in: path
+          name: uuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramMembership'
   /api/v2/sales/:
     get:
       operationId: listSales
@@ -616,6 +832,360 @@ components:
                     items:
                       type: string
                   - type: string
+    ProductCreate:
+      type: object
+      description: schema.org/Product input for creation (with offers and form fields)
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Product
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          description: Human-readable category or internal code
+          example: Ticket booking
+        isRelatedTo:
+          description: Optional link to an Event by UUID
+          oneOf:
+            - type: string
+              format: uuid
+            - type: object
+              properties:
+                '@type':
+                  type: string
+                  example: Event
+                identifier:
+                  type: string
+                  format: uuid
+        offers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductOfferInput'
+        additionalProperty:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: formFields
+              value:
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/ProductFormFieldInput'
+                  - $ref: '#/components/schemas/ProductFormFieldInput'
+          example:
+            - '@type': PropertyValue
+              name: maxPerUser
+              value: 1
+    ProductOfferInput:
+      type: object
+      description: Price definition used to create a Product offer
+      properties:
+        '@type':
+          type: string
+          example: Offer
+        name:
+          type: string
+          example: Tarif Soutien
+        price:
+          type: string
+          example: "10.00"
+        priceCurrency:
+          type: string
+          example: EUR
+        freePrice:
+          type: boolean
+          description: If true, amount is entered by the user on Stripe
+        order:
+          type: integer
+        stock:
+          type: integer
+        maxPerUser:
+          type: integer
+        inventoryLevel:
+          type: object
+          description: schema.org/Offer.inventoryLevel (optional)
+          properties:
+            '@type':
+              type: string
+              example: QuantitativeValue
+            value:
+              type: integer
+        eligibleQuantity:
+          type: object
+          description: schema.org/Offer.eligibleQuantity (optional)
+          properties:
+            '@type':
+              type: string
+              example: QuantitativeValue
+            maxValue:
+              type: integer
+        membershipRequiredProduct:
+          type: string
+          format: uuid
+          description: Product UUID that is required to access this price (adhesion obligatoire)
+        additionalProperty:
+          type: array
+          description: Extra settings as schema.org PropertyValue list
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: recurringPayment
+              value:
+                oneOf:
+                  - type: boolean
+                  - type: string
+          example:
+            - '@type': PropertyValue
+              name: recurringPayment
+              value: true
+            - '@type': PropertyValue
+              name: subscriptionType
+              value: M
+    ReservationCreate:
+      type: object
+      description: schema.org/Reservation input for creation
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Reservation
+        reservationFor:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Event
+            identifier:
+              type: string
+              format: uuid
+        underName:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Person
+            email:
+              type: string
+              format: email
+        reservedTicket:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: Ticket
+              identifier:
+                type: string
+                format: uuid
+                description: Price UUID
+              ticketQuantity:
+                type: integer
+              price:
+                type: string
+                description: Optional custom amount for free price
+        additionalProperty:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: confirmed
+              value:
+                oneOf:
+                  - type: boolean
+                  - type: string
+                  - type: object
+                  - type: array
+                    items:
+                      type: string
+    Reservation:
+      type: object
+      description: schema.org/Reservation output
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: Reservation
+        identifier:
+          type: string
+          format: uuid
+        reservationFor:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Event
+            identifier:
+              type: string
+              format: uuid
+            name:
+              type: string
+        underName:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Person
+            email:
+              type: string
+              format: email
+        reservationStatus:
+          type: string
+          example: https://schema.org/ReservationConfirmed
+        reservedTicket:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: Ticket
+              identifier:
+                type: string
+                format: uuid
+              ticketQuantity:
+                type: integer
+    ProgramMembershipCreate:
+      type: object
+      description: schema.org/ProgramMembership input for creation
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: ProgramMembership
+        member:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Person
+            email:
+              type: string
+              format: email
+            givenName:
+              type: string
+            familyName:
+              type: string
+        membershipPlan:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Offer
+            identifier:
+              type: string
+              format: uuid
+              description: Price UUID
+        validUntil:
+          type: string
+          format: date-time
+        additionalProperty:
+          type: array
+          items:
+            type: object
+            properties:
+              '@type':
+                type: string
+                example: PropertyValue
+              name:
+                type: string
+                example: paymentMode
+              value:
+                oneOf:
+                  - type: string
+                  - type: object
+                  - type: array
+                    items:
+                      type: string
+    ProgramMembership:
+      type: object
+      description: schema.org/ProgramMembership output
+      properties:
+        '@context':
+          type: string
+          example: https://schema.org
+        '@type':
+          type: string
+          example: ProgramMembership
+        identifier:
+          type: string
+          format: uuid
+        member:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Person
+            email:
+              type: string
+              format: email
+            givenName:
+              type: string
+            familyName:
+              type: string
+        membershipPlan:
+          type: object
+          properties:
+            '@type':
+              type: string
+              example: Offer
+            identifier:
+              type: string
+              format: uuid
+            name:
+              type: string
+        validUntil:
+          type: string
+          format: date-time
+    ProductFormFieldInput:
+      type: object
+      description: Dynamic field definition for product forms
+      properties:
+        label:
+          type: string
+          example: Nom
+        fieldType:
+          type: string
+          example: shortText
+        required:
+          type: boolean
+        options:
+          type: array
+          items:
+            type: string
+        order:
+          type: integer
+        helpText:
+          type: string
     Product:
       type: object
       description: schema.org/Product representation used for sales lines
@@ -656,6 +1226,10 @@ components:
         '@type':
           type: string
           example: Offer
+        identifier:
+          type: string
+          format: uuid
+          description: Price UUID when listing Product offers
         price:
           type: string
           description: Unit price including VAT, as string

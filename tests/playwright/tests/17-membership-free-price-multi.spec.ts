@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { env } from './utils/env';
 
 /**
  * TEST: Membership Multi Free Price
@@ -16,6 +17,41 @@ function generateRandomId() {
 }
 
 test.describe('Membership Multi Free Price / Adhésion multi prix libre', () => {
+  const productName = `Adhésion Multi-Prix Libre ${generateRandomId()}`;
+
+  test.beforeAll(async ({ request }) => {
+    const productResponse = await request.post(`${env.BASE_URL}/api/v2/products/`, {
+      headers: {
+        Authorization: `Api-Key ${env.API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      data: {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: productName,
+        category: 'Subscription or membership',
+        description: 'Adhésion multi prix libre créée pour tests E2E.',
+        offers: [
+          {
+            '@type': 'Offer',
+            name: 'Prix Libre 1',
+            price: '5.00',
+            priceCurrency: 'EUR',
+            freePrice: true,
+          },
+          {
+            '@type': 'Offer',
+            name: 'Prix Libre 2',
+            price: '8.00',
+            priceCurrency: 'EUR',
+            freePrice: true,
+          },
+        ],
+      },
+    });
+
+    expect(productResponse.ok()).toBeTruthy();
+  });
 
   test('Scenario 1: Simple free price / Prix libre simple', async ({ page }) => {
     const userEmail = `jturbeaux+multi1${generateRandomId()}@pm.me`;
@@ -24,8 +60,8 @@ test.describe('Membership Multi Free Price / Adhésion multi prix libre', () => 
     await page.goto('/memberships/');
     await page.waitForLoadState('domcontentloaded');
     
-    // Select the product created by setup_test_data.py
-    const card = page.locator('.card:has-text("Adhésion Multi-Prix Libre")').first();
+    // Select the product created by API
+    const card = page.locator(`.card:has-text("${productName}")`).first();
     await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
     await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
 
@@ -60,7 +96,7 @@ test.describe('Membership Multi Free Price / Adhésion multi prix libre', () => 
     await page.goto('/memberships/');
     await page.waitForLoadState('domcontentloaded');
     
-    const card = page.locator('.card:has-text("Adhésion Multi-Prix Libre")').first();
+    const card = page.locator(`.card:has-text("${productName}")`).first();
     await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
     await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
 
@@ -96,7 +132,7 @@ test.describe('Membership Multi Free Price / Adhésion multi prix libre', () => 
     await page.goto('/memberships/');
     await page.waitForLoadState('domcontentloaded');
     
-    const card = page.locator('.card:has-text("Adhésion Multi-Prix Libre")').first();
+    const card = page.locator(`.card:has-text("${productName}")`).first();
     await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
     await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
 
@@ -142,7 +178,7 @@ test.describe('Membership Multi Free Price / Adhésion multi prix libre', () => 
     await page.goto('/memberships/');
     await page.waitForLoadState('domcontentloaded');
     
-    const card = page.locator('.card:has-text("Adhésion Multi-Prix Libre")').first();
+    const card = page.locator(`.card:has-text("${productName}")`).first();
     await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
     await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
 

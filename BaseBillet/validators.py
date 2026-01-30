@@ -175,12 +175,15 @@ class LoginEmailValidator(serializers.Serializer):
 
 class TicketCreator():
 
-    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None):
+    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
+                 sale_origin: str = SaleOrigin.LESPASS):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
         self.promo_code = promo_code
         self.custom_amounts = custom_amounts or {}
+        # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
+        self.sale_origin = sale_origin
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -281,7 +284,7 @@ class TicketCreator():
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
                 promotional_code=self.promo_code,
-                sale_origin=SaleOrigin.LESPASS,
+                sale_origin=self.sale_origin,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -617,11 +620,14 @@ class ReservationValidator(serializers.Serializer):
         self.reservation = reservation
 
         # Fabrication de la reservation et des tickets en fonction du type de produit
+        # Source de vente selon le contexte / Sale origin from context
+        sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
         self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
             promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
-            custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {}
+            custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {},
+            sale_origin=sale_origin,
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
@@ -676,7 +682,7 @@ class MembershipValidator(serializers.Serializer):
         return super().to_internal_value(data)
 
     @staticmethod
-    def get_checkout_stripe(membership: Membership):
+    def get_checkout_stripe(membership: Membership, sale_origin: str = SaleOrigin.LESPASS):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -700,7 +706,7 @@ class MembershipValidator(serializers.Serializer):
             payment_method=PaymentMethod.STRIPE_NOFED,
             amount=amount,
             qty=1,
-            sale_origin=SaleOrigin.LESPASS,
+            sale_origin=sale_origin,
         )
 
         # Création de l'objet paiement stripe en base de donnée
@@ -814,8 +820,33 @@ class MembershipValidator(serializers.Serializer):
         # Initialisation du paiement Stripe si nécessaire
         # Initiate Stripe payment if required
         self.checkout_stripe_url = None
-        if membership.status == Membership.WAITING_PAYMENT:
-            self.checkout_stripe_url = self.get_checkout_stripe(membership)
+        payment_mode = (self.context.get('payment_mode') or 'STRIPE').upper()
+        sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
+
+        if membership.status == Membership.WAITING_PAYMENT and payment_mode == 'STRIPE':
+            self.checkout_stripe_url = self.get_checkout_stripe(membership, sale_origin=sale_origin)
+        elif membership.status == Membership.WAITING_PAYMENT and payment_mode == 'FREE':
+            # Paiement gratuit via API / Free payment via API
+            membership.status = Membership.ONCE
+            membership.payment_method = PaymentMethod.FREE
+            now = timezone.now()
+            if not membership.first_contribution:
+                membership.first_contribution = now
+            membership.last_contribution = now
+            membership.save(update_fields=["status", "payment_method", "first_contribution", "last_contribution"])
+
+            price_sold = get_or_create_price_sold(self.price, custom_amount=membership.contribution_value)
+            line = LigneArticle.objects.create(
+                pricesold=price_sold,
+                membership=membership,
+                payment_method=PaymentMethod.FREE,
+                amount=dec_to_int(membership.contribution_value),
+                qty=1,
+                sale_origin=sale_origin,
+                status=LigneArticle.VALID,
+                metadata={"source": "api"},
+            )
+            line.save(update_fields=["status"])
 
         return attrs
 

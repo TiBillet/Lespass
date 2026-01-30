@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
 import { loginAs } from './utils/auth';
+import { fillStripeCard } from './utils/stripe';
 
 /**
  * TEST: SSA Membership, Payment and Tokens Verification
@@ -26,7 +27,7 @@ test.describe('SSA Membership and Tokens / Adhésion SSA et Jetons', () => {
     // Step 1: Purchase SSA membership
     await test.step('Purchase SSA membership / Acheter l\'adhésion SSA', async () => {
       await page.goto('/memberships/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       
       const ssaCard = page.locator('.card:has-text("Caisse de sécurité sociale alimentaire")').first();
       await ssaCard.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
@@ -48,13 +49,13 @@ test.describe('SSA Membership and Tokens / Adhésion SSA et Jetons', () => {
       const priceLabel = page.locator('label:has-text("Souscription mensuelle")').first();
       await priceLabel.click();
       
-      // Fill amount for recurring price if needed
-      // Use evaluate to be sure to trigger input/change events
-      const recurringAmountInput = page.locator('input[name="recurring_amount"]');
-      if (await recurringAmountInput.isVisible()) {
-          await recurringAmountInput.fill('10');
-          await recurringAmountInput.evaluate(el => el.dispatchEvent(new Event('input', { bubbles: true })));
-          await recurringAmountInput.evaluate(el => el.dispatchEvent(new Event('change', { bubbles: true })));
+      // Fill amount for free/recurring price if needed
+      // Remplir le montant du tarif libre/récurrent si besoin
+      const amountInput = page.locator('#subscribePanel .custom-amount-input').first();
+      if (await amountInput.isVisible()) {
+          await amountInput.fill('10');
+          await amountInput.evaluate(el => el.dispatchEvent(new Event('input', { bubbles: true })));
+          await amountInput.evaluate(el => el.dispatchEvent(new Event('change', { bubbles: true })));
       }
 
       // Submit and Pay
@@ -72,12 +73,12 @@ test.describe('SSA Membership and Tokens / Adhésion SSA et Jetons', () => {
           
           if (page.url().includes('stripe.com')) {
               console.log('Redirected to Stripe');
-              await page.locator('input#cardNumber').waitFor({ state: 'visible', timeout: 20000 });
-              await page.locator('input#cardNumber').fill('4242424242424242');
-              await page.locator('input#cardExpiry').fill('12/42');
-              await page.locator('input#cardCvc').fill('424');
+              await fillStripeCard(page, userEmail);
               await page.locator('button[type="submit"]').click();
-              await page.waitForURL(url => url.hostname.includes('tibillet.localhost'), { timeout: 30000 });
+              await Promise.race([
+                  page.waitForURL(url => url.hostname.includes('tibillet.localhost'), { timeout: 60000 }),
+                  page.waitForSelector('text=/merci|confirmée|succès|success/i', { timeout: 60000 })
+              ]);
           } else {
               console.log('Confirmation message shown instead of Stripe redirection');
           }

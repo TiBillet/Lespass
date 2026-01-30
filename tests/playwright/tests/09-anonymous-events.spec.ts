@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { verifyDbData } from './utils/db';
+import { createEvent, createProduct } from './utils/api';
 
 /**
  * TEST: Anonymous Event Bookings
@@ -20,20 +21,47 @@ const userEmail = `jturbeaux+${generateRandomId()}@pm.me`;
 
 test.describe('Anonymous Event Bookings / Réservations d\'événements anonymes', () => {
 
-  test('should book a free event (Disco Caravane) / doit réserver un événement gratuit (Disco Caravane)', async ({ page }) => {
-    
+  test('should book a free event (Disco Caravane) / doit réserver un événement gratuit (Disco Caravane)', async ({ page, request }) => {
+    const randomId = generateRandomId();
+    const freeEventName = `Disco Caravane ${randomId}`;
+    const freeProductName = `Billets Disco ${randomId}`;
+    const freeStartDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    let freeEventSlug = '';
+
+    await test.step('Create free event and product / Creer event gratuit', async () => {
+      const eventResponse = await createEvent({
+        request,
+        name: freeEventName,
+        startDate: freeStartDate,
+      });
+      expect(eventResponse.ok).toBeTruthy();
+      freeEventSlug = eventResponse.slug || '';
+
+      const productResponse = await createProduct({
+        request,
+        name: freeProductName,
+        description: 'Produit gratuit pour test anonyme.',
+        category: 'Free booking',
+        eventUuid: eventResponse.uuid,
+        offers: [
+          { name: 'Tarif gratuit', price: '0.00' },
+        ],
+      });
+      expect(productResponse.ok).toBeTruthy();
+    });
+
     // Step 1: Navigate to the events page / Naviguer vers la page des événements
     await test.step('Navigate to events / Naviguer vers les événements', async () => {
       await page.goto('/event/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       console.log('✓ On events page / Sur la page des événements');
     });
 
     // Step 2: Select "Disco Caravane" / Sélectionner "Disco Caravane"
     await test.step('Select event / Sélectionner l\'événement', async () => {
-      const discoLink = page.locator('a:has-text("Disco Caravane")').first();
-      await discoLink.click();
-      await page.waitForLoadState('networkidle');
+      await page.goto(`/event/${freeEventSlug}/`);
+      await page.waitForLoadState('domcontentloaded');
       console.log('✓ Event selected / Événement sélectionné');
     });
 
@@ -94,23 +122,50 @@ test.describe('Anonymous Event Bookings / Réservations d\'événements anonymes
         const dbResult = await verifyDbData({
             type: 'reservation',
             email: userEmail,
-            event: 'Disco Caravane'
+            event: freeEventName,
         });
         expect(dbResult).not.toBeNull();
         expect(dbResult?.status).toBe('success');
     });
   });
 
-  test('should book a paid event (What the Funk) / doit réserver un événement payant (What the Funk)', async ({ page }) => {
+  test('should book a paid event (What the Funk) / doit réserver un événement payant (What the Funk)', async ({ page, request }) => {
+    const randomId = generateRandomId();
+    const paidEventName = `What the Funk ${randomId}`;
+    const paidProductName = `Billets Funk ${randomId}`;
+    const paidStartDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+
+    let paidEventSlug = '';
+
+    await test.step('Create paid event and product / Creer event payant', async () => {
+      const eventResponse = await createEvent({
+        request,
+        name: paidEventName,
+        startDate: paidStartDate,
+      });
+      expect(eventResponse.ok).toBeTruthy();
+      paidEventSlug = eventResponse.slug || '';
+
+      const productResponse = await createProduct({
+        request,
+        name: paidProductName,
+        description: 'Produit payant pour test anonyme.',
+        category: 'Ticket booking',
+        eventUuid: eventResponse.uuid,
+        offers: [
+          { name: 'Plein tarif', price: '12.00' },
+        ],
+      });
+      expect(productResponse.ok).toBeTruthy();
+    });
     
     // Step 1: Navigate to events / Naviguer vers les événements
     await page.goto('/event/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Step 2: Select "What the Funk" / Sélectionner "What the Funk"
-    const whatTheFunkLink = page.locator('a:has-text("What the Funk")').first();
-    await whatTheFunkLink.click();
-    await page.waitForLoadState('networkidle');
+    await page.goto(`/event/${paidEventSlug}/`);
+    await page.waitForLoadState('domcontentloaded');
 
     // Step 3: Start booking / Commencer la réservation
     const reserveButton = page.locator('button:has-text("book one or more seats"), button:has-text("réserver")').first();
@@ -213,7 +268,7 @@ test.describe('Anonymous Event Bookings / Réservations d\'événements anonymes
         const dbResult = await verifyDbData({
             type: 'reservation',
             email: userEmail,
-            event: 'What the Funk'
+            event: paidEventName,
         });
         expect(dbResult).not.toBeNull();
         expect(dbResult?.status).toBe('success');

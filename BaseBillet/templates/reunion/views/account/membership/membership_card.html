@@ -8,7 +8,7 @@
 {#    - message_success (optional): text to display as success alert#}
 {#    - message_error (optional): text to display as error alert#}
 
-<div id="membership-card-{{ membership.uuid }}" class="col{% if not membership.is_valid %} d-flex flex-column justify-content-between{% endif %}">
+<div id="membership-card-{{ membership.uuid }}" class="col{% if not membership.is_valid %} d-flex flex-column justify-content-between{% endif %}" data-testid="membership-card-{{ membership.uuid }}">
   <div class="card{% if membership.is_valid %} h-100{% else %} opacity-50 flex-grow-1{% endif %}">
     {% include 'reunion/partials/picture.html' with img=membership.product_img alt=membership.name class='card-img-top' ratio='16x9' %}
     <div class="card-body" id="{{ membership.price.product.uuid }}">
@@ -101,7 +101,7 @@
       >
         {% csrf_token %}
         <input type="hidden" name="uuid_membership" value="{{ membership.uuid }}" />
-        <button type="submit" class="btn btn-outline-danger">
+        <button type="submit" class="btn btn-outline-danger" data-testid="membership-cancel-auto-{{ membership.uuid }}">
           {% trans 'Cancel automatic debit' %}
         </button>
       </form>
