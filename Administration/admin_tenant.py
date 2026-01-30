@@ -4277,6 +4277,12 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
             "name_goal",
             "name_funding",
             "name_participations",
+            "contributor_covenant",
+            "pro_bono_name",
+        )}),
+        (_("Financement"), {"fields": (
+            "global_funding_button",
+            "global_funding_button_text",
         )}),
     )
 
@@ -4540,6 +4546,7 @@ class InitiativeAdmin(ModelAdmin):
         "vote",
         "budget_contributif",
         "adaptative_funding_goal_on_participation",
+
     )
 
     list_filter = ("created_at", "tags")

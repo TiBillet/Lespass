@@ -2310,11 +2310,12 @@ class Paiement_stripe(models.Model):
     reservation = models.ForeignKey(Reservation, on_delete=models.PROTECT, blank=True, null=True,
                                     related_name="paiements")
 
-    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, INVOICE, TRANSFERT = 'Q', 'B', 'F', 'I', 'T'
+    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT = 'Q', 'B', 'F', 'C', 'I', 'T'
     SOURCE_CHOICES = (
         (QRCODE, _('From QR code scan')),  # ancien api. A virer ?
         (API_BILLETTERIE, _('From API')),
         (FRONT_BILLETTERIE, _('From ticketing app')),
+        (FRONT_CROWDS, _('From Crowds app')),
         (INVOICE, _('From invoice')),
         (TRANSFERT, _('Stripe Transfert')),
 

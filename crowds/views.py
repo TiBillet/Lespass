@@ -1,6 +1,7 @@
+from decimal import Decimal
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.conf import settings
 import logging
 
@@ -12,25 +13,250 @@ from rest_framework.decorators import action
 from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
 from django.utils import timezone
+from django.utils.translation import gettext as _
 import json
 
 from BaseBillet.views import get_context
-from BaseBillet.models import Tag
+from BaseBillet.models import (
+    Tag,
+    Product,
+    Price,
+    LigneArticle,
+    Paiement_stripe,
+    PaymentMethod,
+    SaleOrigin,
+)
+from Customers.models import Client
 from fedow_public.models import AssetFedowPublic
-from .models import Initiative, Contribution, CrowdConfig, Vote, Participation, BudgetItem
+from .models import Initiative, Contribution, CrowdConfig, Vote, Participation, BudgetItem, GlobalFunding
 from .serializers import (
     BudgetItemProposalSerializer,
     ContributionCreateSerializer,
+    GlobalFundingCreateSerializer,
+    GlobalFundingAllocateSerializer,
     ParticipationCreateSerializer,
     ParticipationCompleteSerializer,
 )
+from ApiBillet.serializers import get_or_create_price_sold
+from PaiementStripe.views import CreationPaiementStripe
 
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+GLOBAL_FUNDING_ALLOC_NAME = "Répartition globale"
+
+def _user_funded_cache_key(tenant_id, user_id):
+    return f"crowds:user-funded:{tenant_id}:{user_id}"
+
+
+def get_user_funded_total(user):
+    """
+    FR: Total financé par l'utilisateur (global + contributions aux projets).
+    EN: Total funded by the user (global funding + project contributions).
+    """
+    if not user or not user.is_authenticated:
+        return 0
+    tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
+    cache_key = _user_funded_cache_key(tenant_id, user.pk)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    total_global = GlobalFunding.objects.filter(user=user).aggregate(total=Sum("amount_funded")).get("total") or 0
+    total_contrib = Contribution.objects.filter(contributor=user).aggregate(total=Sum("amount")).get("total") or 0
+    total = total_global + total_contrib
+    cache.set(cache_key, total, 60)
+    return total
+
+
+def clear_user_funded_cache(user):
+    tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
+    cache.delete(_user_funded_cache_key(tenant_id, user.pk))
+
+
+class GlobalFundingViewset(viewsets.ViewSet):
+    """
+    Pour le bouton financer le projet global
+    """
+    authentication_classes = [SessionAuthentication]
+    permission_classes = [permissions.AllowAny]
+
+    def _get_or_create_crowdfunding_price(self) -> Price:
+        """
+        FR: Crée (si besoin) un couple Product/Price "crowdfunding" pour un paiement libre.
+        EN: Create (if needed) a "crowdfunding" Product/Price pair for open amount payments.
+        """
+        product = Product.objects.filter(name__iexact="crowdfunding").order_by("pk").first()
+        if not product:
+            product = Product.objects.create(
+                name="crowdfunding",
+                categorie_article=Product.NONE,
+                publish=False,
+                nominative=False,
+            )
+        price = product.prices.order_by("pk").first()
+        if not price:
+            price = Price.objects.create(
+                product=product,
+                name="Libre",
+                prix=Decimal("0.00"),
+                free_price=True,
+                publish=False,
+            )
+        return price
+
+    def create(self, request):
+        """
+        FR: Lance un paiement Stripe pour un financement global.
+        EN: Starts a Stripe checkout for global funding.
+        """
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": _("Authentication required.")}, status=401)
+
+        serializer = GlobalFundingCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return JsonResponse({"error": serializer.errors}, status=400)
+
+        data = serializer.validated_data
+        amount_cents = data.get("amount") or 0
+        if amount_cents <= 0:
+            return JsonResponse({"error": _("Invalid amount.")}, status=400)
+
+        price = self._get_or_create_crowdfunding_price()
+        amount_decimal = (Decimal(amount_cents) / Decimal("100")).quantize(Decimal("0.01"))
+        price_sold = get_or_create_price_sold(price, custom_amount=amount_decimal)
+
+        ligne_article = LigneArticle.objects.create(
+            pricesold=price_sold,
+            qty=1,
+            amount=amount_cents,
+            payment_method=PaymentMethod.STRIPE_NOFED,
+            sale_origin=SaleOrigin.LESPASS,
+        )
+
+        global_funding = GlobalFunding.objects.create(
+            user=request.user,
+            amount_funded=amount_cents,
+            amount_to_be_included=amount_cents,
+            contributor_name=data.get("contributor_name") or "",
+            description=data.get("description") or "",
+            ligne_article=ligne_article,
+        )
+
+        metadata = {
+            "tenant": f"{connection.tenant.uuid}",
+            "global_funding_uuid": f"{global_funding.pk}",
+            "user": f"{request.user.email}",
+        }
+
+        paiement_builder = CreationPaiementStripe(
+            user=request.user,
+            liste_ligne_article=[ligne_article],
+            metadata=metadata,
+            reservation=None,
+            source=Paiement_stripe.FRONT_CROWDS,
+            success_url="stripe_return/",
+            cancel_url="stripe_return/",
+            absolute_domain=request.build_absolute_uri("/crowd/global-funding/"),
+        )
+
+        if not paiement_builder.is_valid():
+            return JsonResponse(
+                {"error": _("Erreur lors de la création du paiement.")},
+                status=400,
+            )
+
+        paiement_stripe = paiement_builder.paiement_stripe_db
+        paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+        clear_user_funded_cache(request.user)
+        return JsonResponse({"stripe_url": paiement_builder.checkout_session.url})
+
+    @action(detail=True, methods=["get"], url_path="stripe_return")
+    def stripe_return(self, request, pk=None):
+        """
+        FR: Retour de Stripe (succès ou annulation) vers la page liste des projets.
+        EN: Stripe return (success or cancel) back to the list page.
+        """
+        paiement_stripe = get_object_or_404(Paiement_stripe, uuid=pk)
+        paiement_stripe.update_checkout_status()
+        paiement_stripe.refresh_from_db()
+
+        #TODO traitement en cours False, ligne article valide, mail envoyé
+
+        return HttpResponseRedirect("/crowd/")
+
+    @action(detail=False, methods=["get"], url_path="funded-total")
+    def funded_total(self, request):
+        """
+        FR: Retourne un fragment HTMX "J'ai financé X".
+        EN: Returns the HTMX fragment "I funded X".
+        """
+        context = get_context(request)
+        context.update({
+            "user_funded_total": get_user_funded_total(request.user),
+            "global_funding_currency": context["config"].currency_code,
+        })
+        return render(request, "crowds/partial/global_funding_amount.html", context)
+
+    @action(detail=False, methods=["post"], url_path="allocate")
+    def allocate(self, request):
+        """
+        FR: Répartit un montant vers un projet et réduit la somme à répartir.
+        EN: Allocates an amount to a project and reduces the remaining pool.
+        """
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": _("Authentication required.")}, status=401)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return JsonResponse({"error": _("Permission denied.")}, status=403)
+
+        serializer = GlobalFundingAllocateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return JsonResponse({"error": serializer.errors}, status=400)
+
+        initiative = get_object_or_404(Initiative, pk=serializer.validated_data["initiative"])
+        amount = serializer.amount or 0
+        if amount <= 0:
+            return JsonResponse({"error": _("Invalid amount.")}, status=400)
+
+        recharge_total_eur = LigneArticle.objects.filter(
+            carte__isnull=False,
+            paiement_stripe__isnull=False,
+            paiement_stripe__status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
+            payment_method__in=[PaymentMethod.STRIPE_FED, PaymentMethod.STRIPE_NOFED, PaymentMethod.STRIPE_SEPA_NOFED],
+        ).aggregate(
+            total=Sum(
+                ExpressionWrapper(
+                    F("pricesold__prix") * F("qty"),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                )
+            )
+        ).get("total") or Decimal("0.00")
+        recharge_total = int(recharge_total_eur * 100)
+        global_funding_total = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
+        allocated_total = Contribution.objects.filter(
+            contributor_name=GLOBAL_FUNDING_ALLOC_NAME
+        ).aggregate(total=Sum("amount")).get("total") or 0
+        available_total = recharge_total + global_funding_total - allocated_total
+        if available_total < 0:
+            available_total = 0
+        if amount > available_total:
+            return JsonResponse({"error": _("Amount exceeds remaining pool.")}, status=400)
+
+        Contribution.objects.create(
+            initiative=initiative,
+            contributor=request.user,
+            contributor_name=GLOBAL_FUNDING_ALLOC_NAME,
+            description=_("Répartition du financement global"),
+            amount=amount,
+            payment_status=Contribution.PaymentStatus.PAID_ADMIN,
+            paid_at=timezone.now(),
+        )
+
+        return JsonResponse({"ok": True})
 
 
 # Create your views here.
@@ -132,6 +358,8 @@ class InitiativeViewSet(viewsets.ViewSet):
         page_obj = paginator.get_page(page_number)
 
         context = get_context(request)
+        name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
+        desc_help = Contribution._meta.get_field("description").help_text or _("Un petit mot pour décrire votre contribution")
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
             "page_obj": page_obj,
@@ -139,6 +367,8 @@ class InitiativeViewSet(viewsets.ViewSet):
             "active_tag": active_tag,
             "all_tags": Tag.objects.filter(initiatives__isnull=False).distinct(),
             "search_query": search_query,
+            "contrib_name_help": name_help,
+            "contrib_desc_help": desc_help,
         })
 
         # HTMX request: return only the list partial to avoid full reload
@@ -146,7 +376,222 @@ class InitiativeViewSet(viewsets.ViewSet):
         if request.headers.get("HX-Request") and hx_target == "crowds_list":
             return render(request, "crowds/partial/list.html", context)
 
+        context.update(self._summary_context())
+        context.update({
+            "user_funded_total": get_user_funded_total(request.user),
+            "global_funding_currency": context["config"].currency_code,
+        })
         return render(request, "crowds/views/list.html", context)
+
+    def _summary_context(self):
+        tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
+        cache_key = f"crowds:list:summary:{tenant_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        votes_total = Vote.objects.count()
+        projects_count = Initiative.objects.filter(archived=False).count()
+        funding_total = Contribution.objects.aggregate(total=Sum("amount")).get("total") or 0
+        participation_total = Participation.objects.aggregate(total=Sum("amount")).get("total") or 0
+        participation_total_valid = Participation.objects.exclude(
+            state__in=[Participation.State.REQUESTED, Participation.State.REJECTED]
+        ).aggregate(total=Sum("amount")).get("total") or 0
+        time_spent_total = Participation.objects.aggregate(
+            total=Sum("time_spent_minutes")
+        ).get("total") or 0
+        funding_goal_total = BudgetItem.objects.filter(
+            state=BudgetItem.State.APPROVED
+        ).aggregate(total=Sum("amount")).get("total") or 0
+        funding_percent = 0
+        if funding_goal_total:
+            funding_percent = int(round((funding_total / funding_goal_total) * 100))
+
+        user_ids = set(Vote.objects.values_list("user_id", flat=True))
+        user_ids.update(Participation.objects.values_list("participant_id", flat=True))
+        user_ids.update(
+            Contribution.objects.exclude(contributor_id__isnull=True).values_list("contributor_id", flat=True)
+        )
+        users = list(User.objects.filter(id__in=user_ids).select_related("client_source"))
+        participants_count = len(users)
+
+        def _initials(value):
+            if not value:
+                return "?"
+            parts = [p for p in value.replace("@", " ").split() if p]
+            if len(parts) >= 2:
+                return (parts[0][0] + parts[1][0]).upper()
+            return parts[0][:2].upper()
+
+        badges = []
+        for u in sorted(users, key=lambda x: (x.full_name_or_email() or "").lower()):
+            display = u.full_name_or_email()
+            badges.append({
+                "label": display,
+                "initials": _initials(display),
+            })
+        badges = badges[:10]
+
+        source_ids = {u.client_source_id for u in users if u.client_source_id}
+        source_logos = []
+        has_multiple_sources = len(source_ids) > 1 or (
+            tenant_id is not None and any(sid != tenant_id for sid in source_ids)
+        )
+        if has_multiple_sources:
+            from django_tenants.utils import schema_context
+            from BaseBillet.models import Configuration
+            for client in Client.objects.filter(pk__in=source_ids):
+                logo_url = None
+                logo_link = None
+                logo_cache_key = f"crowds:tenant:logo:{client.pk}"
+                cached_logo = cache.get(logo_cache_key)
+                if isinstance(cached_logo, dict):
+                    logo_url = cached_logo.get("logo_url")
+                    logo_link = cached_logo.get("logo_link")
+                else:
+                    try:
+                        with schema_context(client.schema_name):
+                            cfg = Configuration.get_solo()
+                            if cfg.logo:
+                                logo_url = cfg.logo.thumbnail.url
+                            logo_link = cfg.full_url()
+                    except Exception:
+                        logo_url = None
+                        logo_link = None
+                    cache.set(logo_cache_key, {"logo_url": logo_url, "logo_link": logo_link}, 3600)
+                source_logos.append({
+                    "name": client.name,
+                    "logo_url": logo_url,
+                    "url": logo_link,
+                })
+
+        active_participations_qs = Participation.objects.exclude(
+            state__in=[Participation.State.COMPLETED_USER, Participation.State.VALIDATED_ADMIN]
+        ).select_related("participant", "initiative").order_by("-created_at")[:9]
+        active_participations = []
+        for p in active_participations_qs:
+            active_participations.append({
+                "participant": p.participant.full_name_or_email(),
+                "initiative": p.initiative.name,
+                "description": p.description,
+                "amount": p.amount,
+                "currency": p.initiative.currency,
+            })
+        active_participations_count = Participation.objects.exclude(
+            state__in=[Participation.State.COMPLETED_USER, Participation.State.VALIDATED_ADMIN]
+        ).count()
+
+        recharge_total_eur = LigneArticle.objects.filter(
+            carte__isnull=False,
+            paiement_stripe__isnull=False,
+            paiement_stripe__status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
+            payment_method__in=[PaymentMethod.STRIPE_FED, PaymentMethod.STRIPE_NOFED, PaymentMethod.STRIPE_SEPA_NOFED],
+        ).aggregate(
+            total=Sum(
+                ExpressionWrapper(
+                    F("pricesold__prix") * F("qty"),
+                    output_field=DecimalField(max_digits=12, decimal_places=2),
+                )
+            )
+        ).get("total") or Decimal("0.00")
+        recharge_total = int(recharge_total_eur * 100)
+        global_funding_total = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
+        allocated_total = Contribution.objects.filter(
+            contributor_name=GLOBAL_FUNDING_ALLOC_NAME
+        ).aggregate(total=Sum("amount")).get("total") or 0
+        funding_to_allocate = recharge_total + global_funding_total - allocated_total
+        if funding_to_allocate < 0:
+            funding_to_allocate = 0
+
+        initiatives_rows = list(
+            Initiative.objects.filter(archived=False).values_list("uuid", "asset_id", "currency")
+        )
+        asset_ids = {aid for _, aid, _ in initiatives_rows if aid}
+        currency_codes = {cur for _, aid, cur in initiatives_rows if not aid and cur}
+        if asset_ids:
+            asset_codes = set(
+                AssetFedowPublic.objects.filter(pk__in=asset_ids).values_list("currency_code", flat=True)
+            )
+            currency_codes.update(asset_codes)
+        currency_codes = {c for c in currency_codes if c}
+        summary_multi_currency = len(currency_codes) > 1
+        currency = next(iter(currency_codes), "")
+
+        asset_code_by_id = {}
+        if asset_ids:
+            asset_code_by_id = {
+                asset_id: code for asset_id, code in AssetFedowPublic.objects.filter(
+                    pk__in=asset_ids
+                ).values_list("id", "currency_code")
+            }
+        initiative_currency = {}
+        for initiative_id, asset_id, cur in initiatives_rows:
+            if asset_id and asset_id in asset_code_by_id:
+                initiative_currency[initiative_id] = asset_code_by_id[asset_id]
+            else:
+                initiative_currency[initiative_id] = cur or ""
+
+        currency_blocks = {}
+        for cur in initiative_currency.values():
+            if not cur:
+                continue
+            currency_blocks.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
+            currency_blocks[cur]["projects"] += 1
+
+        for row in Contribution.objects.values("initiative_id").annotate(total=Sum("amount")):
+            cur = initiative_currency.get(row["initiative_id"], "")
+            if not cur:
+                continue
+            currency_blocks.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
+            currency_blocks[cur]["funding"] += row["total"] or 0
+
+        for row in Participation.objects.values("initiative_id").annotate(total=Sum("amount")):
+            cur = initiative_currency.get(row["initiative_id"], "")
+            if not cur:
+                continue
+            currency_blocks.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
+            currency_blocks[cur]["participation"] += row["total"] or 0
+
+        initiatives_for_alloc = []
+        for initiative in Initiative.objects.filter(archived=False).only("uuid", "name"):
+            initiatives_for_alloc.append({
+                "uuid": str(initiative.uuid),
+                "name": initiative.name,
+                "url": initiative.get_absolute_url(),
+            })
+
+        summary = {
+            "summary_votes_total": votes_total,
+            "summary_funding_total": funding_total,
+            "summary_participation_total": participation_total,
+            "summary_participation_total_valid": participation_total_valid,
+            "summary_currency": currency,
+            "summary_multi_currency": summary_multi_currency,
+            "summary_time_spent_minutes": time_spent_total,
+            "summary_projects_count": projects_count,
+            "summary_funding_goal_total": funding_goal_total,
+            "summary_funding_percent": funding_percent,
+            "summary_currency_blocks": [
+                {
+                    "code": code,
+                    "projects": data["projects"],
+                    "funding": data["funding"],
+                    "participation": data["participation"],
+                }
+                for code, data in sorted(currency_blocks.items(), key=lambda item: item[0])
+            ],
+            "summary_participants_count": participants_count,
+            "summary_participant_badges": badges,
+            "summary_participant_overflow": max(0, participants_count - len(badges)),
+            "summary_source_logos": source_logos,
+            "summary_has_multiple_sources": has_multiple_sources,
+            "summary_active_participations": active_participations,
+            "summary_active_participations_count": active_participations_count,
+            "summary_funding_to_allocate": funding_to_allocate,
+            "summary_initiatives_for_alloc": initiatives_for_alloc,
+        }
+        cache.set(cache_key, summary, 60)
+        return summary
 
     # ------------------------
     # Détail d’un projet

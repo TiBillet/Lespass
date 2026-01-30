@@ -4,10 +4,10 @@
 {% block title %}{{ crowd_config.title }}{% endblock %}
 {% block meta_description %}{{ crowd_config.description | striptags | default:"" }} - {{ config.organisation }}{% endblock %}
 {% block og_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
-{% block og_description %}{{ crowd_config.description | striptags | default:"" }}} - {{ config.organisation }}{% endblock %}
+{% block og_description %}{{ crowd_config.description | striptags | default:"" }} - {{ config.organisation }}{% endblock %}
 {% block og_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
 {% block twitter_title %}{{ crowd_config.title }} | {{ config.organisation }}{% endblock %}
-{% block twitter_description %}{{ crowd_config.description | striptags | default:"" }}} - {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{{ crowd_config.description | striptags | default:"" }} - {{ config.organisation }}{% endblock %}
 {% block twitter_image_alt %}{{ config.organisation }} - {{ crowd_config.title }}{% endblock %}
 
 {% block main %}
@@ -18,6 +18,8 @@
                 <h1 class="mb-2">{{ crowd_config.title }}</h1>
                 <h4 class="text-muted mb-2">{{ crowd_config.short_description | default:"" }}</h4>
                 <p class="text-muted mb-2">{{ crowd_config.description | safe | default:"" }}</p>
+
+                {% include "crowds/partial/summary.html" %}
 
                 {# Légende FALC pour comprendre les deux valeurs des cartes #}
 {#                <div class="small bg-body-tertiary rounded p-2" role="note" aria-label="{% translate 'Explication simple des montants affichés' %}">#}

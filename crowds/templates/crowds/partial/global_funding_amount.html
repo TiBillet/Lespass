@@ -1,0 +1,8 @@
+{% load i18n tibitags %}
+{% if user_funded_total and user_funded_total > 0 %}
+  <div class="small text-muted mb-2">
+    {% blocktrans with amount=user_funded_total|dround currency=global_funding_currency %}
+      J'ai financé {{ amount }} {{ currency }}
+    {% endblocktrans %}
+  </div>
+{% endif %}

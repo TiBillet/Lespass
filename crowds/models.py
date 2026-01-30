@@ -1,6 +1,7 @@
 from uuid import uuid4
 import logging
 from django.db import models
+from django.utils.functional import cached_property
 from django.core.cache import cache
 
 from solo.models import SingletonModel
@@ -46,6 +47,21 @@ class CrowdConfig(SingletonModel):
                                      help_text=_(
                                          "Si vide : Pro-bono. C'est le nom par defaut que vous pouvez changer ici. Ex : Bénévolat, Mécénat de compétence..."))
 
+    global_funding_button = models.BooleanField(default=False, verbose_name=_("Bouton de financement global sur la page d'accueil Crowds"))
+    global_funding_button_text = models.CharField(max_length=255, blank=True, null=True, verbose_name=_("Texte du bouton 'Je finance'"))
+
+
+class GlobalFunding(models.Model):
+    datetime = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    amount_funded = models.PositiveIntegerField(default=0, verbose_name="Montant du financement")
+    amount_to_be_included = models.PositiveIntegerField(default=0, verbose_name="Montant à répartir")
+    user = models.ForeignKey("AuthBillet.TibilletUser", on_delete=models.PROTECT, verbose_name=_("Utilisateur"))
+    contributor_name = models.CharField(max_length=255, verbose_name=_("Name"),
+                                        help_text=_("Nom affiché de l'origine de la contribution"), blank=True,
+                                        null=True)
+    description = models.TextField(blank=True, verbose_name=_(
+        "Decrivez ce que vous attendez de la contribution, ou envoyez un messages sympa à l'équipe !"))
+    ligne_article = models.ForeignKey("BaseBillet.LigneArticle", on_delete=models.PROTECT, verbose_name=_("Ligne comptable"))
 
 class Initiative(models.Model):
     """
@@ -169,15 +185,15 @@ class Initiative(models.Model):
 
     ### TOTAUX ###
     # --- Objectifs et lignes budgetaires ---
-    @property
+    @cached_property
     def total_funding_amount(self):
-        int_amount = self.budget_items.filter(state=BudgetItem.State.APPROVED).aggregate(models.Sum("amount"))[
-                             "amount__sum"] or 0
-        logger.info(f"total_funding_amount: {int_amount}")
+        int_amount = self.budget_items.filter(state=BudgetItem.State.APPROVED).aggregate(
+            models.Sum("amount")
+        )["amount__sum"] or 0
         return int_amount
 
     # --- Financement reçu ---
-    @property
+    @cached_property
     def total_funded_amount(self):
         int_amount = self.contributions.aggregate(models.Sum("amount"))["amount__sum"] or 0
         return int_amount
