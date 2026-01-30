@@ -2563,7 +2563,21 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             for price in product.prices.all():
                 get_or_create_price_sold(price=price, event=obj)
 
-        super().save_model(request, obj, form, change)
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError as err:
+            err_str = str(err)
+            if (
+                "BaseBillet_event_name_datetime" in err_str
+                or ("duplicate key value violates unique constraint" in err_str and "(name, datetime)" in err_str)
+            ):
+                messages.error(request, _("event existe déja"))
+                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
+            logger.error(err)
+            raise err
+        except Exception as err:
+            logger.error(err)
+            raise err
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
