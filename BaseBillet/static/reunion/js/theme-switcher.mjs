@@ -1,17 +1,13 @@
 /**
  * Application du thème à la page. Le thème en `localStorage` est priorisé si il
- * existe, sinon on se base sur le navigateur.
- * Si on est sur la page des préférences, on applique aussi le choix de thème à
- * la checkbox.
+ * existe, sinon on force 'light'.
  * 
  * @param {HTMLElement} doc le document cible du thème
  * @param {HTMLInputElement} toggle la checkbox de thème
- * @return {Function({matches: boolean})}
- *   callback qui prend les préférences navigateur en entrée, prévu pour une
- *   application partielle de la fonction à un event listener
+ * @param {HTMLElement} navToggle le bouton de la navbar
  */
-const refresh = (doc, toggle) => ({ matches }) => {
-    const theme = localStorage.getItem('theme') || (matches ? 'dark' : 'light')
+const refresh = (doc, toggle, navToggle) => {
+    const theme = localStorage.getItem('theme') || 'light'
     
     doc.dataset.bsTheme = theme
     
@@ -19,20 +15,17 @@ const refresh = (doc, toggle) => ({ matches }) => {
 }
 
 /**
- * Mise à jour du choix de thème en fonction de l'état de la checkbox.
- * Si `checked` alors thème sombre, sinon thème clair.
+ * Mise à jour du choix de thème.
  * 
  * @param {HTMLElement} doc le document cible du thème
- * @returns  {Function({target: HTMLInputElement})}
- *   callback qui prend l'évènement de clic sur la checkbox en entrée, prévu
- *   pour une application partielle de la fonction à un event listener
+ * @param {string} theme le thème à appliquer
+ * @param {HTMLInputElement} toggle la checkbox de thème
+ * @param {HTMLElement} navToggle le bouton de la navbar
  */
-const update = doc => ({ target: { checked }}) => {
-    const theme = checked ? 'dark' : 'light'
-
+const setTheme = (doc, theme, toggle, navToggle) => {
     doc.dataset.bsTheme = theme
-
     localStorage.setItem('theme', theme)
+    if (toggle) toggle.checked = theme === 'dark'
 }
 
 /**
@@ -40,15 +33,38 @@ const update = doc => ({ target: { checked }}) => {
  */
 export const init = () => {
     const doc = document.querySelector('html')
-    const toggle = document.querySelector('#darkThemeCheck')
-    const query = window.matchMedia('(prefers-color-scheme: dark)')
 
-    // application initiale du thème
-    refresh(doc, toggle)(query)
+    const attachEvents = () => {
+        const toggle = document.querySelector('#darkThemeCheck')
+        const navToggle = document.querySelector('#themeToggle')
 
-    // on écoute les changements de préférence navigateur 
-    query.addEventListener('change', refresh(doc, toggle))
+        // application initiale du thème
+        refresh(doc, toggle, navToggle)
 
-    // si page des préférences on écoute la checkbox
-    if (toggle) toggle.addEventListener('click', update(doc))
+        // si bouton navbar on écoute le clic
+        if (navToggle && !navToggle.dataset.themeBound) {
+            navToggle.addEventListener('click', () => {
+                const currentTheme = doc.dataset.bsTheme
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
+                setTheme(doc, newTheme, toggle, navToggle)
+            })
+            navToggle.dataset.themeBound = 'true'
+        }
+
+        // si page des préférences on écoute la checkbox
+        if (toggle && !toggle.dataset.themeBound) {
+            toggle.addEventListener('change', (e) => {
+                const newTheme = e.target.checked ? 'dark' : 'light'
+                setTheme(doc, newTheme, toggle, navToggle)
+            })
+            toggle.dataset.themeBound = 'true'
+        }
+    }
+
+    attachEvents()
+
+    // Ré-attacher les événements après chaque swap HTMX
+    document.body.addEventListener('htmx:afterSwap', () => {
+        attachEvents()
+    })
 }

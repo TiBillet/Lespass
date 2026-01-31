@@ -44,7 +44,8 @@
 
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
-    <link rel="modulepreload" href="{% static 'reunion/js/membership-form.js' %}">
+    <link rel="modulepreload" href="{% static 'reunion/js/language-switcher.mjs' %}">
+    <link rel="modulepreload" href="{% static 'reunion/js/membership-form.mjs' %}">
 
     <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet"
@@ -66,12 +67,14 @@
     {% endif %}
     <script type="module">
         import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
-        import * as MembershipForm from '{% static "reunion/js/membership-form.js" %}'
+        import * as LanguageSwitcher from '{% static "reunion/js/language-switcher.mjs" %}'
+        import * as MembershipForm from '{% static "reunion/js/membership-form.mjs" %}'
 
         // components
         import '{% static "reunion/js/bs-counter.mjs" %}'
 
         ThemeSwitcher.init()
+        LanguageSwitcher.init()
         MembershipForm.init()
     </script>
 
