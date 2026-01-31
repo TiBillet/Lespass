@@ -28,6 +28,15 @@
         </div>
     </div>
 
+    <div class="mb-3">
+        <label for="languageSelect" class="form-label">{% trans "Language" %}</label>
+        <select class="form-select" id="languageSelect">
+            <option value="fr" {% if LANGUAGE_CODE == 'fr' %}selected{% endif %}>{% trans "French" %}</option>
+            <option value="en" {% if LANGUAGE_CODE == 'en' %}selected{% endif %}>{% trans "English" %}</option>
+        </select>
+        <p class="text-muted small">{% trans "This setting is synced with the button in the navigation bar." %}</p>
+    </div>
+
     <h2 class="pt-3">{% trans "Data" %}</h2>
 
     <div class="mb-3">

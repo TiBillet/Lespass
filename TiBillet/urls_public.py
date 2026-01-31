@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
+    path('i18n/', include('django.conf.urls.i18n')),
     path('', include('MetaBillet.urls')),
 ]
 

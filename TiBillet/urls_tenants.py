@@ -26,6 +26,7 @@ urlpatterns = [
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
+    path('i18n/', include('django.conf.urls.i18n')),
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 

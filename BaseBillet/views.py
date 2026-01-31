@@ -121,7 +121,7 @@ def get_context(request):
         "base_template": base_template,
         "page": request.GET.get('page', 1),
         "tags": request.GET.getlist('tag'),
-        "url_name": request.resolver_match.url_name,
+        "url_name": request.resolver_match.url_name if request.resolver_match else None,
         "user": request.user,
         "profile": serialized_user,
         "config": config,

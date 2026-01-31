@@ -39,6 +39,16 @@
         </ul>
 
         <div class="navbar-nav d-flex mb-0">
+          <div class="nav-item dropdown">
+            <button class="nav-link border-0 bg-transparent dropdown-toggle" id="languageDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="{% trans 'Switch language' %}">
+              <i class="bi bi-translate"></i>
+              <span class="d-xl-none">{% trans "Language" %}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="languageDropdown">
+              <li><button class="dropdown-item language-select-btn" data-lang="fr">{% trans "French" %}</button></li>
+              <li><button class="dropdown-item language-select-btn" data-lang="en">{% trans "English" %}</button></li>
+            </ul>
+          </div>
           <div class="nav-item">
             <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}">
               <i class="bi bi-circle-half"></i>
