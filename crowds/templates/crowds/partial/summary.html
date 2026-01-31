@@ -1,295 +1,288 @@
 {% load i18n tibitags %}
 <section class="mt-3">
-  <style>
-    .crowds-summary-card {
-      background: var(--bs-body);
-      border: 1px solid var(--bs-border-color);
-      border-radius: 0.75rem;
-      padding: 0.75rem 1rem;
-      height: 100%;
-      overflow: hidden;
-    }
-    .crowds-avatar {
-      width: 2rem;
-      height: 2rem;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 600;
-      background: var(--bs-secondary-bg);
-      color: var(--bs-body-color);
-      border: 1px solid var(--bs-border-color);
-    }
-    .crowds-avatar-stack > * {
-      margin-left: -0.4rem;
-    }
-    .crowds-avatar-stack > *:first-child {
-      margin-left: 0;
-    }
-    .crowds-logo {
-      width: 2.25rem;
-      height: 2.25rem;
-      object-fit: contain;
-      border-radius: 50%;
-      border: 1px solid var(--bs-border-color);
-      background: var(--bs-body);
-      padding: 0.2rem;
-    }
-  </style>
-  <div class="rounded-4 bg-body-tertiary border p-3 p-md-4 shadow-sm" data-testid="crowds-summary">
-{#    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">#}
-{#      <h2 class="h5 mb-0">{% translate "Tout le monde réuni" %}</h2>#}
-{#      <span class="text-muted small">{% translate "Chiffres cumulés de tous les projets" %}</span>#}
-{#    </div>#}
+    <style>
+        .crowds-summary-card {
+            background: var(--bs-body);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            height: 100%;
+            overflow: hidden;
+        }
 
-    <div class="row g-3 align-items-stretch">
-      <div class="col-12 col-md-6 col-lg-3">
-        <div class="crowds-summary-card" data-testid="crowds-summary-card-contributors">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-people" aria-hidden="true"></i>
-            {% translate "Nombre de contributeur·ices" %}
-          </div>
-          <div class="fs-4 fw-semibold">{{ summary_participants_count }}</div>
-          <div class="text-muted small">{% translate "votes, financements, participations" %}</div>
-          <div class="crowds-avatar-stack d-flex align-items-center mt-2">
-            {% for badge in summary_participant_badges %}
-              <span class="crowds-avatar" title="{{ badge.label }}">{{ badge.initials }}</span>
-            {% endfor %}
-            {% if summary_participant_overflow %}
-              <span class="crowds-avatar" title="{% translate 'Autres personnes' %}">+{{ summary_participant_overflow }}</span>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      <div class="col-12 col-md-6 col-lg-3">
-        <div class="crowds-summary-card" data-testid="crowds-summary-card-projects">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
-            {% translate "Projets" %}
-          </div>
-          <div class="fs-4 fw-semibold">{{ summary_projects_count }}</div>
-          <div class="text-muted small">{% translate "idées à soutenir" %}</div>
-        </div>
-      </div>
-      <div class="col-12 col-md-6 col-lg-3">
-        <div class="crowds-summary-card" data-testid="crowds-summary-card-time">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-clock" aria-hidden="true"></i>
-            {% translate "Temps total" %}
-          </div>
-          <div class="fs-4 fw-semibold">{{ summary_time_spent_minutes|minutes_to_human }}</div>
-          <div class="text-muted small">{% translate "réalisations en cours et validées" %}</div>
-        </div>
-      </div>
-      {% if summary_has_multiple_sources %}
-      <div class="col-12 col-md-6 col-lg-3">
-        <div class="crowds-summary-card" data-testid="crowds-summary-card-sources">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-building" aria-hidden="true"></i>
-            {% translate "Lieux et organisations impliqués" %}
-          </div>
-          <div class="fs-4 fw-semibold">{{ summary_source_logos|length }}</div>
-          <div class="d-flex flex-wrap gap-2 mt-2">
-            {% for source in summary_source_logos %}
-              {% if source.logo_url %}
-                {% if source.url %}
-                  <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer" title="{{ source.name }}">
-                    <img class="crowds-logo" src="{{ source.logo_url }}" alt="{{ source.name }}">
-                  </a>
-                {% else %}
-                  <img class="crowds-logo" src="{{ source.logo_url }}" alt="{{ source.name }}">
-                {% endif %}
-              {% else %}
-                {% if source.url %}
-                  <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer" title="{{ source.name }}">
-                    <span class="crowds-avatar">{{ source.name|slice:":2"|upper }}</span>
-                  </a>
-                {% else %}
-                  <span class="crowds-avatar" title="{{ source.name }}">{{ source.name|slice:":2"|upper }}</span>
-                {% endif %}
-              {% endif %}
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-      {% endif %}
-    </div>
+        .crowds-avatar {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
+            border: 1px solid var(--bs-border-color);
+        }
 
-    <div class="row g-3 mt-1">
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="crowds-summary-card h-100 d-flex flex-column" data-testid="crowds-summary-card-rules">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-file-text" aria-hidden="true"></i>
-            {% translate "Règle de contribution" %}
-          </div>
-          <div class="mt-auto pt-3">
-            <a class="btn btn-primary w-100" data-testid="crowds-summary-rules-button"
-               href="{{ crowd_config.contributor_covenant|default:'https://movilab.org/wiki/Coremuneration_et_budget_contributif' }}"
-               target="_blank" rel="noopener noreferrer">
-              {% translate "Voir les règles" %}
-            </a>
-          </div>
-        </div>
-      </div>
+        .crowds-avatar-stack > * {
+            margin-left: -0.4rem;
+        }
 
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="crowds-summary-card" data-testid="crowds-summary-card-funding">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-piggy-bank" aria-hidden="true"></i>
-            {% translate "Financement" %}
-          </div>
-          <div class="mt-2 small">
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">{% translate "Objectif" %}</span>
-              <strong>{{ summary_funding_goal_total|dround }}</strong>
-            </div>
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">{% translate "Financement" %}</span>
-              <strong>{{ summary_funding_percent }}%</strong>
-            </div>
-            {% if user.is_staff or user.is_superuser %}
-            <button type="button" class="btn btn-outline-primary w-100 d-flex justify-content-between align-items-center"
-                    data-crowds-funding-alloc="true" data-testid="crowds-summary-funding-allocate-button">
-              <span>{% translate "Financement à répartir" %}</span>
-              <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
-            </button>
-            {% else %}
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">{% translate "Financement à répartir" %}</span>
-              <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
+        .crowds-avatar-stack > *:first-child {
+            margin-left: 0;
+        }
 
-      {% if crowd_config.global_funding_button %}
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="crowds-summary-card h-100 d-flex flex-column justify-content-between" data-testid="crowds-summary-card-global-funding">
-          <div class="text-muted small d-flex align-items-center gap-2">
-            <i class="bi bi-cash-coin" aria-hidden="true"></i>
-            {% translate "Je finance" %}
-          </div>
-          {% if user.is_authenticated %}
-            <div id="global-funding-total" data-testid="crowds-summary-global-funding-total"
-                 hx-get="{% url 'crowds-global-funding-funded-total' %}"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">
-              {% include "crowds/partial/global_funding_amount.html" %}
-            </div>
-          {% endif %}
-          <div class="mt-auto pt-3">
-            <button class="btn btn-outline-primary w-100" data-testid="crowds-summary-global-funding-button"
-                    onclick="return (window.crowdsOpenGlobalFunding ? crowdsOpenGlobalFunding() : false)">
-              {{ crowd_config.global_funding_button_text|default:"Je finance" }}
-            </button>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-    </div>
+        .crowds-logo {
+            width: 2.25rem;
+            height: 2.25rem;
+            object-fit: contain;
+            border-radius: 50%;
+            border: 1px solid var(--bs-border-color);
+            background: var(--bs-body);
+            padding: 0.2rem;
+        }
+    </style>
+    <div class="rounded-4 bg-body-tertiary border p-3 p-md-4 shadow-sm" data-testid="crowds-summary">
+        {#    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">#}
+        {#      <h2 class="h5 mb-0">{% translate "Tout le monde réuni" %}</h2>#}
+        {#      <span class="text-muted small">{% translate "Chiffres cumulés de tous les projets" %}</span>#}
+        {#    </div>#}
 
-    <div class="text-center mt-3">
-      <button class="btn btn-outline-secondary btn-sm" type="button" data-testid="crowds-summary-toggle-details"
-              data-bs-toggle="collapse" data-bs-target="#crowds-summary-details"
-              aria-expanded="false" aria-controls="crowds-summary-details"
-              data-label-open="{% translate 'Voir moins' %}"
-              data-label-closed="{% translate 'Voir plus de détail et les actions en cours' %}">
-        {% translate "Voir plus de détail et les actions en cours" %}
-      </button>
-    </div>
-
-    <div id="crowds-summary-details" class="collapse mt-3" data-testid="crowds-summary-details">
-      <div class="row g-3">
-        <div class="col-12">
-          <div class="row g-3">
-            {% for block in summary_currency_blocks %}
-              <div class="col-12 col-md-6 col-lg-4">
-                <div class="crowds-summary-card" data-testid="crowds-summary-currency-card">
-                  <div class="d-flex align-items-center justify-content-between gap-2">
+        <div class="row g-3 align-items-stretch row-cols-1 row-cols-md-2 row-cols-lg-4">
+            <div class="col">
+                <div class="crowds-summary-card" data-testid="crowds-summary-card-contributors">
                     <div class="text-muted small d-flex align-items-center gap-2">
-                      <i class="bi bi-currency-exchange" aria-hidden="true"></i>
-                      {% translate "Monnaie" %}
+                        <i class="bi bi-people" aria-hidden="true"></i>
+                        {% translate "Nombre de contributeur·ices" %}
                     </div>
-                    <span class="badge text-bg-light border">{{ block.code }}</span>
-                  </div>
-                  <div class="mt-2 small">
-                    <div class="d-flex justify-content-between">
-                      <span class="text-muted">{% translate "Projets" %}</span>
-                      <strong>{{ block.projects }}</strong>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                      <span class="text-muted">{% translate "Financé" %}</span>
-                      <strong>{{ block.funding|dround }}</strong>
-                    </div>
-                    <div class="d-flex justify-content-between">
-                      <span class="text-muted">{% translate "Demandé" %}</span>
-                      <strong>{{ block.participation|dround }}</strong>
-                    </div>
-                  </div>
+                    <div class="fs-4 fw-semibold">{{ summary_participants_count }}</div>
+{#                    <div class="text-muted small">{% translate "votes, financements, participations" %}</div>#}
                 </div>
-              </div>
-            {% endfor %}
-          </div>
+            </div>
+            <div class="col">
+                <div class="crowds-summary-card" data-testid="crowds-summary-card-time">
+                    <div class="text-muted small d-flex align-items-center gap-2">
+                        <i class="bi bi-clock" aria-hidden="true"></i>
+                        {% translate "Temps total" %}
+                    </div>
+                    <div class="fs-4 fw-semibold">{{ summary_time_spent_minutes|minutes_to_human }}</div>
+{#                    <div class="text-muted small">{% translate "réalisations en cours et validées" %}</div>#}
+                </div>
+            </div>
+
+            {% if summary_has_multiple_sources %}
+                <div class="col">
+                    <div class="crowds-summary-card" data-testid="crowds-summary-card-sources">
+                        <div class="text-muted small d-flex align-items-center gap-2">
+                            <i class="bi bi-building" aria-hidden="true"></i>
+                            {% translate "Lieux et organisations impliqués" %}
+                        </div>
+                        <div class="fs-4 fw-semibold">{{ summary_source_logos|length }}</div>
+{#                        <div class="d-flex flex-wrap gap-2 mt-2">#}
+{#                            {% for source in summary_source_logos %}#}
+{#                                {% if source.logo_url %}#}
+{#                                    {% if source.url %}#}
+{#                                        <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer"#}
+{#                                           title="{{ source.name }}">#}
+{#                                            <img class="crowds-logo" src="{{ source.logo_url }}"#}
+{#                                                 alt="{{ source.name }}">#}
+{#                                        </a>#}
+{#                                    {% else %}#}
+{#                                        <img class="crowds-logo" src="{{ source.logo_url }}" alt="{{ source.name }}">#}
+{#                                    {% endif %}#}
+{#                                {% else %}#}
+{#                                    {% if source.url %}#}
+{#                                        <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer"#}
+{#                                           title="{{ source.name }}">#}
+{#                                            <span class="crowds-avatar">{{ source.name|slice:":2"|upper }}</span>#}
+{#                                        </a>#}
+{#                                    {% else %}#}
+{#                                        <span class="crowds-avatar"#}
+{#                                              title="{{ source.name }}">{{ source.name|slice:":2"|upper }}</span>#}
+{#                                    {% endif %}#}
+{#                                {% endif %}#}
+{#                            {% endfor %}#}
+{#                        </div>#}
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="col">
+                <div class="crowds-summary-card h-100 p-0 overflow-hidden" data-testid="crowds-summary-card-rules">
+                    <a class="btn btn-primary w-100 h-100 rounded-3 d-flex flex-column justify-content-center align-items-center gap-2 py-3"
+                       data-testid="crowds-summary-rules-button"
+                       href="{{ crowd_config.contributor_covenant|default:'https://movilab.org/wiki/Coremuneration_et_budget_contributif' }}"
+                       target="_blank" rel="noopener noreferrer">
+                        <i class="bi bi-file-text fs-3" aria-hidden="true"></i>
+                        <span class="fw-semibold">{% translate "Voir les règles de contribution" %}</span>
+                    </a>
+                </div>
+            </div>
+
         </div>
 
-        <div class="col-12">
-          <div class="crowds-summary-card" data-testid="crowds-summary-actions-card">
-            <div class="d-flex align-items-center gap-2 text-muted small mb-2">
-              <i class="bi bi-lightning-charge" aria-hidden="true"></i>
-              {% translate "Actions en cours" %}
-            </div>
-            {% if summary_active_participations %}
-              <div class="row g-3{% if summary_active_participations_count > 9 %} overflow-auto{% endif %}"
-                   data-testid="crowds-summary-actions-grid"
-                   {% if summary_active_participations_count > 9 %}style="max-height: 18rem;"{% endif %}>
-                {% for item in summary_active_participations %}
-                  <div class="col-12 col-md-6 col-lg-4">
-                    <div class="border rounded-3 p-2 bg-body h-100" data-testid="crowds-summary-action-item">
-                      <div class="fw-semibold small">{{ item.participant }}</div>
-                      <div class="text-muted small">{{ item.initiative }}</div>
-                      <div class="small">
-                        {{ item.description|striptags|truncatewords:18 }}
-                        {% if item.amount is None %}
-                          · {{ crowd_config.pro_bono_name|default:"Pro-bono" }}
-                        {% else %}
-                          · {{ item.amount|dround }} {{ item.currency }}
-                        {% endif %}
-                      </div>
+    <div class="row g-3 mt-1 justify-content-center">
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="crowds-summary-card" data-testid="crowds-summary-card-funding">
+                    <div class="text-muted small d-flex align-items-center gap-2">
+                        <i class="bi bi-piggy-bank" aria-hidden="true"></i>
+                        {% translate "Financement" %}
                     </div>
-                  </div>
-                {% endfor %}
-              </div>
-            {% else %}
-              <p class="text-muted small mb-0">{% translate "Aucune action en cours pour le moment." %}</p>
+                    <div class="mt-2 small">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">{% translate "Objectif" %}</span>
+                            <strong>{{ summary_funding_goal_total|dround }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">{% translate "Financement" %}</span>
+                            <strong>{{ summary_funding_percent }}%</strong>
+                        </div>
+                        {% if user.is_staff or user.is_superuser %}
+                            <button type="button"
+                                    class="btn btn-outline-primary w-100 d-flex justify-content-between align-items-center"
+                                    data-crowds-funding-alloc="true"
+                                    data-testid="crowds-summary-funding-allocate-button">
+                                <span>{% translate "Financement à répartir" %}</span>
+                                <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
+                            </button>
+                        {% else %}
+                            <div class="d-flex justify-content-between">
+                                <span class="text-muted">{% translate "Financement à répartir" %}</span>
+                                <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {% if crowd_config.global_funding_button %}
+                <div class="col-12 col-md-6 col-lg-4">
+                    <div class="crowds-summary-card h-100 d-flex flex-column justify-content-between"
+                         data-testid="crowds-summary-card-global-funding">
+                        <div class="text-muted small d-flex align-items-center gap-2">
+                            <i class="bi bi-cash-coin" aria-hidden="true"></i>
+                            {% translate "Je finance" %}
+                        </div>
+                        {% if user.is_authenticated %}
+                            <div id="global-funding-total" data-testid="crowds-summary-global-funding-total"
+                                 hx-get="{% url 'crowds-global-funding-funded-total' %}"
+                                 hx-trigger="load"
+                                 hx-swap="innerHTML">
+                                {% include "crowds/partial/global_funding_amount.html" %}
+                            </div>
+                        {% endif %}
+                        <div class="mt-auto pt-3">
+                            <button class="btn btn-outline-primary w-100"
+                                    data-testid="crowds-summary-global-funding-button"
+                                    onclick="return (window.crowdsOpenGlobalFunding ? crowdsOpenGlobalFunding() : false)">
+                                {{ crowd_config.global_funding_button_text|default:"Je finance" }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             {% endif %}
-          </div>
         </div>
-      </div>
-    </div>
-    {% translate "Impossible d'envoyer" as t_global_funding_send_fail %}
-    {% translate "Une erreur est survenue." as t_global_funding_error %}
-    {% translate "Répartir le financement" as t_funding_alloc_title %}
-    {% translate "Choisissez un projet" as t_funding_alloc_subtitle %}
-    {% translate "Montant" as t_funding_alloc_amount %}
-    {% translate "Veuillez indiquer un montant valide." as t_funding_alloc_amount_invalid %}
-    {% translate "Montant trop élevé." as t_funding_alloc_amount_too_high %}
-    {% translate "Répartition enregistrée." as t_funding_alloc_saved %}
-    {% translate "Aucun projet disponible." as t_funding_alloc_empty %}
-    {% if user.is_staff or user.is_superuser %}
-      {{ summary_initiatives_for_alloc|json_script:"crowds-alloc-initiatives" }}
-    {% endif %}
-    <script>
-      function crowdsOpenGlobalFunding() {
-        try {
-          if (!(window.Swal && typeof window.Swal.fire === 'function')) {
-            return false;
-          }
-          Swal.fire({
-            title: '{% translate "Contribuer financièrement" %}',
-            html: `
+
+        <div class="text-center mt-3">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-testid="crowds-summary-toggle-details"
+                    data-bs-toggle="collapse" data-bs-target="#crowds-summary-details"
+                    aria-expanded="false" aria-controls="crowds-summary-details"
+                    data-label-open="{% translate 'Voir moins' %}"
+                    data-label-closed="{% translate 'Voir plus de détail et les actions en cours' %}">
+                {% translate "Voir plus de détail et les actions en cours" %}
+            </button>
+        </div>
+
+        <div id="crowds-summary-details" class="collapse mt-3" data-testid="crowds-summary-details">
+            <div class="row g-3">
+                <div class="col-12">
+                    <div class="row g-3">
+                        {% for block in summary_currency_blocks %}
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="crowds-summary-card" data-testid="crowds-summary-currency-card">
+                                    <div class="d-flex align-items-center justify-content-between gap-2">
+                                        <div class="text-muted small d-flex align-items-center gap-2">
+                                            <i class="bi bi-currency-exchange" aria-hidden="true"></i>
+                                            {% translate "Monnaie" %}
+                                        </div>
+                                        <span class="badge text-bg-light border">{{ block.code }}</span>
+                                    </div>
+                                    <div class="mt-2 small">
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">{% translate "Projets" %}</span>
+                                            <strong>{{ block.projects }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">{% translate "Financé" %}</span>
+                                            <strong>{{ block.funding|dround }}</strong>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <span class="text-muted">{% translate "Demandé" %}</span>
+                                            <strong>{{ block.participation|dround }}</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="crowds-summary-card" data-testid="crowds-summary-actions-card">
+                        <div class="d-flex align-items-center gap-2 text-muted small mb-2">
+                            <i class="bi bi-lightning-charge" aria-hidden="true"></i>
+                            {% translate "Actions en cours" %}
+                        </div>
+                        {% if summary_active_participations %}
+                            <div class="row g-3{% if summary_active_participations_count > 9 %} overflow-auto{% endif %}"
+                                 data-testid="crowds-summary-actions-grid"
+                                 {% if summary_active_participations_count > 9 %}style="max-height: 18rem;"{% endif %}>
+                                {% for item in summary_active_participations %}
+                                    <div class="col-12 col-md-6 col-lg-4">
+                                        <div class="border rounded-3 p-2 bg-body h-100"
+                                             data-testid="crowds-summary-action-item">
+                                            <div class="fw-semibold small">{{ item.participant }}</div>
+                                            <div class="text-muted small">{{ item.initiative }}</div>
+                                            <div class="small">
+                                                {{ item.description|striptags|truncatewords:18 }}
+                                                {% if item.amount is None %}
+                                                    · {{ crowd_config.pro_bono_name|default:"Pro-bono" }}
+                                                {% else %}
+                                                    · {{ item.amount|dround }} {{ item.currency }}
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="text-muted small mb-0">{% translate "Aucune action en cours pour le moment." %}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% translate "Impossible d'envoyer" as t_global_funding_send_fail %}
+        {% translate "Une erreur est survenue." as t_global_funding_error %}
+        {% translate "Répartir le financement" as t_funding_alloc_title %}
+        {% translate "Choisissez un projet" as t_funding_alloc_subtitle %}
+        {% translate "Montant" as t_funding_alloc_amount %}
+        {% translate "Veuillez indiquer un montant valide." as t_funding_alloc_amount_invalid %}
+        {% translate "Montant trop élevé." as t_funding_alloc_amount_too_high %}
+        {% translate "Répartition enregistrée." as t_funding_alloc_saved %}
+        {% translate "Aucun projet disponible." as t_funding_alloc_empty %}
+        {% if user.is_staff or user.is_superuser %}
+            {{ summary_initiatives_for_alloc|json_script:"crowds-alloc-initiatives" }}
+        {% endif %}
+        <script>
+            function crowdsOpenGlobalFunding() {
+                try {
+                    if (!(window.Swal && typeof window.Swal.fire === 'function')) {
+                        return false;
+                    }
+                    Swal.fire({
+                        title: '{% translate "Contribuer financièrement" %}',
+                        html: `
               <div class="mb-3 text-start">
                 <label for="contrib-name" class="form-label">{% translate "Nom du contributeur ou de l'organisation" %}</label>
                 <input id="contrib-name" type="text" class="form-control" placeholder="{% translate "Votre nom" %}">
@@ -305,160 +298,160 @@
                 <input id="contrib-amt" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
               </div>
             `,
-            focusConfirm: false,
-            showCancelButton: true,
-            cancelButtonText: '{% translate "Annuler" %}',
-            confirmButtonText: '{% translate "Valider la contribution" %}',
-            preConfirm: () => {
-              const name = document.getElementById('contrib-name').value.trim();
-              const desc = document.getElementById('contrib-desc').value.trim();
-              const amtStr = document.getElementById('contrib-amt').value.trim();
-              const amtNorm = amtStr.replace(',', '.');
-              const amtValid = /^\d+(\.\d{1,2})?$/.test(amtNorm);
-              const amt = Math.round(parseFloat(amtNorm || '0') * 100);
-              if (!name) {
-                Swal.showValidationMessage('{% translate "Veuillez indiquer votre nom." %}');
-                return false;
-              }
-              if (!amtValid) {
-                Swal.showValidationMessage('{% translate "Veuillez saisir un montant avec au maximum deux décimales." %}');
-                return false;
-              }
-              if (!amt || amt <= 0) {
-                Swal.showValidationMessage('{% translate "Veuillez indiquer un montant valide (> 0)." %}');
-                return false;
-              }
-              htmx.ajax('POST', '{% url "crowds-global-funding-list" %}', {
-                swap: 'none',
-                values: {
-                  contributor_name: name,
-                  description: desc,
-                  amount: amt
+                        focusConfirm: false,
+                        showCancelButton: true,
+                        cancelButtonText: '{% translate "Annuler" %}',
+                        confirmButtonText: '{% translate "Valider la contribution" %}',
+                        preConfirm: () => {
+                            const name = document.getElementById('contrib-name').value.trim();
+                            const desc = document.getElementById('contrib-desc').value.trim();
+                            const amtStr = document.getElementById('contrib-amt').value.trim();
+                            const amtNorm = amtStr.replace(',', '.');
+                            const amtValid = /^\d+(\.\d{1,2})?$/.test(amtNorm);
+                            const amt = Math.round(parseFloat(amtNorm || '0') * 100);
+                            if (!name) {
+                                Swal.showValidationMessage('{% translate "Veuillez indiquer votre nom." %}');
+                                return false;
+                            }
+                            if (!amtValid) {
+                                Swal.showValidationMessage('{% translate "Veuillez saisir un montant avec au maximum deux décimales." %}');
+                                return false;
+                            }
+                            if (!amt || amt <= 0) {
+                                Swal.showValidationMessage('{% translate "Veuillez indiquer un montant valide (> 0)." %}');
+                                return false;
+                            }
+                            htmx.ajax('POST', '{% url "crowds-global-funding-list" %}', {
+                                swap: 'none',
+                                values: {
+                                    contributor_name: name,
+                                    description: desc,
+                                    amount: amt
+                                }
+                            });
+                        }
+                    });
+                    return false;
+                } catch (e) {
+                    return false;
                 }
-              });
             }
-          });
-          return false;
-        } catch (e) {
-          return false;
-        }
-      }
 
-      document.body.addEventListener('htmx:afterOnLoad', function (event) {
-        try {
-          const tSendFail = "{{ t_global_funding_send_fail|escapejs }}";
-          const tError = "{{ t_global_funding_error|escapejs }}";
-          const tAllocTooHigh = "{{ t_funding_alloc_amount_too_high|escapejs }}";
-          const tAllocSaved = "{{ t_funding_alloc_saved|escapejs }}";
-          const xhr = event.detail.xhr;
-          const ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
-          if (!ctype.includes('application/json')) {
-            return;
-          }
-          const data = JSON.parse(xhr.responseText || 'null');
-          if (!data) return;
-          if (data.stripe_url) {
-            Swal.fire({
-              icon: 'success',
-              title: '{% translate "Redirection vers le paiement..." %}',
-              showConfirmButton: false,
-              timer: 1500
+            document.body.addEventListener('htmx:afterOnLoad', function (event) {
+                try {
+                    const tSendFail = "{{ t_global_funding_send_fail|escapejs }}";
+                    const tError = "{{ t_global_funding_error|escapejs }}";
+                    const tAllocTooHigh = "{{ t_funding_alloc_amount_too_high|escapejs }}";
+                    const tAllocSaved = "{{ t_funding_alloc_saved|escapejs }}";
+                    const xhr = event.detail.xhr;
+                    const ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
+                    if (!ctype.includes('application/json')) {
+                        return;
+                    }
+                    const data = JSON.parse(xhr.responseText || 'null');
+                    if (!data) return;
+                    if (data.stripe_url) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: '{% translate "Redirection vers le paiement..." %}',
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        setTimeout(() => window.location.href = data.stripe_url, 1200);
+                    } else if (data.error) {
+                        const errMsg = typeof data.error === 'string' ? data.error : '';
+                        Swal.fire({
+                            icon: 'error',
+                            title: tSendFail,
+                            text: errMsg === 'Amount exceeds remaining pool.' ? tAllocTooHigh : (errMsg || tError)
+                        });
+                    } else if (data.ok) {
+                        Swal.fire({
+                            toast: true,
+                            position: 'top',
+                            timer: 1600,
+                            showConfirmButton: false,
+                            icon: 'success',
+                            title: tAllocSaved
+                        });
+                        setTimeout(() => window.location.reload(), 900);
+                    }
+                } catch (e) {
+                    // ignore
+                }
             });
-            setTimeout(() => window.location.href = data.stripe_url, 1200);
-          } else if (data.error) {
-            const errMsg = typeof data.error === 'string' ? data.error : '';
-            Swal.fire({
-              icon: 'error',
-              title: tSendFail,
-              text: errMsg === 'Amount exceeds remaining pool.' ? tAllocTooHigh : (errMsg || tError)
-            });
-          } else if (data.ok) {
-            Swal.fire({
-              toast: true,
-              position: 'top',
-              timer: 1600,
-              showConfirmButton: false,
-              icon: 'success',
-              title: tAllocSaved
-            });
-            setTimeout(() => window.location.reload(), 900);
-          }
-        } catch (e) {
-          // ignore
-        }
-      });
 
-      (function () {
-        const trigger = document.querySelector('[data-crowds-funding-alloc="true"]');
-        const dataTag = document.getElementById('crowds-alloc-initiatives');
-        if (!trigger || !dataTag || !(window.Swal && typeof window.Swal.fire === 'function')) return;
-        const initiatives = JSON.parse(dataTag.textContent || '[]');
-        const title = "{{ t_funding_alloc_title|escapejs }}";
-        const subtitle = "{{ t_funding_alloc_subtitle|escapejs }}";
-        const amountLabel = "{{ t_funding_alloc_amount|escapejs }}";
-        const amountInvalid = "{{ t_funding_alloc_amount_invalid|escapejs }}";
-        const amountTooHigh = "{{ t_funding_alloc_amount_too_high|escapejs }}";
-        const savedMsg = "{{ t_funding_alloc_saved|escapejs }}";
-        const emptyMsg = "{{ t_funding_alloc_empty|escapejs }}";
-        trigger.addEventListener('click', function () {
-          if (!initiatives.length) {
-            Swal.fire({icon: 'info', title: title, text: emptyMsg});
-            return;
-          }
-          const amountInput = `
+            (function () {
+                const trigger = document.querySelector('[data-crowds-funding-alloc="true"]');
+                const dataTag = document.getElementById('crowds-alloc-initiatives');
+                if (!trigger || !dataTag || !(window.Swal && typeof window.Swal.fire === 'function')) return;
+                const initiatives = JSON.parse(dataTag.textContent || '[]');
+                const title = "{{ t_funding_alloc_title|escapejs }}";
+                const subtitle = "{{ t_funding_alloc_subtitle|escapejs }}";
+                const amountLabel = "{{ t_funding_alloc_amount|escapejs }}";
+                const amountInvalid = "{{ t_funding_alloc_amount_invalid|escapejs }}";
+                const amountTooHigh = "{{ t_funding_alloc_amount_too_high|escapejs }}";
+                const savedMsg = "{{ t_funding_alloc_saved|escapejs }}";
+                const emptyMsg = "{{ t_funding_alloc_empty|escapejs }}";
+                trigger.addEventListener('click', function () {
+                    if (!initiatives.length) {
+                        Swal.fire({icon: 'info', title: title, text: emptyMsg});
+                        return;
+                    }
+                    const amountInput = `
             <div class="mb-3 text-start">
               <label for="alloc-amount" class="form-label">${amountLabel}</label>
               <input id="alloc-amount" type="number" min="0" step="0.01" class="form-control" placeholder="0.00">
             </div>
           `;
-          const buttonsHtml = initiatives.map((item) => (
-            `<button type="button" class="btn btn-outline-primary w-100" data-uuid="${item.uuid}">
+                    const buttonsHtml = initiatives.map((item) => (
+                        `<button type="button" class="btn btn-outline-primary w-100" data-uuid="${item.uuid}">
               ${item.name}
             </button>`
-          )).join('');
-          Swal.fire({
-            title: title,
-            html: `<div class="text-muted small mb-2">${subtitle}</div>${amountInput}<div class="d-grid gap-2">${buttonsHtml}</div>`,
-            showConfirmButton: false,
-            showCloseButton: true
-          });
-          const container = Swal.getHtmlContainer();
-          if (!container) return;
-          container.querySelectorAll('button[data-uuid]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-              const amtStr = container.querySelector('#alloc-amount')?.value.trim() || '';
-              const amtNorm = amtStr.replace(',', '.');
-              const amtValid = /^\d+(\.\d{1,2})?$/.test(amtNorm);
-              if (!amtValid || parseFloat(amtNorm || '0') <= 0) {
-                Swal.showValidationMessage(amountInvalid);
-                return;
-              }
-              htmx.ajax('POST', '{% url "crowds-global-funding-allocate" %}', {
-                swap: 'none',
-                values: {
-                  initiative: btn.getAttribute('data-uuid'),
-                  amount_eur: amtNorm
-                }
-              });
-            });
-          });
-        });
-      })();
-    </script>
-    <script>
-      (function () {
-        const btn = document.querySelector('[data-bs-target="#crowds-summary-details"]');
-        const target = document.getElementById('crowds-summary-details');
-        if (!btn || !target) return;
-        const setLabel = (isOpen) => {
-          const openLabel = btn.getAttribute('data-label-open') || 'Voir moins';
-          const closedLabel = btn.getAttribute('data-label-closed') || 'En savoir plus';
-          btn.innerText = isOpen ? openLabel : closedLabel;
-        };
-        setLabel(target.classList.contains('show'));
-        target.addEventListener('shown.bs.collapse', () => setLabel(true));
-        target.addEventListener('hidden.bs.collapse', () => setLabel(false));
-      })();
-    </script>
-  </div>
+                    )).join('');
+                    Swal.fire({
+                        title: title,
+                        html: `<div class="text-muted small mb-2">${subtitle}</div>${amountInput}<div class="d-grid gap-2">${buttonsHtml}</div>`,
+                        showConfirmButton: false,
+                        showCloseButton: true
+                    });
+                    const container = Swal.getHtmlContainer();
+                    if (!container) return;
+                    container.querySelectorAll('button[data-uuid]').forEach((btn) => {
+                        btn.addEventListener('click', () => {
+                            const amtStr = container.querySelector('#alloc-amount')?.value.trim() || '';
+                            const amtNorm = amtStr.replace(',', '.');
+                            const amtValid = /^\d+(\.\d{1,2})?$/.test(amtNorm);
+                            if (!amtValid || parseFloat(amtNorm || '0') <= 0) {
+                                Swal.showValidationMessage(amountInvalid);
+                                return;
+                            }
+                            htmx.ajax('POST', '{% url "crowds-global-funding-allocate" %}', {
+                                swap: 'none',
+                                values: {
+                                    initiative: btn.getAttribute('data-uuid'),
+                                    amount_eur: amtNorm
+                                }
+                            });
+                        });
+                    });
+                });
+            })();
+        </script>
+        <script>
+            (function () {
+                const btn = document.querySelector('[data-bs-target="#crowds-summary-details"]');
+                const target = document.getElementById('crowds-summary-details');
+                if (!btn || !target) return;
+                const setLabel = (isOpen) => {
+                    const openLabel = btn.getAttribute('data-label-open') || 'Voir moins';
+                    const closedLabel = btn.getAttribute('data-label-closed') || 'En savoir plus';
+                    btn.innerText = isOpen ? openLabel : closedLabel;
+                };
+                setLabel(target.classList.contains('show'));
+                target.addEventListener('shown.bs.collapse', () => setLabel(true));
+                target.addEventListener('hidden.bs.collapse', () => setLabel(false));
+            })();
+        </script>
+    </div>
 </section>
