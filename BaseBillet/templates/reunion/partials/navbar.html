@@ -40,6 +40,12 @@
 
         <div class="navbar-nav d-flex mb-0">
           <div class="nav-item">
+            <button id="themeToggle" class="nav-link border-0 bg-transparent" title="{% trans 'Toggle theme' %}">
+              <i class="bi bi-circle-half"></i>
+              <span class="d-xl-none">{% trans "Theme" %}</span>
+            </button>
+          </div>
+          <div class="nav-item">
             {% if user.is_authenticated == False %}
             <button
                 class="nav-link"
