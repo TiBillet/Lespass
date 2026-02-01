@@ -10,7 +10,6 @@ from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 
-from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.db import connection
 from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
@@ -332,11 +331,23 @@ class InitiativeViewSet(viewsets.ViewSet):
         active_slug = (request.GET.get("tag") or "").strip()
         search_query = (request.GET.get("q") or "").strip()
 
-        initiatives_qs = (
-            Initiative.objects.filter(archived=False)
-            .annotate(votes_total=Count("votes", distinct=True))
-            .prefetch_related("tags")
-        )
+        # Check if "Archivé" tag is selected
+        show_archived = (active_slug == "archive")
+
+        # Base queryset: exclude archived by default, unless "Archivé" tag is selected
+        if show_archived:
+            initiatives_qs = (
+                Initiative.objects.all()
+                .annotate(votes_total=Count("votes", distinct=True))
+                .prefetch_related("tags")
+            )
+        else:
+            initiatives_qs = (
+                Initiative.objects.filter(archived=False)
+                .annotate(votes_total=Count("votes", distinct=True))
+                .prefetch_related("tags")
+            )
+
         # Filtering by tag
         active_tag = None
         if active_slug:
@@ -353,17 +364,15 @@ class InitiativeViewSet(viewsets.ViewSet):
         # Order by votes then date, and distinct because of M2M joins
         initiatives_qs = initiatives_qs.order_by("-votes_total", "-created_at").distinct()
 
-        paginator = Paginator(initiatives_qs, 9)
-        page_number = request.GET.get("page")
-        page_obj = paginator.get_page(page_number)
+        # No pagination: display all initiatives on a single page
+        initiatives = list(initiatives_qs)
 
         context = get_context(request)
         name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
         desc_help = Contribution._meta.get_field("description").help_text or _("Un petit mot pour décrire votre contribution")
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
-            "page_obj": page_obj,
-            "initiatives": page_obj.object_list,
+            "initiatives": initiatives,
             "active_tag": active_tag,
             "all_tags": Tag.objects.filter(initiatives__isnull=False).distinct(),
             "search_query": search_query,
@@ -390,9 +399,17 @@ class InitiativeViewSet(viewsets.ViewSet):
         if cached is not None:
             return cached
 
+        # Filter active initiatives (not closed and not archived) for funding stats
+        active_initiatives = Initiative.objects.filter(archived=False, closed=False)
+
         votes_total = Vote.objects.count()
         projects_count = Initiative.objects.filter(archived=False).count()
-        funding_total = Contribution.objects.aggregate(total=Sum("amount")).get("total") or 0
+
+        # Funding stats only for active initiatives
+        funding_total = Contribution.objects.filter(
+            initiative__in=active_initiatives
+        ).aggregate(total=Sum("amount")).get("total") or 0
+
         participation_total = Participation.objects.aggregate(total=Sum("amount")).get("total") or 0
         participation_total_valid = Participation.objects.exclude(
             state__in=[Participation.State.REQUESTED, Participation.State.REJECTED]
@@ -400,9 +417,13 @@ class InitiativeViewSet(viewsets.ViewSet):
         time_spent_total = Participation.objects.aggregate(
             total=Sum("time_spent_minutes")
         ).get("total") or 0
+
+        # Funding goal only for active initiatives
         funding_goal_total = BudgetItem.objects.filter(
-            state=BudgetItem.State.APPROVED
+            state=BudgetItem.State.APPROVED,
+            initiative__in=active_initiatives
         ).aggregate(total=Sum("amount")).get("total") or 0
+
         funding_percent = 0
         if funding_goal_total:
             funding_percent = int(round((funding_total / funding_goal_total) * 100))
@@ -982,8 +1003,78 @@ class InitiativeViewSet(viewsets.ViewSet):
             if contrib.payment_status not in [Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN]:
                 contrib.payment_status = Contribution.PaymentStatus.PAID_ADMIN
                 contrib.paid_at = timezone.now()
-                contrib.save(update_fields=["payment_status", "paid_at"]) 
+                contrib.save(update_fields=["payment_status", "paid_at"])
         except Exception:
             # même en cas d'erreur, renvoyer le partiel (l'état restera inchangé)
             pass
         return _render(status_code=200)
+
+    @action(detail=True, methods=["post"], url_path="close")
+    def close_initiative(self, request, pk=None):
+        """
+        Clôture une initiative (admin/staff uniquement).
+        L'initiative reste visible mais n'est plus modifiable et affiche un badge "Clôturé".
+        Ajoute automatiquement le tag "Clôturé".
+        Retourne une redirection vers la page de détail.
+        """
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": _("Authentication required.")}, status=401)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return JsonResponse({"error": _("Permission denied.")}, status=403)
+
+        initiative = get_object_or_404(Initiative, pk=pk)
+        initiative.closed = True
+        initiative.save(update_fields=["closed"])
+
+        # Add "Clôturé" tag
+        closed_tag, created = Tag.objects.get_or_create(
+            slug="cloture",
+            defaults={
+                "name": _("Clôturé"),
+                "color": "#6c757d"  # Bootstrap secondary gray
+            }
+        )
+        initiative.tags.add(closed_tag)
+
+        return HttpResponseRedirect(initiative.get_absolute_url())
+
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive_initiative(self, request, pk=None):
+        """
+        Archive une initiative (admin/staff uniquement).
+        L'initiative est clôturée et n'apparaît plus dans la liste.
+        Ajoute automatiquement les tags "Clôturé" et "Archivé".
+        Retourne une redirection vers la liste des initiatives.
+        """
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": _("Authentication required.")}, status=401)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return JsonResponse({"error": _("Permission denied.")}, status=403)
+
+        initiative = get_object_or_404(Initiative, pk=pk)
+        initiative.closed = True
+        initiative.archived = True
+        initiative.save(update_fields=["closed", "archived"])
+
+        # Add "Clôturé" tag
+        closed_tag, created = Tag.objects.get_or_create(
+            slug="cloture",
+            defaults={
+                "name": _("Clôturé"),
+                "color": "#6c757d"  # Bootstrap secondary gray
+            }
+        )
+        initiative.tags.add(closed_tag)
+
+        # Add "Archivé" tag
+        archived_tag, created = Tag.objects.get_or_create(
+            slug="archive",
+            defaults={
+                "name": _("Archivé"),
+                "color": "#dc3545"  # Bootstrap danger red
+            }
+        )
+        initiative.tags.add(archived_tag)
+
+        from django.urls import reverse
+        return HttpResponseRedirect(reverse("crowds-list"))

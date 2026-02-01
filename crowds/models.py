@@ -76,6 +76,8 @@ class Initiative(models.Model):
                                          help_text=_("Short description for the cards view and social card."))
 
     created_at = models.DateTimeField(default=timezone.now, verbose_name=_("Created at"))
+    closed = models.BooleanField(default=False, verbose_name=_("Clôturée"),
+                                 help_text=_("Clôturer une initiative empêche toute modification mais elle reste visible avec le badge 'Clôturé'."))
     archived = models.BooleanField(default=False, verbose_name=_("Archived"),
                                    help_text=_("Archived initiatives are not displayed in the main page."))
 

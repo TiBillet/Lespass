@@ -10,14 +10,25 @@
             {% include 'reunion/partials/picture.html' with img=initiative.get_img alt=initiative.name style='aspect-ratio:16/9;max-height:12rem;object-fit:cover' %}
         </a>
         <div class="card-body d-flex flex-column">
-            <h5 class="card-title d-flex justify-content-between align-items-start">
+            {% if initiative.closed %}
+                <div class="mb-2">
+                    <span class="badge bg-secondary" data-testid="badge-closed">
+                        <i class="bi bi-lock"></i> {% translate "Clôturé" %}
+                    </span>
+                </div>
+            {% endif %}
+            <h5 class="card-title d-flex justify-content-between align-items-start gap-2">
                 <a class="text-decoration-none text-body"
                    href="{{ initiative.get_absolute_url }}"
                    hx-get="{{ initiative.get_absolute_url }}"
                    hx-target="body"
                    hx-swap="innerHTML"
                    hx-push-url="true">{{ initiative.name }}</a>
-                {% if initiative.vote %}{% include "crowds/partial/votes_badge.html" with initiative=initiative %}{% endif %}
+                {% if initiative.vote %}
+                    <div class="flex-shrink-0">
+                        {% include "crowds/partial/votes_badge.html" with initiative=initiative %}
+                    </div>
+                {% endif %}
             </h5>
             <p class="card-text text-muted small flex-grow-1">
                 <a class="text-decoration-none text-muted"
