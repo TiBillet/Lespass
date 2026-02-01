@@ -48,140 +48,107 @@
         {#      <span class="text-muted small">{% translate "Chiffres cumulés de tous les projets" %}</span>#}
         {#    </div>#}
 
-        <div class="row g-3 align-items-stretch row-cols-1 row-cols-md-2 row-cols-lg-4">
-            <div class="col">
-                <div class="crowds-summary-card" data-testid="crowds-summary-card-contributors">
-                    <div class="text-muted small d-flex align-items-center gap-2">
-                        <i class="bi bi-people" aria-hidden="true"></i>
-                        {% translate "Nombre de contributeur·ices" %}
-                    </div>
-                    <div class="fs-4 fw-semibold">{{ summary_participants_count }}</div>
-{#                    <div class="text-muted small">{% translate "votes, financements, participations" %}</div>#}
-                </div>
-            </div>
-            <div class="col">
-                <div class="crowds-summary-card" data-testid="crowds-summary-card-time">
-                    <div class="text-muted small d-flex align-items-center gap-2">
-                        <i class="bi bi-clock" aria-hidden="true"></i>
-                        {% translate "Temps total" %}
-                    </div>
-                    <div class="fs-4 fw-semibold">{{ summary_time_spent_minutes|minutes_to_human }}</div>
-{#                    <div class="text-muted small">{% translate "réalisations en cours et validées" %}</div>#}
+        {# Barre de résumé compacte avec tous les indicateurs sur une ligne #}
+        <div class="d-flex flex-wrap align-items-center justify-content-center gap-4 py-3 px-3 bg-body border rounded-3"
+             role="region"
+             aria-label="{% translate 'Résumé de tous les projets' %}"
+             data-testid="crowds-summary-bar">
+
+            {# Contributeur·ices avec icône #}
+            <div class="d-flex align-items-center gap-2" data-testid="crowds-summary-contributors">
+                <i class="bi bi-people fs-5 text-primary" aria-hidden="true"></i>
+                <div class="lh-1">
+                    <strong class="fs-5 fw-bold">{{ summary_participants_count }}</strong>
+                    <small class="d-block text-muted">{% translate "contributeur·ices" %}</small>
                 </div>
             </div>
 
+            {# Séparateur vertical optionnel #}
+            <div class="vr d-none d-md-block" style="height: 2rem;"></div>
+
+            {# Lieux et organisations (si plusieurs sources) #}
             {% if summary_has_multiple_sources %}
-                <div class="col">
-                    <div class="crowds-summary-card" data-testid="crowds-summary-card-sources">
-                        <div class="text-muted small d-flex align-items-center gap-2">
-                            <i class="bi bi-building" aria-hidden="true"></i>
-                            {% translate "Lieux et organisations impliqués" %}
-                        </div>
-                        <div class="fs-4 fw-semibold">{{ summary_source_logos|length }}</div>
-{#                        <div class="d-flex flex-wrap gap-2 mt-2">#}
-{#                            {% for source in summary_source_logos %}#}
-{#                                {% if source.logo_url %}#}
-{#                                    {% if source.url %}#}
-{#                                        <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer"#}
-{#                                           title="{{ source.name }}">#}
-{#                                            <img class="crowds-logo" src="{{ source.logo_url }}"#}
-{#                                                 alt="{{ source.name }}">#}
-{#                                        </a>#}
-{#                                    {% else %}#}
-{#                                        <img class="crowds-logo" src="{{ source.logo_url }}" alt="{{ source.name }}">#}
-{#                                    {% endif %}#}
-{#                                {% else %}#}
-{#                                    {% if source.url %}#}
-{#                                        <a href="{{ source.url }}" target="_blank" rel="noopener noreferrer"#}
-{#                                           title="{{ source.name }}">#}
-{#                                            <span class="crowds-avatar">{{ source.name|slice:":2"|upper }}</span>#}
-{#                                        </a>#}
-{#                                    {% else %}#}
-{#                                        <span class="crowds-avatar"#}
-{#                                              title="{{ source.name }}">{{ source.name|slice:":2"|upper }}</span>#}
-{#                                    {% endif %}#}
-{#                                {% endif %}#}
-{#                            {% endfor %}#}
-{#                        </div>#}
+                <div class="d-flex align-items-center gap-2" data-testid="crowds-summary-sources">
+                    <i class="bi bi-building fs-5 text-primary" aria-hidden="true"></i>
+                    <div class="lh-1">
+                        <strong class="fs-5 fw-bold">{{ summary_source_logos|length }}</strong>
+                        <small class="d-block text-muted">{% translate "lieux & orgas" %}</small>
                     </div>
                 </div>
+                <div class="vr d-none d-md-block" style="height: 2rem;"></div>
             {% endif %}
 
-            <div class="col">
-                <div class="crowds-summary-card h-100 p-0 overflow-hidden" data-testid="crowds-summary-card-rules">
-                    <a class="btn btn-primary w-100 h-100 rounded-3 d-flex flex-column justify-content-center align-items-center gap-2 py-3"
-                       data-testid="crowds-summary-rules-button"
-                       href="{{ crowd_config.contributor_covenant|default:'https://movilab.org/wiki/Coremuneration_et_budget_contributif' }}"
-                       target="_blank" rel="noopener noreferrer">
-                        <i class="bi bi-file-text fs-3" aria-hidden="true"></i>
-                        <span class="fw-semibold">{% translate "Voir les règles de contribution" %}</span>
-                    </a>
+            {# Temps total contributif #}
+            <div class="d-flex align-items-center gap-2" data-testid="crowds-summary-time">
+                <i class="bi bi-clock fs-5 text-primary" aria-hidden="true"></i>
+                <div class="lh-1">
+                    <strong class="fs-5 fw-bold">{{ summary_time_spent_minutes|minutes_to_human }}</strong>
+                    <small class="d-block text-muted">{% translate "temps donné" %}</small>
                 </div>
             </div>
 
-        </div>
+            <div class="vr d-none d-md-block" style="height: 2rem;"></div>
 
-    <div class="row g-3 mt-1 justify-content-center">
-            <div class="col-12 col-md-6 col-lg-4">
-                <div class="crowds-summary-card" data-testid="crowds-summary-card-funding">
-                    <div class="text-muted small d-flex align-items-center gap-2">
-                        <i class="bi bi-piggy-bank" aria-hidden="true"></i>
-                        {% translate "Financement" %}
-                    </div>
-                    <div class="mt-2 small">
-                        <div class="d-flex justify-content-between">
-                            <span class="text-muted">{% translate "Objectif" %}</span>
-                            <strong>{{ summary_funding_goal_total|dround }}</strong>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span class="text-muted">{% translate "Financement" %}</span>
-                            <strong>{{ summary_funding_percent }}%</strong>
-                        </div>
-                        {% if user.is_staff or user.is_superuser %}
-                            <button type="button"
-                                    class="btn btn-outline-primary w-100 d-flex justify-content-between align-items-center"
-                                    data-crowds-funding-alloc="true"
-                                    data-testid="crowds-summary-funding-allocate-button">
-                                <span>{% translate "Financement à répartir" %}</span>
-                                <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
-                            </button>
-                        {% else %}
-                            <div class="d-flex justify-content-between">
-                                <span class="text-muted">{% translate "Financement à répartir" %}</span>
-                                <strong>{{ summary_funding_to_allocate|dround }} {{ global_funding_currency }}</strong>
-                            </div>
-                        {% endif %}
-                    </div>
+            {# Financement : pourcentage + à répartir #}
+            <div class="d-flex align-items-center gap-2" data-testid="crowds-summary-funding">
+                <i class="bi bi-piggy-bank fs-5 text-success" aria-hidden="true"></i>
+                <div class="lh-1">
+                    <strong class="fs-5 fw-bold text-success">{{ summary_funding_percent }}%</strong>
+                    <small class="d-block text-muted">
+                        {{ summary_funding_to_allocate|dround }} {{ global_funding_currency }} {% translate "à répartir" %}
+                    </small>
                 </div>
             </div>
 
+            {# Bouton "Je finance" centré dans le flux avec les autres éléments #}
             {% if crowd_config.global_funding_button %}
-                <div class="col-12 col-md-6 col-lg-4">
-                    <div class="crowds-summary-card h-100 d-flex flex-column justify-content-between"
-                         data-testid="crowds-summary-card-global-funding">
-                        <div class="text-muted small d-flex align-items-center gap-2">
-                            <i class="bi bi-cash-coin" aria-hidden="true"></i>
-                            {% translate "Je finance" %}
-                        </div>
-                        {% if user.is_authenticated %}
-                            <div id="global-funding-total" data-testid="crowds-summary-global-funding-total"
-                                 hx-get="{% url 'crowds-global-funding-funded-total' %}"
-                                 hx-trigger="load"
-                                 hx-swap="innerHTML">
-                                {% include "crowds/partial/global_funding_amount.html" %}
-                            </div>
-                        {% endif %}
-                        <div class="mt-auto pt-3">
-                            <button class="btn btn-outline-primary w-100"
-                                    data-testid="crowds-summary-global-funding-button"
-                                    onclick="return (window.crowdsOpenGlobalFunding ? crowdsOpenGlobalFunding() : false)">
-                                {{ crowd_config.global_funding_button_text|default:"Je finance" }}
-                            </button>
-                        </div>
-                    </div>
+                <div class="vr d-none d-md-block" style="height: 2rem;"></div>
+                <div>
+                    <button class="btn btn-primary btn-lg d-flex align-items-center gap-2"
+                            data-testid="crowds-summary-global-funding-button"
+                            onclick="return (window.crowdsOpenGlobalFunding ? crowdsOpenGlobalFunding() : false)">
+                        <i class="bi bi-cash-coin" aria-hidden="true"></i>
+                        <span>{{ crowd_config.global_funding_button_text|default:"Je finance" }}</span>
+                    </button>
                 </div>
             {% endif %}
         </div>
+
+        {# Montant financé par l'utilisateur (si connecté) #}
+        {% if user.is_authenticated and crowd_config.global_funding_button %}
+            <div class="mt-2" id="global-funding-total"
+                 data-testid="crowds-summary-user-funded"
+                 hx-get="{% url 'crowds-global-funding-funded-total' %}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                {% include "crowds/partial/global_funding_amount.html" %}
+            </div>
+        {% endif %}
+
+        {# Section admin : objectif et répartition (staff only) #}
+        {% if user.is_staff or user.is_superuser %}
+            <div class="mt-3 p-3 bg-warning bg-opacity-10 border border-warning rounded-3" data-testid="crowds-summary-admin">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <span class="badge bg-warning text-dark">
+                            <i class="bi bi-shield-check"></i> {% translate "Admin" %}
+                        </span>
+                        <span class="ms-2 text-muted small">
+                            {% translate "Objectif total" %}:
+                            <strong>{{ summary_funding_goal_total|dround }} {{ global_funding_currency }}</strong>
+                        </span>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-warning btn-sm"
+                            data-crowds-funding-alloc="true"
+                            data-testid="crowds-summary-funding-allocate-button">
+                        <i class="bi bi-wallet2"></i>
+                        {% translate "Répartir le financement" %}
+                        <strong>({{ summary_funding_to_allocate|dround }} {{ global_funding_currency }})</strong>
+                    </button>
+                </div>
+            </div>
+        {% endif %}
 
         <div class="text-center mt-3">
             <button class="btn btn-outline-secondary btn-sm" type="button" data-testid="crowds-summary-toggle-details"

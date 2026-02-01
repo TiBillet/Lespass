@@ -40,33 +40,40 @@ test.describe('Crowds summary toggle / Toggle résumé crowds', () => {
 
     // Step 3: Check summary cards / Étape 3 : Vérifier les cartes du résumé
     await expect(page.locator('[data-testid="crowds-summary"]')).toBeVisible();
-    await expect(page.locator('[data-testid="crowds-summary-card-contributors"]')).toBeVisible();
-    await expect(page.locator('[data-testid="crowds-summary-card-projects"]')).toBeVisible();
-    await expect(page.locator('[data-testid="crowds-summary-card-time"]')).toBeVisible();
 
-    const sourcesCard = page.locator('[data-testid="crowds-summary-card-sources"]');
+    // Verify the summary bar is visible
+    const summaryBar = page.locator('[data-testid="crowds-summary-bar"]');
+    await expect(summaryBar).toBeVisible();
+
+    // Check all stats are displayed on the summary bar
+    await expect(page.locator('[data-testid="crowds-summary-contributors"]')).toBeVisible();
+    await expect(page.locator('[data-testid="crowds-summary-time"]')).toBeVisible();
+    await expect(page.locator('[data-testid="crowds-summary-funding"]')).toBeVisible();
+
+    const sourcesCard = page.locator('[data-testid="crowds-summary-sources"]');
     if (await sourcesCard.count()) {
       await expect(sourcesCard).toBeVisible();
     }
+    // Check admin section (staff/superuser only)
+    const adminSection = page.locator('[data-testid="crowds-summary-admin"]');
+    if (await adminSection.count()) {
+      await expect(adminSection).toBeVisible();
 
-    const rulesButton = page.locator('[data-testid="crowds-summary-rules-button"]');
-    await expect(rulesButton).toBeVisible();
-    await expect(rulesButton).toHaveAttribute('target', '_blank');
-
-    const fundingCard = page.locator('[data-testid="crowds-summary-card-funding"]');
-    await expect(fundingCard).toBeVisible();
-    const allocButton = page.locator('[data-testid="crowds-summary-funding-allocate-button"]');
-    if (await allocButton.count()) {
+      const allocButton = page.locator('[data-testid="crowds-summary-funding-allocate-button"]');
+      await expect(allocButton).toBeVisible();
       await allocButton.click();
+
       const popup = page.locator('.swal2-popup');
       await expect(popup).toBeVisible();
       await expect(popup.locator('#alloc-amount')).toBeVisible();
+
       const projectButtons = popup.locator('button[data-uuid]');
       if (await projectButtons.count()) {
         await expect(projectButtons.first()).toBeVisible();
       } else {
         await expect(popup).toContainText('Aucun projet disponible');
       }
+
       const closeButton = popup.locator('.swal2-close');
       if (await closeButton.count()) {
         await closeButton.click();
