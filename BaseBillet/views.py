@@ -154,7 +154,7 @@ def get_context(request):
     if crowd_config.active and Initiative.objects.exists():
         navbar.append(
             {'name': f'crowd-list', 'url': '/crowd/',
-             'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
+             'label': f'{crowd_config.title}', 'icon': 'people-fill'}
         )
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
