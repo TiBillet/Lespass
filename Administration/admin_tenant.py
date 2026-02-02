@@ -2450,6 +2450,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     ]
     list_per_page = 20
 
+    change_form_template = 'admin/event/change_form.html'
+
     export_form_class = ExportForm
     import_form_class = ImportForm
 
