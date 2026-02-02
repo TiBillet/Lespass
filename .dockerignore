@@ -1,6 +1,6 @@
 .env
 env*
-.git
+#.git
 Backup/dumps
 Backup/logs
 Docker
