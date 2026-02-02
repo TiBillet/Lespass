@@ -4,6 +4,9 @@
         <thead>
         <tr>
             <th scope="col">{% translate 'Proposé par' %}</th>
+            {% if show_budget_items_origin %}
+            <th scope="col">{% translate 'Origine' %}</th>
+            {% endif %}
             <th scope="col">{% translate 'Description' %}</th>
             <th scope="col" class="text-end">{% translate 'Montant' %}</th>
             <th scope="col">{% translate 'Date' %}</th>
@@ -20,14 +23,23 @@
             <tr>
                 <td>
                     {% if bi.contributor %}
-                        {{ bi.contributor.email }}
+                        {{ bi.contributor.full_name_or_email_trunc }}
                     {% else %}
                         <span class="text-muted">—</span>
                     {% endif %}
                 </td>
+                {% if show_budget_items_origin %}
+                <td>
+                    {% if bi.contributor %}
+                        {{ bi.contributor.client_source.name|default:"—" }}
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                {% endif %}
                 <td class="small">{{ bi.description|linebreaksbr }}</td>
                 <td class="text-end">{{ bi.amount|dround }} {{ initiative.currency }}</td>
-                <td>{{ bi.created_at|date:'Y-m-d H:i' }}</td>
+                <td>{{ bi.created_at|date:'d/m/y' }}</td>
                 <td class="text-end">
                     {% if bi.state == 'requested' %}
                         {% if user.is_authenticated %}
@@ -70,7 +82,7 @@
             </tr>
         {% empty %}
             <tr>
-                <td colspan="5"
+                <td colspan="{% if show_budget_items_origin %}6{% else %}5{% endif %}"
                     class="text-center text-muted py-4">{% translate 'Aucune ligne budgétaire pour le moment.' %}</td>
             </tr>
         {% endfor %}

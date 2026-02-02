@@ -27,7 +27,8 @@
                 type="button"
                 data-bs-toggle="offcanvas"
                 data-bs-target="#bookingPanel"
-                aria-controls="bookingPanel">
+                aria-controls="bookingPanel"
+                data-testid="booking-open-panel">
             {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
         </button>
 

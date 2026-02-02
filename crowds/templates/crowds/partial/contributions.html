@@ -4,6 +4,9 @@
     <thead>
       <tr>
         <th scope="col">{% translate 'Contributeur' %}</th>
+        {% if show_contributions_origin %}
+        <th scope="col">{% translate 'Origine' %}</th>
+        {% endif %}
         <th scope="col">{% translate 'Description' %}</th>
         <th scope="col" class="text-end">{% translate 'Montant' %}</th>
         <th scope="col">{% translate 'Statut' %}</th>
@@ -19,6 +22,15 @@
         {% endif %}
         <tr>
           <td>{{ c.get_contriutor_name }}</td>
+          {% if show_contributions_origin %}
+          <td>
+            {% if c.contributor %}
+              {{ c.contributor.client_source.name|default:"—" }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
           <td class="small">{{ c.description|default:""|linebreaksbr }}</td>
           <td class="text-end">{{ c.amount_eur|floatformat:2 }} {{ initiative.currency }}</td>
           <td>
@@ -44,11 +56,11 @@
               {{ c.payment_status }}
             {% endif %}
           </td>
-          <td>{{ c.created_at|date:'Y-m-d H:i' }}</td>
+          <td>{{ c.created_at|date:'d/m/y' }}</td>
         </tr>
       {% empty %}
         <tr>
-          <td colspan="5" class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
+          <td colspan="{% if show_contributions_origin %}6{% else %}5{% endif %}" class="text-center text-muted py-4">{% translate 'Aucune contribution pour le moment.' %}</td>
         </tr>
       {% endfor %}
       {% endwith %}

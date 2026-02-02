@@ -1655,7 +1655,9 @@ def send_to_ghost(membership_pk):
         # Email du compte :
         user = membership.user
         email = user.email
-        name = f"{membership.first_name.capitalize()} {membership.last_name.capitalize()}"
+        first_name = membership.first_name.capitalize() if membership.first_name else ""
+        last_name = membership.last_name.capitalize() if membership.last_name else ""
+        name = f"{first_name} {last_name}".strip()
         send_to_ghost_email(email, name)
 
 
@@ -1716,6 +1718,9 @@ def membership_renewal_reminder():
 
                     config = Configuration.get_solo()
                     user = membership.user
+                    if not user:
+                        logger.warning(f"membership_renewal_reminder : membership {membership.pk} has no user. Skipping.")
+                        continue
                     email = user.email
 
                     context = {

@@ -175,12 +175,15 @@ class LoginEmailValidator(serializers.Serializer):
 
 class TicketCreator():
 
-    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None):
+    def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
+                 sale_origin: str = SaleOrigin.LESPASS):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
         self.promo_code = promo_code
         self.custom_amounts = custom_amounts or {}
+        # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
+        self.sale_origin = sale_origin
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -281,7 +284,7 @@ class TicketCreator():
                 payment_method=PaymentMethod.STRIPE_NOFED,
                 qty=qty,
                 promotional_code=self.promo_code,
-                sale_origin=SaleOrigin.LESPASS,
+                sale_origin=self.sale_origin,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -360,36 +363,63 @@ class ReservationValidator(serializers.Serializer):
         for product in event.products.all():
             for price in product.prices.all():
                 # Un input possède l'uuid du prix ?
-                raw_val = self.initial_data.get(str(price.uuid))
-                if raw_val not in [None, '']:
+                price_key = str(price.uuid)
+                if hasattr(self.initial_data, 'getlist'):
+                    raw_vals = self.initial_data.getlist(price_key)
+                else:
+                    v = self.initial_data.get(price_key)
+                    raw_vals = v if isinstance(v, list) else ([v] if v not in [None, ''] else [])
+
+                if raw_vals:
+                    # Prendre la dernière valeur non vide
+                    raw_val = next((v for v in reversed(raw_vals) if v not in [None, '', 'null']), None)
+                    if raw_val is None:
+                        continue
+                    
                     # Certains frontends envoient des nombres comme "15.00" → normaliser en int de manière sûre
                     try:
-                        # Depuis une QueryDict, la valeur peut être une liste
-                        if isinstance(raw_val, list):
-                            raw_val = raw_val[-1] if raw_val else ''
                         sval = str(raw_val).strip().replace(',', '.')
                         # Autoriser les décimales mais caster en entier (quantité)
                         qty = int(Decimal(sval))
                     except Exception:
-                        raise serializers.ValidationError({str(price.uuid): [_('Invalid quantity.')]})
+                        raise serializers.ValidationError({price_key: [_('Invalid quantity.')]})
 
                     if qty <= 0:  # Skip zero or negative quantities
                         continue
 
                     if price.free_price:
-                        # Récupération du montant personnalisé si prix libre
+                        # --- GESTION DU PRIX LIBRE / OPEN PRICE MANAGEMENT ---
+                        # On cherche un montant spécifique au tarif : custom_amount_{uuid}
+                        # We look for a rate-specific amount: custom_amount_{uuid}
                         custom_amount_key = f"custom_amount_{price.uuid}"
-                        custom_amount_val = self.initial_data.get(custom_amount_key)
-                        if custom_amount_val:
+                        
+                        # Récupération de la valeur brute (on supporte QueryDict ou dict classique)
+                        # Retrieve raw value (QueryDict or plain dict supported)
+                        if hasattr(self.initial_data, 'get'):
+                            raw_custom = self.initial_data.get(custom_amount_key)
+                        else:
+                            raw_custom = self.initial_data.get(custom_amount_key)
+
+                        if raw_custom not in [None, '', 'null']:
                             try:
-                                if isinstance(custom_amount_val, list):
-                                    custom_amount_val = custom_amount_val[-1]
-                                self.custom_amounts[price.uuid] = Decimal(str(custom_amount_val).replace(',', '.'))
+                                # Conversion en Decimal (supporte virgule et point)
+                                # Convert to Decimal (supports comma and dot)
+                                amount = Decimal(str(raw_custom).replace(',', '.'))
+                                
+                                # Validation du montant minimum / Minimum amount validation
+                                if price.prix and amount < price.prix:
+                                    raise serializers.ValidationError({
+                                        custom_amount_key: [_('The amount must be greater than the minimum amount.')]
+                                    })
+                                
+                                self.custom_amounts[price.uuid] = amount
+                                
+                            except (TypeError, ValueError, Decimal.InvalidOperation):
+                                raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
+                            except serializers.ValidationError:
+                                raise
                             except Exception:
                                 raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
-                        else:
-                            # Si prix libre et quantité > 0, on pourrait lever une erreur ici ou laisser TicketCreator gérer
-                            pass
 
                     self.products.append(product)
                     if products_dict.get(product):
@@ -590,11 +620,14 @@ class ReservationValidator(serializers.Serializer):
         self.reservation = reservation
 
         # Fabrication de la reservation et des tickets en fonction du type de produit
+        # Source de vente selon le contexte / Sale origin from context
+        sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
         self.tickets = TicketCreator(
             reservation=reservation,
             products_dict=products_dict,
             promo_code=self.promo_code if hasattr(self, 'promo_code') else None,
-            custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {}
+            custom_amounts=self.custom_amounts if hasattr(self, 'custom_amounts') else {},
+            sale_origin=sale_origin,
         )
         self.reservation = reservation
         # On récupère le lien de paiement fabriqué dans le TicketCreator si besoin :
@@ -622,8 +655,34 @@ class MembershipValidator(serializers.Serializer):
 
     newsletter = serializers.BooleanField()
 
+    def to_internal_value(self, data):
+        """
+        Interception des données brutes avant validation.
+        Intercept raw data before validation.
+        
+        S'assure que le champ générique 'custom_amount' contient la bonne valeur 
+        extraite du champ spécifique au tarif 'custom_amount_{uuid}'.
+        Ensures 'custom_amount' field contains the correct value extracted from
+        the rate-specific field 'custom_amount_{uuid}'.
+        """
+        # On identifie le tarif sélectionné / Identify selected rate
+        price_uuid = data.get('price')
+        
+        if price_uuid:
+            # Recherche du montant spécifique / Look for specific amount
+            specific_field = f"custom_amount_{price_uuid}"
+            raw_val = data.get(specific_field)
+            
+            # Si une valeur est trouvée, on l'utilise / If value found, use it
+            if raw_val not in [None, '', 'null']:
+                if not hasattr(data, '_mutable') or not data._mutable:
+                    data = data.copy()
+                data['custom_amount'] = raw_val
+
+        return super().to_internal_value(data)
+
     @staticmethod
-    def get_checkout_stripe(membership: Membership):
+    def get_checkout_stripe(membership: Membership, sale_origin: str = SaleOrigin.LESPASS):
         # Fiche membre créée, si price payant, on crée le checkout stripe :
         price: Price = membership.price
         user: TibilletUser = membership.user
@@ -639,7 +698,7 @@ class MembershipValidator(serializers.Serializer):
             'user': f"{user.email}",
         }
 
-        amount = int(membership.contribution_value * 100)
+        amount = dec_to_int(membership.contribution_value)
 
         ligne_article_adhesion = LigneArticle.objects.create(
             pricesold=get_or_create_price_sold(price, custom_amount=membership.contribution_value),
@@ -647,7 +706,7 @@ class MembershipValidator(serializers.Serializer):
             payment_method=PaymentMethod.STRIPE_NOFED,
             amount=amount,
             qty=1,
-            sale_origin=SaleOrigin.LESPASS,
+            sale_origin=sale_origin,
         )
 
         # Création de l'objet paiement stripe en base de donnée
@@ -677,83 +736,117 @@ class MembershipValidator(serializers.Serializer):
         return checkout_stripe_url
 
     def validate(self, attrs):
+        """
+        Validation finale et création de l'objet Membership.
+        Final validation and creation of the Membership object.
+        """
+        # Identification du tarif / Rate identification
         self.price: Price = attrs['price']
 
-        # On va chercher le montant si c'est un prix libre
-        amount: Decimal = self.price.prix
+        # Détermination du montant de la contribution / Contribution amount determination
+        # Par défaut, on utilise le prix de base / Default to base price
+        amount: Decimal = self.price.prix or Decimal('0.00')
+        
+        # Si c'est un prix libre, on récupère la valeur personnalisée
+        # If it's an open price, retrieve the custom value
         if self.price.free_price:
-            amount = attrs.get('custom_amount', None)
+            amount = attrs.get('custom_amount') or self.price.prix or Decimal('0.00')
 
-            if self.price.prix:  # on a un tarif minimum, on vérifie que le montant est bien supérieur :
-                contribution: Decimal = amount or self.price.prix
-                if contribution < self.price.prix:
-                    logger.info("prix inférieur au minimum")
-                    raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
+            # Validation du montant minimum / Minimum amount validation
+            if self.price.prix and amount < self.price.prix:
+                logger.info(f"Open price {amount} below minimum {self.price.prix}")
+                raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 
-        # Création de l'user après les validation champs par champ ( un robot peut spammer le POST et créer des user a la volée sinon )
+        # Création/Récupération de l'utilisateur après validation des champs
+        # Create/Retrieve user after field validation (anti-spam)
         self.user = get_or_create_user(attrs['email'])
 
-        # Vérififaction du max par user sur le produit :
+        # Vérifications des limites par utilisateur / User limit checks
         if self.price.product.max_per_user_reached(user=self.user):
-            raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+            raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
-        # Vérification du max per user
         if self.price.max_per_user:
-            user_membeshipr_count = Membership.objects.filter(
+            user_membership_count = Membership.objects.filter(
                 user=self.user,
                 price=self.price,
-                deadline__gt=timezone.localtime()).exclude(
+                deadline__gt=timezone.localtime()
+            ).exclude(
                 status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED]
             ).count()
-            if user_membeshipr_count >= self.price.max_per_user:
-                logger.info("max per user")
-                raise serializers.ValidationError(_(f'This product is limited in quantity per person.'))
+            
+            if user_membership_count >= self.price.max_per_user:
+                logger.info(f"Max per user reached for {self.user.email} on price {self.price.uuid}")
+                raise serializers.ValidationError(_('This product is limited in quantity per person.'))
 
-
-        ### CREATION DE LA FICHE MEMBRE
-        # On fait create, car il peut y avoir plusieurs adhésions pour le même user (ex : parent/enfant)
+        # Création de la fiche membre / Membership record creation
+        # On autorise plusieurs adhésions (ex: famille) / Multiple memberships allowed
         membership = Membership.objects.create(
             user=self.user,
             price=self.price,
             contribution_value=amount,
             status=Membership.WAITING_PAYMENT,
-            first_name = attrs['firstname'],
-            last_name = attrs['lastname'],
-            newsletter = not attrs.get('newsletter'), # TODO: A virer, utiliser les options ou les formulaires dynamiques : laisser le choix à l'admin
+            first_name=attrs['firstname'],
+            last_name=attrs['lastname'],
+            # Note: newsletter is an opt-out in the form / opt-out dans le formulaire
+            newsletter=not attrs.get('newsletter'), 
         )
 
-        # Vérification de la validation manuelle
+        # Gestion de la validation manuelle / Manual validation handling
         if self.price.manual_validation:
-            logger.info(f"membership_validator.price.manual_validation")
-            # Marque la fiche comme nécessitant une validation manuelle et place l'état sur "en attente"
+            logger.info(f"Membership {membership.uuid} requires manual validation")
             membership.status = Membership.ADMIN_WAITING
-            # Envoi des mails pour prévenir les users
+            # Notification asynchrone / Async notification
             send_membership_pending_admin.delay(str(membership.uuid))
             send_membership_pending_user.delay(str(membership.uuid))
 
-        # Inititation des itérations de récurrence maximales
-        if self.price.recurring_payment and self.price.iteration :
+        # Configuration de la récurrence / Recurrence setup
+        if self.price.recurring_payment and self.price.iteration:
             membership.max_iteration = self.price.iteration
 
-        # Set remplace les options existantes, accepte les listes
+        # Association des options / Options association
         options = attrs.get('options', [])
         if options:
-            membership.option_generale.set(attrs['options'])
+            membership.option_generale.set(options)
 
-        # Build validated custom_form from dynamic fields (prefixed with 'form__') for the membership product
+        # Traitement du formulaire dynamique / Dynamic form processing
         request = self.context.get('request')
         req_data = request.data if request else {}
-        product = self.price.product
-        custom_form = build_custom_form_from_request(req_data, [product], prefix='form__')
+        custom_form = build_custom_form_from_request(req_data, [self.price.product], prefix='form__')
         membership.custom_form = custom_form or None
 
         membership.save()
         self.membership = membership
 
-        # Création du lien de paiement
+        # Initialisation du paiement Stripe si nécessaire
+        # Initiate Stripe payment if required
         self.checkout_stripe_url = None
-        if membership.status == Membership.WAITING_PAYMENT:
-            self.checkout_stripe_url = self.get_checkout_stripe(membership)
+        payment_mode = (self.context.get('payment_mode') or 'STRIPE').upper()
+        sale_origin = self.context.get('sale_origin', SaleOrigin.LESPASS)
+
+        if membership.status == Membership.WAITING_PAYMENT and payment_mode == 'STRIPE':
+            self.checkout_stripe_url = self.get_checkout_stripe(membership, sale_origin=sale_origin)
+        elif membership.status == Membership.WAITING_PAYMENT and payment_mode == 'FREE':
+            # Paiement gratuit via API / Free payment via API
+            membership.status = Membership.ONCE
+            membership.payment_method = PaymentMethod.FREE
+            now = timezone.now()
+            if not membership.first_contribution:
+                membership.first_contribution = now
+            membership.last_contribution = now
+            membership.save(update_fields=["status", "payment_method", "first_contribution", "last_contribution"])
+
+            price_sold = get_or_create_price_sold(self.price, custom_amount=membership.contribution_value)
+            line = LigneArticle.objects.create(
+                pricesold=price_sold,
+                membership=membership,
+                payment_method=PaymentMethod.FREE,
+                amount=dec_to_int(membership.contribution_value),
+                qty=1,
+                sale_origin=sale_origin,
+                status=LigneArticle.VALID,
+                metadata={"source": "api"},
+            )
+            line.save(update_fields=["status"])
 
         return attrs
 
@@ -808,6 +901,10 @@ class TenantCreateValidator(serializers.Serializer):
             raise Exception("Tenant already exists. ")
 
         with schema_context('public'):
+            # Double check for unique name to avoid IntegrityError if name was taken since validation
+            if Client.objects.filter(name=name).exists():
+                raise Exception(f"The name '{name}' is already taken. ")
+
             tenant = Client.objects.filter(categorie=Client.WAITING_CONFIG).first()
             if not tenant:
                 raise Exception("No waiting tenant. ")

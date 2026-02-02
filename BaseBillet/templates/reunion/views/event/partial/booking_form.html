@@ -7,42 +7,70 @@
 </style>
 
 
-<form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100">
+<form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
         {% if user.is_anonymous %}
             <div class="mb-3">
                 <label for="booking-email" class="form-label">{% trans "Email" %}</label>
-                <input type="email" name="email" class="form-control" id="booking-email" required>
+                <input type="email" name="email" class="form-control" id="booking-email" required data-testid="booking-email">
             </div>
             <div class="mb-3">
                 <label for="booking-confirm" class="form-label">{% trans "Email confirmation" %}</label>
-                <input type="email" name="email-confirm" class="form-control" id="booking-confirm" required>
+                <input type="email" name="email-confirm" class="form-control" id="booking-confirm" required data-testid="booking-email-confirm">
             </div>
 
-            <div id="email-error" class="invalid-feedback" role="heading" style="display: block"></div>
+            <div id="email-error" class="invalid-feedback" role="heading" style="display: block" data-testid="booking-email-error"></div>
             <script>
-                document.getElementById("reservation_form").addEventListener("htmx:configRequest", function (event) {
-                    const email = document.getElementById("booking-email").value;
-                    console.log(email);
-                    const confirmEmail = document.getElementById("booking-confirm").value;
+                const reservationForm = document.getElementById("reservation_form");
+                const validateEmails = () => {
+                    const emailEl = document.getElementById("booking-email");
+                    const confirmEl = document.getElementById("booking-confirm");
                     const errorDiv = document.getElementById("email-error");
-                    console.log(confirmEmail);
+                    if (!emailEl || !confirmEl || !errorDiv) {
+                        return true;
+                    }
+                    const email = emailEl.value || "";
+                    const confirmEmail = confirmEl.value || "";
 
                     if (email !== confirmEmail) {
-                        event.preventDefault(); // empêche l’envoi de la requête HTMX
+                        confirmEl.setCustomValidity("Les emails ne correspondent pas.");
                         errorDiv.textContent = "Les emails ne correspondent pas.";
-                    } else {
-                        errorDiv.textContent = ""; // nettoyage si c’est bon
+                        return false;
+                    }
+                    confirmEl.setCustomValidity("");
+                    errorDiv.textContent = "";
+                    return true;
+                };
+
+                // Check on HTMX request
+                reservationForm.addEventListener("htmx:configRequest", function (event) {
+                    if (!validateEmails()) {
+                        event.preventDefault();
                     }
                 });
+
+                // Also check on normal submit (fallback)
+                reservationForm.addEventListener("submit", function (event) {
+                    if (!validateEmails()) {
+                        event.preventDefault();
+                    }
+                });
+
+                // Live check while typing (simple feedback)
+                const emailInput = document.getElementById("booking-email");
+                const confirmInput = document.getElementById("booking-confirm");
+                if (emailInput && confirmInput) {
+                    emailInput.addEventListener("input", validateEmails);
+                    confirmInput.addEventListener("input", validateEmails);
+                }
             </script>
             {#            <p><code>{{ user.email }}</code></p>#}
         {% elif user.is_active %}
             <div class="mb-3">
                 <label for="booking-email" class="form-label">{% trans "Email" %}</label>
                 <input type="email" class="form-control" id="booking-email" name="email" value="{{ user.email }}"
-                       readonly>
+                       readonly data-testid="booking-email">
             </div>
         {% else %}
             <div class="alert alert-danger" role="alert">
@@ -52,7 +80,7 @@
 
         <div class="mb-3">
             {% for price in event.published_prices %}
-                <div class="p-3 js-order">
+                <div class="p-3 js-order" data-testid="booking-price-{{ price.uuid }}">
                     <label for="amount-{{ price.uuid }}" class="form-label">
                         <strong>{{ price.name }}</strong>{% if not price.free_price and price.prix > 0 %}&nbsp;:
                         <span class="js-order-price">{{ price.prix }}</span>&nbsp;€
@@ -89,7 +117,8 @@
                                         name="{{ price.uuid }}"
                                         step="1" min="0"
                                         max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
-                                        class="flex-grow-1 js-order-amount">
+                                        class="flex-grow-1 js-order-amount"
+                                        data-testid="booking-amount-{{ price.uuid }}">
                                 </bs-counter>
                                 {% trans 'ticket(s)' %}
                             </span>
@@ -102,6 +131,7 @@
                                     step="1" min="0"
                                     max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
                                     class="flex-grow-1 js-order-amount"
+                                    data-testid="booking-amount-{{ price.uuid }}"
                             ></bs-counter>
                             {% trans 'ticket(s)' %}
                         </span>
@@ -110,7 +140,8 @@
                     {% if price.free_price %}
                         <div id="custom-amount-container-{{ price.uuid }}"
                              class="custom-amount-container mt-3 p-3 border border-primary-subtle rounded bg-body-tertiary"
-                             style="display: none;">
+                             style="display: none;"
+                             data-testid="booking-custom-amount-container-{{ price.uuid }}">
                             <input id="custom_amount-{{ price.uuid }}"
                                    class="form-control form-control-lg custom-amount-input js-order-custom-price"
                                    type="number"
@@ -118,7 +149,8 @@
                                    min="{{ price.prix }}"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
-                                   aria-describedby="custom-amount-help-{{ price.uuid }}">
+                                   aria-describedby="custom-amount-help-{{ price.uuid }}"
+                                   data-testid="booking-custom-amount-{{ price.uuid }}">
                             <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
                                 {% trans "Enter the desired amount per ticket" %}
                             </small>
@@ -132,7 +164,7 @@
                 <div class="form-check me-3">
                     <input id="option-radio-{{ option.uuid }}" name="options"
                            class="form-check-input" type="radio" value="{{ option.uuid }}"
-                           required>
+                           required data-testid="booking-option-radio-{{ option.uuid }}">
                     <label class="custom-control-label" for="option-radio-{{ option.uuid }}">
                         {{ option.name }}
                     </label>
@@ -142,7 +174,7 @@
         {% for option in event.options_checkbox.all %}
             <div class="form-check form-switch mb-3">
                 <input class="form-check-input" type="checkbox" role="switch" id="option-checkbox-{{ option.uuid }}"
-                       name="options" value="{{ option.uuid }}">
+                       name="options" value="{{ option.uuid }}" data-testid="booking-option-checkbox-{{ option.uuid }}">
                 <label class="form-check-label" for="option-checkbox-{{ option.uuid }}">
                     {{ option.name }}
                 </label>
@@ -165,7 +197,8 @@
                                     <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
                                            class="form-control"
                                            placeholder="{{ field.placeholder|default:field.label }}"
-                                           {% if field.required %}required{% endif %}>
+                                           {% if field.required %}required{% endif %}
+                                           data-testid="booking-form-field-{{ field.name }}">
                                     <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
                                         <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                                     {% if field.help_text %}
@@ -177,7 +210,8 @@
                                     <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}"
                                               class="form-control" style="height: 120px"
                                               placeholder="{{ field.placeholder|default:field.label }}"
-                                              {% if field.required %}required{% endif %}></textarea>
+                                              {% if field.required %}required{% endif %}
+                                              data-testid="booking-form-field-{{ field.name }}"></textarea>
                                     <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
                                         <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                                     {% if field.help_text %}
@@ -189,7 +223,8 @@
                                     <label class="form-label" for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
                                         <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                                     <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
-                                            {% if field.required %}required{% endif %}>
+                                            {% if field.required %}required{% endif %}
+                                            data-testid="booking-form-field-{{ field.name }}">
                                         <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
                                         {% for opt in field.options %}
                                             <option value="{{ opt }}">{{ opt }}</option>
@@ -210,7 +245,8 @@
                                             <input class="form-check-input" type="radio"
                                                    id="ff-{{ field.uuid }}-{{ forloop.counter }}"
                                                    name="form__{{ field.name }}" value="{{ opt }}"
-                                                   {% if field.required and forloop.first %}required{% endif %}>
+                                                   {% if field.required and forloop.first %}required{% endif %}
+                                                   data-testid="booking-form-field-{{ field.name }}">
                                             <label class="form-check-label"
                                                    for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                         </div>
@@ -222,10 +258,12 @@
                             {% elif field.field_type == 'BL' %}
                                 <div class="form-check form-switch mb-3" {% if field.required %}data-bl-required="true"
                                      data-input-id="ff-{{ field.uuid }}"
-                                     data-error-message="{% translate 'Please check this box.' %}"{% endif %}>
+                                     data-error-message="{% translate 'Please check this box.' %}"{% endif %}
+                                     data-testid="booking-form-group-{{ field.name }}">
                                     <input class="form-check-input" type="checkbox" role="switch"
                                            id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on"
-                                           {% if field.required %}required aria-required="true"{% endif %}>
+                                           {% if field.required %}required aria-required="true"{% endif %}
+                                           data-testid="booking-form-field-{{ field.name }}">
                                     <label class="form-check-label" for="ff-{{ field.uuid }}">
                                         {{ field.label }}{% if field.required %}
                                             <span class="text-danger" aria-hidden="true">*</span>{% endif %}
@@ -234,13 +272,14 @@
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
                                     {% if field.required %}
-                                        <div class="text-danger small mt-1" data-bl-error style="display:none;"></div>
+                                        <div class="text-danger small mt-1" data-bl-error style="display:none;" data-testid="booking-form-error-{{ field.name }}"></div>
                                     {% endif %}
                                 </div>
                             {% elif field.field_type == 'MS' %}
                                 <div class="mb-3" {% if field.required %}data-ms-required="true"
                                      data-input-name="form__{{ field.name }}"
-                                     data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}>
+                                     data-error-message="{% translate 'Please select at least one option.' %}"{% endif %}
+                                     data-testid="booking-form-group-{{ field.name }}">
                                     <div class="form-label">
                                         {{ field.label }}{% if field.required %}
                                             <span class="text-danger" aria-hidden="true">*</span>{% endif %}
@@ -250,7 +289,8 @@
                                             <input class="form-check-input" type="checkbox"
                                                    id="ff-{{ field.uuid }}-{{ forloop.counter }}"
                                                    name="form__{{ field.name }}" value="{{ opt }}"
-                                                   {% if field.required %}aria-required="true"{% endif %}>
+                                                   {% if field.required %}aria-required="true"{% endif %}
+                                                   data-testid="booking-form-field-{{ field.name }}">
                                             <label class="form-check-label"
                                                    for="ff-{{ field.uuid }}-{{ forloop.counter }}">{{ opt }}</label>
                                         </div>
@@ -259,7 +299,7 @@
                                         <div class="form-text">{{ field.help_text }}</div>
                                     {% endif %}
                                     {% if field.required %}
-                                        <div class="text-danger small mt-1" data-ms-error style="display:none;"></div>
+                                        <div class="text-danger small mt-1" data-ms-error style="display:none;" data-testid="booking-form-error-{{ field.name }}"></div>
                                     {% endif %}
                                 </div>
                             {% endif %}
@@ -372,11 +412,11 @@
         </script>
 
         <h4>
-            {% trans 'Total&nbsp;:' %} <span class="js-total-amount">0</span> {% trans 'ticket(s)' %}
+            {% trans 'Total&nbsp;:' %} <span class="js-total-amount" data-testid="booking-total-amount">0</span> {% trans 'ticket(s)' %}
             <span class="js-total-has-price">
                 {% trans 'for' %}
                 <span class="fs-5 badge bg-secondary-subtle mb-md-0"><span
-                        class="js-total-price">1,00</span>&nbsp;€</span>
+                        class="js-total-price" data-testid="booking-total-price">1,00</span>&nbsp;€</span>
             </span>
         </h4>
         <p>
@@ -393,15 +433,15 @@
                     <div class="mb-3">
                         <label for="promotional-code" class="form-label">{% trans "Promotional code" %}</label>
                         <input type="text" name="promotional_code" class="form-control" id="promotional-code"
-                               placeholder="{% trans 'Enter your promotional code' %}">
+                               placeholder="{% trans 'Enter your promotional code' %}" data-testid="booking-promo-code">
                     </div>
                 {% endif %}
             {% endfor %}
         {% endif %}
 
 
-        <button type="submit" class="btn btn-primary w-100 mb-3">{% trans 'Send booking request' %}</button>
-        <a href="." class="btn btn-danger d-block">{% trans 'Cancel' %}</a>
+        <button type="submit" class="btn btn-primary w-100 mb-3" data-testid="booking-submit">{% trans 'Send booking request' %}</button>
+        <a href="." class="btn btn-danger d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
     </div>
 </form>
 
@@ -426,6 +466,7 @@
                 if (!err) {
                     err = document.createElement('div')
                     err.id = 'booking-form-error'
+                    err.setAttribute('data-testid', 'booking-no-ticket-error')
                     err.className = 'alert alert-danger mt-2'
                     // Insert the error right above the submit buttons
                     const footer = form.querySelector('.p-3')

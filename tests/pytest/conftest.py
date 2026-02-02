@@ -1,5 +1,11 @@
 import os
+import subprocess
 import pytest
+
+try:
+    import urllib3
+except Exception:  # pragma: no cover - optional dependency for warnings
+    urllib3 = None
 
 
 def pytest_addoption(parser):
@@ -30,9 +36,46 @@ def _inject_cli_env(request):
     Tests already read API_KEY and API_BASE_URL from the environment, so
     this allows passing them via pytest CLI flags without editing tests.
     """
-    api_key = request.config.getoption("--api-key")
-    if api_key:
-        os.environ["API_KEY"] = api_key
+
+    api_key = request.config.getoption("--api-key") or os.getenv("API_KEY")
+
+    if not api_key:
+        result = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-e",
+                "TEST=1",
+                "lespass_django",
+                "poetry",
+                "run",
+                "python",
+                "manage.py",
+                "test_api_key",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            pytest.fail(
+                "Unable to fetch API key from docker. "
+                "Command failed: docker exec lespass_django poetry run python manage.py test_api_key\n"
+                f"stderr: {result.stderr.strip()}"
+            )
+        api_key = result.stdout.strip()
+
+    if not api_key:
+        pytest.fail(
+            "API key is empty. Provide --api-key/ API_KEY env or ensure docker "
+            "returns a key via manage.py test_api_key."
+        )
+
+    os.environ["API_KEY"] = api_key
+
+    # Silence HTTPS warnings in test environment (self-signed certs on localhost)
+    if urllib3 is not None:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     base = request.config.getoption("--api-base-url")
     if base:
         os.environ["API_BASE_URL"] = base.rstrip("/")
@@ -48,6 +91,7 @@ def pytest_collection_modifyitems(config, items):
     5) delete
     Other tests keep their relative order.
     """
+
     def sort_key(item):
         name = item.name.lower()
         path = str(item.fspath)

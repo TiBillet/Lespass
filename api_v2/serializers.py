@@ -4,10 +4,14 @@ import random
 import string
 
 from rest_framework import serializers
+from django.db import transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
-from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, PriceSold, Product
+from BaseBillet.models import Event, PostalAddress, Tag, OptionGenerale, LigneArticle, Price, PriceSold, Product, ProductFormField, Reservation, Membership
+from crowds.models import Initiative, BudgetItem, Participation, Vote
+from fedow_connect.utils import dround
+from Administration.utils import clean_html
 
 # Image validation utilities
 from PIL import Image, UnidentifiedImageError
@@ -420,23 +424,29 @@ class EventCreateSerializer(serializers.Serializer):
             slug_value = f"{base_slug}{suffix}"
 
         # Create Event
-        event = Event.objects.create(
-            name=name,
-            slug=slug_value,
-            datetime=start,
-            end_datetime=end,
-            full_url=full_url,
-            is_external=is_external,
-            jauge_max=max_cap if max_cap is not None else Event.jauge_max.field.default,
-            short_description=short_desc,
-            long_description=long_desc,
-            published=published,
-            private=private,
-            max_per_user=max_per_user if max_per_user is not None else Event.max_per_user.field.default,
-            refund_deadline=refund_days if refund_days is not None else Event.refund_deadline.field.default,
-            categorie=cat_code,
-            parent=parent_obj,
-        )
+        create_kwargs = {
+            "name": name,
+            "slug": slug_value,
+            "datetime": start,
+            "end_datetime": end,
+            "full_url": full_url,
+            "is_external": is_external,
+            "short_description": short_desc,
+            "long_description": long_desc,
+            "published": published,
+            "archived": False,
+            "private": private,
+            "categorie": cat_code,
+            "parent": parent_obj,
+        }
+        if max_cap is not None:
+            create_kwargs["jauge_max"] = max_cap
+        if max_per_user is not None:
+            create_kwargs["max_per_user"] = max_per_user
+        if refund_days is not None:
+            create_kwargs["refund_deadline"] = refund_days
+
+        event = Event.objects.create(**create_kwargs)
 
         # keywords → tags
         if keywords:
@@ -462,18 +472,22 @@ class EventCreateSerializer(serializers.Serializer):
             for opt_name in radio_names:
                 try:
                     opt = OptionGenerale.objects.get(name=opt_name)
-                    event.options_radio.add(opt)
                 except OptionGenerale.DoesNotExist:
-                    continue
+                    # Create missing options to keep API v2 setup simple
+                    # Cree l'option si elle n'existe pas (FALC)
+                    opt = OptionGenerale.objects.create(name=opt_name)
+                event.options_radio.add(opt)
 
         checkbox_names = _extract_values("optionsCheckbox")
         if checkbox_names:
             for opt_name in checkbox_names:
                 try:
                     opt = OptionGenerale.objects.get(name=opt_name)
-                    event.options_checkbox.add(opt)
                 except OptionGenerale.DoesNotExist:
-                    continue
+                    # Create missing options to keep API v2 setup simple
+                    # Cree l'option si elle n'existe pas (FALC)
+                    opt = OptionGenerale.objects.create(name=opt_name)
+                event.options_checkbox.add(opt)
 
         # customConfirmationMessage
         for p in add_props:
@@ -681,3 +695,762 @@ class SemanticProductFromSaleLineSerializer(serializers.Serializer):
             data["image"] = image_url
 
         return data
+
+
+class ProductSchemaSerializer(serializers.Serializer):
+    """
+    schema.org/Product output serializer for API v2 product resources.
+    Sortie schema.org/Product pour les produits API v2.
+    """
+
+    def to_representation(self, instance: Product) -> Dict[str, Any]:
+        description = instance.long_description or instance.short_description
+        category = instance.get_categorie_article_display() if hasattr(instance, "get_categorie_article_display") else None
+
+        offers: List[Dict[str, Any]] = []
+        for price in instance.prices.all().order_by("order"):
+            offer: Dict[str, Any] = {
+                "@type": "Offer",
+                "identifier": str(price.uuid),
+                "name": price.name,
+                "price": str(price.prix),
+                "priceCurrency": "EUR",
+                "freePrice": bool(price.free_price),
+            }
+
+            # Optional semantic helpers
+            if price.stock is not None:
+                offer["inventoryLevel"] = {
+                    "@type": "QuantitativeValue",
+                    "value": price.stock,
+                }
+            if price.max_per_user is not None:
+                offer["eligibleQuantity"] = {
+                    "@type": "QuantitativeValue",
+                    "maxValue": price.max_per_user,
+                }
+
+            additional_property = []
+            if price.recurring_payment:
+                additional_property.append({
+                    "@type": "PropertyValue",
+                    "name": "recurringPayment",
+                    "value": True,
+                })
+                additional_property.append({
+                    "@type": "PropertyValue",
+                    "name": "subscriptionType",
+                    "value": price.subscription_type,
+                })
+            if price.adhesion_obligatoire_id:
+                additional_property.append({
+                    "@type": "PropertyValue",
+                    "name": "membershipRequiredProduct",
+                    "value": str(price.adhesion_obligatoire_id),
+                })
+            if price.manual_validation:
+                additional_property.append({
+                    "@type": "PropertyValue",
+                    "name": "manualValidation",
+                    "value": True,
+                })
+            if additional_property:
+                offer["additionalProperty"] = additional_property
+
+            offers.append(offer)
+
+        data: Dict[str, Any] = {
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "identifier": str(instance.uuid),
+            "sku": str(instance.uuid),
+            "name": instance.name,
+            "description": description,
+            "category": category,
+            "offers": offers,
+        }
+
+        return {k: v for k, v in data.items() if v not in (None, "", [])}
+
+
+class ProductCreateSerializer(serializers.Serializer):
+    """
+    schema.org/Product input serializer for product creation with prices and form fields.
+    Serializer simple pour creer un produit, ses tarifs, et son formulaire dynamique.
+    """
+
+    name = serializers.CharField(max_length=500)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    category = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    offers = serializers.ListField(child=serializers.DictField(), required=True)
+    additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
+    isRelatedTo = serializers.JSONField(required=False)
+
+    def _normalize_category(self, raw: Optional[str]) -> str:
+        if not raw:
+            return Product.BILLET
+
+        normalized = str(raw).strip().lower()
+
+        display_to_code = {
+            str(label).strip().lower(): code
+            for code, label in Product.CATEGORIE_ARTICLE_CHOICES
+        }
+
+        synonyms = {
+            "ticket": Product.BILLET,
+            "ticket booking": Product.BILLET,
+            "billet": Product.BILLET,
+            "free booking": Product.FREERES,
+            "reservation gratuite": Product.FREERES,
+            "subscription or membership": Product.ADHESION,
+            "membership": Product.ADHESION,
+            "adhesion": Product.ADHESION,
+            Product.BILLET.lower(): Product.BILLET,
+            Product.FREERES.lower(): Product.FREERES,
+            Product.ADHESION.lower(): Product.ADHESION,
+        }
+
+        if normalized in display_to_code:
+            return display_to_code[normalized]
+        if normalized in synonyms:
+            return synonyms[normalized]
+
+        raise serializers.ValidationError({"category": "Unknown category. Use a known label or code."})
+
+    def _extract_additional_property(self, add_props: List[Dict[str, Any]], key: str) -> Any:
+        for prop in add_props:
+            name = str(prop.get("name", "")).strip().lower()
+            if name == key.lower():
+                return prop.get("value")
+        return None
+
+    def _extract_event_uuid(self, related: Any, add_props: List[Dict[str, Any]]) -> Optional[str]:
+        if isinstance(related, str):
+            return related
+        if isinstance(related, dict):
+            identifier = related.get("identifier") or related.get("id") or related.get("uuid")
+            if identifier:
+                return str(identifier)
+
+        fallback = self._extract_additional_property(add_props, "eventUuid")
+        if isinstance(fallback, str) and fallback.strip():
+            return fallback.strip()
+        return None
+
+    def _parse_form_fields(self, add_props: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        raw_fields = self._extract_additional_property(add_props, "formFields")
+        if raw_fields is None:
+            return []
+        if isinstance(raw_fields, dict):
+            return [raw_fields]
+        if isinstance(raw_fields, list):
+            return raw_fields
+        return []
+
+    def _extract_offer_property(self, offer: Dict[str, Any], key: str) -> Any:
+        # Read from offer.additionalProperty (schema.org PropertyValue list)
+        add_props = offer.get("additionalProperty") or []
+        if isinstance(add_props, dict):
+            add_props = [add_props]
+        if isinstance(add_props, list):
+            for prop in add_props:
+                name = str(prop.get("name", "")).strip().lower()
+                if name == key.lower():
+                    return prop.get("value")
+        return None
+
+    def create(self, validated_data: Dict[str, Any]) -> Product:
+        name = validated_data["name"]
+        description = validated_data.get("description")
+        category_raw = validated_data.get("category")
+        offers = validated_data.get("offers") or []
+        add_props = validated_data.get("additionalProperty") or []
+        related = validated_data.get("isRelatedTo")
+
+        if not offers:
+            raise serializers.ValidationError({"offers": "At least one offer is required."})
+
+        category_code = self._normalize_category(category_raw)
+
+        form_fields = self._parse_form_fields(add_props)
+        field_type_map = {
+            "shorttext": ProductFormField.FieldType.SHORT_TEXT,
+            "longtext": ProductFormField.FieldType.LONG_TEXT,
+            "singleselect": ProductFormField.FieldType.SINGLE_SELECT,
+            "radioselect": ProductFormField.FieldType.RADIO_SELECT,
+            "multiselect": ProductFormField.FieldType.MULTI_SELECT,
+            "boolean": ProductFormField.FieldType.BOOLEAN,
+        }
+
+        with transaction.atomic():
+            product = Product.objects.create(
+                name=name,
+                long_description=description,
+                publish=True,
+                archive=False,
+                categorie_article=category_code,
+            )
+
+            # Product-level max per user (semantic)
+            # Maximum par utilisateur (niveau produit)
+            max_per_user = self._extract_additional_property(add_props, "maxPerUser")
+            if max_per_user is not None:
+                try:
+                    product.max_per_user = int(max_per_user)
+                    product.save(update_fields=["max_per_user"])
+                except Exception:
+                    raise serializers.ValidationError({"maxPerUser": "Invalid value for maxPerUser."})
+
+            for idx, offer in enumerate(offers):
+                offer_name = offer.get("name")
+                offer_price = offer.get("price")
+                if not offer_name:
+                    raise serializers.ValidationError({"offers": "Each offer must include a name."})
+                if offer_price in (None, ""):
+                    raise serializers.ValidationError({"offers": "Each offer must include a price."})
+
+                order = int(offer.get("order") or (100 + idx))
+                stock = offer.get("stock")
+                max_per_user = offer.get("maxPerUser")
+
+                # Support schema.org-like fields
+                # inventoryLevel.value -> stock
+                inventory_level = offer.get("inventoryLevel")
+                if isinstance(inventory_level, dict):
+                    inv_val = inventory_level.get("value")
+                    if inv_val is not None:
+                        stock = inv_val
+
+                # eligibleQuantity.maxValue -> max_per_user
+                eligible_quantity = offer.get("eligibleQuantity")
+                if isinstance(eligible_quantity, dict):
+                    max_val = eligible_quantity.get("maxValue")
+                    if max_val is not None:
+                        max_per_user = max_val
+
+                # recurring payment and subscription type
+                recurring_payment = offer.get("recurringPayment")
+                if recurring_payment is None:
+                    recurring_payment = self._extract_offer_property(offer, "recurringPayment")
+                recurring_payment = bool(recurring_payment)
+
+                subscription_type = offer.get("subscriptionType")
+                if subscription_type is None:
+                    subscription_type = self._extract_offer_property(offer, "subscriptionType")
+                subscription_type = str(subscription_type or "").strip().upper() or None
+                if subscription_type and subscription_type not in dict(Price.SUB_CHOICES):
+                    raise serializers.ValidationError({"subscriptionType": "Invalid subscription type."})
+
+                # Required membership product for this price
+                # Can be passed as offer.membershipRequiredProduct or additionalProperty
+                membership_required = offer.get("membershipRequiredProduct")
+                if membership_required is None:
+                    membership_required = self._extract_offer_property(offer, "membershipRequiredProduct")
+
+                # Manual validation flag
+                manual_validation = offer.get("manualValidation")
+                if manual_validation is None:
+                    manual_validation = self._extract_offer_property(offer, "manualValidation")
+                manual_validation = bool(manual_validation)
+
+                price_obj = Price.objects.create(
+                    product=product,
+                    name=str(offer_name),
+                    prix=offer_price,
+                    order=order,
+                    free_price=bool(offer.get("freePrice")),
+                    publish=True,
+                    stock=stock,
+                    max_per_user=max_per_user,
+                    recurring_payment=recurring_payment,
+                    subscription_type=subscription_type or Price.NA,
+                    manual_validation=manual_validation,
+                )
+
+                # Link required membership product if requested
+                if membership_required:
+                    try:
+                        membership_product = Product.objects.get(uuid=str(membership_required))
+                    except Product.DoesNotExist:
+                        raise serializers.ValidationError({"membershipRequiredProduct": "Product not found."})
+                    if membership_product.categorie_article != Product.ADHESION:
+                        raise serializers.ValidationError({"membershipRequiredProduct": "Product must be a membership."})
+                    price_obj.adhesion_obligatoire = membership_product
+                    price_obj.save(update_fields=["adhesion_obligatoire"])
+
+            for idx, field in enumerate(form_fields):
+                label = field.get("label")
+                field_type_raw = field.get("fieldType")
+                if not label or not field_type_raw:
+                    raise serializers.ValidationError({"formFields": "Each field needs label and fieldType."})
+
+                field_type = field_type_map.get(str(field_type_raw).strip().lower())
+                if not field_type:
+                    raise serializers.ValidationError({"formFields": f"Unknown fieldType: {field_type_raw}"})
+
+                ProductFormField.objects.create(
+                    product=product,
+                    label=str(label),
+                    field_type=field_type,
+                    required=bool(field.get("required")),
+                    options=field.get("options"),
+                    order=int(field.get("order") or (idx + 1)),
+                    help_text=field.get("helpText"),
+                )
+
+            event_uuid = self._extract_event_uuid(related, add_props)
+            if event_uuid:
+                try:
+                    event = Event.objects.get(uuid=event_uuid)
+                except Event.DoesNotExist:
+                    raise serializers.ValidationError({"isRelatedTo": "Event not found."})
+                event.products.add(product)
+
+        return product
+
+
+class ReservationCreateSerializer(serializers.Serializer):
+    """
+    schema.org/Reservation input serializer for API v2.
+    Serializer d'entree pour creer une reservation via API v2.
+    """
+
+    reservationFor = serializers.DictField(required=True)
+    underName = serializers.DictField(required=True)
+    reservedTicket = serializers.ListField(child=serializers.DictField(), required=True)
+    additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
+
+    def _extract_property(self, add_props: List[Dict[str, Any]], key: str) -> Any:
+        for prop in add_props:
+            name = str(prop.get("name", "")).strip().lower()
+            if name == key.lower():
+                return prop.get("value")
+        return None
+
+    def create(self, validated_data: Dict[str, Any]) -> Reservation:
+        from django.contrib.auth.models import AnonymousUser
+        from django.http import QueryDict
+        from types import SimpleNamespace
+
+        from BaseBillet.models import Reservation, Ticket, Price
+        from BaseBillet.validators import ReservationValidator
+        from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
+        from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+
+        reservation_for = validated_data.get("reservationFor") or {}
+        under_name = validated_data.get("underName") or {}
+        reserved_tickets = validated_data.get("reservedTicket") or []
+        add_props = validated_data.get("additionalProperty") or []
+
+        event_uuid = reservation_for.get("identifier") or reservation_for.get("id") or reservation_for.get("uuid")
+        email = under_name.get("email")
+
+        if not event_uuid:
+            raise serializers.ValidationError({"reservationFor": "identifier is required."})
+        if not email:
+            raise serializers.ValidationError({"underName": "email is required."})
+
+        try:
+            event = Event.objects.get(uuid=str(event_uuid))
+        except Event.DoesNotExist:
+            raise serializers.ValidationError({"reservationFor": "Event not found."})
+
+        data = QueryDict(mutable=True)
+        data.update({
+            "email": email,
+            "event": str(event.pk),
+        })
+
+        # Options (list of UUID)
+        options = self._extract_property(add_props, "options") or []
+        if options:
+            for opt in options:
+                data.update({"options": str(opt)})
+
+        # Promo code
+        promo_code = self._extract_property(add_props, "promotionalCode")
+        if promo_code:
+            data.update({"promotional_code": str(promo_code)})
+
+        # Custom form (object)
+        custom_form = self._extract_property(add_props, "customForm") or {}
+        if isinstance(custom_form, dict):
+            for key, value in custom_form.items():
+                data.update({f"form__{key}": str(value)})
+
+        # Reserved tickets (price uuid + qty + custom amount)
+        price_qty_pairs = []
+        for item in reserved_tickets:
+            price_uuid = item.get("identifier") or item.get("id") or item.get("uuid")
+            qty = item.get("ticketQuantity") or item.get("qty") or 1
+            price_value = item.get("price")
+            if not price_uuid:
+                raise serializers.ValidationError({"reservedTicket": "identifier is required for each ticket."})
+            data.update({str(price_uuid): str(qty)})
+            price_qty_pairs.append((str(price_uuid), qty, price_value))
+            if price_value is not None:
+                data.update({f"custom_amount_{price_uuid}": str(price_value)})
+
+        # Build a fake request for the validator
+        fake_request = SimpleNamespace(user=AnonymousUser(), data=data)
+        validator = ReservationValidator(data=data, context={"request": fake_request, "sale_origin": SaleOrigin.API})
+        validator.is_valid(raise_exception=True)
+
+        reservation = validator.reservation
+        checkout_link = validator.checkout_link
+
+        # Confirm free reservations (optional)
+        confirmed = bool(self._extract_property(add_props, "confirmed"))
+        if confirmed and not checkout_link:
+            reservation.status = Reservation.VALID
+            reservation.save(update_fields=["status"])
+            reservation.tickets.all().update(status=Ticket.NOT_SCANNED)
+
+        # Ensure LigneArticle exists for free bookings (source API)
+        if not checkout_link:
+            for price_uuid, qty, price_value in price_qty_pairs:
+                try:
+                    price = Price.objects.get(uuid=price_uuid)
+                except Price.DoesNotExist:
+                    continue
+                price_sold = get_or_create_price_sold(price, event=event, custom_amount=price_value)
+                LigneArticle.objects.create(
+                    pricesold=price_sold,
+                    amount=dec_to_int(price_sold.prix),
+                    qty=qty,
+                    payment_method=PaymentMethod.FREE,
+                    sale_origin=SaleOrigin.API,
+                    status=LigneArticle.FREERES,
+                    metadata={"reservation_uuid": str(reservation.uuid), "source": "api"},
+                )
+
+        return reservation
+
+
+class ReservationSchemaSerializer(serializers.Serializer):
+    """
+    schema.org/Reservation output serializer.
+    Serializer de sortie pour une reservation API v2.
+    """
+
+    def to_representation(self, instance: Reservation) -> Dict[str, Any]:
+        # Build reserved tickets list (grouped by price)
+        tickets = instance.tickets.all()
+        grouped: Dict[str, int] = {}
+        for ticket in tickets:
+            price_uuid = str(getattr(ticket.pricesold.price, "uuid", "")) if ticket.pricesold else ""
+            grouped[price_uuid] = grouped.get(price_uuid, 0) + 1
+
+        reserved_ticket = []
+        for price_uuid, qty in grouped.items():
+            reserved_ticket.append({
+                "@type": "Ticket",
+                "identifier": price_uuid,
+                "ticketQuantity": qty,
+            })
+
+        status_map = {
+            Reservation.VALID: "https://schema.org/ReservationConfirmed",
+            Reservation.FREERES: "https://schema.org/ReservationPending",
+            Reservation.UNPAID: "https://schema.org/ReservationPending",
+        }
+
+        return {
+            "@context": "https://schema.org",
+            "@type": "Reservation",
+            "identifier": str(instance.uuid),
+            "reservationFor": {
+                "@type": "Event",
+                "identifier": str(instance.event.uuid),
+                "name": instance.event.name,
+            },
+            "underName": {
+                "@type": "Person",
+                "email": instance.user_commande.email,
+            },
+            "reservationStatus": status_map.get(instance.status, "https://schema.org/ReservationPending"),
+            "reservedTicket": reserved_ticket,
+        }
+
+
+class MembershipCreateSerializer(serializers.Serializer):
+    """
+    schema.org/ProgramMembership input serializer for API v2.
+    Serializer d'entree pour creer une adhesion via API v2.
+    """
+
+    member = serializers.DictField(required=True)
+    membershipPlan = serializers.DictField(required=False)
+    additionalProperty = serializers.ListField(child=serializers.DictField(), required=False)
+    validUntil = serializers.DateTimeField(required=False, allow_null=True)
+
+    def _extract_property(self, add_props: List[Dict[str, Any]], key: str) -> Any:
+        for prop in add_props:
+            name = str(prop.get("name", "")).strip().lower()
+            if name == key.lower():
+                return prop.get("value")
+        return None
+
+    def create(self, validated_data: Dict[str, Any]) -> Membership:
+        from django.contrib.auth.models import AnonymousUser
+        from django.http import QueryDict
+        from types import SimpleNamespace
+
+        from BaseBillet.validators import MembershipValidator
+        from BaseBillet.models import Membership, SaleOrigin, PaymentMethod
+
+        member = validated_data.get("member") or {}
+        plan = validated_data.get("membershipPlan") or {}
+        add_props = validated_data.get("additionalProperty") or []
+        valid_until = validated_data.get("validUntil")
+
+        email = member.get("email")
+        first_name = member.get("givenName") or member.get("firstName") or ""
+        last_name = member.get("familyName") or member.get("lastName") or ""
+
+        price_uuid = plan.get("identifier") or self._extract_property(add_props, "priceUuid")
+
+        if not email:
+            raise serializers.ValidationError({"member": "email is required."})
+        if not price_uuid:
+            raise serializers.ValidationError({"membershipPlan": "identifier (price UUID) is required."})
+
+        data = QueryDict(mutable=True)
+        data.update({
+            "email": email,
+            "firstname": first_name or "API",
+            "lastname": last_name or "Member",
+            "price": str(price_uuid),
+            "newsletter": "0",
+            "acknowledge": "1",
+        })
+
+        # Custom amount for free price
+        custom_amount = self._extract_property(add_props, "customAmount")
+        if custom_amount is not None:
+            data.update({f"custom_amount_{price_uuid}": str(custom_amount)})
+
+        # Options (list of UUID)
+        options = self._extract_property(add_props, "options") or []
+        if options:
+            for opt in options:
+                data.update({"options": str(opt)})
+
+        # Custom form (object)
+        custom_form = self._extract_property(add_props, "customForm") or {}
+        if isinstance(custom_form, dict):
+            for key, value in custom_form.items():
+                data.update({f"form__{key}": str(value)})
+
+        payment_mode = (self._extract_property(add_props, "paymentMode") or "FREE").upper()
+        if payment_mode not in ["FREE", "STRIPE"]:
+            raise serializers.ValidationError({"paymentMode": "Allowed values: FREE, STRIPE."})
+
+        fake_request = SimpleNamespace(user=AnonymousUser(), data=data)
+        validator = MembershipValidator(data=data, context={
+            "request": fake_request,
+            "payment_mode": payment_mode,
+            "sale_origin": SaleOrigin.API,
+        })
+        validator.is_valid(raise_exception=True)
+
+        membership = validator.membership
+
+        # Optional status override (admin usage)
+        override_status = self._extract_property(add_props, "status")
+        if override_status:
+            allowed = [choice[0] for choice in Membership.STATUS_CHOICES]
+            if override_status not in allowed:
+                raise serializers.ValidationError({"status": "Invalid membership status."})
+            membership.status = override_status
+            membership.save(update_fields=["status"])
+
+        # Optional subscription id
+        stripe_sub_id = self._extract_property(add_props, "stripeSubscriptionId")
+        if stripe_sub_id:
+            membership.stripe_id_subscription = str(stripe_sub_id)
+            membership.save(update_fields=["stripe_id_subscription"])
+
+        # Optional valid until
+        if valid_until:
+            membership.deadline = valid_until
+            membership.save(update_fields=["deadline"])
+
+        return membership
+
+
+class MembershipSchemaSerializer(serializers.Serializer):
+    """
+    schema.org/ProgramMembership output serializer.
+    Serializer de sortie pour une adhesion API v2.
+    """
+
+    def to_representation(self, instance: Membership) -> Dict[str, Any]:
+        return {
+            "@context": "https://schema.org",
+            "@type": "ProgramMembership",
+            "identifier": str(instance.uuid),
+            "member": {
+                "@type": "Person",
+                "email": instance.user.email if instance.user else None,
+                "givenName": instance.first_name,
+                "familyName": instance.last_name,
+            },
+            "membershipPlan": {
+                "@type": "Offer",
+                "identifier": str(instance.price.uuid) if instance.price else None,
+                "name": instance.price.name if instance.price else None,
+            },
+            "validUntil": instance.deadline.isoformat() if instance.deadline else None,
+        }
+
+
+class InitiativeSchemaSerializer(serializers.Serializer):
+    """
+    schema.org/Project output serializer for Crowds initiatives.
+    """
+
+    def to_representation(self, instance: Initiative) -> Dict[str, Any]:
+        tags = list(instance.tags.values_list("name", flat=True))
+        additional = [
+            {"@type": "PropertyValue", "name": "voteEnabled", "value": bool(instance.vote)},
+            {"@type": "PropertyValue", "name": "budgetContributif", "value": bool(instance.budget_contributif)},
+            {"@type": "PropertyValue", "name": "directDebit", "value": bool(instance.direct_debit)},
+        ]
+        return {
+            "@context": "https://schema.org",
+            "@type": "Project",
+            "identifier": str(instance.uuid),
+            "name": instance.name,
+            "description": instance.description,
+            "disambiguatingDescription": instance.short_description,
+            "dateCreated": instance.created_at.isoformat() if instance.created_at else None,
+            "currency": instance.currency,
+            "keywords": tags,
+            "additionalProperty": additional,
+        }
+
+
+class InitiativeCreateSerializer(serializers.Serializer):
+    """
+    Input serializer for schema.org/Project creation.
+    """
+    name = serializers.CharField()
+    description = serializers.CharField(required=False, allow_blank=True)
+    disambiguatingDescription = serializers.CharField(required=False, allow_blank=True)
+    keywords = serializers.ListField(child=serializers.CharField(), required=False)
+    currency = serializers.CharField(required=False, allow_blank=True)
+    voteEnabled = serializers.BooleanField(required=False)
+    budgetContributif = serializers.BooleanField(required=False)
+    directDebit = serializers.BooleanField(required=False)
+
+    def validate_name(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_disambiguatingDescription(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def save(self, **kwargs) -> Initiative:
+        data = self.validated_data
+        initiative = Initiative.objects.create(
+            name=data["name"],
+            description=data.get("description") or "",
+            short_description=data.get("disambiguatingDescription") or "",
+            currency=data.get("currency") or "€",
+            vote=bool(data.get("voteEnabled", False)),
+            budget_contributif=bool(data.get("budgetContributif", False)),
+            direct_debit=bool(data.get("directDebit", False)),
+        )
+        keywords = data.get("keywords") or []
+        for tag_name in keywords:
+            if not str(tag_name).strip():
+                continue
+            tag, _ = Tag.objects.get_or_create(name=str(tag_name).strip())
+            initiative.tags.add(tag)
+        return initiative
+
+
+class BudgetItemSchemaSerializer(serializers.Serializer):
+    """
+    Output serializer for BudgetItem using schema.org MonetaryAmount-like structure.
+    """
+
+    def to_representation(self, instance: BudgetItem) -> Dict[str, Any]:
+        amount = dround(instance.amount)
+        return {
+            "@type": "MonetaryAmount",
+            "identifier": str(instance.uuid),
+            "name": instance.description,
+            "value": str(amount) if amount is not None else None,
+            "currency": instance.initiative.currency,
+            "actionStatus": instance.state,
+            "dateCreated": instance.created_at.isoformat() if instance.created_at else None,
+        }
+
+
+class BudgetItemCreateSerializer(serializers.Serializer):
+    description = serializers.CharField(min_length=1)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    actionStatus = serializers.ChoiceField(
+        choices=[c[0] for c in BudgetItem.State.choices],
+        required=False,
+    )
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        self.amount = int(Decimal(value) * 100)
+        return value
+
+
+class ParticipationSchemaSerializer(serializers.Serializer):
+    """
+    Output serializer for Participation using schema.org Action-like fields.
+    """
+
+    def to_representation(self, instance: Participation) -> Dict[str, Any]:
+        amount = dround(instance.amount) if instance.amount is not None else None
+        payload = {
+            "@type": "Action",
+            "identifier": str(instance.uuid),
+            "description": instance.description,
+            "actionStatus": instance.state,
+            "object": {
+                "@type": "Project",
+                "identifier": str(instance.initiative.uuid),
+                "name": instance.initiative.name,
+            },
+            "agent": {
+                "@type": "Person",
+                "name": instance.participant.full_name_or_email_trunc(),
+                "email": instance.participant.email,
+            },
+            "dateCreated": instance.created_at.isoformat() if instance.created_at else None,
+        }
+        if amount is not None:
+            payload["amount"] = {
+                "@type": "MonetaryAmount",
+                "value": str(amount),
+                "currency": instance.initiative.currency,
+            }
+        if instance.time_spent_minutes:
+            payload["timeSpentMinutes"] = int(instance.time_spent_minutes)
+        return payload
+
+
+class ParticipationCreateSerializer(serializers.Serializer):
+    description = serializers.CharField(min_length=1)
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value is not None:
+            self.amount = int(Decimal(value) * 100)
+        return value

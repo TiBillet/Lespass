@@ -4,6 +4,9 @@
     <thead>
       <tr>
         <th scope="col">{% translate 'Participant' %}</th>
+        {% if show_participations_origin %}
+        <th scope="col">{% translate 'Origine' %}</th>
+        {% endif %}
         <th scope="col">{% translate 'Description' %}</th>
         <th scope="col" class="text-end">{% translate 'Montant demandé' %}</th>
         <th scope="col">{% translate 'Statut' %}</th>
@@ -20,11 +23,14 @@
     <tbody id="parts-more-{{ initiative.uuid }}" class="collapse">
         {% endif %}
         <tr>
-          <td>{{ p.participant.email }}</td>
+          <td>{{ p.participant.full_name_or_email_trunc }}</td>
+          {% if show_participations_origin %}
+          <td>{{ p.participant.client_source.name|default:"—" }}</td>
+          {% endif %}
           <td class="small">{{ p.description|linebreaksbr }}</td>
           <td class="text-end">
-            {% if p.amount == None %}
-              <span class="text-muted">—</span>
+            {% if p.amount is None %}
+              <span class="text-muted">{{ crowd_config.pro_bono_name|default:"Pro-bono" }}</span>
             {% else %}
               {{ p.amount|dround|floatformat:2 }} {{ initiative.currency }}
             {% endif %}
@@ -42,7 +48,7 @@
               {{ p.state }}
             {% endif %}
           </td>
-          <td>{{ p.created_at|date:'Y-m-d H:i' }}</td>
+          <td>{{ p.created_at|date:'d/m/y' }}</td>
           <td class="text-end">
             {% if user.is_authenticated and p.participant_id == user.id %}
               {% if p.state == 'requested' or p.state == 'approved_admin' %}
@@ -53,13 +59,13 @@
                 </button>
               {% elif p.state == 'completed_user' or p.state == 'validated_admin' %}
                 {% if p.time_spent_minutes %}
-                  <span class="text-muted small">{{ p.time_spent_minutes }} {% translate 'min' %}</span>
+                  <span class="text-muted small">{{ p.time_spent_minutes|minutes_to_human }}</span>
                 {% endif %}
               {% endif %}
             {% else %}
               {% if p.state == 'completed_user' or p.state == 'validated_admin' %}
                 {% if p.time_spent_minutes %}
-                  <span class="text-muted small">{{ p.time_spent_minutes }} {% translate 'min' %}</span>
+                  <span class="text-muted small">{{ p.time_spent_minutes|minutes_to_human }}</span>
                 {% endif %}
               {% endif %}
             {% endif %}
@@ -96,7 +102,7 @@
         </tr>
       {% empty %}
         <tr>
-          <td colspan="7" class="text-center text-muted py-4">{% translate 'Aucune participation pour le moment.' %}</td>
+          <td colspan="{% if show_participations_origin %}8{% else %}7{% endif %}" class="text-center text-muted py-4">{% translate 'Aucune participation pour le moment.' %}</td>
         </tr>
       {% endfor %}
       {% endwith %}

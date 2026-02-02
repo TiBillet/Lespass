@@ -243,7 +243,16 @@ class TibilletUser(AbstractUser):
             return f"{self.first_name} {self.last_name}"
         elif self.first_name:
             return self.first_name
-        return self.email
+        return self.email.partition("@")[0]
+
+    def full_name_or_email_trunc(self):
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        return self.email.partition("@")[0]
+
+
 
     # def achat(self):
     #     # Check if client_achat is already prefetched to avoid N+1 query

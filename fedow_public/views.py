@@ -52,6 +52,7 @@ class AssetViewset(viewsets.ViewSet):
         now = timezone.now()
         start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
+
         context = {
             "asset": asset,
             "total_by_place_with_uuid": total_by_place_with_uuid,

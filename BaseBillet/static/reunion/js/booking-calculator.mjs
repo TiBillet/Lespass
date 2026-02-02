@@ -68,10 +68,58 @@ export const init = () => {
             customPrice: el.querySelector('.js-order-custom-price')
         }))
         .filter(({ amount }) => amount !== null )
+
+    // Email confirmation check (reservation form)
+    const reservationForm = document.getElementById('reservation_form')
+    const emailInput = document.getElementById('booking-email')
+    const confirmInput = document.getElementById('booking-confirm')
+    const errorDiv = document.getElementById('email-error')
+    const validateEmails = () => {
+        if (!emailInput || !confirmInput || !errorDiv) return true
+        const email = emailInput.value || ''
+        const confirmEmail = confirmInput.value || ''
+        if (email !== confirmEmail) {
+            confirmInput.setCustomValidity('Les emails ne correspondent pas.')
+            errorDiv.textContent = 'Les emails ne correspondent pas.'
+            return false
+        }
+        confirmInput.setCustomValidity('')
+        errorDiv.textContent = ''
+        return true
+    }
+
+    if (reservationForm && emailInput && confirmInput) {
+        emailInput.addEventListener('input', validateEmails)
+        confirmInput.addEventListener('input', validateEmails)
+        reservationForm.addEventListener('submit', (event) => {
+            if (!validateEmails()) {
+                event.preventDefault()
+            }
+        })
+        reservationForm.addEventListener('htmx:configRequest', (event) => {
+            if (!validateEmails()) {
+                event.preventDefault()
+            }
+        })
+    }
     
-    orders.forEach(({ amount, customPrice }) => {
+    orders.forEach((order) => {
+        const { amount, customPrice } = order;
         const update = updateTotal(orders, totalAmount, totalPrice)
-        amount.addEventListener('bs-counter:update', update)
+        amount.addEventListener('bs-counter:update', () => {
+            // Mutual exclusion for free prices: if this is a free price and quantity > 0,
+            // reset all other free prices.
+            if (customPrice && Number(amount.value) > 0) {
+                orders.forEach(other => {
+                    if (other !== order && other.customPrice && Number(other.amount.value) > 0) {
+                        other.amount.value = 0;
+                        // Trigger update on the other counter so its UI refreshes
+                        other.amount.dispatchEvent(new CustomEvent('bs-counter:update'));
+                    }
+                });
+            }
+            update();
+        })
         if (customPrice) {
             customPrice.addEventListener('input', update)
         }

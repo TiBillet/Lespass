@@ -5,7 +5,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Optional, Dict
 from urllib.parse import urlencode
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import requests
 import segno
@@ -65,6 +65,7 @@ from unfold.widgets import (
 )
 
 from Administration.importers.ticket_exporter import TicketExportResource
+from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold
@@ -76,7 +77,7 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Pai
     PromotionalCode, Tva
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
-    send_reservation_cancellation_user, send_sale_to_laboutik
+    send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
 from Customers.models import Client
 from MetaBillet.models import WaitingConfiguration
 from crowds.models import Contribution, Vote, Participation, CrowdConfig, Initiative, BudgetItem
@@ -86,6 +87,7 @@ from fedow_connect.utils import dround
 from fedow_public.models import AssetFedowPublic as Asset, AssetFedowPublic
 
 # from simple_history.admin import SimpleHistoryAdmin
+from stripe._error import InvalidRequestError
 
 logger = logging.getLogger(__name__)
 
@@ -340,8 +342,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         queryset = super().get_queryset(request)
         return queryset.select_related('postal_address').prefetch_related(
             'federated_with',
-            'option_generale_radio',
-            'option_generale_checkbox'
+            # 'option_generale_radio',
+            # 'option_generale_checkbox'
         )
 
     fieldsets = (
@@ -493,6 +495,8 @@ class TagAdmin(ModelAdmin):
     compressed_fields = True  # Default: False 
     warn_unsaved_form = True  # Default: False
 
+    actions_list = ["sync_tags_action"]
+
     form = TagForm
     fields = ("name", "color")
     list_display = [
@@ -526,6 +530,117 @@ class TagAdmin(ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
+    def has_sync_tags_action_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    @action(
+        description=_("Synchronize tags"),
+        url_path="sync_tags",
+        permissions=["sync_tags_action"],
+    )
+    def sync_tags_action(self, request):
+        current_tenant = connection.tenant
+
+        # 1. Identifier les parents (ceux qui nous fédèrent)
+        # On utilise une requête SQL optimisée pour éviter 600 changements de contexte
+        from django.db import connection as db_connection
+        cursor = db_connection.cursor()
+
+        # On récupère les schémas possédant la table FederatedPlace
+        cursor.execute("SELECT table_schema FROM information_schema.tables WHERE table_name = 'BaseBillet_federatedplace'")
+        schemas_with_fed = {row[0] for row in cursor.fetchall()}
+
+        # On exclut le public, le nôtre et les schémas système
+        schemas_to_check = [s for s in schemas_with_fed if s not in ['public', 'information_schema', 'pg_catalog', current_tenant.schema_name]]
+
+        parents_pks = []
+        if schemas_to_check:
+            batch_size = 50
+            for i in range(0, len(schemas_to_check), batch_size):
+                batch = schemas_to_check[i:i + batch_size]
+                query_parts = []
+                params = []
+                for schema in batch:
+                    query_parts.append(f'SELECT %s WHERE EXISTS (SELECT 1 FROM "{schema}"."BaseBillet_federatedplace" WHERE tenant_id = %s)')
+                    params.extend([schema, current_tenant.pk])
+
+                if query_parts:
+                    full_query = " UNION ALL ".join(query_parts)
+                    cursor.execute(full_query, params)
+                    for row in cursor.fetchall():
+                        parents_pks.append(row[0])
+
+        parents = list(Client.objects.filter(schema_name__in=parents_pks))
+
+        # 2. Identifier les enfants (ceux que nous fédérons)
+        children = [fp.tenant for fp in FederatedPlace.objects.all().select_related('tenant')]
+
+        # Combiner et dédupliquer en gardant l'ordre (parents d'abord)
+        seen = {current_tenant.pk}
+        tenants_to_sync = []
+        for t in parents + children:
+            if t.pk not in seen:
+                tenants_to_sync.append(t)
+                seen.add(t.pk)
+
+        # 3. Collecter tous les tags distants en une seule fois
+        all_remote_tags = {}
+        if tenants_to_sync:
+            # On vérifie quels schémas ont la table Tag
+            cursor.execute("SELECT table_schema FROM information_schema.tables WHERE table_name = 'BaseBillet_tag'")
+            schemas_with_tags = {row[0] for row in cursor.fetchall()}
+
+            schemas_to_fetch = [t.schema_name for t in tenants_to_sync if t.schema_name in schemas_with_tags]
+
+            if schemas_to_fetch:
+                batch_size = 50
+                for i in range(0, len(schemas_to_fetch), batch_size):
+                    batch = schemas_to_fetch[i:i + batch_size]
+                    query_parts = []
+                    for schema in batch:
+                        query_parts.append(f'SELECT name, color FROM "{schema}"."BaseBillet_tag"')
+
+                    full_query = " UNION ALL ".join(query_parts)
+                    cursor.execute(full_query)
+                    for name, color in cursor.fetchall():
+                        # Le dernier rencontré gagne (priorité aux enfants sur les parents si conflit)
+                        all_remote_tags[name] = color
+
+        # 4. Appliquer les changements localement en masse
+        local_tags = {t.name: t for t in Tag.objects.all()}
+        tags_created = 0
+        tags_updated = 0
+
+        to_create = []
+        to_update = []
+
+        for name, color in all_remote_tags.items():
+            cleaned_color = Tag._clean_hex(color, "#0dcaf0")
+            if name in local_tags:
+                tag = local_tags[name]
+                if tag.color != cleaned_color:
+                    tag.color = cleaned_color
+                    to_update.append(tag)
+            else:
+                to_create.append(Tag(
+                    uuid=uuid4(),
+                    name=name,
+                    slug=slugify(name),
+                    color=cleaned_color
+                ))
+
+        if to_create:
+            Tag.objects.bulk_create(to_create)
+            tags_created = len(to_create)
+
+        if to_update:
+            Tag.objects.bulk_update(to_update, ['color'])
+            tags_updated = len(to_update)
+
+        messages.success(request, _("Synchronization complete: {} tags created, {} tags updated.").format(tags_created, tags_updated))
+        return redirect(request.META.get("HTTP_REFERER", reverse("staff_admin:BaseBillet_tag_changelist")))
+
+"""
 
 @admin.register(OptionGenerale, site=staff_admin_site)
 class OptionGeneraleAdmin(ModelAdmin):
@@ -548,7 +663,7 @@ class OptionGeneraleAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
+"""
 
 class PriceInlineChangeForm(ModelForm):
     # Le formulaire pour changer une adhésion
@@ -779,8 +894,8 @@ class ProductAdminCustomForm(ModelForm):
             'long_description',
             'img',
             'poids',
-            "option_generale_radio",
-            "option_generale_checkbox",
+            # "option_generale_radio",
+            # "option_generale_checkbox",
             "validate_button_text",
             "legal_link",
             'publish',
@@ -885,12 +1000,12 @@ class ProductAdmin(ModelAdmin):
                 'archive',
             ),
         }),
-        (_('Options'), {
-            'fields': (
-                'option_generale_radio',
-                'option_generale_checkbox',
-            ),
-        }),
+        # (_('Options'), {
+        #     'fields': (
+        #         'option_generale_radio',
+        #         'option_generale_checkbox',
+        #     ),
+        # }),
     )
 
     list_display = (
@@ -902,9 +1017,9 @@ class ProductAdmin(ModelAdmin):
     )
 
     ordering = ("categorie_article", "poids",)
-    autocomplete_fields = [
-        "option_generale_radio", "option_generale_checkbox",
-    ]
+    # autocomplete_fields = [
+    #     "option_generale_radio", "option_generale_checkbox",
+    # ]
     list_filter = ['publish', 'categorie_article']
     search_fields = ['name']
 
@@ -1477,6 +1592,31 @@ class HumanUserAdmin(ModelAdmin):
         logger.info(request.user, perm)
         return perm
 
+    actions_row = ["login_as_user", ]
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return RootPermissionWithRequest(request)
+
+    @action(
+        description=_("Login as this user"),
+        permissions=["custom_actions_row"],
+    )
+    def login_as_user(self, request, object_id):
+        if not RootPermissionWithRequest(request):
+            messages.error(request, _("You do not have permission to perform this action."))
+            return redirect(request.META.get("HTTP_REFERER", "/admin/"))
+
+        user = get_object_or_404(HumanUser, pk=object_id)
+        tenant = connection.tenant
+        try:
+            domain = tenant.get_primary_domain().domain
+            base_url = f"https://{domain}"
+        except Exception:
+            base_url = "https://tibillet.org"
+
+        connexion_url = forge_connexion_url(user, base_url)
+        return redirect(connexion_url)
+
 
 ### ADHESION
 
@@ -1537,7 +1677,6 @@ class MembershipAddForm(ModelForm):
         fields = [
             'last_name',
             'first_name',
-            'option_generale',
         ]
 
     def clean_email(self):
@@ -1629,11 +1768,9 @@ class MembershipChangeForm(ModelForm):
         fields = (
             'last_name',
             'first_name',
-            'option_generale',
             'deadline',
             'commentaire',
         )
-
 
 # Le petit badge route a droite du titre "adhésion"
 def adhesion_badge_callback(request):
@@ -1754,6 +1891,9 @@ class LigneArticleInline(TabularInline):
     def display_status(self, instance: LigneArticle):
         return instance.get_status_display()
 
+    def has_view_permission(self, request, obj=None):
+        return True
+
     def has_add_permission(self, request, obj=None):
         return False
 
@@ -1792,7 +1932,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'last_name',
         'price',
         'contribution_value',
-        'options',
+        # 'options',
         'last_contribution',
         'deadline',
         'display_is_valid',
@@ -1813,7 +1953,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         qs = super().get_queryset(request)
         return (
             qs.select_related('user', 'price', 'price__product')
-            .prefetch_related('option_generale', 'price__product__form_fields')
+            .prefetch_related('price__product__form_fields')
         )
 
     @display(description=_("User"))
@@ -1827,22 +1967,26 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             )
         return "-"
 
+    @display(description=_("Produit / Tarif"))
+    def price_product_display(self, obj: Membership):
+        return f"{obj.price.product.name} / {obj.price.name}"
+
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = super().get_readonly_fields(request, obj)
         if obj:  # On est en train de modifier
-            return list(readonly_fields) + ['user_email_link']
+            return list(readonly_fields) + ['user_email_link', 'price_product_display']
         return readonly_fields
 
-    def get_fields(self, request, obj=None):
-        fields = super().get_fields(request, obj)
-        if obj:
-            # Si on est en modif, on s'assure que user_email_link est présent et au début
-            if 'user_email_link' not in fields:
-                fields = ['user_email_link'] + list(fields)
-        return fields
+    # def get_fields(self, request, obj=None):
+    #     fields = super().get_fields(request, obj)
+    #     if obj:
+    #         # Si on est en modif, on s'assure que user_email_link est présent et au début
+    #         if 'user_email_link' or 'price_product_display' not in fields:
+    #             fields = ['user_email_link', 'price_product_display'] + list(fields)
+    #     return fields
 
     ### FORMULAIRES
-    autocomplete_fields = ['option_generale', ]
+    # autocomplete_fields = ['option_generale', ]
 
     def get_form(self, request, obj=None, **kwargs):
         """ Si c'est un add, on modifie un peu le formulaire pour avoir un champs email """
@@ -1876,10 +2020,10 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
                 initial[key] = value
 
         # ManyToMany: option_generale (allow multiple ids)
-        option_ids = params.getlist('option_generale')
-        if option_ids:
+        # option_ids = params.getlist('option_generale')
+        # if option_ids:
             # Keep as list of IDs (ModelMultipleChoiceField accepts IDs as initial)
-            initial['option_generale'] = option_ids
+            # initial['option_generale'] = option_ids
 
         return initial
 
@@ -1968,13 +2112,13 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             params['last_name'] = membership.last_name
 
         # ManyToMany: option_generale -> pass multiple query params
-        option_ids = list(membership.option_generale.values_list('pk', flat=True))
+        # option_ids = list(membership.option_generale.values_list('pk', flat=True))
 
         # Encode query string with doseq for multi-values
         query = urlencode(params, doseq=True)
-        if option_ids:
-            option_query = urlencode([("option_generale", oid) for oid in option_ids])
-            query = f"{query}&{option_query}" if query else option_query
+        # if option_ids:
+        #     option_query = urlencode([("option_generale", oid) for oid in option_ids])
+        #     query = f"{query}&{option_query}" if query else option_query
 
         return redirect(f"{add_url}?{query}")
 
@@ -2027,7 +2171,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 ### VENTES ###
 
 @admin.register(LigneArticle, site=staff_admin_site)
-class LigneArticleAdmin(ModelAdmin):
+class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
@@ -2054,6 +2198,9 @@ class LigneArticleAdmin(ModelAdmin):
     search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name',
                      'paiement_stripe__user__email', 'membership__user__email')
     ordering = ('-datetime',)
+
+    resource_classes = [LigneArticleExportResource]
+    export_form_class = ExportForm
 
     def get_queryset(self, request):
         # Utiliser select_related pour précharger pricesold et productsold
@@ -2328,21 +2475,15 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'jauge_max',
                 'show_gauge',
                 'postal_address',
-            )
-        }),
-        (_('Tags and forms'), {
-            'fields': (
                 'tag',
-                'options_radio',
-                'options_checkbox',
-                'reservation_button_name',
-            ),
+            )
         }),
         (_('Bookings'), {
             'fields': (
                 # 'easy_reservation',
-                'max_per_user',
                 'products',
+                'max_per_user',
+                'reservation_button_name',
                 'custom_confirmation_message',
                 'refund_deadline',
             ),
@@ -2379,8 +2520,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     autocomplete_fields = [
         "tag",
-        "options_radio",
-        "options_checkbox",
+        # "options_radio",
+        # "options_checkbox",
         "carrousel",
 
         # Le autocomplete fields + many2many ne permet pas de filtrage facile
@@ -2403,7 +2544,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             .exclude(parent__isnull=False)
             .select_related('postal_address')
             .prefetch_related(
-                'tag', 'options_radio', 'options_checkbox', 'carrousel', 'products',
+                'tag', 'carrousel', 'products',
                 Prefetch(
                     'reservation',
                     queryset=Reservation.objects.select_related('user_commande')
@@ -2428,7 +2569,21 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             for price in product.prices.all():
                 get_or_create_price_sold(price=price, event=obj)
 
-        super().save_model(request, obj, form, change)
+        try:
+            super().save_model(request, obj, form, change)
+        except IntegrityError as err:
+            err_str = str(err)
+            if (
+                "BaseBillet_event_name_datetime" in err_str
+                or ("duplicate key value violates unique constraint" in err_str and "(name, datetime)" in err_str)
+            ):
+                messages.error(request, _("event existe déja"))
+                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
+            logger.error(err)
+            raise err
+        except Exception as err:
+            logger.error(err)
+            raise err
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -2583,8 +2738,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # Copy many-to-many relationships
         duplicate.products.set(obj.products.all())
         duplicate.tag.set(obj.tag.all())
-        duplicate.options_radio.set(obj.options_radio.all())
-        duplicate.options_checkbox.set(obj.options_checkbox.all())
+        # duplicate.options_radio.set(obj.options_radio.all())
+        # duplicate.options_checkbox.set(obj.options_checkbox.all())
         duplicate.carrousel.set(obj.carrousel.all())
 
         # Duplicate child events of type ACTION
@@ -2626,8 +2781,8 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
             # Copy many-to-many relationships for child
             child_duplicate.products.set(child.products.all())
             child_duplicate.tag.set(child.tag.all())
-            child_duplicate.options_radio.set(child.options_radio.all())
-            child_duplicate.options_checkbox.set(child.options_checkbox.all())
+            # child_duplicate.options_radio.set(child.options_radio.all())
+            # child_duplicate.options_checkbox.set(child.options_checkbox.all())
             child_duplicate.carrousel.set(child.carrousel.all())
 
         return duplicate
@@ -2691,22 +2846,22 @@ class ReservationAddAdmin(ModelForm):
         label=_("Rate")
     )
 
-    options_checkbox = forms.ModelMultipleChoiceField(
-        # Uniquement les options qui sont utilisé dans les évènements futurs
-        required=False,
-        queryset=OptionGenerale.objects.filter(
-            options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
-        widget=UnfoldAdminCheckboxSelectMultiple(),
-        label=_("Multiple choice menu"),
-    )
-
-    options_radio = forms.ModelChoiceField(
-        # Uniquement les options qui sont utilisé dans les évènements futurs
-        required=False,
-        queryset=OptionGenerale.objects.filter(options_radio__datetime__gte=timezone.localtime() - timedelta(days=1)),
-        widget=UnfoldAdminRadioSelectWidget(),
-        label=_("Single choice menu"),
-    )
+    # options_checkbox = forms.ModelMultipleChoiceField(
+    #     # Uniquement les options qui sont utilisé dans les évènements futurs
+    #     required=False,
+    #     queryset=OptionGenerale.objects.filter(
+    #         options_checkbox__datetime__gte=timezone.localtime() - timedelta(days=1)),
+    #     widget=UnfoldAdminCheckboxSelectMultiple(),
+    #     label=_("Multiple choice menu"),
+    # )
+    #
+    # options_radio = forms.ModelChoiceField(
+    #     # Uniquement les options qui sont utilisé dans les évènements futurs
+    #     required=False,
+    #     queryset=OptionGenerale.objects.filter(options_radio__datetime__gte=timezone.localtime() - timedelta(days=1)),
+    #     widget=UnfoldAdminRadioSelectWidget(),
+    #     label=_("Single choice menu"),
+    # )
 
     payment_method = forms.ChoiceField(
         required=False,
@@ -2759,12 +2914,12 @@ class ReservationAddAdmin(ModelForm):
         reservation.event = event
         reservation.status = Reservation.VALID  # automatiquement en VALID,on est sur l'admin
         # On va chercher les options
-        options_checkbox = cleaned_data.pop('options_checkbox')
-        if options_checkbox:
-            reservation.options.set(options_checkbox)
-        options_radio = cleaned_data.pop('options_radio')
-        if options_radio:
-            reservation.options.add(options_radio)
+        # options_checkbox = cleaned_data.pop('options_checkbox')
+        # if options_checkbox:
+        #     reservation.options.set(options_checkbox)
+        # options_radio = cleaned_data.pop('options_radio')
+        # if options_radio:
+        #     reservation.options.add(options_radio)
 
         reservation = super().save(commit=commit)
 
@@ -2878,17 +3033,17 @@ class ReservationAdmin(ModelAdmin):
         'event',
         'status',
         'tickets_count',
-        'options_str',
+        # 'options_str',
         'total_paid',
     )
     # readonly_fields = list_display
 
-    search_fields = ['event__name', 'user_commande__email', 'options__name', 'datetime', 'custom_form']
+    search_fields = ['event__name', 'user_commande__email', 'datetime', 'custom_form']
     list_filter = [
         EventFutureFilter,
         ReservationValidFilter,
         'datetime',
-        'options',
+        # 'options',
         EventPastFilter,
         EventArchivedFilter,
     ]
@@ -2902,7 +3057,7 @@ class ReservationAdmin(ModelAdmin):
             queryset
             .select_related('user_commande', 'event')
             .prefetch_related(
-                'options',
+                # 'options',
                 'tickets',
                 'tickets__pricesold__price__product__form_fields',
             )
@@ -2937,9 +3092,9 @@ class ReservationAdmin(ModelAdmin):
     def tickets_count(self, instance: Reservation):
         return instance.tickets.filter(status__in=[Ticket.SCANNED, Ticket.NOT_SCANNED]).count()
 
-    @display(description=_("Options"))
-    def options_str(self, instance: Reservation):
-        return " - ".join([option.name for option in instance.options.all()])
+    # @display(description=_("Options"))
+    # def options_str(self, instance: Reservation):
+    #     return " - ".join([option.name for option in instance.options.all()])
 
     actions_detail = ["send_ticket_to_mail", ]
 
@@ -3031,7 +3186,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         EventPastFilter,
         TicketValidFilter,
         "reservation__datetime",
-        "reservation__options",
+        # "reservation__options",
         EventArchivedFilter,
     ]
     search_fields = (
@@ -3047,7 +3202,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
         # 'first_name',
         # 'last_name',
         'event',
-        'options',
+        # 'options',
         'product_name',
         'price_name',
         'state',
@@ -3158,7 +3313,7 @@ class TicketAdmin(ModelAdmin, ExportActionModelAdmin):
             .select_related('reservation', 'reservation__event', 'reservation__event__parent',
                             'reservation__user_commande')
             .prefetch_related(
-                'reservation__options',
+                # 'reservation__options',
                 'reservation__tickets__pricesold__price__product__form_fields',
             )
         )
@@ -4128,7 +4283,13 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
             "name_goal",
             "name_funding",
             "name_participations",
+            "contributor_covenant",
+            "pro_bono_name",
         )}),
+        # (_("Financement"), {"fields": (
+        #     "global_funding_button",
+        #     "global_funding_button_text",
+        # )}),
     )
 
     formfield_overrides = {
@@ -4391,6 +4552,7 @@ class InitiativeAdmin(ModelAdmin):
         "vote",
         "budget_contributif",
         "adaptative_funding_goal_on_participation",
+
     )
 
     list_filter = ("created_at", "tags")

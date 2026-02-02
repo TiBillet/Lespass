@@ -10,10 +10,13 @@ urlpatterns = [
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
+    path('i18n/', include('django.conf.urls.i18n')),
     path('', include('MetaBillet.urls')),
 ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+if settings.DEBUG and not settings.TEST :
     urlpatterns += [path("__reload__/", include("django_browser_reload.urls")), ]

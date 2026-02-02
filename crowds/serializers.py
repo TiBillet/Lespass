@@ -30,6 +30,28 @@ class ContributionCreateSerializer(serializers.Serializer):
         return clean_html(value or "")
 
 
+class GlobalFundingCreateSerializer(serializers.Serializer):
+    contributor_name = serializers.CharField(allow_blank=False, trim_whitespace=True)
+    description = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+    amount = serializers.IntegerField(min_value=1)
+
+    def validate_contributor_name(self, value: str) -> str:
+        return clean_html(value or "")
+
+    def validate_description(self, value: str) -> str:
+        return clean_html(value or "")
+
+
+class GlobalFundingAllocateSerializer(serializers.Serializer):
+    initiative = serializers.UUIDField()
+    amount_eur = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+    def validate_amount_eur(self, value: Decimal) -> Decimal:
+        if value:
+            self.amount = int(Decimal(value) * 100)
+        return value
+
+
 class ParticipationCreateSerializer(serializers.Serializer):
     description = serializers.CharField(allow_blank=False, trim_whitespace=True)
     requested_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)

@@ -121,7 +121,7 @@ def get_context(request):
         "base_template": base_template,
         "page": request.GET.get('page', 1),
         "tags": request.GET.getlist('tag'),
-        "url_name": request.resolver_match.url_name,
+        "url_name": request.resolver_match.url_name if request.resolver_match else None,
         "user": request.user,
         "profile": serialized_user,
         "config": config,
@@ -153,8 +153,8 @@ def get_context(request):
 
     if crowd_config.active and Initiative.objects.exists():
         navbar.append(
-            {'name': f'crowd-list', 'url': '/crowd/',
-             'label': f'{crowd_config.title}', 'icon': 'piggy-bank'}
+            {'name': f'crowd-list', 'url': '/contrib/',
+             'label': f'{crowd_config.title}', 'icon': 'people-fill'}
         )
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
@@ -302,7 +302,7 @@ def connexion(request):
 
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.TEST:
+            if settings.TEST or settings.DEBUG:
                 token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
@@ -392,7 +392,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             # Pour les tests :
             # On est sur le moteur de démonstration / test
             # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.TEST:
+            if settings.TEST or settings.DEBUG:
                 token = user.get_connect_token()
                 base_url = connection.tenant.get_primary_domain().domain
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
@@ -498,7 +498,7 @@ class SpecialAdminAction(viewsets.ViewSet):
         referer = request.headers.get('Referer') or f"/admin/AuthBillet/humanuser/{pk}/change/"
         logger.info(f"toggle_user_right : {request.data}")
 
-        if request.GET.get('action') == 'client_admin' :
+        if request.GET.get('action') == 'client_admin':
             if user.client_admin.filter(pk=tenant.pk).exists():
                 user.client_admin.remove(tenant)
                 user.is_staff = False
@@ -508,7 +508,7 @@ class SpecialAdminAction(viewsets.ViewSet):
                 user.client_admin.add(tenant)
                 messages.success(request, _("Admin right granted: with great power comes great responsibility."))
 
-        elif request.GET.get('action') == 'initiate_payment' :
+        elif request.GET.get('action') == 'initiate_payment':
             if user.initiate_payment.filter(pk=tenant.pk).exists():
                 user.initiate_payment.remove(tenant)
                 messages.info(request, _("Right removed: initiate payment"))
@@ -516,7 +516,7 @@ class SpecialAdminAction(viewsets.ViewSet):
                 user.initiate_payment.add(tenant)
                 messages.success(request, _("Right granted: initiate payment"))
 
-        elif request.GET.get('action') == 'create_event' :
+        elif request.GET.get('action') == 'create_event':
             if user.create_event.filter(pk=tenant.pk).exists():
                 user.create_event.remove(tenant)
                 messages.info(request, _("Right removed: Event create"))
@@ -524,7 +524,7 @@ class SpecialAdminAction(viewsets.ViewSet):
                 user.create_event.add(tenant)
                 messages.success(request, _("Right granted: Event create"))
 
-        elif request.GET.get('action') == 'manage_crowd' :
+        elif request.GET.get('action') == 'manage_crowd':
             if user.manage_crowd.filter(pk=tenant.pk).exists():
                 user.manage_crowd.remove(tenant)
                 messages.info(request, _("Right removed: Manage crowds"))
@@ -536,8 +536,6 @@ class SpecialAdminAction(viewsets.ViewSet):
             messages.error(request, _("No right selected"))
 
         return HttpResponseClientRedirect(referer)
-
-
 
 
 class TiBilletLogin(viewsets.ViewSet):
@@ -678,7 +676,6 @@ class MyAccount(viewsets.ViewSet):
         template_context['account_tab'] = 'balance'
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
-
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
@@ -1451,18 +1448,20 @@ class FederationViewset(viewsets.ViewSet):
             actual_tenant: Client = connection.tenant
             tenants.append(actual_tenant)
             # Les lieux fédéré en agenda
-            for fed in FederatedPlace.objects.all():
+            for fed in FederatedPlace.objects.all().select_related('tenant'):
                 if fed.tenant not in tenants:
                     tenants.append(fed.tenant)
 
             for asset in AssetFedowPublic.objects.filter(
                     origin=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT):
+            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
+                'federated_with'):
                 assets.append(asset)
 
             for asset in AssetFedowPublic.objects.filter(
                     federated_with=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT):
+            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
+                'federated_with'):
                 assets.append(asset)
 
             # Les lieux fédéré en Asset
@@ -1560,6 +1559,7 @@ class HomeViewset(viewsets.ViewSet):
 
 class EventMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
+
     def get_permissions(self):
         # Permissions spécifiques pour les actions d'administration (création d'évènement simple)
         if self.action in ['simple_add_event', 'simple_create_event', 'address_add_form', 'address_create']:
@@ -1568,10 +1568,8 @@ class EventMVT(viewsets.ViewSet):
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
 
-
-
     def federated_events_get(self, slug):
-        for place in FederatedPlace.objects.all():
+        for place in FederatedPlace.objects.all().select_related('tenant'):
             tenant = place.tenant
             with tenant_context(tenant):
                 try:
@@ -1589,7 +1587,7 @@ class EventMVT(viewsets.ViewSet):
         return None
 
     def federated_events_get_hex8(self, hex8):
-        for place in FederatedPlace.objects.all():
+        for place in FederatedPlace.objects.all().select_related('tenant'):
             tenant = place.tenant
             with tenant_context(tenant):
                 try:
@@ -1641,7 +1639,7 @@ class EventMVT(viewsets.ViewSet):
                     'tag', 'products', 'products__prices',
                 ).filter(
                     published=True,
-                    datetime__gte=timezone.localtime() - timedelta(days=1), # On prend les évènement a partir d'hier
+                    datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
                 ).exclude(
                     tag__slug__in=tenant['tag_filter']
                 ).exclude(
@@ -1687,7 +1685,7 @@ class EventMVT(viewsets.ViewSet):
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
 
-                    date = event.datetime.date()
+                    date = event.datetime
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
@@ -1735,7 +1733,8 @@ class EventMVT(viewsets.ViewSet):
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
+        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search,
+                                                                                          page=page)
         # On renvoie la page en entier
         return render(request, "reunion/views/event/list.html", context=context)
 
@@ -1806,10 +1805,12 @@ class EventMVT(viewsets.ViewSet):
             if request.user.is_authenticated:
                 for product in products:
                     if product.max_per_user_reached(user=request.user, event=event):
-                        logger.info(f"product.max_per_user_reached : {product.name} {product.max_per_user_reached(user=request.user, event=event)}")
+                        logger.info(
+                            f"product.max_per_user_reached : {product.name} {product.max_per_user_reached(user=request.user, event=event)}")
                         product_max_per_user_reached.append(product)
                 for price in prices:
-                    logger.info(f"price.max_per_user_reached : {price.name} {price.max_per_user_reached(user=request.user, event=event)}")
+                    logger.info(
+                        f"price.max_per_user_reached : {price.name} {price.max_per_user_reached(user=request.user, event=event)}")
                     if price.max_per_user_reached(user=request.user, event=event):
                         price_max_per_user_reached.append(price)
 
@@ -1835,7 +1836,7 @@ class EventMVT(viewsets.ViewSet):
             else:
                 event = self.federated_events_get(slug)
 
-        except Event.MultipleObjectsReturned :
+        except Event.MultipleObjectsReturned:
             logger.info("Url de lien mal formé, plusieurs events ?")
             return redirect("/event/")
 
@@ -1961,7 +1962,6 @@ class EventMVT(viewsets.ViewSet):
             return redirect('/my_account/my_reservations/')
         return redirect('/event/')
 
-
     ### Simple add event
 
     @action(detail=False, methods=['GET'])
@@ -1979,7 +1979,6 @@ class EventMVT(viewsets.ViewSet):
             'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
         })
         return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
-
 
     @action(detail=False, methods=['POST'])
     def simple_create_event(self, request: HttpRequest):
@@ -2112,6 +2111,7 @@ class EventMVT(viewsets.ViewSet):
         # Redirige l'offcanvas vers le formulaire d'évènement
         return self.simple_add_event(request)
 
+
 '''
 @require_GET
 def agenda(request):
@@ -2230,7 +2230,7 @@ class MembershipMVT(viewsets.ViewSet):
             return render(request, "reunion/views/membership/pending_manual_validation.html", context=context)
 
         # Le lien de paiement a été généré, on envoi sur Stripe
-        elif membership_validator.checkout_stripe_url :
+        elif membership_validator.checkout_stripe_url:
             return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
 
         else:
@@ -2336,8 +2336,6 @@ class MembershipMVT(viewsets.ViewSet):
             # Pour toute autre erreur, on affiche la page 404 personnalisée
             context = get_context(request)
             return render(request, "reunion/views/membership/404.html", context=context, status=404)
-
-
 
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):
@@ -2562,7 +2560,24 @@ class Tenant(viewsets.ViewSet):
 
             # Si assez de tenant en attentent de création existent :
             if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
-                tenant = wc.create_tenant()
+                try:
+                    tenant = wc.create_tenant()
+                except Exception as e:
+                    logger.error(f"Error creating tenant for {wc.organisation}: {e}")
+                    # Try to redirect to existing tenant if it's a name conflict
+                    existing_client = Client.objects.filter(name=wc.organisation).first()
+                    if existing_client:
+                        try:
+                            primary_domain = f"https://{existing_client.get_primary_domain().domain}"
+                            messages.info(request, _("This space already exists. Redirecting you to it."))
+                            return redirect(primary_domain)
+                        except Exception:
+                            pass
+
+                    messages.error(request,
+                                   _("An error occurred while creating your space. It might be because the name is already taken or no free slot is available. Please contact us."))
+                    return redirect('/')
+
                 primary_domain = f"https://{tenant.get_primary_domain().domain}"
                 user = get_or_create_user(wc.email, send_mail=False)
                 token = user.get_connect_token()

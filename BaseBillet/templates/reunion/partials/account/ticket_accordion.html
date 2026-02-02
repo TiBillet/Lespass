@@ -80,7 +80,8 @@
                         hx-target="#ticketPanelBody"
                         data-bs-toggle="offcanvas"
                         data-bs-target="#ticketPanel"
-                        aria-controls="ticketPanel">
+                        aria-controls="ticketPanel"
+                        data-testid="ticket-display-{{ ticket.uuid }}">
                         {% translate "Display ticket" %}
                     </button>
                     {% if ticket.status == ticket.NOT_SCANNED %}
@@ -89,7 +90,8 @@
                         hx-post="/my_account/{{ ticket.uuid }}/cancel_ticket/"
                         hx-confirm="{% if ticket.reservation.total_paid > 0 %}{{ ticket.reservation.cancel_text }}{% else %}J'annule ce billet{% endif %}"
                         hx-target="closest .accordion-item"
-                        hx-swap="delete">
+                        hx-swap="delete"
+                        data-testid="ticket-cancel-{{ ticket.uuid }}">
                         {% translate "Cancel this ticket" %}
                     </button>
                     {% endif %}

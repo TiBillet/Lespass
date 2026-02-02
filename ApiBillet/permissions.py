@@ -20,6 +20,7 @@ def get_apikey_valid(view: ViewSet) -> AbstractAPIKey or None:
     try:
         # Récupération de la clé API et vérification qu'elle existe pour le tenant
         key = view.request.META["HTTP_AUTHORIZATION"].split()[1]
+
         api_key = APIKey.objects.get_from_key(key)
         tenant_apikey = get_object_or_404(ExternalApiKey, key=api_key)
 
@@ -42,7 +43,8 @@ def get_apikey_valid(view: ViewSet) -> AbstractAPIKey or None:
         if tenant_apikey.api_permissions().get(view.basename):
             return tenant_apikey
 
-    except:
+    except Exception as e:
+        logger.error(f"get_apikey_valid : {e}")
         return None
 
 

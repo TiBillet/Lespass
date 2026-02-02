@@ -26,6 +26,7 @@ urlpatterns = [
     }, 'template_name': 'sitemaps/sitemap.xml'}, name='django.contrib.sitemaps.views.sitemap'),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
+    path('i18n/', include('django.conf.urls.i18n')),
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
 
@@ -43,6 +44,7 @@ urlpatterns = [
     re_path(r'fwh/', include('fedow_connect.urls')),
     re_path(r'fedow/', include('fedow_public.urls')),
     re_path(r'crowd/', include('crowds.urls')),
+    re_path(r'contrib/', include('crowds.urls')),
 
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
@@ -53,9 +55,11 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    urlpatterns += [path("__reload__/", include("django_browser_reload.urls")),]
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+if settings.DEBUG and not settings.TEST:
+    urlpatterns += [path("__reload__/", include("django_browser_reload.urls")),]
 
 # Register custom error handlers
 handler500 = 'BaseBillet.views.handler500'

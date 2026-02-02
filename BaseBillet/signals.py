@@ -10,7 +10,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 from jedi.inference.value import instance
 
-from ApiBillet.serializers import get_or_create_price_sold
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, LigneArticle, Ticket, Paiement_stripe, Product, Price, \
     PaymentMethod, Membership, SaleOrigin, Configuration
@@ -417,7 +417,7 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
             pricesold=get_or_create_price_sold(membership.price),
             qty=1,
             membership=membership,
-            amount=int(membership.contribution_value * 100),
+            amount=dec_to_int(membership.contribution_value),
             payment_method=membership.payment_method,
             status=LigneArticle.CREATED,
             sale_origin=SaleOrigin.ADMIN,

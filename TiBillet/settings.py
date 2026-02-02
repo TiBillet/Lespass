@@ -157,7 +157,7 @@ SHARED_APPS = (
     'import_export',
 )
 
-if DEBUG:
+if DEBUG and not TEST :
     SHARED_APPS += ('django_browser_reload',)
 
 # CodeLogin_app/settings.py
@@ -214,7 +214,7 @@ MIDDLEWARE = [
     'Customers.views.TimezoneMiddleware',
 ]
 
-if DEBUG:
+if DEBUG and not TEST :
     MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
 TEMPLATES = [
@@ -576,13 +576,13 @@ UNFOLD = {
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
 
                     },
-                    {
-                        "title": _("Options"),
-                        "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
+                    # {
+                    #     "title": _("Options"),
+                    #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
+                    #     # "badge": "Administration.admin_tenant.badge_callback",
+                    #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                    # },
                 ],
             },
             {
