@@ -1,3 +1,7 @@
+---
+apply: always
+---
+
 # 🧪 Guide des Tests - Lespass (TiBillet) / Tests Guide
 
 Bienvenue dans le dossier des tests du projet Lespass !

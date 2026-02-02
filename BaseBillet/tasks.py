@@ -1718,6 +1718,9 @@ def membership_renewal_reminder():
 
                     config = Configuration.get_solo()
                     user = membership.user
+                    if not user:
+                        logger.warning(f"membership_renewal_reminder : membership {membership.pk} has no user. Skipping.")
+                        continue
                     email = user.email
 
                     context = {
