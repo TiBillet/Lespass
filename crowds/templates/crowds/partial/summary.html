@@ -94,9 +94,11 @@
                 <i class="bi bi-piggy-bank fs-5 text-success" aria-hidden="true"></i>
                 <div class="lh-1">
                     <strong class="fs-5 fw-bold text-success">{{ summary_funding_percent }}%</strong>
-                    <small class="d-block text-muted">
-                        {{ summary_funding_to_allocate|dround }} {{ global_funding_currency }} {% translate "à répartir" %}
-                    </small>
+                    {% if crowd_config.global_funding_button %}
+                        <small class="d-block text-muted">
+                            {{ summary_funding_to_allocate|dround }} {{ global_funding_currency }} {% translate "à répartir" %}
+                        </small>
+                    {% endif %}
                 </div>
             </div>
 
@@ -112,6 +114,7 @@
                     </button>
                 </div>
             {% endif %}
+
         </div>
 
         {# Montant financé par l'utilisateur (si connecté) #}
@@ -126,8 +129,9 @@
         {% endif %}
 
         {# Section admin : objectif et répartition (staff only) #}
-        {% if user.is_staff or user.is_superuser %}
-            <div class="mt-3 p-3 bg-warning bg-opacity-10 border border-warning rounded-3" data-testid="crowds-summary-admin">
+        {% if user|can_admin and crowd_config.global_funding_button %}
+            <div class="mt-3 p-3 bg-warning bg-opacity-10 border border-warning rounded-3"
+                 data-testid="crowds-summary-admin">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <div>
                         <span class="badge bg-warning text-dark">

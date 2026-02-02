@@ -4280,10 +4280,10 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
             "contributor_covenant",
             "pro_bono_name",
         )}),
-        (_("Financement"), {"fields": (
-            "global_funding_button",
-            "global_funding_button_text",
-        )}),
+        # (_("Financement"), {"fields": (
+        #     "global_funding_button",
+        #     "global_funding_button_text",
+        # )}),
     )
 
     formfield_overrides = {
