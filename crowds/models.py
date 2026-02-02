@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Create your models here.
 
 class CrowdConfig(SingletonModel):
-    active = models.BooleanField(default=True, verbose_name=_("Activer Crowds"), help_text=_(
+    active = models.BooleanField(default=True, verbose_name=_("Activer"), help_text=_(
         "Vous pouvez activer ou desactiver cette fonction pour la faire apparaitre dans le menu général."))
     title = models.CharField(max_length=255, blank=True, verbose_name=_("Titre"), default="Contribuez")
     description = models.TextField(blank=True, default="Découvrez les projets à financer et les budgets contributifs")

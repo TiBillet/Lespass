@@ -153,7 +153,7 @@ def get_context(request):
 
     if crowd_config.active and Initiative.objects.exists():
         navbar.append(
-            {'name': f'crowd-list', 'url': '/crowd/',
+            {'name': f'crowd-list', 'url': '/contrib/',
              'label': f'{crowd_config.title}', 'icon': 'people-fill'}
         )
 

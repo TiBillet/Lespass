@@ -1,5 +1,5 @@
 from decimal import Decimal
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.shortcuts import get_object_or_404
 from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.conf import settings
@@ -622,6 +622,9 @@ class InitiativeViewSet(viewsets.ViewSet):
         Affiche le détail d’un projet dans la charte graphique TiBillet.
         """
         # Précharge les tags pour éviter les requêtes supplémentaires dans le template
+        if not Initiative.objects.filter(pk=pk).exists():
+            return redirect('/contrib')
+
         initiative = get_object_or_404(
             Initiative.objects.prefetch_related("tags"), pk=pk
         )
