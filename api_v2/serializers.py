@@ -748,6 +748,12 @@ class ProductSchemaSerializer(serializers.Serializer):
                     "name": "membershipRequiredProduct",
                     "value": str(price.adhesion_obligatoire_id),
                 })
+            if price.manual_validation:
+                additional_property.append({
+                    "@type": "PropertyValue",
+                    "name": "manualValidation",
+                    "value": True,
+                })
             if additional_property:
                 offer["additionalProperty"] = additional_property
 
@@ -942,6 +948,12 @@ class ProductCreateSerializer(serializers.Serializer):
                 if membership_required is None:
                     membership_required = self._extract_offer_property(offer, "membershipRequiredProduct")
 
+                # Manual validation flag
+                manual_validation = offer.get("manualValidation")
+                if manual_validation is None:
+                    manual_validation = self._extract_offer_property(offer, "manualValidation")
+                manual_validation = bool(manual_validation)
+
                 price_obj = Price.objects.create(
                     product=product,
                     name=str(offer_name),
@@ -953,6 +965,7 @@ class ProductCreateSerializer(serializers.Serializer):
                     max_per_user=max_per_user,
                     recurring_payment=recurring_payment,
                     subscription_type=subscription_type or Price.NA,
+                    manual_validation=manual_validation,
                 )
 
                 # Link required membership product if requested

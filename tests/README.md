@@ -86,9 +86,9 @@ Allez dans le dossier `tests/playwright` :
 # Run all tests (recommended)
 yarn test:chromium:console --workers=1
 
-    # Voir ce qui se passe en temps réel (Mode "Headed")
-    # See what happens in real time
-    yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
+# Voir ce qui se passe en temps réel (Mode "Headed")
+# See what happens in real time
+yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
 ```
 
 Note:

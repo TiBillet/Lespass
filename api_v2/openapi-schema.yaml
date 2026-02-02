@@ -1321,6 +1321,9 @@ components:
             - '@type': PropertyValue
               name: subscriptionType
               value: M
+            - '@type': PropertyValue
+              name: manualValidation
+              value: true
     ReservationCreate:
       type: object
       description: schema.org/Reservation input for creation

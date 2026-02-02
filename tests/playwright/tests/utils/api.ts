@@ -97,6 +97,7 @@ export async function createProduct(params: {
     membershipRequiredProduct?: string;
     recurringPayment?: boolean;
     subscriptionType?: string;
+    manualValidation?: boolean;
   }>;
   formFields?: Array<{
     label: string;
@@ -155,6 +156,11 @@ export async function createProduct(params: {
             '@type': 'PropertyValue',
             name: 'subscriptionType',
             value: offer.subscriptionType,
+          } : null,
+          offer.manualValidation !== undefined ? {
+            '@type': 'PropertyValue',
+            name: 'manualValidation',
+            value: offer.manualValidation,
           } : null,
         ].filter(Boolean),
       })),

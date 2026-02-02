@@ -3,6 +3,7 @@ import { verifyDbData } from './utils/db';
 import { loginAsAdmin } from './utils/auth';
 import { env } from './utils/env';
 import { fillStripeCard } from './utils/stripe';
+import { createProduct } from './utils/api';
 
 /**
  * TEST: Membership Manual Validation by Admin
@@ -17,15 +18,45 @@ const userEmail = `jturbeaux+val${generateRandomId()}@pm.me`;
 
 test.describe('Membership Manual Validation / Validation manuelle d\'adhésion', () => {
 
-  test('should request and approve membership / doit demander et approuver l\'adhésion', async ({ page }) => {
+  test('should request and approve membership / doit demander et approuver l\'adhésion', async ({ page, request }) => {
     let membershipUuid = '';
-    
+    let productName = '';
+
+    // Step 0: Create membership product with manual validation via API v2
+    await test.step('Setup: Create membership product via API v2', async () => {
+      productName = `Adhésion à validation sélective (Test-${generateRandomId()})`;
+
+      const productResult = await createProduct({
+        request,
+        name: productName,
+        description: 'Tarif solidaire soumis à validation manuelle',
+        category: 'Membership',
+        offers: [
+          {
+            name: 'Solidaire',
+            price: '2.00',
+            subscriptionType: 'Y',
+            manualValidation: true,
+          },
+          {
+            name: 'Plein tarif',
+            price: '30.00',
+            subscriptionType: 'Y',
+          },
+        ],
+      });
+
+      expect(productResult.ok).toBeTruthy();
+      expect(productResult.uuid).toBeTruthy();
+      console.log(`✓ Created product with manual validation: ${productName}`);
+    });
+
     // Step 1: User requests membership
     await test.step('User request / Demande de l\'utilisateur', async () => {
       await page.goto('/memberships/');
       await page.waitForLoadState('domcontentloaded');
-      
-      const card = page.locator('.card:has-text("Adhésion à validation sélective")').first();
+
+      const card = page.locator(`.card:has-text("${productName}")`).first();
       await card.locator('button:has-text("Subscribe"), button:has-text("Adhérer")').click();
       await page.waitForSelector('#subscribePanel.show', { state: 'visible' });
 
@@ -69,7 +100,7 @@ test.describe('Membership Manual Validation / Validation manuelle d\'adhésion',
       const preValidation = await verifyDbData({
           type: 'membership',
           email: userEmail,
-          product: 'Adhésion à validation sélective'
+          product: productName
       });
       expect(preValidation).not.toBeNull();
       membershipUuid = preValidation?.uuid || '';
@@ -99,7 +130,7 @@ test.describe('Membership Manual Validation / Validation manuelle d\'adhésion',
       const dbResult = await verifyDbData({
           type: 'membership',
           email: userEmail,
-          product: 'Adhésion à validation sélective'
+          product: productName
       });
       
       expect(dbResult).not.toBeNull();
