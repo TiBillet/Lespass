@@ -2562,7 +2562,23 @@ class Tenant(viewsets.ViewSet):
 
             # Si assez de tenant en attentent de création existent :
             if Client.objects.filter(categorie=Client.WAITING_CONFIG).exists():
-                tenant = wc.create_tenant()
+                try:
+                    tenant = wc.create_tenant()
+                except Exception as e:
+                    logger.error(f"Error creating tenant for {wc.organisation}: {e}")
+                    # Try to redirect to existing tenant if it's a name conflict
+                    existing_client = Client.objects.filter(name=wc.organisation).first()
+                    if existing_client:
+                        try:
+                            primary_domain = f"https://{existing_client.get_primary_domain().domain}"
+                            messages.info(request, _("This space already exists. Redirecting you to it."))
+                            return redirect(primary_domain)
+                        except Exception:
+                            pass
+                    
+                    messages.error(request, _("An error occurred while creating your space. It might be because the name is already taken or no free slot is available. Please contact us."))
+                    return redirect('/')
+
                 primary_domain = f"https://{tenant.get_primary_domain().domain}"
                 user = get_or_create_user(wc.email, send_mail=False)
                 token = user.get_connect_token()

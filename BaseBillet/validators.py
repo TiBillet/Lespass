@@ -901,6 +901,10 @@ class TenantCreateValidator(serializers.Serializer):
             raise Exception("Tenant already exists. ")
 
         with schema_context('public'):
+            # Double check for unique name to avoid IntegrityError if name was taken since validation
+            if Client.objects.filter(name=name).exists():
+                raise Exception(f"The name '{name}' is already taken. ")
+
             tenant = Client.objects.filter(categorie=Client.WAITING_CONFIG).first()
             if not tenant:
                 raise Exception("No waiting tenant. ")
