@@ -1687,7 +1687,7 @@ class EventMVT(viewsets.ViewSet):
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
 
-                    date = event.datetime.date()
+                    date = event.datetime
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
