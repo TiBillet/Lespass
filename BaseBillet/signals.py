@@ -319,6 +319,7 @@ PRE_SAVE_TRANSITIONS = {
             '_else_': error_regression,
         },
         Reservation.VALID: {
+            Reservation.VALID: no_change,
             Reservation.CANCELED: no_change,
             '_else_': error_regression,
         }
