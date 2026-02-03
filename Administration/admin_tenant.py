@@ -4466,7 +4466,7 @@ class ParticipationInline(TabularInline):
         "created_at",
         "updated_at",
     )
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("created_at", "updated_at", "participant")
 
     # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
     def has_add_permission(self, request, obj=None):

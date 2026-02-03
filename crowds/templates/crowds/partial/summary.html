@@ -43,10 +43,24 @@
         }
     </style>
     <div class="rounded-4 bg-body-tertiary border p-3 p-md-4 shadow-sm" data-testid="crowds-summary">
-        {#    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">#}
-        {#      <h2 class="h5 mb-0">{% translate "Tout le monde réuni" %}</h2>#}
-        {#      <span class="text-muted small">{% translate "Chiffres cumulés de tous les projets" %}</span>#}
-        {#    </div>#}
+        {# Nouvelle information sur le budget financé et non réclamé #}
+        {% if summary_remaining_to_claim > 0 %}
+            <div class="alert alert-{{ summary_claim_color }} d-flex align-items-center gap-3 mb-3 border-0 shadow-sm py-2 px-3" data-testid="crowds-summary-remaining">
+                <i class="bi bi-info-circle-fill fs-4 opacity-75"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-bold" style="font-size: 0.9rem;">{% translate "Budget disponible pour de nouvelles participations" %}</div>
+                    <div class="small opacity-75">
+                        {% blocktrans with amount=summary_remaining_to_claim|dround currency=global_funding_currency %}
+                            Il reste <strong>{{ amount }} {{ currency }}</strong> financés qui n'ont pas encore été attribués à des participations.
+                        {% endblocktrans %}
+                    </div>
+                </div>
+                <div class="text-end d-none d-sm-block lh-1">
+                    <div class="fw-bold" style="font-size: 1.1rem;">{{ summary_claim_ratio|floatformat:0 }}%</div>
+                    <div class="text-uppercase opacity-50 fw-bold" style="font-size: 0.6rem;">{% translate "Utilisé" %}</div>
+                </div>
+            </div>
+        {% endif %}
 
         {# Barre de résumé compacte avec tous les indicateurs sur une ligne #}
         <div class="d-flex flex-wrap align-items-center justify-content-center gap-4 py-3 px-3 bg-body border rounded-3"
@@ -83,7 +97,7 @@
                 <i class="bi bi-clock fs-5 text-primary" aria-hidden="true"></i>
                 <div class="lh-1">
                     <strong class="fs-5 fw-bold">{{ summary_time_spent_minutes|minutes_to_human }}</strong>
-                    <small class="d-block text-muted">{% translate "temps donné" %}</small>
+                    <small class="d-block text-muted">{% translate "Contributions" %}</small>
                 </div>
             </div>
 
@@ -94,6 +108,8 @@
                 <i class="bi bi-piggy-bank fs-5 text-success" aria-hidden="true"></i>
                 <div class="lh-1">
                     <strong class="fs-5 fw-bold text-success">{{ summary_funding_percent }}%</strong>
+                    <small class="d-block text-muted">{% translate "Financé" %}</small>
+
                     {% if crowd_config.global_funding_button %}
                         <small class="d-block text-muted">
                             {{ summary_funding_to_allocate|dround }} {{ global_funding_currency }} {% translate "à répartir" %}

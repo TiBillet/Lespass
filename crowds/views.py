@@ -16,7 +16,7 @@ from django.core.cache import cache
 from django.db import connection
 from django.db.models import Count, Q, Sum, F, DecimalField, ExpressionWrapper
 from django.utils import timezone
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext as _, gettext
 import json
 
 from BaseBillet.views import get_context
@@ -404,18 +404,17 @@ class InitiativeViewSet(viewsets.ViewSet):
         # Filter active initiatives (not closed and not archived) for funding stats
         active_initiatives = Initiative.objects.filter(archived=False, closed=False)
 
-        votes_total = Vote.objects.count()
-        projects_count = Initiative.objects.filter(archived=False).count()
-
         # Funding stats only for active initiatives
         funding_total = Contribution.objects.filter(
             initiative__in=active_initiatives
         ).aggregate(total=Sum("amount")).get("total") or 0
 
-        participation_total = Participation.objects.aggregate(total=Sum("amount")).get("total") or 0
-        participation_total_valid = Participation.objects.exclude(
+        participation_total_valid = Participation.objects.filter(
+            initiative__in=active_initiatives
+        ).exclude(
             state__in=[Participation.State.REQUESTED, Participation.State.REJECTED]
         ).aggregate(total=Sum("amount")).get("total") or 0
+
         time_spent_total = Participation.objects.aggregate(
             total=Sum("time_spent_minutes")
         ).get("total") or 0
@@ -430,32 +429,15 @@ class InitiativeViewSet(viewsets.ViewSet):
         if funding_goal_total:
             funding_percent = int(round((funding_total / funding_goal_total) * 100))
 
+        # Participants count (voters + participants + contributors)
         user_ids = set(Vote.objects.values_list("user_id", flat=True))
         user_ids.update(Participation.objects.values_list("participant_id", flat=True))
         user_ids.update(
             Contribution.objects.exclude(contributor_id__isnull=True).values_list("contributor_id", flat=True)
         )
-        users = list(User.objects.filter(id__in=user_ids).select_related("client_source"))
-        participants_count = len(users)
+        participants_count = User.objects.filter(id__in=user_ids).count()
 
-        def _initials(value):
-            if not value:
-                return "?"
-            parts = [p for p in value.replace("@", " ").split() if p]
-            if len(parts) >= 2:
-                return (parts[0][0] + parts[1][0]).upper()
-            return parts[0][:2].upper()
-
-        badges = []
-        for u in sorted(users, key=lambda x: (x.full_name_or_email() or "").lower()):
-            display = u.full_name_or_email()
-            badges.append({
-                "label": display,
-                "initials": _initials(display),
-            })
-        badges = badges[:10]
-
-        source_ids = {u.client_source_id for u in users if u.client_source_id}
+        source_ids = User.objects.filter(id__in=user_ids, client_source_id__isnull=False).values_list("client_source_id", flat=True).distinct()
         source_logos = []
         has_multiple_sources = len(source_ids) > 1 or (
             tenant_id is not None and any(sid != tenant_id for sid in source_ids)
@@ -583,15 +565,20 @@ class InitiativeViewSet(viewsets.ViewSet):
                 "url": initiative.get_absolute_url(),
             })
 
+        # Calculations for remaining budget to claim
+        remaining_to_claim = funding_total - participation_total_valid
+        claim_ratio = 0
+        if funding_total > 0:
+            claim_ratio = (participation_total_valid / funding_total) * 100
+
+        claim_color = "success"
+        if claim_ratio >= 90:
+            claim_color = "danger"
+        elif claim_ratio >= 70:
+            claim_color = "warning"
+
         summary = {
-            "summary_votes_total": votes_total,
-            "summary_funding_total": funding_total,
-            "summary_participation_total": participation_total,
-            "summary_participation_total_valid": participation_total_valid,
-            "summary_currency": currency,
-            "summary_multi_currency": summary_multi_currency,
             "summary_time_spent_minutes": time_spent_total,
-            "summary_projects_count": projects_count,
             "summary_funding_goal_total": funding_goal_total,
             "summary_funding_percent": funding_percent,
             "summary_currency_blocks": [
@@ -604,14 +591,19 @@ class InitiativeViewSet(viewsets.ViewSet):
                 for code, data in sorted(currency_blocks.items(), key=lambda item: item[0])
             ],
             "summary_participants_count": participants_count,
-            "summary_participant_badges": badges,
-            "summary_participant_overflow": max(0, participants_count - len(badges)),
             "summary_source_logos": source_logos,
             "summary_has_multiple_sources": has_multiple_sources,
             "summary_active_participations": active_participations,
             "summary_active_participations_count": active_participations_count,
             "summary_funding_to_allocate": funding_to_allocate,
             "summary_initiatives_for_alloc": initiatives_for_alloc,
+            # Help texts for Global Funding Swal
+            "contrib_name_help": Contribution._meta.get_field("contributor_name").help_text or gettext("Votre nom ou celui de votre organisation (affiché publiquement)"),
+            "contrib_desc_help": Contribution._meta.get_field("description").help_text or gettext("Un petit mot pour décrire votre contribution"),
+            # New info: funding vs participation
+            "summary_remaining_to_claim": max(0, remaining_to_claim),
+            "summary_claim_ratio": claim_ratio,
+            "summary_claim_color": claim_color,
         }
         cache.set(cache_key, summary, 60)
         return summary
