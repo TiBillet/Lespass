@@ -622,7 +622,11 @@ class InitiativeViewSet(viewsets.ViewSet):
         Affiche le détail d’un projet dans la charte graphique TiBillet.
         """
         # Précharge les tags pour éviter les requêtes supplémentaires dans le template
-        if not Initiative.objects.filter(pk=pk).exists():
+        try :
+            if not Initiative.objects.filter(pk=pk).exists():
+                return redirect('/contrib')
+        except ValidationError:
+            # pk n'est pas un uuid valide :
             return redirect('/contrib')
 
         initiative = get_object_or_404(
