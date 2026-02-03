@@ -1170,6 +1170,22 @@ class EventQuickCreateSerializer(serializers.Serializer):
                     "Aucun produit de réservation gratuite n'a été trouvé. Merci de créer d'abord un produit de réservation gratuite dans l'administration."
                 )
 
+        # Validation de l'unicité (Nom + Date)
+        # On vérifie si un évènement identique existe déjà pour éviter une erreur serveur (500)
+        # et informer l'utilisateur de manière compréhensible.
+        if dt_start and attrs.get('name'):
+            nom_evenement = attrs.get('name').strip()
+            # On cherche en base s'il y a déjà un évènement avec ce nom et cette date précise
+            doublon_existant = Event.objects.filter(
+                name=nom_evenement,
+                datetime=dt_start
+            ).exists()
+
+            if doublon_existant:
+                message_erreur = _("Un évènement avec ce nom et cette date existe déjà.")
+                # On ajoute le message d'erreur à la liste des erreurs pour le champ 'name'
+                errors.setdefault('name', []).append(message_erreur)
+
         if errors:
             raise serializers.ValidationError(errors)
 

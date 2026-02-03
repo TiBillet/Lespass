@@ -17,7 +17,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.signing import TimestampSigner
-from django.db import connection
+from django.db import connection, IntegrityError
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.shortcuts import render, redirect, get_object_or_404
@@ -1990,21 +1990,12 @@ class EventMVT(viewsets.ViewSet):
         - img (image) optionnelle
         - tags (liste séparée par des virgules)
         """
-        # Utilise un Serializer DRF pour valider, nettoyer et créer l'évènement
-        serializer = EventQuickCreateSerializer(data=request.POST, context={'request': request})
-        if not serializer.is_valid():
-            # Transformer les erreurs structurées du serializer en liste simple FALC
-            form_errors = []
-            for field, msgs in serializer.errors.items():
-                if isinstance(msgs, (list, tuple)):
-                    for msg in msgs:
-                        form_errors.append(str(msg))
-                else:
-                    form_errors.append(str(msgs))
 
+        # Aide à l'affichage des erreurs du formulaire avec pré-remplissage des champs
+        def render_form_error(errors_list):
             context = get_context(request)
             context.update({
-                'form_errors': form_errors,
+                'form_errors': errors_list,
                 'default_address': Configuration.get_solo().postal_address,
                 'addresses': PostalAddress.objects.all().order_by('name', 'address_locality', 'postal_code'),
                 'all_tags': Tag.objects.all().order_by('name'),
@@ -2021,7 +2012,25 @@ class EventMVT(viewsets.ViewSet):
             })
             return render(request, "reunion/views/event/partial/simple_add_event.html", context=context)
 
-        event = serializer.save()
+        # Utilise un Serializer DRF pour valider, nettoyer et créer l'évènement
+        serializer = EventQuickCreateSerializer(data=request.POST, context={'request': request})
+        if not serializer.is_valid():
+            # On transforme les erreurs DRF en une liste simple de messages pour le template
+            form_errors = []
+            for field, msgs in serializer.errors.items():
+                if isinstance(msgs, (list, tuple)):
+                    for msg in msgs:
+                        form_errors.append(str(msg))
+                else:
+                    form_errors.append(str(msgs))
+            return render_form_error(form_errors)
+
+        # Sauvegarde de l'évènement avec gestion des erreurs d'intégrité (doublons)
+        try:
+            event = serializer.save()
+        except IntegrityError:
+            # Si un doublon a été créé entre-temps, on renvoie une erreur explicite
+            return render_form_error([_("Un évènement avec ce nom et cette date existe déjà.")])
 
         # Message succès utilisateur
         try:
