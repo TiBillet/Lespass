@@ -4340,6 +4340,7 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
 class ContributionInline(TabularInline):
     model = Contribution
     fk_name = 'initiative'
+    # Ne pas proposer de nouvelle ligne par défaut
     extra = 0
     can_delete = True
     show_change_link = True
@@ -4365,9 +4366,9 @@ class ContributionInline(TabularInline):
 
     amount_eur_display.short_description = _("Montant")
 
-    # Permissions simples (FALC)
+    # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -4414,6 +4415,7 @@ class VoteInline(TabularInline):
 class BudgetItemInline(TabularInline):
     model = BudgetItem
     fk_name = 'initiative'
+    # Ne pas proposer de nouvelle ligne par défaut
     extra = 0
     can_delete = True
     show_change_link = True
@@ -4430,8 +4432,9 @@ class BudgetItemInline(TabularInline):
     )
     readonly_fields = ("created_at", "contributor", "validator")
 
+    # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -4450,6 +4453,7 @@ class BudgetItemInline(TabularInline):
 class ParticipationInline(TabularInline):
     model = Participation
     fk_name = 'initiative'
+    # On NE PROPOSE PAS de nouvelle ligne par défaut
     extra = 0
     # Evite le chargement massif des users
     raw_id_fields = ("participant",)
@@ -4462,10 +4466,11 @@ class ParticipationInline(TabularInline):
         "created_at",
         "updated_at",
     )
-    readonly_fields = ("created_at", "updated_at", "participant")
+    readonly_fields = ("created_at", "updated_at")
 
+    # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
     def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
+        return False
 
     def has_change_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
