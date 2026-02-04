@@ -7,7 +7,6 @@ from django.http import HttpResponse, JsonResponse, HttpResponseRedirect
 from django.conf import settings
 import logging
 
-
 from rest_framework import viewsets, permissions
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
@@ -50,6 +49,7 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 GLOBAL_FUNDING_ALLOC_NAME = "Répartition globale"
+
 
 def _user_funded_cache_key(tenant_id, user_id):
     return f"crowds:user-funded:{tenant_id}:{user_id}"
@@ -187,7 +187,7 @@ class GlobalFundingViewset(viewsets.ViewSet):
         paiement_stripe.update_checkout_status()
         paiement_stripe.refresh_from_db()
 
-        #TODO traitement en cours False, ligne article valide, mail envoyé
+        # TODO traitement en cours False, ligne article valide, mail envoyé
 
         return HttpResponseRedirect("/crowd/")
 
@@ -371,8 +371,10 @@ class InitiativeViewSet(viewsets.ViewSet):
         initiatives = list(initiatives_qs)
 
         context = get_context(request)
-        name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
-        desc_help = Contribution._meta.get_field("description").help_text or _("Un petit mot pour décrire votre contribution")
+        name_help = Contribution._meta.get_field("contributor_name").help_text or _(
+            "Votre nom ou celui de votre organisation (affiché publiquement)")
+        desc_help = Contribution._meta.get_field("description").help_text or _(
+            "Un petit mot pour décrire votre contribution")
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
             "initiatives": initiatives,
@@ -402,18 +404,18 @@ class InitiativeViewSet(viewsets.ViewSet):
         if cached is not None:
             return cached
 
-        # Filter active initiatives (not closed and not archived) for funding stats
-        active_initiatives = Initiative.objects.filter(archived=False, closed=False)
+        # Filter active initiatives (not archived) for funding stats
+        active_initiatives = Initiative.objects.filter(archived=False)
 
         # Funding stats only for active initiatives
         funding_total = Contribution.objects.filter(
-            initiative__in=active_initiatives
+            initiative__in=active_initiatives,
+            payment_status__in=[Contribution.PaymentStatus.PAID_ADMIN, Contribution.PaymentStatus.PAID],
         ).aggregate(total=Sum("amount")).get("total") or 0
 
         participation_total_valid = Participation.objects.filter(
             initiative__in=active_initiatives
-        ).exclude(
-            state__in=[Participation.State.REQUESTED, Participation.State.REJECTED]
+        ).filter(state=Participation.State.VALIDATED_ADMIN
         ).aggregate(total=Sum("amount")).get("total") or 0
 
         time_spent_total = Participation.objects.aggregate(
@@ -438,10 +440,11 @@ class InitiativeViewSet(viewsets.ViewSet):
         )
         participants_count = User.objects.filter(id__in=user_ids).count()
 
-        source_ids = User.objects.filter(id__in=user_ids, client_source_id__isnull=False).values_list("client_source_id", flat=True).distinct()
+        source_ids = User.objects.filter(id__in=user_ids, client_source_id__isnull=False).values_list(
+            "client_source_id", flat=True).distinct()
         source_logos = []
         has_multiple_sources = len(source_ids) > 1 or (
-            tenant_id is not None and any(sid != tenant_id for sid in source_ids)
+                tenant_id is not None and any(sid != tenant_id for sid in source_ids)
         )
         if has_multiple_sources:
             from django_tenants.utils import schema_context
@@ -598,8 +601,10 @@ class InitiativeViewSet(viewsets.ViewSet):
             "summary_funding_to_allocate": funding_to_allocate,
             "summary_initiatives_for_alloc": initiatives_for_alloc,
             # Help texts for Global Funding Swal
-            "contrib_name_help": Contribution._meta.get_field("contributor_name").help_text or gettext("Votre nom ou celui de votre organisation (affiché publiquement)"),
-            "contrib_desc_help": Contribution._meta.get_field("description").help_text or gettext("Un petit mot pour décrire votre contribution"),
+            "contrib_name_help": Contribution._meta.get_field("contributor_name").help_text or gettext(
+                "Votre nom ou celui de votre organisation (affiché publiquement)"),
+            "contrib_desc_help": Contribution._meta.get_field("description").help_text or gettext(
+                "Un petit mot pour décrire votre contribution"),
             # New info: funding vs participation
             "summary_remaining_to_claim": max(0, remaining_to_claim),
             "summary_claim_ratio": claim_ratio,
@@ -616,7 +621,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         Affiche le détail d’un projet dans la charte graphique TiBillet.
         """
         # Précharge les tags pour éviter les requêtes supplémentaires dans le template
-        try :
+        try:
             if not Initiative.objects.filter(pk=pk).exists():
                 return redirect('/contrib')
         except ValidationError:
@@ -638,8 +643,10 @@ class InitiativeViewSet(viewsets.ViewSet):
         participations_context = self._participations_context(initiative)
         # Help texts for Contribution form in Swal
         from django.utils.translation import gettext as _
-        name_help = Contribution._meta.get_field("contributor_name").help_text or _("Votre nom ou celui de votre organisation (affiché publiquement)")
-        desc_help = Contribution._meta.get_field("description").help_text or _("Un petit mot pour décrire votre contribution")
+        name_help = Contribution._meta.get_field("contributor_name").help_text or _(
+            "Votre nom ou celui de votre organisation (affiché publiquement)")
+        desc_help = Contribution._meta.get_field("description").help_text or _(
+            "Un petit mot pour décrire votre contribution")
         # Ne passer que les variables réellement utilisées par les templates
         context.update({
             "crowd_config": CrowdConfig.get_solo(),
@@ -767,7 +774,6 @@ class InitiativeViewSet(viewsets.ViewSet):
         html = render(request, "crowds/partial/budget_items.html", context).content.decode("utf-8")
         return JsonResponse({"ok": True, "html": html})
 
-
     @action(detail=True, methods=["post"], url_path=r"budget-items/(?P<bid>[^/.]+)/approve")
     def approve_budget_item(self, request, pk=None, bid=None):
         """
@@ -800,7 +806,6 @@ class InitiativeViewSet(viewsets.ViewSet):
             return _render(status_code=400)
         return _render(status_code=200)
 
-
     @action(detail=True, methods=["post"], url_path=r"budget-items/(?P<bid>[^/.]+)/reject")
     def reject_budget_item(self, request, pk=None, bid=None):
         """
@@ -831,7 +836,6 @@ class InitiativeViewSet(viewsets.ViewSet):
         except Exception:
             return _render(status_code=400)
         return _render(status_code=200)
-
 
     @action(detail=True, methods=["post"], url_path=r"participations/(?P<pid>[^/.]+)/complete")
     def complete_participation(self, request, pk=None, pid=None):
@@ -987,6 +991,7 @@ class InitiativeViewSet(viewsets.ViewSet):
         Retourne toujours le partiel HTML des contributions.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
+
         # Toujours renvoyer le partiel HTML (règle HTMX)
         def _render(status_code=200):
             ctx = get_context(request)
@@ -994,6 +999,7 @@ class InitiativeViewSet(viewsets.ViewSet):
             resp = render(request, "crowds/partial/contributions.html", ctx)
             resp.status_code = status_code
             return resp
+
         if not request.user.is_authenticated:
             return _render(status_code=401)
         if not (request.user.is_staff or request.user.is_superuser):
@@ -1103,7 +1109,10 @@ class InitiativeViewSet(viewsets.ViewSet):
         # ---------- 1) Collecte des données / Gather data ----------
         paid_contribs = (
             Contribution.objects
-            .filter(payment_status__in=[Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN])
+            .filter(
+                payment_status__in=[Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN],
+                initiative__archived=False,
+            )
             .select_related('initiative', 'contributor')
         )
         validated_parts = (
@@ -1112,7 +1121,9 @@ class InitiativeViewSet(viewsets.ViewSet):
                 Participation.State.VALIDATED_ADMIN,
                 Participation.State.APPROVED_ADMIN,
                 Participation.State.COMPLETED_USER,
-            ])
+            ],
+                initiative__archived=False,
+            )
             .select_related('initiative', 'participant')
         )
 
@@ -1135,7 +1146,8 @@ class InitiativeViewSet(viewsets.ViewSet):
             amount_unit = float(((p.amount or 0) / 100))
             if amount_unit <= 0:
                 continue
-            part_flow[(init_label, participant_label)] = part_flow.get((init_label, participant_label), 0.0) + amount_unit
+            part_flow[(init_label, participant_label)] = part_flow.get((init_label, participant_label),
+                                                                       0.0) + amount_unit
 
         # ---------- 3) Construction des nœuds (ordre déterministe) / Build nodes (deterministic order) ----------
         # FR: On fige l'ordre pour simplifier les diffs visuels et faciliter le debug.

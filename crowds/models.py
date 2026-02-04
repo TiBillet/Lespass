@@ -197,7 +197,9 @@ class Initiative(models.Model):
     # --- Financement reçu ---
     @cached_property
     def total_funded_amount(self):
-        int_amount = self.contributions.aggregate(models.Sum("amount"))["amount__sum"] or 0
+        int_amount = self.contributions.filter(
+            payment_status__in=[Contribution.PaymentStatus.PAID_ADMIN, Contribution.PaymentStatus.PAID],
+        ).aggregate(models.Sum("amount"))["amount__sum"] or 0
         return int_amount
 
     # --- Sommes demandées par les participations au budget contributif ---
@@ -205,7 +207,7 @@ class Initiative(models.Model):
     def total_participation_amount(self) -> int:
         int_total_participation = (
                 self.participations
-                .exclude(state__in=[Participation.State.REQUESTED, Participation.State.REJECTED])
+                .filter(state=Participation.State.VALIDATED_ADMIN)
                 .aggregate(models.Sum("amount"))
                 ["amount__sum"]
                 or 0
