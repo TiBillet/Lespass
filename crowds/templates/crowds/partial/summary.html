@@ -170,13 +170,23 @@
             </div>
         {% endif %}
 
-        <div class="text-center mt-3">
+        <div class="text-center mt-3 d-flex flex-wrap justify-content-center gap-2">
             <button class="btn btn-outline-secondary btn-sm" type="button" data-testid="crowds-summary-toggle-details"
                     data-bs-toggle="collapse" data-bs-target="#crowds-summary-details"
                     aria-expanded="false" aria-controls="crowds-summary-details"
                     data-label-open="{% translate 'Voir moins' %}"
                     data-label-closed="{% translate 'Voir plus de détail et les actions en cours' %}">
                 {% translate "Voir plus de détail et les actions en cours" %}
+            </button>
+
+            <button class="btn btn-outline-info btn-sm d-flex align-items-center gap-2" type="button"
+                    data-bs-toggle="modal" data-bs-target="#sankeyModal"
+                    hx-get="{% url 'crowds-sankey' %}"
+                    hx-target="#sankeyModalContent"
+                    hx-trigger="click"
+                    data-testid="crowds-summary-sankey-button">
+                <i class="bi bi-diagram-3"></i>
+                {% translate "Diagramme des flux" %}
             </button>
         </div>
 
@@ -425,6 +435,18 @@
                 });
             })();
         </script>
+        <!-- Modal Sankey -->
+        <div class="modal fade" id="sankeyModal" tabindex="-1" aria-labelledby="sankeyModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content" id="sankeyModalContent">
+                    <div class="modal-body text-center p-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <script>
             (function () {
                 const btn = document.querySelector('[data-bs-target="#crowds-summary-details"]');

@@ -28,6 +28,7 @@ from BaseBillet.models import (
     Paiement_stripe,
     PaymentMethod,
     SaleOrigin,
+    Configuration,
 )
 from Customers.models import Client
 from fedow_public.models import AssetFedowPublic
@@ -444,7 +445,6 @@ class InitiativeViewSet(viewsets.ViewSet):
         )
         if has_multiple_sources:
             from django_tenants.utils import schema_context
-            from BaseBillet.models import Configuration
             for client in Client.objects.filter(pk__in=source_ids):
                 logo_url = None
                 logo_link = None
@@ -1079,3 +1079,124 @@ class InitiativeViewSet(viewsets.ViewSet):
 
         from django.urls import reverse
         return HttpResponseRedirect(reverse("crowds-list"))
+
+    @action(detail=False, methods=["get"], url_path="sankey")
+    def sankey(self, request):
+        """
+        Sankey diagram data provider (HTMX modal)
+        Doc from : https://plotly.com/python/sankey-diagram/
+
+        FR: Prépare les données pour le diagramme de Sankey (chargé à la demande dans une modale).
+            Le flux visualisé est en 3 colonnes fixes: Financeurs → Initiatives → Participants.
+            Mise en cache du contexte pour optimiser les performances.
+        EN: Build data for the Sankey diagram (lazy‑loaded in a Bootstrap modal).
+            The flow has 3 fixed columns: Funders → Initiatives → Participants.
+            Cached context for performance optimization.
+        """
+        tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
+        cache_key = f"crowds:sankey:data:{tenant_id}"
+        context = cache.get(cache_key)
+
+        if context is not None:
+            return render(request, "crowds/partial/sankey.html", context)
+
+        # ---------- 1) Collecte des données / Gather data ----------
+        paid_contribs = (
+            Contribution.objects
+            .filter(payment_status__in=[Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN])
+            .select_related('initiative', 'contributor')
+        )
+        validated_parts = (
+            Participation.objects
+            .filter(state__in=[
+                Participation.State.VALIDATED_ADMIN,
+                Participation.State.APPROVED_ADMIN,
+                Participation.State.COMPLETED_USER,
+            ])
+            .select_related('initiative', 'participant')
+        )
+
+        # ---------- 2) Agrégation des flux / Aggregate flows ----------
+        # FR: On agrège les montants en unités (ex: euros), en ignorant les valeurs nulles ou négatives.
+        # EN: Aggregate amounts in units (e.g. euros), ignoring null/negative values.
+        contrib_flow = {}  # (funder_label, initiative_label) -> float amount
+        for c in paid_contribs:
+            funder_label = c.get_contriutor_name or _("Financeur Anonyme")  # FR: libellé financeur / EN: funder label
+            init_label = c.initiative.name
+            amount_unit = float((c.amount or 0) / 100)
+            if amount_unit <= 0:
+                continue
+            contrib_flow[(funder_label, init_label)] = contrib_flow.get((funder_label, init_label), 0.0) + amount_unit
+
+        part_flow = {}  # (initiative_label, participant_label) -> float amount
+        for p in validated_parts:
+            init_label = p.initiative.name
+            participant_label = p.participant.full_name_or_email()
+            amount_unit = float(((p.amount or 0) / 100))
+            if amount_unit <= 0:
+                continue
+            part_flow[(init_label, participant_label)] = part_flow.get((init_label, participant_label), 0.0) + amount_unit
+
+        # ---------- 3) Construction des nœuds (ordre déterministe) / Build nodes (deterministic order) ----------
+        # FR: On fige l'ordre pour simplifier les diffs visuels et faciliter le debug.
+        # EN: Freeze ordering for stable indices and easier debugging.
+        funders = {f for (f, _) in contrib_flow.keys()}
+        initiatives = {i for (_, i) in contrib_flow.keys()} | {i for (i, _) in part_flow.keys()}
+        participants = {u for (_, u) in part_flow.keys()}
+
+        nodes: list[str] = []
+        node_types: list[str] = []  # parallel array to keep each node's type
+        node_index: dict[tuple[str, str], int] = {}
+
+        def _add_nodes(labels: set[str], ntype: str):
+            for label in sorted(labels):  # stable order inside each column
+                node_index[(ntype, label)] = len(nodes)
+                nodes.append(label)
+                node_types.append(ntype)
+
+        _add_nodes(funders, 'funder')
+        _add_nodes(initiatives, 'initiative')
+        _add_nodes(participants, 'participant')
+
+        # ---------- 4) Liens / Links ----------
+        links = {'source': [], 'target': [], 'value': []}
+
+        for (funder_label, init_label), val in contrib_flow.items():
+            links['source'].append(node_index[('funder', funder_label)])
+            links['target'].append(node_index[('initiative', init_label)])
+            links['value'].append(val)
+
+        for (init_label, participant_label), val in part_flow.items():
+            links['source'].append(node_index[('initiative', init_label)])
+            links['target'].append(node_index[('participant', participant_label)])
+            links['value'].append(val)
+
+        # ---------- 5) Positionnement fixe / Fixed positions ----------
+        # FR: On verrouille la colonne de chaque type (x) et on répartit les nœuds verticalement (y).
+        # EN: Lock each group on a fixed X and spread items evenly on Y.
+        node_x = [0.0] * len(nodes)
+        node_y = [0.0] * len(nodes)
+        x_by_type = {'funder': 0.0, 'initiative': 0.5, 'participant': 1.0}
+        idx_by_type = {'funder': [], 'initiative': [], 'participant': []}
+
+        for idx, ntype in enumerate(node_types):
+            idx_by_type[ntype].append(idx)
+
+        for ntype, idxs in idx_by_type.items():
+            n = max(1, len(idxs))
+            for rank, idx in enumerate(idxs):
+                node_x[idx] = x_by_type[ntype]
+                node_y[idx] = (rank + 1) / (n + 1)  # FR: espacement régulier / EN: evenly spaced
+
+        # ---------- 6) Contexte pour le template / Template context ----------
+        context = {
+            'nodes': nodes,
+            'links': links,
+            'node_x': node_x,
+            'node_y': node_y,
+            'global_funding_currency': Configuration.get_solo().currency_code,
+        }
+        # FR: On met en cache pour 1 heure (sera invalidé par signal)
+        # EN: Cache for 1 hour (invalidated via signals)
+        cache.set(cache_key, context, 3600)
+        return render(request, "crowds/partial/sankey.html", context)
