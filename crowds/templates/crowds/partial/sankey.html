@@ -1,0 +1,114 @@
+{% load i18n %}
+<div class="modal-header">
+    <h5 class="modal-title">{% translate "Diagramme des flux" %}</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body p-0 position-relative">
+    <div id="sankey-loader" class="position-absolute top-50 start-50 translate-middle text-center" style="z-index: 10;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+    <div id="sankey-diagram" style="width: 100%; height: 600px; min-height: 400px;"></div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% translate "Fermer" %}</button>
+</div>
+
+<script>
+    // Sankey modal renderer
+    // FR: Ce script s'exécute quand le fragment HTMX est inséré dans la modale.
+    // EN: This script runs when the HTMX fragment is inserted into the modal.
+    (function () {
+        // ----- Données préparées côté serveur / Server-provided data -----
+        const sankeyNodes = {{ nodes|safe }}; // FR: étiquettes des nœuds ; EN: node labels
+        const sankeyLinks = {{ links|safe }}; // FR: liens {source,target,value} ; EN: links arrays
+        const sankeyNodeX = {{ node_x|safe }}; // FR: positions X fixes ; EN: fixed X positions
+        const sankeyNodeY = {{ node_y|safe }}; // FR: positions Y réparties ; EN: evenly spaced Y positions
+
+        // ----- Sélecteurs utiles / Useful elements -----
+        const container = document.getElementById('sankey-diagram');
+        const loader = document.getElementById('sankey-loader');
+
+        // FR: Masquer le spinner / EN: Hide the spinner
+        function hideLoader() { if (loader) loader.style.display = 'none'; }
+        // FR: Afficher un message d'erreur / EN: Show an error message
+        function showError(html) {
+            hideLoader();
+            if (container) container.innerHTML = html;
+        }
+
+        // FR: Cas sans données / EN: No data case
+        if (!Array.isArray(sankeyNodes) || sankeyNodes.length === 0) {
+            showError('<div class="p-4 text-center text-muted">{% translate "Aucune donnée disponible pour générer le diagramme." %}</div>');
+            return;
+        }
+
+        // ----- Rendu du Sankey / Sankey rendering -----
+        // FR: On fixe l'arrangement et on affiche les unités.
+        // EN: Use fixed arrangement and show value suffix (currency).
+        const PLOTLY_CDN_URL = 'https://cdn.plot.ly/plotly-2.27.0.min.js';
+        const VALUE_SUFFIX = ' {{ global_funding_currency|default:"€" }}';
+
+        function renderSankey() {
+            const data = [{
+                type: 'sankey',
+                orientation: 'h',
+                arrangement: 'fixed',
+                valueformat: '.2f',
+                valuesuffix: VALUE_SUFFIX,
+                node: {
+                    pad: 15,
+                    thickness: 20,
+                    line: { color: 'black', width: 0.5 },
+                    label: sankeyNodes,
+                    color: 'rgba(13,110,253,0.8)', // FR: bleu avec opacité ; EN: blue with opacity
+                    x: sankeyNodeX,
+                    y: sankeyNodeY,
+                },
+                link: {
+                    source: sankeyLinks.source,
+                    target: sankeyLinks.target,
+                    value: sankeyLinks.value,
+                    color: 'rgba(13,110,253,0.2)', // FR: liens discrets ; EN: subtle links
+                }
+            }];
+
+            const layout = {
+                font: { size: 12, family: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial" },
+                autosize: true,
+                margin: { l: 20, r: 20, t: 20, b: 20 },
+            };
+
+            const config = { responsive: true, displayModeBar: false };
+
+            // FR: On cache le loader uniquement après rendu effectif
+            // EN: Hide the spinner only after the chart is drawn
+            window.Plotly.newPlot(container, data, layout, config).then(hideLoader);
+
+            // FR: S'adapte au redimensionnement de la modale
+            // EN: Resize when the modal changes size
+            const ro = new ResizeObserver(() => { window.Plotly.Plots.resize(container); });
+            ro.observe(container);
+        }
+
+        // ----- Chargement dynamique de Plotly / Dynamic Plotly loading -----
+        function ensurePlotlyLoadedAndRender() {
+            if (window.Plotly && typeof window.Plotly.newPlot === 'function') {
+                renderSankey();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = PLOTLY_CDN_URL;
+            script.async = true;
+            script.onload = renderSankey;
+            script.onerror = function () {
+                showError('<div class="p-4 text-center text-danger">{% translate "Impossible de charger la librairie de graphique." %}</div>');
+            };
+            document.head.appendChild(script);
+        }
+
+        // FR: Démarrage ; EN: Boot
+        ensurePlotlyLoadedAndRender();
+    })();
+</script>
