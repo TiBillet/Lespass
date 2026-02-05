@@ -1010,7 +1010,6 @@ class ProductAdmin(ModelAdmin):
 
     list_display = (
         'name',
-        'img',
         'categorie_article',
         'publish',
         'poids',
@@ -1025,13 +1024,146 @@ class ProductAdmin(ModelAdmin):
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_row = ["archive", ]
+    actions_row = ["duplicate_product", "archive", ]
 
     formfield_overrides = {
         models.TextField: {
             "widget": WysiwygWidget,
         }
     }
+
+    @action(
+        description=_("Duplicate product"),
+        url_path="duplicate_product",
+        permissions=["changelist_row_action"],
+    )
+    def duplicate_product(self, request, object_id):
+        """
+        Action d'administration pour dupliquer un produit.
+        Admin action to duplicate a product.
+        """
+        # Récupération du produit original depuis la base de données
+        # Retrieve the original product from the database
+        produit_original = get_object_or_404(Product, pk=object_id)
+
+        try:
+            # Appel de la méthode de duplication profonde
+            # Call the deep duplication method
+            produit_duplique = self._duplicate_product(produit_original)
+
+            # Message de succès à l'utilisateur
+            # Success message to the user
+            messages.success(
+                request,
+                _(f"Le produit '{produit_original.name}' a été dupliqué avec succès sous le nom '{produit_duplique.name}'")
+            )
+        except Exception as erreur:
+            # En cas d'erreur, on logue et on informe l'utilisateur
+            # In case of error, log it and inform the user
+            logger.error(f"Erreur lors de la duplication du produit {object_id}: {str(erreur)}")
+            messages.error(request, _(f"Erreur lors de la duplication : {str(erreur)}"))
+
+        # Redirection vers la page précédente (la liste des produits)
+        # Redirect back to the previous page (product list)
+        referer = request.META.get("HTTP_REFERER")
+        if referer:
+            return redirect(referer)
+        else:
+            # Fallback to product list if no referer
+            return redirect("admin:BaseBillet_product_changelist")
+
+    def _duplicate_product(self, produit_source: Product):
+        """
+        Méthode d'aide pour réaliser une duplication profonde d'un produit.
+        Cela inclut le produit lui-même, ses tarifs, ses champs de formulaires et ses relations.
+        
+        Helper method to perform a deep duplication of a product.
+        This includes the product itself, its prices, form fields, and relationships.
+        
+        Le code est conçu pour être FALC (Facile À Lire et à Comprendre).
+        The code is designed to be easy to read and understand (FALC).
+        """
+
+        # 1. DUPLICATION DE L'OBJET PRODUIT LUI-MÊME
+        # 1. DUPLICATION OF THE PRODUCT OBJECT ITSELF
+
+        # On récupère une instance propre du produit source
+        # We fetch a fresh instance of the source product
+        nouveau_produit = Product.objects.get(pk=produit_source.pk)
+
+        # En mettant la clé primaire (pk) à None, Django créera un nouvel enregistrement lors du .save()
+        # By setting the primary key (pk) to None, Django will create a new record upon .save()
+        nouveau_produit.pk = None
+
+        # On change le nom pour indiquer que c'est un duplicata
+        # Change the name to indicate it is a duplicate
+        nouveau_produit.name = f"{produit_source.name} [DUPLICATA]"
+
+        # Le duplicata ne doit pas être publié par défaut
+        # The duplicate should not be published by default
+        nouveau_produit.publish = False
+
+        # On s'assure que le duplicata n'est pas archivé
+        # Ensure the duplicate is not archived
+        nouveau_produit.archive = False
+
+        # Sauvegarde initiale pour générer un nouvel UUID/PK
+        # Initial save to generate a new UUID/PK
+        nouveau_produit.save()
+
+        # 2. DUPLICATION DES RELATIONS MANY-TO-MANY (M2M)
+        # 2. DUPLICATION OF MANY-TO-MANY (M2M) RELATIONSHIPS
+
+        # Duplication des tags
+        # Duplicate tags
+        nouveau_produit.tag.set(produit_source.tag.all())
+
+        # Duplication des options générales (boutons radio)
+        # Duplicate general options (radio buttons)
+        nouveau_produit.option_generale_radio.set(produit_source.option_generale_radio.all())
+
+        # Duplication des options générales (cases à cocher)
+        # Duplicate general options (checkboxes)
+        nouveau_produit.option_generale_checkbox.set(produit_source.option_generale_checkbox.all())
+
+        # 3. DUPLICATION DES TARIFS (Price)
+        # 3. DUPLICATION OF PRICES (Price)
+
+        # On parcourt tous les tarifs associés au produit source
+        # Loop through all prices associated with the source product
+        for tarif_original in produit_source.prices.all():
+            # Création d'une copie du tarif
+            # Creating a copy of the price
+            nouveau_tarif = Price.objects.get(pk=tarif_original.pk)
+            nouveau_tarif.pk = None  # Prêt pour une nouvelle insertion / Ready for new insertion
+            nouveau_tarif.product = nouveau_produit  # Liaison au nouveau produit / Link to new product
+            nouveau_tarif.save()
+
+        # 4. DUPLICATION DES FORMULAIRES DYNAMIQUES (ProductFormField)
+        # 4. DUPLICATION OF DYNAMIC FORM FIELDS (ProductFormField)
+
+        # Ces champs sont utilisés pour les formulaires personnalisés lors de l'adhésion
+        # These fields are used for custom forms during subscription
+        for champ_original in produit_source.form_fields.all():
+            nouveau_champ = ProductFormField.objects.get(pk=champ_original.pk)
+            nouveau_champ.pk = None
+            nouveau_champ.product = nouveau_produit
+            nouveau_champ.save()
+
+        # 5. DUPLICATION DES FORMULAIRES FORMBRICKS (FormbricksForms)
+        # 5. DUPLICATION OF FORMBRICKS FORMS (FormbricksForms)
+
+        # Si le produit utilise des formulaires Formbricks, on les duplique aussi
+        # If the product uses Formbricks forms, we duplicate them as well
+        for formulaire_fb_original in produit_source.formbricksform.all():
+            nouveau_formulaire_fb = FormbricksForms.objects.get(pk=formulaire_fb_original.pk)
+            nouveau_formulaire_fb.pk = None
+            nouveau_formulaire_fb.product = nouveau_produit
+            nouveau_formulaire_fb.save()
+
+        # Retourne le produit nouvellement créé
+        # Returns the newly created product
+        return nouveau_produit
 
     @action(
         description=_("Archive"),

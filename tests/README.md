@@ -88,7 +88,10 @@ yarn test:chromium:console --workers=1
 
 # Voir ce qui se passe en temps réel (Mode "Headed")
 # See what happens in real time
-yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
+yarn playwright test --project=chromium --headed --slow-mo=300 --workers=1 tests/01-login.spec.ts
+
+# Pour lancer avec tout des logs verbeux :
+DEBUG=pw:api yarn playwright test --project=chromium --workers=1 tests/25-product-duplication-complex.spec.ts
 ```
 
 Note:
