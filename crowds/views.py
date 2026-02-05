@@ -57,40 +57,53 @@ def _user_funded_cache_key(tenant_id, user_id):
 
 def get_user_funded_total(user):
     """
-    FR: Total financé par l'utilisateur (global + contributions aux projets).
-    EN: Total funded by the user (global funding + project contributions).
+    FR: Calcule le total financé par un utilisateur spécifique.
+        Prend en compte le financement global ET les contributions aux projets.
+    EN: Compute the total amount funded by a specific user.
+        Includes global funding AND project contributions.
     """
     if not user or not user.is_authenticated:
         return 0
     tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
     cache_key = _user_funded_cache_key(tenant_id, user.pk)
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
+    cached_total = cache.get(cache_key)
+    if cached_total is not None:
+        return cached_total
 
-    total_global = GlobalFunding.objects.filter(user=user).aggregate(total=Sum("amount_funded")).get("total") or 0
-    total_contrib = Contribution.objects.filter(contributor=user).aggregate(total=Sum("amount")).get("total") or 0
-    total = total_global + total_contrib
-    cache.set(cache_key, total, 60)
-    return total
+    # FR: Somme des financements globaux / EN: Sum of global fundings
+    total_global_funding = GlobalFunding.objects.filter(user=user).aggregate(total=Sum("amount_funded")).get("total") or 0
+    # FR: Somme des contributions directes / EN: Sum of direct contributions
+    total_project_contributions = Contribution.objects.filter(contributor=user).aggregate(total=Sum("amount")).get("total") or 0
+    
+    grand_total = total_global_funding + total_project_contributions
+    
+    # FR: Cache court (1 min) car les paiements Stripe peuvent changer la valeur vite
+    # EN: Short cache (1 min) as Stripe payments can change values quickly
+    cache.set(cache_key, grand_total, 60)
+    return grand_total
 
 
 def clear_user_funded_cache(user):
+    """
+    FR: Supprime le cache du montant financé pour un utilisateur.
+    EN: Clears the funded amount cache for a user.
+    """
     tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
     cache.delete(_user_funded_cache_key(tenant_id, user.pk))
 
 
 class GlobalFundingViewset(viewsets.ViewSet):
     """
-    Pour le bouton financer le projet global
+    FR: Gère le financement "global" (don non affecté à un projet précis au départ).
+    EN: Manages "global" funding (donation not assigned to a specific project initially).
     """
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.AllowAny]
 
     def _get_or_create_crowdfunding_price(self) -> Price:
         """
-        FR: Crée (si besoin) un couple Product/Price "crowdfunding" pour un paiement libre.
-        EN: Create (if needed) a "crowdfunding" Product/Price pair for open amount payments.
+        FR: Récupère ou crée le produit technique utilisé pour le financement global.
+        EN: Retrieves or creates the technical product used for global funding.
         """
         product = Product.objects.filter(name__iexact="crowdfunding").order_by("pk").first()
         if not product:
@@ -113,8 +126,8 @@ class GlobalFundingViewset(viewsets.ViewSet):
 
     def create(self, request):
         """
-        FR: Lance un paiement Stripe pour un financement global.
-        EN: Starts a Stripe checkout for global funding.
+        FR: Crée une intention de financement global et redirige vers Stripe.
+        EN: Creates a global funding intention and redirects to Stripe.
         """
         if not request.user.is_authenticated:
             return JsonResponse({"error": _("Authentication required.")}, status=401)
@@ -128,37 +141,45 @@ class GlobalFundingViewset(viewsets.ViewSet):
         if amount_cents <= 0:
             return JsonResponse({"error": _("Invalid amount.")}, status=400)
 
-        price = self._get_or_create_crowdfunding_price()
+        # FR: Préparation de la ligne comptable (LigneArticle)
+        # EN: Accounting line preparation (LigneArticle)
+        price_obj = self._get_or_create_crowdfunding_price()
         amount_decimal = (Decimal(amount_cents) / Decimal("100")).quantize(Decimal("0.01"))
-        price_sold = get_or_create_price_sold(price, custom_amount=amount_decimal)
+        price_sold_obj = get_or_create_price_sold(price_obj, custom_amount=amount_decimal)
 
-        ligne_article = LigneArticle.objects.create(
-            pricesold=price_sold,
+        accounting_line = LigneArticle.objects.create(
+            pricesold=price_sold_obj,
             qty=1,
             amount=amount_cents,
             payment_method=PaymentMethod.STRIPE_NOFED,
             sale_origin=SaleOrigin.LESPASS,
         )
 
-        global_funding = GlobalFunding.objects.create(
+        # FR: Création de l'objet GlobalFunding
+        # EN: Creation of the GlobalFunding object
+        global_funding_instance = GlobalFunding.objects.create(
             user=request.user,
             amount_funded=amount_cents,
             amount_to_be_included=amount_cents,
             contributor_name=data.get("contributor_name") or "",
             description=data.get("description") or "",
-            ligne_article=ligne_article,
+            ligne_article=accounting_line,
         )
 
-        metadata = {
+        # FR: Métadonnées pour Stripe (pour le webhook de retour)
+        # EN: Metadata for Stripe (for return webhook)
+        stripe_metadata = {
             "tenant": f"{connection.tenant.uuid}",
-            "global_funding_uuid": f"{global_funding.pk}",
+            "global_funding_uuid": f"{global_funding_instance.pk}",
             "user": f"{request.user.email}",
         }
 
-        paiement_builder = CreationPaiementStripe(
+        # FR: Initialisation du paiement via le builder TiBillet
+        # EN: Payment initialization via TiBillet builder
+        payment_builder = CreationPaiementStripe(
             user=request.user,
-            liste_ligne_article=[ligne_article],
-            metadata=metadata,
+            liste_ligne_article=[accounting_line],
+            metadata=stripe_metadata,
             reservation=None,
             source=Paiement_stripe.FRONT_CROWDS,
             success_url="stripe_return/",
@@ -166,16 +187,22 @@ class GlobalFundingViewset(viewsets.ViewSet):
             absolute_domain=request.build_absolute_uri("/crowd/global-funding/"),
         )
 
-        if not paiement_builder.is_valid():
+        if not payment_builder.is_valid():
             return JsonResponse(
                 {"error": _("Erreur lors de la création du paiement.")},
                 status=400,
             )
 
-        paiement_stripe = paiement_builder.paiement_stripe_db
-        paiement_stripe.lignearticles.all().update(status=LigneArticle.UNPAID)
+        # FR: Passage en UNPAID en attendant le retour de Stripe
+        # EN: Set to UNPAID while waiting for Stripe return
+        payment_db_obj = payment_builder.paiement_stripe_db
+        payment_db_obj.lignearticles.all().update(status=LigneArticle.UNPAID)
+        
+        # FR: On invalide le cache car l'utilisateur a initié un flux
+        # EN: Invalidate cache since user initiated a flow
         clear_user_funded_cache(request.user)
-        return JsonResponse({"stripe_url": paiement_builder.checkout_session.url})
+        
+        return JsonResponse({"stripe_url": payment_builder.checkout_session.url})
 
     @action(detail=True, methods=["get"], url_path="stripe_return")
     def stripe_return(self, request, pk=None):
@@ -328,168 +355,179 @@ class InitiativeViewSet(viewsets.ViewSet):
     # ------------------------
     def list(self, request):
         """
-        Affiche la liste des projets avec le thème TiBillet + HTMX (pas de blink).
+        FR: Affiche la liste des projets avec le thème TiBillet + HTMX.
+            Gère le filtrage par tag, la recherche plein texte et l'exclusion des archivés.
+        EN: Displays the list of projects with TiBillet theme + HTMX.
+            Handles tag filtering, full-text search, and archived exclusion.
         """
 
-        active_slug = (request.GET.get("tag") or "").strip()
-        search_query = (request.GET.get("q") or "").strip()
+        active_tag_slug = (request.GET.get("tag") or "").strip()
+        search_query_str = (request.GET.get("q") or "").strip()
 
-        # Check if "Archivé" tag is selected
-        show_archived = (active_slug == "archive")
+        # FR: On vérifie si le tag "Archivé" est sélectionné pour montrer les projets clos
+        # EN: Check if "Archived" tag is selected to show closed projects
+        is_showing_archived = (active_tag_slug == "archive")
 
-        # Base queryset: exclude archived by default, unless "Archivé" tag is selected
-        if show_archived:
-            initiatives_qs = (
+        # FR: Queryset de base : exclut les archivés par défaut
+        # EN: Base queryset: exclude archived by default
+        if is_showing_archived:
+            initiatives_queryset = (
                 Initiative.objects.all()
                 .annotate(votes_total=Count("votes", distinct=True))
                 .prefetch_related("tags")
             )
         else:
-            initiatives_qs = (
+            initiatives_queryset = (
                 Initiative.objects.filter(archived=False)
                 .annotate(votes_total=Count("votes", distinct=True))
                 .prefetch_related("tags")
             )
 
-        # Filtering by tag
-        active_tag = None
-        if active_slug:
-            active_tag = Tag.objects.filter(slug=active_slug).first()
-            if active_tag:
-                initiatives_qs = initiatives_qs.filter(tags__slug=active_slug)
-        # Full-text lite search across name, description, tag name
-        if search_query:
-            initiatives_qs = initiatives_qs.filter(
-                Q(name__icontains=search_query)
-                | Q(description__icontains=search_query)
-                | Q(tags__name__icontains=search_query)
+        # FR: Filtrage par tag / EN: Tag filtering
+        active_tag_obj = None
+        if active_tag_slug:
+            active_tag_obj = Tag.objects.filter(slug=active_tag_slug).first()
+            if active_tag_obj:
+                initiatives_queryset = initiatives_queryset.filter(tags__slug=active_tag_slug)
+        
+        # FR: Recherche plein texte (nom, description, tag)
+        # EN: Full-text search (name, description, tag)
+        if search_query_str:
+            initiatives_queryset = initiatives_queryset.filter(
+                Q(name__icontains=search_query_str)
+                | Q(description__icontains=search_query_str)
+                | Q(tags__name__icontains=search_query_str)
             )
-        # Order by votes then date, and distinct because of M2M joins
-        initiatives_qs = initiatives_qs.order_by("-votes_total", "-created_at").distinct()
+            
+        # FR: Tri par votes puis par date de création
+        # EN: Sort by votes then by creation date
+        initiatives_queryset = initiatives_queryset.order_by("-votes_total", "-created_at").distinct()
 
-        # No pagination: display all initiatives on a single page
-        initiatives = list(initiatives_qs)
+        # FR: On convertit en liste (affichage global sans pagination)
+        # EN: Convert to list (global display without pagination)
+        initiatives_list = list(initiatives_queryset)
 
-        context = get_context(request)
-        name_help = Contribution._meta.get_field("contributor_name").help_text or _(
+        view_context = get_context(request)
+        contributor_name_help = Contribution._meta.get_field("contributor_name").help_text or _(
             "Votre nom ou celui de votre organisation (affiché publiquement)")
-        desc_help = Contribution._meta.get_field("description").help_text or _(
+        contribution_description_help = Contribution._meta.get_field("description").help_text or _(
             "Un petit mot pour décrire votre contribution")
-        context.update({
+            
+        view_context.update({
             "crowd_config": CrowdConfig.get_solo(),
-            "initiatives": initiatives,
-            "active_tag": active_tag,
+            "initiatives": initiatives_list,
+            "active_tag": active_tag_obj,
             "all_tags": Tag.objects.filter(initiatives__isnull=False).distinct(),
-            "search_query": search_query,
-            "contrib_name_help": name_help,
-            "contrib_desc_help": desc_help,
+            "search_query": search_query_str,
+            "contrib_name_help": contributor_name_help,
+            "contrib_desc_help": contribution_description_help,
         })
 
-        # HTMX request: return only the list partial to avoid full reload
-        hx_target = (request.headers.get("HX-Target") or "").lstrip("#")
-        if request.headers.get("HX-Request") and hx_target == "crowds_list":
-            return render(request, "crowds/partial/list.html", context)
+        # FR: Requête HTMX : on ne renvoie que le fragment de liste
+        # EN: HTMX request: only return the list fragment
+        htmx_target = (request.headers.get("HX-Target") or "").lstrip("#")
+        if request.headers.get("HX-Request") and htmx_target == "crowds_list":
+            return render(request, "crowds/partial/list.html", view_context)
 
-        context.update(self._summary_context())
-        context.update({
+        # FR: Requête standard : on ajoute le résumé global au contexte
+        # EN: Standard request: add global summary to context
+        view_context.update(self._summary_context())
+        view_context.update({
             "user_funded_total": get_user_funded_total(request.user),
-            "global_funding_currency": context["config"].currency_code,
+            "global_funding_currency": view_context["config"].currency_code,
         })
-        return render(request, "crowds/views/list.html", context)
+        return render(request, "crowds/views/list.html", view_context)
 
     def _summary_context(self):
+        """
+        FR: Calcule les statistiques globales pour le bandeau de résumé et les détails.
+            Inclut les montants financés, les objectifs, les participations et le temps passé.
+        EN: Compute global statistics for the summary bar and details.
+            Includes funded amounts, goals, participations, and time spent.
+        """
         tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
         cache_key = f"crowds:list:summary:{tenant_id}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
+        cached_summary = cache.get(cache_key)
+        if cached_summary is not None:
+            return cached_summary
 
-        # Filter active initiatives (not archived) for funding stats
-        active_initiatives = Initiative.objects.filter(archived=False)
+        # FR: On ne prend en compte que les initiatives actives (non archivées)
+        # EN: Only active initiatives (not archived) are considered
+        active_initiatives_queryset = Initiative.objects.filter(archived=False)
 
-        # Funding stats only for active initiatives
-        funding_total = Contribution.objects.filter(
-            initiative__in=active_initiatives,
+        # FR: Statistiques de financement (contributions payées)
+        # EN: Funding statistics (paid contributions)
+        total_funded_amount = Contribution.objects.filter(
+            initiative__in=active_initiatives_queryset,
             payment_status__in=[Contribution.PaymentStatus.PAID_ADMIN, Contribution.PaymentStatus.PAID],
         ).aggregate(total=Sum("amount")).get("total") or 0
 
-        participation_total_valid = Participation.objects.filter(
-            initiative__in=active_initiatives
+        # FR: Total des participations déjà validées par l'admin
+        # EN: Total of participations already validated by an admin
+        total_validated_participation_amount = Participation.objects.filter(
+            initiative__in=active_initiatives_queryset
         ).filter(state=Participation.State.VALIDATED_ADMIN
         ).aggregate(total=Sum("amount")).get("total") or 0
 
-        time_spent_total = Participation.objects.aggregate(
+        # FR: Temps total passé par les participants (tous projets confondus)
+        # EN: Total time spent by participants (across all projects)
+        total_time_spent_minutes = Participation.objects.aggregate(
             total=Sum("time_spent_minutes")
         ).get("total") or 0
 
-        # Funding goal only for active initiatives
-        funding_goal_total = BudgetItem.objects.filter(
+        # FR: Objectif total de financement (somme des lignes budgétaires approuvées)
+        # EN: Total funding goal (sum of approved budget items)
+        total_funding_goal = BudgetItem.objects.filter(
             state=BudgetItem.State.APPROVED,
-            initiative__in=active_initiatives
+            initiative__in=active_initiatives_queryset
         ).aggregate(total=Sum("amount")).get("total") or 0
 
-        funding_percent = 0
-        if funding_goal_total:
-            funding_percent = int(round((funding_total / funding_goal_total) * 100))
+        # FR: Calcul du pourcentage de financement global
+        # EN: Calculation of global funding percentage
+        global_funding_percent = 0
+        if total_funding_goal:
+            global_funding_percent = int(round((total_funded_amount / total_funding_goal) * 100))
 
-        # Participants count (voters + participants + contributors)
-        user_ids = set(Vote.objects.values_list("user_id", flat=True))
-        user_ids.update(Participation.objects.values_list("participant_id", flat=True))
-        user_ids.update(
+        # FR: Nombre de contributeurs uniques (votants + participants + financeurs)
+        # EN: Count of unique contributors (voters + participants + funders)
+        unique_contributor_ids = set(Vote.objects.values_list("user_id", flat=True))
+        unique_contributor_ids.update(Participation.objects.values_list("participant_id", flat=True))
+        unique_contributor_ids.update(
             Contribution.objects.exclude(contributor_id__isnull=True).values_list("contributor_id", flat=True)
         )
-        participants_count = User.objects.filter(id__in=user_ids).count()
+        total_participants_count = User.objects.filter(id__in=unique_contributor_ids).count()
 
-        source_ids = User.objects.filter(id__in=user_ids, client_source_id__isnull=False).values_list(
+        # FR: Vérification si les contributeurs proviennent de plusieurs lieux/organisations
+        # EN: Check if contributors come from multiple locations/organizations
+        source_client_ids = User.objects.filter(id__in=unique_contributor_ids, client_source_id__isnull=False).values_list(
             "client_source_id", flat=True).distinct()
-        source_logos = []
-        has_multiple_sources = len(source_ids) > 1 or (
-                tenant_id is not None and any(sid != tenant_id for sid in source_ids)
+        has_multiple_sources = len(source_client_ids) > 1 or (
+                tenant_id is not None and any(sid != tenant_id for sid in source_client_ids)
         )
-        if has_multiple_sources:
-            from django_tenants.utils import schema_context
-            for client in Client.objects.filter(pk__in=source_ids):
-                logo_url = None
-                logo_link = None
-                logo_cache_key = f"crowds:tenant:logo:{client.pk}"
-                cached_logo = cache.get(logo_cache_key)
-                if isinstance(cached_logo, dict):
-                    logo_url = cached_logo.get("logo_url")
-                    logo_link = cached_logo.get("logo_link")
-                else:
-                    try:
-                        with schema_context(client.schema_name):
-                            cfg = Configuration.get_solo()
-                            if cfg.logo:
-                                logo_url = cfg.logo.thumbnail.url
-                            logo_link = cfg.full_url()
-                    except Exception:
-                        logo_url = None
-                        logo_link = None
-                    cache.set(logo_cache_key, {"logo_url": logo_url, "logo_link": logo_link}, 3600)
-                source_logos.append({
-                    "name": client.name,
-                    "logo_url": logo_url,
-                    "url": logo_link,
-                })
 
-        active_participations_qs = Participation.objects.exclude(
+        # FR: Liste des 9 dernières participations actives pour affichage rapide
+        # EN: List of the last 9 active participations for quick display
+        active_participations_queryset = Participation.objects.exclude(
             state__in=[Participation.State.COMPLETED_USER, Participation.State.VALIDATED_ADMIN]
         ).select_related("participant", "initiative").order_by("-created_at")[:9]
-        active_participations = []
-        for p in active_participations_qs:
-            active_participations.append({
+        
+        formatted_active_participations = []
+        for p in active_participations_queryset:
+            formatted_active_participations.append({
                 "participant": p.participant.full_name_or_email(),
                 "initiative": p.initiative.name,
                 "description": p.description,
                 "amount": p.amount,
                 "currency": p.initiative.currency,
             })
-        active_participations_count = Participation.objects.exclude(
+            
+        total_active_participations_count = Participation.objects.exclude(
             state__in=[Participation.State.COMPLETED_USER, Participation.State.VALIDATED_ADMIN]
         ).count()
 
-        recharge_total_eur = LigneArticle.objects.filter(
+        # FR: Calcul du pool de financement global à répartir
+        # EN: Calculation of the global funding pool to allocate
+        total_stripe_recharges_eur = LigneArticle.objects.filter(
             carte__isnull=False,
             paiement_stripe__isnull=False,
             paiement_stripe__status__in=[Paiement_stripe.PAID, Paiement_stripe.VALID],
@@ -502,88 +540,89 @@ class InitiativeViewSet(viewsets.ViewSet):
                 )
             )
         ).get("total") or Decimal("0.00")
-        recharge_total = int(recharge_total_eur * 100)
-        global_funding_total = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
-        allocated_total = Contribution.objects.filter(
+        
+        total_stripe_recharges_cents = int(total_stripe_recharges_eur * 100)
+        total_direct_global_funding = GlobalFunding.objects.aggregate(total=Sum("amount_funded")).get("total") or 0
+        total_already_allocated = Contribution.objects.filter(
             contributor_name=GLOBAL_FUNDING_ALLOC_NAME
         ).aggregate(total=Sum("amount")).get("total") or 0
-        funding_to_allocate = recharge_total + global_funding_total - allocated_total
+        
+        funding_to_allocate = total_stripe_recharges_cents + total_direct_global_funding - total_already_allocated
         if funding_to_allocate < 0:
             funding_to_allocate = 0
 
-        initiatives_rows = list(
+        # FR: Agrégation par devise pour le détail des monnaies
+        # EN: Aggregation by currency for currency details
+        initiatives_currency_data = list(
             Initiative.objects.filter(archived=False).values_list("uuid", "asset_id", "currency")
         )
-        asset_ids = {aid for _, aid, _ in initiatives_rows if aid}
-        currency_codes = {cur for _, aid, cur in initiatives_rows if not aid and cur}
-        if asset_ids:
-            asset_codes = set(
-                AssetFedowPublic.objects.filter(pk__in=asset_ids).values_list("currency_code", flat=True)
-            )
-            currency_codes.update(asset_codes)
-        currency_codes = {c for c in currency_codes if c}
-        summary_multi_currency = len(currency_codes) > 1
-        currency = next(iter(currency_codes), "")
-
-        asset_code_by_id = {}
-        if asset_ids:
-            asset_code_by_id = {
+        all_asset_ids = {aid for _, aid, _ in initiatives_currency_data if aid}
+        
+        asset_currency_code_by_id = {}
+        if all_asset_ids:
+            asset_currency_code_by_id = {
                 asset_id: code for asset_id, code in AssetFedowPublic.objects.filter(
-                    pk__in=asset_ids
+                    pk__in=all_asset_ids
                 ).values_list("id", "currency_code")
             }
-        initiative_currency = {}
-        for initiative_id, asset_id, cur in initiatives_rows:
-            if asset_id and asset_id in asset_code_by_id:
-                initiative_currency[initiative_id] = asset_code_by_id[asset_id]
+            
+        currency_by_initiative_id = {}
+        for initiative_uuid, asset_id, cur in initiatives_currency_data:
+            if asset_id and asset_id in asset_currency_code_by_id:
+                currency_by_initiative_id[initiative_uuid] = asset_currency_code_by_id[asset_id]
             else:
-                initiative_currency[initiative_id] = cur or ""
+                currency_by_initiative_id[initiative_uuid] = cur or ""
 
-        currency_blocks = {}
-        for cur in initiative_currency.values():
+        currency_blocks_data = {}
+        for cur in currency_by_initiative_id.values():
             if not cur:
                 continue
-            currency_blocks.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
-            currency_blocks[cur]["projects"] += 1
+            currency_blocks_data.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
+            currency_blocks_data[cur]["projects"] += 1
 
         for row in Contribution.objects.values("initiative_id").annotate(total=Sum("amount")):
-            cur = initiative_currency.get(row["initiative_id"], "")
+            cur = currency_by_initiative_id.get(row["initiative_id"], "")
             if not cur:
                 continue
-            currency_blocks.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
-            currency_blocks[cur]["funding"] += row["total"] or 0
+            currency_blocks_data.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
+            currency_blocks_data[cur]["funding"] += row["total"] or 0
 
         for row in Participation.objects.values("initiative_id").annotate(total=Sum("amount")):
-            cur = initiative_currency.get(row["initiative_id"], "")
+            cur = currency_by_initiative_id.get(row["initiative_id"], "")
             if not cur:
                 continue
-            currency_blocks.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
-            currency_blocks[cur]["participation"] += row["total"] or 0
+            currency_blocks_data.setdefault(cur, {"projects": 0, "funding": 0, "participation": 0})
+            currency_blocks_data[cur]["participation"] += row["total"] or 0
 
-        initiatives_for_alloc = []
+        # FR: Préparation des initiatives pour la modale de répartition admin
+        # EN: Prepare initiatives for the admin allocation modal
+        initiatives_for_allocation = []
         for initiative in Initiative.objects.filter(archived=False).only("uuid", "name"):
-            initiatives_for_alloc.append({
+            initiatives_for_allocation.append({
                 "uuid": str(initiative.uuid),
                 "name": initiative.name,
                 "url": initiative.get_absolute_url(),
             })
 
-        # Calculations for remaining budget to claim
-        remaining_to_claim = funding_total - participation_total_valid
-        claim_ratio = 0
-        if funding_total > 0:
-            claim_ratio = (participation_total_valid / funding_total) * 100
+        # FR: Indicateurs de budget restant à réclamer
+        # EN: Indicators for remaining budget to be claimed
+        remaining_to_claim_amount = total_funded_amount - total_validated_participation_amount
+        claim_ratio_percent = 0
+        if total_funded_amount > 0:
+            claim_ratio_percent = (total_validated_participation_amount / total_funded_amount) * 100
 
-        claim_color = "success"
-        if claim_ratio >= 90:
-            claim_color = "danger"
-        elif claim_ratio >= 70:
-            claim_color = "warning"
+        # FR: Système de couleur pour l'alerte de budget (Vert < 70%, Jaune < 90%, Rouge >= 90%)
+        # EN: Color system for budget alert (Green < 70%, Yellow < 90%, Red >= 90%)
+        budget_claim_alert_color = "success"
+        if claim_ratio_percent >= 90:
+            budget_claim_alert_color = "danger"
+        elif claim_ratio_percent >= 70:
+            budget_claim_alert_color = "warning"
 
-        summary = {
-            "summary_time_spent_minutes": time_spent_total,
-            "summary_funding_goal_total": funding_goal_total,
-            "summary_funding_percent": funding_percent,
+        summary_context_data = {
+            "summary_time_spent_minutes": total_time_spent_minutes,
+            "summary_funding_goal_total": total_funding_goal,
+            "summary_funding_percent": global_funding_percent,
             "summary_currency_blocks": [
                 {
                     "code": code,
@@ -591,120 +630,139 @@ class InitiativeViewSet(viewsets.ViewSet):
                     "funding": data["funding"],
                     "participation": data["participation"],
                 }
-                for code, data in sorted(currency_blocks.items(), key=lambda item: item[0])
+                for code, data in sorted(currency_blocks_data.items(), key=lambda item: item[0])
             ],
-            "summary_participants_count": participants_count,
-            "summary_source_logos": source_logos,
+            "summary_participants_count": total_participants_count,
+            "summary_sources_count": len(source_client_ids),
             "summary_has_multiple_sources": has_multiple_sources,
-            "summary_active_participations": active_participations,
-            "summary_active_participations_count": active_participations_count,
+            "summary_active_participations": formatted_active_participations,
+            "summary_active_participations_count": total_active_participations_count,
             "summary_funding_to_allocate": funding_to_allocate,
-            "summary_initiatives_for_alloc": initiatives_for_alloc,
-            # Help texts for Global Funding Swal
+            "summary_initiatives_for_alloc": initiatives_for_allocation,
+            # FR: Textes d'aide pour le formulaire de financement global
+            # EN: Help texts for Global Funding form
             "contrib_name_help": Contribution._meta.get_field("contributor_name").help_text or gettext(
                 "Votre nom ou celui de votre organisation (affiché publiquement)"),
             "contrib_desc_help": Contribution._meta.get_field("description").help_text or gettext(
                 "Un petit mot pour décrire votre contribution"),
-            # New info: funding vs participation
-            "summary_remaining_to_claim": max(0, remaining_to_claim),
-            "summary_claim_ratio": claim_ratio,
-            "summary_claim_color": claim_color,
+            # FR: Indicateurs de budget financé vs réclamé
+            # EN: Indicators for funded vs claimed budget
+            "summary_remaining_to_claim": max(0, remaining_to_claim_amount),
+            "summary_claim_ratio": claim_ratio_percent,
+            "summary_claim_color": budget_claim_alert_color,
         }
-        cache.set(cache_key, summary, 60)
-        return summary
+        cache.set(cache_key, summary_context_data, 60)
+        return summary_context_data
 
     # ------------------------
     # Détail d’un projet
     # ------------------------
     def retrieve(self, request, pk=None):
         """
-        Affiche le détail d’un projet dans la charte graphique TiBillet.
+        FR: Affiche le détail complet d’un projet spécifique.
+            Inclut les contributions, les lignes budgétaires et les participations.
+        EN: Displays complete detail of a specific project.
+            Includes contributions, budget items, and participations.
         """
-        # Précharge les tags pour éviter les requêtes supplémentaires dans le template
         try:
+            # FR: On vérifie l'existence de l'initiative / EN: Check initiative existence
             if not Initiative.objects.filter(pk=pk).exists():
                 return redirect('/contrib')
         except ValidationError:
-            # pk n'est pas un uuid valide :
+            # FR: pk n'est pas un UUID valide / EN: pk is not a valid UUID
             return redirect('/contrib')
 
-        initiative = get_object_or_404(
+        initiative_obj = get_object_or_404(
             Initiative.objects.prefetch_related("tags"), pk=pk
         )
-        contributions_context = self._contributions_context(initiative)
-        budget_items_context = self._budget_items_context(initiative)
+        
+        # FR: Préparation des contextes spécifiques / EN: Prepare specific contexts
+        contributions_data = self._contributions_context(initiative_obj)
+        budget_items_data = self._budget_items_context(initiative_obj)
+        participations_data = self._participations_context(initiative_obj)
 
-        context = get_context(request)
-        # Précharger les votants pour éviter le N+1
-        votes = list(initiative.votes.select_related("user__client_source").order_by("-created_at"))
-        show_votes_origin = self._should_show_user_source(
-            initiative, "votes", [v.user for v in votes]
+        view_context = get_context(request)
+        
+        # FR: Précharger les votants pour éviter le N+1
+        # EN: Preload voters to avoid N+1 queries
+        project_votes = list(initiative_obj.votes.select_related("user__client_source").order_by("-created_at"))
+        
+        # FR: Décide si on affiche l'origine géographique des votants
+        # EN: Decide whether to show voters' geographical origin
+        should_show_votes_origin = self._should_show_user_source(
+            initiative_obj, "votes", [v.user for v in project_votes]
         )
-        participations_context = self._participations_context(initiative)
-        # Help texts for Contribution form in Swal
+        
+        # FR: Textes d'aide pour les formulaires / EN: Help texts for forms
         from django.utils.translation import gettext as _
-        name_help = Contribution._meta.get_field("contributor_name").help_text or _(
+        contrib_name_help_text = Contribution._meta.get_field("contributor_name").help_text or _(
             "Votre nom ou celui de votre organisation (affiché publiquement)")
-        desc_help = Contribution._meta.get_field("description").help_text or _(
+        contrib_desc_help_text = Contribution._meta.get_field("description").help_text or _(
             "Un petit mot pour décrire votre contribution")
-        # Ne passer que les variables réellement utilisées par les templates
-        context.update({
+            
+        view_context.update({
             "crowd_config": CrowdConfig.get_solo(),
-            "initiative": initiative,
-            "contrib_name_help": name_help,
-            "contrib_desc_help": desc_help,
-            "votes": votes,
-            "show_votes_origin": show_votes_origin,
+            "initiative": initiative_obj,
+            "contrib_name_help": contrib_name_help_text,
+            "contrib_desc_help": contrib_desc_help_text,
+            "votes": project_votes,
+            "show_votes_origin": should_show_votes_origin,
         })
-        context.update(contributions_context)
-        context.update(budget_items_context)
-        context.update(participations_context)
+        view_context.update(contributions_data)
+        view_context.update(budget_items_data)
+        view_context.update(participations_data)
 
-        return render(request, "crowds/views/detail.html", context)
+        return render(request, "crowds/views/detail.html", view_context)
 
     @action(detail=True, methods=["post"], url_path="vote")
     def vote(self, request, pk=None):
         """
-        Enregistre un vote de pertinence pour une initiative.
-        - Nécessite un utilisateur authentifié (SessionAuthentication).
-        - Idempotent: multiple POST par le même user n'ajoute pas de nouveau vote.
-        Retourne toujours du HTML (partiel de badge de votes) pour HTMX.
+        FR: Enregistre un vote de pertinence pour une initiative.
+            - Nécessite un utilisateur authentifié.
+            - Idempotent: multiple POST par le même utilisateur n'ajoute pas de nouveau vote.
+            - Retourne du HTML (fragment badge de votes) pour mise à jour via HTMX.
+        EN: Registers a relevance vote for an initiative.
+            - Requires an authenticated user.
+            - Idempotent: multiple POSTs by the same user do not add a new vote.
+            - Returns HTML (vote badge fragment) for HTMX update.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
         if not request.user.is_authenticated:
-            # Retourner simplement le badge inchangé (HTML) avec statut 401
+            # FR: Si non connecté, on renvoie le badge sans changement avec un statut 401
+            # EN: If not logged in, return unchanged badge with 401 status
             context = get_context(request)
             context.update({"initiative": initiative})
             response = render(request, "crowds/partial/votes_badge.html", context)
             response.status_code = 401
             return response
 
-        # Crée le vote si inexistant (idempotent)
+        # FR: Crée le vote si inexistant (get_or_create assure l'idempotence)
+        # EN: Create vote if it doesn't exist (get_or_create ensures idempotency)
         _, created = Vote.objects.get_or_create(initiative=initiative, user=request.user)
-        # Retourner le badge mis à jour + un évènement HTMX pour feedback UI
+        
+        # FR: Retourner le badge mis à jour + un évènement HTMX pour retour visuel
+        # EN: Return updated badge + HTMX event for visual feedback
         context = get_context(request)
         context.update({"initiative": initiative})
         response = render(request, "crowds/partial/votes_badge.html", context)
-        # Déclenche un évènement custom côté client sans JSON dans le body
-        # HTMX parse automatiquement le JSON du header HX-Trigger en tant que detail
+        
+        # FR: Déclenche un évènement custom côté client via les headers HTMX
+        # EN: Trigger a custom client-side event via HTMX headers
         try:
             response["HX-Trigger"] = json.dumps({
                 "crowds:vote": {"created": created, "uuid": str(initiative.uuid)}
             })
         except Exception:
-            # En cas d'erreur de sérialisation, on envoie une forme simple
             response["HX-Trigger"] = "crowds:vote"
         return response
 
     @action(detail=True, methods=["post"], url_path="participate")
     def participate(self, request, pk=None):
         """
-        Déclare une participation à une initiative.
-        Champs attendus: description (str), requested_amount_cents (int > 0) optionnel (bénévolat possible)
-        Réponses:
-         - 401 si non connecté
-         - Si HX-Request avec HX-Target == 'participations_list' → renvoie le partiel HTML mis à jour
-         - Sinon JSON { ok, id }
+        FR: Déclare une participation (action) à une initiative.
+            Champs attendus: description, amount (optionnel pour bénévolat).
+        EN: Declares a participation (action) to an initiative.
+            Expected fields: description, amount (optional for pro-bono).
         """
         initiative = get_object_or_404(Initiative, pk=pk)
         if not request.user.is_authenticated:
@@ -714,7 +772,8 @@ class InitiativeViewSet(viewsets.ViewSet):
             response.status_code = 401
             return response
 
-        # Validation via DRF serializer (et sanitation HTML)
+        # FR: Validation via DRF serializer (inclut le nettoyage HTML)
+        # EN: Validation via DRF serializer (includes HTML sanitation)
         serializer = ParticipationCreateSerializer(data=request.data)
         if not serializer.is_valid():
             logger.warning("Invalid participation request: %s", serializer.errors)
@@ -734,6 +793,9 @@ class InitiativeViewSet(viewsets.ViewSet):
             amount=amount,
             state=Participation.State.REQUESTED,
         )
+        
+        # FR: Retourne la liste des participations mise à jour (HTMX)
+        # EN: Returns the updated list of participations (HTMX)
         context = get_context(request)
         context.update(self._participations_context(initiative))
         return render(request, "crowds/partial/participations.html", context)
@@ -777,12 +839,14 @@ class InitiativeViewSet(viewsets.ViewSet):
     @action(detail=True, methods=["post"], url_path=r"budget-items/(?P<bid>[^/.]+)/approve")
     def approve_budget_item(self, request, pk=None, bid=None):
         """
-        Approuve une proposition de ligne budgétaire.
-        Réservé aux admins/staff. Retourne toujours le partiel HTML mis à jour.
+        FR: Approuve une proposition de ligne budgétaire.
+            Réservé aux administrateurs. Retourne le fragment HTML mis à jour.
+        EN: Approves a budget item proposal.
+            Reserved for administrators. Returns the updated HTML fragment.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
 
-        def _render(status_code=200):
+        def _render_updated_fragment(status_code=200):
             ctx = get_context(request)
             ctx.update(self._budget_items_context(initiative))
             resp = render(request, "crowds/partial/budget_items.html", ctx)
@@ -790,31 +854,32 @@ class InitiativeViewSet(viewsets.ViewSet):
             return resp
 
         if not request.user.is_authenticated:
-            return _render(status_code=401)
+            return _render_updated_fragment(status_code=401)
         if not (request.user.is_staff or request.user.is_superuser):
-            return _render(status_code=403)
+            return _render_updated_fragment(status_code=403)
 
-        item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
-        if item.state != BudgetItem.State.REQUESTED:
-            return _render(status_code=400)
+        budget_item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
+        if budget_item.state != BudgetItem.State.REQUESTED:
+            return _render_updated_fragment(status_code=400)
         try:
-            item.state = BudgetItem.State.APPROVED
-            item.validator = request.user
-            item.save(update_fields=["state", "validator"])
+            budget_item.state = BudgetItem.State.APPROVED
+            budget_item.validator = request.user
+            budget_item.save(update_fields=["state", "validator"])
         except Exception:
-            # En cas d'erreur, on renvoie le partiel sans changer l'état
-            return _render(status_code=400)
-        return _render(status_code=200)
+            return _render_updated_fragment(status_code=400)
+        return _render_updated_fragment(status_code=200)
 
     @action(detail=True, methods=["post"], url_path=r"budget-items/(?P<bid>[^/.]+)/reject")
     def reject_budget_item(self, request, pk=None, bid=None):
         """
-        Rejette une proposition de ligne budgétaire.
-        Réservé aux admins/staff. Retourne toujours le partiel HTML mis à jour.
+        FR: Rejette une proposition de ligne budgétaire.
+            Réservé aux administrateurs. Retourne le fragment HTML mis à jour.
+        EN: Rejects a budget item proposal.
+            Reserved for administrators. Returns the updated HTML fragment.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
 
-        def _render(status_code=200):
+        def _render_updated_fragment(status_code=200):
             ctx = get_context(request)
             ctx.update(self._budget_items_context(initiative))
             resp = render(request, "crowds/partial/budget_items.html", ctx)
@@ -822,178 +887,176 @@ class InitiativeViewSet(viewsets.ViewSet):
             return resp
 
         if not request.user.is_authenticated:
-            return _render(status_code=401)
+            return _render_updated_fragment(status_code=401)
         if not (request.user.is_staff or request.user.is_superuser):
-            return _render(status_code=403)
+            return _render_updated_fragment(status_code=403)
 
-        item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
-        if item.state != BudgetItem.State.REQUESTED:
-            return _render(status_code=400)
+        budget_item = get_object_or_404(BudgetItem, pk=bid, initiative=initiative)
+        if budget_item.state != BudgetItem.State.REQUESTED:
+            return _render_updated_fragment(status_code=400)
         try:
-            item.state = BudgetItem.State.REJECTED
-            item.validator = request.user
-            item.save(update_fields=["state", "validator"])
+            budget_item.state = BudgetItem.State.REJECTED
+            budget_item.validator = request.user
+            budget_item.save(update_fields=["state", "validator"])
         except Exception:
-            return _render(status_code=400)
-        return _render(status_code=200)
+            return _render_updated_fragment(status_code=400)
+        return _render_updated_fragment(status_code=200)
 
     @action(detail=True, methods=["post"], url_path=r"participations/(?P<pid>[^/.]+)/complete")
     def complete_participation(self, request, pk=None, pid=None):
         """
-        Marque une participation comme terminée (par l'utilisateur propriétaire).
-        Champs attendus: time_spent_minutes (int > 0)
-        Autorisé uniquement si l'état actuel est REQUESTED ou APPROVED_ADMIN.
+        FR: Marque une participation comme terminée par l'utilisateur.
+            Met à jour le temps passé et change l'état vers COMPLETED_USER.
+        EN: Marks a participation as completed by the user.
+            Updates time spent and changes state to COMPLETED_USER.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
-        part = get_object_or_404(Participation, pk=pid, initiative=initiative)
-        if not request.user.is_authenticated:
+        participation_obj = get_object_or_404(Participation, pk=pid, initiative=initiative)
+        
+        # FR: Aide pour renvoyer le fragment en cas d'erreur
+        # EN: Helper to return fragment on error
+        def _render_participations(status_code=200):
             context = get_context(request)
             context.update(self._participations_context(initiative))
             response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 401
+            response.status_code = status_code
             return response
 
-        if part.participant_id != request.user.id:
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 403
-            return response
-        # Vérifier l'état courant
-        if part.state not in (Participation.State.REQUESTED, Participation.State.APPROVED_ADMIN):
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 400
-            return response
+        if not request.user.is_authenticated:
+            return _render_participations(401)
+
+        if participation_obj.participant_id != request.user.id:
+            return _render_participations(403)
+            
+        # FR: On ne peut compléter qu'une participation demandée ou déjà approuvée
+        # EN: Can only complete a requested or already approved participation
+        if participation_obj.state not in (Participation.State.REQUESTED, Participation.State.APPROVED_ADMIN):
+            return _render_participations(400)
+            
         try:
-            minutes = int(request.POST.get("time_spent_minutes") or 0)
+            time_spent_minutes = int(request.POST.get("time_spent_minutes") or 0)
         except (TypeError, ValueError):
-            minutes = 0
-        if minutes <= 0:
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 400
-            return response
-        part.time_spent_minutes = minutes
-        part.state = Participation.State.COMPLETED_USER
-        part.save(update_fields=["time_spent_minutes", "state", "updated_at"])
-        context = get_context(request)
-        context.update(self._participations_context(initiative))
-        return render(request, "crowds/partial/participations.html", context)
+            time_spent_minutes = 0
+            
+        if time_spent_minutes <= 0:
+            return _render_participations(400)
+            
+        participation_obj.time_spent_minutes = time_spent_minutes
+        participation_obj.state = Participation.State.COMPLETED_USER
+        participation_obj.save(update_fields=["time_spent_minutes", "state", "updated_at"])
+        
+        return _render_participations(200)
 
     @action(detail=True, methods=["post"], url_path=r"participations/(?P<pid>[^/.]+)/approve")
     def approve_participation(self, request, pk=None, pid=None):
         """
-        Validation admin d'une participation (étape 2): REQUESTED -> APPROVED_ADMIN.
-        Réservé aux admins/staff. Retourne le partiel si HX-Target == 'participations_list'.
+        FR: Approbation admin d'une participation (étape 2 du flux).
+            Passe l'état de REQUESTED à APPROVED_ADMIN.
+        EN: Admin approval of a participation (step 2 of the flow).
+            Moves state from REQUESTED to APPROVED_ADMIN.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
-        part = get_object_or_404(Participation, pk=pid, initiative=initiative)
+        participation_obj = get_object_or_404(Participation, pk=pid, initiative=initiative)
+        
+        def _render_participations(status_code=200):
+            context = get_context(request)
+            context.update(self._participations_context(initiative))
+            response = render(request, "crowds/partial/participations.html", context)
+            response.status_code = status_code
+            return response
+
         if not request.user.is_authenticated:
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 401
-            return response
+            return _render_participations(401)
         if not (request.user.is_staff or request.user.is_superuser):
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 403
-            return response
-        if part.state != Participation.State.REQUESTED:
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 400
-            return response
-        part.state = Participation.State.APPROVED_ADMIN
-        part.save(update_fields=["state", "updated_at"])
-        context = get_context(request)
-        context.update(self._participations_context(initiative))
-        return render(request, "crowds/partial/participations.html", context)
+            return _render_participations(403)
+            
+        if participation_obj.state != Participation.State.REQUESTED:
+            return _render_participations(400)
+            
+        participation_obj.state = Participation.State.APPROVED_ADMIN
+        participation_obj.save(update_fields=["state", "updated_at"])
+        
+        return _render_participations(200)
 
     @action(detail=True, methods=["post"], url_path=r"participations/(?P<pid>[^/.]+)/validate")
     def validate_participation(self, request, pk=None, pid=None):
         """
-        Validation finale admin (étape 4): COMPLETED_USER -> VALIDATED_ADMIN.
-        Réservé aux admins/staff. Retourne le partiel si HX-Target == 'participations_list'.
+        FR: Validation finale admin d'une participation terminée (étape 4 du flux).
+            Passe l'état de COMPLETED_USER à VALIDATED_ADMIN.
+        EN: Final admin validation of a completed participation (step 4 of the flow).
+            Moves state from COMPLETED_USER to VALIDATED_ADMIN.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
-        part = get_object_or_404(Participation, pk=pid, initiative=initiative)
+        participation_obj = get_object_or_404(Participation, pk=pid, initiative=initiative)
+        
+        def _render_participations(status_code=200):
+            context = get_context(request)
+            context.update(self._participations_context(initiative))
+            response = render(request, "crowds/partial/participations.html", context)
+            response.status_code = status_code
+            return response
+
         if not request.user.is_authenticated:
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 401
-            return response
+            return _render_participations(401)
         if not (request.user.is_staff or request.user.is_superuser):
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 403
-            return response
-        if part.state != Participation.State.COMPLETED_USER:
-            context = get_context(request)
-            context.update(self._participations_context(initiative))
-            response = render(request, "crowds/partial/participations.html", context)
-            response.status_code = 400
-            return response
-        part.state = Participation.State.VALIDATED_ADMIN
-        part.save(update_fields=["state", "updated_at"])
-        context = get_context(request)
-        context.update(self._participations_context(initiative))
-        return render(request, "crowds/partial/participations.html", context)
+            return _render_participations(403)
+            
+        if participation_obj.state != Participation.State.COMPLETED_USER:
+            return _render_participations(400)
+            
+        participation_obj.state = Participation.State.VALIDATED_ADMIN
+        participation_obj.save(update_fields=["state", "updated_at"])
+        
+        return _render_participations(200)
 
     @action(detail=True, methods=["post"], url_path="contribute")
     def contribute(self, request, pk=None):
         """
-        Crée une contribution financière à une initiative.
-        Champs attendus (POST): amount (centimes), contributor_name (str), description (str, optionnel)
-        Retourne toujours du HTML: le partiel 'crowds/partial/contributions.html'.
+        FR: Crée une contribution financière à une initiative.
+            Champs attendus: amount (en centimes), contributor_name, description.
+        EN: Creates a financial contribution to an initiative.
+            Expected fields: amount (in cents), contributor_name, description.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
+        
+        def _render_contributions(status_code=200):
+            context = get_context(request)
+            context.update(self._contributions_context(initiative))
+            response = render(request, "crowds/partial/contributions.html", context)
+            response.status_code = status_code
+            return response
+
         if not request.user.is_authenticated:
-            context = get_context(request)
-            context.update(self._contributions_context(initiative))
-            response = render(request, "crowds/partial/contributions.html", context)
-            response.status_code = 401
-            return response
+            return _render_contributions(401)
 
-        # Validation via DRF serializer (et sanitation HTML)
-        serializer = ContributionCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            context = get_context(request)
-            context.update(self._contributions_context(initiative))
-            response = render(request, "crowds/partial/contributions.html", context)
-            response.status_code = 400
-            return response
+        # FR: Validation via DRF serializer (inclut le nettoyage HTML)
+        # EN: Validation via DRF serializer (includes HTML sanitation)
+        contribution_serializer = ContributionCreateSerializer(data=request.data)
+        if not contribution_serializer.is_valid():
+            return _render_contributions(400)
 
-        # Create
-        data = serializer.validated_data
+        validated_contrib_data = contribution_serializer.validated_data
         Contribution.objects.create(
             initiative=initiative,
             contributor=request.user,
-            contributor_name=data.get("contributor_name") or "",
-            description=data.get("description") or "",
-            amount=data.get("amount") or 0,
+            contributor_name=validated_contrib_data.get("contributor_name") or "",
+            description=validated_contrib_data.get("description") or "",
+            amount=validated_contrib_data.get("amount") or 0,
         )
-        context = get_context(request)
-        context.update(self._contributions_context(initiative))
-        return render(request, "crowds/partial/contributions.html", context)
+        
+        return _render_contributions(200)
 
     @action(detail=True, methods=["post"], url_path=r"contributions/(?P<cid>[^/.]+)/mark-paid")
     def mark_contribution_paid(self, request, pk=None, cid=None):
         """
-        Marque une contribution comme payée (admin/staff uniquement).
-        Retourne toujours le partiel HTML des contributions.
+        FR: Marque une contribution comme payée par un administrateur.
+            Réservé aux admins/staff.
+        EN: Marks a contribution as paid by an administrator.
+            Reserved for admins/staff.
         """
         initiative = get_object_or_404(Initiative, pk=pk)
 
-        # Toujours renvoyer le partiel HTML (règle HTMX)
-        def _render(status_code=200):
+        def _render_contributions(status_code=200):
             ctx = get_context(request)
             ctx.update(self._contributions_context(initiative))
             resp = render(request, "crowds/partial/contributions.html", ctx)
@@ -1001,20 +1064,21 @@ class InitiativeViewSet(viewsets.ViewSet):
             return resp
 
         if not request.user.is_authenticated:
-            return _render(status_code=401)
+            return _render_contributions(status_code=401)
         if not (request.user.is_staff or request.user.is_superuser):
-            return _render(status_code=403)
-        contrib = get_object_or_404(Contribution, pk=cid, initiative=initiative)
-        # Met à jour seulement si nécessaire
+            return _render_contributions(status_code=403)
+            
+        contribution_obj = get_object_or_404(Contribution, pk=cid, initiative=initiative)
+        
         try:
-            if contrib.payment_status not in [Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN]:
-                contrib.payment_status = Contribution.PaymentStatus.PAID_ADMIN
-                contrib.paid_at = timezone.now()
-                contrib.save(update_fields=["payment_status", "paid_at"])
+            if contribution_obj.payment_status not in [Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN]:
+                contribution_obj.payment_status = Contribution.PaymentStatus.PAID_ADMIN
+                contribution_obj.paid_at = timezone.now()
+                contribution_obj.save(update_fields=["payment_status", "paid_at"])
         except Exception:
-            # même en cas d'erreur, renvoyer le partiel (l'état restera inchangé)
             pass
-        return _render(status_code=200)
+            
+        return _render_contributions(status_code=200)
 
     @action(detail=True, methods=["post"], url_path="close")
     def close_initiative(self, request, pk=None):

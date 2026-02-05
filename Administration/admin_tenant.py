@@ -4338,13 +4338,20 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
 
 
 class ContributionInline(TabularInline):
+    """
+    FR: Inline pour les contributions financières d'une initiative.
+        L'ajout direct depuis l'admin est désactivé pour éviter les erreurs d'intégrité (ex: participant_id NULL).
+    EN: Inline for financial contributions of an initiative.
+        Direct addition from admin is disabled to prevent integrity errors (e.g. participant_id NULL).
+    """
     model = Contribution
     fk_name = 'initiative'
-    # Ne pas proposer de nouvelle ligne par défaut
+    # FR: Ne pas proposer de nouvelle ligne par défaut / EN: No empty row by default
     extra = 0
     can_delete = True
     show_change_link = True
-    # Evite de charger 200k users dans un select: champ en saisie par ID
+    # FR: Evite de charger 200k users dans un select: champ en saisie par ID
+    # EN: Avoid loading 200k users in a select: field input by ID
     raw_id_fields = ("contributor",)
 
     fields = (
@@ -4366,7 +4373,8 @@ class ContributionInline(TabularInline):
 
     amount_eur_display.short_description = _("Montant")
 
-    # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
+    # FR: Permissions : on INTERDIT l'ajout; seule la modification/suppression est permise
+    # EN: Permissions: addition is FORBIDDEN; only modification/deletion is allowed
     def has_add_permission(self, request, obj=None):
         return False
 
@@ -4413,13 +4421,19 @@ class VoteInline(TabularInline):
 
 
 class BudgetItemInline(TabularInline):
+    """
+    FR: Inline pour les lignes budgétaires (objectifs à financer).
+        L'ajout direct est interdit ici pour forcer l'usage du front ou un flux contrôlé.
+    EN: Inline for budget items (funding goals).
+        Direct addition is forbidden here to force use of the front-end or a controlled flow.
+    """
     model = BudgetItem
     fk_name = 'initiative'
-    # Ne pas proposer de nouvelle ligne par défaut
+    # FR: Ne pas proposer de nouvelle ligne par défaut / EN: No empty row by default
     extra = 0
     can_delete = True
     show_change_link = True
-    # Evite les gros menus déroulants de users
+    # FR: Evite les gros menus déroulants de users / EN: Avoid large user dropdowns
     raw_id_fields = ("contributor", "validator")
 
     fields = (
@@ -4432,7 +4446,8 @@ class BudgetItemInline(TabularInline):
     )
     readonly_fields = ("created_at", "contributor", "validator")
 
-    # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
+    # FR: Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
+    # EN: Permissions: addition is FORBIDDEN; only modification/deletion is allowed
     def has_add_permission(self, request, obj=None):
         return False
 
@@ -4451,11 +4466,17 @@ class BudgetItemInline(TabularInline):
 
 
 class ParticipationInline(TabularInline):
+    """
+    FR: Inline pour les participations (actions des utilisateurs).
+        L'ajout est bloqué car il manquait souvent le participant_id (IntegrityError).
+    EN: Inline for participations (user actions).
+        Addition is blocked because participant_id was often missing (IntegrityError).
+    """
     model = Participation
     fk_name = 'initiative'
-    # On NE PROPOSE PAS de nouvelle ligne par défaut
+    # FR: On NE PROPOSE PAS de nouvelle ligne par défaut / EN: No empty row by default
     extra = 0
-    # Evite le chargement massif des users
+    # FR: Evite le chargement massif des users / EN: Avoid massive user loading
     raw_id_fields = ("participant",)
     fields = (
         "participant",
@@ -4468,7 +4489,8 @@ class ParticipationInline(TabularInline):
     )
     readonly_fields = ("created_at", "updated_at", "participant")
 
-    # Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
+    # FR: Permissions: on INTERDIT l'ajout; seule la modification/suppression est permise
+    # EN: Permissions: addition is FORBIDDEN; only modification/deletion is allowed
     def has_add_permission(self, request, obj=None):
         return False
 

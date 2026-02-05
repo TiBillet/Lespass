@@ -186,25 +186,37 @@ class Initiative(models.Model):
         return self.name
 
     ### TOTAUX ###
-    # --- Objectifs et lignes budgetaires ---
+    # --- Objectifs et lignes budgetaires / Goals and budget items ---
     @cached_property
     def total_funding_amount(self):
+        """
+        FR: Retourne la somme des montants des lignes budgétaires approuvées.
+        EN: Returns the sum of amounts from approved budget items.
+        """
         int_amount = self.budget_items.filter(state=BudgetItem.State.APPROVED).aggregate(
             models.Sum("amount")
         )["amount__sum"] or 0
         return int_amount
 
-    # --- Financement reçu ---
+    # --- Financement reçu / Received funding ---
     @cached_property
     def total_funded_amount(self):
+        """
+        FR: Retourne la somme des contributions financières validées (payées).
+        EN: Returns the sum of validated (paid) financial contributions.
+        """
         int_amount = self.contributions.filter(
             payment_status__in=[Contribution.PaymentStatus.PAID_ADMIN, Contribution.PaymentStatus.PAID],
         ).aggregate(models.Sum("amount"))["amount__sum"] or 0
         return int_amount
 
-    # --- Sommes demandées par les participations au budget contributif ---
+    # --- Sommes demandées par les participations au budget contributif / Sums requested by participations ---
     @property
     def total_participation_amount(self) -> int:
+        """
+        FR: Retourne la somme des montants demandés par les participations validées.
+        EN: Returns the sum of amounts requested by validated participations.
+        """
         int_total_participation = (
                 self.participations
                 .filter(state=Participation.State.VALIDATED_ADMIN)

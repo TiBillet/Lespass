@@ -19,15 +19,19 @@ def invalidate_crowds_cache():
     """
     FR: Invalide les caches globaux de l'application Crowds pour le tenant actuel.
         Ceci inclut le résumé de la liste et les données du diagramme de Sankey.
+        Appelé à chaque fois qu'une donnée source change (initiative, contribution, etc.).
     EN: Invalidate global Crowds application caches for the current tenant.
         This includes the list summary and the Sankey diagram data.
+        Called whenever source data changes (initiative, contribution, etc.).
     """
     try:
         tenant_id = getattr(getattr(connection, "tenant", None), "pk", None)
         if tenant_id:
-            # Invalide le résumé de la liste (utilisé dans InitiativeViewSet._summary_context)
+            # FR: Invalide le résumé de la liste (InitiativeViewSet._summary_context)
+            # EN: Invalidate the list summary (InitiativeViewSet._summary_context)
             cache.delete(f"crowds:list:summary:{tenant_id}")
-            # Invalide les données du Sankey (utilisé dans InitiativeViewSet.sankey)
+            # FR: Invalide les données du Sankey (InitiativeViewSet.sankey)
+            # EN: Invalidate the Sankey data (InitiativeViewSet.sankey)
             cache.delete(f"crowds:sankey:data:{tenant_id}")
             logger.info(f"crowds.signals: Cache invalidated for tenant {tenant_id}")
     except Exception as e:
@@ -47,8 +51,8 @@ def invalidate_crowds_cache():
 @receiver(post_delete, sender=GlobalFunding)
 def on_crowds_data_change(sender, **kwargs):
     """
-    FR: Déclenché à chaque modification d'une initiative, contribution ou participation.
-    EN: Triggered on every modification of an initiative, contribution or participation.
+    FR: Déclenché à chaque modification d'une donnée influençant les stats Crowds.
+    EN: Triggered on every modification of data influencing Crowds stats.
     """
     invalidate_crowds_cache()
 
@@ -56,6 +60,10 @@ def on_crowds_data_change(sender, **kwargs):
 # --- Participation: notify admins when a new request is created ---
 @receiver(post_save, sender=Participation)
 def participation_created_notify(sender, instance: Participation, created: bool, **kwargs):
+    """
+    FR: Notifie les administrateurs par email lors d'une nouvelle demande de participation.
+    EN: Notify administrators via email when a new participation request is created.
+    """
     if not created:
         return
     try:
@@ -75,29 +83,32 @@ def participation_created_notify(sender, instance: Participation, created: bool,
 # --- Contribution: detect payment status transitions ---
 @receiver(pre_save, sender=Contribution)
 def contribution_store_old_status(sender, instance: Contribution, **kwargs):
-    """Store old payment_status on the instance to compare post_save."""
+    """
+    FR: Stocke l'ancien statut de paiement avant sauvegarde pour comparaison.
+    EN: Store old payment status before saving for comparison.
+    """
     try:
         if not instance.pk:
             instance._old_payment_status = None
             return
-        old = Contribution.objects.filter(pk=instance.pk).only("payment_status").first()
-        instance._old_payment_status = old.payment_status if old else None
+        old_contribution = Contribution.objects.filter(pk=instance.pk).only("payment_status").first()
+        instance._old_payment_status = old_contribution.payment_status if old_contribution else None
     except Exception:
         instance._old_payment_status = None
 
 
 @receiver(post_save, sender=Contribution)
 def contribution_paid_notify(sender, instance: Contribution, created: bool, **kwargs):
-    # Only when transitioning to a paid status
+    """
+    FR: Notifie les administrateurs lorsqu'une contribution passe en attente ou payée.
+    EN: Notify administrators when a contribution moves to pending or paid.
+    """
     try:
-        new_status = instance.payment_status
+        new_payment_status = instance.payment_status
 
-        ### Au cas ou on veut suivre le status, mini machine a état :
-        # old_status = getattr(instance, "_old_payment_status", None)
-        # paid_values = {Contribution.PaymentStatus.PAID, Contribution.PaymentStatus.PAID_ADMIN}
-        # if new_status in paid_values and new_status != old_status:
-
-        if new_status == Contribution.PaymentStatus.PENDING and not settings.TEST:
+        # FR: Notification lors de la création d'une contribution (attente de paiement)
+        # EN: Notification when a contribution is created (waiting for payment)
+        if new_payment_status == Contribution.PaymentStatus.PENDING and not settings.TEST:
             try:
                 schema_name = connection.schema_name
             except Exception:

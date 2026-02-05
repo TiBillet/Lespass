@@ -16,7 +16,8 @@ SUPER IMPORTANT :
 Fabriquer du code facile à lire et à comprendre : FALC !
 Le but est de faire un commun numérique facile à manipuler : on préfère faire des for que des compli complique. Le verbeux n'est pas un problème.
 
-On commente toujours en Français et en Anglais !
+J'aimerais avoir beaucoup de commentaires EN/FR, soit le plus verbeux possible, avec des noms de variables explicite.
+Le code doit être FALC : nous fabriquons un commun numérique qui doit être facile à comprendre
 
 ## Exectution dans l'environnement django de docker :
 
