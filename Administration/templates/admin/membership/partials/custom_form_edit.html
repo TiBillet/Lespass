@@ -1,0 +1,158 @@
+{% load i18n unfold %}
+
+{# Template partiel pour l'édition du custom_form en mode HTMX #}
+{# Partial template for editing custom_form in HTMX mode #}
+
+<div id="custom-form-edit-container-{{ membership.uuid }}" class="space-y-4">
+    {# Affichage des erreurs de validation s'il y en a #}
+    {# Display validation errors if any #}
+    {% if errors %}
+        <div class="p-3 rounded-md bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+            <p class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">
+                {% trans "Erreurs de validation :" %}
+            </p>
+            <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside space-y-1">
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {# Formulaire d'édition avec HTMX #}
+    {# Edit form with HTMX #}
+    <form hx-post="/memberships/{{ membership.uuid }}/admin_change_json_form/"
+          hx-target="#custom-form-edit-container-{{ membership.uuid }}"
+          hx-swap="outerHTML"
+          class="space-y-3">
+        {% csrf_token %}
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead class="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% trans "Champ" %}
+                        </th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {% trans "Valeur" %}
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200 dark:bg-gray-900 dark:divide-gray-700">
+                    {# Boucle sur chaque champ du formulaire #}
+                    {# Loop through each form field #}
+                    {% for field_name, field_data in form_fields.items %}
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            {# Colonne 1 : Le libellé du champ #}
+                            {# Column 1: Field label #}
+                            <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {{ field_data.label }}
+                                {% if field_data.required %}
+                                    <span class="text-red-600">*</span>
+                                {% endif %}
+                            </td>
+
+                            {# Colonne 2 : Le champ de saisie (input/textarea/select/etc.) #}
+                            {# Column 2: Input field (input/textarea/select/etc.) #}
+                            <td class="px-4 py-3">
+                                {# LT = Long Text (texte long) → textarea #}
+                                {% if field_data.field_type == 'LT' %}
+                                    <textarea name="{{ field_name }}"
+                                              rows="3"
+                                              {% if field_data.required %}required{% endif %}
+                                              class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent">{{ field_data.value|default:"" }}</textarea>
+
+                                {# BL = Boolean (switch on/off) → checkbox #}
+                                {% elif field_data.field_type == 'BL' %}
+                                    <input type="checkbox"
+                                           name="{{ field_name }}"
+                                           value="true"
+                                           {% if field_data.value %}checked{% endif %}
+                                           class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-800">
+
+                                {# SS = Single Select (menu déroulant) → select #}
+                                {% elif field_data.field_type == 'SS' %}
+                                    <select name="{{ field_name }}"
+                                            {% if field_data.required %}required{% endif %}
+                                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                                        <option value="">---</option>
+                                        {% for option in field_data.options %}
+                                            <option value="{{ option }}" {% if field_data.value == option %}selected{% endif %}>{{ option }}</option>
+                                        {% endfor %}
+                                    </select>
+
+                                {# SR = Single select Radio (boutons radio) #}
+                                {% elif field_data.field_type == 'SR' %}
+                                    <div class="space-y-2">
+                                        {% for option in field_data.options %}
+                                            <label class="flex items-center space-x-2">
+                                                <input type="radio"
+                                                       name="{{ field_name }}"
+                                                       value="{{ option }}"
+                                                       {% if field_data.value == option %}checked{% endif %}
+                                                       {% if field_data.required %}required{% endif %}
+                                                       class="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-gray-600">
+                                                <span class="text-sm text-gray-900 dark:text-gray-100">{{ option }}</span>
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+
+                                {# MS = Multi Select (sélection multiple) → select multiple #}
+                                {% elif field_data.field_type == 'MS' %}
+                                    <select name="{{ field_name }}"
+                                            multiple
+                                            {% if field_data.required %}required{% endif %}
+                                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                            size="3">
+                                        {% for option in field_data.options %}
+                                            {% comment %}
+                                            Note: Pour multi-select, la valeur peut être une liste
+                                            On vérifie si l'option est dans la liste
+                                            Note: For multi-select, value can be a list
+                                            Check if option is in the list
+                                            {% endcomment %}
+                                            <option value="{{ option }}"
+                                                    {% if field_data.value and option in field_data.value %}selected{% endif %}>
+                                                {{ option }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+
+                                {# ST = Short Text (texte court) ou type par défaut → input text #}
+                                {% else %}
+                                    <input type="text"
+                                           name="{{ field_name }}"
+                                           value="{{ field_data.value|default:"" }}"
+                                           {% if field_data.required %}required{% endif %}
+                                           class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Boutons d'action : Annuler et Enregistrer #}
+        {# Action buttons: Cancel and Save #}
+        <div class="flex gap-2 justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
+            {# Bouton Annuler : retour à la vue en lecture seule via HTMX GET #}
+            {# Cancel button: return to read-only view via HTMX GET #}
+            <button type="button"
+                    hx-get="/memberships/{{ membership.uuid }}/admin_cancel_edit/"
+                    hx-target="#custom-form-edit-container-{{ membership.uuid }}"
+                    hx-swap="outerHTML"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% trans "Annuler" %}
+            </button>
+
+            {# Bouton Enregistrer : soumet le formulaire via HTMX POST #}
+            {# Save button: submit form via HTMX POST #}
+            <button type="submit"
+                    class="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% trans "Enregistrer" %}
+            </button>
+        </div>
+    </form>
+</div>
