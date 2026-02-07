@@ -1,25 +1,39 @@
 {% extends "faire_festival/base.html" %}
-{% load static i18n %}
+{% load static i18n tibitags %}
 
 {% block title %}{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %}{% endblock %}
 
-{% block content %}
+{% block main %}
 
 <!-- =======================================================================
      PAGE LISTE DES ÉVÉNEMENTS
      Adaptée depuis la maquette events.html du Faire Festival
-     Affiche tous les événements avec des filtres par tags
+
+     STRUCTURE DE dated_events :
+     C'est un dict {date: [event, event, ...]} classé par date.
+     On itère d'abord sur les dates, puis sur les événements de chaque date.
      ======================================================================= -->
 
-<!-- ===================================================================
-     SECTION FILTRES (Barre de tri)
-     Permet de filtrer les événements par date, catégorie, thématique
-     =================================================================== -->
 <section class="container-fluid py-4 conteneur-principal">
     <div class="container">
 
         <!-- Conteneur des boutons de filtre -->
         <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-4">
+
+            <!-- Bouton Admin : Ajouter un événement (si autorisé) -->
+            {% if user|can_create_event_tag %}
+                <button class="bouton-filtre fond-jaune texte-bleu"
+                        type="button"
+                        hx-get="/event/simple_add_event/"
+                        hx-target="#offcanvas-event-admin"
+                        hx-swap="innerHTML"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#adminAddEventPanel"
+                        aria-controls="adminAddEventPanel">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    {% translate 'Ajouter un évènement' %}
+                </button>
+            {% endif %}
 
             <!-- Filtre par tag/catégorie -->
             {% if all_tags %}
@@ -31,14 +45,14 @@
                         {% if active_tag %}
                             {{ active_tag.name }}
                         {% else %}
-                            {% translate 'Filter by category' %}
+                            {% translate 'Filtrer par tags' %}
                         {% endif %}
                     </button>
                     <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
                         <!-- Option "Tous" pour réinitialiser le filtre -->
                         <li>
                             <a class="dropdown-item police-mono" href="{% url 'event-list' %}">
-                                {% translate 'All' %}
+                                {% translate 'Effacer le filtre' %}
                             </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
@@ -55,120 +69,91 @@
                 </div>
             {% endif %}
 
-            <!-- Filtre par recherche (optionnel) -->
-            {% comment %}
-            <div class="dropdown">
-                <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    {% translate 'Sort by date' %}
-                </button>
-                <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
-                    <li><a class="dropdown-item police-mono" href="#">{% translate 'Upcoming' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="#">{% translate 'Past' %}</a></li>
-                </ul>
-            </div>
-            {% endcomment %}
-
         </div>
 
-        <!-- ===================================================================
+        <!-- =================================================================
              GRILLE D'ÉVÉNEMENTS
-             Affiche les cartes d'événements en grille responsive
-             'g-4' = Gutter (espace) de taille 4 entre les cartes
-             =================================================================== -->
-        <div class="row g-4">
+             dated_events est un dict {date: [event, event, ...]}
+             On itère sur chaque date, puis sur chaque événement de cette date
+             ================================================================= -->
+        <div class="row g-4" id="event_list">
 
-            {% for dated_event in dated_events %}
-                {% with event=dated_event.event %}
+            {% for date_key, events in dated_events.items %}
+                {% for event in events %}
 
-                    <!-- ============================================================
-                         CARTE ÉVÉNEMENT (une carte par événement)
-                         Colonnes responsives : col-12 (mobile), col-md-6 (tablette), col-lg-3 (desktop)
-                         ============================================================ -->
+                    <!-- CARTE ÉVÉNEMENT -->
                     <div class="col-12 col-md-6 col-lg-3">
                         <div class="carte-evenement">
                             <div>
-                                <!-- ================================================
-                                     IMAGE DE L'ÉVÉNEMENT
-                                     Affiche l'image ou un placeholder jaune avec croix
-                                     ================================================ -->
-                                <div class="image-evenement {% if not event.img %}placeholder{% endif %}"
-                                     {% if event.img %}style="background-image: url('{{ event.img.med.url }}');"{% endif %}>
-                                </div>
+                                <!-- IMAGE DE L'ÉVÉNEMENT -->
+                                <a href="/event/{{ event.slug }}/"
+                                   hx-get="/event/{{ event.slug }}/"
+                                   hx-target="body"
+                                   hx-push-url="true"
+                                   class="d-block text-decoration-none">
+                                    <div class="image-evenement"
+                                         style="background-image: url('{% if event.sticker_img %}{{ event.sticker_img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');">
+                                    </div>
+                                </a>
 
-                                <!-- ================================================
-                                     TAGS DE L'ÉVÉNEMENT
-                                     Affiche les catégories/tags associés à l'événement
-                                     ================================================ -->
+                                <!-- TAGS DE L'ÉVÉNEMENT -->
                                 <div class="mb-2">
                                     {% for tag in event.tag.all %}
                                         <span class="etiquette-categorie">{{ tag.name|lower }}</span>
                                     {% endfor %}
                                 </div>
 
-                                <!-- ================================================
-                                     TITRE DE L'ÉVÉNEMENT
-                                     ================================================ -->
-                                <h3 class="titre-evenement">
-                                    {{ event.name|upper|truncatewords:6 }}
-                                </h3>
+                                <!-- TITRE DE L'ÉVÉNEMENT -->
+                                <a href="/event/{{ event.slug }}/"
+                                   hx-get="/event/{{ event.slug }}/"
+                                   hx-target="body"
+                                   hx-push-url="true"
+                                   class="text-decoration-none">
+                                    <h3 class="titre-evenement">
+                                        {{ event.name|upper|truncatewords:6 }}
+                                    </h3>
+                                </a>
 
-                                <!-- ================================================
-                                     INFORMATIONS DATE ET HEURE
-                                     ================================================ -->
+                                <!-- DATE ET HEURE -->
                                 <div class="infos-evenement d-flex justify-content-between">
-                                    <!-- Date formatée (ex: "Samedi 30 Mai") -->
-                                    <span>→ {{ dated_event.datetime|date:"l d F" }}</span>
-                                    <!-- Heure formatée (ex: "11h-12h") -->
-                                    <span>→ {{ dated_event.datetime|date:"H" }}h
-                                        {% if event.datetime_end %}
-                                            - {{ event.datetime_end|date:"H" }}h
+                                    <span>→ {{ event.datetime|date:"l d F" }}</span>
+                                    <span>→ {{ event.datetime|date:"H" }}h
+                                        {% if event.end_datetime %}
+                                            - {{ event.end_datetime|date:"H" }}h
                                         {% endif %}
                                     </span>
                                 </div>
                             </div>
 
-                            <!-- ================================================
-                                 PIED DE CARTE : Boutons d'action
-                                 ================================================ -->
+                            <!-- PIED DE CARTE : Boutons d'action -->
                             <div class="pied-carte">
-                                <!-- Bouton "En voir +" : Lien vers la page de détail -->
-                                <a href="{% url 'event-detail' event.uuid %}"
-                                   class="bouton-petit-jaune"
-                                   hx-get="{% url 'event-detail' event.uuid %}"
+                                <!-- Lien vers la page de détail (utilise le slug comme le skin reunion) -->
+                                <a href="/event/{{ event.slug }}/"
+                                   class="bouton-petit-jaune w-100 text-center"
+                                   hx-get="/event/{{ event.slug }}/"
                                    hx-target="body"
                                    hx-push-url="true">
                                     {% translate 'See more' %}
                                 </a>
-
-                                <!-- Bouton "Je m'inscris" : Lien vers la réservation -->
-                                <a href="{% url 'event-detail' event.uuid %}"
-                                   class="bouton-petit-bleu"
-                                   hx-get="{% url 'event-detail' event.uuid %}"
-                                   hx-target="body"
-                                   hx-push-url="true">
-                                    {% translate 'Sign up' %}
-                                </a>
                             </div>
-                        </div> <!-- Fin carte-evenement -->
-                    </div> <!-- Fin colonne -->
+                        </div>
+                    </div>
 
-                {% endwith %}
+                {% endfor %}
             {% empty %}
 
-                <!-- ====================================================
-                     MESSAGE SI AUCUN ÉVÉNEMENT TROUVÉ
-                     ==================================================== -->
+                <!-- MESSAGE SI AUCUN ÉVÉNEMENT TROUVÉ -->
                 <div class="col-12">
                     <div class="bordure-epaisse p-5 text-center bg-white">
                         <h3 class="texte-bleu police-titre mb-3">
-                            {% translate 'No events found' %}
+                            {% translate 'No results for this search.' %}
                         </h3>
                         <p class="texte-bleu police-mono">
                             {% translate 'No events match your search criteria. Try adjusting your filters.' %}
                         </p>
                         <a href="{% url 'event-list' %}"
                            class="btn bouton-pilule fond-bleu text-white mt-3">
-                            {% translate 'View all events' %}
+                            {% translate 'Effacer le filtre' %}
                         </a>
                     </div>
                 </div>
@@ -177,31 +162,33 @@
 
         </div> <!-- Fin de la grille row -->
 
-        <!-- ===================================================================
-             PAGINATION : Bouton "Charger Plus"
-             Affiché uniquement s'il y a plus de pages à charger
-             =================================================================== -->
+        <!-- PAGINATION : Bouton "Charger Plus" -->
         {% if paginated_info.has_next %}
             <div class="text-center py-5">
-                <a href="?page={{ paginated_info.next_page_number }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                <a href="?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
                    class="bouton-charger-plus">
-                    {% translate 'LOAD MORE' %}
+                    {% translate 'Load more events' %}
                 </a>
             </div>
         {% endif %}
 
-        <!-- Informations de pagination (optionnel, pour debug) -->
-        {% comment %}
-        <div class="text-center py-3">
-            <p class="texte-bleu police-mono small">
-                {% blocktranslate with current=paginated_info.number total=paginated_info.num_pages %}
-                Page {{ current }} of {{ total }}
-                {% endblocktranslate %}
-            </p>
-        </div>
-        {% endcomment %}
-
-    </div> <!-- Fin container -->
+    </div>
 </section>
+
+<!-- OFFCANVAS ADMIN : Ajout rapide d'événement -->
+<div class="offcanvas-start offcanvas" tabindex="-1" id="adminAddEventPanel" aria-labelledby="adminAddEventPanelLabel">
+    <div class="offcanvas-header fond-jaune bordure-bas-epaisse">
+        <h5 class="offcanvas-title texte-bleu police-titre" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body" id="offcanvas-event-admin">
+        {# Le contenu du formulaire est chargé ici via HTMX #}
+        <div class="text-center py-5">
+            <div class="spinner-border texte-bleu" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
 
 {% endblock %}

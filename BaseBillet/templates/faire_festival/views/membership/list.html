@@ -1,9 +1,34 @@
 {% extends "faire_festival/base.html" %}
-{% load static i18n %}
+{% load static i18n tibitags %}
 
 {% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
 
-{% block content %}
+{% block offcanvas %}
+    {# Style spécifique pour l'offcanvas d'adhésion (look reunion) #}
+    <style>
+        #offcanvasMembership { --bs-offcanvas-width: 100vw; }
+        @media (min-width: 992px) { #offcanvasMembership { --bs-offcanvas-width: 800px; } }
+    </style>
+
+    <!-- OFFCANVAS : Formulaire d'inscription (look reunion) -->
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="offcanvasMembership">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">
+                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
+                    {% translate 'Subscribe' %}{% endif %}
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body" id="membership-form-container">
+            <!-- Le formulaire sera chargé ici via HTMX -->
+            <p class="text-center py-5">
+                {% translate 'Loading...' %}
+            </p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block main %}
 
 <!-- =======================================================================
      PAGE LISTE DES ADHÉSIONS / BILLETS
@@ -19,7 +44,7 @@
                 {% if config.membership_menu_name %}
                     {{ config.membership_menu_name|upper }}
                 {% else %}
-                    {% translate 'SUBSCRIPTIONS AND TICKETS'|upper %}
+                    {% translate 'Subscriptions'|upper %}
                 {% endif %}
             </h1>
 
@@ -52,7 +77,7 @@
                          Affiche l'image ou un placeholder jaune
                          ================================================ -->
                     <div class="image-billet mb-4"
-                         {% if product.img %}style="background-image: url('{{ product.img.med.url }}'); background-size: cover; background-position: center;"{% endif %}>
+                         style="background-image: url('{% if product.img %}{{ product.img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}'); background-size: cover; background-position: center;">
                     </div>
 
                     <!-- ================================================
@@ -110,12 +135,12 @@
                          ================================================ -->
                     <a href="#"
                        class="btn bouton-achat w-100"
-                       hx-get="{% url 'memberships_mvt' %}"
+                       hx-get="{% url 'membership_mvt-list' %}"
                        hx-target="#membership-form-container"
                        hx-vals='{"product_uuid":"{{ product.uuid }}"}'
                        data-bs-toggle="offcanvas"
                        data-bs-target="#offcanvasMembership">
-                        {% translate 'Get my ticket' %}
+                        {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                     </a>
 
                 </div> <!-- Fin carte-billet -->
@@ -157,7 +182,7 @@
             <div class="col-12">
                 <div class="bordure-epaisse bg-white p-4">
                     <h3 class="texte-bleu police-titre mb-4 text-center">
-                        {% translate 'Other places in the federation' %}
+                        {% translate "Découvrez les adhésions des espaces fédérés :" %}
                     </h3>
 
                     <div class="row g-3">
@@ -168,13 +193,9 @@
                                    class="text-decoration-none">
                                     <div class="carte-evenement text-center">
                                         <!-- Image du tenant -->
-                                        {% if tenant.img_url %}
-                                            <div class="image-evenement"
-                                                 style="background-image: url('{{ tenant.img_url }}'); background-size: cover; background-position: center;">
-                                            </div>
-                                        {% else %}
-                                            <div class="image-evenement placeholder"></div>
-                                        {% endif %}
+                                        <div class="image-evenement"
+                                             style="background-image: url('{% if tenant.img_url %}{{ tenant.img_url }}{% else %}{{ ""|randCardImg }}{% endif %}'); background-size: cover; background-position: center;">
+                                        </div>
 
                                         <!-- Nom du lieu -->
                                         <h4 class="titre-evenement h6 mt-3">
@@ -191,7 +212,7 @@
                                         <!-- Bouton vers le site -->
                                         <div class="pied-carte mt-3">
                                             <span class="bouton-petit-bleu w-100">
-                                                {% translate 'Visit' %}
+                                                {% translate 'Voir les adhésions' %}
                                                 <i class="bi bi-box-arrow-up-right ms-1"></i>
                                             </span>
                                         </div>
@@ -233,24 +254,5 @@
     {% endcomment %}
 
 </main>
-
-<!-- ===================================================================
-     OFFCANVAS : Formulaire d'inscription (Panneau latéral)
-     S'ouvre lors du clic sur un bouton "Prendre mon billet"
-     =================================================================== -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasMembership">
-    <div class="offcanvas-header bordure-bas-epaisse fond-jaune">
-        <h5 class="offcanvas-title texte-bleu police-titre">
-            {% translate 'Subscription form' %}
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-    </div>
-    <div class="offcanvas-body" id="membership-form-container">
-        <!-- Le formulaire sera chargé ici via HTMX -->
-        <p class="texte-bleu police-mono text-center py-5">
-            {% translate 'Loading...' %}
-        </p>
-    </div>
-</div>
 
 {% endblock %}

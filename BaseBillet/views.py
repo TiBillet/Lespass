@@ -96,6 +96,39 @@ def encode_uid(pk):
     return force_str(urlsafe_base64_encode(force_bytes(pk)))
 
 
+def get_skin_template(config, template_relative_path):
+    """
+    Résout le chemin du template en fonction du skin configuré.
+    Si le template existe dans le dossier du skin, on l'utilise.
+    Sinon, on retourne le template du skin par défaut "reunion".
+
+    Exemple :
+        get_skin_template(config, "views/home.html")
+        → "faire_festival/views/home.html"  (si le fichier existe)
+        → "reunion/views/home.html"         (sinon, fallback)
+    """
+    from django.template.loader import get_template
+    from django.template import TemplateDoesNotExist
+
+    # Détermination du skin configuré (par défaut : "reunion")
+    skin = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+
+    # Si le skin est "reunion", pas besoin de vérifier le fallback
+    if skin == "reunion":
+        return f"reunion/{template_relative_path}"
+
+    # On essaie le template du skin configuré
+    skin_template_path = f"{skin}/{template_relative_path}"
+    try:
+        get_template(skin_template_path)
+        return skin_template_path
+    except TemplateDoesNotExist:
+        # Le template n'existe pas dans le skin configuré
+        # On retombe sur le template "reunion" par défaut
+        logger.debug(f"Template '{skin_template_path}' introuvable, fallback vers reunion/{template_relative_path}")
+        return f"reunion/{template_relative_path}"
+
+
 def get_context(request):
     # context_cached = cache.get(f'get_context_{connection.tenant.uuid}')
     # if context_cached:
@@ -104,14 +137,12 @@ def get_context(request):
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
 
-    # SYSTÈME DE SKIN : Détermination du répertoire de templates à utiliser
-    # Par défaut : "reunion" (thème historique)
-    # Si config.skin = "faire_festival" : utilise le thème brutaliste jaune/bleu
-    skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
-
-    # logger.debug("request.htmx") if request.htmx else None
-    # Construction du chemin vers le template de base selon le skin et le contexte HTMX
-    base_template = f"{skin_template_dir}/headless.html" if request.htmx else f"{skin_template_dir}/base.html"
+    # SYSTÈME DE SKIN : Le template de base est résolu via get_skin_template()
+    # Si le skin configuré a un base.html, on l'utilise. Sinon fallback vers reunion.
+    if request.htmx:
+        base_template = get_skin_template(config, "headless.html")
+    else:
+        base_template = get_skin_template(config, "base.html")
 
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
@@ -1439,10 +1470,9 @@ def index(request):
 
     template_context = get_context(request)
 
-    # SYSTÈME DE SKIN : Utilisation du template home.html selon le skin configuré
+    # Résolution du template avec fallback vers reunion si le skin n'a pas de home.html
     config = Configuration.get_solo()
-    skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
-    template_path = f"{skin_template_dir}/views/home.html"
+    template_path = get_skin_template(config, "views/home.html")
 
     return render(request, template_path, context=template_context)
 
@@ -1650,7 +1680,7 @@ class EventMVT(viewsets.ViewSet):
                 events = Event.objects.select_related(
                     'postal_address',
                 ).prefetch_related(
-                    'tag', 'products', 'products__prices',
+                    'tag', 'products', 'products__prices', 'artists', 'artists__artist',
                 ).filter(
                     published=True,
                     datetime__gte=timezone.localtime() - timedelta(days=1),  # On prend les évènement a partir d'hier
@@ -1729,7 +1759,12 @@ class EventMVT(viewsets.ViewSet):
 
         ctx = {}  # le dict de context pour template
         ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
-        return render(request, "reunion/views/event/partial/list.html", context=ctx)
+
+        # Résolution du template avec fallback vers reunion
+        config = Configuration.get_solo()
+        template_path = get_skin_template(config, "views/event/partial/list.html")
+
+        return render(request, template_path, context=ctx)
 
     # La page get /
     def list(self, request: HttpRequest):
@@ -1750,10 +1785,9 @@ class EventMVT(viewsets.ViewSet):
         context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search,
                                                                                           page=page)
 
-        # SYSTÈME DE SKIN : Utilisation du template event/list.html selon le skin configuré
+        # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
-        skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
-        template_path = f"{skin_template_dir}/views/event/list.html"
+        template_path = get_skin_template(config, "views/event/list.html")
 
         # On renvoie la page en entier
         return render(request, template_path, context=context)
@@ -1873,6 +1907,13 @@ class EventMVT(viewsets.ViewSet):
         template_context['event_in_this_tenant'] = event_in_this_tenant
         template_context['event_max_per_user_reached'] = event_max_per_user_reached
 
+        # On prépare les prix publiés pour le template (utilisé par le sélecteur de billet)
+        # On s'assure que price.name n'est jamais None pour éviter les "undefined" en JS
+        event.published_prices = Price.objects.filter(product__event=event, publish=True).order_by('order', 'prix')
+        for p in event.published_prices:
+            if p.name is None:
+                p.name = ""
+
         # L'evènement possède des sous évènement.
         # Pour l'instant : uniquement des ACTIONS
         if event.children.exists():
@@ -1880,10 +1921,9 @@ class EventMVT(viewsets.ViewSet):
                                                          'total_value'] or 0
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
-        # SYSTÈME DE SKIN : Utilisation du template event/retrieve.html selon le skin configuré
+        # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
-        skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
-        template_path = f"{skin_template_dir}/views/event/retrieve.html"
+        template_path = get_skin_template(config, "views/event/retrieve.html")
 
         return render(request, template_path, context=template_context)
 
@@ -2292,10 +2332,9 @@ class MembershipMVT(viewsets.ViewSet):
         template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
 
-        # SYSTÈME DE SKIN : Utilisation du template membership/list.html selon le skin configuré
+        # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
-        skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
-        template_path = f"{skin_template_dir}/views/membership/list.html"
+        template_path = get_skin_template(config, "views/membership/list.html")
 
         return render(
             request, template_path,

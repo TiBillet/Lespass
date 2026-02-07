@@ -134,7 +134,7 @@ class BSCounter extends HTMLElement
                 }
             </style>
             <div class="input-group flex-nowrap ${this.groupStyle}">
-                <button id="down" class="btn ${this.downStyle}" type="button">
+                <button id="down" class="btn ${this.downStyle}" type="button" part="btn btn-down">
                     <slot name="down-label">
                         <i class="bi ${this.downIcon}"></i>
                     </slot>
@@ -147,8 +147,9 @@ class BSCounter extends HTMLElement
                     size="${this.size}"
                     placeholder="${this.placeholder}"
                     aria-label="Number counter with pretty buttons"
+                    part="input"
                 />
-                <button id="up" class="btn ${this.upStyle}" type="button">
+                <button id="up" class="btn ${this.upStyle}" type="button" part="btn btn-up">
                     <slot name="up-label">
                         <i class="bi ${this.upIcon}"></i>
                     </slot>

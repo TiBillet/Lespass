@@ -120,6 +120,21 @@ Vocabulaire schema.org avec champs JSON-LD. Voir `api_v2/GUIDELINES.md` pour le 
 
 ## Commandes de developpement
 
+**Lancer le serveur en arriere-plan depuis un terminal :**
+
+```bash
+# Lance dans le terminal actuel ET garde un trace dans un fichier de log : 
+docker exec lespass_django poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/logs/runserver.log
+```
+
+Les logs du serveur (tracebacks, requetes) sont ecrits dans un fichier temporaire :
+
+**Pour que le mainteneur suive les logs en temps reel dans un terminal PyCharm :**
+```bash
+tail -f logs/runserver.log
+```
+
+
 ```bash
 # Demarrer la stack
 docker compose up -d

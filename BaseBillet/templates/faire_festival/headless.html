@@ -5,15 +5,21 @@
      Utilisé lorsque le contenu est chargé dynamiquement sans recharger toute la page
      ======================================================================= -->
 
+<!-- navigation (navbar) incluse même en mode headless -->
 {% if not embed %}
-    <!-- Navigation (navbar) incluse même en mode headless -->
     {% include "faire_festival/partials/navbar.html" %}
 {% endif %}
 
-<!-- Contenu principal de la page -->
-{% block content %}
-<!-- Le contenu sera remplacé par les templates enfants -->
-{% endblock %}
+<div class="skin-faire-festival">
+    <!-- Contenu principal de la page -->
+    {% block main %}
+    <!-- Le contenu sera remplacé par les templates enfants -->
+    {% endblock %}
+</div>
+
+<!-- Bloc pour les offcanvas spécifiques aux vues -->
+{% block offcanvas %}{% endblock %}
 
 <!-- Scripts additionnels spécifiques (si nécessaire) -->
+{% block scripts %}{% endblock %}
 {% block extra_scripts %}{% endblock %}

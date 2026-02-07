@@ -1,9 +1,9 @@
 {% extends "faire_festival/base.html" %}
-{% load static i18n %}
+{% load static i18n tibitags %}
 
 {% block title %}{% translate 'Home' %}{% endblock %}
 
-{% block content %}
+{% block main %}
 
 <!-- =======================================================================
      CONTENU PRINCIPAL DE LA PAGE D'ACCUEIL
@@ -83,18 +83,18 @@
                    hx-get="{% url 'event-list' %}"
                    hx-target="body"
                    hx-push-url="true">
-                    {% translate 'Discover the program' %}
+                    {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %}
                 </a>
             </div>
 
             <!-- Bouton vers la liste des adhésions/billets -->
             <div class="col-md-4">
-                <a href="{% url 'memberships_mvt' %}"
+                <a href="{% url 'membership_mvt-list' %}"
                    class="btn btn-block w-100 bouton-action"
-                   hx-get="{% url 'memberships_mvt' %}"
+                   hx-get="{% url 'membership_mvt-list' %}"
                    hx-target="body"
                    hx-push-url="true">
-                    {% translate 'Get my tickets' %}
+                    {% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}
                 </a>
             </div>
 
@@ -128,8 +128,10 @@
                              alt="{{ config.organisation }}"
                              class="img-fluid">
                     {% else %}
-                        <!-- Placeholder si pas d'image -->
-                        <div class="image-evenement placeholder" style="width: 100%; height: 300px;"></div>
+                        <!-- Image aléatoire si pas d'image de configuration -->
+                        <img src="{{ ""|randImg }}"
+                             alt="{{ config.organisation }}"
+                             class="img-fluid">
                     {% endif %}
                 </div>
             </div>

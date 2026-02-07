@@ -1,9 +1,125 @@
 {% extends "faire_festival/base.html" %}
-{% load static i18n %}
+{% load static i18n tibitags %}
 
 {% block title %}{{ event.name }}{% endblock %}
 
-{% block content %}
+{% block meta_description %}{% if event.short_description %}{{ event.short_description|striptags }}
+{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
+{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
+
+{% block og_type %}event{% endblock %}
+{% block og_title %}{{ event.name }}{% endblock %}
+{% block og_description %}{% if event.short_description %}{{ event.short_description|striptags }}
+{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
+{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
+{% block og_image %}{{ event.get_social_card }}{% endblock %}
+{% block og_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
+
+{% block twitter_title %}{{ event.name }}{% endblock %}
+{% block twitter_description %}{% if event.short_description %}{{ event.short_description|striptags }}
+{% elif event.long_description %}{{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}
+{% endif %} - Un évènement publié sur le logiciel libre TiBillet{% endblock %}
+{% block twitter_image %}{{ event.get_social_card }}{% endblock %}
+{% block twitter_image_alt %}{{ event.name }} - {{ config.organisation }}{% endblock %}
+
+{% block extra_meta %}
+    {% if event.postal_address %}
+        {% if event.postal_address.latitude and event.postal_address.longitude %}
+            <meta name="geo.position"
+                  content="{{ event.postal_address.latitude }};{{ event.postal_address.longitude }}">
+            <meta name="ICBM" content="{{ event.postal_address.latitude }}, {{ event.postal_address.longitude }}">
+        {% endif %}
+        <meta name="geo.placename"
+              content="{{ event.postal_address.address_locality }}, {{ event.postal_address.address_country }}">
+        <meta name="geo.region" content="
+                {{ event.postal_address.address_country }}{% if event.postal_address.address_region %}-{{ event.postal_address.address_region }}{% endif %}">
+    {% endif %}
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        // Check if openbookingPanel parameter exists in URL and open booking panel if it does
+        // Example URL: https://example.com/event/123/?openbookingPanel=true
+        document.addEventListener('DOMContentLoaded', function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('openbookingPanel')) {
+                const bookingPanel = document.getElementById('bookingPanel');
+                if (bookingPanel) {
+                    const offcanvas = new bootstrap.Offcanvas(bookingPanel);
+                    offcanvas.show();
+                }
+            }
+        });
+    </script>
+
+    <!-- Schema.org Event structured data -->
+    <script type="application/ld+json">
+        {
+						"@context": "https://schema.org",
+						"@type": "Event",
+						"name": "{{ event.name }}",
+        "description": "{% if event.short_description %}
+        {{ event.short_description|striptags }}{% elif event.long_description %}
+        {{ event.long_description|striptags|truncatechars:150 }}{% else %}{{ event.name }}{% endif %} - Un évènement publié sur le logiciel libre TiBillet",
+        "image": "{% if event.img %}{{ event.img.hdr.url }}{% else %}{% static 'reunion/img/favicon.png' %}{% endif %}",
+        "startDate": "{{ event.datetime|date:'c' }}",
+        {% if event.end_datetime %}"endDate": "{{ event.end_datetime|date:'c' }}",{% endif %}
+        "eventStatus": "https://schema.org/EventScheduled",
+        {% if event.complet %}"eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",{% endif %}
+        "location": {
+            "@type": "Place",
+            "name": "{{ config.organisation }}",
+        {% if event.postal_address %}"address": {
+                "@type": "PostalAddress",
+            {% if event.postal_address.name %}"name": "{{ event.postal_address.name }}",{% endif %}
+            "streetAddress": "{{ event.postal_address.street_address }}",
+                "addressLocality": "{{ event.postal_address.address_locality }}",
+                "postalCode": "{{ event.postal_address.postal_code }}",
+                "addressCountry": "{{ event.postal_address.address_country }}"
+            },
+            {% if event.postal_address.latitude and event.postal_address.longitude %}"geo": {
+                "@type": "GeoCoordinates",
+                "latitude": "{{ event.postal_address.latitude }}",
+                "longitude": "{{ event.postal_address.longitude }}"
+            }{% endif %}{% endif %}
+        },
+        "organizer": {
+            "@type": "Organization",
+            "name": "{{ config.organisation }}",
+            "url": "{{ request.build_absolute_uri|slice:':-6' }}"
+        },
+        {% if event.price_min %}"offers": {
+            "@type": "Offer",
+            "price": "{{ event.price_min }}",
+            "priceCurrency": "EUR",
+            "availability": "{% if event.complet %}https://schema.org/SoldOut{% else %}https://schema.org/InStock
+        {% endif %}",
+            "url": "{{ request.build_absolute_uri }}"
+        }{% endif %}
+        }
+    </script>
+{% endblock %}
+
+{% block offcanvas %}
+    {# Style spécifique pour l'offcanvas de réservation (look reunion) #}
+    <style>
+        #bookingPanel { --bs-offcanvas-width: 100vw; }
+        @media (min-width: 992px) { #bookingPanel { --bs-offcanvas-width: 800px; } }
+    </style>
+
+    <!-- OFFCANVAS RÉSERVATION : Formulaire de réservation (look reunion) -->
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Request booking' %}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+        </div>
+        <div class="offcanvas-body">
+            {% include 'reunion/views/event/partial/booking_form.html' %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block main %}
 
 <!-- =======================================================================
      PAGE DÉTAIL D'UN ÉVÉNEMENT
@@ -24,8 +140,8 @@
              ============================================================ -->
         <div class="col-md-6 mb-4 mb-md-0">
             <!-- Image principale de l'événement -->
-            <div class="image-detail-grand {% if not event.img %}placeholder{% endif %}"
-                 {% if event.img %}style="background-image: url('{{ event.img.hdr.url }}');"{% endif %}>
+            <div class="image-detail-grand"
+                 style="background-image: url('{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ ""|randImg }}{% endif %}');">
             </div>
 
             <!-- Tags de l'événement (catégories/thématiques) -->
@@ -63,31 +179,33 @@
                     <span class="fleche-info me-3">→</span>
                     <span class="h4 police-mono fw-bold m-0">
                         {{ event.datetime|date:"H:i" }}
-                        {% if event.datetime_end %}
-                            - {{ event.datetime_end|date:"H:i" }}
+                        {% if event.end_datetime %}
+                            - {{ event.end_datetime|date:"H:i" }}
                         {% endif %}
                     </span>
                 </div>
 
                 <!-- Lieu (optionnel) -->
-                {% if event.location %}
+                {% if event.postal_address %}
                     <div class="d-flex align-items-center mb-3">
                         <span class="fleche-info me-3">→</span>
                         <span class="h5 police-mono fw-bold m-0">
                             <i class="bi bi-geo-alt me-2"></i>
-                            {{ event.location }}
+                            {{ event.postal_address.name }}
                         </span>
                     </div>
                 {% endif %}
 
                 <!-- Jauge (places disponibles) -->
-                {% if event.jauge_max %}
+                {% if event.jauge_max and event.show_gauge %}
                     <div class="d-flex align-items-center mb-3">
                         <span class="fleche-info me-3">→</span>
                         <span class="h6 police-mono m-0">
                             <i class="bi bi-people me-2"></i>
-                            {% if event_max_per_user_reached %}
-                                <span class="text-danger">{% translate 'Full' %}</span>
+                            {% if event.complet %}
+                                <span class="text-danger">{% translate "Full capacity: The event is sold out." %}</span>
+                            {% elif event_max_per_user_reached %}
+                                 <span class="text-danger">{% translate "You have reached the maximum number of tickets for this event." %}</span>
                             {% else %}
                                 {% blocktranslate with available=event.remaining_seats total=event.jauge_max %}
                                 {{ available }} / {{ total }} places available
@@ -99,28 +217,33 @@
 
             </div>
 
-            <!-- Bouton d'inscription / réservation -->
-            {% if not event_max_per_user_reached %}
-                <a href="#reservation"
-                   class="bouton-inscription fw-bold"
-                   {% if user.is_authenticated %}
-                       hx-post="{% url 'event-action_reservation' event.uuid %}"
-                       hx-target="#reservation-result"
-                       hx-swap="innerHTML"
-                   {% else %}
-                       href="{% url 'login' %}?next={{ request.path }}"
-                   {% endif %}>
-                    {% if user.is_authenticated %}
-                        {% translate "I'm signing up" %}
-                    {% else %}
-                        {% translate "Login to register" %}
-                    {% endif %}
-                </a>
-            {% else %}
+            <!-- ============================================================
+                 ZONE D'INSCRIPTION / RÉSERVATION
+                 La logique suit celle du skin 'reunion' :
+                 1. Si l'événement est complet -> Bouton désactivé
+                 2. Si la limite par utilisateur est atteinte -> Bouton désactivé
+                 3. Si des produits existent -> Bouton d'ouverture du panel de réservation
+                 4. Si aucun produit -> Pas de bouton (conformément à la demande)
+                 ============================================================ -->
+            {% if event.complet %}
                 <button class="bouton-inscription fw-bold" disabled>
-                    {% translate 'Event full' %}
+                    {% translate "Full capacity: The event is sold out." %}
+                </button>
+            {% elif event_max_per_user_reached %}
+                <button class="bouton-inscription fw-bold" disabled>
+                    {% translate "You have reached the maximum number of tickets for this event." %}
+                </button>
+            {% elif event.products.exists %}
+                <!-- Cas 3 : Des produits de billetterie existent, on affiche le bouton de réservation -->
+                <button class="bouton-inscription fw-bold"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#bookingPanel"
+                        aria-controls="bookingPanel"
+                        data-testid="booking-open-panel">
+                    {% if event.reservation_button_name %}{{ event.reservation_button_name }}{% else %}{% translate "I want to book one or more seats" %}{% endif %}
                 </button>
             {% endif %}
+            <!-- Cas 4 : Aucun produit présent -> On n'affiche rien du tout ici -->
 
             <!-- Zone de résultat pour la réservation (HTMX) -->
             <div id="reservation-result" class="mt-3"></div>
@@ -177,10 +300,10 @@
             {% endcomment %}
 
             <!-- Lieu détaillé -->
-            {% if event.location %}
+            {% if event.postal_address %}
                 <div class="mb-3">
                     <p class="fw-bold mb-2">{% translate 'Location:' %}</p>
-                    <p>{{ event.location }}</p>
+                    <p>{{ event.postal_address }}</p>
                 </div>
             {% endif %}
 
@@ -197,6 +320,31 @@
                 </div>
             {% endif %}
 
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         SECTION JAUGE ET VOLONTAIRES
+         Affiche le taux de remplissage et les besoins en bénévolat
+         =================================================================== -->
+    <div class="row mb-4">
+        <div class="col-12 text-center texte-bleu police-mono">
+            <!-- Jauge de remplissage (si activée) -->
+            {% if event.show_gauge %}
+                <div class="mb-2">
+                    <i class="bi bi-people me-2"></i>
+                    {{ event.valid_tickets_count }} {% translate "reservations validées sur" %} {{ event.jauge_max }} {% translate "places disponibles" %}
+                </div>
+            {% endif %}
+
+            <!-- Bénévolat / Actions (si existantes) -->
+            {% if action_total_jauge %}
+                <div class="mb-2">
+                    <i class="bi bi-hand-thumbs-up me-2"></i>
+                    {% translate "Looking for volunteers" %}&nbsp;:
+                    <span> ({{ inscrits }}/{{ action_total_jauge }} {% translate "open slots" %})</span>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -245,16 +393,13 @@
                                     </div>
 
                                     <div class="pied-carte mt-3">
-                                        <a href="#reservation"
-                                           class="bouton-petit-bleu w-100"
-                                           {% if user.is_authenticated %}
-                                               hx-post="{% url 'event-action_reservation' event.uuid %}"
-                                               hx-target="#reservation-result"
-                                           {% else %}
-                                               href="{% url 'login' %}?next={{ request.path }}"
-                                           {% endif %}>
+                                        <button class="bouton-petit-bleu w-100"
+                                                data-bs-toggle="offcanvas"
+                                                data-bs-target="#bookingPanel"
+                                                aria-controls="bookingPanel"
+                                                data-testid="booking-open-panel">
                                             {% translate 'Select' %}
-                                        </a>
+                                        </button>
                                     </div>
                                 </div>
                             </div>

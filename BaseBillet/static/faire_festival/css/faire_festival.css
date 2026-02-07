@@ -1,0 +1,640 @@
+/* ==========================================================================
+   FAIRE FESTIVAL - FEUILLE DE STYLE CSS
+   Thème brutaliste jaune/bleu inspiré du design Faire Festival
+   Code FALC : Facile À Lire et à Comprendre
+   ========================================================================== */
+
+/* ==========================================================================
+   1. VARIABLES CSS (Custom Properties)
+   Définition des couleurs et valeurs réutilisables dans tout le CSS
+   ========================================================================== */
+:root {
+    /* Couleurs principales du thème */
+    --couleur-jaune-principal: #FFCB05;  /* Jaune vif utilisé pour les highlights */
+    --couleur-bleu-vif: #0055FF;         /* Bleu électrique pour le texte et bordures */
+    --couleur-blanc: #FFFFFF;            /* Blanc pur pour les fonds */
+
+    /* Épaisseur des bordures (style brutaliste) */
+    --epaisseur-bordure: 2.5px;
+
+    /* Polices de caractères */
+    --police-titre: 'Archivo Black', sans-serif;    /* Police grasse pour les titres */
+    --police-mono: 'Space Mono', monospace;         /* Police monospace pour le corps de texte */
+}
+
+/* ==========================================================================
+   2. STYLES GLOBAUX
+   Styles appliqués uniquement au contenu principal du thème
+   ========================================================================== */
+.skin-faire-festival {
+    background-color: var(--couleur-blanc);
+    color: var(--couleur-bleu-vif);
+    font-family: var(--police-mono);
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+/* ==========================================================================
+   3. UTILITAIRES DE COULEURS
+   Classes pour appliquer rapidement des couleurs de fond et de texte
+   ========================================================================== */
+.skin-faire-festival .fond-jaune {
+    background-color: var(--couleur-jaune-principal) !important;
+}
+
+.skin-faire-festival .fond-bleu {
+    background-color: var(--couleur-bleu-vif) !important;
+}
+
+.skin-faire-festival .fond-blanc {
+    background-color: var(--couleur-blanc) !important;
+}
+
+.skin-faire-festival .texte-jaune {
+    color: var(--couleur-jaune-principal) !important;
+}
+
+.skin-faire-festival .texte-bleu {
+    color: var(--couleur-bleu-vif) !important;
+}
+
+.skin-faire-festival .texte-blanc {
+    color: var(--couleur-blanc) !important;
+}
+
+/* ==========================================================================
+   4. UTILITAIRES DE POLICES
+   Classes pour changer rapidement la police de caractères
+   ========================================================================== */
+.skin-faire-festival .police-titre {
+    font-family: var(--police-titre);
+}
+
+.skin-faire-festival .police-mono {
+    font-family: var(--police-mono);
+}
+
+/* ==========================================================================
+   5. UTILITAIRES DE BORDURES
+   Classes pour ajouter des bordures épaisses (style brutaliste)
+   ========================================================================== */
+.skin-faire-festival .bordure-epaisse {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+}
+
+.skin-faire-festival .bordure-bas-epaisse {
+    border-bottom: var(--epaisseur-bordure) solid var(--couleur-blanc) !important;
+}
+
+/* ==========================================================================
+   6. UTILITAIRES D'OMBRES
+   Ombres "dures" sans flou (hard shadows) pour l'effet brutaliste
+   ========================================================================== */
+.skin-faire-festival .ombre-dure {
+    box-shadow: 6px 6px 0px var(--couleur-bleu-vif);
+}
+
+.skin-faire-festival .ombre-dure-petite {
+    box-shadow: 3px 3px 0px var(--couleur-bleu-vif);
+}
+
+/* ==========================================================================
+   7. HEADER (En-tête du site)
+   ========================================================================== */
+.skin-faire-festival header.fond-jaune {
+    background-color: var(--couleur-jaune-principal);
+    position: sticky;  /* Le header reste visible lors du scroll */
+    top: 0;
+    z-index: 1000;     /* Au-dessus de tous les autres éléments */
+}
+
+/* ==========================================================================
+   8. BOUTONS
+   ========================================================================== */
+
+/* --- Bouton Pilule (Arrondi) --- */
+/* Utilisé dans la navbar et les menus */
+.skin-faire-festival .bouton-pilule {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 50px;       /* Coins très arrondis = forme de pilule */
+    padding: 0.3rem 1.5rem;
+    font-weight: 700;
+    font-family: var(--police-mono);
+    text-transform: none;
+    transition: all 0.2s ease;  /* Animation douce au survol */
+    text-decoration: none;      /* Pas de soulignement sur les liens */
+    display: inline-block;
+}
+
+.skin-faire-festival .bouton-pilule:hover {
+    transform: translateY(-2px);  /* Légère élévation au survol */
+    box-shadow: 2px 2px 0px var(--couleur-bleu-vif);
+}
+
+.skin-faire-festival .bouton-pilule.active {
+    background-color: var(--couleur-jaune-principal) !important;
+    font-weight: 900;
+}
+
+/* --- Boutons d'Action (Carrés/Brutalistes) --- */
+/* Boutons larges utilisés pour les CTA (Call To Action) */
+.skin-faire-festival .bouton-action {
+    background-color: var(--couleur-blanc);
+    color: var(--couleur-bleu-vif);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 0;           /* Angles droits (style brutaliste) */
+    padding: 1rem;
+    font-weight: 700;
+    font-family: var(--police-mono);
+    box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    font-size: 1.1rem;
+    text-decoration: none;
+    display: block;
+    text-align: center;
+}
+
+.skin-faire-festival .bouton-action:hover {
+    transform: translate(-3px, -3px);  /* Déplacement en haut à gauche */
+    box-shadow: 7px 7px 0px var(--couleur-bleu-vif);  /* Ombre plus grande */
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+}
+
+/* --- Petits Boutons (Cartes d'événements) --- */
+.skin-faire-festival .bouton-petit-jaune {
+    background-color: var(--couleur-jaune-principal);
+    border: none;
+    border-radius: 20px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    font-family: var(--police-mono);
+    color: var(--couleur-bleu-vif);
+    font-weight: bold;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.skin-faire-festival .bouton-petit-jaune:hover {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+}
+
+.skin-faire-festival .bouton-petit-bleu {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    border: none;
+    border-radius: 20px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    font-family: var(--police-mono);
+    font-weight: bold;
+    text-decoration: none;
+    flex-grow: 1;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.skin-faire-festival .bouton-petit-bleu:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+}
+
+/* --- Bouton Inscription (Large) --- */
+.skin-faire-festival .bouton-inscription {
+    display: block;
+    width: 100%;
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+    font-size: 1.5rem;
+    padding: 1rem;
+    text-align: center;
+    border-radius: 50px;
+    border: none;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 700;
+}
+
+.skin-faire-festival .bouton-inscription:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
+}
+
+/* --- Bouton "Charger Plus" --- */
+.skin-faire-festival .bouton-charger-plus {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-blanc);
+    font-family: var(--police-titre);
+    font-size: 1.5rem;
+    padding: 1rem 3rem;
+    border-radius: 50px;
+    border: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.skin-faire-festival .bouton-charger-plus:hover {
+    transform: scale(1.05);  /* Légère augmentation de taille */
+    color: var(--couleur-blanc);
+}
+
+/* --- Boutons de Filtre --- */
+.skin-faire-festival .bouton-filtre {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    border: none;
+    border-radius: 50px;
+    padding: 0.5rem 1.5rem;
+    font-family: var(--police-mono);
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s ease;
+}
+
+.skin-faire-festival .bouton-filtre:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+    transform: translateY(-2px);
+    box-shadow: 3px 3px 0px var(--couleur-bleu-vif);
+}
+
+/* --- Bouton Achat (Billetterie) --- */
+.skin-faire-festival .bouton-achat {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+    font-weight: bold;
+    border-radius: 50px;
+    padding: 0.8rem;
+    font-size: 1rem;
+    border: none;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.skin-faire-festival .bouton-achat:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+}
+
+/* ==========================================================================
+   9. BADGE DATE (Section Héro)
+   Badge stylisé pour afficher la date d'un événement
+   ========================================================================== */
+.skin-faire-festival .badge-date {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+    text-align: left;
+    line-height: 1.1;
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    position: relative;
+    box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
+    transform: rotate(-2deg);  /* Légère rotation pour dynamisme */
+}
+
+.skin-faire-festival .grande-date {
+    font-size: 2.5rem;
+    font-weight: 900;
+}
+
+.skin-faire-festival .mois-annee {
+    font-size: 1.8rem;
+    font-weight: 900;
+}
+
+/* ==========================================================================
+   10. CONTENEUR PRINCIPAL
+   Zone de contenu avec motif de fond en pointillés
+   ========================================================================== */
+.skin-faire-festival .conteneur-principal {
+    background-color: #ffffff;
+    /* Motif de fond : petits points bleus espacés */
+    background-image: radial-gradient(circle, var(--couleur-bleu-vif) 1px, transparent 1px);
+    background-size: 40px 40px;
+    min-height: 60vh;
+}
+
+/* ==========================================================================
+   11. FOND GRILLE (Section Héro)
+   Motif de grille en arrière-plan pour effet "blueprint"
+   ========================================================================== */
+.skin-faire-festival .fond-grille {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;  /* N'intercepte pas les clics */
+    z-index: 0;
+    opacity: 0.15;
+    /* Grille en forme de croix (+) */
+    background-image:
+        linear-gradient(var(--couleur-bleu-vif) 2px, transparent 2px),
+        linear-gradient(90deg, var(--couleur-bleu-vif) 2px, transparent 2px);
+    background-size: 50px 50px;
+}
+
+/* ==========================================================================
+   12. CARTES DES JOURS (Page d'accueil)
+   ========================================================================== */
+.skin-faire-festival .carte-jour {
+    /* Style de base pour les blocs de présentation des jours */
+}
+
+.skin-faire-festival .en-tete-jour {
+    transform: skew(-2deg);  /* Légère inclinaison pour dynamisme */
+    display: inline-block;
+}
+
+/* ==========================================================================
+   13. PAGE ÉVÉNEMENTS - Conteneur des filtres
+   ========================================================================== */
+.skin-faire-festival .conteneur-filtres {
+    background-color: transparent;
+    padding-bottom: 2rem;
+}
+
+/* ==========================================================================
+   14. CARTES ÉVÉNEMENTS (Liste des événements)
+   ========================================================================== */
+
+/* --- Carte Événement (Conteneur) --- */
+.skin-faire-festival .carte-evenement {
+    background-color: var(--couleur-blanc);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 20px;
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.skin-faire-festival .carte-evenement:hover {
+    transform: translate(-4px, -4px);  /* Déplacement en haut à gauche */
+    box-shadow: 8px 8px 0px var(--couleur-bleu-vif);
+    z-index: 10;  /* Passe au-dessus des autres cartes */
+}
+
+/* --- Image de l'événement (Placeholder ou vraie image) --- */
+.skin-faire-festival .image-evenement {
+    background-color: var(--couleur-jaune-principal);
+    border: 1px solid var(--couleur-bleu-vif);
+    height: 150px;
+    width: 100%;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;  /* Cache les débordements */
+    background-size: cover;
+    background-position: center;
+}
+
+/* Effet de croix (X) en overlay sur l'image placeholder */
+.skin-faire-festival .image-evenement.placeholder::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        linear-gradient(to top right, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%),
+        linear-gradient(to top left, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%);
+    opacity: 0.5;
+}
+
+/* --- Étiquettes de catégorie (Tags) --- */
+.skin-faire-festival .etiquette-categorie {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+    font-size: 0.75rem;
+    padding: 0.2rem 0.8rem;
+    border-radius: 20px;
+    display: inline-block;
+    margin-right: 5px;
+    margin-bottom: 10px;
+    text-transform: lowercase;
+}
+
+/* --- Titre de l'événement --- */
+.skin-faire-festival .titre-evenement {
+    font-family: var(--police-titre);
+    color: var(--couleur-bleu-vif);
+    font-size: 1.5rem;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+/* --- Infos de l'événement (Date, Heure) --- */
+.skin-faire-festival .infos-evenement {
+    font-family: var(--police-mono);
+    color: var(--couleur-bleu-vif);
+    font-size: 0.9rem;
+    border-top: 1px dashed var(--couleur-bleu-vif);
+    padding-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* --- Pied de carte (boutons d'action) --- */
+.skin-faire-festival .pied-carte {
+    display: flex;
+    gap: 10px;
+}
+
+/* ==========================================================================
+   15. PAGE DÉTAIL ÉVÉNEMENT
+   ========================================================================== */
+
+/* --- Grande Image (Hero) --- */
+.skin-faire-festival .image-detail-grand {
+    background-color: var(--couleur-jaune-principal);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    height: 350px;
+    width: 100%;
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+}
+
+/* Effet de croix (X) sur l'image de détail */
+.skin-faire-festival .image-detail-grand.placeholder::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        linear-gradient(to top right, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%),
+        linear-gradient(to top left, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%);
+    opacity: 0.5;
+}
+
+/* --- Titre de la page détail --- */
+.skin-faire-festival .titre-detail {
+    font-family: var(--police-titre);
+    font-size: 3rem;
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+/* --- Infos clés (Date/Heure avec flèches) --- */
+.skin-faire-festival .infos-clefs {
+    /* Conteneur des informations clés */
+}
+
+.skin-faire-festival .fleche-info {
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* --- Boite de description --- */
+.skin-faire-festival .boite-description {
+    background-color: transparent;
+    padding: 2rem;
+    border-radius: 30px;
+}
+
+.skin-faire-festival .texte-description {
+    font-size: 1.1rem;
+    line-height: 1.8;
+    margin: 0;
+}
+
+/* ==========================================================================
+   16. PAGE BILLETTERIE / ADHÉSIONS
+   ========================================================================== */
+
+/* --- Carte Billet (Conteneur) --- */
+.skin-faire-festival .carte-billet {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 20px;
+    padding: 2rem;
+    text-align: center;
+    background-color: var(--couleur-blanc);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s ease;
+}
+
+.skin-faire-festival .carte-billet:hover {
+    transform: translateY(-5px);  /* Légère élévation */
+    box-shadow: 6px 6px 0px var(--couleur-bleu-vif);
+}
+
+/* --- Image de billet (Placeholder jaune) --- */
+.skin-faire-festival .image-billet {
+    background-color: var(--couleur-jaune-principal);
+    border-radius: 10px;
+    width: 100%;
+    height: 200px;
+    background-size: cover;
+    background-position: center;
+}
+
+/* --- Typographie des billets --- */
+.skin-faire-festival .titre-billet {
+    font-family: 'Space Mono', monospace;
+    font-weight: 700;
+    color: var(--couleur-bleu-vif);
+    font-size: 1.8rem;
+    text-transform: uppercase;
+}
+
+.skin-faire-festival .date-billet {
+    font-family: var(--police-mono);
+    font-weight: 700;
+    color: var(--couleur-bleu-vif);
+    font-size: 1.2rem;
+    text-transform: uppercase;
+}
+
+/* ==========================================================================
+   17. TITRE PRINCIPAL (Hero section page d'accueil)
+   ========================================================================== */
+.skin-faire-festival .titre-principal {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.skin-faire-festival .titre-principal img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ==========================================================================
+   18. RESPONSIVE DESIGN (Adaptation mobile)
+   ========================================================================== */
+@media (max-width: 768px) {
+    /* Sur mobile, les badges de date ne sont pas tournés */
+    .skin-faire-festival .badge-date {
+        transform: none;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    /* Motif de fond plus petit sur mobile */
+    .skin-faire-festival .conteneur-principal {
+        background-size: 20px 20px;
+    }
+
+    /* Titres plus petits sur mobile */
+    .skin-faire-festival .titre-detail {
+        font-size: 2rem;
+    }
+
+    .skin-faire-festival .bouton-action {
+        font-size: 1rem;
+        padding: 0.8rem;
+    }
+}
+
+/* ==========================================================================
+   19. DROPDOWN MENU (Menus déroulants)
+   Style personnalisé pour les menus Bootstrap
+   ========================================================================== */
+.skin-faire-festival .dropdown-menu {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    box-shadow: 3px 3px 0px var(--couleur-bleu-vif);
+    border-radius: 10px;
+}
+
+.skin-faire-festival .dropdown-item {
+    font-family: var(--police-mono);
+    color: var(--couleur-bleu-vif);
+}
+
+.skin-faire-festival .dropdown-item:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+}
+
+/* ==========================================================================
+   20. ANIMATIONS ET TRANSITIONS
+   ========================================================================== */
+/* Tous les éléments interactifs ont une transition douce */
+.skin-faire-festival a, .skin-faire-festival button, .skin-faire-festival .btn {
+    transition: all 0.2s ease;
+}
+
+/* ==========================================================================
+   FIN DU FICHIER CSS FAIRE FESTIVAL
+   ========================================================================== */

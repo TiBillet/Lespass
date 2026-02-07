@@ -70,18 +70,24 @@
     <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
 
     <!-- Bootstrap CSS : Framework CSS pour le responsive design et les composants -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+    <link data-bs-stylesheet="bootstrap" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
           crossorigin="anonymous">
 
     <!-- Bootstrap Icons : Bibliothèque d'icônes -->
-    <link rel="stylesheet" href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
+    <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet" href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
 
     <!-- CSS personnalisé pour le thème Faire Festival (brutaliste jaune/bleu) -->
+    <link rel="stylesheet" href="{% static 'reunion/css/vars.css' %}">
+    <link rel="stylesheet" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="stylesheet" href="{% static 'faire_festival/css/faire_festival.css' %}">
 
     <!-- CSS pour les alertes SweetAlert2 -->
     <link rel="stylesheet" href="{% static 'reunion/css/swal.css' %}">
+
+    <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
+    <link rel="modulepreload" href="{% static 'reunion/js/language-switcher.mjs' %}">
+    <link rel="modulepreload" href="{% static 'reunion/js/membership-form.mjs' %}">
 
     <!-- ================================================================
          SCRIPTS JAVASCRIPT : Fonctionnalités interactives
@@ -105,36 +111,88 @@
         <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
     {% endif %}
 
+    <script type="module">
+        import * as ThemeSwitcher from '{% static "reunion/js/theme-switcher.mjs" %}'
+        import * as LanguageSwitcher from '{% static "reunion/js/language-switcher.mjs" %}'
+        import * as MembershipForm from '{% static "reunion/js/membership-form.mjs" %}'
+
+        // components
+        import '{% static "reunion/js/bs-counter.mjs" %}'
+
+        ThemeSwitcher.init()
+        LanguageSwitcher.init()
+        MembershipForm.init()
+    </script>
+
     {% block extra_head %}{% endblock %}
 </head>
 
-<body class="bg-white">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="bg-white">
 
-    {% if not embed %} <!-- Pas de navbar si le site est embedé dans une iframe -->
-        {% include "faire_festival/partials/navbar.html" %}
-    {% endif %}
+    <div class="skin-faire-festival">
+        {% if not embed %} <!-- Pas de navbar si le site est embedé dans une iframe -->
+            {% include "faire_festival/partials/navbar.html" %}
+        {% endif %}
 
-    <!-- ================================================================
-         CONTENU PRINCIPAL : Zone dynamique remplacée par les templates enfants
-         ================================================================ -->
-    <main>
-        {% block content %}
-        <!-- Le contenu spécifique de chaque page sera inséré ici -->
-        {% endblock %}
-    </main>
+        <!-- ================================================================
+             CONTENU PRINCIPAL : Zone dynamique remplacée par les templates enfants
+             ================================================================ -->
+        <main>
+            {% block main %}
+            <!-- Le contenu spécifique de chaque page sera inséré ici -->
+            {% endblock %}
+        </main>
 
-    <!-- ================================================================
-         FOOTER (Optionnel) : Pied de page du site
-         ================================================================ -->
+        <!-- ================================================================
+             FOOTER (Optionnel) : Pied de page du site
+             ================================================================ -->
+        {% if not embed %}
+            {% block footer %}
+            <!-- Footer à implémenter si nécessaire -->
+            {% endblock %}
+        {% endif %}
+    </div>
+
+    <!-- =======================================================================
+         OFFCANVAS : Panneaux latéraux (look standard reunion / bootstrap)
+         Placés en dehors de .skin-faire-festival pour ne pas hériter des styles brutalistes
+         ======================================================================= -->
     {% if not embed %}
-        {% block footer %}
-        <!-- Footer à implémenter si nécessaire -->
-        {% endblock %}
+        <!-- Panel de contact -->
+        <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Contact and support' %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
+            </div>
+            <div class="offcanvas-body">
+                {% include 'reunion/forms/contact.html' %}
+            </div>
+        </div>
+
+        <!-- Panel de connexion -->
+        <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title" id="loginPanelLabel">{% translate 'Login' %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
+            </div>
+            <div class="offcanvas-body">
+                {% include 'reunion/forms/login.html' %}
+            </div>
+        </div>
     {% endif %}
+
+    <!-- Bloc pour les offcanvas spécifiques aux vues (ex: booking, membership) -->
+    {% block offcanvas %}{% endblock %}
+
+    {% include "reunion/partials/toasts.html" %}
+
+    <!-- spinner -->
+    {% include "reunion/loading.html" %}
 
     <!-- ================================================================
          SCRIPTS ADDITIONNELS : Scripts spécifiques à certaines pages
          ================================================================ -->
+    {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
 
 </body>

@@ -49,30 +49,28 @@
                      ============================================================ -->
                 <div class="navbar-nav mx-auto gap-3 align-items-center mt-3 mt-md-0">
 
+                    {%comment%} On n'affiche pas les pages fédération et contrib dans ce skin {%endcomment%}
                     {% for nav_item in main_nav %}
-                        <!-- Chaque lien de navigation est un bouton pilule -->
-                        <!-- La classe 'active' est ajoutée si on est sur la page courante -->
-                        <a href="{{ nav_item.url }}"
-                           class="btn bouton-pilule bg-white texte-bleu text-center {% if url_name == nav_item.name %}active{% endif %}"
-                           hx-get="{{ nav_item.url }}"
-                           hx-target="body"
-                           hx-push-url="true">
-                            <!-- Icône Bootstrap (optionnelle) -->
-                            {% if nav_item.icon %}
-                                <i class="bi bi-{{ nav_item.icon }} me-1"></i>
-                            {% endif %}
-                            <!-- Label du menu (personnalisable dans la config) -->
-                            {{ nav_item.label }}
-                        </a>
+                        {% if nav_item.name != "federation" and nav_item.name != "crowd-list" %}
+                            <a href="{{ nav_item.url }}"
+                               class="btn bouton-pilule bg-white texte-bleu text-center {% if url_name == nav_item.name %}active{% endif %}"
+                               hx-get="{{ nav_item.url }}"
+                               hx-target="body"
+                               hx-push-url="true">
+                                {{ nav_item.label }}
+                            </a>
+                        {% endif %}
                     {% endfor %}
 
-                    <!-- Lien "Infos pratiques" (optionnel, à adapter selon les besoins) -->
-                    {% comment %}
-                    <a href="#"
-                       class="btn bouton-pilule bg-white texte-bleu text-center">
-                        {% translate 'Practical information' %}
+                    <!-- Bouton Contact (déclenche l'offcanvas de réunion) -->
+                    <a href=""
+                       class="btn bouton-pilule bg-white texte-bleu text-center"
+                       data-bs-toggle="offcanvas"
+                       data-bs-target="#contactPanel"
+                       aria-controls="contactPanel">
+                        <i class="bi bi-question-lg me-1"></i>
+                        {% translate 'Contact' %}
                     </a>
-                    {% endcomment %}
 
                 </div>
 
@@ -83,7 +81,7 @@
                 <div class="navbar-nav ms-0 mt-3 mt-md-0">
 
                     {% if user.is_authenticated %}
-                        <!-- Utilisateur connecté : affiche son nom avec un menu déroulant -->
+                        <!-- Utilisateur connecté : affiche son email avec un menu déroulant -->
                         <div class="dropdown">
                             <button class="btn bouton-pilule fond-bleu text-white text-center dropdown-toggle"
                                     type="button"
@@ -95,14 +93,20 @@
                             <ul class="dropdown-menu dropdown-menu-end bordure-epaisse ombre-dure-petite">
                                 <!-- Lien vers le profil utilisateur -->
                                 <li>
-                                    <a class="dropdown-item police-mono" href="/account/">
+                                    <a class="dropdown-item police-mono" href="/my_account/"
+                                       hx-get="/my_account/"
+                                       hx-target="body"
+                                       hx-push-url="true">
                                         <i class="bi bi-person me-2"></i>
                                         {% translate 'My account' %}
                                     </a>
                                 </li>
                                 <!-- Lien vers les réservations -->
                                 <li>
-                                    <a class="dropdown-item police-mono" href="/account/">
+                                    <a class="dropdown-item police-mono" href="/my_account/my_reservations/"
+                                       hx-get="/my_account/my_reservations/"
+                                       hx-target="body"
+                                       hx-push-url="true">
                                         <i class="bi bi-ticket-perforated me-2"></i>
                                         {% translate 'My tickets' %}
                                     </a>
@@ -110,7 +114,7 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <!-- Bouton de déconnexion -->
                                 <li>
-                                    <a class="dropdown-item police-mono text-danger" href="/logout/">
+                                    <a class="dropdown-item police-mono text-danger" href="/deconnexion/">
                                         <i class="bi bi-box-arrow-right me-2"></i>
                                         {% translate 'Logout' %}
                                     </a>
@@ -119,15 +123,14 @@
                         </div>
 
                     {% else %}
-                        <!-- Utilisateur non connecté : bouton "Connexion" -->
-                        <a href="/login/"
-                           class="btn bouton-pilule fond-bleu text-white text-center"
-                           hx-get="/login/"
-                           hx-target="body"
-                           hx-push-url="true">
+                        <!-- Utilisateur non connecté : bouton "Connexion" (déclenche l'offcanvas de réunion) -->
+                        <button class="btn bouton-pilule fond-bleu text-white text-center"
+                                data-bs-toggle="offcanvas"
+                                data-bs-target="#loginPanel"
+                                aria-controls="loginPanel">
                             <i class="bi bi-person-circle me-1"></i>
                             {% translate 'Login' %}
-                        </a>
+                        </button>
                     {% endif %}
 
                 </div>
