@@ -175,16 +175,20 @@
     </div>
 </section>
 
-<!-- OFFCANVAS ADMIN : Ajout rapide d'événement -->
+<!-- OFFCANVAS ADMIN : Ajout rapide d'événement (look reunion) -->
+<style>
+    #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
+    @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
+</style>
 <div class="offcanvas-start offcanvas" tabindex="-1" id="adminAddEventPanel" aria-labelledby="adminAddEventPanelLabel">
-    <div class="offcanvas-header fond-jaune bordure-bas-epaisse">
-        <h5 class="offcanvas-title texte-bleu police-titre" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
     </div>
     <div class="offcanvas-body" id="offcanvas-event-admin">
         {# Le contenu du formulaire est chargé ici via HTMX #}
         <div class="text-center py-5">
-            <div class="spinner-border texte-bleu" role="status">
+            <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
         </div>

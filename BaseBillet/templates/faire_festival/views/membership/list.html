@@ -6,22 +6,22 @@
 {% block offcanvas %}
     {# Style spécifique pour l'offcanvas d'adhésion (look reunion) #}
     <style>
-        #offcanvasMembership { --bs-offcanvas-width: 100vw; }
-        @media (min-width: 992px) { #offcanvasMembership { --bs-offcanvas-width: 800px; } }
+        #subscribePanel { --bs-offcanvas-width: 100vw; }
+        @media (min-width: 992px) { #subscribePanel { --bs-offcanvas-width: 800px; } }
     </style>
 
     <!-- OFFCANVAS : Formulaire d'inscription (look reunion) -->
-    <div class="offcanvas-start offcanvas" tabindex="-1" id="offcanvasMembership">
+    <div class="offcanvas-start offcanvas" tabindex="-1" id="subscribePanel" aria-labelledby="subscribePanelLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title">
-                {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                    {% translate 'Subscribe' %}{% endif %}
+            <h5 class="offcanvas-title" id="subscribePanelLabel">
+                {% translate 'Subscribe' %}
             </h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
         </div>
-        <div class="offcanvas-body" id="membership-form-container">
+        <div class="offcanvas-body" id="offcanvas-membership">
             <!-- Le formulaire sera chargé ici via HTMX -->
             <p class="text-center py-5">
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
                 {% translate 'Loading...' %}
             </p>
         </div>
@@ -133,15 +133,17 @@
                     <!-- ================================================
                          BOUTON D'ACHAT / INSCRIPTION
                          ================================================ -->
-                    <a href="#"
+                    <button type="button"
                        class="btn bouton-achat w-100"
-                       hx-get="{% url 'membership_mvt-list' %}"
-                       hx-target="#membership-form-container"
-                       hx-vals='{"product_uuid":"{{ product.uuid }}"}'
+                       hx-get="/memberships/{{ product.uuid }}/"
+                       hx-target="#offcanvas-membership"
+                       hx-swap="innerHTML"
                        data-bs-toggle="offcanvas"
-                       data-bs-target="#offcanvasMembership">
+                       data-bs-target="#subscribePanel"
+                       aria-controls="subscribePanel"
+                       data-testid="membership-open-{{ product.uuid }}">
                         {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
-                    </a>
+                    </button>
 
                 </div> <!-- Fin carte-billet -->
             </div> <!-- Fin colonne -->
