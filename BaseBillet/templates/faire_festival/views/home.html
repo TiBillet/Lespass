@@ -1,0 +1,228 @@
+{% extends "faire_festival/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% translate 'Home' %}{% endblock %}
+
+{% block content %}
+
+<!-- =======================================================================
+     CONTENU PRINCIPAL DE LA PAGE D'ACCUEIL
+     Adapté depuis la maquette index.html du Faire Festival
+     ======================================================================= -->
+<main class="container-fluid conteneur-principal">
+
+    <!-- ===================================================================
+         SECTION HÉROS (Bannière principale)
+         Affiche le titre principal, la date de l'événement et le sous-titre
+         =================================================================== -->
+    <section class="container py-5 position-relative">
+
+        <!-- Motif de grille en arrière-plan (effet blueprint) -->
+        <div class="fond-grille"></div>
+
+        <div class="row align-items-center">
+
+            <!-- ============================================================
+                 BLOC DATE (Gauche) - Visible uniquement sur desktop
+                 Badge stylisé avec la date de l'événement principal
+                 ============================================================ -->
+            <div class="col-md-2 d-none d-md-block">
+                {% comment %}
+                <!-- Badge de date - À adapter avec les vraies données d'événement -->
+                <div class="badge-date bordure-epaisse p-3 texte-jaune fond-blanc">
+                    <span class="d-block grande-date fw-bold">28→30</span>
+                    <span class="d-block mois-annee fw-bold">MAI</span>
+                    <span class="d-block mois-annee fw-bold">2026</span>
+                </div>
+                {% endcomment %}
+            </div>
+
+            <!-- ============================================================
+                 TITRE PRINCIPAL (Centre)
+                 Utilise l'image de configuration ou le nom de l'organisation
+                 ============================================================ -->
+            <div class="col-md-8 text-center position-relative">
+                <!-- Image du titre stylisé (si disponible) -->
+                <div class="titre-principal mb-4">
+                    {% if config.img %}
+                        <img src="{{ config.img.hdr.url }}"
+                             alt="{{ config.organisation }}"
+                             class="img-fluid w-75">
+                    {% else %}
+                        <!-- Titre en texte si pas d'image -->
+                        <h1 class="texte-bleu police-titre" style="font-size: 4rem;">
+                            {{ config.organisation|upper }}
+                        </h1>
+                    {% endif %}
+                </div>
+
+                <!-- Sous-titre : Description courte de la configuration -->
+                {% if config.short_description %}
+                    <h2 class="texte-bleu police-mono fw-bold h3">
+                        {{ config.short_description|upper }}
+                    </h2>
+                {% endif %}
+            </div>
+
+            <!-- Colonne vide pour l'équilibre à droite (structure en grille) -->
+            <div class="col-md-2"></div>
+        </div>
+    </section>
+
+    <!-- ===================================================================
+         SECTION APPEL À L'ACTION (CTA - Call To Action)
+         Boutons principaux pour naviguer vers les sections importantes
+         =================================================================== -->
+    <section class="container py-4">
+        <div class="row g-4 justify-content-center">
+
+            <!-- Bouton vers la liste des événements -->
+            <div class="col-md-4">
+                <a href="{% url 'event-list' %}"
+                   class="btn btn-block w-100 bouton-action"
+                   hx-get="{% url 'event-list' %}"
+                   hx-target="body"
+                   hx-push-url="true">
+                    {% translate 'Discover the program' %}
+                </a>
+            </div>
+
+            <!-- Bouton vers la liste des adhésions/billets -->
+            <div class="col-md-4">
+                <a href="{% url 'memberships_mvt' %}"
+                   class="btn btn-block w-100 bouton-action"
+                   hx-get="{% url 'memberships_mvt' %}"
+                   hx-target="body"
+                   hx-push-url="true">
+                    {% translate 'Get my tickets' %}
+                </a>
+            </div>
+
+            <!-- Bouton vers la newsletter (optionnel) -->
+            {% comment %}
+            <div class="col-md-4">
+                <a href="#newsletter"
+                   class="btn btn-block w-100 bouton-action">
+                    {% translate 'Subscribe to newsletter' %}
+                </a>
+            </div>
+            {% endcomment %}
+        </div>
+    </section>
+
+    <!-- ===================================================================
+         SECTION INFORMATION & PRÉSENTATION
+         Bloc d'information avec image et texte explicatif
+         =================================================================== -->
+    <section class="container py-5">
+        <div class="row">
+
+            <!-- ============================================================
+                 IMAGE ILLUSTRATIVE (Gauche)
+                 Affiche l'image de configuration ou une image par défaut
+                 ============================================================ -->
+            <div class="col-md-5 mb-4 mb-md-0">
+                <div class="bordure-epaisse p-4 h-100 d-flex align-items-center justify-content-center bg-white">
+                    {% if config.img %}
+                        <img src="{{ config.img.med.url }}"
+                             alt="{{ config.organisation }}"
+                             class="img-fluid">
+                    {% else %}
+                        <!-- Placeholder si pas d'image -->
+                        <div class="image-evenement placeholder" style="width: 100%; height: 300px;"></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- ============================================================
+                 TEXTE EXPLICATIF (Droite)
+                 Présentation de l'organisation et description longue
+                 ============================================================ -->
+            <div class="col-md-7 ps-md-5">
+                <div class="mb-4">
+                    <!-- Titre encadré légèrement tourné -->
+                    <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 ombre-dure-petite">
+                        <h3 class="m-0 texte-bleu police-mono fw-bold">
+                            {{ config.organisation }}, {% translate "what is it?" %}
+                        </h3>
+                    </div>
+
+                    <!-- Description longue en 2 colonnes (responsive) -->
+                    {% if config.long_description %}
+                        <div class="row texte-bleu police-mono small lh-sm">
+                            <div class="col-12">
+                                {{ config.long_description|safe }}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Texte par défaut si pas de description -->
+                        <div class="row texte-bleu police-mono small lh-sm">
+                            <div class="col-md-6 mb-3">
+                                <p>
+                                    {% blocktranslate with org=config.organisation %}
+                                    Welcome to {{ org }}. Discover our program of events,
+                                    workshops, conferences and meetings throughout the year.
+                                    {% endblocktranslate %}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <p>
+                                    {% translate "Join us to share, experiment and create together in a space accessible to all." %}
+                                </p>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- ========================================================
+                     GRILLE DES INFORMATIONS COMPLÉMENTAIRES (Optionnel)
+                     Cartes pour présenter des infos supplémentaires
+                     ======================================================== -->
+                {% comment %}
+                <!-- Exemple de cartes "Jours" comme dans la maquette -->
+                <div class="row g-3">
+                    <!-- Carte Info 1 -->
+                    <div class="col-md-4">
+                        <div class="carte-jour">
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">INFO 01</h4>
+                            </div>
+                            <p class="small texte-bleu police-mono">
+                                Informations complémentaires
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Carte Info 2 -->
+                    <div class="col-md-4">
+                        <div class="carte-jour">
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">INFO 02</h4>
+                            </div>
+                            <p class="small texte-bleu police-mono">
+                                Informations complémentaires
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Carte Info 3 -->
+                    <div class="col-md-4">
+                        <div class="carte-jour">
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">INFO 03</h4>
+                            </div>
+                            <p class="small texte-bleu police-mono">
+                                Informations complémentaires
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {% endcomment %}
+
+            </div> <!-- Fin Col Droite -->
+        </div> <!-- Fin Row Principale -->
+    </section>
+
+</main>
+
+{% endblock %}

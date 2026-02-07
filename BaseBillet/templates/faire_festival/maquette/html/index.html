@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faire Festival - Maquette</title>
+
+    <!-- Intégration de Bootstrap via CDN (Content Delivery Network) -->
+    <!-- Bootstrap fournit le système de grille et les utilitaires de base -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Intégration des Polices Google (Google Fonts) -->
+    <!-- Archivo Black pour les titres, Space Mono pour le texte façon code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
+
+    <!-- Notre feuille de style personnalisée -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- =======================================================================
+         HEADER (Haut de page)
+         Contient le logo, la navigation et le bouton de connexion.
+         ======================================================================= -->
+    <!-- 'container-fluid' prend toute la largeur. 'py-3' ajoute du padding vertical. -->
+    <header class="container-fluid py-3 bordure-bas-epaisse fond-jaune">
+        <nav class="navbar navbar-expand-md p-0">
+            <div class="container-fluid p-0 position-relative">
+
+                <!-- Logo -->
+                <a class="navbar-brand" href="index.html">
+                    <img src="assets/logo-faire.png" alt="Logo Faire" class="img-fluid" style="height: 50px;">
+                </a>
+
+                <!-- Bouton Toggler pour Mobile -->
+                <button class="navbar-toggler bordure-epaisse texte-bleu" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarFaire">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Contenu Du Menu -->
+                <div class="collapse navbar-collapse" id="navbarFaire">
+
+                    <!-- Liens Centraux (mx-auto le centre) -->
+                    <div class="navbar-nav mx-auto gap-3 align-items-center mt-3 mt-md-0">
+                        <a href="events.html" class="btn bouton-pilule bg-white texte-bleu text-center">La
+                            programmation</a>
+                        <a href="tickets.html" class="btn bouton-pilule bg-white texte-bleu text-center">Prendre ses
+                            billets</a>
+                        <a href="#" class="btn bouton-pilule bg-white texte-bleu text-center">Infos pratiques</a>
+                    </div>
+
+                    <!-- Bouton Connexion (A droite) -->
+                    <!-- Sur mobile, il sera en bas de la liste -->
+                    <div class="navbar-nav ms-0 mt-3 mt-md-0">
+                        <a href="#" class="btn bouton-pilule fond-bleu text-white text-center">CONNEXION</a>
+                    </div>
+
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- =======================================================================
+         CONTENU PRINCIPAL
+         ======================================================================= -->
+    <main class="container-fluid conteneur-principal">
+
+        <!-- --- SECTION HÉROS (Bannière) --- -->
+        <!-- 'position-relative' permet de positionner des éléments absolus à l'intérieur -->
+        <section class="container py-5 position-relative">
+
+            <!-- Motif de grille en arrière-plan -->
+            <div class="fond-grille"></div>
+
+            <div class="row align-items-center">
+
+                <!-- Bloc Date (Gauche) -->
+                <!-- Caché sur mobile, visible sur desktop -->
+                <div class="col-md-2 d-none d-md-block">
+                    <div class="badge-date bordure-epaisse p-3 texte-jaune fond-blanc">
+                        <!-- 'd-block' force le retour à la ligne pour chaque élément -->
+                        <span class="d-block grande-date fw-bold">28→30</span>
+                        <span class="d-block mois-annee fw-bold">MAI</span>
+                        <span class="d-block mois-annee fw-bold">2026</span>
+                    </div>
+                </div>
+
+                <!-- Titre Principal (Centre) -->
+                <div class="col-md-8 text-center position-relative">
+                    <!-- Image du titre stylisé -->
+                    <div class="titre-principal mb-4">
+                        <img src="assets/main-title.png" alt="Titre Principal Faire Festival" class="img-fluid w-75">
+                    </div>
+
+                    <!-- Sous-titre -->
+                    <h2 class="texte-bleu police-mono fw-bold h3">
+                        ÉDITION 04 → TUTOS
+                    </h2>
+                </div>
+
+                <!-- Colonne vide pour l'équilibre à droite -->
+                <div class="col-md-2"></div>
+            </div>
+        </section>
+
+        <!-- --- SECTION APPEL À L'ACTION (Boutons) --- -->
+        <section class="container py-4">
+            <!-- 'g-4' ajoute de l'espace (gutter) entre les colonnes -->
+            <div class="row g-4 justify-content-center">
+                <div class="col-md-4">
+                    <a href="events.html" class="btn btn-block w-100 bouton-action">Découvrir le programme</a>
+                </div>
+                <div class="col-md-4">
+                    <a href="#" class="btn btn-block w-100 bouton-action">Prendre mes billets</a>
+                </div>
+                <div class="col-md-4">
+                    <a href="#" class="btn btn-block w-100 bouton-action">S'inscrire à la newsletter</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- --- SECTION INFORMATION & PROGRAMME --- -->
+        <section class="container py-5">
+            <div class="row">
+
+                <!-- Image Isométrique (Gauche) -->
+                <div class="col-md-5 mb-4 mb-md-0">
+                    <!-- Cadre avec bordure épaisse centré -->
+                    <div class="bordure-epaisse p-4 h-100 d-flex align-items-center justify-content-center bg-white">
+                        <img src="assets/isometric-table.png" alt="Illustration Table Isométrique" class="img-fluid">
+                    </div>
+                </div>
+
+                <!-- Texte Explicatif (Droite) -->
+                <div class="col-md-7 ps-md-5">
+                    <div class="mb-4">
+                        <!-- Titre encadré légèrement tourné -->
+                        <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 ombre-dure-petite">
+                            <h3 class="m-0 texte-bleu police-mono fw-bold">Le Faire Festival, c'est quoi ?</h3>
+                        </div>
+
+                        <!-- Paragraphes explicatifs en 2 colonnes -->
+                        <div class="row texte-bleu police-mono small lh-sm">
+                            <div class="col-md-6 mb-3">
+                                <p>FabLabs et Espace du FAIRE... Bienvenue dans le FAIRE Festival, trois jours pour
+                                    FAIRE ensemble. Un festival géant avec des ateliers, rencontres, conférences,
+                                    animations, stands, démonstrations, une exposition, une boutique et un SuperLab...
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <p>Pour aller plus loin dans la fabrication partagée et distribuée. Trois jours de
+                                    rencontres entre le public, les Espaces, et Communautés du Faire et les entreprises
+                                    pour se rencontrer, se comprendre, expérimenter et faire ensemble dans un espace
+                                    accessible à tous·tes.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Grille des Jours (Jour 01, 02, 03) -->
+                    <div class="row g-3">
+
+                        <!-- Carte Jour 01 -->
+                        <div class="col-md-4">
+                            <div class="carte-jour">
+                                <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
+                                    <h4 class="m-0 texte-bleu police-titre">JOUR 01</h4>
+                                </div>
+                                <p class="small texte-bleu police-mono">
+                                    Entre Espaces,<br>
+                                    Communautés du Faire<br>
+                                    et Entreprises
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Carte Jour 02 -->
+                        <div class="col-md-4">
+                            <div class="carte-jour">
+                                <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
+                                    <h4 class="m-0 texte-bleu police-titre">JOUR 02</h4>
+                                </div>
+                                <p class="small texte-bleu police-mono">
+                                    Entre Espaces,<br>
+                                    Communautés du Faire<br>
+                                    et Entreprises
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Carte Jour 03 (Avec badge gratuit) -->
+                        <div class="col-md-4 position-relative">
+                            <!-- Badge 'Gratuit' positionné en absolu par dessus -->
+                            <div class="badge-gratuit position-absolute"
+                                style="top:-15px; right:-10px; transform: rotate(15deg); background: white; border: 2px solid blue; padding: 2px 8px; border-radius: 20px; z-index: 10;">
+                                <span class="texte-bleu police-mono small fw-bold">gratuit</span>
+                            </div>
+
+                            <div class="carte-jour">
+                                <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
+                                    <h4 class="m-0 texte-bleu police-titre">JOUR 03</h4>
+                                </div>
+                                <p class="small texte-bleu police-mono">
+                                    Entre Grand Public,<br>
+                                    Espaces et<br>
+                                    Communautés du Faire
+                                </p>
+                            </div>
+                        </div>
+                    </div> <!-- Fin Row Jours -->
+                </div> <!-- Fin Col Droite -->
+            </div> <!-- Fin Row Principale -->
+        </section>
+    </main>
+
+    <!-- Script Bootstrap pour les interactions (Menu déroulant, etc.) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

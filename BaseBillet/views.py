@@ -103,8 +103,16 @@ def get_context(request):
 
     config = Configuration.get_solo()
     crowd_config = CrowdConfig.get_solo()
+
+    # SYSTÈME DE SKIN : Détermination du répertoire de templates à utiliser
+    # Par défaut : "reunion" (thème historique)
+    # Si config.skin = "faire_festival" : utilise le thème brutaliste jaune/bleu
+    skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+
     # logger.debug("request.htmx") if request.htmx else None
-    base_template = "reunion/headless.html" if request.htmx else "reunion/base.html"
+    # Construction du chemin vers le template de base selon le skin et le contexte HTMX
+    base_template = f"{skin_template_dir}/headless.html" if request.htmx else f"{skin_template_dir}/base.html"
+
     serialized_user = MeSerializer(request.user).data if request.user.is_authenticated else None
 
     # Le lien "Fédération"
@@ -1430,7 +1438,13 @@ def index(request):
         return HttpResponseRedirect('https://tibillet.org/')
 
     template_context = get_context(request)
-    return render(request, "reunion/views/home.html", context=template_context)
+
+    # SYSTÈME DE SKIN : Utilisation du template home.html selon le skin configuré
+    config = Configuration.get_solo()
+    skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+    template_path = f"{skin_template_dir}/views/home.html"
+
+    return render(request, template_path, context=template_context)
 
 
 class FederationViewset(viewsets.ViewSet):
@@ -1735,8 +1749,14 @@ class EventMVT(viewsets.ViewSet):
         context['search'] = search
         context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search,
                                                                                           page=page)
+
+        # SYSTÈME DE SKIN : Utilisation du template event/list.html selon le skin configuré
+        config = Configuration.get_solo()
+        skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+        template_path = f"{skin_template_dir}/views/event/list.html"
+
         # On renvoie la page en entier
-        return render(request, "reunion/views/event/list.html", context=context)
+        return render(request, template_path, context=context)
 
     @action(detail=False, methods=['GET'])
     def embed(self, request):
@@ -1860,7 +1880,12 @@ class EventMVT(viewsets.ViewSet):
                                                          'total_value'] or 0
             template_context['inscrits'] = Ticket.objects.filter(reservation__event__parent=event).count()
 
-        return render(request, "reunion/views/event/retrieve.html", context=template_context)
+        # SYSTÈME DE SKIN : Utilisation du template event/retrieve.html selon le skin configuré
+        config = Configuration.get_solo()
+        skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+        template_path = f"{skin_template_dir}/views/event/retrieve.html"
+
+        return render(request, template_path, context=template_context)
 
     @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
     def action_reservation(self, request, pk=None):
@@ -2267,8 +2292,13 @@ class MembershipMVT(viewsets.ViewSet):
         template_context['products'] = Product.objects.filter(categorie_article=Product.ADHESION,
                                                               publish=True).prefetch_related('tag')
 
+        # SYSTÈME DE SKIN : Utilisation du template membership/list.html selon le skin configuré
+        config = Configuration.get_solo()
+        skin_template_dir = config.skin if hasattr(config, 'skin') and config.skin else "reunion"
+        template_path = f"{skin_template_dir}/views/membership/list.html"
+
         return render(
-            request, "reunion/views/membership/list.html",
+            request, template_path,
             context=template_context,
         )
 

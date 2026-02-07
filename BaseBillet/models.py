@@ -542,6 +542,20 @@ class Configuration(SingletonModel):
     PERSONALISATION
     """
 
+    # Choix du thème graphique (skin) pour l'affichage du site
+    # Par défaut : "reunion" (thème existant)
+    # Option : "faire_festival" (thème brutaliste jaune/bleu)
+    skin = models.CharField(
+        max_length=50,
+        default="reunion",
+        choices=[
+            ("reunion", "Réunion (thème par défaut)"),
+            ("faire_festival", "Faire Festival (thème brutaliste)")
+        ],
+        verbose_name=_("Thème graphique du site"),
+        help_text=_("Sélectionnez le thème visuel à utiliser pour l'affichage du site web.")
+    )
+
     membership_menu_name = models.CharField(max_length=200,
                                             blank=True, null=True,
                                             verbose_name=_("Subscription page name"),

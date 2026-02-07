@@ -1,0 +1,138 @@
+{% load static i18n %}
+
+<!-- =======================================================================
+     HEADER (Haut de page) - Navigation principale du site
+     Inspiré de la maquette Faire Festival avec le style brutaliste jaune/bleu
+     ======================================================================= -->
+<header class="container-fluid py-3 bordure-bas-epaisse fond-jaune">
+    <nav class="navbar navbar-expand-md p-0">
+        <div class="container-fluid p-0 position-relative">
+
+            <!-- ================================================================
+                 LOGO : Lien vers la page d'accueil
+                 ================================================================ -->
+            <a class="navbar-brand" href="/" hx-get="/" hx-target="body" hx-push-url="true">
+                {% if config.img %}
+                    <!-- Logo personnalisé depuis la configuration -->
+                    <img src="{{ config.img.med.url }}"
+                         alt="Logo {{ config.organisation }}"
+                         class="img-fluid"
+                         style="height: 50px; object-fit: contain;">
+                {% else %}
+                    <!-- Texte alternatif si pas de logo -->
+                    <span class="texte-bleu police-titre fw-bold">{{ config.organisation }}</span>
+                {% endif %}
+            </a>
+
+            <!-- ================================================================
+                 BOUTON TOGGLER : Menu hamburger pour mobile
+                 Affiche/masque le menu sur les petits écrans
+                 ================================================================ -->
+            <button class="navbar-toggler bordure-epaisse texte-bleu"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#navbarFaireFestival"
+                    aria-controls="navbarFaireFestival"
+                    aria-expanded="false"
+                    aria-label="{% translate 'Toggle navigation' %}">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <!-- ================================================================
+                 CONTENU DU MENU : Liens de navigation et bouton connexion
+                 ================================================================ -->
+            <div class="collapse navbar-collapse" id="navbarFaireFestival">
+
+                <!-- ============================================================
+                     LIENS CENTRAUX : Navigation principale (milieu de la navbar)
+                     'mx-auto' centre les liens horizontalement
+                     ============================================================ -->
+                <div class="navbar-nav mx-auto gap-3 align-items-center mt-3 mt-md-0">
+
+                    {% for nav_item in main_nav %}
+                        <!-- Chaque lien de navigation est un bouton pilule -->
+                        <!-- La classe 'active' est ajoutée si on est sur la page courante -->
+                        <a href="{{ nav_item.url }}"
+                           class="btn bouton-pilule bg-white texte-bleu text-center {% if url_name == nav_item.name %}active{% endif %}"
+                           hx-get="{{ nav_item.url }}"
+                           hx-target="body"
+                           hx-push-url="true">
+                            <!-- Icône Bootstrap (optionnelle) -->
+                            {% if nav_item.icon %}
+                                <i class="bi bi-{{ nav_item.icon }} me-1"></i>
+                            {% endif %}
+                            <!-- Label du menu (personnalisable dans la config) -->
+                            {{ nav_item.label }}
+                        </a>
+                    {% endfor %}
+
+                    <!-- Lien "Infos pratiques" (optionnel, à adapter selon les besoins) -->
+                    {% comment %}
+                    <a href="#"
+                       class="btn bouton-pilule bg-white texte-bleu text-center">
+                        {% translate 'Practical information' %}
+                    </a>
+                    {% endcomment %}
+
+                </div>
+
+                <!-- ============================================================
+                     BOUTON CONNEXION : Section droite de la navbar
+                     Affiche soit "Connexion" soit le nom d'utilisateur si connecté
+                     ============================================================ -->
+                <div class="navbar-nav ms-0 mt-3 mt-md-0">
+
+                    {% if user.is_authenticated %}
+                        <!-- Utilisateur connecté : affiche son nom avec un menu déroulant -->
+                        <div class="dropdown">
+                            <button class="btn bouton-pilule fond-bleu text-white text-center dropdown-toggle"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false">
+                                <i class="bi bi-person-circle me-1"></i>
+                                {{ user.email|truncatechars:20 }}
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end bordure-epaisse ombre-dure-petite">
+                                <!-- Lien vers le profil utilisateur -->
+                                <li>
+                                    <a class="dropdown-item police-mono" href="/account/">
+                                        <i class="bi bi-person me-2"></i>
+                                        {% translate 'My account' %}
+                                    </a>
+                                </li>
+                                <!-- Lien vers les réservations -->
+                                <li>
+                                    <a class="dropdown-item police-mono" href="/account/">
+                                        <i class="bi bi-ticket-perforated me-2"></i>
+                                        {% translate 'My tickets' %}
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <!-- Bouton de déconnexion -->
+                                <li>
+                                    <a class="dropdown-item police-mono text-danger" href="/logout/">
+                                        <i class="bi bi-box-arrow-right me-2"></i>
+                                        {% translate 'Logout' %}
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
+                    {% else %}
+                        <!-- Utilisateur non connecté : bouton "Connexion" -->
+                        <a href="/login/"
+                           class="btn bouton-pilule fond-bleu text-white text-center"
+                           hx-get="/login/"
+                           hx-target="body"
+                           hx-push-url="true">
+                            <i class="bi bi-person-circle me-1"></i>
+                            {% translate 'Login' %}
+                        </a>
+                    {% endif %}
+
+                </div>
+
+            </div> <!-- Fin du collapse navbar -->
+        </div> <!-- Fin du container-fluid -->
+    </nav>
+</header>

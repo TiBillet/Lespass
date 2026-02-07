@@ -1,0 +1,141 @@
+{% load static i18n %}
+
+{% get_current_language as LANGUAGE_CODE %}
+
+<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
+
+<head>
+    {% load i18n %}
+    <!-- ================================================================
+         META : Informations basiques pour le navigateur et les moteurs de recherche
+         ================================================================ -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Description courte pour le référencement (SEO) -->
+    <meta name="description" content="{% block meta_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+
+    <!-- Instructions pour les robots d'indexation -->
+    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+
+    <!-- Titre de la page affiché dans l'onglet du navigateur -->
+    <title>{% block title %}{% translate 'Home' %}{% endblock %} | {{ config.organisation }}</title>
+
+    <!-- ================================================================
+         OPEN GRAPH / FACEBOOK : Informations pour les partages sur les réseaux sociaux
+         ================================================================ -->
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:title" content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{{ config.get_social_card }}{% endblock %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
+    <meta property="og:site_name" content="{{ config.organisation }}">
+
+    <!-- ================================================================
+         TWITTER CARD : Informations pour les partages sur Twitter/X
+         ================================================================ -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
+    <meta name="twitter:domain" content="{{ request.get_host }}">
+    <meta name="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}{{ config.get_social_card }}{% endblock %}">
+    <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
+    {% if config.twitter %}
+        <meta name="twitter:site" content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">
+    {% endif %}
+
+    {% block extra_meta %}{% endblock %}
+
+    <!-- ================================================================
+         PRELOAD / PRECONNECT : Optimisation du chargement des ressources
+         ================================================================ -->
+    <!-- Préchargement de la police Google Fonts pour accélérer l'affichage -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <!-- Polices Google Fonts utilisées dans le thème Faire Festival -->
+    <!-- Archivo Black : Police grasse pour les titres -->
+    <!-- Space Mono : Police monospace pour le texte -->
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+    <!-- ================================================================
+         STYLES CSS : Feuilles de style pour l'apparence du site
+         ================================================================ -->
+    <!-- Favicon : petite icône affichée dans l'onglet du navigateur -->
+    <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
+
+    <!-- Bootstrap CSS : Framework CSS pour le responsive design et les composants -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+          crossorigin="anonymous">
+
+    <!-- Bootstrap Icons : Bibliothèque d'icônes -->
+    <link rel="stylesheet" href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
+
+    <!-- CSS personnalisé pour le thème Faire Festival (brutaliste jaune/bleu) -->
+    <link rel="stylesheet" href="{% static 'faire_festival/css/faire_festival.css' %}">
+
+    <!-- CSS pour les alertes SweetAlert2 -->
+    <link rel="stylesheet" href="{% static 'reunion/css/swal.css' %}">
+
+    <!-- ================================================================
+         SCRIPTS JAVASCRIPT : Fonctionnalités interactives
+         ================================================================ -->
+    <!-- Bootstrap JS : Nécessaire pour les menus déroulants, modales, etc. -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+            crossorigin="anonymous"></script>
+
+    <!-- HTMX : Bibliothèque pour les requêtes AJAX sans JavaScript -->
+    <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+
+    <!-- Loading States : Indicateurs de chargement pour HTMX -->
+    <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
+
+    <!-- SweetAlert2 : Bibliothèque pour les alertes et modales élégantes -->
+    <script src="{% static 'reunion/js/sweetalert2@11.js' %}"></script>
+
+    <!-- Formbricks : Système de formulaires et sondages (si configuré) -->
+    {% if formbricks_api_host %}
+        <script src="{{ formbricks_api_host }}/js/formbricks.umd.cjs" async></script>
+    {% endif %}
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="bg-white">
+
+    {% if not embed %} <!-- Pas de navbar si le site est embedé dans une iframe -->
+        {% include "faire_festival/partials/navbar.html" %}
+    {% endif %}
+
+    <!-- ================================================================
+         CONTENU PRINCIPAL : Zone dynamique remplacée par les templates enfants
+         ================================================================ -->
+    <main>
+        {% block content %}
+        <!-- Le contenu spécifique de chaque page sera inséré ici -->
+        {% endblock %}
+    </main>
+
+    <!-- ================================================================
+         FOOTER (Optionnel) : Pied de page du site
+         ================================================================ -->
+    {% if not embed %}
+        {% block footer %}
+        <!-- Footer à implémenter si nécessaire -->
+        {% endblock %}
+    {% endif %}
+
+    <!-- ================================================================
+         SCRIPTS ADDITIONNELS : Scripts spécifiques à certaines pages
+         ================================================================ -->
+    {% block extra_scripts %}{% endblock %}
+
+</body>
+</html>

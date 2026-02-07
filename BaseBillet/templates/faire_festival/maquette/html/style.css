@@ -1,0 +1,503 @@
+/* ==========================================================================
+   VARIABLES & CONFIGURATION (FALC)
+   ========================================================================== */
+:root {
+    --couleur-jaune-principal: #FFCB05;
+    /* Jaune Maquette */
+    --couleur-bleu-vif: #0055FF;
+    /* Bleu Maquette */
+    --couleur-blanc: #FFFFFF;
+
+    --epaisseur-bordure: 2.5px;
+
+    --police-titre: 'Archivo Black', sans-serif;
+    --police-mono: 'Space Mono', monospace;
+}
+
+/* ==========================================================================
+   STYLES GLOBAUX
+   ========================================================================== */
+body {
+    background-color: var(--couleur-blanc);
+    color: var(--couleur-bleu-vif);
+    font-family: var(--police-mono);
+}
+
+/* --- Utilitaires de Couleurs --- */
+.fond-jaune {
+    background-color: var(--couleur-jaune-principal) !important;
+}
+
+.fond-bleu {
+    background-color: var(--couleur-bleu-vif) !important;
+}
+
+.fond-blanc {
+    /* Ajouté pour badge-date fond-blanc */
+    background-color: var(--couleur-blanc) !important;
+}
+
+.texte-jaune {
+    color: var(--couleur-jaune-principal) !important;
+}
+
+.texte-bleu {
+    color: var(--couleur-bleu-vif) !important;
+}
+
+/* --- Utilitaires de Polices --- */
+.police-titre {
+    font-family: var(--police-titre);
+}
+
+.police-mono {
+    font-family: var(--police-mono);
+}
+
+/* --- Utilitaires de Bordures --- */
+.bordure-epaisse {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+}
+
+.bordure-bas-epaisse {
+    /* Utilisé dans le header pour faire une séparation */
+    border-bottom: var(--epaisseur-bordure) solid var(--couleur-blanc) !important;
+}
+
+/* --- Utilitaires d'Ombres --- */
+.ombre-dure {
+    box-shadow: 6px 6px 0px var(--couleur-bleu-vif);
+}
+
+.ombre-dure-petite {
+    box-shadow: 3px 3px 0px var(--couleur-bleu-vif);
+}
+
+/* ==========================================================================
+   COMPOSANTS (Components)
+   ========================================================================== */
+
+/* --- Header --- */
+header.fond-jaune {
+    background-color: var(--couleur-jaune-principal);
+}
+
+/* --- Bouton Pilule (Arrondi) --- */
+.bouton-pilule {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 50px;
+    padding: 0.3rem 1.5rem;
+    font-weight: 700;
+    font-family: var(--police-mono);
+    text-transform: none;
+    transition: all 0.2s;
+}
+
+.bouton-pilule:hover {
+    transform: translateY(-2px);
+    box-shadow: 2px 2px 0px var(--couleur-bleu-vif);
+}
+
+/* --- Badge Date (Héros) --- */
+.badge-date {
+    background-color: var(--couleur-jaune-principal);
+    /* Défaut, mais index utilise fond-blanc */
+    color: var(--couleur-bleu-vif);
+    text-align: left;
+    line-height: 1.1;
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    position: relative;
+    box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
+    transform: rotate(-2deg);
+}
+
+.grande-date {
+    font-size: 2.5rem;
+    /* ~ display-4 */
+}
+
+.mois-annee {
+    font-size: 1.8rem;
+    /* ~ display-5 */
+}
+
+/* --- Boutons d'Action (Carrés/Brutalistes) --- */
+.bouton-action {
+    background-color: var(--couleur-blanc);
+    color: var(--couleur-bleu-vif);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 0;
+    /* Angles droits */
+    padding: 1rem;
+    font-weight: 700;
+    font-family: var(--police-mono);
+    box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
+    transition: all 0.2s;
+    text-transform: uppercase;
+    font-size: 1.1rem;
+}
+
+.bouton-action:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 7px 7px 0px var(--couleur-bleu-vif);
+    background-color: var(--couleur-jaune-principal);
+}
+
+/* --- Conteneur Principal & Arrière-plan --- */
+.conteneur-principal {
+    background-color: #ffffff;
+    /* Petit motif pointillé */
+    background-image: radial-gradient(circle, var(--couleur-bleu-vif) 1px, transparent 1px);
+    background-size: 40px 40px;
+}
+
+/* --- Fond Grille (Héros) --- */
+.fond-grille {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.15;
+    /* Motif de + */
+    background-image:
+        linear-gradient(var(--couleur-bleu-vif) 2px, transparent 2px),
+        linear-gradient(90deg, var(--couleur-bleu-vif) 2px, transparent 2px);
+    background-size: 50px 50px;
+}
+
+/* --- Cartes des Jours (En bas de page) --- */
+.carte-jour {
+    /* Style de base pour les blocs jours */
+}
+
+.en-tete-jour {
+    transform: skew(-2deg);
+    /* Légère inclinaison */
+}
+
+/* ==========================================================================
+   PAGE ÉVÉNEMENTS (Events)
+   ========================================================================== */
+
+/* --- Barre de Filtres --- */
+.conteneur-filtres {
+    background-color: transparent;
+    padding-bottom: 2rem;
+}
+
+.bouton-filtre {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    border: none;
+    border-radius: 50px;
+    padding: 0.5rem 1.5rem;
+    font-family: var(--police-mono);
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.2s;
+}
+
+.bouton-filtre:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+    transform: translateY(-2px);
+    box-shadow: 3px 3px 0px var(--couleur-bleu-vif);
+}
+
+/* --- Carte Événement (Card) --- */
+.carte-evenement {
+    background-color: var(--couleur-blanc);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 20px;
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.carte-evenement:hover {
+    transform: translate(-4px, -4px);
+    box-shadow: 8px 8px 0px var(--couleur-bleu-vif);
+    z-index: 10;
+}
+
+/* Image de l'événement (Placeholder) */
+.image-evenement {
+    background-color: var(--couleur-jaune-principal);
+    border: 1px solid var(--couleur-bleu-vif);
+    height: 150px;
+    width: 100%;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+    position: relative;
+}
+
+.image-evenement::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        linear-gradient(to top right, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%),
+        linear-gradient(to top left, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%);
+    opacity: 0.5;
+}
+
+/* Tags (Catégories) */
+.etiquette-categorie {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+    font-size: 0.75rem;
+    padding: 0.2rem 0.8rem;
+    border-radius: 20px;
+    display: inline-block;
+    margin-right: 5px;
+    margin-bottom: 10px;
+}
+
+/* Titre de l'événement */
+.titre-evenement {
+    font-family: var(--police-titre);
+    color: var(--couleur-bleu-vif);
+    font-size: 1.5rem;
+    line-height: 1.1;
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+}
+
+/* Infos (Date, Heure) */
+.infos-evenement {
+    font-family: var(--police-mono);
+    color: var(--couleur-bleu-vif);
+    font-size: 0.9rem;
+    border-top: 1px dashed var(--couleur-bleu-vif);
+    padding-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Boutons de bas de carte */
+.pied-carte {
+    display: flex;
+    gap: 10px;
+}
+
+.bouton-petit-jaune {
+    background-color: var(--couleur-jaune-principal);
+    border: none;
+    border-radius: 20px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    font-family: var(--police-mono);
+    color: var(--couleur-bleu-vif);
+    font-weight: bold;
+    text-decoration: none;
+}
+
+.bouton-petit-bleu {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    border: none;
+    border-radius: 20px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    font-family: var(--police-mono);
+    font-weight: bold;
+    text-decoration: none;
+    flex-grow: 1;
+    text-align: center;
+}
+
+/* Bouton "Charger Plus" */
+.bouton-charger-plus {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-blanc);
+    font-family: var(--police-titre);
+    font-size: 1.5rem;
+    padding: 1rem 3rem;
+    border-radius: 50px;
+    border: none;
+    display: inline-block;
+    transition: all 0.3s;
+}
+
+.bouton-charger-plus:hover {
+    transform: scale(1.05);
+    color: var(--couleur-blanc);
+}
+
+/* --- Responsive (Mobile) --- */
+@media (max-width: 768px) {
+    .badge-date {
+        transform: none;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .conteneur-principal {
+        background-size: 20px 20px;
+    }
+}
+
+/* ==========================================================================
+   PAGE DÉTAIL ÉVÉNEMENT (Event Detail)
+   ========================================================================== */
+
+/* Grande Image (Hero) */
+.image-detail-grand {
+    background-color: var(--couleur-jaune-principal);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    height: 350px;
+    /* Plus grand que les cartes */
+    width: 100%;
+    border-radius: 20px;
+    /* Arrondi plus doux ou style maquette */
+    position: relative;
+}
+
+.image-detail-grand::after {
+    /* Même effet de croix que les cartes */
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        linear-gradient(to top right, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%),
+        linear-gradient(to top left, transparent 49%, var(--couleur-bleu-vif) 49.5%, var(--couleur-bleu-vif) 50.5%, transparent 51%);
+    opacity: 0.5;
+}
+
+/* Titre Détail */
+.titre-detail {
+    font-family: var(--police-titre);
+    font-size: 3rem;
+    /* Très gros titre */
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+/* Infos Clefs (Date/Heure) */
+.fleche-info {
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Bouton Inscription (Large Bleu) */
+.bouton-inscription {
+    display: block;
+    width: 100%;
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+    font-size: 1.5rem;
+    padding: 1rem;
+    text-align: center;
+    border-radius: 50px;
+    /* Pilule */
+    border: none;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.bouton-inscription:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
+}
+
+/* Boite de Description */
+.boite-description {
+    background-color: transparent;
+    /* Fond blanc ou transparent ? Maquette semble avoir cadre bleu sur fond blanc page */
+    padding: 2rem;
+    border-radius: 30px;
+    /* Bords très arrondis comme l'image */
+}
+
+margin: 0;
+}
+
+/* ==========================================================================
+   PAGE BILLETTERIE (Tickets)
+   ========================================================================== */
+
+/* Carte Billet (Conteneur) */
+.carte-billet {
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 20px;
+    /* Coins arrondis comme maquette */
+    padding: 2rem;
+    text-align: center;
+    background-color: var(--couleur-blanc);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.2s;
+}
+
+.carte-billet:hover {
+    transform: translateY(-5px);
+    box-shadow: 6px 6px 0px var(--couleur-bleu-vif);
+}
+
+/* Image Jaune (Placeholder) */
+.image-billet {
+    background-color: var(--couleur-jaune-principal);
+    border-radius: 10px;
+    width: 100%;
+    height: 200px;
+    /* Hauteur fixe pour l'image */
+}
+
+/* Typographie Billet */
+.titre-billet {
+    font-family: var(--police-mono);
+    /* Ou Archivo Black ? Maquette semble mono ou très carré */
+    font-family: 'Space Mono', monospace;
+    /* Forcer pour ressembler à l'image 'BILLET JOUR' */
+    font-weight: 700;
+    color: var(--couleur-bleu-vif);
+    font-size: 1.8rem;
+    text-transform: uppercase;
+}
+
+.date-billet {
+    font-family: var(--police-mono);
+    font-weight: 700;
+    color: var(--couleur-bleu-vif);
+    font-size: 1.2rem;
+    text-transform: uppercase;
+}
+
+/* Bouton Achat (Bleu plein) */
+.bouton-achat {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+    font-weight: bold;
+    border-radius: 50px;
+    padding: 0.8rem;
+    font-size: 1rem;
+    border: none;
+    transition: all 0.2s;
+}
+
+.bouton-achat:hover {
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+}

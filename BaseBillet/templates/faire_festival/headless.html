@@ -1,0 +1,19 @@
+{% load static i18n %}
+
+<!-- =======================================================================
+     TEMPLATE HEADLESS : Version sans <head> pour les requêtes HTMX
+     Utilisé lorsque le contenu est chargé dynamiquement sans recharger toute la page
+     ======================================================================= -->
+
+{% if not embed %}
+    <!-- Navigation (navbar) incluse même en mode headless -->
+    {% include "faire_festival/partials/navbar.html" %}
+{% endif %}
+
+<!-- Contenu principal de la page -->
+{% block content %}
+<!-- Le contenu sera remplacé par les templates enfants -->
+{% endblock %}
+
+<!-- Scripts additionnels spécifiques (si nécessaire) -->
+{% block extra_scripts %}{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "faire_festival/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %}{% endblock %}
+
+{% block content %}
+
+<!-- =======================================================================
+     PAGE LISTE DES ÉVÉNEMENTS
+     Adaptée depuis la maquette events.html du Faire Festival
+     Affiche tous les événements avec des filtres par tags
+     ======================================================================= -->
+
+<!-- ===================================================================
+     SECTION FILTRES (Barre de tri)
+     Permet de filtrer les événements par date, catégorie, thématique
+     =================================================================== -->
+<section class="container-fluid py-4 conteneur-principal">
+    <div class="container">
+
+        <!-- Conteneur des boutons de filtre -->
+        <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-4">
+
+            <!-- Filtre par tag/catégorie -->
+            {% if all_tags %}
+                <div class="dropdown">
+                    <button class="bouton-filtre dropdown-toggle"
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false">
+                        {% if active_tag %}
+                            {{ active_tag.name }}
+                        {% else %}
+                            {% translate 'Filter by category' %}
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                        <!-- Option "Tous" pour réinitialiser le filtre -->
+                        <li>
+                            <a class="dropdown-item police-mono" href="{% url 'event-list' %}">
+                                {% translate 'All' %}
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <!-- Liste de tous les tags disponibles -->
+                        {% for tag in all_tags %}
+                            <li>
+                                <a class="dropdown-item police-mono"
+                                   href="?tag={{ tag.slug }}">
+                                    {{ tag.name }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            <!-- Filtre par recherche (optionnel) -->
+            {% comment %}
+            <div class="dropdown">
+                <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    {% translate 'Sort by date' %}
+                </button>
+                <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                    <li><a class="dropdown-item police-mono" href="#">{% translate 'Upcoming' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="#">{% translate 'Past' %}</a></li>
+                </ul>
+            </div>
+            {% endcomment %}
+
+        </div>
+
+        <!-- ===================================================================
+             GRILLE D'ÉVÉNEMENTS
+             Affiche les cartes d'événements en grille responsive
+             'g-4' = Gutter (espace) de taille 4 entre les cartes
+             =================================================================== -->
+        <div class="row g-4">
+
+            {% for dated_event in dated_events %}
+                {% with event=dated_event.event %}
+
+                    <!-- ============================================================
+                         CARTE ÉVÉNEMENT (une carte par événement)
+                         Colonnes responsives : col-12 (mobile), col-md-6 (tablette), col-lg-3 (desktop)
+                         ============================================================ -->
+                    <div class="col-12 col-md-6 col-lg-3">
+                        <div class="carte-evenement">
+                            <div>
+                                <!-- ================================================
+                                     IMAGE DE L'ÉVÉNEMENT
+                                     Affiche l'image ou un placeholder jaune avec croix
+                                     ================================================ -->
+                                <div class="image-evenement {% if not event.img %}placeholder{% endif %}"
+                                     {% if event.img %}style="background-image: url('{{ event.img.med.url }}');"{% endif %}>
+                                </div>
+
+                                <!-- ================================================
+                                     TAGS DE L'ÉVÉNEMENT
+                                     Affiche les catégories/tags associés à l'événement
+                                     ================================================ -->
+                                <div class="mb-2">
+                                    {% for tag in event.tag.all %}
+                                        <span class="etiquette-categorie">{{ tag.name|lower }}</span>
+                                    {% endfor %}
+                                </div>
+
+                                <!-- ================================================
+                                     TITRE DE L'ÉVÉNEMENT
+                                     ================================================ -->
+                                <h3 class="titre-evenement">
+                                    {{ event.name|upper|truncatewords:6 }}
+                                </h3>
+
+                                <!-- ================================================
+                                     INFORMATIONS DATE ET HEURE
+                                     ================================================ -->
+                                <div class="infos-evenement d-flex justify-content-between">
+                                    <!-- Date formatée (ex: "Samedi 30 Mai") -->
+                                    <span>→ {{ dated_event.datetime|date:"l d F" }}</span>
+                                    <!-- Heure formatée (ex: "11h-12h") -->
+                                    <span>→ {{ dated_event.datetime|date:"H" }}h
+                                        {% if event.datetime_end %}
+                                            - {{ event.datetime_end|date:"H" }}h
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- ================================================
+                                 PIED DE CARTE : Boutons d'action
+                                 ================================================ -->
+                            <div class="pied-carte">
+                                <!-- Bouton "En voir +" : Lien vers la page de détail -->
+                                <a href="{% url 'event-detail' event.uuid %}"
+                                   class="bouton-petit-jaune"
+                                   hx-get="{% url 'event-detail' event.uuid %}"
+                                   hx-target="body"
+                                   hx-push-url="true">
+                                    {% translate 'See more' %}
+                                </a>
+
+                                <!-- Bouton "Je m'inscris" : Lien vers la réservation -->
+                                <a href="{% url 'event-detail' event.uuid %}"
+                                   class="bouton-petit-bleu"
+                                   hx-get="{% url 'event-detail' event.uuid %}"
+                                   hx-target="body"
+                                   hx-push-url="true">
+                                    {% translate 'Sign up' %}
+                                </a>
+                            </div>
+                        </div> <!-- Fin carte-evenement -->
+                    </div> <!-- Fin colonne -->
+
+                {% endwith %}
+            {% empty %}
+
+                <!-- ====================================================
+                     MESSAGE SI AUCUN ÉVÉNEMENT TROUVÉ
+                     ==================================================== -->
+                <div class="col-12">
+                    <div class="bordure-epaisse p-5 text-center bg-white">
+                        <h3 class="texte-bleu police-titre mb-3">
+                            {% translate 'No events found' %}
+                        </h3>
+                        <p class="texte-bleu police-mono">
+                            {% translate 'No events match your search criteria. Try adjusting your filters.' %}
+                        </p>
+                        <a href="{% url 'event-list' %}"
+                           class="btn bouton-pilule fond-bleu text-white mt-3">
+                            {% translate 'View all events' %}
+                        </a>
+                    </div>
+                </div>
+
+            {% endfor %}
+
+        </div> <!-- Fin de la grille row -->
+
+        <!-- ===================================================================
+             PAGINATION : Bouton "Charger Plus"
+             Affiché uniquement s'il y a plus de pages à charger
+             =================================================================== -->
+        {% if paginated_info.has_next %}
+            <div class="text-center py-5">
+                <a href="?page={{ paginated_info.next_page_number }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                   class="bouton-charger-plus">
+                    {% translate 'LOAD MORE' %}
+                </a>
+            </div>
+        {% endif %}
+
+        <!-- Informations de pagination (optionnel, pour debug) -->
+        {% comment %}
+        <div class="text-center py-3">
+            <p class="texte-bleu police-mono small">
+                {% blocktranslate with current=paginated_info.number total=paginated_info.num_pages %}
+                Page {{ current }} of {{ total }}
+                {% endblocktranslate %}
+            </p>
+        </div>
+        {% endcomment %}
+
+    </div> <!-- Fin container -->
+</section>
+
+{% endblock %}

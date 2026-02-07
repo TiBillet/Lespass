@@ -1,0 +1,300 @@
+{% extends "faire_festival/base.html" %}
+{% load static i18n %}
+
+{% block title %}{{ event.name }}{% endblock %}
+
+{% block content %}
+
+<!-- =======================================================================
+     PAGE DÉTAIL D'UN ÉVÉNEMENT
+     Adaptée depuis la maquette event_detail.html du Faire Festival
+     Affiche toutes les informations détaillées d'un événement
+     ======================================================================= -->
+<main class="container py-5 conteneur-principal">
+
+    <!-- ===================================================================
+         SECTION HERO : Présentation principale de l'événement
+         Image à gauche, Informations clés à droite
+         =================================================================== -->
+    <div class="row align-items-center mb-5">
+
+        <!-- ============================================================
+             COLONNE IMAGE (Gauche)
+             Grande image de l'événement ou placeholder jaune
+             ============================================================ -->
+        <div class="col-md-6 mb-4 mb-md-0">
+            <!-- Image principale de l'événement -->
+            <div class="image-detail-grand {% if not event.img %}placeholder{% endif %}"
+                 {% if event.img %}style="background-image: url('{{ event.img.hdr.url }}');"{% endif %}>
+            </div>
+
+            <!-- Tags de l'événement (catégories/thématiques) -->
+            <div class="mt-3">
+                {% for tag in event.tag.all %}
+                    <span class="etiquette-categorie">{{ tag.name|lower }}</span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- ============================================================
+             COLONNE INFORMATIONS (Droite)
+             Titre, date, heure et bouton d'inscription
+             ============================================================ -->
+        <div class="col-md-6 ps-md-5">
+
+            <!-- Titre de l'événement -->
+            <h1 class="titre-detail mb-4 texte-bleu">
+                {{ event.name|upper }}
+            </h1>
+
+            <!-- Informations clés avec flèches -->
+            <div class="infos-clefs texte-bleu mb-4">
+
+                <!-- Date de l'événement -->
+                <div class="d-flex align-items-center mb-2">
+                    <span class="fleche-info me-3">→</span>
+                    <span class="h4 police-mono fw-bold m-0">
+                        {{ event.datetime|date:"l d F Y" }}
+                    </span>
+                </div>
+
+                <!-- Heure de début et de fin -->
+                <div class="d-flex align-items-center mb-3">
+                    <span class="fleche-info me-3">→</span>
+                    <span class="h4 police-mono fw-bold m-0">
+                        {{ event.datetime|date:"H:i" }}
+                        {% if event.datetime_end %}
+                            - {{ event.datetime_end|date:"H:i" }}
+                        {% endif %}
+                    </span>
+                </div>
+
+                <!-- Lieu (optionnel) -->
+                {% if event.location %}
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="fleche-info me-3">→</span>
+                        <span class="h5 police-mono fw-bold m-0">
+                            <i class="bi bi-geo-alt me-2"></i>
+                            {{ event.location }}
+                        </span>
+                    </div>
+                {% endif %}
+
+                <!-- Jauge (places disponibles) -->
+                {% if event.jauge_max %}
+                    <div class="d-flex align-items-center mb-3">
+                        <span class="fleche-info me-3">→</span>
+                        <span class="h6 police-mono m-0">
+                            <i class="bi bi-people me-2"></i>
+                            {% if event_max_per_user_reached %}
+                                <span class="text-danger">{% translate 'Full' %}</span>
+                            {% else %}
+                                {% blocktranslate with available=event.remaining_seats total=event.jauge_max %}
+                                {{ available }} / {{ total }} places available
+                                {% endblocktranslate %}
+                            {% endif %}
+                        </span>
+                    </div>
+                {% endif %}
+
+            </div>
+
+            <!-- Bouton d'inscription / réservation -->
+            {% if not event_max_per_user_reached %}
+                <a href="#reservation"
+                   class="bouton-inscription fw-bold"
+                   {% if user.is_authenticated %}
+                       hx-post="{% url 'event-action_reservation' event.uuid %}"
+                       hx-target="#reservation-result"
+                       hx-swap="innerHTML"
+                   {% else %}
+                       href="{% url 'login' %}?next={{ request.path }}"
+                   {% endif %}>
+                    {% if user.is_authenticated %}
+                        {% translate "I'm signing up" %}
+                    {% else %}
+                        {% translate "Login to register" %}
+                    {% endif %}
+                </a>
+            {% else %}
+                <button class="bouton-inscription fw-bold" disabled>
+                    {% translate 'Event full' %}
+                </button>
+            {% endif %}
+
+            <!-- Zone de résultat pour la réservation (HTMX) -->
+            <div id="reservation-result" class="mt-3"></div>
+
+        </div> <!-- Fin colonne informations -->
+
+    </div> <!-- Fin row hero -->
+
+    <!-- ===================================================================
+         SECTION DESCRIPTION DÉTAILLÉE
+         Boite avec bordure contenant la description complète de l'événement
+         =================================================================== -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="boite-description bordure-epaisse">
+                {% if event.short_description or event.long_description %}
+                    <div class="texte-description texte-bleu police-mono">
+                        <!-- Description courte (si disponible) -->
+                        {% if event.short_description %}
+                            <p class="fw-bold">{{ event.short_description }}</p>
+                        {% endif %}
+
+                        <!-- Description longue (si disponible) -->
+                        {% if event.long_description %}
+                            {{ event.long_description|safe }}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <!-- Message par défaut si pas de description -->
+                    <p class="texte-description texte-bleu police-mono">
+                        {% translate 'No detailed description available for this event.' %}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         SECTION INFORMATIONS SUPPLÉMENTAIRES
+         Intervenants, lieu, organisateurs, etc.
+         =================================================================== -->
+    <div class="row mb-5">
+        <div class="col-12 texte-bleu police-mono">
+
+            <!-- Intervenants (si disponible) -->
+            {% comment %}
+            <!-- À implémenter si le modèle Event possède un champ intervenants -->
+            {% if event.intervenants %}
+                <div class="mb-3">
+                    <p class="fw-bold mb-2">{% translate 'Speakers:' %}</p>
+                    <p>{{ event.intervenants }}</p>
+                </div>
+            {% endif %}
+            {% endcomment %}
+
+            <!-- Lieu détaillé -->
+            {% if event.location %}
+                <div class="mb-3">
+                    <p class="fw-bold mb-2">{% translate 'Location:' %}</p>
+                    <p>{{ event.location }}</p>
+                </div>
+            {% endif %}
+
+            <!-- Lien externe (si disponible) -->
+            {% if event.external_link %}
+                <div class="mb-3">
+                    <p class="fw-bold mb-2">{% translate 'More information:' %}</p>
+                    <a href="{{ event.external_link }}"
+                       target="_blank"
+                       class="bouton-petit-bleu">
+                        {% translate 'External link' %}
+                        <i class="bi bi-box-arrow-up-right ms-1"></i>
+                    </a>
+                </div>
+            {% endif %}
+
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         SECTION PRODUITS ASSOCIÉS (Billetterie)
+         Affiche les différents tarifs/produits disponibles pour cet événement
+         =================================================================== -->
+    {% if event.products.exists %}
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="bordure-epaisse bg-white p-4">
+                    <h3 class="texte-bleu police-titre mb-4">
+                        {% translate 'Tickets and prices' %}
+                    </h3>
+
+                    <div class="row g-3">
+                        {% for product in event.products.all %}
+                            <div class="col-md-6">
+                                <div class="carte-evenement">
+                                    <div>
+                                        <h4 class="titre-evenement h5">
+                                            {{ product.name }}
+                                        </h4>
+
+                                        {% if product.short_description %}
+                                            <p class="small texte-bleu police-mono">
+                                                {{ product.short_description }}
+                                            </p>
+                                        {% endif %}
+
+                                        <!-- Prix -->
+                                        <div class="infos-evenement">
+                                            {% if product.prices.exists %}
+                                                {% for price in product.prices.all %}
+                                                    <span class="fw-bold">
+                                                        {{ price.prix }} €
+                                                        {% if price.name %}
+                                                            ({{ price.name }})
+                                                        {% endif %}
+                                                    </span>
+                                                {% endfor %}
+                                            {% else %}
+                                                <span class="fw-bold">{% translate 'Free' %}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="pied-carte mt-3">
+                                        <a href="#reservation"
+                                           class="bouton-petit-bleu w-100"
+                                           {% if user.is_authenticated %}
+                                               hx-post="{% url 'event-action_reservation' event.uuid %}"
+                                               hx-target="#reservation-result"
+                                           {% else %}
+                                               href="{% url 'login' %}?next={{ request.path }}"
+                                           {% endif %}>
+                                            {% translate 'Select' %}
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- ===================================================================
+         SECTION ÉVÉNEMENTS SIMILAIRES (Optionnel)
+         Propose d'autres événements de la même catégorie
+         =================================================================== -->
+    {% comment %}
+    <!-- À implémenter si besoin -->
+    <div class="row">
+        <div class="col-12">
+            <h3 class="texte-bleu police-titre mb-4 text-center">
+                {% translate 'Similar events' %}
+            </h3>
+            <!-- Grille d'événements similaires -->
+        </div>
+    </div>
+    {% endcomment %}
+
+    <!-- Bouton retour à la liste -->
+    <div class="row mt-5">
+        <div class="col-12 text-center">
+            <a href="{% url 'event-list' %}"
+               class="btn bouton-pilule fond-bleu text-white"
+               hx-get="{% url 'event-list' %}"
+               hx-target="body"
+               hx-push-url="true">
+                <i class="bi bi-arrow-left me-2"></i>
+                {% translate 'Back to events list' %}
+            </a>
+        </div>
+    </div>
+
+</main>
+
+{% endblock %}

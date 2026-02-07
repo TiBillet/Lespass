@@ -1,0 +1,256 @@
+{% extends "faire_festival/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}{% endblock %}
+
+{% block content %}
+
+<!-- =======================================================================
+     PAGE LISTE DES ADHÉSIONS / BILLETS
+     Adaptée depuis la maquette tickets.html du Faire Festival
+     Affiche tous les produits d'adhésion disponibles
+     ======================================================================= -->
+<main class="container py-5 conteneur-principal">
+
+    <!-- Titre de la page -->
+    <div class="row mb-5">
+        <div class="col-12 text-center">
+            <h1 class="texte-bleu police-titre" style="font-size: 3rem;">
+                {% if config.membership_menu_name %}
+                    {{ config.membership_menu_name|upper }}
+                {% else %}
+                    {% translate 'SUBSCRIPTIONS AND TICKETS'|upper %}
+                {% endif %}
+            </h1>
+
+            <!-- Description introductive (si disponible dans la config) -->
+            {% if config.short_description %}
+                <p class="texte-bleu police-mono mt-3">
+                    {{ config.short_description }}
+                </p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ===================================================================
+         GRILLE DES CARTES DE PRODUITS (Adhésions / Billets)
+         Affiche les différents produits disponibles à l'achat
+         =================================================================== -->
+    <div class="row g-4 justify-content-center">
+
+        {% for product in products %}
+
+            <!-- ============================================================
+                 CARTE PRODUIT (une carte par produit d'adhésion)
+                 Colonnes responsives : col-md-4 (3 cartes par ligne sur desktop)
+                 ============================================================ -->
+            <div class="col-md-4">
+                <div class="carte-billet">
+
+                    <!-- ================================================
+                         IMAGE DU PRODUIT
+                         Affiche l'image ou un placeholder jaune
+                         ================================================ -->
+                    <div class="image-billet mb-4"
+                         {% if product.img %}style="background-image: url('{{ product.img.med.url }}'); background-size: cover; background-position: center;"{% endif %}>
+                    </div>
+
+                    <!-- ================================================
+                         INFORMATIONS DU PRODUIT
+                         ================================================ -->
+                    <!-- Nom du produit (ex: "BILLET JOUR") -->
+                    <h2 class="titre-billet mb-2">
+                        {{ product.name|upper }}
+                    </h2>
+
+                    <!-- Description courte du produit (optionnelle) -->
+                    {% if product.short_description %}
+                        <h3 class="date-billet mb-4">
+                            {{ product.short_description|truncatewords:10 }}
+                        </h3>
+                    {% endif %}
+
+                    <!-- Tags/Catégories du produit -->
+                    {% if product.tag.exists %}
+                        <div class="mb-3">
+                            {% for tag in product.tag.all %}
+                                <span class="etiquette-categorie">{{ tag.name|lower }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <!-- ================================================
+                         PRIX DU PRODUIT
+                         Affiche tous les tarifs disponibles pour ce produit
+                         ================================================ -->
+                    {% if product.prices.exists %}
+                        <div class="mb-4">
+                            {% for price in product.prices.all %}
+                                <div class="texte-bleu police-mono fw-bold mb-2">
+                                    <!-- Nom du tarif (ex: "Tarif normal", "Tarif réduit") -->
+                                    {% if price.name %}
+                                        <span class="text-uppercase">{{ price.name }}:</span>
+                                    {% endif %}
+
+                                    <!-- Prix -->
+                                    <span class="h4">
+                                        {% if price.prix > 0 %}
+                                            {{ price.prix }} €
+                                        {% else %}
+                                            {% translate 'Free' %}
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <!-- ================================================
+                         BOUTON D'ACHAT / INSCRIPTION
+                         ================================================ -->
+                    <a href="#"
+                       class="btn bouton-achat w-100"
+                       hx-get="{% url 'memberships_mvt' %}"
+                       hx-target="#membership-form-container"
+                       hx-vals='{"product_uuid":"{{ product.uuid }}"}'
+                       data-bs-toggle="offcanvas"
+                       data-bs-target="#offcanvasMembership">
+                        {% translate 'Get my ticket' %}
+                    </a>
+
+                </div> <!-- Fin carte-billet -->
+            </div> <!-- Fin colonne -->
+
+        {% empty %}
+
+            <!-- ====================================================
+                 MESSAGE SI AUCUN PRODUIT DISPONIBLE
+                 ==================================================== -->
+            <div class="col-12">
+                <div class="bordure-epaisse p-5 text-center bg-white">
+                    <h3 class="texte-bleu police-titre mb-3">
+                        {% translate 'No subscriptions available' %}
+                    </h3>
+                    <p class="texte-bleu police-mono">
+                        {% translate 'There are currently no subscription products available. Please check back later.' %}
+                    </p>
+                    <a href="{% url 'event-list' %}"
+                       class="btn bouton-pilule fond-bleu text-white mt-3"
+                       hx-get="{% url 'event-list' %}"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate 'View events' %}
+                    </a>
+                </div>
+            </div>
+
+        {% endfor %}
+
+    </div> <!-- Fin row -->
+
+    <!-- ===================================================================
+         SECTION FÉDÉRATION (Optionnel)
+         Affiche les autres lieux/organisations de la fédération
+         =================================================================== -->
+    {% if federated_tenants %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="bordure-epaisse bg-white p-4">
+                    <h3 class="texte-bleu police-titre mb-4 text-center">
+                        {% translate 'Other places in the federation' %}
+                    </h3>
+
+                    <div class="row g-3">
+                        {% for tenant in federated_tenants %}
+                            <div class="col-md-3">
+                                <a href="https://{{ tenant.domain }}/memberships/"
+                                   target="_blank"
+                                   class="text-decoration-none">
+                                    <div class="carte-evenement text-center">
+                                        <!-- Image du tenant -->
+                                        {% if tenant.img_url %}
+                                            <div class="image-evenement"
+                                                 style="background-image: url('{{ tenant.img_url }}'); background-size: cover; background-position: center;">
+                                            </div>
+                                        {% else %}
+                                            <div class="image-evenement placeholder"></div>
+                                        {% endif %}
+
+                                        <!-- Nom du lieu -->
+                                        <h4 class="titre-evenement h6 mt-3">
+                                            {{ tenant.name }}
+                                        </h4>
+
+                                        <!-- Description courte -->
+                                        {% if tenant.short_description %}
+                                            <p class="small texte-bleu police-mono">
+                                                {{ tenant.short_description|truncatewords:10 }}
+                                            </p>
+                                        {% endif %}
+
+                                        <!-- Bouton vers le site -->
+                                        <div class="pied-carte mt-3">
+                                            <span class="bouton-petit-bleu w-100">
+                                                {% translate 'Visit' %}
+                                                <i class="bi bi-box-arrow-up-right ms-1"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <!-- ===================================================================
+         INFORMATIONS COMPLÉMENTAIRES (Optionnel)
+         Texte explicatif sur les adhésions, conditions, etc.
+         =================================================================== -->
+    {% comment %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="boite-description bordure-epaisse">
+                <h3 class="texte-bleu police-titre mb-3">
+                    {% translate 'Why become a member?' %}
+                </h3>
+                <div class="texte-description texte-bleu police-mono">
+                    <p>
+                        {% translate 'Membership gives you access to all our events, activities and resources throughout the year.' %}
+                    </p>
+                    <ul>
+                        <li>{% translate 'Unlimited access to all events' %}</li>
+                        <li>{% translate 'Preferential rates on workshops' %}</li>
+                        <li>{% translate 'Priority registration' %}</li>
+                        <li>{% translate 'Access to members-only areas' %}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endcomment %}
+
+</main>
+
+<!-- ===================================================================
+     OFFCANVAS : Formulaire d'inscription (Panneau latéral)
+     S'ouvre lors du clic sur un bouton "Prendre mon billet"
+     =================================================================== -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasMembership">
+    <div class="offcanvas-header bordure-bas-epaisse fond-jaune">
+        <h5 class="offcanvas-title texte-bleu police-titre">
+            {% translate 'Subscription form' %}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body" id="membership-form-container">
+        <!-- Le formulaire sera chargé ici via HTMX -->
+        <p class="texte-bleu police-mono text-center py-5">
+            {% translate 'Loading...' %}
+        </p>
+    </div>
+</div>
+
+{% endblock %}

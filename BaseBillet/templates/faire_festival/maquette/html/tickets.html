@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faire Festival - Billetterie</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
+
+    <!-- CSS Personnalisé -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-white">
+
+    <!-- =======================================================================
+         HEADER (Haut de page) - Identique à l'accueil
+         ======================================================================= -->
+    <header class="container-fluid py-3 bordure-bas-epaisse fond-jaune">
+        <nav class="navbar navbar-expand-md p-0">
+            <div class="container-fluid p-0 position-relative">
+
+                <!-- Logo -->
+                <a class="navbar-brand" href="index.html">
+                    <img src="assets/logo-faire.png" alt="Logo Faire" class="img-fluid" style="height: 50px;">
+                </a>
+
+                <!-- Bouton Toggler pour Mobile -->
+                <button class="navbar-toggler bordure-epaisse texte-bleu" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarFaire">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Contenu Du Menu -->
+                <div class="collapse navbar-collapse" id="navbarFaire">
+
+                    <!-- Liens Centraux -->
+                    <div class="navbar-nav mx-auto gap-3 align-items-center mt-3 mt-md-0">
+                        <a href="events.html" class="btn bouton-pilule bg-white texte-bleu text-center">La
+                            programmation</a>
+                        <a href="tickets.html" class="btn bouton-pilule fond-jaune texte-bleu text-center"
+                            style="background-color: white; border-width: 3px;">Prendre ses billets</a>
+                        <a href="#" class="btn bouton-pilule bg-white texte-bleu text-center">Infos pratiques</a>
+                    </div>
+
+                    <!-- Bouton Connexion -->
+                    <div class="navbar-nav ms-0 mt-3 mt-md-0">
+                        <a href="#" class="btn bouton-pilule fond-bleu text-white text-center">CONNEXION</a>
+                    </div>
+
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- =======================================================================
+         CONTENU PRINCIPAL - BILLETTERIE
+         ======================================================================= -->
+    <main class="container py-5">
+
+        <!-- Grille des 3 Cartes -->
+        <div class="row g-4 justify-content-center">
+
+            <!-- Carte 1 : Jeudi -->
+            <div class="col-md-4">
+                <div class="carte-billet">
+                    <!-- Image Jaune -->
+                    <div class="image-billet mb-4"></div>
+
+                    <!-- Titre -->
+                    <h2 class="titre-billet mb-2">BILLET JOUR</h2>
+                    <h3 class="date-billet mb-4">JEUDI 28 MAI</h3>
+
+                    <!-- Bouton -->
+                    <a href="#" class="btn bouton-achat w-100">Je prends mon billet</a>
+                </div>
+            </div>
+
+            <!-- Carte 2 : Vendredi -->
+            <div class="col-md-4">
+                <div class="carte-billet">
+                    <div class="image-billet mb-4"></div>
+                    <h2 class="titre-billet mb-2">BILLET JOUR</h2>
+                    <h3 class="date-billet mb-4">VENDREDI 29 MAI</h3>
+                    <a href="#" class="btn bouton-achat w-100">Je prends mon billet</a>
+                </div>
+            </div>
+
+            <!-- Carte 3 : Samedi -->
+            <div class="col-md-4">
+                <div class="carte-billet">
+                    <div class="image-billet mb-4"></div>
+                    <h2 class="titre-billet mb-2">BILLET JOUR</h2>
+                    <h3 class="date-billet mb-4">SAMEDI 30 MAI</h3>
+                    <a href="#" class="btn bouton-achat w-100">Je prends mon billet</a>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Scripts JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

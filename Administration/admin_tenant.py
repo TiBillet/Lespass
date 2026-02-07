@@ -359,19 +359,16 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'phone',
                 'email',
                 'site_web',
-                # 'map_img',
+                'skin',
             )
         }),
         ('Options générales', {
             'fields': (
-                #         'need_name',
                 'fuseau_horaire',
                 'language',
                 'jauge_max',
                 'allow_concurrent_bookings',
                 'currency_code',
-                # 'option_generale_radio',
-                # 'option_generale_checkbox',
             ),
         }),
         ('Personnalisation', {

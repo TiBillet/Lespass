@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Faire Festival - La Programmation</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap"
+        rel="stylesheet">
+
+    <!-- CSS Personnalisé -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="bg-white">
+
+    <!-- =======================================================================
+         HEADER (Haut de page) - Copie conforme de l'accueil
+         ======================================================================= -->
+    <header class="container-fluid py-3 bordure-bas-epaisse fond-jaune">
+        <nav class="navbar navbar-expand-md p-0">
+            <div class="container-fluid p-0 position-relative">
+
+                <!-- Logo -->
+                <a class="navbar-brand" href="index.html">
+                    <img src="assets/logo-faire.png" alt="Logo Faire" class="img-fluid" style="height: 50px;">
+                </a>
+
+                <!-- Bouton Toggler pour Mobile -->
+                <button class="navbar-toggler bordure-epaisse texte-bleu" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarFaire">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <!-- Contenu Du Menu -->
+                <div class="collapse navbar-collapse" id="navbarFaire">
+
+                    <!-- Liens Centraux (mx-auto le centre) -->
+                    <div class="navbar-nav mx-auto gap-3 align-items-center mt-3 mt-md-0">
+                        <a href="events.html" class="btn bouton-pilule fond-jaune texte-bleu text-center"
+                            style="background-color: white; border-width: 3px;">La programmation</a>
+                        <a href="tickets.html" class="btn bouton-pilule bg-white texte-bleu text-center">Prendre ses
+                            billets</a>
+                        <a href="#" class="btn bouton-pilule bg-white texte-bleu text-center">Infos pratiques</a>
+                    </div>
+
+                    <!-- Bouton Connexion (A droite) -->
+                    <div class="navbar-nav ms-0 mt-3 mt-md-0">
+                        <a href="#" class="btn bouton-pilule fond-bleu text-white text-center">CONNEXION</a>
+                    </div>
+
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- =======================================================================
+         FILTRES (Barre de tri)
+         ======================================================================= -->
+    <section class="container-fluid py-4 conteneur-principal">
+        <div class="container">
+            <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres">
+                <!-- Filtre 1 : Date -->
+                <div class="dropdown">
+                    <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        Trier par date
+                    </button>
+                    <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                        <li><a class="dropdown-item police-mono" href="#">Samedi 30 Mai</a></li>
+                        <li><a class="dropdown-item police-mono" href="#">Dimanche 31 Mai</a></li>
+                    </ul>
+                </div>
+
+                <!-- Filtre 2 : Catégories -->
+                <div class="dropdown">
+                    <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        Trier par catégories
+                    </button>
+                    <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                        <li><a class="dropdown-item police-mono" href="#">Ateliers</a></li>
+                        <li><a class="dropdown-item police-mono" href="#">Conférences</a></li>
+                        <li><a class="dropdown-item police-mono" href="#">Démos</a></li>
+                    </ul>
+                </div>
+
+                <!-- Filtre 3 : Thématique -->
+                <div class="dropdown">
+                    <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        Trier par thématique
+                    </button>
+                    <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                        <li><a class="dropdown-item police-mono" href="#">Low-tech</a></li>
+                        <li><a class="dropdown-item police-mono" href="#">Textile</a></li>
+                        <li><a class="dropdown-item police-mono" href="#">Numérique</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- =======================================================================
+                 GRILLE D'ÉVÉNEMENTS
+                 ======================================================================= -->
+            <div class="row g-4"> <!-- 'g-4' = Gutter (espace) de taille 4 entre les cartes -->
+
+                <!-- CARTE 1 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <!-- Placeholder Image (Croix Jaune) -->
+                            <div class="image-evenement"></div>
+
+                            <!-- Tags -->
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">atelier</span>
+                                <span class="etiquette-categorie">papier</span>
+                            </div>
+
+                            <!-- Titre -->
+                            <h3 class="titre-evenement">FABRIQUER UN MARQUE PAGE</h3>
+
+                            <!-- Infos -->
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Samedi 30 Mai</span>
+                                <span>→ 11h-12h</span>
+                            </div>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 2 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">conférence</span>
+                                <span class="etiquette-categorie">futur</span>
+                            </div>
+                            <h3 class="titre-evenement">L'IA ET LE CODE CRÉATIF</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Samedi 30 Mai</span>
+                                <span>→ 14h-15h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 3 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">démo</span>
+                                <span class="etiquette-categorie">laser</span>
+                            </div>
+                            <h3 class="titre-evenement">GRAVER SUR DU BOIS</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Samedi 30 Mai</span>
+                                <span>→ 16h-18h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 4 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">atelier</span>
+                                <span class="etiquette-categorie">textile</span>
+                            </div>
+                            <h3 class="titre-evenement">COUTURE ZÉRO DÉCHET</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Dimanche 31</span>
+                                <span>→ 10h-12h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 5 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">rencontre</span>
+                                <span class="etiquette-categorie">pro</span>
+                            </div>
+                            <h3 class="titre-evenement">APÉRO DES MAKERS</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Samedi 30 Mai</span>
+                                <span>→ 19h-21h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 6 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">atelier</span>
+                                <span class="etiquette-categorie">électro</span>
+                            </div>
+                            <h3 class="titre-evenement">SOUDER SON PREMIER KIT</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Dimanche 31</span>
+                                <span>→ 14h-16h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 7 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">conférence</span>
+                                <span class="etiquette-categorie">écologie</span>
+                            </div>
+                            <h3 class="titre-evenement">LOW-TECH ET HABITAT</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Samedi 30 Mai</span>
+                                <span>→ 10h-11h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARTE 8 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">atelier</span>
+                                <span class="etiquette-categorie">3d</span>
+                            </div>
+                            <h3 class="titre-evenement">MODELISER EN 3D (BLENDER)</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Dimanche 31</span>
+                                <span>→ 16h-18h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- CARTE 9 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">demo</span>
+                                <span class="etiquette-categorie">robotique</span>
+                            </div>
+                            <h3 class="titre-evenement">COMBAT DE ROBOTS</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Samedi 30 Mai</span>
+                                <span>→ 18h-19h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+                <!-- CARTE 10 -->
+                <div class="col-12 col-md-6 col-lg-3">
+                    <div class="carte-evenement">
+                        <div>
+                            <div class="image-evenement"></div>
+                            <div class="mb-2">
+                                <span class="etiquette-categorie">atelier</span>
+                                <span class="etiquette-categorie">bois</span>
+                            </div>
+                            <h3 class="titre-evenement">FABRIQUER UN TABOURET</h3>
+                            <div class="infos-evenement d-flex justify-content-between">
+                                <span>→ Dimanche 31</span>
+                                <span>→ 09h-13h</span>
+                            </div>
+                        </div>
+                        <div class="pied-carte">
+                            <a href="event_detail.html" class="bouton-petit-jaune">En voir +</a>
+                            <a href="#" class="bouton-petit-bleu">Je m'inscris</a>
+                        </div>
+                    </div>
+                </div>
+
+            </div> <!-- Fin de la grille row -->
+
+            <!-- BOUTON CHARGER PLUS -->
+            <div class="text-center py-5">
+                <button class="bouton-charger-plus">CHARGER PLUS</button>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Scripts JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
