@@ -45,7 +45,7 @@ from AuthBillet.utils import get_or_create_user
 from AuthBillet.views import activate
 from BaseBillet.models import Configuration, Ticket, Product, Event, Tag, Paiement_stripe, Membership, Reservation, \
     FormbricksConfig, FormbricksForms, FederatedPlace, Carrousel, LigneArticle, PriceSold, \
-    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin
+    Price, ProductSold, PaymentMethod, PostalAddress, SaleOrigin, ProductFormField
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, new_tenant_mailer, \
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
@@ -2524,8 +2524,382 @@ class MembershipMVT(viewsets.ViewSet):
         send_membership_invoice_to_email.delay(str(membership.uuid))
         return Response("sended", status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=['GET'])
+    def admin_edit_json_form(self, request, pk):
+        """
+        Point d'entrée HTMX pour afficher le formulaire d'édition des champs JSON custom_form.
+        HTMX endpoint to display the edit form for custom_form JSON fields.
+
+        Action admin accessible depuis le formulaire de modification d'adhésion.
+        Admin action accessible via the membership change form.
+        """
+        # Récupération de l'utilisateur et du tenant courant
+        # Get the current user and tenant
+        user = request.user
+        tenant = request.tenant
+
+        # Vérification des permissions admin
+        # Verify admin permissions
+        is_admin = False  # Par défaut, on suppose que l'utilisateur n'est pas admin / Default: assume user is not admin
+        try:
+            # On vérifie si l'utilisateur est authentifié ET admin du tenant
+            # Check if user is authenticated AND admin of the tenant
+            user_is_authenticated = user.is_authenticated
+            user_has_is_tenant_admin_method = hasattr(user, 'is_tenant_admin')
+            user_is_tenant_admin = user.is_tenant_admin(tenant) if user_has_is_tenant_admin_method else False
+
+            is_admin = user_is_authenticated and user_has_is_tenant_admin_method and user_is_tenant_admin
+        except Exception:
+            # En cas d'erreur, on reste sur is_admin = False
+            # If error, keep is_admin = False
+            is_admin = False
+
+        # Si l'utilisateur n'est pas admin, on refuse l'accès
+        # If user is not admin, deny access
+        if not is_admin:
+            return HttpResponse(_("Accès refusé"), status=403)
+
+        # Récupération de l'adhésion via son UUID
+        # Get the membership by UUID
+        membership_uuid = uuid.UUID(pk)
+        membership = get_object_or_404(Membership, uuid=membership_uuid)
+
+        # Construction de la structure de données pour les champs du formulaire
+        # Build form fields data structure from ProductFormField and current custom_form values
+        form_fields = {}  # Dictionnaire vide qui va contenir tous les champs / Empty dict to hold all fields
+
+        # On vérifie que l'adhésion a un prix ET un produit
+        # Check that membership has a price AND a product
+        membership_has_price = membership.price is not None
+        if membership_has_price:
+            membership_has_product = membership.price.product is not None
+        else:
+            membership_has_product = False
+
+        if membership_has_price and membership_has_product:
+            # Récupération du produit associé à l'adhésion
+            # Get the product associated with the membership
+            product = membership.price.product
+
+            # Récupération de tous les champs de formulaire définis pour ce produit, ordonnés par leur ordre d'affichage
+            # Get all form fields defined for this product, ordered by display order
+            product_form_fields = ProductFormField.objects.filter(product=product).order_by('order')
+
+            # Pour chaque champ de formulaire défini
+            # For each defined form field
+            for field in product_form_fields:
+                # Récupération de la valeur actuelle depuis le JSON custom_form, ou chaîne vide si pas de valeur
+                # Get current value from custom_form JSON, or empty string if no value
+                current_value = ""
+                if membership.custom_form:
+                    current_value = membership.custom_form.get(field.name, "")
+
+                # Préparation de la liste d'options pour les champs de sélection
+                # Prepare options list for selection fields
+                options_list = []
+
+                # Les types SINGLE_SELECT, RADIO_SELECT et MULTI_SELECT ont des options
+                # SINGLE_SELECT, RADIO_SELECT and MULTI_SELECT types have options
+                field_is_single_select = field.field_type == ProductFormField.FieldType.SINGLE_SELECT
+                field_is_radio_select = field.field_type == ProductFormField.FieldType.RADIO_SELECT
+                field_is_multi_select = field.field_type == ProductFormField.FieldType.MULTI_SELECT
+
+                field_has_options = field_is_single_select or field_is_radio_select or field_is_multi_select
+
+                if field_has_options and field.options:
+                    try:
+                        # Les options sont stockées comme une chaîne séparée par des virgules
+                        # Options are stored as a comma-separated string
+                        # On les split et on enlève les espaces vides
+                        # Split them and remove empty spaces
+                        raw_options = field.options.split(',')
+                        options_list = []
+                        for option in raw_options:
+                            option_stripped = option.strip()
+                            if option_stripped:  # Si l'option n'est pas vide / If option is not empty
+                                options_list.append(option_stripped)
+                    except Exception:
+                        # En cas d'erreur, on garde une liste vide
+                        # If error, keep empty list
+                        options_list = []
+
+                # Ajout du champ dans notre dictionnaire avec toutes ses informations
+                # Add field to our dictionary with all its information
+                form_fields[field.name] = {
+                    'label': field.label,  # Le libellé affiché / Displayed label
+                    'field_type': field.field_type,  # Le type de champ (ST, LT, SS, SR, MS, BL) / Field type
+                    'value': current_value,  # La valeur actuelle / Current value
+                    'required': field.required,  # Est-ce obligatoire ? / Is it required?
+                    'options': options_list,  # Liste d'options (vide si pas applicable) / Options list (empty if not applicable)
+                }
+
+        # Préparation du contexte pour le template
+        # Prepare context for template
+        context = {
+            'membership': membership,  # L'objet adhésion / The membership object
+            'form_fields': form_fields,  # Tous les champs du formulaire / All form fields
+            'errors': None,  # Pas d'erreurs à ce stade / No errors at this stage
+        }
+
+        # Rendu du template partiel pour HTMX
+        # Render partial template for HTMX
+        return render(request, "admin/membership/partials/custom_form_edit.html", context)
+
+    @action(detail=True, methods=['GET'])
+    def admin_cancel_edit(self, request, pk):
+        """
+        Point d'entrée HTMX pour annuler l'édition et retourner à la vue en lecture seule.
+        HTMX endpoint to cancel editing and return to read-only view.
+        """
+        # Récupération de l'utilisateur et du tenant courant
+        # Get the current user and tenant
+        user = request.user
+        tenant = request.tenant
+
+        # Vérification des permissions admin
+        # Verify admin permissions
+        is_admin = False
+        try:
+            # On vérifie si l'utilisateur est authentifié ET admin du tenant
+            # Check if user is authenticated AND admin of the tenant
+            user_is_authenticated = user.is_authenticated
+            user_has_is_tenant_admin_method = hasattr(user, 'is_tenant_admin')
+            user_is_tenant_admin = user.is_tenant_admin(tenant) if user_has_is_tenant_admin_method else False
+
+            is_admin = user_is_authenticated and user_has_is_tenant_admin_method and user_is_tenant_admin
+        except Exception:
+            # En cas d'erreur, on reste sur is_admin = False
+            # If error, keep is_admin = False
+            is_admin = False
+
+        # Si l'utilisateur n'est pas admin, on refuse l'accès
+        # If user is not admin, deny access
+        if not is_admin:
+            return HttpResponse(_("Accès refusé"), status=403)
+
+        # Récupération de l'adhésion via son UUID
+        # Get the membership by UUID
+        membership_uuid = uuid.UUID(pk)
+        membership = get_object_or_404(Membership, uuid=membership_uuid)
+
+        # Préparation du contexte pour le template de succès (mode lecture seule)
+        # Prepare context for success template (read-only mode)
+        context = {
+            'membership': membership
+        }
+
+        # Rendu du template partiel de succès pour HTMX
+        # Render success partial template for HTMX
+        return render(request, "admin/membership/partials/custom_form_edit_success.html", context)
+
+    @action(detail=True, methods=['POST'])
+    def admin_change_json_form(self, request, pk):
+        """
+        HTMX endpoint to save changes to custom_form JSON fields.
+        Validates data against ProductFormField definitions and updates the membership.
+        """
+        user = request.user
+        tenant = request.tenant
+
+        # Vérification des permissions admin
+        # Verify admin permissions
+        is_admin = False  # Par défaut, on suppose que l'utilisateur n'est pas admin / Default: assume user is not admin
+        try:
+            user_is_authenticated = user.is_authenticated
+            user_has_is_tenant_admin_method = hasattr(user, 'is_tenant_admin')
+            user_is_tenant_admin = user.is_tenant_admin(tenant) if user_has_is_tenant_admin_method else False
+
+            is_admin = user_is_authenticated and user_has_is_tenant_admin_method and user_is_tenant_admin
+        except Exception:
+            is_admin = False
+
+        # Si l'utilisateur n'est pas admin, on refuse l'accès
+        # If user is not admin, deny access
+        if not is_admin:
+            return HttpResponse(_("Accès refusé"), status=403)
+
+        # Récupération de l'adhésion via son UUID
+        # Get the membership by UUID
+        membership_uuid = uuid.UUID(pk)
+        membership = get_object_or_404(Membership, uuid=membership_uuid)
+
+        # Get ProductFormField definitions
+        if not membership.price or not membership.price.product:
+            return HttpResponse(_("Produit non trouvé"), status=400)
+
+        product = membership.price.product
+        product_form_fields = ProductFormField.objects.filter(product=product)
+        field_definitions = {field.name: field for field in product_form_fields}
+
+        # Validate and process form data
+        errors = []
+        updated_data = dict(membership.custom_form) if membership.custom_form else {}
+
+        for field_name, field_definition in field_definitions.items():
+            # Récupération de la valeur envoyée via POST
+            # Get value sent via POST
+            value_from_post = request.POST.get(field_name, "")
+
+            # Traitement spécial pour les champs booléens (switch on/off)
+            # Special handling for boolean fields (switch on/off)
+            field_is_boolean = field_definition.field_type == ProductFormField.FieldType.BOOLEAN
+            if field_is_boolean:
+                # Pour les booléens, on vérifie si la valeur est 'true'
+                # For booleans, check if value is 'true'
+                value_from_post = request.POST.get(field_name) == 'true'
+
+            # Validation des champs obligatoires
+            # Validate required fields
+            field_is_required = field_definition.required
+            value_is_empty = not value_from_post
+
+            if field_is_required and value_is_empty:
+                # Si le champ est obligatoire et vide, on ajoute une erreur
+                # If field is required and empty, add an error
+                error_message = _(f"Le champ '{field_definition.label}' est obligatoire.")
+                errors.append(error_message)
+                continue  # On passe au champ suivant / Skip to next field
+
+            # Mise à jour de la valeur dans notre dictionnaire
+            # Update value in our dictionary
+            updated_data[field_name] = value_from_post
+
+        # Si il y a des erreurs, on retourne le formulaire d'édition avec les erreurs affichées
+        # If there are errors, return edit form with errors displayed
+        if errors:
+            # Reconstruction de la structure form_fields avec les valeurs POST pour ne pas perdre les modifications
+            # Rebuild form_fields structure with POST values to not lose modifications
+            form_fields = {}
+            for field in product_form_fields:
+                # Récupération de la valeur depuis POST
+                # Get value from POST
+                current_value_from_post = request.POST.get(field.name, "")
+
+                # Traitement spécial pour les booléens
+                # Special handling for booleans
+                field_is_boolean = field.field_type == ProductFormField.FieldType.BOOLEAN
+                if field_is_boolean:
+                    current_value_from_post = request.POST.get(field.name) == 'true'
+
+                # Préparation de la liste d'options pour les champs de sélection
+                # Prepare options list for selection fields
+                options_list = []
+                field_is_single_select = field.field_type == ProductFormField.FieldType.SINGLE_SELECT
+                field_is_radio_select = field.field_type == ProductFormField.FieldType.RADIO_SELECT
+                field_is_multi_select = field.field_type == ProductFormField.FieldType.MULTI_SELECT
+                field_has_options = field_is_single_select or field_is_radio_select or field_is_multi_select
+
+                if field_has_options and field.options:
+                    try:
+                        # Les options sont stockées comme une chaîne séparée par des virgules
+                        # Options are stored as a comma-separated string
+                        # On les split et on enlève les espaces vides
+                        # Split them and remove empty spaces
+                        raw_options = field.options.split(',')
+                        options_list = []
+                        for option in raw_options:
+                            option_stripped = option.strip()
+                            if option_stripped:  # Si l'option n'est pas vide / If option is not empty
+                                options_list.append(option_stripped)
+                    except Exception:
+                        # En cas d'erreur, on garde une liste vide
+                        # If error, keep empty list
+                        options_list = []
+
+                # Ajout du champ dans notre dictionnaire avec toutes ses informations
+                # Add field to our dictionary with all its information
+                form_fields[field.name] = {
+                    'label': field.label,  # Le libellé affiché / Displayed label
+                    'field_type': field.field_type,  # Le type de champ (ST, LT, SS, SR, MS, BL) / Field type
+                    'value': current_value_from_post,  # La valeur depuis POST / Value from POST
+                    'required': field.required,  # Est-ce obligatoire ? / Is it required?
+                    'options': options_list,  # Liste d'options (vide si pas applicable) / Options list (empty if not applicable)
+                }
+
+            # Préparation du contexte avec les erreurs
+            # Prepare context with errors
+            context = {
+                'membership': membership,
+                'form_fields': form_fields,
+                'errors': errors,
+            }
+
+            # Retour au formulaire d'édition avec les erreurs
+            # Return to edit form with errors
+            return render(request, "admin/membership/partials/custom_form_edit.html", context)
+
+        # Pas d'erreurs : on sauvegarde les modifications
+        # No errors: save the changes
+        try:
+            # Mise à jour du champ custom_form de l'adhésion
+            # Update membership's custom_form field
+            membership.custom_form = updated_data
+            membership.save(update_fields=['custom_form'])
+
+            # Log de la modification pour traçabilité
+            # Log the change for traceability
+            logger.info(f"Admin {user.email} a modifié le custom_form de l'adhésion {membership.uuid}")
+            logger.info(f"Admin {user.email} updated custom_form for membership {membership.uuid}")
+
+        except Exception as e:
+            # En cas d'erreur lors de la sauvegarde
+            # If error during save
+            logger.error(f"Erreur lors de la sauvegarde du custom_form pour l'adhésion {membership.uuid}: {e}")
+            logger.error(f"Error saving custom_form for membership {membership.uuid}: {e}")
+
+            error_message = _(f"Erreur lors de l'enregistrement : {str(e)}")
+            errors.append(error_message)
+
+            # On retourne le formulaire avec l'erreur
+            # Return form with error
+            form_fields = {}
+            for field in product_form_fields:
+                current_value_from_post = request.POST.get(field.name, "")
+
+                field_is_boolean = field.field_type == ProductFormField.FieldType.BOOLEAN
+                if field_is_boolean:
+                    current_value_from_post = request.POST.get(field.name) == 'true'
+
+                options_list = []
+                field_is_single_select = field.field_type == ProductFormField.FieldType.SINGLE_SELECT
+                field_is_radio_select = field.field_type == ProductFormField.FieldType.RADIO_SELECT
+                field_is_multi_select = field.field_type == ProductFormField.FieldType.MULTI_SELECT
+                field_has_options = field_is_single_select or field_is_radio_select or field_is_multi_select
+
+                if field_has_options and field.options:
+                    try:
+                        raw_options = field.options.split(',')
+                        for option in raw_options:
+                            option_stripped = option.strip()
+                            if option_stripped:
+                                options_list.append(option_stripped)
+                    except Exception:
+                        options_list = []
+
+                form_fields[field.name] = {
+                    'label': field.label,
+                    'field_type': field.field_type,
+                    'value': current_value_from_post,
+                    'required': field.required,
+                    'options': options_list,
+                }
+
+            context = {
+                'membership': membership,
+                'form_fields': form_fields,
+                'errors': errors,
+            }
+            return render(request, "admin/membership/partials/custom_form_edit.html", context)
+
+        # Succès : on retourne la vue de succès (mode lecture seule)
+        # Success: return success view (read-only mode)
+        context = {
+            'membership': membership
+        }
+        return render(request, "admin/membership/partials/custom_form_edit_success.html", context)
+
     def get_permissions(self):
-        if self.action in ['invoice_to_mail', 'admin_accept']:
+        if self.action in ['invoice_to_mail', 'admin_accept', 'admin_edit_json_form', 'admin_cancel_edit', 'admin_change_json_form']:
             permission_classes = [TenantAdminPermission, ]
 
         else:
