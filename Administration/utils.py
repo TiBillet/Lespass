@@ -45,6 +45,25 @@ def _attribute_filter(tag: str, attr: str, value: str) -> Optional[str]:
 
 
 
+def clean_text(text: str) -> str:
+    """Nettoie une chaîne de texte brut en supprimant tout HTML.
+    Clean a plain text string by stripping all HTML tags.
+
+    Utilisé pour les entrées utilisateur qui ne doivent contenir aucun HTML
+    (noms de champs, valeurs de formulaire, etc.).
+    Used for user inputs that should contain no HTML at all
+    (field names, form values, etc.).
+    """
+    # nh3.clean avec tags vide supprime tout le HTML et ne garde que le texte
+    # nh3.clean with empty tags strips all HTML and keeps only text
+    return nh3.clean(
+        text,
+        tags=set(),
+        attributes={},
+        strip_comments=True,
+    )
+
+
 def clean_html(html: str) -> str:
     # Use nh3 (ammonia) to sanitize HTML; explicitly restrict URL schemes and strip comments.
     url_schemes = {"http", "https", "mailto", "tel"}

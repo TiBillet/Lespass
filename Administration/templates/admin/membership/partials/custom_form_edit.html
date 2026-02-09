@@ -118,6 +118,9 @@
                                             </option>
                                         {% endfor %}
                                     </select>
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        {% trans "Maintenez Ctrl (ou Cmd sur Mac) pour en sélectionner plusieurs." %}
+                                    </p>
 
                                 {# ST = Short Text (texte court) ou type par défaut → input text #}
                                 {% else %}
@@ -143,6 +146,8 @@
                     hx-get="/memberships/{{ membership.uuid }}/admin_cancel_edit/"
                     hx-target="#custom-form-edit-container-{{ membership.uuid }}"
                     hx-swap="outerHTML"
+                    data-testid="custom-form-cancel-btn"
+                    aria-label="{% trans "Annuler les modifications" %}"
                     class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                 {% trans "Annuler" %}
             </button>
@@ -150,6 +155,8 @@
             {# Bouton Enregistrer : soumet le formulaire via HTMX POST #}
             {# Save button: submit form via HTMX POST #}
             <button type="submit"
+                    data-testid="custom-form-save-btn"
+                    aria-label="{% trans "Enregistrer les modifications" %}"
                     class="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
                 {% trans "Enregistrer" %}
             </button>

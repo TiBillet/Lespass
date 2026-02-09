@@ -44,12 +44,21 @@ def build_custom_form_from_request(req_data, products, prefix: str = 'form__'):
     custom_form = {}
     try:
         product_fields_qs = ProductFormField.objects.filter(product__in=list(products))
-        product_fields = {ff.name: ff for ff in product_fields_qs}
     except Exception:
-        product_fields = {}
+        product_fields_qs = []
 
-    for name, ff in product_fields.items():
+    for ff in product_fields_qs:
+        name = ff.name
         key = f"{prefix}{name}"
+
+        # Robust lookup: try primary name, then UUID, then current label slug
+        if key not in req_data:
+            alt_keys = [f"{prefix}{ff.uuid}", f"{prefix}{slugify(ff.label)[:64]}"]
+            for ak in alt_keys:
+                if ak in req_data:
+                    key = ak
+                    break
+
         # Use label as the JSON key; fallback to name if label is empty
         label_key = (ff.label or '').strip() or name
         # MULTI SELECT → normalize to list
