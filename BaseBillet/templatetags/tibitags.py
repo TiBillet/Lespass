@@ -13,6 +13,13 @@ from fedow_connect.utils import dround as utils_dround
 register = template.Library()
 
 @register.filter
+def get_item(dictionary, key):
+    """Accès par clé dans un dict depuis un template / Dict key lookup from template"""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None
+
+@register.filter
 def strip_trailing_slash(value):
     """Supprime les / à la fin de la chaîne"""
     if isinstance(value, str):

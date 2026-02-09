@@ -3,10 +3,9 @@
 alias mm="poetry run python /DjangoFiles/manage.py migrate"
 alias sp="poetry run python manage.py tenant_command shell_plus --print-sql"
 
-alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002"
-alias rsptee="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
+alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
 
-alias guni="poetry run python /DjangoFiles/manage.py collectstatic --no-input && poetry run gunicorn TiBillet.wsgi --capture-output --reload -w 3 -b 0.0.0.0:8002"
+alias guni="poetry run python /DjangoFiles/manage.py collectstatic --no-input && poetry run gunicorn TiBillet.wsgi --capture-output --reload -w 3 -b 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
 
 alias cel="poetry run celery -A TiBillet worker -l INFO"
 

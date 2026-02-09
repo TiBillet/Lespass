@@ -2396,6 +2396,36 @@ class MembershipMVT(viewsets.ViewSet):
                 if product.max_per_user_reached(user=request.user):
                     return render(request, "reunion/views/membership/already_has_membership.html", context=context)
 
+            # Pré-remplissage du formulaire dynamique si l'user a déjà une adhésion avec custom_form
+            # Pre-fill dynamic form if user already has a membership with custom_form data
+            prefill = {}
+            if request.user.is_authenticated:
+                # On cherche la dernière adhésion de cet user pour ce produit qui a un custom_form rempli
+                # Find the most recent membership for this product that has custom_form data
+                last_membership = (
+                    Membership.objects
+                    .filter(
+                        user=request.user,
+                        price__product=product,
+                        custom_form__isnull=False,
+                    )
+                    .exclude(custom_form={})
+                    .order_by('-date_added')
+                    .first()
+                )
+                if last_membership:
+                    # On construit un dict name → valeur pour le template
+                    # Le JSON stocke avec le label comme clé, mais le template utilise field.name
+                    # Build a name → value mapping for the template
+                    # JSON stores with label as key, but template inputs use field.name
+                    stored_data = last_membership.custom_form
+                    for field in product.form_fields.all():
+                        label_key = (field.label or '').strip() or field.name
+                        if label_key in stored_data:
+                            prefill[field.name] = stored_data[label_key]
+
+            context['prefill'] = prefill
+
             return render(request, "reunion/views/membership/form.html", context=context)
 
         except Product.DoesNotExist:

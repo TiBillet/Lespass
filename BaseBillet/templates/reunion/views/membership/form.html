@@ -323,6 +323,7 @@
                             <input id="ff-{{ field.uuid }}" name="form__{{ field.name }}" type="text"
                                    class="form-control"
                                    placeholder="{{ field.label }}" {% if field.required %}required{% endif %}
+                                   {% if field.name in prefill %}value="{{ prefill|get_item:field.name }}"{% endif %}
                                    data-testid="membership-form-field-{{ field.name }}">
                             <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
                                 <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
@@ -335,7 +336,7 @@
                             <textarea id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-control"
                                       style="height: 120px"
                                       placeholder="{{ field.label }}"
-                                      {% if field.required %}required{% endif %} data-testid="membership-form-field-{{ field.name }}"></textarea>
+                                      {% if field.required %}required{% endif %} data-testid="membership-form-field-{{ field.name }}">{% if field.name in prefill %}{{ prefill|get_item:field.name }}{% endif %}</textarea>
                             <label for="ff-{{ field.uuid }}">{{ field.label }}{% if field.required %}
                                 <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             {% if field.help_text %}
@@ -348,9 +349,9 @@
                                 <span class="text-danger" aria-hidden="true">*</span>{% endif %}</label>
                             <select id="ff-{{ field.uuid }}" name="form__{{ field.name }}" class="form-select"
                                     {% if field.required %}required{% endif %} data-testid="membership-form-field-{{ field.name }}">
-                                <option value="" {% if field.required %}disabled selected{% endif %}>—</option>
+                                <option value="" {% if field.required and field.name not in prefill %}disabled selected{% endif %}>—</option>
                                 {% for opt in field.options %}
-                                    <option value="{{ opt }}">{{ opt }}</option>
+                                    <option value="{{ opt }}" {% if field.name in prefill and prefill|get_item:field.name == opt %}selected{% endif %}>{{ opt }}</option>
                                 {% endfor %}
                             </select>
                             {% if field.help_text %}
@@ -368,6 +369,7 @@
                                     <input class="form-check-input" type="radio"
                                            id="ff-{{ field.uuid }}-{{ forloop.counter }}"
                                            name="form__{{ field.name }}" value="{{ opt }}"
+                                           {% if field.name in prefill and prefill|get_item:field.name == opt %}checked{% endif %}
                                            {% if field.required and forloop.first %}required{% endif %}
                                            data-testid="membership-form-field-{{ field.name }}">
                                     <label class="form-check-label"
@@ -385,6 +387,7 @@
                              data-testid="membership-form-group-{{ field.name }}">
                             <input class="form-check-input" type="checkbox" role="switch"
                                    id="ff-{{ field.uuid }}" name="form__{{ field.name }}" value="on"
+                                   {% if field.name in prefill and prefill|get_item:field.name %}checked{% endif %}
                                    {% if field.required %}required aria-required="true"{% endif %}
                                    data-testid="membership-form-field-{{ field.name }}">
                             <label class="form-check-label" for="ff-{{ field.uuid }}">
@@ -412,6 +415,7 @@
                                     <input class="form-check-input" type="checkbox"
                                            id="ff-{{ field.uuid }}-{{ forloop.counter }}"
                                            name="form__{{ field.name }}" value="{{ opt }}"
+                                           {% if field.name in prefill and opt in prefill|get_item:field.name %}checked{% endif %}
                                            {% if field.required %}aria-required="true"{% endif %}
                                            data-testid="membership-form-field-{{ field.name }}">
                                     <label class="form-check-label"
