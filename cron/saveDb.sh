@@ -11,6 +11,8 @@ export PGPASSWORD=$POSTGRES_PASSWORD
 export PGUSER=$POSTGRES_USER
 export PGHOST=lespass_postgres
 
+# Dans le cas d'un nouveau dépot BorgWarehouse ou d'un déplacement depuis ancienne méthode :
+# Ajouter l'adresse et une clé dans le .env ( l'adresse se récupère sur le front de BWH )
 # borg init --encryption=repokey-blake2 $BORG_REPO
 # borg init --encryption=repokey-blake2 /Backup/borg
 
