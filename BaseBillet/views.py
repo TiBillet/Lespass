@@ -1430,7 +1430,7 @@ def index(request):
     # On redirige vers la page d'adhésion en attendant que les events soient disponibles
     tenant: Client = connection.tenant
     if tenant.categorie in [Client.WAITING_CONFIG, Client.ROOT]:
-        return HttpResponseRedirect('https://tibillet.org/')
+        return HttpResponseRedirect('https://tibilletbts.org/')
 
     template_context = get_context(request)
     return render(request, "reunion/views/home.html", context=template_context)
