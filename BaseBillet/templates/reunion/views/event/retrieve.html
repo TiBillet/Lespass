@@ -110,7 +110,10 @@
             <h1 class="mt-3">
                 <small>
                     {{ event.datetime|date:'l j F'|capfirst }} <br/>
-                    {{ event.datetime|time:'H\hi' }} <br/>
+                    
+                    {% if event.show_time %}
+                        {{ event.datetime|time:'H\hi' }} <br/>
+                    {% endif %}
                 </small>
                 {{ event.name }}
             </h1>
