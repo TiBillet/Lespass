@@ -13,9 +13,11 @@
     </h2>
     {% for event in events %}
         <div class="row align-items-center mb-3">
-            <div class="col-md-auto">
-                <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
-            </div>
+            {% if event.show_time %}
+                <div class="col-md-auto">
+                    <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
+                </div>
+            {% endif %}
             <div class="col-auto py-3" style="width: 140px">
                 {% include 'reunion/partials/picture.html' with img=event.get_sticker_img alt=event.name ratio='4x3' class='rounded' %}
             </div>
@@ -36,6 +38,13 @@
                     {{ event.name }}
                 </a>
                 {% endif %}
+
+                {% if event.short_description %}
+                    <div class="text-muted">
+                        {{ event.short_description }}
+                    </div>
+                {% endif %}
+
                 
                 <div class="small text-muted mb-2">
                     {% if event_domain != current_domain %}
