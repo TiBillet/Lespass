@@ -2596,6 +2596,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 # 'categorie',
                 'datetime',
                 'end_datetime',
+                'show_time',
                 'img',
                 'sticker_img',
                 'carrousel',
@@ -2631,6 +2632,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # 'categorie',
         'display_valid_tickets_count',
         'datetime',
+        'show_time',
         'published',
     ]
 
