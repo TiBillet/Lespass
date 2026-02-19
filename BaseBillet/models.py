@@ -1292,6 +1292,8 @@ class Event(models.Model):
                                     "The small image displayed in the events list. If None, img will be displayed. 4x3 ratio.")
                                 )
 
+    show_time = models.BooleanField(default=True, verbose_name=_("Afficher l'heure de l'évènement"))
+
     def get_social_card(self):
         # Cache key based on instance ID and method name
         cache_key = f'event_get_social_card_{self.pk}'
