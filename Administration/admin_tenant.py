@@ -33,6 +33,7 @@ from django.views.decorators.http import require_POST
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
+from import_export import resources
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -2565,6 +2566,28 @@ class EventArchiveFilter(admin.SimpleListFilter):
         return queryset
 
 
+# Import/Export Resource pour Event
+class EventResource(resources.ModelResource):
+    """Ressource d'import/export pour les événements.
+    
+    Clés uniques: (name, datetime) - identifie si on crée ou met à jour.
+    """
+    class Meta:
+        model = Event
+        import_id_fields = ('name', 'datetime')
+        fields = (
+            'name', 'datetime', 'end_datetime', 'jauge_max', 'max_per_user',
+            'short_description', 'long_description', 'published', 'archived',
+            'private', 'show_time', 'show_gauge', 'slug', 'is_external',
+            'full_url', 'postal_address', 'reservation_button_name',
+            'minimum_cashless_required'
+        )
+        widgets = {
+            'datetime': {'format': '%Y-%m-%d %H:%M:%S'},
+            'end_datetime': {'format': '%Y-%m-%d %H:%M:%S'},
+        }
+
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
@@ -2572,6 +2595,12 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     warn_unsaved_form = True  # Default: False
     date_hierarchy = "datetime"
     ordering = ("-datetime",)
+    
+    # Import/Export configuration
+    resource_classes = [EventResource]
+    export_form_class = ExportForm
+    import_form_class = ImportForm
+    
     # Unfold sections (expandable rows)
     list_sections = [
         EventPricesSummaryTable,
@@ -2596,6 +2625,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 # 'categorie',
                 'datetime',
                 'end_datetime',
+                'show_time',
                 'img',
                 'sticker_img',
                 'carrousel',
@@ -2631,6 +2661,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # 'categorie',
         'display_valid_tickets_count',
         'datetime',
+        'show_time',
         'published',
     ]
 
