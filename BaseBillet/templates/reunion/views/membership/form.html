@@ -63,6 +63,7 @@
                                    type="number"
                                    name="custom_amount_{{ price.uuid }}"
                                    min="{{ price.prix }}"
+                                   max="999999.99"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
                                    aria-describedby="custom-amount-help-{{ price.uuid }}"
@@ -161,6 +162,7 @@
                                    type="number"
                                    name="custom_amount_{{ price.uuid }}"
                                    min="{{ price.prix }}"
+                                   max="999999.99"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
                                    aria-describedby="custom-amount-help-{{ price.uuid }}"
@@ -508,6 +510,11 @@
                         if (container) {
                             const input = container.querySelector('.custom-amount-input');
                             if (input && !input.value) {
+                                okFreePrice = false;
+                                input.classList.add('is-invalid');
+                                input.focus();
+                            } else if (input && parseFloat(input.value) > 999999.99) {
+                                // Montant trop élevé / Amount too high
                                 okFreePrice = false;
                                 input.classList.add('is-invalid');
                                 input.focus();

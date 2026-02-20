@@ -2639,7 +2639,7 @@ class Membership(models.Model):
     current_iteration = models.IntegerField(null=True, blank=True)
 
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Presence"))
-    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
+    contribution_value = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,

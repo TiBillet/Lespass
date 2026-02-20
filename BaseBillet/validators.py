@@ -420,6 +420,12 @@ class ReservationValidator(serializers.Serializer):
                                     raise serializers.ValidationError({
                                         custom_amount_key: [_('The amount must be greater than the minimum amount.')]
                                     })
+
+                                # Validation du montant maximum / Maximum amount validation
+                                if amount > Decimal('999999.99'):
+                                    raise serializers.ValidationError({
+                                        custom_amount_key: [_('The amount is too high.')]
+                                    })
                                 
                                 self.custom_amounts[price.uuid] = amount
                                 
@@ -765,6 +771,10 @@ class MembershipValidator(serializers.Serializer):
             if self.price.prix and amount < self.price.prix:
                 logger.info(f"Open price {amount} below minimum {self.price.prix}")
                 raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
+
+            # Validation du montant maximum / Maximum amount validation
+            if amount > Decimal('999999.99'):
+                raise serializers.ValidationError(_('The amount is too high.'))
 
         # Création/Récupération de l'utilisateur après validation des champs
         # Create/Retrieve user after field validation (anti-spam)

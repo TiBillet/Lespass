@@ -1804,15 +1804,23 @@ def refill_from_lespass_to_user_wallet_from_ticket_scanned(ticket_pk):
                     metadata=metadata,
                 )
 
-                # add to metadata for trace
-                ticket.metadata["rewarded_from_ticket_scanned"] = {
+                # Mise à jour du dict local metadata avec les détails de la transaction
+                # Update local metadata dict with transaction details
+                # On utilise la variable locale "metadata" (pas ticket.metadata directement)
+                # car ticket.metadata peut être None en base — cf. JSONField(null=True)
+                # We use the local "metadata" variable (not ticket.metadata directly)
+                # because ticket.metadata can be None in DB — see JSONField(null=True)
+                metadata["rewarded_from_ticket_scanned"] = {
                     "transaction_uuid": str(reward_tx.get("uuid")),
                     "hash": reward_tx.get("hash"),
                     "asset": str(asset.uuid),
                     "amount": int(amount),
                     "sent_at": timezone.now().isoformat(),
                 }
-                logger.info(f"    TASKS TICKET SCANNED -> Fedow reward sent: {ticket.metadata['fedow_reward']}")
+                # On réaffecte ticket.metadata avec le dict local enrichi avant le save
+                # We reassign ticket.metadata with the enriched local dict before saving
+                ticket.metadata = metadata
+                logger.info(f"    TASKS TICKET SCANNED -> Fedow reward sent: {ticket.metadata['rewarded_from_ticket_scanned']}")
                 ticket.save(update_fields=["metadata"])
 
     except Exception as e:

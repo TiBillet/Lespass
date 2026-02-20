@@ -182,7 +182,7 @@ cd tests/playwright
 yarn install && yarn playwright install
 
 # Un test a la fois (toujours --workers=1). Ne jamais lancer tous les tests d'un coup.
-yarn playwright test --project=chromium --headed --slow-mo=300 --workers=1 tests/01-login.spec.ts
+yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
 ```
 
 Les tests sont numerotes pour l'ordre d'execution (01 a 24+). Carte Stripe test : `4242 4242 4242 4242`, nom : Douglas Adams, exp : 12/42, CVC : 424.
