@@ -1763,7 +1763,7 @@ def trigger_product_update_tasks(product_pk):
                     'Origin': config.domain(),
                 },
                 data={"product_pk": product.pk},
-                timeout=1,
+                timeout=10,
                 verify=bool(not settings.DEBUG),
             )
             logger.info(f"    send_to_laboutik : {send_to_laboutik.status_code} {send_to_laboutik.text}")
