@@ -45,7 +45,7 @@
                 <ul class="list-group list-group-horizontal-xl w-100">
                     <li class="list-group-item border-start-0 border-end-0 rounded-0 px-0 py-3 p-xl-5">
                         <i class="bi bi-calendar-check me-3"></i>
-                        {% if event.show_time %} 
+                        {% if event.show_time %}
                         {{ event.datetime|date:'j F Y, H:i' }}
                         {% else %}
                         {{ event.datetime|date:'j F Y' }}

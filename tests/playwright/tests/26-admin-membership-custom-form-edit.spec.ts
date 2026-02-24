@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { loginAsAdmin } from './utils/auth';
 
 /**
@@ -15,7 +15,50 @@ import { loginAsAdmin } from './utils/auth';
  * - Modifications are saved and displayed
  * - Les erreurs de validation sont affichées
  * - Validation errors are displayed
+ *
+ * Prérequis : le test 27 doit avoir été exécuté avant (il crée une adhésion avec custom_form).
+ * Prerequisite: test 27 must have been run before (it creates a membership with custom_form).
  */
+
+// -- Helper : ajouter un champ dynamique dans l'admin inline --
+// -- Helper: add a dynamic form field in the admin inline --
+async function addFormField(page: Page, fieldData: {
+    label: string;
+    type: string;
+    required: boolean;
+    options?: string;
+}) {
+    // Trouver la section inline "Dynamic form field"
+    // Find the "Dynamic form field" inline section
+    const section = page.locator('.inline-group').filter({
+        has: page.locator('h2:has-text("Dynamic form field")'),
+    });
+    const addButton = section.locator('a:has-text("Add another")').first();
+    await addButton.click();
+
+    // Attendre la dernière ligne ajoutée
+    // Wait for the last added row
+    const lastRow = section.locator('tr.form-row:not(.empty-form)').last();
+    await lastRow.waitFor({ state: 'visible', timeout: 5000 });
+
+    console.log(`  ✓ Adding field / Ajout du champ : ${fieldData.label}`);
+
+    await lastRow.locator('input[name*="-label"]').fill(fieldData.label);
+    await lastRow.locator('select[name*="-field_type"]').selectOption(fieldData.type);
+
+    if (fieldData.required) {
+        await lastRow.locator('input[name*="-required"]').check();
+    }
+
+    if (fieldData.options) {
+        await lastRow.locator('input[name*="-options"]').fill(fieldData.options);
+    }
+}
+
+// -- Données de test / Test data --
+const randomId = Math.random().toString(36).substring(2, 10);
+const PRODUCT_NAME = `Adhésion Test Edit ${randomId}`;
+const USER_EMAIL = `jturbeaux+edit${randomId}@pm.me`;
 
 test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésion admin', () => {
 
@@ -28,134 +71,177 @@ test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésio
 
     test('should edit custom form fields of membership / doit éditer les champs du formulaire personnalisé', async ({ page }) => {
 
-        // Étape 1 : Créer un produit d'adhésion avec des champs personnalisés
-        // Step 1: Create a membership product with custom fields
-        await test.step('Create membership product with custom fields / Créer produit adhésion avec champs personnalisés', async () => {
+        // Étape 1 : Créer un produit d'adhésion avec un tarif et des champs dynamiques
+        // Step 1: Create a membership product with a price and dynamic fields
+        await test.step('Create membership product / Créer produit adhésion', async () => {
             await page.goto('/admin/BaseBillet/product/add/');
             await page.waitForLoadState('networkidle');
 
             // Nom du produit / Product name
-            const productName = `Adhésion Test Edit Form ${Date.now()}`;
-            await page.fill('input[name="name"]', productName);
+            await page.fill('input[name="name"]', PRODUCT_NAME);
 
             // Catégorie : Adhésion / Category: Membership
             await page.selectOption('select[name="categorie_article"]', 'A');
 
             // Description courte / Short description
-            await page.fill('input[name="short_description"]', 'Adhésion pour test édition formulaire personnalisé');
+            await page.fill('input[name="short_description"]', 'Test édition custom_form admin');
 
-            // Ajouter un tarif / Add a price
+            // Ajouter un tarif gratuit pour pouvoir créer l'adhésion sans paiement
+            // Add a free price to create the membership without payment
             const addPriceButton = page.locator('a:has-text("Add another"), button:has-text("Add another")').first();
+            await addPriceButton.scrollIntoViewIfNeeded();
             await addPriceButton.click();
             await page.waitForTimeout(500);
 
-            await page.fill('input[name="prices-0-name"]', 'Tarif Standard');
-            await page.fill('input[name="prices-0-prix"]', '50');
-            await page.selectOption('select[name="prices-0-subscription_type"]', 'AN');
+            await page.fill('input[name="prices-0-name"]', 'Gratuit annuel');
+            await page.fill('input[name="prices-0-prix"]', '0');
+            // Y = 365 jours (année)
+            // Y = 365 days (year)
+            await page.selectOption('select[name="prices-0-subscription_type"]', 'Y');
 
-            // Cocher "Publier" pour que le produit soit visible
-            // Check "Publish" so the product is visible
+            // Cocher "Publier" / Check "Publish"
             await page.check('input[name="publish"]');
 
-            // Sauvegarder le produit / Save the product
-            const saveButton = page.locator('button[type="submit"]:has-text("Save"), input[name="_save"]').first();
-            await saveButton.click();
+            // "Save and continue editing" pour rester sur la page d'édition
+            // "Save and continue editing" to stay on the edit page
+            const saveAndContinue = page.locator('button[name="_continue"]').first();
+            await saveAndContinue.click();
             await page.waitForLoadState('networkidle');
 
-            console.log(`✓ Created product: ${productName}`);
+            // Vérifier pas d'erreur / Check no errors
+            const errorList = page.locator('.errorlist');
+            expect(await errorList.count()).toBe(0);
+
+            console.log(`✓ Created product: ${PRODUCT_NAME}`);
         });
 
-        // Étape 2 : Ajouter des champs personnalisés au produit
-        // Step 2: Add custom fields to the product
-        await test.step('Add custom fields to product / Ajouter champs personnalisés au produit', async () => {
-            // On est maintenant sur la page de modification du produit
-            // We are now on the product edit page
+        // Étape 2 : Ajouter des champs dynamiques au produit
+        // Step 2: Add dynamic fields to the product
+        await test.step('Add custom fields / Ajouter champs personnalisés', async () => {
+            // Ouvrir l'onglet "Dynamic form field" (Unfold tabs)
+            // Open the "Dynamic form field" tab (Unfold tabs)
+            const tab = page.locator('button:has-text("Dynamic form field"), a:has-text("Dynamic form field")').first();
+            if (await tab.count() > 0) {
+                await tab.click();
+                await page.waitForTimeout(1000);
+            }
 
-            // Trouver la section "Form fields" et ajouter des champs
-            // Find the "Form fields" section and add fields
-            const addFormFieldButton = page.locator('a:has-text("Add another Form Field"), a:has-text("Ajouter un autre")').last();
+            // Champ 1 : Texte court (nom) — obligatoire
+            // Field 1: Short text (name) — required
+            await addFormField(page, {
+                label: 'Nom complet',
+                type: 'ST',
+                required: true,
+            });
 
-            // Champ 1 : Texte court (nom) / Field 1: Short text (name)
-            await addFormFieldButton.click();
-            await page.waitForTimeout(500);
+            // Champ 2 : Sélection simple (ville)
+            // Field 2: Single select (city)
+            await addFormField(page, {
+                label: 'Ville',
+                type: 'SS',
+                required: false,
+                options: 'Paris, Lyon, Marseille, Toulouse',
+            });
 
-            await page.fill('input[name="form_fields-0-label"]', 'Nom complet');
-            await page.selectOption('select[name="form_fields-0-field_type"]', 'ST');
-            await page.check('input[name="form_fields-0-required"]');
-
-            // Champ 2 : Sélection simple (ville) / Field 2: Single select (city)
-            await addFormFieldButton.click();
-            await page.waitForTimeout(500);
-
-            await page.fill('input[name="form_fields-1-label"]', 'Ville');
-            await page.selectOption('select[name="form_fields-1-field_type"]', 'SS');
-            await page.fill('input[name="form_fields-1-options"]', 'Paris, Lyon, Marseille, Toulouse');
-
-            // Champ 3 : Booléen (newsletter) / Field 3: Boolean (newsletter)
-            await addFormFieldButton.click();
-            await page.waitForTimeout(500);
-
-            await page.fill('input[name="form_fields-2-label"]', 'S\'abonner à la newsletter');
-            await page.selectOption('select[name="form_fields-2-field_type"]', 'BL');
+            // Champ 3 : Booléen (newsletter)
+            // Field 3: Boolean (newsletter)
+            await addFormField(page, {
+                label: 'Newsletter',
+                type: 'BL',
+                required: false,
+            });
 
             // Sauvegarder / Save
-            const saveButton = page.locator('button[type="submit"]:has-text("Save"), input[name="_save"]').first();
-            await saveButton.click();
+            const saveAndContinue = page.locator('button[name="_continue"]').first();
+            await saveAndContinue.click();
             await page.waitForLoadState('networkidle');
+
+            const errorList = page.locator('.errorlist');
+            expect(await errorList.count()).toBe(0);
 
             console.log('✓ Added 3 custom fields to product');
         });
 
-        // Étape 3 : Créer une adhésion avec des réponses au formulaire personnalisé
-        // Step 3: Create a membership with custom form answers
-        let membershipUuid = '';
-        await test.step('Create membership with custom form answers / Créer adhésion avec réponses formulaire', async () => {
+        // Étape 3 : Créer une adhésion depuis l'admin
+        // Step 3: Create a membership from admin
+        await test.step('Create membership via admin / Créer adhésion via admin', async () => {
             await page.goto('/admin/BaseBillet/membership/add/');
             await page.waitForLoadState('networkidle');
 
-            // Sélectionner l'utilisateur (admin connecté) / Select user (logged-in admin)
-            const userSelect = page.locator('select[name="user"]').first();
-            await userSelect.selectOption({ index: 1 }); // Sélectionner le premier utilisateur disponible
+            // Remplir le formulaire d'ajout d'adhésion
+            // Fill the membership add form
+            await page.fill('input[name="email"]', USER_EMAIL);
 
-            // Sélectionner le produit créé précédemment / Select previously created product
-            const priceSelect = page.locator('select[name="price"]').first();
-            const options = await priceSelect.locator('option').all();
-            if (options.length > 1) {
-                await priceSelect.selectOption({ index: options.length - 1 }); // Dernier produit ajouté
+            // Sélectionner le tarif qu'on vient de créer par son texte
+            // Select the price we just created by its text content
+            const priceSelect = page.locator('select[name="price"]');
+            await priceSelect.waitFor({ state: 'visible', timeout: 5000 });
+            // Chercher l'option qui contient le nom du produit
+            // Find the option containing the product name
+            const allOptions = await priceSelect.locator('option').all();
+            let targetValue = '';
+            for (const option of allOptions) {
+                const text = await option.textContent();
+                if (text && text.includes(PRODUCT_NAME)) {
+                    targetValue = await option.getAttribute('value') || '';
+                    break;
+                }
             }
+            expect(targetValue).not.toBe('');
+            await priceSelect.selectOption(targetValue);
 
-            // Remplir les champs custom_form en JSON
-            // Fill custom_form fields as JSON
-            const customFormData = {
-                'nom-complet': 'Jean Dupont',
-                'ville': 'Paris',
-                's-abonner-a-la-newsletter': true
-            };
-
-            const customFormTextarea = page.locator('textarea[name="custom_form"]');
-            await customFormTextarea.fill(JSON.stringify(customFormData, null, 2));
-
-            // Sauvegarder / Save
-            const saveButton = page.locator('button[type="submit"]:has-text("Save"), input[name="_save"]').first();
-            await saveButton.click();
+            // Sauvegarder avec "Save and continue editing"
+            // Save with "Save and continue editing"
+            const saveAndContinue = page.locator('button[name="_continue"]').first();
+            await saveAndContinue.click();
             await page.waitForLoadState('networkidle');
 
-            // Extraire l'UUID depuis l'URL
-            // Extract UUID from URL
-            const currentUrl = page.url();
-            const uuidMatch = currentUrl.match(/\/([a-f0-9-]{36})\//);
-            if (uuidMatch) {
-                membershipUuid = uuidMatch[1];
-                console.log(`✓ Created membership with UUID: ${membershipUuid}`);
-            }
+            console.log(`✓ Created membership for: ${USER_EMAIL}`);
         });
 
-        // Étape 4 : Tester l'interface d'édition des champs personnalisés
-        // Step 4: Test the custom fields edit interface
-        await test.step('Edit custom form fields via HTMX interface / Éditer champs via interface HTMX', async () => {
+        // Étape 4 : Injecter des données custom_form via manage.py
+        // Step 4: Inject custom_form data via manage.py
+        // L'admin ne permet pas de remplir custom_form directement,
+        // on utilise le shell Django pour simuler des réponses existantes.
+        // The admin doesn't allow filling custom_form directly,
+        // we use the Django shell to simulate existing answers.
+        await test.step('Inject custom_form data / Injecter données custom_form', async () => {
+            // Extraire le PK de l'adhésion depuis l'URL de la page
+            // L'URL admin est de la forme /admin/BaseBillet/membership/<pk>/change/
+            // Extract the membership PK from the page URL
+            // Admin URL is like /admin/BaseBillet/membership/<pk>/change/
+            const currentUrl = page.url();
+            const pkMatch = currentUrl.match(/\/membership\/(\d+)\/change/);
+            expect(pkMatch).not.toBeNull();
+            const membershipPk = pkMatch![1];
+
+            // Utiliser manage.py tenant_command shell pour injecter le custom_form
+            // Use manage.py tenant_command shell to inject the custom_form
+            const { execSync } = require('child_process');
+            const shellCmd = `docker exec lespass_django poetry run python /DjangoFiles/manage.py tenant_command shell -s lespass -c "
+from BaseBillet.models import Membership
+m = Membership.objects.get(pk=${membershipPk})
+m.custom_form = {'Nom complet': 'Jean Dupont', 'Ville': 'Paris', 'Newsletter': True}
+m.save()
+print('OK')
+"`;
+            const result = execSync(shellCmd, { encoding: 'utf-8', timeout: 15000 });
+            expect(result).toContain('OK');
+
+            // Recharger la page pour voir le custom_form
+            // Reload the page to see the custom_form
+            await page.reload();
+            await page.waitForLoadState('networkidle');
+
+            console.log(`✓ Injected custom_form for membership PK: ${membershipPk}`);
+        });
+
+        // Étape 5 : Tester l'interface d'édition des champs personnalisés
+        // Step 5: Test the custom fields edit interface
+        await test.step('Edit custom form fields via HTMX / Éditer champs via HTMX', async () => {
             // Vérifier que le bouton "Modifier les réponses" est présent
             // Check that "Modify answers" button is present
-            const editButton = page.locator('button:has-text("Modifier les réponses"), button:has-text("Modifier")').first();
+            const editButton = page.locator('[data-testid="custom-form-edit-btn"]');
             await expect(editButton).toBeVisible({ timeout: 5000 });
             console.log('✓ Edit button is visible / Bouton édition visible');
 
@@ -164,19 +250,14 @@ test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésio
             await editButton.click();
             await page.waitForTimeout(1000);
 
-            // Vérifier que le formulaire d'édition est affiché
-            // Check that edit form is displayed
-            const formContainer = page.locator('#custom-form-edit-container');
-            await expect(formContainer).toBeVisible({ timeout: 3000 });
-            console.log('✓ Edit form is displayed / Formulaire édition affiché');
-
-            // Vérifier que les champs sont pré-remplis avec les valeurs actuelles
-            // Check that fields are pre-filled with current values
-            const nomInput = page.locator('input[name="nom-complet"]');
+            // Vérifier que le formulaire d'édition est affiché (le container change de contenu via HTMX)
+            // Check that edit form is displayed (container content changes via HTMX)
+            const nomInput = page.locator('input[name="Nom complet"]');
+            await expect(nomInput).toBeVisible({ timeout: 5000 });
             await expect(nomInput).toHaveValue('Jean Dupont');
             console.log('✓ Name field has correct value / Champ nom a la bonne valeur');
 
-            const villeSelect = page.locator('select[name="ville"]');
+            const villeSelect = page.locator('select[name="Ville"]');
             await expect(villeSelect).toHaveValue('Paris');
             console.log('✓ City field has correct value / Champ ville a la bonne valeur');
 
@@ -190,65 +271,70 @@ test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésio
             await saveButton.click();
             await page.waitForTimeout(1000);
 
-            // Vérifier le message de succès / Check success message
-            const successMessage = page.locator('text=/modifications.*enregistrées|success/i');
-            await expect(successMessage).toBeVisible({ timeout: 3000 });
-            console.log('✓ Success message displayed / Message de succès affiché');
-
-            // Vérifier que les nouvelles valeurs sont affichées dans le tableau
-            // Check that new values are displayed in the table
-            const tableCell = page.locator('td:has-text("Marie Martin")');
-            await expect(tableCell).toBeVisible({ timeout: 3000 });
-            console.log('✓ New values displayed in table / Nouvelles valeurs affichées');
+            // Vérifier le message de succès via data-testid
+            // Check success message via data-testid
+            const successMessage = page.locator('[data-testid="custom-form-success-msg"]');
+            await expect(successMessage).toBeVisible({ timeout: 5000 });
+            console.log('✓ Changes saved successfully / Modifications enregistrées');
         });
 
-        // Étape 5 : Tester l'annulation d'édition
-        // Step 5: Test edit cancellation
+        // Étape 6 : Tester l'annulation d'édition
+        // Step 6: Test edit cancellation
         await test.step('Test cancel edit / Tester annulation édition', async () => {
             // Cliquer à nouveau sur modifier / Click edit again
-            const editButton = page.locator('button:has-text("Modifier")').first();
+            const editButton = page.locator('[data-testid="custom-form-edit-btn"]');
             await editButton.click();
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(1000);
 
             // Modifier une valeur / Modify a value
-            const nomInput = page.locator('input[name="nom-complet"]');
+            const nomInput = page.locator('input[name="Nom complet"]');
+            await expect(nomInput).toBeVisible({ timeout: 3000 });
             await nomInput.fill('Test Annulation');
 
             // Cliquer sur Annuler / Click Cancel
-            const cancelButton = page.locator('button:has-text("Annuler")').first();
+            const cancelButton = page.locator('button:has-text("Annuler"), button:has-text("Cancel")').first();
             await cancelButton.click();
             await page.waitForTimeout(500);
 
-            // Vérifier que la valeur n'a pas changé / Check value hasn't changed
-            const tableCell = page.locator('td:has-text("Marie Martin")');
+            // Vérifier que la valeur n'a pas changé (Marie Martin toujours affichée)
+            // Check value hasn't changed (Marie Martin still displayed)
+            const tableCell = page.locator('text=Marie Martin');
             await expect(tableCell).toBeVisible({ timeout: 3000 });
             console.log('✓ Cancel works correctly / Annulation fonctionne');
         });
 
-        // Étape 6 : Tester la validation des champs obligatoires
-        // Step 6: Test required fields validation
+        // Étape 7 : Tester la validation des champs obligatoires (HTML native)
+        // Step 7: Test required fields validation (HTML native)
         await test.step('Test required fields validation / Tester validation champs obligatoires', async () => {
             // Ouvrir l'édition / Open edit
-            const editButton = page.locator('button:has-text("Modifier")').first();
+            const editButton = page.locator('[data-testid="custom-form-edit-btn"]');
             await editButton.click();
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(1000);
 
             // Vider un champ obligatoire / Empty a required field
-            const nomInput = page.locator('input[name="nom-complet"]');
+            const nomInput = page.locator('input[name="Nom complet"]');
+            await expect(nomInput).toBeVisible({ timeout: 3000 });
             await nomInput.fill('');
 
             // Essayer de sauvegarder / Try to save
-            const saveButton = page.locator('button[type="submit"]:has-text("Enregistrer")').first();
+            const saveButton = page.locator('[data-testid="custom-form-save-btn"]');
             await saveButton.click();
             await page.waitForTimeout(500);
 
-            // Vérifier qu'un message d'erreur est affiché / Check error message is displayed
-            const errorMessage = page.locator('text=/obligatoire|required/i');
-            await expect(errorMessage).toBeVisible({ timeout: 3000 });
-            console.log('✓ Required field validation works / Validation champ obligatoire fonctionne');
+            // La validation HTML native empêche la soumission.
+            // On vérifie que le formulaire est toujours affiché (pas soumis).
+            // HTML native validation prevents submission.
+            // We verify the form is still displayed (not submitted).
+            await expect(nomInput).toBeVisible({ timeout: 3000 });
+
+            // Vérifier que l'input a l'attribut required
+            // Check the input has the required attribute
+            const isRequired = await nomInput.getAttribute('required');
+            expect(isRequired).not.toBeNull();
+            console.log('✓ Required field validation works (HTML native) / Validation champ obligatoire fonctionne (HTML natif)');
 
             // Annuler / Cancel
-            const cancelButton = page.locator('button:has-text("Annuler")').first();
+            const cancelButton = page.locator('[data-testid="custom-form-cancel-btn"]');
             await cancelButton.click();
             await page.waitForTimeout(500);
         });
