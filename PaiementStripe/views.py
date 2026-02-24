@@ -181,13 +181,25 @@ class CreationPaiementStripe():
         try:
             checkout_session = stripe.checkout.Session.create(**data_checkout)
         except InvalidRequestError as e:
-            # L'id stripe d'un prix est mauvais.
-            # Probablement dû à un changement d'état de test/prod.
-            # On force là creation de nouvel ID en relançant la boucle self.line_items avec force=True
             logger.warning(f"InvalidRequestError on checkout session creation : {e}")
-            self.line_items = self._set_stripe_line_items(force=True)
-            data_checkout = self.dict_checkout_creator()
-            checkout_session = stripe.checkout.Session.create(**data_checkout)
+
+            # Si l'erreur concerne sepa_debit, on retire ce moyen de paiement et on reessaie
+            # If the error is about sepa_debit, remove it and retry
+            if 'sepa_debit' in str(e):
+                logger.warning("SEPA debit rejected by Stripe, retrying without it")
+                data_checkout['payment_method_types'] = ['card']
+                # Desactiver le flag pour eviter les prochaines erreurs
+                # Disable the flag to prevent future errors
+                self.config.stripe_accept_sepa = False
+                self.config.save(update_fields=['stripe_accept_sepa'])
+                checkout_session = stripe.checkout.Session.create(**data_checkout)
+            else:
+                # L'id stripe d'un prix est mauvais.
+                # Probablement du a un changement d'etat de test/prod.
+                # On force la creation de nouvel ID en relancant la boucle self.line_items avec force=True
+                self.line_items = self._set_stripe_line_items(force=True)
+                data_checkout = self.dict_checkout_creator()
+                checkout_session = stripe.checkout.Session.create(**data_checkout)
 
         logger.info(" ")
         logger.info("-" * 40)

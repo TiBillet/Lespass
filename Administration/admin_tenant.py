@@ -33,7 +33,8 @@ from django.views.decorators.http import require_POST
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
-from import_export import resources
+from import_export import resources, fields
+from import_export.widgets import ForeignKeyWidget
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -2572,11 +2573,31 @@ class EventArchiveFilter(admin.SimpleListFilter):
 
 
 # Import/Export Resource pour Event
+# Resource for CSV import/export of events in admin
 class EventResource(resources.ModelResource):
     """Ressource d'import/export pour les événements.
-    
-    Clés uniques: (name, datetime) - identifie si on crée ou met à jour.
+    Resource for import/export of events.
+
+    Clés uniques: (name, datetime) — identifie si on crée ou met à jour.
+    Unique keys: (name, datetime) — determines create vs update.
+
+    Les ForeignKey (postal_address) sont exportées en clair (nom lisible).
+    ForeignKey fields (postal_address) are exported as human-readable names.
+
+    Les ManyToMany (products, tag) ne sont pas gérés ici.
+    ManyToMany fields (products, tag) are not handled here.
+    Il faudrait un widget M2MWidget personnalisé pour les gérer.
+    A custom M2MWidget would be needed to handle them.
     """
+
+    # postal_address : on exporte/importe le nom de l'adresse au lieu de l'ID
+    # postal_address: export/import the address name instead of the raw PK
+    postal_address = fields.Field(
+        column_name='postal_address',
+        attribute='postal_address',
+        widget=ForeignKeyWidget(PostalAddress, field='name'),
+    )
+
     class Meta:
         model = Event
         import_id_fields = ('name', 'datetime')
@@ -2585,12 +2606,21 @@ class EventResource(resources.ModelResource):
             'short_description', 'long_description', 'published', 'archived',
             'private', 'show_time', 'show_gauge', 'slug', 'is_external',
             'full_url', 'postal_address', 'reservation_button_name',
-            'minimum_cashless_required'
+            'minimum_cashless_required',
         )
+        # Ordre des colonnes dans le CSV exporté
+        # Column order in the exported CSV
+        export_order = fields
         widgets = {
             'datetime': {'format': '%Y-%m-%d %H:%M:%S'},
             'end_datetime': {'format': '%Y-%m-%d %H:%M:%S'},
         }
+        # Ne pas lever d'erreur sur les lignes invalides, les ignorer
+        # Skip invalid rows instead of raising errors
+        skip_unchanged = True
+        # Afficher un diff des changements avant import
+        # Show a diff of changes before import
+        report_skipped = True
 
 
 @admin.register(Event, site=staff_admin_site)
