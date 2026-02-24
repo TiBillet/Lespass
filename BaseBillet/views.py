@@ -3037,6 +3037,11 @@ class Tenant(viewsets.ViewSet):
                     existing_client = Client.objects.filter(name=wc.organisation).first()
                     if existing_client:
                         try:
+                            # Repare la liaison manquante pour les prochains clics
+                            # Fix the missing link for future clicks
+                            if not wc.tenant:
+                                wc.tenant = existing_client
+                                wc.save()
                             primary_domain = f"https://{existing_client.get_primary_domain().domain}"
                             messages.info(request, _("This space already exists. Redirecting you to it."))
                             return redirect(primary_domain)

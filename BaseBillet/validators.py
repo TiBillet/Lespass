@@ -944,6 +944,15 @@ class TenantCreateValidator(serializers.Serializer):
                 is_primary=True
             )
 
+            # Liaison immediate entre WaitingConfiguration et le tenant
+            # pour eviter les doublons si le reste de la config echoue
+            # (l'utilisateur pourrait re-cliquer sur le lien de confirmation)
+            # Immediate link between WaitingConfiguration and tenant
+            # to avoid duplicates if the rest of the config fails
+            # (user might re-click the confirmation link)
+            waiting_config.tenant = tenant
+            waiting_config.save()
+
         with tenant_context(tenant):
             ## Création du premier admin:
             from django.contrib.auth.models import Group
