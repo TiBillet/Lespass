@@ -3170,15 +3170,15 @@ class ProductFormField(models.Model):
         return f"{self.product} • {self.label}"
 
     def save(self, *args, **kwargs):
+        # Genere le nom machine a partir du label si absent
         # Derive the machine key from the label only if it doesn't exist yet
         if not self.name:
-            base = slugify(self.label or "")[:64] if self.label else ""
+            base = slugify(self.label or "")[:50] if self.label else ""
             candidate = base or "field"
-            suffix = 1
-            # Ensure uniqueness per product by appending -2, -3 ... if needed
-            while ProductFormField.objects.filter(product=self.product, name=candidate).exclude(pk=self.pk).exists():
-                suffix += 1
-                tail = f"-{suffix}"
-                candidate = f"{base}{tail}"[:64]
+            # Si le slug existe deja pour ce produit, on ajoute un fragment du uuid (unique par nature)
+            # If the slug already exists for this product, append a uuid fragment (unique by design)
+            if ProductFormField.objects.filter(product=self.product, name=candidate).exclude(pk=self.pk).exists():
+                uuid_short = str(self.pk).replace("-", "")[:8]
+                candidate = f"{base}-{uuid_short}"
             self.name = candidate
         super().save(*args, **kwargs)
