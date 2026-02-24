@@ -14,6 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db import models
 from django.db.models import JSONField, SET_NULL
@@ -760,12 +761,47 @@ class Configuration(SingletonModel):
     def categorie(self):
         return connection.tenant.categorie
 
+    def check_stripe_sepa_capability(self):
+        """
+        Verifie que le prelevement SEPA est bien active sur le compte Stripe Connect.
+        Check that SEPA Direct Debit is enabled on the Stripe Connect account.
+        Retourne True si SEPA est actif, False sinon.
+        """
+        try:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            connect_account_id = self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
+            if not connect_account_id:
+                return False
+            account = stripe.Account.retrieve(connect_account_id)
+            capabilities = account.get('capabilities', {})
+            sepa_capability = capabilities.get('sepa_debit_payments', 'inactive')
+            return sepa_capability == 'active'
+        except Exception as e:
+            logger.warning(f"check_stripe_sepa_capability error: {e}")
+            return False
+
     def save(self, *args, **kwargs):
         '''
         Transforme le nom en slug si vide, pour en faire une url lisible
         '''
         if not self.slug:
             self.slug = slugify(f"{self.organisation}")
+
+        # Si l'admin active SEPA, on verifie que c'est bien actif dans Stripe
+        # If admin enables SEPA, check that it's actually active in Stripe
+        if self.stripe_accept_sepa:
+            sepa_is_active_in_stripe = self.check_stripe_sepa_capability()
+            if not sepa_is_active_in_stripe:
+                logger.warning(
+                    f"SEPA debit not active on Stripe for {self.organisation}, disabling stripe_accept_sepa"
+                )
+                self.stripe_accept_sepa = False
+                raise ValidationError(
+                    _("SEPA Direct Debit is not activated on your Stripe account. "
+                      "Please enable it at https://dashboard.stripe.com/settings/payment_methods "
+                      "then try again.")
+                )
+
         super().save(*args, **kwargs)
 
     class Meta:
