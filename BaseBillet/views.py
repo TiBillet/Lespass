@@ -824,12 +824,17 @@ class MyAccount(viewsets.ViewSet):
         user_pk, number_printed = pk.split(':')
         user = get_object_or_404(HumanUser, pk=user_pk)
         if admin.is_tenant_admin(tenant):
-            fedowAPI = FedowAPI()
-            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
-            if lost_card_report:
-                messages.add_message(request, messages.SUCCESS,
-                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-            else:
+            try:
+                fedowAPI = FedowAPI()
+                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
+                if lost_card_report:
+                    messages.add_message(request, messages.SUCCESS,
+                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+                else:
+                    messages.add_message(request, messages.ERROR,
+                                         _("Error when detaching your card. Contact an administrator."))
+            except Exception as e:
+                logger.error(f"admin_lost_my_card error: {e}")
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect(request.headers['Referer'])
@@ -837,12 +842,17 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
         if request.user.email_valid:
-            fedowAPI = FedowAPI()
-            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
-            if lost_card_report:
-                messages.add_message(request, messages.SUCCESS,
-                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-            else:
+            try:
+                fedowAPI = FedowAPI()
+                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
+                if lost_card_report:
+                    messages.add_message(request, messages.SUCCESS,
+                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+                else:
+                    messages.add_message(request, messages.ERROR,
+                                         _("Error when detaching your card. Contact an administrator."))
+            except Exception as e:
+                logger.error(f"lost_my_card error: {e}")
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect('/my_account/')
