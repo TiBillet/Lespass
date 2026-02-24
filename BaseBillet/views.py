@@ -1910,7 +1910,11 @@ class EventMVT(viewsets.ViewSet):
 
         # On prépare les prix publiés pour le template (utilisé par le sélecteur de billet)
         # On s'assure que price.name n'est jamais None pour éviter les "undefined" en JS
-        event.published_prices = Price.objects.filter(product__event=event, publish=True).order_by('order', 'prix')
+        # Tri par poids du produit parent, puis par ordre du tarif, puis par prix
+        # Sort by parent product weight, then by rate display order, then by price
+        event.published_prices = Price.objects.filter(
+            product__event=event, publish=True
+        ).order_by('product__poids', 'order', 'prix')
         for p in event.published_prices:
             if p.name is None:
                 p.name = ""
