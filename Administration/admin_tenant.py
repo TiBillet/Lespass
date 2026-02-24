@@ -1822,6 +1822,11 @@ class MembershipAddForm(ModelForm):
         card_number = cleaned_data.get('card_number')
         if card_number:
 
+            # Si clean_email a echoue, le wallet n'existe pas encore — on ne peut pas valider la carte
+            # If clean_email failed, the wallet doesn't exist yet — we can't validate the card
+            if not hasattr(self, 'user_wallet_serialized'):
+                raise forms.ValidationError(_("Please provide a valid email address first."))
+
             if self.user_wallet_serialized.get('has_user_card'):
                 raise forms.ValidationError(_("A card is already linked to this email address."))
 
