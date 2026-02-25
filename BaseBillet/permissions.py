@@ -1,6 +1,7 @@
 import logging
 import typing
 
+from django.db import connection
 from django.http import HttpRequest
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_api_key.permissions import BaseHasAPIKey
@@ -50,7 +51,7 @@ class HasLaBoutikAccess(BaseHasAPIKey):
 
     def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
         # 1. Admin tenant connecté via session → autorisé
-        if request.user and request.user.is_authenticated and request.user.is_staff:
+        if request.user and request.user.is_authenticated and request.user.is_tenant_admin(connection.tenant):
             return True
 
         # 2. Clé API LaBoutik (header Authorization: Api-Key xxx)
