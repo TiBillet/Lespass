@@ -8,6 +8,7 @@ urlpatterns = [
     # path('admin/', root_admin_site.urls, name="root_admin_site"),
 
     path('api/webhook_stripe/', Webhook_stripe.as_view()),
+    path('api/discovery/', include('discovery.urls')),
 
     re_path(r'api/user/', include('AuthBillet.urls')),
     path('i18n/', include('django.conf.urls.i18n')),

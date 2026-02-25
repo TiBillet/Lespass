@@ -262,6 +262,7 @@ class ScanAppAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+
 @admin.register(Webhook, site=staff_admin_site)
 class WebhookAdmin(ModelAdmin):
     compressed_fields = True

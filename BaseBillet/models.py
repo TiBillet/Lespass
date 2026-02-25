@@ -2167,6 +2167,15 @@ class ScannerAPIKey(AbstractAPIKey):
         # unique_together = [['place', 'user', 'name']]
 
 
+### Pour terminaux LaBoutik (appairage via Discovery PIN)
+
+class LaBoutikAPIKey(AbstractAPIKey):
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = "LaBoutik API Key"
+        verbose_name_plural = "LaBoutik API Keys"
+
+
 class ScanApp(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=30)
