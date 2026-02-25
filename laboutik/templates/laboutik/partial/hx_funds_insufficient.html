@@ -1,0 +1,70 @@
+{% load static i18n %}
+{% load laboutik_process %}
+
+<div id="messages" class="BF-col">
+  {% if payment.moyen_paiement == 'nfc' and step == 2 %}
+  <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants" %}</div>
+  <div class="fi-title1">{% translate "sur deuxième carte" %}</div>
+  <div class="fi-msg1 test-return-missing-cash">
+    {% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
+    {{ card.name }}.
+  </div>
+  {% else %}
+  <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants." %}</div>
+  <div class="fi-msg1 test-return-missing-cash">
+    {% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
+    {{ card.name }}.
+  </div>
+  <c-status-wallets monnaie-name="{{ monnaie_name }}" name="{{ card.name }}" :wallets="wallets" />
+  <div class="fi-msg1 test-returm-possible-purchase">{% translate "Achat possible par :" %}</div>
+
+  {% if payments_accepted.accepte_especes %}
+  <c-bt.paiement name='{% translate "ESPÈCE" %}' total="{{ payment.missing }}" icon="fa-coins" hx-trigger="click"
+    hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing  }}"
+    hx-target="#confirm" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')
+    {% if uuid_transaction != '' %}; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}'){% endif %}"/>
+  {% endif %}
+
+  {% if payments_accepted.accepte_carte_bancaire %}
+  <c-bt.paiement name='{% translate "CB" %}' total="{{ payment.missing }}" icon="fa-coins"
+    hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing  }}"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')
+    {% if uuid_transaction != '' %}; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}'){% endif %}"/>
+  {% endif %}
+
+  <c-bt.paiement name='{% translate "CASHLESS" %}' total="{{ payment.missing }}" icon="fa-address-card"
+    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML" 
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'){% if uuid_transaction != '' %}; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}'){% endif %}"/>
+
+  <!-- TODO: chèque ? -->
+  {% endif %}
+  <c-bt.return />
+
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      color: var(--blanc01);
+      background-color: var(--rouge07);
+      font-size: 1.5rem;
+      text-align: center;
+    }
+
+    .fi-title1 {
+      font-size: 2.5rem;
+      font-weight: bold;
+      text-align: center;
+    }
+
+    .fi-msg1 {
+      font-size: 1.5rem;
+      font-weight: bold;
+      text-align: center;
+    }
+  </style>
+</div>

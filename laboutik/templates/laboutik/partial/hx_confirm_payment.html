@@ -1,0 +1,105 @@
+{% load static i18n %}
+{% load laboutik_process %}
+
+<div id="confirm" class="BF-col">
+  <div>uuid_transaction = {{ uuid_transaction }}</div>
+  <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
+  {% if method == 'espece' %}
+  <!-- <div id="given-sum-container" class="BF-col"> -->
+  <div class="info-sum-given">{% translate "somme donnée" %}</div>
+  <input type="number" id="given-sum" class="addition-fractionnee-input">
+  <small id="given-sum-msg-erreur"></small>
+  <!-- </div> -->
+  {% endif %}
+
+  <div id="confirm-action-container">
+    <!-- include bt_return.html -->
+    <c-bt.return selector="#confirm" layer="2" />
+
+    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }} {% endif %})" ;>
+      <div class="bt-basic-icon">
+        <i class="fas fa-check-circle"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "Valider" %}</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function askManageAddition(method, total) {
+      if (method === 'espece') {
+        const inputGivenSum = document.querySelector('#given-sum').value
+        const givenSum = Number(inputGivenSum)
+        if (inputGivenSum !== '' && givenSum < total) {
+          document.querySelector('#given-sum-msg-erreur').innerText = `{% translate "Total" %} : ${total} {{ currency_data.symbol }} - {% translate "Somme incorrecte !" %}`
+          return
+        } else {
+          // insérer la somme donnée en centimes d'euro dans le formulaire de l'addition
+          sendEvent('organizerMsg', '#event-organizer', {
+            src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+            msg: 'additionManageForm',
+            data: { actionType: 'updateInput', selector: '#addition-given-sum', value: givenSum * 100 }
+          })
+        }
+      }
+
+      // hx-post = 'hx_payment'
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+        msg: 'additionManageForm',
+        data: { actionType: 'postUrl', selector: null, value: '{% url "laboutik-paiement-payer" %}' }
+      })
+
+      // submit le formulaire
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
+        msg: 'additionManageForm',
+        data: { actionType: 'submit' }
+      })
+    }
+  </script>
+  <style>
+    #confirm {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      color: var(--blanc01);
+      font-size: 1.5rem;
+      text-align: center;
+      background-color: var(--bleu09);
+    }
+
+    #confirm-action-container {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-around;
+      align-items: center;
+      margin-top: 2rem;
+    }
+
+    .info-sum-given {
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+
+    .addition-fractionnee-input {
+      height: 60px;
+      margin-top: 2rem;
+      font-size: 1rem;
+    }
+
+    #bt-valider-layer2 {
+      margin-left: 8px;
+    }
+
+    #given-sum-msg-erreur {
+      margin-top: 4px;
+      width: 100%;
+      height: 24px;
+      color: var(--warning);
+    }
+  </style>
+</div>

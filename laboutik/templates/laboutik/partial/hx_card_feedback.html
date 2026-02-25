@@ -1,0 +1,92 @@
+{% load static i18n %}
+
+<div id="messages" style="background-color: var({{ background }});">
+  <div class="BF-col-uniforme check-carte-ok">
+    {% if not card.email %}
+    <div class="f1r test-return-card-type">
+      <span>{% trans "Carte anonyme" %}</span>
+    </div>
+    {% else %}
+    <div class="f1r test-return-card-type">
+      <span>{% trans "Carte fédérée" %}</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="return-container">
+    <div class="return-header">
+      <div>{% trans "Tirelire" %}</div>
+      <div class="test-return-total-card" title="total">
+        {{total_monnaie}}
+      </div>
+    </div>
+
+
+    <!-- wallet -->
+    <div class="return-item">
+      <div class="test-return-monnaie-item-value{{ forloop.counter }}">{{ card.wallets }}</div>
+      <div class="test-return-monnaie-item-name{{ forloop.counter }}">
+        {{ state.place.monnaie_name }}
+      </div>
+      {% if state.place.name %}
+      <div class="test-return-monnaie-item-place{{ forloop.counter }}">
+        <div>{% trans "Provenance" %}</div>
+        <div>{{ state.place.name }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- wallet gift -->
+    <div class="return-item">
+      <div class="test-return-monnaie-item-value{{ forloop.counter }}">{{ card.wallets_gift }}</div>
+      <div class="test-return-monnaie-item-name{{ forloop.counter }}">
+        {{ state.place.monnaie_name }} {% trans "Cadeau" %}
+      </div>
+      {% if state.place.name %}
+      <div class="test-return-monnaie-item-place{{ forloop.counter }}">
+        <div>{% trans "Provenance" %}</div>
+        <div>{{ state.place.name }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <c-bt.return selector="#messages" />
+
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      align-items: center;
+      background-color: var(--noir01);
+      color: var(--blanc01);
+    }
+
+    .return-container {
+      width: 70%;
+      font-size: 1.2rem;
+    }
+
+    .return-header {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 70% 30%;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid;
+      margin-bottom: .5rem;
+    }
+
+    .return-item {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto 2fr 1fr;
+      
+    }
+  </style>
+</div>

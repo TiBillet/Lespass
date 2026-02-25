@@ -1,0 +1,149 @@
+{% extends "laboutik/base.html" %}
+{% load static %}
+{% load static i18n %}
+{% load laboutik_process %}
+
+{% block content %}
+<!-- header + nav -->
+<c-header title="{{ title }}" />
+<main>
+	<nav id="categories">
+		cat
+	</nav>
+	<div id="tables-container">
+		{% for table in tables %}
+		<a class="BF-col-haut table-bouton"
+			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&id_table={{table.id}}">
+			<div class="BF-col table-nom">{{table.name}}</div>
+			<div class="BF-ligne table-etat" style="background-color: var({{ table_status_colors|sel:table.statut }});">
+			</div>
+		</a>`
+		{% endfor %}
+	</div>
+</main>
+<footer>
+	<!-- bouton CHECK CARTE -->
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte">
+		<i class="fas fa-money-check-alt md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "CHECK" %}</div>
+			<div>{% translate "CARTE" %}</div>
+		</div>
+	</div>
+	<!-- bouton service direct -->
+	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
+		<i class="fas fa-cash-register md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "SERVICE DIRECT" %}</div>
+		</div>
+	</a>
+</footer>
+{% endblock content %}
+
+{% block script %}
+<script>
+
+</script>
+{% endblock script %}
+
+{% block css %}
+<style>
+	main {
+		display: flex;
+		flex-direction: row;
+		justify-content: start;
+		align-items: start;
+		width: 100%;
+		height: var(--main-container-height);
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+
+	#categories {
+		width: var(--cat-width);
+		height: 100%;
+		background-color: var(--noir04);
+	}
+
+	#tables-container {
+		width: calc(100% - var(--cat-width));
+		height: 100%;
+		background-color: var(--bleu11);
+		display: flex;
+		justify-content: flex-start;
+		align-content: flex-start;
+		flex-wrap: wrap;
+		overflow-y: auto;
+		scrollbar-width: none
+	}
+
+
+	footer {
+		width: 100%;
+		height: var(--footer-container-height);
+		display: flex;
+		flex-direction: row;
+		background-color: var(--vert04);
+		font-size: 2rem
+	}
+
+	.footer-bt {
+		width: 50%;
+		height: 100%;
+		color: var(--blanc01);
+		cursor: pointer;
+		text-decoration: none;
+
+		i {
+			margin-right: 4px;
+			font-size: 1.5rem;
+		}
+	}
+
+	.footer-bt-text {
+		font-size: 1rem;
+		font-weight: bold;
+	}
+
+	.fond-normal {
+		background-color: var(--bleu02);
+	}
+
+	.fond-coul1 {
+		background-color: var(--rouge05);
+	}
+
+	.table-bouton {
+		width: var(--bt-table-width);
+		height: var(--bt-table-height);
+		border-radius: 15px;
+		margin: 8px;
+		font-family: 'Source Sans', sans-serif;
+		box-sizing: border-box;
+		background-color: var(--gris04);
+		text-decoration: none;
+	}
+
+	.table-nom {
+		width: 100%;
+		height: calc(100% - 24px);
+		border-radius: 15px 15px 0 0;
+		font-size: 1rem;
+		font-weight: bold;
+		color: var(--blanc01);
+		overflow: hidden;
+		padding: 2px;
+	}
+
+	.table-etat {
+		width: 100%;
+		height: 24px;
+		border-radius: 0 0 15px 15px;
+		font-size: 1rem;
+		padding-right: 8px;
+		justify-content: flex-end;
+		overflow: hidden;
+	}
+</style>
+{% endblock css %}

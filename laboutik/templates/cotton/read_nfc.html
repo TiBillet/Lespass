@@ -1,0 +1,67 @@
+{% load static %}
+<div {{ attrs }} class="nfc-container">
+	<c-spinner size="240" />
+	<div class="nfc-container-slot">
+		{{ slot }}
+		<!-- reference(id) for the insertion of simulation buttons -->
+		<div id="nfc-simu-tag"></div>
+		{% if selector %}
+		<c-bt.return selector="{{selector}}" />
+		{% endif %}
+	</div>
+
+	<script>
+		function initNfc() {
+			try {		
+			const nfc = new NfcReader()
+			// start read nfc
+			nfc.start({eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}'})
+			} catch (error) {
+				console.log('-> Cotton - read_nfc.html - initNfc,', error)
+			}
+		}
+			initNfc()
+	</script>
+
+	<style>
+		.nfc-container {
+			display: grid;
+			width: 100%;
+			height: 100%;
+		}
+
+		.nfc-container-slot,
+		.spinner {
+			grid-area: 1 / 1;
+		}
+
+		.nfc-container-slot {
+			position: relative;
+			width: 100%;
+			height: 100%;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			align-items: center;
+			color: var(--blanc01);
+		}
+
+		.nfc-reader-simu-bt {
+			width: 200px;
+			height: 70px;
+			background-color: var(--bleu04);
+			color: var(--blanc01);
+			display: flex;
+			flex-direction: row;
+			justify-content: center;
+			align-items: center;
+			font-size: 1.5rem;
+			margin-bottom: 2rem;
+			border-radius: 8px;
+			font-weight: bold;
+			white-space: pre-line;
+			text-align: center;
+			cursor: pointer;
+		}
+	</style>
+</div>

@@ -1,0 +1,157 @@
+{% load static i18n %}
+
+<nav id="categories">
+	<div id="bt-show-addition" class="BF-col category-item">
+		<i class="category-icon fas fa-list"></i>
+		<div class="category-nom">{% translate "Note" %}</div>
+		<!-- pour remonter au parent plus facilement -->
+		<div class="category-touch"></div>
+	</div>
+
+	<div id="bt-hide-addition" class="BF-col category-item">
+		<i class="category-icon fas fa-undo"></i>
+		<div class="category-nom">{% translate "Retour" %}</div>
+		<!-- pour remonter au parent plus facilement -->
+		<div class="category-touch"></div>
+	</div>
+
+	<div id="category-all" class="BF-col category-item category-item-active">
+		<i class="category-icon fas fa-th"></i>
+		<div class="category-nom">{% translate "Tous" %}</div>
+		<div class="category-touch"></div>
+	</div>
+
+	{% for cat in categories %}
+	<div class="BF-col category-item active" data-sel="cat-{{cat.id}}">
+		<i class="category-icon fas {{cat.icon}}"></i>
+		<div class="category-nom">{{ cat.name }}</div>
+		<div class="category-touch"></div>
+	</div>
+	{% endfor %}
+</nav>
+
+<script>
+	function allRemoveCatActive() {
+		document.querySelectorAll('#categories .category-item').forEach(eleCat => {
+			eleCat.classList.remove('category-item-active')
+		})
+	}
+
+	function manageCategories(event) {
+		const ele = event.target.parentNode
+		if (ele.classList.contains("category-item")) {
+			console.log("c'est un bt catégorie")
+			// show list addition
+			if (ele.id === "bt-show-addition" && !ele.classList.contains("category-item-active")) {
+				document.querySelectorAll('#categories .category-item').forEach(ele => {
+					ele.style.display = "none"
+				})
+				document.querySelector('#bt-hide-addition').style.display = "flex"
+				document.querySelector('#bt-hide-addition').classList.add('category-item-active')
+				document.querySelector('#products').style.display = "none"
+				document.querySelector('#addition').style.display = "flex"
+			}
+
+			// hide list addition
+			if (ele.id === "bt-hide-addition" && ele.classList.contains("category-item-active")) {
+				document.querySelectorAll('#categories .category-item').forEach(ele => {
+					ele.style.display = "flex"
+				})
+				document.querySelector('#bt-hide-addition').style.display = "none"
+				document.querySelector('#products').style.display = "flex"
+				document.querySelector('#addition').style.display = "none"
+			}
+
+			// display select category
+			if (ele.getAttribute('data-sel') !== null) {
+				const category = ele.getAttribute('data-sel')
+
+				// dispatch event "articlesDisplayCategory"
+				sendEvent('organizerMsg', '#event-organizer', {
+					src: { file: 'categories.html', method: 'manageCategories' },
+					msg: 'articlesDisplayCategory',
+					data: { category }
+				})
+			}
+
+			// display all categories
+			if (ele.id === "category-all") {
+				// dispatch event "articlesDisplayCategory"
+				sendEvent('organizerMsg', '#event-organizer', {
+					src: { file: 'categories.html', method: 'manageCategories' },
+					msg: 'articlesDisplayCategory',
+					data: { category: 'cat-all' }
+				})
+			}
+		}
+	}
+	document.querySelector("#categories").addEventListener('click', manageCategories)
+</script>
+
+<style>
+	#categories {
+		width: var(--cat-width);
+		height: 100%;
+		background-color: var(--noir04);
+	}
+
+	.category-item {
+		width: 100%;
+		height: 66px;
+		border-bottom: 1px solid var(--noir02);
+		padding: 4px 0;
+		cursor: pointer;
+		color: var(--gris07);
+		overflow: hidden;
+		position: relative;
+	}
+
+	.category-icon {
+		font-size: var(--cat-icon-size);
+		text-shadow: 2px 2px var(--gris02)
+	}
+
+	.categorie-nom {
+		font-size: var(--cat-name-size);
+	}
+
+	.category-touch {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.category-item-active {
+		color: var(--blanc01);
+	}
+
+	#bt-hide-addition {
+		display: none;
+	}
+
+	/* pour une largeur supérieure 1022 pixels */
+	@media only screen and (width > 1022px) {
+
+		/* effacer le bouton addition */
+		#bt-show-addition {
+			display: none;
+		}
+	}
+
+	/* pour une largeur supérieure 1199 pixels */
+	@media only screen and (width > 1199px) {
+		.category-item {
+			height: 90px;
+			margin: 10px 0;
+		}
+	}
+
+	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */
+	@media only screen and (width > 1278px) {
+		:root {
+			--cat-width: 8%;
+		}
+	}
+</style>

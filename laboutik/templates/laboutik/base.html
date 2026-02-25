@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>{{ titrePage }}</title>
+	{% load static %}
+	<link rel="stylesheet" href="{% static 'css/all_fontawesome-free-5-11-2.css' %}" />
+	<link rel="stylesheet" href="{% static 'css/modele00.css' %}" />
+	<link rel="icon" href="{% static 'images/favicon.ico' %}" />
+	{% block css %} {% endblock css %}
+
+	<!-- https://github.com/MikeMcl/big.js/tree/main -->
+	<script src="{% static 'js/big.js' %}"></script>
+	<!-- init global values and function -->
+	<script src="{% static 'js/tibilletUtils.js' %}"></script>
+	<!-- passing django values to javascript - ex : state.demo.active -->
+	<script src="{% static 'js/nfc.js' %}"></script>
+	<script>
+		const state = JSON.parse("{{stateJson|escapejs}}")
+	</script>
+</head>
+
+<!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()"
+	hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' style="background-color:#000000;">
+	{% block content %} {% endblock content %}
+	<!-- info: layer 1 -->
+	<div id="messages"></div>
+	<!-- info: layer 2 -->
+	<div id="confirm"></div>
+
+	<script src="http://localhost/cordova.js"></script>
+	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
+	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+	{% block script %} {% endblock script %}
+	<div id="event-organizer" class="hide"></div>
+</body>
+
+</html>

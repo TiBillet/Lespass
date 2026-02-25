@@ -1,0 +1,174 @@
+{% extends "laboutik/base.html" %}
+{% load static %}
+{% load static i18n %}
+
+{% block content %}
+<!-- header + nav -->
+<c-header :title="title" />
+<main>
+	<!-- catégories -->
+	<c-categories />
+	<div id="products-container">
+		<c-articles />
+		<c-addition />
+	</div>
+</main>
+<footer>
+	<!-- bouton Reset commandes -->
+	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset">
+		<i class="fas fa-trash md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "RESET" %}</div>
+		</div>
+	</div>
+	<!-- bouton CHECK CARTE -->
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
+		hx-target="#messages" hx-swap="outerHTML">
+		<i class="fas fa-money-check-alt md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "CHECK" %}</div>
+			<div>{% translate "CARTE" %}</div>
+		</div>
+	</div>
+	<!-- bouton valider -->
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok">
+		<i class="fas fa-check-circle md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "VALIDER" %}</div>
+			<!-- <div>{% translate "TOTAL" %} </div> -->
+			<div class="BF-ligne">
+				<div id="bt-valider-total" class="md4px">0</div>
+				<div> {{ currency_data.symbol }}</div>
+			</div>
+		</div>
+	</div>
+</footer>
+
+<script>
+	/**
+	* Reset articles, addition list and value of button valider
+	*/
+	function manageReset() {
+	// reset articles
+	sendEvent('organizerMsg', '#event-organizer', {
+		src: { file: 'common_user_interface.html', method: 'manageReset' },
+		msg: 'resetArticles',
+		data: {}
+	})
+	}
+
+	function displayPaymentTypes() {
+		sendEvent('organizerMsg', '#event-organizer', {
+		src: { file: 'common_user_interface.html', method: 'displayPaymentTypes' },
+		msg: 'additionDisplayPaymentTypes',
+		data: {}
+	})
+	}
+
+	function updateBtValider(event) {
+		// console.log('-> updateBtValider, event.detail =', event.detail)
+		document.querySelector('#bt-valider-total').innerText = (event.detail.totalAddition / 100)
+	}
+
+	document.addEventListener('DOMContentLoaded', () => {
+		document.querySelector('#bt-reset').addEventListener('click', manageReset)
+		document.querySelector('#bt-valider').addEventListener('updateBtValider', updateBtValider)
+		document.querySelector('#bt-valider').addEventListener('click', displayPaymentTypes)
+	})
+
+</script>
+<!-- no articles, hide -->
+{% include "laboutik/partial/no_articles.html" %}
+
+{% endblock content %}
+
+{% block css %}
+<style>
+	main {
+		display: flex;
+		flex-direction: row;
+		justify-content: start;
+		align-items: start;
+		width: 100%;
+		height: var(--main-container-height);
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+	}
+
+	#products-container {
+		width: calc(100% - var(--cat-width));
+		height: 100%;
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		align-items: center;
+	}
+
+	#products {
+		width: 100%;
+		height: 100%;
+		background-color: var(--bleu11);
+		display: flex;
+		justify-content: flex-start;
+		align-content: flex-start;
+		flex-wrap: wrap;
+		overflow-y: auto;
+		scrollbar-width: none
+	}
+
+
+	footer {
+		width: 100%;
+		height: var(--footer-container-height);
+		display: flex;
+		flex-direction: row;
+		background-color: var(--vert04);
+		font-size: 2rem
+	}
+
+	.footer-bt {
+		width: 33.3333333%;
+		height: 100%;
+		color: var(--blanc01);
+		cursor: pointer;
+
+		i {
+			margin-right: 4px;
+			font-size: 1.5rem;
+		}
+	}
+
+	.footer-bt-text {
+		font-size: 1rem;
+		font-weight: bold;
+		text-align: center;
+	}
+
+	.fond-retour {
+		background-color: var(--rouge03);
+	}
+
+	.fond-normal {
+		background-color: var(--bleu02);
+	}
+
+	.fond-ok {
+		background-color: var(--vert03);
+	}
+
+	/* pour une largeur supérieure 1022 pixels */
+	@media only screen and (width > 1022px) {
+		#products {
+			width: 71%;
+		}
+	}
+
+	/* pour une largeur supérieure 1199 pixels */
+	@media only screen and (width > 1199px) {
+		:root {
+			--footer-container-height: 120px;
+		}
+	}
+</style>
+{% endblock css %}

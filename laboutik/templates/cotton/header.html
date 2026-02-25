@@ -1,0 +1,210 @@
+{% load static %}
+{% load static i18n %}
+<header class="header-background">
+	<!-- link = first sales point of the primary card -->
+	<div class="header-img"
+		onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}'">
+		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
+	</div>
+	<div class="header-status">
+		<div id="header-status-info1">inf</div>
+		<div id="header-status-info2">inf</div>
+	</div>
+	<div id="header-title">
+		<div>
+			<span>{{ title }}</span> - <i class="fas {{ pv.icon }}"></i> {{ pv.name }}
+		</div>
+	</div>
+	<div class="header-menu pointer">
+		<i class="menu-burger-icon fas fa-bars curseur-action" onclick="toggleMenuBurger(event)"></i>
+	</div>
+</header>
+<nav id="menu-burger-container" class="hide">
+	<div class="main-menu">
+		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-pvs')">
+			<i class="menu-burger-item-content fas fa-store"></i>
+			<div class="menu-burger-item-content">{% translate "POINTS DE VENTES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
+			<div class="menu-burger-item-content">{% translate "PREPARATIONS" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
+			<div class="menu-burger-item-content">{% translate "VENTES" %}</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-params')">
+			<i class="menu-burger-item-content fas fa-cog"></i>
+			<div class="menu-burger-item-content">{% translate "PARAMÈTRES" %}</div>
+		</div>
+	</div>
+	<!-- sub menu points de vente -->
+	<div class="sub-menu-pvs sub-menu hide">
+		{% for pv in card.pvs_list %}
+		<a class="menu-burger-item menu-burger-item-content" href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
+			style="text-decoration: none;">
+			<i class="menu-burger-item-content fas {{ pv.icon }}"></i>
+			<div class="menu-burger-item-content">{{ pv.name }}</div>
+		</a>
+		{% endfor %}
+	</div>
+	<!-- dev sub menu paramètres -->
+	<div class="sub-menu-params sub-menu hide">
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">params 1</div>
+		</div>
+		<div class="menu-burger-item menu-burger-item-content">
+			<i class="menu-burger-item-content fas fa-utensils"></i>
+			<div class="menu-burger-item-content">params 2</div>
+		</div>
+	</div>
+</nav>
+<script>
+	window.showSubMenu = function (event, subMenuClass) {
+		// effacer main-menu
+		document.querySelector('#menu-burger-container .main-menu').classList.add('hide')
+		// effacer touts les sub-menu
+		document.querySelectorAll('#menu-burger-container .sub-menu').forEach(ele => {
+			ele.classList.add('hide')
+		})
+		// afficher subMenuClass
+		document.querySelector(`#menu-burger-container ${subMenuClass}`).classList.remove('hide')
+	}
+
+	// effacer menu principale 
+	window.hideMenuBurger = function () {
+		// sup class active
+		document.querySelector('.menu-burger-icon').classList.remove('menu-burger-active')
+		// effacer le menu
+		document.querySelector('#menu-burger-container').classList.add('hide')
+	}
+
+	window.toggleMenuBurger = function (event) {
+		const ele = event.target
+		const classRep = ele.classList
+		// afficher menu principale 
+		if (!classRep.contains('menu-burger-active')) {
+			// effacer touts les sub-menu
+			document.querySelectorAll('#menu-burger-container .sub-menu').forEach(ele => {
+				ele.classList.add('hide')
+			})
+			// afficher main-menu
+			document.querySelector('#menu-burger-container .main-menu').classList.remove('hide')
+			// ajouter class active
+			ele.classList.add('menu-burger-active')
+			// afficher le menu
+			document.querySelector('#menu-burger-container').classList.remove('hide')
+		} else {
+			hideMenuBurger()
+		}
+	}
+
+	document.addEventListener('click', (event) => {
+		const classRep = event.target.classList
+		if (!classRep.contains('menu-burger-icon') && !classRep.contains('menu-burger-item-content')) {
+			hideMenuBurger()
+		}
+	})
+
+</script>
+
+<style>
+	.header-background {
+		width: 100%;
+		height: var(--header-height);
+		background-color: var(--noir03);
+		display: flex;
+		flex-direction: row;
+		justify-content: space-arround;
+		align-items: center;
+		color: var(--blanc01);
+		border-bottom: 1px solid var(--gris01);
+	}
+
+	.header-img {
+		width: var(--header-img-width);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		cursor: pointer;
+	}
+
+	.header-status {
+		width: var(--header-status-width);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+		align-items: center;
+		background-color: var(--vert01);
+	}
+
+	#header-title {
+		width: calc(100% - var(--header-add-img-status-menu));
+		height: 100%;
+		display: flex;
+		flex-direction: row;
+		justify-content: center;
+		align-items: center;
+		font-size: clamp(1rem, 3.5vw, 2.5rem);
+		overflow-wrap: break-word;
+		font-weight: bold;
+	}
+
+	.header-menu {
+		width: var(--header-menu-width);
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		font-size: 2rem;
+		cursor: pointer;
+	}
+
+	#menu-burger-container {
+		max-height: calc(var(--main-container-height) - 2px);
+		position: absolute;
+		top: calc(var(--header-height) + 2px);
+		right: 0;
+		background-color: var(--noir03);
+		z-index: 2;
+		overflow-y: auto;
+	}
+
+	.menu-burger-item {
+		min-width: 300px;
+		height: 60px;
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		align-items: center;
+		line-height: 60px;
+		text-transform: uppercase;
+		font-size: 1.4rem;
+		border-bottom: 1px solid var(--gris01);
+		color: var(--blanc01);
+		cursor: pointer;
+		overflow: hidden;
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+
+	.menu-burger-item i {
+		padding-right: 6px;
+	}
+
+	/* pour une largeur supérieure 1199 pixels */
+	@media only screen and (width > 1199px) {
+		:root {
+			--header-height: 66px;
+		}
+	}
+</style>

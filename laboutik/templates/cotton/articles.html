@@ -1,0 +1,215 @@
+{% load static %}
+{% load laboutik_process %}
+
+<!-- les data articles sont prises dans le container #products -->
+<div id="products">
+	{% for article in pv.articles %}
+	<!-- TODO: supprimer dès le back l'article paiement fractionné -->
+	{% if article.id != uuidArticlePaiementFractionne %}
+	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
+		class="article-container cat-{{ article.categorie.id}}"
+		style="background-color:{{ article.categorie.couleur_backgr }};">
+		<!-- image -->
+		{% if article.url_image %}
+		<div class="article-img-layer BF-ligne">
+			<img src="{{ article.url_image}}" class="article-image" loading="lazy" alt='' onerror="this.style.display='none'">
+		</div>
+		{% endif %}
+		<!-- name -->
+		<div class="article-name-layer"
+			style="color:{{article.categorie.couleur_texte}};text-shadow: 2px 2px 3px {{article.categorie.couleur_backgr}}">
+			{{article.name}}
+		</div>
+		<div class="article-footer-layer BF-ligne-g">
+			<!-- icon -->
+			<div class="article-icon" style="color:{{article.categorie.couleur_texte}};">
+				{% if article.categorie %}
+				<i class="fas {{ article.categorie.icon }}"></i>
+				{% endif %}
+			</div>
+			<!-- price -->
+			{% if pv.afficher_les_prix %}
+			<div class="article-prix BF-ligne-g" style="color:{{article.categorie.couleur_texte}};">
+				{{ article.prix|divide_by:100 }} {{ currency_data.symbol }}
+			</div>
+			{% endif %}
+			<!-- quantity -->
+			<div class="article-quantity BF-ligne">
+				<span id="article-quantity-number-{{ article.id }}" class="badge">0</span>
+			</div>
+		</div>
+		<!-- pour remonter au parent plus facilement -->
+		<div class="article-touch"></div>
+		<div class="article-lock-layer"></div>
+	</div>
+	{% endif %}
+	{% endfor %}
+</div>
+<script src="{% static 'js/articles.js' %}"></script>
+
+<style>
+	.article-container {
+		position: relative;
+		width: var(--bt-article-width);
+		height: var(--bt-article-height);
+		box-sizing: border-box;
+		overflow: hidden;
+		margin: 20px 0 0 20px;
+		font-family: "Luciole-regular";
+		border-radius: 15px;
+	}
+
+	.article-name-layer {
+		position: absolute;
+		left: 4px;
+		top: 6px;
+		font-weight: bold;
+		height: 78px;
+		width: calc(100% - 8px);
+		font-size: 18px;
+		margin: 0;
+		padding: 0;
+		overflow: hidden;
+		text-align: center;
+	}
+
+	.article-img-layer {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+	}
+
+	.article-image {
+		width: 52px;
+		height: auto;
+		opacity: 0.7;
+	}
+
+	.BF-ligne-g {
+		align-items: center;
+		display: flex;
+		flex-direction: row;
+		justify-content: flex-start;
+		width: 100%;
+	}
+
+	.article-footer-layer {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+	}
+
+	.article-icon {
+		flex-basis: 25%;
+	}
+
+	.article-prix {
+		flex-basis: 45%;
+	}
+
+	.article-quantity {
+		flex-basis: 25%;
+	}
+
+	.badge {
+		color: #212529;
+		background-color: #f8f9fa;
+		display: inline-block;
+		padding: .25em .4em;
+		font-weight: bold;
+		line-height: 1;
+		text-align: center;
+		white-space: nowrap;
+		vertical-align: baseline;
+		border-radius: .25rem;
+		transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+	}
+
+	.article-touch {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.article-lock-layer {
+		position: absolute;
+		left: 0;
+		top: 0;
+		width: 100%;
+		height: 100%;
+		border-radius: 15px;
+		background-color: #2a2828;
+		opacity: 0.5;
+		cursor: default;
+		display: none;
+	}
+
+	/* pour une largeur supérieure ou égale à 599 pixels */
+	@media only screen and (width > 599px) {
+		:root {
+			--bt-article-width: 140px;
+		}
+	}
+
+	/* pour une largeur supérieure ou égale à 1022 pixels */
+	@media only screen and (width > 1022px) {
+		:root {
+			--bt-article-width: 100px;
+			--bt-article-height: 100px;
+		}
+
+		.article-name-layer {
+			font-size: 16px;
+		}
+
+		.article-footer-layer {
+			font-size: 0.8rem;
+		}
+
+		.article-image {
+			width: 100px;
+		}
+
+		.article-icon {
+			flex-basis: 20%;
+		}
+	}
+
+	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */
+	@media only screen and (width > 1278px) {
+		:root {
+			width: 160px;
+			height: 160px;
+			--bt-article-width: 160px;
+			--bt-article-height: 160px;
+		}
+
+		.article-name-layer {
+			font-size: 1.5rem;
+		}
+
+		.article-footer-layer {
+			width: 95%;
+			left: 4px;
+			font-size: 1.4rem;
+		}
+
+		.article-icon {
+			flex-basis: 20%;
+		}
+
+		.article-prix {
+			flex-basis: 55%;
+			overflow-wrap: break-word;
+		}
+
+		.article-quantity {
+			flex-basis: 25%;
+		}
+	}
+</style>

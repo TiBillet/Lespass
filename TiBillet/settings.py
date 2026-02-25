@@ -150,6 +150,7 @@ SHARED_APPS = (
     'fedow_public',
     'discovery',
 
+    'django_cotton',
     'django_extensions',
     'solo',
     'stdimage',
@@ -179,6 +180,7 @@ TENANT_APPS = (
     'tibrss',
     'fedow_connect',
     'crowds',
+    'laboutik',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -221,11 +223,17 @@ if DEBUG and not TEST :
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        # 'DIRS': [],
         'DIRS': [BASE_DIR / "Administration/templates"],  # Pour le dashboard d'admin unfold
-        'APP_DIRS': True,
-
+        'APP_DIRS': False,  # Requis par django-cotton (loaders explicites ci-dessous)
         'OPTIONS': {
+            'loaders': [
+                'django_cotton.cotton_loader.Loader',
+                'django.template.loaders.filesystem.Loader',
+                'django.template.loaders.app_directories.Loader',
+            ],
+            'builtins': [
+                'django_cotton.templatetags.cotton',
+            ],
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
@@ -807,4 +815,9 @@ if DEBUG:
     ]
     os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"  # only use in development
 
-
+# LaBoutik — NFC simulation demo tags
+DEMO = os.environ.get('DEMO') == '1'
+DEMO_TAGID_CM = os.environ.get('DEMO_TAGID_CM', 'A49E8E2A')
+DEMO_TAGID_CLIENT1 = os.environ.get('DEMO_TAGID_CLIENT1', 'B52F9F3B')
+DEMO_TAGID_CLIENT2 = os.environ.get('DEMO_TAGID_CLIENT2', 'C63A0A4C')
+DEMO_TAGID_CLIENT3 = os.environ.get('DEMO_TAGID_CLIENT3', 'D74B1B5D')

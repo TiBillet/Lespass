@@ -1,0 +1,41 @@
+:root {
+	/* header */
+	--header-height: 49px;
+	--header-img-width: 120px;
+	--header-status-width: 26px;
+	--header-menu-width: 56px;
+	--header-add-img-status: calc(var(--header-img-width) + var(--header-status-width));
+	--header-add-img-status-menu: calc(var(--header-add-img-status) + var(--header-menu-width));
+
+	/* nav category */
+	--cat-width: 80px;
+	--cat-icon-size: 2.5rem;
+	--cat-name-size: 1rem;
+
+	/* footer */
+	--footer-container-height: 90px;
+
+	/* main */
+	--no-main-container-height: calc(var(--header-height) + var(--footer-container-height));
+	--main-container-height: calc(100% - var(--no-main-container-height));
+
+	/* bouton article */
+	--bt-article-width: 120px;
+	--bt-article-height: 120px;
+
+	/* tables */
+	--bt-table-width: 90px;
+	--bt-table-height: 90px;
+
+	/* addition */
+	--addition-legend-heigh: 20px;
+	--addition-line-heigh: 29px;
+	/* dev addition */
+	--addition-list-height: 50%;
+
+	/* button basic */
+	--bt-basic-width: 280px;
+	--bt-basic-height: 120px;
+	--bt-basic-icon-width: 28%;
+	--bt-basic-text-width: 72%;
+}

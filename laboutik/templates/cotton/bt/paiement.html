@@ -1,0 +1,16 @@
+{% load static i18n %}
+
+<div class="bt-basic-container bt-basic-bg-success" {{ attrs }} 
+	>
+	<div class="bt-basic-icon">
+		<i class="fas {{ icon }}"></i>
+	</div>
+	<div class="bt-basic-text">
+		<div>{{ name }}</div>
+		<div class="paiement-bt-total">
+			<span>{% translate "TOTAL" %}</span>
+			<span>{{ total }}</span>
+			<span>{{ currency_data.symbol }}</span>
+		</div>
+	</div>
+</div>

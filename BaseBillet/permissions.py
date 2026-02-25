@@ -33,6 +33,30 @@ class HasLaBoutikApi(BaseHasAPIKey):
 
     def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
         key = self.get_key(request)
+        if not key:
+            raise PermissionDenied("Missing LaBoutik API key.")
+        try:
+            api_key = LaBoutikAPIKey.objects.get_from_key(key)
+        except LaBoutikAPIKey.DoesNotExist:
+            raise PermissionDenied("Invalid LaBoutik API key.")
+
+        request.laboutik_api_key = api_key
+        return super().has_permission(request, view)
+
+
+class HasLaBoutikAccess(BaseHasAPIKey):
+    """Accepte soit une clé API LaBoutik, soit un admin tenant connecté."""
+    model = LaBoutikAPIKey
+
+    def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
+        # 1. Admin tenant connecté via session → autorisé
+        if request.user and request.user.is_authenticated and request.user.is_staff:
+            return True
+
+        # 2. Clé API LaBoutik (header Authorization: Api-Key xxx)
+        key = self.get_key(request)
+        if not key:
+            raise PermissionDenied("Missing LaBoutik API key or admin session.")
         try:
             api_key = LaBoutikAPIKey.objects.get_from_key(key)
         except LaBoutikAPIKey.DoesNotExist:

@@ -1,0 +1,97 @@
+{% load static i18n %}
+
+<div id="addition">
+	<div class="addition-legend-grid">
+		<div></div>
+		<div>{% translate "QTE" %}</div>
+		<div>{% translate "PRODUIT" %}</div>
+		<div>{% translate "PRIX" %}</div>
+	</div>
+	<div id="addition-list"></div>
+	<form id="addition-form" class="hide" hx-post="{% url 'laboutik-paiement-moyens_paiement' %}" hx-trigger="validerPaiement"
+		hx-target="#messages" hx-swap="outerHTML" hx-on::after-request="hideAndEmptyElement('#confirm')">
+		<input type="text" name="id_table" value="{{ id_table }}" />
+		<input type="text" name="uuid_pv" value="{{ pv.id }}" />
+		<input type="text" name="responsable" value="{{ card.name }}" />
+		<input type="text" name="tag_id_cm" value="{{ card.tag_id }}" />
+		<input type="text" id="nfc-tag-id" name="tag_id" />
+		<input type="text" id="addition-comportement" name="comportement" value="{{ pv.comportement }}" />
+		<input type="number" id="addition-total" name="total" value="" />
+		<input type="text" id="addition-moyen-paiement" name="moyen_paiement" value="" />
+		<input type="text" id="addition-hostname-client" name="hostname_client" value="{{ hostname_client }}" />
+		<input type="text" id="addition-uuid-transaction" name="uuid_transaction" value="" />
+		<input type="number" id="addition-given-sum" name="given_sum" value="" />
+	</form>
+</div>
+
+<script src="{% static 'js/addition.js' %}"></script>
+
+<style>
+	#addition {
+		display: none;
+		flex-direction: column;
+		width: 100%;
+		height: 100%;
+		color: var(--blanc01);
+	}
+
+	#addition-list {
+		width: 100%;
+		/* dev */
+		/* height: calc(var(--addition-list-heigh) - var(--addition-legend-heigh)); */
+		height: calc(100% - var(--addition-legend-heigh));
+		overflow-y: auto;
+		scrollbar-width: none
+	}
+
+	.addition-legend-grid {
+		width: 100%;
+		height: 20px;
+		display: grid;
+		grid-template-columns: 12% 12% 60% 16%;
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--gris03);
+		border-bottom: 1px solid var(--gris07);
+	}
+
+	.addition-line-grid {
+		width: 100%;
+		min-height: var(--addition-line-heigh);
+		display: grid;
+		grid-template-columns: 12% 12% 60% 16%;
+		color: var(--blanc01);
+		font-size: 16px;
+		font-weight: 400;
+		margin: 8px 0;
+	}
+
+	.addition-col-bt {
+		font-size: 1.8rem;
+		/* background-color: aqua; */
+	}
+
+	.addition-col-number,
+	.addition-col-name,
+	.addition-col-price {
+		overflow: hidden;
+	}
+
+	#addition-form {
+		display: none;
+	}
+
+	.addition-include-data {
+		display: none;
+	}
+
+	/* pour une largeur supérieure 1022 pixels */
+	@media only screen and (width > 1022px) {
+		#addition {
+			display: flex;
+			flex-direction: column;
+			width: 29%;
+			background-color: var(--gris10);
+		}
+	}
+</style>
