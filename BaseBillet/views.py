@@ -151,9 +151,10 @@ def get_context(request):
     # Le lien "Fédération"
     meta_url = cache.get('meta_url')
     if not meta_url:
-        meta = Client.objects.filter(categorie=Client.META)[0]
-        meta_url = f"https://{meta.get_primary_domain().domain}"
-        cache.set('meta_url', meta_url, 3600 * 24)
+        meta = Client.objects.filter(categorie=Client.META).first()
+        if meta:
+            meta_url = f"https://{meta.get_primary_domain().domain}"
+            cache.set('meta_url', meta_url, 3600 * 24)
 
     # Formbricks existe ?
     formbricks_config = FormbricksConfig.get_solo()
