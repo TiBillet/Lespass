@@ -532,6 +532,31 @@ class Configuration(SingletonModel):
     allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"),
                                                     help_text=_("Events need start and end dates to be comparable."))
 
+    """
+    ######### MODULES GROUPWARE #########
+    """
+
+    module_billetterie = models.BooleanField(
+        default=True,
+        verbose_name=_("Event ticketing module"),
+    )
+    module_adhesion = models.BooleanField(
+        default=False,
+        verbose_name=_("Membership module"),
+    )
+    module_crowdfunding = models.BooleanField(
+        default=False,
+        verbose_name=_("Crowdfunding module"),
+    )
+    module_monnaie_locale = models.BooleanField(
+        default=False,
+        verbose_name=_("Local currency & cashless module"),
+    )
+    module_caisse = models.BooleanField(
+        default=False,
+        verbose_name=_("POS & restaurant module"),
+    )
+
     currency_code = models.CharField(max_length=3, default="EUR")
 
     additional_text_in_membership_mail = models.TextField(blank=True, null=True,
@@ -780,6 +805,22 @@ class Configuration(SingletonModel):
             logger.warning(f"check_stripe_sepa_capability error: {e}")
             return False
 
+    def clean(self):
+        super().clean()
+
+        # Regle 1 : la caisse V2 est interdite si un serveur cashless V1 est configure
+        # Rule 1: POS V2 is forbidden when a V1 cashless server is configured
+        if self.module_caisse and self.server_cashless:
+            raise ValidationError(
+                _("POS V2 cannot be activated while a V1 cashless server is configured. "
+                  "Migration to V2 is required first.")
+            )
+
+        # Regle 2 : la caisse necessite la monnaie locale (pas de POS sans cashless)
+        # Rule 2: POS requires local currency (no POS without cashless)
+        if self.module_caisse:
+            self.module_monnaie_locale = True
+
     def save(self, *args, **kwargs):
         '''
         Transforme le nom en slug si vide, pour en faire une url lisible
@@ -970,6 +1011,28 @@ class Product(models.Model):
         verbose_name = _('Product')
         verbose_name_plural = _('Products')
         unique_together = ('categorie_article', 'name')
+
+
+class TicketProduct(Product):
+    """Proxy pour afficher uniquement les produits billetterie dans l'admin.
+    Proxy to display only ticket products in admin.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _('Ticket product')
+        verbose_name_plural = _('Ticket products')
+
+
+class MembershipProduct(Product):
+    """Proxy pour afficher uniquement les produits adhesion dans l'admin.
+    Proxy to display only membership products in admin.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _('Membership product')
+        verbose_name_plural = _('Membership products')
 
 
 class PromotionalCode(models.Model):

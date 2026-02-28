@@ -22,7 +22,7 @@ from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
-from django.urls import reverse, re_path
+from django.urls import reverse, reverse_lazy, re_path, path
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -73,7 +73,8 @@ from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissi
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
+from BaseBillet.models import Configuration, OptionGenerale, Product, TicketProduct, MembershipProduct, \
+    Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
     PromotionalCode, Tva
@@ -409,24 +410,63 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         }
     }
 
-    #
-    # def get_urls(self):
-    #     urls = super().get_urls()
-    #     custom_urls = [
-    #         re_path(
-    #             r'^slugify_preview/$',
-    #             self.admin_site.admin_view(csrf_protect(require_POST(self.slugify_preview))),
-    #             name='configuration-slugify-preview',
-    #         ),
-    #     ]
-    #     return custom_urls + urls
-    #
-    # def slugify_preview(self, request: HttpRequest):
-    #     """HTMX endpoint: returns the slugified version of posted domain_name."""
-    #     if not TenantAdminPermissionWithRequest(request):
-    #         return HttpResponse("", status=403)
-    #     value = request.POST.get('domain_name', '')
-    #     return HttpResponse(slugify(value))
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'module-toggle-modal/<str:field_name>/',
+                self.admin_site.admin_view(self.module_toggle_modal),
+                name='configuration-module-modal',
+            ),
+            path(
+                'module-toggle/<str:field_name>/',
+                self.admin_site.admin_view(csrf_protect(require_POST(self.module_toggle))),
+                name='configuration-module-toggle',
+            ),
+        ]
+        return custom_urls + urls
+
+    def module_toggle_modal(self, request, field_name):
+        """HTMX GET : renvoie le modal de confirmation pour activer/desactiver un module."""
+        if field_name not in MODULE_FIELDS:
+            return HttpResponse("", status=400)
+
+        configuration = Configuration.get_solo()
+        is_active = getattr(configuration, field_name)
+        module_name = str(MODULE_FIELDS[field_name]["name"])
+
+        toggle_url = reverse(
+            'staff_admin:configuration-module-toggle',
+            args=[field_name],
+        )
+
+        html = render_to_string(
+            'admin/dashboard_module_modal.html',
+            {
+                "module_name": module_name,
+                "is_active": is_active,
+                "toggle_url": toggle_url,
+                "csrf_token": request.META.get("CSRF_COOKIE", ""),
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+    def module_toggle(self, request, field_name):
+        """HTMX POST : bascule un module et renvoie les cartes mises a jour."""
+        if field_name not in MODULE_FIELDS:
+            return HttpResponse("", status=400)
+
+        configuration = Configuration.get_solo()
+        current_value = getattr(configuration, field_name)
+        setattr(configuration, field_name, not current_value)
+        configuration.full_clean()
+        configuration.save()
+
+        # HX-Refresh force un reload complet : la sidebar se met a jour
+        response = HttpResponse("")
+        response["HX-Refresh"] = "true"
+        return response
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -1262,6 +1302,79 @@ class ProductAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+# ---------------------------------------------------------------------------
+# Proxy admins : vues filtrees par type de produit
+# Proxy admins: filtered views per product type
+#
+# Le ProductAdmin original reste enregistre (autocomplete EventAdmin, URLs
+# existantes, tests Playwright). Ces proxy admins ajoutent des vues dediees
+# dans les sections Billetterie et Adhesion de la sidebar.
+# ---------------------------------------------------------------------------
+
+
+class TicketProductForm(ProductAdminCustomForm):
+    """Formulaire produit restreint aux types billetterie.
+    Product form restricted to ticket types."""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = TicketProduct
+
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.BILLET, _('Ticket booking')),
+            (Product.FREERES, _('Free booking')),
+        ],
+        widget=UnfoldAdminSelectWidget(),
+        label=_("Product type"),
+    )
+
+
+class MembershipProductForm(ProductAdminCustomForm):
+    """Formulaire produit force en mode adhesion.
+    Product form forced to membership mode.
+    Le champ categorie_article est cache et pre-rempli."""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = MembershipProduct
+
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.ADHESION, _('Subscription or membership')),
+        ],
+        widget=forms.HiddenInput(),
+        label=_("Product type"),
+        initial=Product.ADHESION,
+    )
+
+
+@admin.register(TicketProduct, site=staff_admin_site)
+class TicketProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits billetterie (Billet, Reservation gratuite).
+    Filtered admin view: only ticket products (Ticket booking, Free booking)."""
+    form = TicketProductForm
+    inlines = [PriceInline]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+
+    list_filter = ['publish']  # categorie_article inutile, deja filtre
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(categorie_article__in=[Product.BILLET, Product.FREERES])
+
+
+@admin.register(MembershipProduct, site=staff_admin_site)
+class MembershipProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits adhesion.
+    Filtered admin view: only membership products."""
+    form = MembershipProductForm
+    inlines = [PriceInline, ProductFormFieldInline]
+
+    list_filter = ['publish']  # categorie_article inutile, deja filtre
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.filter(categorie_article=Product.ADHESION)
+
+
 @admin.register(PromotionalCode, site=staff_admin_site)
 class PromotionalCodeAdmin(ModelAdmin):
     compressed_fields = True
@@ -1913,6 +2026,274 @@ class MembershipChangeForm(ModelForm):
 def adhesion_badge_callback(request):
     # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
     return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
+
+
+def get_sidebar_navigation(request):
+    """Sidebar dynamique : masque les sections liees aux modules inactifs.
+    Appelee par Unfold via SIDEBAR.navigation (string importable)."""
+    from BaseBillet.models import Configuration
+
+    configuration = Configuration.get_solo()
+
+    admin_permission = "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+    root_permission = "ApiBillet.permissions.RootPermissionWithRequest"
+
+    # --- Toujours visible : Global information ---
+    navigation = [
+        {
+            "title": _("Global information"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Dashboard"),
+                    "icon": "dashboard",
+                    "link": reverse_lazy("admin:index"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Settings"),
+                    "icon": "manufacturing",
+                    "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
+                    "permission": admin_permission,
+                },
+            ],
+        },
+    ]
+
+    # --- Comptes utilisateurs dans Informations generales ---
+    # --- User accounts in Global information ---
+    navigation[0]["items"].append({
+        "title": _("User accounts"),
+        "icon": "person_add",
+        "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
+        "permission": admin_permission,
+    })
+
+    # --- module_adhesion : section Adhesions ---
+    # --- module_adhesion: Memberships section ---
+    if configuration.module_adhesion:
+        navigation.append({
+            "title": _("Memberships"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Membership products"),
+                    "icon": "loyalty",
+                    "link": reverse_lazy("staff_admin:BaseBillet_membershipproduct_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Subscriptions"),
+                    "icon": "card_membership",
+                    "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
+                    "badge": "Administration.admin_tenant.adhesion_badge_callback",
+                    "permission": admin_permission,
+                },
+            ],
+        })
+
+    # --- module_billetterie : tout ce qui concerne la billetterie ---
+    # --- module_billetterie: everything related to ticketing ---
+    if configuration.module_billetterie:
+        navigation.append({
+            "title": _("Ticketing"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Ticket products"),
+                    "icon": "storefront",
+                    "link": reverse_lazy("staff_admin:BaseBillet_ticketproduct_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Carousel"),
+                    "icon": "photo_library",
+                    "link": reverse_lazy("staff_admin:BaseBillet_carrousel_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Promotional codes"),
+                    "icon": "local_offer",
+                    "link": reverse_lazy("staff_admin:BaseBillet_promotionalcode_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Tags"),
+                    "icon": "style",
+                    "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Addresses"),
+                    "icon": "signpost",
+                    "link": reverse_lazy("staff_admin:BaseBillet_postaladdress_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Events"),
+                    "icon": "event",
+                    "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Bookings"),
+                    "icon": "event_upcoming",
+                    "link": reverse_lazy("staff_admin:BaseBillet_reservation_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Tickets"),
+                    "icon": "confirmation_number",
+                    "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Scan App"),
+                    "icon": "qr_code_scanner",
+                    "link": reverse_lazy("staff_admin:BaseBillet_scanapp_changelist"),
+                    "permission": admin_permission,
+                },
+            ],
+        })
+
+    # --- module_caisse : Caisse LaBoutik ---
+    if configuration.module_caisse:
+        navigation.append({
+            "title": _("Caisse LaBoutik"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Device pairing (PIN)"),
+                    "icon": "phonelink_setup",
+                    "link": reverse_lazy("staff_admin:discovery_pairingdevice_changelist"),
+                    "permission": admin_permission,
+                },
+            ],
+        })
+
+    # --- Toujours visible : Sales ---
+    navigation.append({
+        "title": _("Sales"),
+        "separator": True,
+        "collapsible": True,
+        "items": [
+            {
+                "title": _("Entries"),
+                "icon": "receipt_long",
+                "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
+                "permission": admin_permission,
+            },
+        ],
+    })
+
+    # --- Toujours visible : Fédération ---
+    navigation.append({
+        "title": _("Fédération"),
+        "separator": True,
+        "collapsible": True,
+        "items": [
+            {
+                "title": _("Espaces"),
+                "icon": "linked_services",
+                "link": reverse_lazy("staff_admin:BaseBillet_federatedplace_changelist"),
+                "permission": admin_permission,
+            },
+            {
+                "title": _("Assets"),
+                "icon": "currency_exchange",
+                "link": reverse_lazy("staff_admin:fedow_public_assetfedowpublic_changelist"),
+                "permission": admin_permission,
+            },
+        ],
+    })
+
+    # --- module_crowdfunding : Contributions ---
+    if configuration.module_crowdfunding:
+        navigation.append({
+            "title": _("Contributions"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Configuration"),
+                    "icon": "manufacturing",
+                    "link": reverse_lazy("staff_admin:crowds_crowdconfig_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Initiative"),
+                    "icon": "crowdsource",
+                    "link": reverse_lazy("staff_admin:crowds_initiative_changelist"),
+                    "permission": admin_permission,
+                },
+            ],
+        })
+
+    # --- Toujours visible : External tools ---
+    navigation.append({
+        "title": _("External tools"),
+        "separator": True,
+        "collapsible": True,
+        "items": [
+            {
+                "title": _("API Key"),
+                "icon": "api",
+                "link": reverse_lazy("staff_admin:BaseBillet_externalapikey_changelist"),
+                "permission": admin_permission,
+            },
+            {
+                "title": _("Webhook"),
+                "icon": "webhook",
+                "link": reverse_lazy("staff_admin:BaseBillet_webhook_changelist"),
+                "permission": admin_permission,
+            },
+            {
+                "title": _("Ghost"),
+                "icon": "circle",
+                "link": reverse_lazy("staff_admin:BaseBillet_ghostconfig_changelist"),
+                "permission": admin_permission,
+            },
+            {
+                "title": _("Formbricks"),
+                "icon": "list_alt",
+                "link": reverse_lazy("staff_admin:BaseBillet_formbricksforms_changelist"),
+                "permission": admin_permission,
+            },
+            {
+                "title": _("Brevo"),
+                "icon": "alternate_email",
+                "link": reverse_lazy("staff_admin:BaseBillet_brevoconfig_changelist"),
+                "permission": admin_permission,
+            },
+        ],
+    })
+
+    # --- Root seulement : Root Configuration ---
+    navigation.append({
+        "title": _("Root Configuration"),
+        "separator": True,
+        "collapsible": True,
+        "items": [
+            {
+                "title": _("Waiting Configuration"),
+                "icon": "linked_services",
+                "link": reverse_lazy("staff_admin:MetaBillet_waitingconfiguration_changelist"),
+                "permission": root_permission,
+            },
+            {
+                "title": _("Tenants"),
+                "icon": "domain",
+                "link": reverse_lazy("staff_admin:Customers_client_changelist"),
+                "permission": root_permission,
+            },
+        ],
+    })
+
+    return navigation
 
 
 class MembershipStatusFilter(admin.SimpleListFilter):
@@ -4869,9 +5250,63 @@ def environment_callback(request):
     return [_("Production"), "primary"]
 
 
+MODULE_FIELDS = {
+    "module_billetterie": {
+        "name": _("Event ticketing"),
+        "description": _("Events, reservations, and ticket sales"),
+        "testid": "dashboard-card-billetterie",
+    },
+    "module_adhesion": {
+        "name": _("Membership"),
+        "description": _("Memberships and subscriptions"),
+        "testid": "dashboard-card-adhesion",
+    },
+    "module_crowdfunding": {
+        "name": _("Crowdfunding"),
+        "description": _("Participatory funding and adaptive contributions"),
+        "testid": "dashboard-card-crowdfunding",
+    },
+    "module_monnaie_locale": {
+        "name": _("Local currency & cashless"),
+        "description": _("Local currency tokens, federated wallet"),
+        "testid": "dashboard-card-monnaie-locale",
+    },
+    "module_caisse": {
+        "name": _("POS & restaurant"),
+        "description": _("Point of sale, orders, and cash register"),
+        "testid": "dashboard-card-caisse",
+    },
+}
+
+
+def _build_modules_context(configuration):
+    """Construit la liste de modules pour le dashboard.
+    Utilise par dashboard_callback et par le toggle HTMX."""
+    modules = []
+    for field_name, info in MODULE_FIELDS.items():
+        is_caisse = field_name == "module_caisse"
+        modules.append({
+            "field": field_name,
+            "name": info["name"],
+            "description": info["description"],
+            "testid": info["testid"],
+            "active": getattr(configuration, field_name),
+            "disabled": is_caisse and bool(configuration.server_cashless),
+            "modal_url": reverse(
+                'staff_admin:configuration-module-modal',
+                args=[field_name],
+            ),
+        })
+    return modules
+
+
 def dashboard_callback(request, context):
+    from BaseBillet.models import Configuration
+
+    configuration = Configuration.get_solo()
+
     context.update({
-        "custom_variable": "value",
+        "modules": _build_modules_context(configuration),
     })
 
     return context
