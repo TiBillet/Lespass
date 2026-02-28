@@ -18,8 +18,8 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 **Resume executif — ou on en est :**
 - Branche : `integration_laboutik`
 - Front LaBoutik : 100% fait (templates, JS, cotton)
-- Backend : 100% mocke. Phase -1 terminee. Prochaine etape = Phase 0 (fedow_core)
-- fedow_core : pas encore cree
+- Backend : 100% mocke. Phase -1 terminee. Phase 0.5 (admin federation) terminee. Prochaine etape = Phase 0 suite (services, Token, Transaction)
+- fedow_core : app creee (Asset, Federation + admin complet avec flow invitation per-asset et per-lieu)
 - Toutes les decisions architecturales sont prises (section 16)
 
 **Les 3 regles a ne jamais oublier :**
@@ -304,17 +304,18 @@ La badgeuse etait une experimentation non aboutie.
 
 ### Decision : simplifier la hash chain (DECIDE)
 
-**Choix retenu : hash par transaction (sans chaine) + numero sequentiel.**
+**Choix retenu : hash par transaction (sans chaine) + id auto-increment.**
 
 Le `previous_transaction` (FK → self) est supprime. Chaque transaction a :
+- un `id` (BigAutoField, PK) auto-incremente par Django/PostgreSQL — ordonnancement global, detection de trous, reference humaine pour les tickets
+- un `uuid` (UUIDField, unique) conserve pour les migrations/imports depuis l'ancien Fedow
 - un `hash` individuel (SHA256 de ses propres donnees, nullable pendant la migration)
-- un `sequence_number` auto-incremente (BigIntegerField + sequence PostgreSQL) — ordonnancement global, detection de trous
 
 Raisons :
 - L'ancien Fedow verifiait rarement la chaine en pratique
 - En mono-repo, PostgreSQL (ACID, WAL) garantit l'integrite
-- Le `sequence_number` apporte : detection de trous, ordonnancement garanti, reference humaine pour les tickets/recus
-- L'UUID reste la PK (indispensable pour les migrations/imports)
+- L'`id` BigAutoField apporte : detection de trous, ordonnancement garanti, reference humaine pour les tickets/recus. C'est du Django natif, zero hack (pas de RunSQL, pas de sequence manuelle)
+- L'UUID reste un champ unique (on peut toujours faire `Transaction.objects.get(uuid=ancien_uuid)` pour les imports)
 
 ### Strategie de migration en 3 phases
 
@@ -322,11 +323,11 @@ Raisons :
 - Importer les anciennes transactions avec leur UUID original et leur hash original
 - Marquer `migrated=True` sur les transactions importees
 - Les nouvelles transactions ont `hash=null`
-- Le `sequence_number` est auto-attribue a l'import (ordre chronologique)
+- L'`id` est auto-attribue a l'import (ordre chronologique)
 
 **Phase 2 — Production (le systeme tourne)**
 - Tout fonctionne sans calcul de hash
-- Le `sequence_number` s'incremente automatiquement
+- L'`id` (BigAutoField) s'incremente automatiquement
 - Pas de verification de hash
 
 **Phase 3 — Consolidation (quand tout est stable)**
@@ -423,6 +424,21 @@ assets_accessibles = AssetService.obtenir_assets_accessibles(tenant=connection.t
 # GOOD — "My account" view (all places for one user)
 tous_les_tokens = Token.objects.filter(wallet=user.wallet, asset__active=True)
 ```
+
+### Separation des responsabilites federation
+
+Trois mecanismes distincts gerent la federation. Ne pas les confondre :
+
+| Mecanisme | Modele | App (schema) | Role |
+|-----------|--------|--------------|------|
+| Federation de lieux | `Federation` (.tenants, .pending_tenants) | fedow_core (SHARED_APPS, public) | Groupement de lieux + invitation de lieux |
+| Federation per-asset | `Asset` (.pending_invitations, .federated_with) | fedow_core (SHARED_APPS, public) | Invitation per-asset : le createur invite, l'invite accepte |
+| Filtrage par tags | `FederatedPlace` (.tag_filter, .tag_exclude) | BaseBillet (TENANT_APPS, per-tenant) | Filtrer les evenements importes par tags |
+
+**⚠️ Contrainte cross-schema** : un modele SHARED_APPS ne peut PAS avoir de M2M vers un
+modele TENANT_APPS (la table M2M serait dans le schema public mais pointerait vers des
+enregistrements dans des schemas differents). C'est pourquoi le filtrage par tags reste
+sur `FederatedPlace` (BaseBillet) et non sur `Federation` ou `Asset` (fedow_core).
 
 ## 8. Multi-tarif par asset (prix en EUR ou en tokens)
 
@@ -590,12 +606,20 @@ Asset
 │   FID = Points de fidelite
 ├── wallet_origin (FK → Wallet) — qui a cree cet asset
 ├── tenant_origin (FK → Customers.Client) — tenant createur
+├── pending_invitations (M2M → Customers.Client) — lieux invites (en attente d'acceptation)
+├── federated_with (M2M → Customers.Client) — lieux qui ont accepte le partage
 ├── active (BooleanField, default=True)
 ├── archive (BooleanField, default=False)
 ├── id_price_stripe (CharField, nullable) — pour FED (recharge Stripe)
 ├── created_at (DateTimeField, auto_now_add)
 └── last_update (DateTimeField, auto_now)
 ```
+
+**Flow d'invitation per-asset (admin) :**
+1. Le createur edite un Asset → champ autocomplete `pending_invitations` → ajoute un lieu
+2. Le lieu invite voit une carte "Invitations de partage d'assets" au-dessus de sa changelist
+3. Il clique "Accepter le partage" → deplace de `pending_invitations` vers `federated_with`
+4. L'asset apparait dans la changelist de l'invite (lecture seule)
 
 #### `Token` — Solde d'un wallet pour un asset
 
@@ -615,8 +639,8 @@ C'est LE modele qui repond a "combien a-t-il sur sa carte ?".
 
 ```
 Transaction
-├── uuid (PK) — conserve pour migrations/imports
-├── sequence_number (BigIntegerField, unique, editable=False) — auto-increment global via sequence PostgreSQL
+├── id (BigAutoField, PK) — auto-increment natif Django/PostgreSQL, sert de reference humaine (#12345)
+├── uuid (UUIDField, unique) — conserve pour migrations/imports depuis l'ancien Fedow
 ├── hash (CharField, 64, nullable, unique) — SHA256 individuel (pas de chaine)
 │   nullable pendant Phase 1-2, NOT NULL apres Phase 3
 ├── migrated (BooleanField, default=False) — True pour les transactions importees
@@ -632,42 +656,28 @@ Transaction
 ├── metadata (JSONField, default=dict)
 ├── subscription_type (CharField, nullable) — legacy (SUBSCRIBE retire, conserve pour import)
 ├── subscription_start_datetime (DateTimeField, nullable)
-├── checkout_stripe (FK → PaiementStripe, nullable)
+├── checkout_stripe (UUIDField, nullable) — UUID du Paiement_stripe (pas de FK cross-schema)
 ├── tenant (FK → Customers.Client) — pour filtrage si SHARED_APP
 └── ip (GenericIPAddressField, default='0.0.0.0')
 ```
 
-**⚠️ Note technique sur `sequence_number` :**
-En Django 4.2, `BigAutoField` ne peut etre que la PK. Comme `uuid` est la PK,
-on utilise un `BigIntegerField` + une sequence PostgreSQL dans la migration :
-```python
-# Dans la migration Django / In the Django migration
-migrations.RunSQL(
-    "CREATE SEQUENCE IF NOT EXISTS fedow_core_transaction_seq;",
-    "DROP SEQUENCE IF EXISTS fedow_core_transaction_seq;",
-)
-# Puis sur le champ / Then on the field
-migrations.RunSQL(
-    "ALTER TABLE fedow_core_transaction ALTER COLUMN sequence_number SET DEFAULT nextval('fedow_core_transaction_seq');",
-    "ALTER TABLE fedow_core_transaction ALTER COLUMN sequence_number DROP DEFAULT;",
-)
-```
-PostgreSQL gere l'auto-increment. Django voit un `BigIntegerField(unique=True, editable=False)`.
-Le `sequence_number` est global (cross-tenant) car `fedow_core` est en SHARED_APPS.
-Aucun verrou applicatif (`select_for_update`) — PostgreSQL gere la sequence tout seul.
+**Note sur `id` (BigAutoField) :**
+L'`id` est un BigAutoField natif Django — zero hack, zero RunSQL, zero sequence manuelle.
+Django gere l'auto-increment tout seul. L'`id` est global (cross-tenant) car `fedow_core` est en SHARED_APPS.
+On peut chercher une transaction par UUID : `Transaction.objects.get(uuid=ancien_uuid)`.
 
 **Pas de `sequence_par_asset`.** On a retire le compteur par asset pour eviter les verrous
 cross-tenant sur les assets federes. L'audit humain se fait via `LigneArticle` (table VENTES
 du lieu), pas via la table Transaction federee. La verification d'integrite de la sequence
 globale se fait via un management command (cf. ci-dessous).
 
-**Note :** `previous_transaction` (FK → self) est supprime. Le `sequence_number` le remplace.
+**Note :** `previous_transaction` (FK → self) est supprime. L'`id` auto-increment le remplace.
 
 **Le `save()` de Transaction doit :**
 1. Valider les regles metier (solde suffisant, etc.)
 2. Mettre a jour les Token (debit sender, credit receiver)
 3. Etre dans une transaction DB atomique
-4. Le `sequence_number` est auto-attribue par PostgreSQL (nextval)
+4. L'`id` (BigAutoField) est auto-attribue par Django/PostgreSQL
 5. Le hash est calcule en Phase 3 uniquement (management command `recalculate_hashes`)
 
 **Verification d'integrite — management command `verify_transactions` :**
@@ -692,9 +702,14 @@ Federation
 ├── uuid (PK)
 ├── name (CharField, 100, unique)
 ├── description (TextField, blank=True)
-├── tenants (M2M → Customers.Client)
-└── assets (M2M → Asset)
+├── created_by (FK → Customers.Client) — tenant createur de la federation
+├── tenants (M2M → Customers.Client) — membres actifs
+├── pending_tenants (M2M → Customers.Client) — lieux invites (en attente d'acceptation)
+└── assets (M2M → Asset) — gere per-asset via AssetAdmin (cache du formulaire admin)
 ```
+
+**Note :** pas de `tag_filter`/`tag_exclude` sur Federation (contrainte cross-schema,
+cf. section 7). Le filtrage par tags reste sur `FederatedPlace` (BaseBillet, TENANT_APPS).
 
 ### 10.2 App `laboutik` — Modeles POS
 
@@ -994,7 +1009,7 @@ Apres chaque import, verifier :
 - Nombre de Transaction == nombre dans l'ancien Fedow
 - Chaque CarteCashless a un wallet lie
 - Chaque CarteMaitresse pointe vers une CarteCashless existante
-- Les transactions importees ont `migrated=True` et un `sequence_number` croissant
+- Les transactions importees ont `migrated=True` et un `id` croissant
 - `manage.py verify_transactions` passe sans erreur
 
 ## 15. Ordre de travail (phases)
@@ -1045,10 +1060,12 @@ Habitue les utilisateurs a l'activation modulaire avant meme que la V2 soit pret
 C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 
 1. Creer l'app `fedow_core` (SHARED_APPS) avec `Asset`, `Token`, `Transaction`, `Federation`
-2. `Transaction` : uuid PK + `sequence_number` (BigIntegerField + sequence PostgreSQL) + `hash` nullable
+2. `Transaction` : `id` BigAutoField PK + `uuid` UUIDField unique (pour imports) + `hash` nullable
 3. Ecrire `fedow_core/services.py` (WalletService, TransactionService, AssetService)
 4. Migrations + tests unitaires (cf. MEMORY.md Phase 0)
 5. Admin Unfold pour Asset, Token, Transaction
+   - AssetAdmin : flow d'invitation per-asset (pending_invitations → accept → federated_with)
+   - FederationAdmin : permissions createur/invite, invitation de lieux, exclusion de membres
 6. **Test securite** : verifier l'isolation tenant (pas de leak cross-tenant)
 
 ### Phase 1 — laboutik : modeles POS
@@ -1103,8 +1120,15 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 33. Supprimer `fedow_connect.Asset`, `fedow_connect.FedowConfig`
 34. Supprimer ou archiver `fedow_public.AssetFedowPublic` (remplace par fedow_core.Asset)
 35. Adapter les vues `fedow_public` pour utiliser `fedow_core.Asset`
-36. Supprimer les templates/JS legacy
-37. Tests Playwright complets
+36. ✅ **Flow d'invitation/acceptation de federation** — FAIT (avance en Phase 0.5) :
+    - `Federation` : permissions createur/invite, invitation de lieux (`pending_tenants`),
+      exclusion de membres, template `federation_members.html`
+    - `Asset` : invitation per-asset (`pending_invitations` → accept → `federated_with`),
+      template `asset_changelist_invitations.html`, changelist avec assets propres + federes
+    - Admin : le createur invite via autocomplete, les invites voient la carte et acceptent
+    - Remplace le flow V1 qui passait par HTTP vers le serveur Fedow distant
+37. Supprimer les templates/JS legacy
+38. Tests Playwright complets
 
 ## 16. Decisions architecturales (toutes prises)
 
@@ -1114,8 +1138,7 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 
 ### ~~16.2 Hash chain : garder, simplifier ou supprimer ?~~
 
-**DECIDE : Simplifier.** Hash individuel par transaction (pas de chaine), plus `sequence_number` auto-incremente.
-Migration en 3 phases : import sans hash → production sans hash → recalcul des hash. Cf. section 5.
+**DECIDE : Simplifier.** Hash individuel par transaction (pas de chaine). L'`id` (BigAutoField) remplace `sequence_number` comme compteur global auto-incremente. Migration en 3 phases : import sans hash → production sans hash → recalcul des hash. Cf. section 5.
 
 ### ~~16.3 Prix en centimes ou DecimalField ?~~
 
@@ -1178,21 +1201,25 @@ le `search_path` mais ne cree pas de connexion separee. L'atomicite cross-schema
 ### 17.2 Migration des Transaction (strategie 3 phases)
 
 **Phase 1 — Import :** Les anciennes transactions sont importees avec leur UUID original et leur hash original tel quel.
-Le champ `migrated=True` les identifie. Le `sequence_number` est auto-attribue dans l'ordre chronologique.
+Le champ `migrated=True` les identifie. L'`id` est auto-attribue dans l'ordre chronologique.
 Les nouvelles transactions creees apres l'import ont `hash=null` et `migrated=False`.
 
-**Phase 2 — Production :** Le systeme tourne sans calcul de hash. Le `sequence_number` garantit l'ordonnancement.
+**⚠️ Import et `id` (BigAutoField) :** A l'import, on ne peut pas fixer l'`id` manuellement
+(c'est la PK auto-increment). Les transactions importees auront de nouveaux `id`, mais conservent
+leur `uuid` original. La correspondance se fait toujours par UUID.
+
+**Phase 2 — Production :** Le systeme tourne sans calcul de hash. L'`id` auto-increment garantit l'ordonnancement.
 Aucune verification de hash n'est effectuee. C'est la phase de stabilisation.
 
 **Phase 3 — Consolidation :** Management command `recalculate_hashes` qui :
-1. Parcourt toutes les transactions par `sequence_number`
+1. Parcourt toutes les transactions par `id`
 2. Calcule le hash SHA256 individuel (pas de chaine) pour chacune
 3. Met a jour le champ `hash`
 4. Migration Django : rendre `hash` NOT NULL + UNIQUE
 
 **⚠️ Point d'attention :** L'ancien hash (chaine) et le nouveau hash (individuel) ne seront pas identiques.
 C'est normal et attendu. L'ancien hash est ecrase. L'integrite des donnees importees repose sur les UUID
-(qui sont conserves) et le `sequence_number` (attribue a l'import).
+(qui sont conserves) et l'`id` (attribue a l'import).
 
 ### 17.3 Federation cross-tenant
 
@@ -1333,19 +1360,18 @@ Avant de travailler sur une Phase qui touche des vues ou des services, toujours 
 Chaque lieu a 20-30 terminaux POS. Pic : 2000 transactions/minute cross-tenant sur le meme asset federe.
 
 **Pourquoi c'est critique :** `fedow_core` est en SHARED_APPS. La table `Transaction` est unique
-(schema `public`). Tous les lieux ecrivent dans la meme table. La sequence PostgreSQL `sequence_number`
-est globale. Si ca ne tient pas la charge, tout s'ecroule.
+(schema `public`). Tous les lieux ecrivent dans la meme table. L'`id` (BigAutoField)
+est global. Si ca ne tient pas la charge, tout s'ecroule.
 
 **Ce qu'on doit verifier :**
 
-1. **Sequence PostgreSQL sous contention** — `nextval()` est-il un goulot ?
+1. **Sequence PostgreSQL sous contention** — la sequence interne du BigAutoField est-elle un goulot ?
    PostgreSQL garantit que `nextval()` ne bloque pas (pas de verrou sur la sequence).
    Mais avec 2000 ecritures/minute, la sequence doit tenir.
 
 2. **INSERT dans Transaction (SHARED_APPS)** — pas de verrou applicatif
    On a supprime `select_for_update`. Chaque INSERT est independant.
-   Le seul point de serialisation est la contrainte UNIQUE sur `sequence_number`
-   (geree par la sequence, pas de conflit possible).
+   L'`id` BigAutoField utilise la sequence interne PostgreSQL (pas de conflit possible).
 
 3. **UPDATE sur Token (debit/credit)** — verrou par ligne
    Le `transaction.atomic()` verrouille les lignes Token du sender et du receiver.

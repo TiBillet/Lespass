@@ -2175,6 +2175,41 @@ def get_sidebar_navigation(request):
             ],
         })
 
+    # --- module_monnaie_locale : Fedow (monnaies, tokens, transactions) ---
+    # --- module_monnaie_locale: Fedow (currencies, tokens, transactions) ---
+    if configuration.module_monnaie_locale:
+        navigation.append({
+            "title": _("Fedow"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Monnaies et tokens"),
+                    "icon": "toll",
+                    "link": reverse_lazy("staff_admin:fedow_core_asset_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Soldes"),
+                    "icon": "account_balance_wallet",
+                    "link": reverse_lazy("staff_admin:fedow_core_token_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Transactions"),
+                    "icon": "receipt_long",
+                    "link": reverse_lazy("staff_admin:fedow_core_transaction_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Federations"),
+                    "icon": "hub",
+                    "link": reverse_lazy("staff_admin:fedow_core_federation_changelist"),
+                    "permission": admin_permission,
+                },
+            ],
+        })
+
     # --- Toujours visible : Sales ---
     navigation.append({
         "title": _("Sales"),
@@ -4021,17 +4056,42 @@ class TenantAdmin(ModelAdmin):
 
     def get_search_results(self, request, queryset, search_term):
         """
-        Pour la recherche de tenant dans la page Federation.
-        On est sur un autocomplete, il faut bidouiller la réponde de ce coté
-        Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
+        Filtre l'autocomplete des tenants selon la page d'origine.
+        Filters tenant autocomplete based on the referring page.
+
+        Utilise sur les pages FederatedPlace (V1) et Federation (V2).
+        Exclut les tenants systeme (WAITING_CONFIG, ROOT, META)
+        et le tenant courant (on ne s'invite pas soi-meme).
+        Used on FederatedPlace (V1) and Federation (V2) pages.
+        Excludes system tenants (WAITING_CONFIG, ROOT, META)
+        and the current tenant (you don't invite yourself).
         """
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
-        if request.headers.get('Referer'):
-            logger.info(request.headers.get('Referer'))
-            if ("federatedplace" in request.headers['Referer']
-                    and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
-                queryset = queryset.exclude(categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META]).exclude(
-                    pk=connection.tenant.pk)  # on retire le client actuel
+        referer = request.headers.get('Referer', '')
+        requete_est_autocomplete = "admin/autocomplete" in request.path
+
+        # Pages qui utilisent l'autocomplete de tenants :
+        # - FederatedPlace (V1) : "federatedplace" dans le referer
+        # - Federation (V2) : "federation" dans le referer
+        # - Asset fedow_core (V2) : "fedow_core/asset" dans le referer
+        #   (pour pending_invitations — invitation per-asset)
+        # Pages that use tenant autocomplete:
+        # - FederatedPlace (V1): "federatedplace" in referer
+        # - Federation (V2): "federation" in referer
+        # - Asset fedow_core (V2): "fedow_core/asset" in referer
+        #   (for pending_invitations — per-asset invitation)
+        page_utilise_autocomplete_tenant = (
+            "federatedplace" in referer
+            or "federation" in referer
+            or "fedow_core/asset" in referer
+        )
+
+        if requete_est_autocomplete and page_utilise_autocomplete_tenant:
+            queryset = queryset.exclude(
+                categorie__in=[Client.WAITING_CONFIG, Client.ROOT, Client.META],
+            ).exclude(
+                pk=connection.tenant.pk,
+            )
         return queryset, use_distinct
 
     actions_row = ["go_admin", ]

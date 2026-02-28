@@ -147,6 +147,7 @@ SHARED_APPS = (
     'MetaBillet',
     'root_billet',
     'wsocket',
+    'fedow_core',
     'fedow_public',
     'discovery',
 

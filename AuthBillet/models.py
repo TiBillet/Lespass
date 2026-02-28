@@ -105,6 +105,20 @@ class Wallet(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, db_index=True)
     origin = models.ForeignKey(Client, on_delete=models.CASCADE, related_name="wallets", blank=True, null=True)
 
+    # Ajouts Phase 0 fedow_core (decision 16.6)
+    # Phase 0 fedow_core additions (decision 16.6)
+    public_pem = models.TextField(
+        null=True,
+        blank=True,
+        help_text=_("Cle publique PEM pour audit cryptographique"),
+    )
+    name = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text=_("Nom du wallet (ex: nom du lieu, nom du user)"),
+    )
+
 
 
 class TibilletUser(AbstractUser):
