@@ -1509,10 +1509,11 @@ Cette methode n'existe pas. Verifie dans la doc.
 - Quand Claude repete des erreurs deja corrigees
 
 **Contexte etendu (1M tokens) :**
-- Activation : `claude --max-context-window 1000000`
+- Activation au lancement : `claude --model opus[1m]` (ou `sonnet[1m]` selon la phase)
+- Activation en cours de session : `/model opus[1m]`
 - Utile pour : Phase 0 (beaucoup de modeles), Phase 6 (migration, lire ancien + ecrire nouveau), revue de securite transverse
 - Par defaut (200k) : suffisant pour les phases 1-5 et 7
-- ⚠️ Plus de contexte = plus lent + plus cher. Ne pas laisser active en permanence.
+- ⚠️ Plus de contexte = plus lent + plus cher (2x input, 1.5x output au-dela de 200k). Ne pas laisser active en permanence.
 
 **Signaux d'alerte — le mainteneur doit intervenir si :**
 - Claude modifie plus de 3 fichiers sans lancer de test
