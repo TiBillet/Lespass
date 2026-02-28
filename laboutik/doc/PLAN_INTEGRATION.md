@@ -18,8 +18,8 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 **Resume executif — ou on en est :**
 - Branche : `integration_laboutik`
 - Front LaBoutik : 100% fait (templates, JS, cotton)
-- Backend : 100% mocke. Phase -1 terminee. Phase 0.5 (admin federation) terminee. Prochaine etape = Phase 0 suite (services, Token, Transaction)
-- fedow_core : app creee (Asset, Federation + admin complet avec flow invitation per-asset et per-lieu)
+- Backend : 100% mocke. Phase -1 terminee. Phase 0 TERMINEE (modeles + services + admin + tests). Prochaine etape = Phase 1 (modeles POS)
+- fedow_core : app complete (Asset, Token, Transaction, Federation + admin + services + tests 8 pytest + 1 Playwright)
 - Toutes les decisions architecturales sont prises (section 16)
 
 **Les 3 regles a ne jamais oublier :**
@@ -1128,7 +1128,12 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
     - Admin : le createur invite via autocomplete, les invites voient la carte et acceptent
     - Remplace le flow V1 qui passait par HTTP vers le serveur Fedow distant
 37. Supprimer les templates/JS legacy
-38. Tests Playwright complets
+38. ✅ **Tests federation d'assets** — FAIT :
+    - Pytest (`tests/pytest/test_fedow_core.py`) : 3 tests ajoutes (tests 6-8) :
+      pending_invitations, accept_invitation, visibilite queryset admin
+    - Playwright (`tests/playwright/tests/31-admin-asset-federation.spec.ts`) :
+      flow complet cross-tenant (Lespass cree + invite → Chantefrein accepte → verification bilaterale)
+    - 8 pytest + 1 Playwright (12 steps, ~18s) — tous verts
 
 ## 16. Decisions architecturales (toutes prises)
 
