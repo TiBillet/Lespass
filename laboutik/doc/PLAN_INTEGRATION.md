@@ -4,7 +4,7 @@
 > Le front LaBoutik (templates, JS, cotton) est deja fait.
 > Reste : modeles, backend, admin, retrait des mocks, internalisation de Fedow.
 >
-> Derniere mise a jour : 2026-02-28
+> Derniere mise a jour : 2026-03-01
 
 ---
 
@@ -20,7 +20,7 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 - Front LaBoutik : 100% fait (templates, JS, cotton)
 - Backend : 100% mocke. Phase -1 terminee. Phase 0 TERMINEE (modeles + services + admin + tests). Prochaine etape = Phase 1 (modeles POS)
 - fedow_core : app complete (Asset, Token, Transaction, Federation + admin + services + tests 8 pytest + 1 Playwright)
-- Toutes les decisions architecturales sont prises (section 16)
+- Toutes les decisions architecturales sont prises (section 16), dont 16.9 : Product unifie (pas de ArticlePOS)
 
 **Les 3 regles a ne jamais oublier :**
 1. Ne jamais casser les vues BaseBillet qui utilisent `fedow_connect`
@@ -154,7 +154,7 @@ des concerts n'a pas besoin du module adhesion. Une AMAP n'a pas besoin de la bi
 | Adhesion & Abonnement | `BaseBillet` (Membership) | Gestion des membres, cotisations | Inactif |
 | Budget contributif & Crowdfunding | `crowds` | Don, financement participatif, contribution adaptive | Inactif |
 | Monnaie locale & Caisse alimentaire | `fedow_core` (Asset, Token, Transaction) | Portefeuille, tokens, paiement NFC | Inactif |
-| Caisse & Restauration | `laboutik` (PointDeVente, ArticlePOS) | POS, tables, commandes, cloture | Inactif |
+| Caisse & Restauration | `laboutik` (PointDeVente) + `BaseBillet` (Product/POSProduct) | POS, tables, commandes, cloture | Inactif |
 | Newsletter, Blog, Landing page | — | A venir | Futur |
 
 **Techniquement :** des `BooleanField` sur `BaseBillet.Configuration` (singleton par tenant) :
@@ -476,24 +476,24 @@ Product "Concert Rock"
 Un Product peut avoir autant de Price qu'on veut avec des assets differents.
 Le choix se fait au moment de l'achat (page produit ou panier).
 
-#### Sur `laboutik.ArticlePOS` (caisse POS)
+#### Au POS (Product unifie)
 
-Le modele a deja `prix` (int centimes) et `fedow_asset` (FK → Asset, nullable).
-Meme convention :
+Avec le Product unifie (cf. decision 16.9), le POS utilise directement le couple
+Product + Price. `Price.asset` determine la devise :
 
-- `fedow_asset=null` → prix en centimes EUR
-- `fedow_asset=monnaie_temps` → prix en unites de cet asset
+- `asset=null` → prix en EUR (via `Price.prix`, DecimalField euros)
+- `asset=monnaie_temps` → prix en unites de cet asset
 
-Pour un article vendable en EUR **et** en TIM, creer 2 ArticlePOS
-lies au meme Product :
+Pour un article vendable en EUR **et** en TIM, creer 2 Prices sur le meme Product :
 
 ```
-ArticlePOS "Concert (€)"   → prix=2000, fedow_asset=null      → 20 EUR
-ArticlePOS "Concert (TIM)" → prix=500,  fedow_asset=TIM_asset  → 5 tokens
+Product "Concert" (methode_caisse=BI)
+├── Price "Concert (€)"   → prix=20.00, asset=null       → 20 EUR
+└── Price "Concert (TIM)" → prix=5.00,  asset=TIM_asset  → 5 tokens
 ```
 
-C'est le plus FALC : pas de M2M, pas de modele intermediaire.
-Le caissier voit 2 boutons. L'admin cree 2 articles.
+Le caissier voit 1 bouton "Concert", puis choisit le tarif (EUR ou TIM).
+Pour les articles simples (biere, sandwich), 1 Product = 1 Price = 1 bouton direct.
 
 ### Paniers mixtes en caisse (multi-asset)
 
@@ -526,8 +526,8 @@ Le front doit :
 2. Afficher : "Total : 13€ + 5 TIM"
 3. Au moment du paiement : proposer NFC pour les tokens, especes/CB pour les EUR
 
-Le JS `addition.js` utilise deja Big.js pour les calculs. Il faut ajouter
-un regroupement par `fedow_asset` dans le calcul du total.
+Le JS `addition.js` travaille deja en centimes. Il faut ajouter
+un regroupement par `asset` (depuis `Price.asset`) dans le calcul du total.
 
 **⚠️ C'est un changement front non trivial.** Le template `hx_display_type_payment.html`
 doit aussi s'adapter (montrer quel montant sera debite en tokens vs en EUR).
@@ -546,9 +546,9 @@ Aucune migration de donnees necessaire. Backward compatible a 100%.
 | Ancien modele (OLD_REPOS/LaBoutik) | Destination Lespass v2 | Statut | Notes |
 |---|---|---|---|
 | `Configuration` (singleton, 40+ champs) | `BaseBillet.Configuration` | **Enrichir** | Ajouter : horaires, pied de ticket, prix adhesion, calcul adhesion, Sunmi printer config |
-| `Articles` | `laboutik.ArticlePOS` + lien `BaseBillet.Product` | **Creer** | Couleur, icon, poid, methode, groupement |
-| `Categorie` | `laboutik.CategorieArticlePOS` | **Creer** | Couleur, icon, TVA, poids |
-| `PointDeVente` | `laboutik.PointDeVente` | **Creer** | Config PV, M2M articles/categories |
+| `Articles` | `BaseBillet.Product` (enrichi) + proxy `POSProduct` | **Enrichir** | Champs POS (methode_caisse, couleurs, categorie_pos, etc.) sur Product. Proxy pour admin. Cf. decision 16.9 |
+| `Categorie` | `BaseBillet.CategorieProduct` | **Creer** | Couleur, icon, TVA, poids. Dans BaseBillet car reutilisable au-dela du POS (vente en ligne, etc.) |
+| `PointDeVente` | `laboutik.PointDeVente` | **Creer** | Config PV, M2M products/categories |
 | `MoyenPaiement` | `fedow_core.Asset` | **Absorber** | Categories TLF/TNF/FED/TIM/FID (BDG et SUB retires) |
 | `CarteCashless` | `QrcodeCashless.CarteCashless` | **Enrichir** | Ajouter `wallet_ephemere` seulement (cf. decision 16.7) |
 | `Assets` (soldes) | `fedow_core.Token` | **Nouveau** | Token = solde d'un wallet pour un asset |
@@ -561,7 +561,7 @@ Aucune migration de donnees necessaire. Backward compatible a 100%.
 | `ClotureCaisse` | `laboutik.ClotureCaisse` | **Creer** | Rapport fin de service |
 | `Appareil` + `Appairage` | `BaseBillet.PairingDevice` + `LaBoutikAPIKey` | **Existe** | Discovery remplace RSA |
 | `Couleur` | — | **Absorber** | Hexa directement sur les modeles |
-| `Methode` | — | **Absorber** | Choices CharField sur ArticlePOS |
+| `Methode` | — | **Absorber** | Choices CharField `methode_caisse` sur Product |
 | `TauxTVA` | `BaseBillet.Tva` | **Existe** | |
 | `Wallet` | `AuthBillet.Wallet` | **Existe** | A enrichir si necessaire |
 | `Place` | `Customers.Client` | **Existe** | = tenant django-tenants |
@@ -711,7 +711,79 @@ Federation
 **Note :** pas de `tag_filter`/`tag_exclude` sur Federation (contrainte cross-schema,
 cf. section 7). Le filtrage par tags reste sur `FederatedPlace` (BaseBillet, TENANT_APPS).
 
-### 10.2 App `laboutik` — Modeles POS
+### 10.2 Product unifie — enrichissement pour le POS (cf. decision 16.9)
+
+**Pas de modele `ArticlePOS` separe.** Le Product existant est enrichi avec des champs POS.
+Chaque article de caisse EST un Product (avec une ou plusieurs Prices).
+Un proxy `POSProduct` filtre l'admin.
+
+#### Nouveaux champs sur `BaseBillet.Product`
+
+Tous nullable/optionnels — ne concernent que les produits utilises en caisse :
+
+```
+Product (champs existants inchanges)
+├── ... (uuid, name, categorie_article, tva, img, publish, etc.)
+│
+├── methode_caisse (CharField choices, nullable) — NOUVEAU
+│   VT = Vente
+│   RE = Recharge euros
+│   RC = Recharge cadeau
+│   TM = Recharge temps
+│   AD = Adhesion
+│   CR = Retour de consigne
+│   VC = Vider carte
+│   FR = Fractionne
+│   BI = Billet
+│   FD = Fidelite
+│   null = pas un article de caisse
+│
+├── categorie_pos (FK → CategorieProduct, SET_NULL, nullable) — NOUVEAU
+├── couleur_texte_pos (CharField 7 hexa, nullable) — NOUVEAU
+├── couleur_fond_pos (CharField 7 hexa, nullable) — NOUVEAU
+├── groupe_pos (CharField 50, nullable) — NOUVEAU, groupement de boutons
+├── fractionne (BooleanField, default=False) — NOUVEAU
+├── besoin_tag_id (BooleanField, default=False) — NOUVEAU
+└── icon_pos (CharField, nullable) — NOUVEAU
+```
+
+**Convention :** `methode_caisse IS NOT NULL` = le produit est disponible en caisse.
+Le proxy `POSProduct` filtre sur ce critere.
+
+**Lien POS → prix :** Le prix d'un article en caisse vient de `Price` (comme tout Product).
+Pour un article POS simple (biere 3€), creer 1 Product + 1 Price.
+Pour un article multi-tarif (EUR + TIM), creer 1 Product + N Prices avec `Price.asset` different.
+Cf. section 8.
+
+#### Proxy `POSProduct(Product)` — zero migration
+
+```python
+class POSProduct(Product):
+    """Proxy pour afficher uniquement les produits de caisse dans l'admin.
+    Filtre : methode_caisse IS NOT NULL."""
+    class Meta:
+        proxy = True
+        verbose_name = _('POS product')
+        verbose_name_plural = _('POS products')
+```
+
+#### `BaseBillet.CategorieProduct` — NOUVEAU modele
+
+Dans BaseBillet (pas laboutik) car reutilisable au-dela du POS (vente en ligne, etc.).
+
+```
+CategorieProduct
+├── uuid (PK)
+├── name (CharField)
+├── icon (CharField, nullable)
+├── couleur_texte (CharField, 7 hexa, nullable)
+├── couleur_fond (CharField, 7 hexa, nullable)
+├── poid_liste (SmallIntegerField, default=0)
+├── tva (FK → BaseBillet.Tva, nullable) — TVA par defaut pour les produits de cette categorie
+└── cashless (BooleanField, default=False) — indique si la categorie concerne des articles cashless
+```
+
+### 10.3 App `laboutik` — Modeles POS
 
 #### `PointDeVente`
 
@@ -729,44 +801,8 @@ PointDeVente
 ├── accepte_commandes (BooleanField, default=False)
 ├── poid_liste (SmallIntegerField, default=0)
 ├── hidden (BooleanField, default=False)
-├── categories (M2M → CategorieArticlePOS)
-└── articles (M2M → ArticlePOS)
-```
-
-#### `CategorieArticlePOS`
-
-```
-CategorieArticlePOS
-├── uuid (PK)
-├── name (CharField)
-├── icon (CharField)
-├── couleur_texte (CharField, 7) — hexa
-├── couleur_fond (CharField, 7) — hexa
-├── poid_liste (SmallIntegerField, default=0)
-├── tva (FK → BaseBillet.Tva, nullable)
-└── cashless (BooleanField, default=False)
-```
-
-#### `ArticlePOS`
-
-```
-ArticlePOS
-├── uuid (PK)
-├── product (FK → BaseBillet.Product, nullable) — lien catalogue
-├── name (CharField)
-├── prix (IntegerField) — en centimes
-├── methode (CharField choices: VT/RE/RC/AD/CR/VC/FR/BI/FD)
-├── couleur_texte (CharField, hexa)
-├── couleur_fond (CharField, hexa)
-├── icon (CharField, nullable)
-├── poid_liste (SmallIntegerField)
-├── categorie (FK → CategorieArticlePOS)
-├── archive (BooleanField, default=False)
-├── fractionne (BooleanField, default=False)
-├── fedow_asset (FK → fedow_core.Asset, nullable)
-├── moyens_paiement (CharField) — "espece|nfc|carte_bancaire"
-├── besoin_tag_id (BooleanField, default=False)
-└── groupe (CharField, nullable)
+├── categories (M2M → CategorieProduct)
+└── products (M2M → Product) — les produits disponibles a ce point de vente
 ```
 
 #### `CarteMaitresse`
@@ -814,7 +850,8 @@ CommandeSauvegarde
 
 ArticleCommandeSauvegarde
 ├── commande (FK → CommandeSauvegarde)
-├── article (FK → ArticlePOS)
+├── product (FK → Product) — le produit commande
+├── price (FK → Price) — le tarif choisi
 ├── qty (SmallIntegerField, default=1)
 ├── reste_a_payer (IntegerField) — en centimes
 ├── reste_a_servir (SmallIntegerField)
@@ -841,7 +878,8 @@ ClotureCaisse
 ## 11. Modeles existants a reutiliser
 
 - `BaseBillet.LigneArticle` — ledger de ventes (sale_origin=LABOUTIK)
-- `BaseBillet.Product` + `Price` — catalogue produits
+- `BaseBillet.Product` + `Price` — catalogue produits ET articles POS (Product unifie, cf. 16.9)
+- `BaseBillet.CategorieProduct` — categories produits (POS et au-dela)
 - `BaseBillet.Membership` — adhesions (status=LABOUTIK)
 - `QrcodeCashless.CarteCashless` — cartes NFC
 - `BaseBillet.Configuration` — config tenant
@@ -900,14 +938,14 @@ ClotureCaisse
 4. Si un seul PV → redirect ; si plusieurs → choix
 
 #### `point_de_vente()` — Interface POS
-1. `PointDeVente.objects.prefetch_related('categories', 'articles').get(uuid=uuid_pv)`
+1. `PointDeVente.objects.prefetch_related('categories', 'products__prices').get(uuid=uuid_pv)`
 2. `stateJson` : `Configuration.get_solo()` + donnees PV
 3. Tables si `accepte_commandes=True`
 
 ### PaiementViewSet
 
 #### `moyens_paiement()` + `confirmer()`
-- Meme logique, `ArticlePOS.objects.get(uuid=uuid)` au lieu de mock
+- Meme logique, `Product.objects.get(uuid=uuid)` + `Price.objects.get(uuid=uuid)` au lieu de mock
 
 #### `payer()` — Le gros morceau
 
@@ -937,13 +975,13 @@ WalletService.obtenir_solde_total(utilisateur) + Membership.objects.filter(user=
 
 | Modele | Section menu |
 |---|---|
-| `PointDeVente` | LaBoutik > Points de vente |
-| `CategorieArticlePOS` | LaBoutik > Categories |
-| `ArticlePOS` | LaBoutik > Articles |
-| `CarteMaitresse` | LaBoutik > Cartes maitresses |
-| `Table` | LaBoutik > Tables |
-| `CommandeSauvegarde` | LaBoutik > Commandes en cours |
-| `ClotureCaisse` | LaBoutik > Clotures |
+| `POSProduct` (proxy Product) | Caisse > Articles POS |
+| `CategorieProduct` | Caisse > Categories |
+| `PointDeVente` | Caisse > Points de vente |
+| `CarteMaitresse` | Caisse > Cartes maitresses |
+| `Table` | Caisse > Tables |
+| `CommandeSauvegarde` | Caisse > Commandes en cours |
+| `ClotureCaisse` | Caisse > Clotures |
 
 ### Modeles fedow_core
 
@@ -988,9 +1026,9 @@ L'ancien LaBoutik a sa propre base PostgreSQL. Donnees a migrer :
 
 ```
 Ordre d'import :
-1. CategorieArticlePOS ← Categorie (+ Couleur inline)
-2. ArticlePOS ← Articles (+ Methode inline, prix deja en centimes)
-3. PointDeVente ← PointDeVente (+ M2M articles/categories)
+1. CategorieProduct ← Categorie (+ Couleur inline → champs hexa)
+2. Product (POS) ← Articles (+ Methode inline → methode_caisse, prix → Price en euros)
+3. PointDeVente ← PointDeVente (+ M2M products/categories)
 4. CarteMaitresse ← CarteMaitresse (tag_id → CarteCashless)
 5. Table ← Table (+ CategorieTable)
 6. CommandeSauvegarde ← CommandeSauvegarde (si commandes en cours)
@@ -1068,67 +1106,73 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
    - FederationAdmin : permissions createur/invite, invitation de lieux, exclusion de membres
 6. **Test securite** : verifier l'isolation tenant (pas de leak cross-tenant)
 
-### Phase 1 — laboutik : modeles POS
+### Phase 1 — Product unifie + modeles POS
 
-7. Creer les modeles dans `laboutik/models.py` :
-   - `PointDeVente`, `CategorieArticlePOS`, `ArticlePOS`
+7. Enrichir `BaseBillet.Product` avec les champs POS (cf. section 10.2) :
+   - `methode_caisse`, `categorie_pos`, `couleur_texte_pos`, `couleur_fond_pos`,
+     `groupe_pos`, `fractionne`, `besoin_tag_id`, `icon_pos`
+   - Creer proxy `POSProduct`
+   - Creer `BaseBillet.CategorieProduct`
+   - Ajouter `asset` FK sur `BaseBillet.Price` (cf. section 8)
+8. Creer les modeles dans `laboutik/models.py` :
+   - `PointDeVente` (M2M → Product, M2M → CategorieProduct)
    - `CarteMaitresse`
    - `Table`, `CategorieTable`
-8. Migrations
-9. Admin Unfold
-10. Donnees initiales (fixture ou management command)
+9. Migrations (`migrate_schemas`)
+10. Admin Unfold : `POSProductAdmin`, `CategorieProductAdmin`, `PointDeVenteAdmin`
+11. Donnees initiales (fixture ou management command)
 
 ### Phase 2 — laboutik : remplacement des mocks
 
-11. `carte_primaire()` : CarteMaitresse + CarteCashless
-12. `point_de_vente()` : charger depuis DB
-13. `moyens_paiement()` + `confirmer()` : articles depuis DB
-14. `_payer_par_carte_ou_cheque()` + `_payer_en_especes()` : creer LigneArticle
+12. `carte_primaire()` : CarteMaitresse + CarteCashless
+13. `point_de_vente()` : charger depuis DB
+14. `moyens_paiement()` + `confirmer()` : articles depuis DB
+15. `_payer_par_carte_ou_cheque()` + `_payer_en_especes()` : creer LigneArticle
 
 ### Phase 3 — Integration fedow_core dans laboutik
 
-15. `_payer_par_nfc()` : WalletService + TransactionService
-16. `retour_carte()` : vrai solde depuis Token
-17. Recharges (RE/RC) : TransactionService.creer_recharge()
-18. Adhesions (AD) : TransactionService + Membership
+16. `_payer_par_nfc()` : WalletService + TransactionService
+17. `retour_carte()` : vrai solde depuis Token
+18. Recharges (RE/RC) : TransactionService.creer_recharge()
+19. Adhesions (AD) : TransactionService + Membership
 
 ### Phase 4 — Mode restaurant
 
-19. Modeles : `CommandeSauvegarde`, `ArticleCommandeSauvegarde`
-20. Vues : gestion commandes par table
-21. Tables : mise a jour statuts
+20. Modeles : `CommandeSauvegarde`, `ArticleCommandeSauvegarde`
+21. Vues : gestion commandes par table
+22. Tables : mise a jour statuts
 
 ### Phase 5 — Cloture, rapports, Celery
 
-22. `ClotureCaisse` : modele + vue
-23. Rapport : calcul totaux par moyen de paiement
-24. Taches Celery : cloture auto, rapport quotidien
+23. `ClotureCaisse` : modele + vue
+24. Rapport : calcul totaux par moyen de paiement
+25. Taches Celery : cloture auto, rapport quotidien
 
 ### Phase 6 — Migration des donnees
 
-25. Management command `import_fedow_data`
-26. Management command `import_laboutik_data`
-27. Script de verification
-28. Tests sur un environnement de staging avec vraies donnees
+26. Management command `import_fedow_data`
+27. Management command `import_laboutik_data`
+28. Script de verification
+29. Tests sur un environnement de staging avec vraies donnees
 
 ### Phase 7 — Consolidation et nettoyage
 
-29. Management command `recalculate_hashes` : recalcul des hash individuels sur toutes les transactions
-30. Migration Django : `hash` NOT NULL + UNIQUE
-31. Supprimer les mocks : `utils/mockData.py`, `utils/dbJson.py`, `utils/mockDb.json`, `utils/method.py`
-32. Supprimer `fedow_connect/fedow_api.py` (remplace par fedow_core/services.py)
-33. Supprimer `fedow_connect.Asset`, `fedow_connect.FedowConfig`
-34. Supprimer ou archiver `fedow_public.AssetFedowPublic` (remplace par fedow_core.Asset)
-35. Adapter les vues `fedow_public` pour utiliser `fedow_core.Asset`
-36. ✅ **Flow d'invitation/acceptation de federation** — FAIT (avance en Phase 0.5) :
+30. Management command `recalculate_hashes` : recalcul des hash individuels sur toutes les transactions
+31. Migration Django : `hash` NOT NULL + UNIQUE
+32. Supprimer les mocks : `utils/mockData.py`, `utils/dbJson.py`, `utils/mockDb.json`, `utils/method.py`
+33. Supprimer `fedow_connect/fedow_api.py` (remplace par fedow_core/services.py)
+34. Supprimer `fedow_connect.Asset`, `fedow_connect.FedowConfig`
+35. Supprimer ou archiver `fedow_public.AssetFedowPublic` (remplace par fedow_core.Asset)
+36. Adapter les vues `fedow_public` pour utiliser `fedow_core.Asset`
+37. ✅ **Flow d'invitation/acceptation de federation** — FAIT (avance en Phase 0.5) :
     - `Federation` : permissions createur/invite, invitation de lieux (`pending_tenants`),
       exclusion de membres, template `federation_members.html`
     - `Asset` : invitation per-asset (`pending_invitations` → accept → `federated_with`),
       template `asset_changelist_invitations.html`, changelist avec assets propres + federes
     - Admin : le createur invite via autocomplete, les invites voient la carte et acceptent
     - Remplace le flow V1 qui passait par HTTP vers le serveur Fedow distant
-37. Supprimer les templates/JS legacy
-38. ✅ **Tests federation d'assets** — FAIT :
+38. Supprimer les templates/JS legacy
+39. ✅ **Tests federation d'assets** — FAIT :
     - Pytest (`tests/pytest/test_fedow_core.py`) : 3 tests ajoutes (tests 6-8) :
       pending_invitations, accept_invitation, visibilite queryset admin
     - Playwright (`tests/playwright/tests/31-admin-asset-federation.spec.ts`) :
@@ -1148,19 +1192,32 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 ### ~~16.3 Prix en centimes ou DecimalField ?~~
 
 **DECIDE : Centimes (int) partout.** Tous les nouveaux champs monetaires sont en `IntegerField` (centimes).
-ArticlePOS.prix, Token.value, LigneArticle.amount, ClotureCaisse.total_*, ArticleCommandeSauvegarde.reste_a_payer — tout en centimes.
+Token.value, LigneArticle.amount, ClotureCaisse.total_*, ArticleCommandeSauvegarde.reste_a_payer — tout en centimes.
+C'est le standard industrie (Stripe, Square, SumUp : tout en plus petite unite, zero flottant).
 
 **⚠️ Seule exception :** `BaseBillet.Price.prix` reste un `DecimalField` (euros) — c'est un champ existant
-en production, on ne le change pas. Quand on lit un `Price` pour creer un `ArticlePOS` lie,
-il faut convertir : `int(price.prix * 100)`. Ne jamais mixer les unites sans conversion explicite.
+en production, on ne le change pas.
 
-### ~~16.4 GroupementBouton : modele separe ou champs sur ArticlePOS ?~~
+**Semantique de `Price.prix` quand `Price.asset` est set (cf. section 8) :**
+- `asset=null` → `prix` est en **euros** (ex: 20.00 = 20€)
+- `asset=TIM` → `prix` est en **unites de l'asset** (ex: 5.00 = 5 tokens temps)
+- La conversion en centimes est TOUJOURS la meme : `int(round(price.prix * 100))`
+  - 20.00 EUR → 2000 centi-euros
+  - 5.00 TIM → 500 centi-tokens (= Token.value)
 
-**DECIDE : Champs directs** sur ArticlePOS (champ `groupe`). Pas de modele separe. KISS.
+**⚠️ Formule de conversion :** toujours `int(round(price.prix * 100))`, jamais `int(price.prix * 100)`.
+`int()` tronque (19.999 → 19), `round()` arrondit (19.999 → 20). `price.prix` est un `Decimal`
+Django (pas un float), donc pas de risque IEEE 754, mais `round()` est un garde-fou gratuit.
+Ne jamais convertir via `float` intermediaire.
 
-### ~~16.5 Lien ArticlePOS → Product~~
+### ~~16.4 GroupementBouton : modele separe ou champs sur Product ?~~
 
-**DECIDE : FK nullable.** Un ArticlePOS peut exister sans Product (article POS-only).
+**DECIDE : Champs directs** sur Product (champ `groupe_pos`). Pas de modele separe. KISS.
+
+### ~~16.5 Lien POS → Product~~
+
+**DECIDE : Product unifie.** Pas de modele `ArticlePOS` separe. Le Product EST l'article de caisse.
+Cf. decision 16.9 pour le raisonnement complet.
 
 ### ~~16.6 Wallet : ou vit-il ?~~
 
@@ -1183,6 +1240,39 @@ Quand le user s'identifie : Transaction FUSION (wallet_ephemere → user.wallet)
 Le M2M `fedow_transactions` existe deja sur `Paiement_stripe`. Ajouter un `source` choice
 (`CASHLESS_REFILL`). Flux : Stripe webhook → creer Transaction(REFILL) dans fedow_core → lier
 via le M2M existant. Pas de nouveau modele, pas de nouveau endpoint webhook.
+
+### ~~16.9 Product unifie vs ArticlePOS separe~~
+
+**DECIDE : Product unifie.** Pas de modele `ArticlePOS` separe.
+
+**Probleme initial :** `LigneArticle` (ledger de ventes) a un champ obligatoire
+`pricesold = FK(PriceSold)` → `ProductSold` → `Product`. Toute vente necessite un Product.
+Avec un `ArticlePOS` separe et `product=null` (article POS-only), il faudrait soit creer
+un Product+Price fantome pour chaque article POS, soit modifier LigneArticle — les deux
+sont inelegants.
+
+**Solution :** Le Product existant est enrichi avec des champs POS (nullable, cf. section 10.2).
+Un article de caisse IS a Product avec une ou plusieurs Prices. Proxy `POSProduct` pour l'admin.
+
+**Avantages :**
+- LigneArticle fonctionne nativement (pricesold → ProductSold → Product, zero hack)
+- TicketZ et rapports comptables : requete directe sur Product, TVA, categorie
+- Reutilisation : un produit adhesion/billetterie est vendable en caisse sans duplication
+- Les points de vente "Adhesion" et "Billetterie" utilisent les memes Products que le catalogue en ligne
+- Standard industrie (Square, Shopify POS, Odoo POS : catalogue produit unifie)
+- 1 modele en moins a maintenir
+
+**Inconvenients acceptes :**
+- ~8 champs nullable supplementaires sur Product (meme pattern que les champs existants
+  `nominative`, `max_per_user` qui ne concernent que les billets)
+- CategorieProduct dans BaseBillet (pas laboutik) — reutilisable au-dela du POS
+
+**Convention :** `methode_caisse IS NOT NULL` = le produit est un article de caisse.
+
+**Multi-prix au POS :**
+- Product avec 1 Price → 1 bouton, 1 clic (biere, sandwich)
+- Product avec N Prices → 1 bouton produit, sous-selection du tarif (plein tarif / reduit / tokens)
+- Multi-asset (EUR + TIM) gere par Price.asset (cf. section 8)
 
 ## 17. Passages dangereux
 
