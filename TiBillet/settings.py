@@ -471,6 +471,13 @@ LOGGING = {
         # 'handlers': ['console', 'logfile', 'weasyprint']
         'handlers': ['console']
     },
+    'loggers': {
+        'laboutik': {
+            'handlers': ['console'],
+            'level': LOGGING_LVL,
+            'propagate': True,
+        },
+    },
 }
 
 UNFOLD = {

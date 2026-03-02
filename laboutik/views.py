@@ -10,6 +10,7 @@
 # IMPORTANT: all data is mocked (JSON file).
 # Real Django models will be created later.
 
+import logging
 import os
 from json import dumps
 
@@ -53,6 +54,8 @@ PAYMENT_METHOD_TRANSLATIONS = {
 # UUID de l'article "consigne" — déclenche un flux de remboursement spécial
 # UUID of the "deposit" article — triggers a special refund flow
 UUID_ARTICLE_CONSIGNE = "8f08b90d-d3f0-49da-9dbd-8be795f689ef"
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -141,35 +144,47 @@ class CaisseViewSet(viewsets.ViewSet):
         - Carte cliente → message "carte non primaire" / "not a primary card" message
         - Carte inconnue → message "carte inconnue" / "unknown card" message
         """
+        logger.debug("carte_primaire: Entrée dans la méthode")
         db = _charger_mock_db()
         tag_id_carte_manager = request.POST.get("tag_id", "").upper()
+        logger.debug(f"carte_primaire: tag_id reçu = {tag_id_carte_manager}")
 
         # Chercher la carte dans la base mock par son tag NFC
         # Look up the card in the mock database by its NFC tag
         cartes_trouvees = db.get_by_index("cards", "tag_id", tag_id_carte_manager)
+        logger.debug(f"carte_primaire: cartes_trouvees = {cartes_trouvees}")
+
         if not cartes_trouvees:
+            logger.debug("carte_primaire: Aucune carte trouvée, type set to unknown")
             carte = {"type_card": "unknown"}
         else:
             carte = cartes_trouvees[0]
+            logger.debug(f"carte_primaire: Carte trouvée = {carte}")
 
         # Carte primaire (responsable de caisse) → rediriger vers le point de vente
         # Primary card (cash register manager) → redirect to the point of sale
         type_carte = carte.get("type_card")
+        logger.debug(f"carte_primaire: type_carte = {type_carte}")
+
         if type_carte == "primary_card":
             uuid_premier_pv = carte["pvs_list"][0]["uuid"]
+            logger.debug(f"carte_primaire: Carte primaire détectée, uuid_premier_pv = {uuid_premier_pv}")
             url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
             url_avec_params = f"{url_point_de_vente}?uuid_pv={uuid_premier_pv}&tag_id_cm={tag_id_carte_manager}"
+            logger.debug(f"carte_primaire: Redirection vers {url_avec_params}")
             return HttpResponseClientRedirect(url_avec_params)
 
         # Carte cliente — pas autorisée à ouvrir la caisse
         # Client card — not authorized to open the register
         if type_carte == "client_card":
+            logger.debug("carte_primaire: Carte cliente détectée, accès refusé")
             return render(request, "laboutik/partial/hx_primary_card_message.html", {
                 "msg": _("Carte non primaire"),
             })
 
         # Carte inconnue — tag NFC non reconnu
         # Unknown card — NFC tag not recognized
+        logger.debug("carte_primaire: Carte inconnue")
         return render(request, "laboutik/partial/hx_primary_card_message.html", {
             "msg": _("Carte inconnue"),
         })
