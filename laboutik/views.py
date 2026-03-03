@@ -487,6 +487,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # --- Aiguillage vers le bon flux de paiement ---
         # --- Route to the correct payment flow ---
         moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+        logger.info(f"moyen_paiement_code: {moyen_paiement_code}")
 
         if moyen_paiement_code in ("carte_bancaire", "CH"):
             return self._payer_par_carte_ou_cheque(
@@ -514,7 +515,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "msg_content": _("Il y a une erreur !"),
             "selector_bt_retour": "#messages",
         }
-        return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+        return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
 
     # ------------------------------------------------------------------ #
     #  Flux de paiement : carte bancaire ou chèque                        #
