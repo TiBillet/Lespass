@@ -13,7 +13,7 @@ services:
       - "--log.level=INFO"
       - "--providers.docker=true"
       - "--providers.docker.network=frontend"
-      - "--providers.docker.exposedbydefault=true"
+      - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.entrypoints-https.address=:443"
       - "--entrypoints.entrypoints-http.address=:80"
       - "--entrypoints.entrypoints-http.http.redirections.entryPoint.to=entrypoints-https"
@@ -193,7 +193,6 @@ services:
 
 networks:
   frontend:
-    external: true
   backend:
 
 volumes:
