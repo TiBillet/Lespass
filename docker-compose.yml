@@ -28,57 +28,57 @@ services:
       - frontend
 
   #### FEDOW ####
-  fedow_memcached:
-    image: memcached:1.6
-    container_name: fedow_memcached
-    hostname: fedow_memcached
-    restart: always
-    networks:
-      - backend
-
-  fedow_django:
-    image: tibillet/fedow:latest
-    container_name: fedow_django
-    hostname: fedow_django
-    restart: unless-stopped
-    env_file: .env
-    user: fedow
-    links:
-      - fedow_memcached:memcached
-    volumes:
-      - fedow_database:/home/fedow/Fedow/database
-    networks:
-      - backend
-    command: "bash start.sh"
-#    command: "bash start_dev.sh"
-    extra_hosts:
-      - fedow.tibillet.localhost:172.17.0.1
-      - lespass.tibillet.localhost:172.17.0.1
-      - laboutik.tibillet.localhost:172.17.0.1
-      - laboutik2.tibillet.localhost:172.17.0.1
-
-  fedow_nginx:
-    image: nginx
-    restart: unless-stopped
-    container_name: fedow_nginx
-    hostname: fedow_nginx
-    volumes:
-      - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./logs:/logs
-    depends_on:
-      - fedow_django
-    links:
-      - fedow_django:fedow_django
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=frontend
-      - traefik.http.routers.fedow_nginx.tls=true
-      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.$DOMAIN`)
-      - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
-
-    networks:
-      - frontend
-      - backend
+#  fedow_memcached:
+#    image: memcached:1.6
+#    container_name: fedow_memcached
+#    hostname: fedow_memcached
+#    restart: always
+#    networks:
+#      - backend
+#
+#  fedow_django:
+#    image: tibillet/fedow:latest
+#    container_name: fedow_django
+#    hostname: fedow_django
+#    restart: unless-stopped
+#    env_file: .env
+#    user: fedow
+#    links:
+#      - fedow_memcached:memcached
+#    volumes:
+#      - fedow_database:/home/fedow/Fedow/database
+#    networks:
+#      - backend
+#    command: "bash start.sh"
+##    command: "bash start_dev.sh"
+#    extra_hosts:
+#      - fedow.tibillet.localhost:172.17.0.1
+#      - lespass.tibillet.localhost:172.17.0.1
+#      - laboutik.tibillet.localhost:172.17.0.1
+#      - laboutik2.tibillet.localhost:172.17.0.1
+#
+#  fedow_nginx:
+#    image: nginx
+#    restart: unless-stopped
+#    container_name: fedow_nginx
+#    hostname: fedow_nginx
+#    volumes:
+#      - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+#      - ./logs:/logs
+#    depends_on:
+#      - fedow_django
+#    links:
+#      - fedow_django:fedow_django
+#    labels:
+#      - traefik.enable=true
+#      - traefik.docker.network=frontend
+#      - traefik.http.routers.fedow_nginx.tls=true
+#      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.$DOMAIN`)
+#      - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
+#
+#    networks:
+#      - frontend
+#      - backend
 
 
   #########
@@ -136,6 +136,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
+    command: 'bash start_dev.sh'
 
 
   lespass_celery:
