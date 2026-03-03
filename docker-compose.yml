@@ -36,7 +36,7 @@ services:
     hostname: fedow_memcached
     restart: always
     networks:
-      - fedow_backend
+      - backend
 
   fedow_django:
     image: tibillet/fedow:latest
@@ -50,7 +50,7 @@ services:
     volumes:
       - fedow_database:/home/fedow/Fedow/database
     networks:
-      - fedow_backend
+      - backend
     command: "bash start.sh"
 #    command: "bash start_dev.sh"
     extra_hosts:
@@ -79,7 +79,7 @@ services:
 
     networks:
       - frontend
-      - fedow_backend
+      - backend
 
 
   #########
@@ -95,7 +95,7 @@ services:
       - lespass_dev_db:/var/lib/postgresql/data
     env_file: .env
     networks:
-      - frontend
+      - backend
 
   lespass_memcached:
     image : memcached:1.6
@@ -103,7 +103,7 @@ services:
     hostname: lespass_memcached
     restart: unless-stopped
     networks:
-      - frontend
+      - backend
 
   lespass_redis:
     container_name: lespass_redis
@@ -111,7 +111,7 @@ services:
     image: redis:7.2.3-bookworm
     restart: unless-stopped
     networks:
-      - frontend
+      - backend
 
   lespass_django:
     build: .
@@ -131,7 +131,7 @@ services:
       - lespass_redis:redis
       - lespass_memcached:memcached
     networks:
-      - frontend
+      - backend
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
@@ -157,7 +157,7 @@ services:
       - lespass_redis:redis
       - lespass_memcached:memcached
     networks:
-      - frontend
+      - backend
     extra_hosts:
       - fedow.tibillet.localhost:172.17.0.1
       - lespass.tibillet.localhost:172.17.0.1
@@ -177,7 +177,6 @@ services:
       - ./nginx/lespass_dev.conf:/etc/nginx/conf.d/default.conf:ro
       - ./www:/www
       - ./logs:/logs
-      - ./nginx:/etc/nginx/conf.d
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
@@ -185,16 +184,22 @@ services:
       - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:
+      - backend
       - frontend
+
+
+
 
 
 networks:
   frontend:
     external: true
-#  lespass_backend:
+  backend:
 
 volumes:
   lespass_dev_db:
+  fedow_database:
+  fedow_dev_db:
 
 
 # Pour test stripe :
