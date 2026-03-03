@@ -1,4 +1,26 @@
 /* ==========================================================================
+   IMPORT TYPOGRAPHIE
+   ========================================================================== */
+   
+   
+   @font-face {
+    font-family: 'faireregular';
+    src: 
+        url('../fonts/Faire-Regular.woff') format('woff'),
+        url('../fonts/Faire-Regular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+    }
+
+    @font-face {
+        font-family: 'fairestencil'; /* Nom que tu vas utiliser dans ton CSS */
+        src: url('../fonts/Faire-Stencil.otf') format('opentype'); /* Chemin vers le fichier */
+        font-weight: normal;
+        font-style: normal;
+    }
+
+
+/* ==========================================================================
    VARIABLES & CONFIGURATION (FALC)
    ========================================================================== */
 :root {
@@ -10,17 +32,22 @@
 
     --epaisseur-bordure: 2.5px;
 
-    --police-titre: 'Archivo Black', sans-serif;
-    --police-mono: 'Space Mono', monospace;
+    --fairestencil: 'fairestencil', sans-serif;
+    --faireregular: 'faireregular', sans-serif;
 }
 
 /* ==========================================================================
    STYLES GLOBAUX
    ========================================================================== */
+
+body, h1, h2, h3, p, span, div {
+    font-family: var(--faireregular) !important;
+}
+
 body {
     background-color: var(--couleur-blanc);
     color: var(--couleur-bleu-vif);
-    font-family: var(--police-mono);
+    font-family: var(--faireregular);
 }
 
 /* --- Utilitaires de Couleurs --- */
@@ -47,11 +74,11 @@ body {
 
 /* --- Utilitaires de Polices --- */
 .police-titre {
-    font-family: var(--police-titre);
+    font-family: var(--fairestencil) !important;
 }
 
 .police-mono {
-    font-family: var(--police-mono);
+    font-family: var(--faireregular) !important;
 }
 
 /* --- Utilitaires de Bordures --- */
@@ -130,7 +157,7 @@ header.fond-jaune {
     /* Angles droits */
     padding: 1rem;
     font-weight: 700;
-    font-family: var(--police-mono);
+    font-family: var(--faireregular);
     box-shadow: 4px 4px 0px var(--couleur-bleu-vif);
     transition: all 0.2s;
     text-transform: uppercase;
@@ -428,8 +455,7 @@ header.fond-jaune {
     /* Bords très arrondis comme l'image */
 }
 
-margin: 0;
-}
+
 
 /* ==========================================================================
    PAGE BILLETTERIE (Tickets)
