@@ -1,48 +1,72 @@
+/**
+ * TIBILLET UTILS - SYSTÈME D'ÉVÉNEMENTS CENTRAL (EVENT BUS)
+ * / Central Event System for LaBoutik
+ * 
+ * LOCALISATION : laboutik/static/js/tibilletUtils.js
+ * 
+ * Ce fichier implémente un "Event Bus" qui permet aux composants de communiquer
+ * sans se connaître directement via un système d'événements personnalisés.
+ * 
+ * ARCHITECTURE :
+ * - sendEvent() : Émet un événement sur un élément DOM
+ * - switches : Table de routage des événements
+ * - eventsOrganizer() : Récepteur central qui route les événements
+ * 
+ * FLUX D'UN ÉVÉNEMENT :
+ * 1. Composant émet : sendEvent('organizerMsg', '#event-organizer', { msg: 'articlesAdd', data })
+ * 2. eventsOrganizer() reçoit et consulte switches[msg]
+ * 3. switches['articlesAdd'] = [{ name: 'additionInsertArticle', selector: '#addition' }]
+ * 4. sendEvent() déclenche l'événement sur l'élément cible
+ * 5. Le handler dans l'autre fichier est exécuté
+ */
+
 let currentConfiguration = null
 const logTypes = ['DANGER', 'WARNING', 'INFO']
 
+/**
+ * Convertit les valeurs Django ('True', 'False', 'None') en valeurs JS
+ * / Converts Django values to JS values
+ */
 function tibilletConvDjangoToJs(value) {
 	const convList = {
 		'True': true,
 		'False': false,
 		'None': null
 	}
-	let retour
 	if (convList[value]) {
 		return convList[value]
 	} else {
-		console.log(`tibilletConvDjandoToJs.js, variable "${value}" inconnue dans la list "convlist".`);
+		console.log(`Variable "${value}" inconnue dans la liste.`);
+		// TODO : Cette fonction ne retourne rien explicitement si la valeur n'est pas dans convList.
+		// Ne devrait-elle pas retourner 'value' tel quel ou throw une erreur ?
+		// Actuellement elle retourne 'undefined' ce qui peut causer des bugs silencieux.
 	}
 }
 
-
+/**
+ * Fonction de logging utilitaire
+ * / Utility logging function
+ */
 function log({ tag, msg }) {
 	const arg0 = arguments[0]
 	const arg1 = arguments[1]
 	const typeArgument0 = typeof (arg0)
 	const typeArgument1 = typeof (arg1)
-	// tag + msg
 	if (typeArgument0 === 'object' && logTypes.includes(tag)) {
 		console.log(msg)
 	} else {
 		let formatMsg = ''
-		// string
-		if (typeArgument0 === 'string') {
-			formatMsg += arg0
-		}
-		// string + object
-		if (typeArgument1 === 'object') {
-			formatMsg += JSON.stringify(arg1)
-		}
-		// string + string
-		if (typeArgument1 === 'string') {
-			formatMsg += ' ' + arg1
-		}
+		if (typeArgument0 === 'string') formatMsg += arg0
+		if (typeArgument1 === 'object') formatMsg += JSON.stringify(arg1)
+		if (typeArgument1 === 'string') formatMsg += ' ' + arg1
 		console.log(formatMsg)
 	}
 }
 
-
+/**
+ * Convertit une valeur Big en nombre flottant
+ * / Converts Big value to float
+ */
 function bigToFloat(value) {
 	try {
 		return parseFloat(new Big(value).valueOf())
@@ -50,15 +74,27 @@ function bigToFloat(value) {
 		console.log('-> bigToFloat, ', error)
 	}
 }
+
 /**
- * Send custum ecent
- * @param {string} name event name 
- * @param {string} selector css selector
- * @param {object} data 
+ * Émet un événement personnalisé sur un élément du DOM
+ * / Dispatches a custom event on a DOM element
+ * 
+ * C'est la fonction fondamentale du système d'événements.
+ * Elle crée un CustomEvent et le déclenche sur l'élément ciblé.
+ * 
+ * Exemple d'utilisation dans articles.js :
+ * sendEvent('organizerMsg', '#event-organizer', {
+ *     src: { file: 'articles.js', method: 'addArticle' },
+ *     msg: 'articlesAdd',
+ *     data: { uuid, price, quantity, name, currency }
+ * })
+ * 
+ * @param {string} name - Nom de l'événement
+ * @param {string} selector - Sélecteur CSS de l'élément cible
+ * @param {object} data - Données à passer (disponibles dans event.detail)
  */
 function sendEvent(name, selector, data) {
 	data = data === undefined ? {} : data
-	// console.log(`-> sendEvent "${name}" on "${selector}"`)
 	try {
 		const event = new CustomEvent(name, { detail: data })
 		document.querySelector(selector).dispatchEvent(event)
@@ -67,17 +103,30 @@ function sendEvent(name, selector, data) {
 	}
 }
 
+/**
+ * Cache et vide un élément du DOM
+ * / Hides and empties a DOM element
+ */
 function hideAndEmptyElement(selector) {
 	const element = document.querySelector(selector)
-	// cache
 	element.classList.add('hide')
-	// vide
 	element.innerHTML = ''
 }
 
-// demande de mise à jour du moyen de paiement dans le formulaire de l'addition
+/**
+ * Demande la mise à jour d'un champ du formulaire d'addition
+ * / Requests update to addition form field
+ * 
+ * Appelée depuis les partials HTMX (ex: hx_display_type_payment.html)
+ * pour modifier dynamiquement les inputs cachés du formulaire de paiement.
+ * 
+ * Exemple : onclick="askAdditionManageForm('updateInput', '#addition-moyen-paiement', 'espece')"
+ * 
+ * @param {string} actionType - Type d'action ('updateInput', 'postUrl', 'submit')
+ * @param {string} selector - Sélecteur du champ à modifier
+ * @param {*} value - Valeur à assigner
+ */
 function askAdditionManageForm(actionType, selector, value) {
-	// dispatch event "askAdditionManageForm"
 	sendEvent('organizerMsg', '#event-organizer', {
 		src: { file: 'hx_display_type_payement.html', method: 'additionUpdateForm' },
 		msg: 'additionManageForm',
@@ -85,11 +134,21 @@ function askAdditionManageForm(actionType, selector, value) {
 	})
 }
 
-
-// aiguillage d'eventsOrganizer :
-// - Est un objet contenant l'aiguillage de chaque évènement reçu
-// - un évènement reçu dispatch d'autres évèvement - exemple: { name: 'additionInsertArticle', selector: '#addition' }
-// - exemple: je reçois le message 'addArticle' alors j'envoie le message "additionInsertArticle"
+/**
+ * TABLE DE ROUTAGE DES ÉVÉNEMENTS
+ * / Event routing table
+ * 
+ * Définit pour chaque message entrant vers quel événement et quel sélecteur l'envoyer.
+ * Structure : { 'messageEntrant': [{ name: 'eventAEmettre', selector: '#cible' }] }
+ * 
+ * ROUTES DÉFINIES :
+ * - articlesAdd → additionInsertArticle sur #addition (ajoute au panier)
+ * - additionTotalChange → updateBtValider sur #bt-valider (maj total)
+ * - additionRemoveArticle → articlesRemove sur #products (maj quantité tuile)
+ * - resetArticles → additionReset sur #addition + articlesReset sur #products (reset complet)
+ * - additionDisplayPaymentTypes → additionDisplayPaymentTypes sur #addition (affiche paiements)
+ * - additionManageForm → additionManageForm sur #addition (modifie formulaire)
+ */
 const switches = {
 	articlesAdd: [{ name: 'additionInsertArticle', selector: '#addition' }],
 	additionTotalChange: [{ name: 'updateBtValider', selector: '#bt-valider' }],
@@ -99,33 +158,52 @@ const switches = {
 	additionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
 	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
 	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }],
-  checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }]
+	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }]
 }
 
+/**
+ * ORGANISATEUR D'ÉVÉNEMENTS - RÉCEPTEUR CENTRAL
+ * / Central event receiver and router
+ * 
+ * Reçoit tous les événements 'organizerMsg' sur #event-organizer et les route
+ * selon la table switches. C'est le cœur du système d'événements.
+ * 
+ * Exemple de flux complet :
+ * 1. articles.js:addArticle() envoie { msg: 'articlesAdd', data: { uuid, price... } }
+ * 2. CETTE FONCTION reçoit l'événement et lit event.detail.msg = 'articlesAdd'
+ * 3. Consulte switches['articlesAdd'] = [{ name: 'additionInsertArticle', selector: '#addition' }]
+ * 4. Appelle sendEvent('additionInsertArticle', '#addition', data)
+ * 5. addition.js:additionInsertArticle() est exécuté
+ * 
+ * @param {Event} event - Événement 'organizerMsg' avec event.detail contenant src, msg, data
+ */
 function eventsOrganizer(event) {
 	try {
 		const data = event.detail.data
 		const src = event.detail.src
 		const msg = event.detail.msg
-		// console.log(`--- eventsOrganizer - ${src.file}/${src.method} ---`)
-		// console.log('- msg =', msg)
-		// console.log('- data =', data)
-		// console.log('--------------------------------------------------------------------')
-		// console.log('   ')
 
-		// récupère les "routes" d'un évènement
+		// Récupère les routes depuis la table switches
 		const eventSwitch = switches[msg]
+		
+		// TODO : Si 'msg' n'existe pas dans 'switches', eventSwitch sera undefined
+		// et le forEach plantera. Ne devrait-on pas vérifier si eventSwitch existe
+		// ou logger un warning pour les événements non reconnus ?
 
-		// envoi les évènements
+		// Envoie l'événement vers chaque destination
 		for (let i = 0; i < eventSwitch.length; i++) {
 			const eventData = eventSwitch[i];
 			sendEvent(eventData.name, eventData.selector, data)
 		}
 	} catch (error) {
-
+		// Silencieux en production
 	}
 }
 
+/**
+ * INITIALISATION - Attache l'écouteur sur #event-organizer
+ * / Initialization - Attaches listener on #event-organizer
+ */
 document.addEventListener('DOMContentLoaded', () => {
 	document.querySelector('#event-organizer').addEventListener('organizerMsg', eventsOrganizer)
 })

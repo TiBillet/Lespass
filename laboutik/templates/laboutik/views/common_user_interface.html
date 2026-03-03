@@ -2,26 +2,144 @@
 {% load static %}
 {% load static i18n %}
 
+{# ARCHITECTURE DE LABOUTIK - INTERFACE CAISSE / CASHLESS #}
+{# ========================================================== #}
+{# 
+# LaBoutik est une application de caisse/cashless pour points de vente.
+# Cette page est l'interface principale utilisée par les vendeurs pour :
+# - Sélectionner des articles/produits
+# - Gérer une addition (panier)
+# - Valider une vente avec différents moyens de paiement
+#
+# STRUCTURE DE L'APPLICATION :
+# -----------------------------
+# 1. COMPONENTS DJANGO COTTON (templates/cotton/) :
+#    - c-header : En-tête avec titre, menu burger, navigation
+#    - c-categories : Liste des catégories de produits
+#    - c-articles : Grille des articles disponibles (produits)
+#    - c-addition : Panier/Addition avec formulaire de paiement
+#
+# 2. FICHIERS JAVASCRIPT (static/js/) :
+#    - tibilletUtils.js : Système d'événements central (eventsOrganizer)
+#    - articles.js : Gestion des articles (clic, quantité, groupes)
+#    - addition.js : Gestion de l'addition (calcul total, paiement)
+#
+# 3. SYSTÈME D'ÉVÉNEMENTS (EVENT BUS) :
+# --------------------------------------
+# L'application utilise un système d'événements personnalisés via l'élément
+# #event-organizer (défini dans base.html) pour communiquer entre composants.
+# 
+# Fonctionnement :
+# - Envoi : sendEvent('organizerMsg', '#event-organizer', { msg: 'nomEvent', data: {} })
+# - Réception : eventsOrganizer() dans tibilletUtils.js reçoit et route l'événement
+# - Table de routage : objet 'switches' dans tibilletUtils.js mappe les événements
+#
+# Flux d'un clic sur un article (exemple complet) :
+# 1. articles.js:manageKey() → détecte le clic sur un article
+# 2. articles.js:addArticle() → envoie événement 'articlesAdd' à #event-organizer
+# 3. tibilletUtils.js:eventsOrganizer() reçoit l'événement via l'écouteur 'organizerMsg'
+# 4. tibilletUtils.js:switches['articlesAdd'] → [{ name: 'additionInsertArticle', selector: '#addition' }]
+# 5. addition.js:additionInsertArticle() → ajoute l'article à l'addition
+# 6. addition.js envoie 'additionTotalChange' → eventsOrganizer
+# 7. switches['additionTotalChange'] → [{ name: 'updateBtValider', selector: '#bt-valider' }]
+# 8. common_user_interface.html:updateBtValider() → met à jour l'affichage du total
+#
+# Avantages de cette architecture :
+# - Découplage : les composants ne se connaissent pas directement
+# - Testabilité : facile de simuler des événements
+# - Maintenabilité : un seul endroit pour modifier le routage (switches)
+#}
+
 {% block content %}
-<!-- header + nav -->
+<!-- 
+HEADER - BARRE DE NAVIGATION
+Composant Cotton : templates/cotton/header.html
+Contient : Logo TiBillet, titre du point de vente, menu burger (navigation)
+-->
 <c-header :title="title" />
+
+<!-- 
+ZONE PRINCIPALE - CONTENU DE L'APPLICATION
+Structure en 3 colonnes sur desktop :
+- Colonne 1 (gauche) : Catégories de produits
+- Colonne 2 (centre) : Articles/produits disponibles  
+- Colonne 3 (droite) : Addition/panier (visible uniquement sur grand écran)
+-->
 <main>
-	<!-- catégories -->
+	<!-- 
+	CATÉGORIES DE PRODUITS
+	Composant Cotton : templates/cotton/categories.html
+	Liste cliquable des catégories pour filtrer les articles affichés.
+	Chaque catégorie a une couleur et une icône associées.
+	-->
 	<c-categories />
+	
 	<div id="products-container">
+		<!-- 
+		ARTICLES/PRODUITS
+		Composant Cotton : templates/cotton/articles.html
+		Grille des articles disponibles à la vente.
+		Chaque article affiche : image, nom, prix (si configuré), quantité sélectionnée
+		Gestion des groupes : si un article d'un groupe est sélectionné, 
+		les articles des autres groupes sont verrouillés (article-lock-layer)
+		-->
 		<c-articles />
+		
+		<!-- 
+		ADDITION / PANIER
+		Composant Cotton : templates/cotton/addition.html
+		Affiche la liste des articles ajoutés avec leur quantité et prix.
+		Contient un formulaire caché (#addition-form) qui sera soumis lors du paiement.
+		
+		CHAMPS DU FORMULAIRE (input cachés) :
+		- id_table : Identifiant de la table (si mode restaurant)
+		- uuid_pv : UUID du point de vente actuel
+		- responsable : Nom du vendeur (carte primaire)
+		- tag_id_cm : ID de la carte vendeur
+		- tag_id (nfc-tag-id) : ID de la carte client (pour paiement NFC)
+		- comportement : Type de comportement du point de vente (C=cashless, etc.)
+		- total (addition-total) : Montant total de la commande en centimes
+		- moyen_paiement (addition-moyen-paiement) : Type de paiement choisi
+		- hostname_client : Nom de l'appareil client
+		- uuid_transaction : UUID de la transaction (pour traçabilité)
+		- given_sum : Somme donnée (pour calcul de monnaie en espèces)
+		-->
 		<c-addition />
 	</div>
 </main>
+
+<!-- 
+FOOTER - BARRE D'ACTIONS FIXE EN BAS
+Contient 3 boutons principaux pour les actions de la caisse :
+1. RESET : Annuler la commande en cours
+2. CHECK CARTE : Vérifier le solde d'une carte NFC/cashless
+3. VALIDER : Confirmer la vente et choisir le mode de paiement
+-->
 <footer>
-	<!-- bouton Reset commandes -->
+	<!-- 
+	BOUTON RESET - ANNULER LA COMMANDE
+	Action : Réinitialise toute la commande en cours
+	- Vide la liste d'addition
+	- Remet les quantités d'articles à zéro
+	- Déverrouille les groupes d'articles
+	- Réinitialise le total à zéro
+	Déclencheur : Clic sur #bt-reset
+	Événement émis : 'resetArticles' → eventsOrganizer → additionReset + articlesReset
+	-->
 	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset">
 		<i class="fas fa-trash md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "RESET" %}</div>
 		</div>
 	</div>
-	<!-- bouton CHECK CARTE -->
+	<!-- 
+	BOUTON CHECK CARTE - VÉRIFIER LE SOLDE NFC/CASHLESS
+	Action : Vérifie le solde et les informations d'une carte NFC/cashless
+	Utilise HTMX pour charger la vue de vérification de carte.
+	Endpoint : laboutik-paiement-verifier_carte
+	Cible : Remplace le contenu de #messages par la réponse du serveur
+	Affiche : Solde du portefeuille, informations de la carte, historique
+	-->
 	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
 		hx-target="#messages" hx-swap="outerHTML">
 		<i class="fas fa-money-check-alt md4px"></i>
@@ -30,13 +148,34 @@
 			<div>{% translate "CARTE" %}</div>
 		</div>
 	</div>
-	<!-- bouton valider -->
+	
+	<!-- 
+	BOUTON VALIDER - CONFIRMER LA VENTE
+	Action : Affiche les options de paiement pour finaliser la vente
+	
+	FLUX COMPLET DU CLIC SUR VALIDER :
+	----------------------------
+	1. common_user_interface.html:displayPaymentTypes() est appelée
+	2. Envoie événement 'additionDisplayPaymentTypes' → #event-organizer
+	3. tibilletUtils.js:eventsOrganizer() reçoit l'événement
+	4. Route vers addition.js:additionDisplayPaymentTypes()
+	5. Vérifie s'il y a des articles dans l'addition (compte les inputs repid-*)
+	   - Si aucun article : affiche #message-no-article (voir partial/no_articles.html)
+	   - Si articles présents : déclenche le formulaire HTMX
+	6. Le formulaire #addition-form a déjà hx-post="{% url 'laboutik-paiement-moyens_paiement' %}" (défini dans addition.html)
+	7. Déclenche le formulaire → POST vers /laboutik/paiement/moyens_paiement/
+	8. Le serveur répond avec partial/hx_display_type_payment.html
+	9. Affiche les boutons de paiement : CASHLESS, ESPÈCE, CB, CHÈQUE, OFFRIR
+	
+	Le total affiché est mis à jour en temps réel via l'événement 'updateBtValider'
+	déclenché lors de chaque modification de l'addition (additionTotalChange)
+	-->
 	<div id="bt-valider" class="BF-ligne footer-bt fond-ok">
 		<i class="fas fa-check-circle md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "VALIDER" %}</div>
-			<!-- <div>{% translate "TOTAL" %} </div> -->
 			<div class="BF-ligne">
+				<!-- Affichage du total en temps réel (mis à jour par updateBtValider) -->
 				<div id="bt-valider-total" class="md4px">0</div>
 				<div> {{ currency_data.symbol }}</div>
 			</div>
@@ -46,44 +185,157 @@
 
 <script>
 	/**
-	* Reset articles, addition list and value of button valider
+	* Réinitialise complètement l'interface de vente
+	* / Resets the entire sales interface
+	* 
+	* LOCALISATION : Cette fonction est définie DANS CE FICHIER (lignes ci-dessous)
+	* / Location: This function is defined IN THIS FILE (lines below)
+	* 
+	* Cette fonction est appelée lors du clic sur le bouton RESET (#bt-reset).
+	* Elle envoie un événement 'resetArticles' qui sera routé par eventsOrganizer
+	* vers deux handlers dans d'autres fichiers JS (déjà commentés) :
+	* 
+	* HANDLERS DE L'ÉVÉNEMENT (déjà commentés, voir fichiers sources) :
+	* - additionReset() dans laboutik/static/js/addition.js : 
+	*   Voir la documentation complète dans le fichier addition.js
+	*   Action : Vide l'addition, supprime les inputs, réinitialise le formulaire
+	* 
+	* - articlesReset() dans laboutik/static/js/articles.js :
+	*   Voir la documentation complète dans le fichier articles.js  
+	*   Action : Remet les quantités à zéro et déverrouille les groupes d'articles
+	* 
+	* TABLE DE ROUTAGE / ROUTING TABLE :
+	* Voir tibilletUtils.js : switches['resetArticles'] définit ces routes
 	*/
 	function manageReset() {
-	// reset articles
-	sendEvent('organizerMsg', '#event-organizer', {
-		src: { file: 'common_user_interface.html', method: 'manageReset' },
-		msg: 'resetArticles',
-		data: {}
-	})
+		sendEvent('organizerMsg', '#event-organizer', {
+			src: { file: 'common_user_interface.html', method: 'manageReset' },
+			msg: 'resetArticles',
+			data: {}
+		})
 	}
 
+	/**
+	* Affiche les types de paiement disponibles
+	* / Displays available payment types
+	*
+	* LOCALISATION : Cette fonction est définie DANS CE FICHIER (lignes ci-dessous)
+	* / Location: This function is defined IN THIS FILE (lines below)
+	*
+	* Cette fonction est appelée lors du clic sur le bouton VALIDER (#bt-valider).
+	* Elle envoie l'événement 'additionDisplayPaymentTypes' qui est géré par
+	* le handler dans le fichier JS suivant (déjà commenté) :
+	*
+	* HANDLER DE L'ÉVÉNEMENT (déjà commenté, voir fichier source) :
+	* - additionDisplayPaymentTypes() dans laboutik/static/js/addition.js
+	*   Voir la documentation complète dans le fichier addition.js
+	*   Action : Affiche l'écran de sélection des moyens de paiement (CASHLESS, ESPÈCE, CB, etc.)
+	*   ou le message d'erreur si aucun article n'est sélectionné
+	*   Configure HTMX pour charger partial/hx_display_type_payment.html
+	*
+	* TABLE DE ROUTAGE / ROUTING TABLE :
+	* Voir tibilletUtils.js : switches['additionDisplayPaymentTypes'] définit cette route
+	*/
 	function displayPaymentTypes() {
 		sendEvent('organizerMsg', '#event-organizer', {
-		src: { file: 'common_user_interface.html', method: 'displayPaymentTypes' },
-		msg: 'additionDisplayPaymentTypes',
-		data: {}
-	})
+			src: { file: 'common_user_interface.html', method: 'displayPaymentTypes' },
+			msg: 'additionDisplayPaymentTypes',
+			data: {}
+		})
 	}
 
+	/**
+	* Met à jour l'affichage du total sur le bouton VALIDER
+	* / Updates the total display on the VALIDER button
+	*
+	* LOCALISATION : Cette fonction est définie DANS CE FICHIER (lignes ci-dessous)
+	* / Location: This function is defined IN THIS FILE (lines below)
+	*
+	* Cette fonction est un HANDLER d'événement. Elle est appelée automatiquement
+	* lorsque l'événement 'updateBtValider' est déclenché sur #bt-valider.
+	*
+	* ÉMETTEUR DE L'ÉVÉNEMENT (déjà commenté, voir fichier source) :
+	* - addition.js envoie 'additionTotalChange' → eventsOrganizer
+	* - Voir laboutik/static/js/addition.js pour la documentation complète :
+	*   * additionInsertArticle() émet 'additionTotalChange' après ajout
+	*   * additionRemoveArticle() émet 'additionTotalChange' après retrait
+	*   * additionReset() émet 'additionTotalChange' avec total=0
+	* - switches['additionTotalChange'] dans tibilletUtils.js route vers #bt-valider
+	*
+	* Cette fonction reçoit le total en centimes et l'affiche en euros (divisé par 100).
+	*
+	* @param {Event} event - Événement contenant event.detail.totalAddition (total en centimes)
+	*/
 	function updateBtValider(event) {
-		// console.log('-> updateBtValider, event.detail =', event.detail)
 		document.querySelector('#bt-valider-total').innerText = (event.detail.totalAddition / 100)
 	}
 
+	/**
+	* Initialisation des écouteurs d'événements au chargement de la page
+	* / Event listeners initialization on page load
+	*
+	* LOCALISATION : Cette fonction est définie DANS CE FICHIER
+	* / Location: This function is defined IN THIS FILE
+	*
+	* Attache trois types d'écouteurs différents :
+	*
+	* 1. ÉCOUTEUR DE CLIC (click event listener) :
+	*    - #bt-reset → manageReset() : réinitialise la commande
+	*    - #bt-valider → displayPaymentTypes() : affiche les options de paiement
+	*
+	* 2. ÉCOUTEUR D'ÉVÉNEMENT PERSONNALISÉ (custom event listener) :
+	*    - #bt-valider → updateBtValider() : met à jour le total affiché
+	*      Cet événement 'updateBtValider' est émis par addition.js (voir ci-dessus)
+	*
+	* Three types of listeners are attached:
+	* 1. Click event listeners on #bt-reset and #bt-valider
+	* 2. Custom event listener 'updateBtValider' on #bt-valider
+	*/
 	document.addEventListener('DOMContentLoaded', () => {
 		document.querySelector('#bt-reset').addEventListener('click', manageReset)
 		document.querySelector('#bt-valider').addEventListener('updateBtValider', updateBtValider)
 		document.querySelector('#bt-valider').addEventListener('click', displayPaymentTypes)
 	})
-
 </script>
-<!-- no articles, hide -->
+
+<!-- 
+MESSAGE "AUCUN ARTICLE SÉLECTIONNÉ"
+Partial : templates/laboutik/partial/no_articles.html
+Affiché lorsque l'utilisateur clique sur VALIDER sans avoir ajouté d'articles.
+Contient un message d'erreur et un bouton de retour pour fermer l'overlay.
+-->
 {% include "laboutik/partial/no_articles.html" %}
 
 {% endblock content %}
 
+{#
+STYLES CSS ET DESIGN RESPONSIVE
+/ CSS Styles and Responsive Design
+
+L'interface est conçue pour fonctionner sur différents types d'écrans :
+- Mobile (caisses portables)
+- Tablette
+- Desktop (postes fixes)
+
+Variables CSS utilisées (définies dans base.html ou :root) :
+- --main-container-height : Hauteur de la zone principale (hors header/footer)
+- --footer-container-height : Hauteur du footer avec les boutons d'action
+- --cat-width : Largeur de la colonne catégories
+- --bt-article-width/height : Dimensions des tuiles d'articles
+
+Breakpoints principaux :
+- 599px : Articles plus larges
+- 1022px : Affichage 3 colonnes (catégories + articles + addition)
+- 1199px : Header et footer plus grands
+- 1278px : Optimisation pour Sunmi D3mini (caisse Android)
+#}
+
 {% block css %}
 <style>
+	/* 
+	ZONE PRINCIPALE - MAIN
+	Conteneur flex horizontal qui s'adapte à la largeur disponible
+	*/
 	main {
 		display: flex;
 		flex-direction: row;
@@ -96,6 +348,11 @@
 		overflow: hidden;
 	}
 
+	/*
+	CONTENEUR DES PRODUITS
+	Prend toute la largeur sauf celle de la colonne catégories
+	Contient : grille des articles (gauche) + addition (droite sur desktop)
+	*/
 	#products-container {
 		width: calc(100% - var(--cat-width));
 		height: 100%;
@@ -105,6 +362,11 @@
 		align-items: center;
 	}
 
+	/*
+	GRILLE DES ARTICLES
+	Affiche les articles en grille responsive avec retour à la ligne automatique
+	Fond bleu foncé (var(--bleu11)) pour contraste avec les tuiles colorées
+	*/
 	#products {
 		width: 100%;
 		height: 100%;
@@ -114,10 +376,14 @@
 		align-content: flex-start;
 		flex-wrap: wrap;
 		overflow-y: auto;
-		scrollbar-width: none
+		scrollbar-width: none  /* Cache la scrollbar sur Firefox */
 	}
 
-
+	/*
+	FOOTER - BARRE D'ACTIONS
+	Barre fixe en bas de l'écran avec 3 boutons d'action égaux
+	Background vert (var(--vert04))
+	*/
 	footer {
 		width: 100%;
 		height: var(--footer-container-height);
@@ -127,6 +393,11 @@
 		font-size: 2rem
 	}
 
+	/*
+	BOUTONS DU FOOTER
+	Style commun aux 3 boutons (RESET, CHECK, VALIDER)
+	Chaque bouton occupe 1/3 de la largeur
+	*/
 	.footer-bt {
 		width: 33.3333333%;
 		height: 100%;
@@ -145,6 +416,12 @@
 		text-align: center;
 	}
 
+	/* 
+	COULEURS DES BOUTONS
+	- fond-retour : Rouge pour RESET (annulation/danger)
+	- fond-normal : Bleu pour CHECK (action neutre)
+	- fond-ok : Vert pour VALIDER (confirmation/succès)
+	*/
 	.fond-retour {
 		background-color: var(--rouge03);
 	}
@@ -153,18 +430,45 @@
 		background-color: var(--bleu02);
 	}
 
+	/* 
+	COULEUR DU BOUTON VALIDER
+	Vert pour indiquer la confirmation et la validation
+	*/
 	.fond-ok {
 		background-color: var(--vert03);
 	}
 
-	/* pour une largeur supérieure 1022 pixels */
+	/* 
+	=============================================================
+	MEDIA QUERIES - DESIGN RESPONSIVE
+	Adaptation de l'interface selon la taille de l'écran
+	=============================================================
+	
+	LaBoutik est conçu pour fonctionner sur différents appareils :
+	- Mobile (smartphones, caisses portables)
+	- Tablette 
+	- Desktop (écrans larges)
+	- Terminaux spécifiques (Sunmi D3mini, etc.)
+	*/
+
+	/* 
+	ÉCRAN LARGE (> 1022px) : LAYOUT 3 COLONNES
+	/ Large screen: 3-column layout
+	Affiche l'addition à droite en permanence (29% de la largeur)
+	Les articles occupent 71% de l'espace disponible
+	*/
 	@media only screen and (width > 1022px) {
 		#products {
 			width: 71%;
 		}
 	}
 
-	/* pour une largeur supérieure 1199 pixels */
+	/* 
+	TRÈS GRAND ÉCRAN (> 1199px) : FOOTER PLUS GRAND
+	/ Very large screen: larger footer
+	Augmente la hauteur du footer pour une meilleure accessibilité
+	sur les grands écrans tactiles
+	*/
 	@media only screen and (width > 1199px) {
 		:root {
 			--footer-container-height: 120px;
