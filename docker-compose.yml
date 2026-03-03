@@ -18,16 +18,11 @@ services:
       - "--entrypoints.entrypoints-http.address=:80"
       - "--entrypoints.entrypoints-http.http.redirections.entryPoint.to=entrypoints-https"
       - "--entrypoints.entrypoints-http.http.redirections.entryPoint.scheme=https"
-      - "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=entrypoints-http"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./letsencrypt:/letsencrypt"
     restart: unless-stopped
     networks:
       - frontend
@@ -77,7 +72,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
-      - traefik.http.routers.fedow_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.fedow_nginx.tls=true
       - traefik.http.routers.fedow_nginx.rule=Host(`fedow.$DOMAIN`)
       - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
 
@@ -184,7 +179,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=frontend
-      - traefik.http.routers.lespass_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.lespass_nginx.tls=true
       - traefik.http.routers.lespass_nginx.rule=Host(`$DOMAIN`) || Host(`www.$DOMAIN`) || Host(`agenda.$DOMAIN`) || Host(`lespass.$DOMAIN`) || Host(`linterupteur.$DOMAIN`) || Host(`demo.$DOMAIN`) || Host(`bis.domainbis.localhost`) || Host(`domainbis.localhost`) || Host(`chantefrein.$DOMAIN`)  || Host(`la-lowcow-motiv.$DOMAIN`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:
