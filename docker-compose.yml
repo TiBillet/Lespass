@@ -19,6 +19,9 @@ services:
       - "--entrypoints.entrypoints-http.http.redirections.entryPoint.to=entrypoints-https"
       - "--entrypoints.entrypoints-http.http.redirections.entryPoint.scheme=https"
       - "--certificatesresolvers.myresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=entrypoints-http"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
     ports:
       - "80:80"
       - "443:443"
@@ -66,6 +69,7 @@ services:
     hostname: fedow_nginx
     volumes:
       - ./nginx/fedow_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs:/logs
     depends_on:
       - fedow_django
     links:
@@ -193,6 +197,7 @@ services:
 
 networks:
   frontend:
+    name: frontend
   backend:
 
 volumes:
