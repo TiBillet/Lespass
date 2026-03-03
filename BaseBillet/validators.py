@@ -420,6 +420,12 @@ class ReservationValidator(serializers.Serializer):
                                     raise serializers.ValidationError({
                                         custom_amount_key: [_('The amount must be greater than the minimum amount.')]
                                     })
+
+                                # Validation du montant maximum / Maximum amount validation
+                                if amount > Decimal('999999.99'):
+                                    raise serializers.ValidationError({
+                                        custom_amount_key: [_('The amount is too high.')]
+                                    })
                                 
                                 self.custom_amounts[price.uuid] = amount
                                 
@@ -766,6 +772,10 @@ class MembershipValidator(serializers.Serializer):
                 logger.info(f"Open price {amount} below minimum {self.price.prix}")
                 raise serializers.ValidationError(_('The amount must be greater than the minimum amount.'))
 
+            # Validation du montant maximum / Maximum amount validation
+            if amount > Decimal('999999.99'):
+                raise serializers.ValidationError(_('The amount is too high.'))
+
         # Création/Récupération de l'utilisateur après validation des champs
         # Create/Retrieve user after field validation (anti-spam)
         self.user = get_or_create_user(attrs['email'])
@@ -933,6 +943,15 @@ class TenantCreateValidator(serializers.Serializer):
                 tenant=tenant,
                 is_primary=True
             )
+
+            # Liaison immediate entre WaitingConfiguration et le tenant
+            # pour eviter les doublons si le reste de la config echoue
+            # (l'utilisateur pourrait re-cliquer sur le lien de confirmation)
+            # Immediate link between WaitingConfiguration and tenant
+            # to avoid duplicates if the rest of the config fails
+            # (user might re-click the confirmation link)
+            waiting_config.tenant = tenant
+            waiting_config.save()
 
         with tenant_context(tenant):
             ## Création du premier admin:

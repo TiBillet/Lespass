@@ -151,9 +151,10 @@ def get_context(request):
     # Le lien "Fédération"
     meta_url = cache.get('meta_url')
     if not meta_url:
-        meta = Client.objects.filter(categorie=Client.META)[0]
-        meta_url = f"https://{meta.get_primary_domain().domain}"
-        cache.set('meta_url', meta_url, 3600 * 24)
+        meta = Client.objects.filter(categorie=Client.META).first()
+        if meta:
+            meta_url = f"https://{meta.get_primary_domain().domain}"
+            cache.set('meta_url', meta_url, 3600 * 24)
 
     # Formbricks existe ?
     formbricks_config = FormbricksConfig.get_solo()
@@ -824,12 +825,17 @@ class MyAccount(viewsets.ViewSet):
         user_pk, number_printed = pk.split(':')
         user = get_object_or_404(HumanUser, pk=user_pk)
         if admin.is_tenant_admin(tenant):
-            fedowAPI = FedowAPI()
-            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
-            if lost_card_report:
-                messages.add_message(request, messages.SUCCESS,
-                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-            else:
+            try:
+                fedowAPI = FedowAPI()
+                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
+                if lost_card_report:
+                    messages.add_message(request, messages.SUCCESS,
+                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+                else:
+                    messages.add_message(request, messages.ERROR,
+                                         _("Error when detaching your card. Contact an administrator."))
+            except Exception as e:
+                logger.error(f"admin_lost_my_card error: {e}")
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect(request.headers['Referer'])
@@ -837,12 +843,17 @@ class MyAccount(viewsets.ViewSet):
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
         if request.user.email_valid:
-            fedowAPI = FedowAPI()
-            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
-            if lost_card_report:
-                messages.add_message(request, messages.SUCCESS,
-                                     _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-            else:
+            try:
+                fedowAPI = FedowAPI()
+                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
+                if lost_card_report:
+                    messages.add_message(request, messages.SUCCESS,
+                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
+                else:
+                    messages.add_message(request, messages.ERROR,
+                                         _("Error when detaching your card. Contact an administrator."))
+            except Exception as e:
+                logger.error(f"lost_my_card error: {e}")
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
             return HttpResponseClientRedirect('/my_account/')
@@ -1910,7 +1921,11 @@ class EventMVT(viewsets.ViewSet):
 
         # On prépare les prix publiés pour le template (utilisé par le sélecteur de billet)
         # On s'assure que price.name n'est jamais None pour éviter les "undefined" en JS
-        event.published_prices = Price.objects.filter(product__event=event, publish=True).order_by('order', 'prix')
+        # Tri par poids du produit parent, puis par ordre du tarif, puis par prix
+        # Sort by parent product weight, then by rate display order, then by price
+        event.published_prices = Price.objects.filter(
+            product__event=event, publish=True
+        ).order_by('product__poids', 'order', 'prix')
         for p in event.published_prices:
             if p.name is None:
                 p.name = ""
@@ -3033,6 +3048,11 @@ class Tenant(viewsets.ViewSet):
                     existing_client = Client.objects.filter(name=wc.organisation).first()
                     if existing_client:
                         try:
+                            # Repare la liaison manquante pour les prochains clics
+                            # Fix the missing link for future clicks
+                            if not wc.tenant:
+                                wc.tenant = existing_client
+                                wc.save()
                             primary_domain = f"https://{existing_client.get_primary_domain().domain}"
                             messages.info(request, _("This space already exists. Redirecting you to it."))
                             return redirect(primary_domain)

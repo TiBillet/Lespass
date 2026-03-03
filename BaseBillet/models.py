@@ -14,6 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from dateutil.relativedelta import relativedelta
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.db import models
 from django.db.models import JSONField, SET_NULL
@@ -760,12 +761,47 @@ class Configuration(SingletonModel):
     def categorie(self):
         return connection.tenant.categorie
 
+    def check_stripe_sepa_capability(self):
+        """
+        Verifie que le prelevement SEPA est bien active sur le compte Stripe Connect.
+        Check that SEPA Direct Debit is enabled on the Stripe Connect account.
+        Retourne True si SEPA est actif, False sinon.
+        """
+        try:
+            stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+            connect_account_id = self.stripe_connect_account_test if self.stripe_mode_test else self.stripe_connect_account
+            if not connect_account_id:
+                return False
+            account = stripe.Account.retrieve(connect_account_id)
+            capabilities = account.get('capabilities', {})
+            sepa_capability = capabilities.get('sepa_debit_payments', 'inactive')
+            return sepa_capability == 'active'
+        except Exception as e:
+            logger.warning(f"check_stripe_sepa_capability error: {e}")
+            return False
+
     def save(self, *args, **kwargs):
         '''
         Transforme le nom en slug si vide, pour en faire une url lisible
         '''
         if not self.slug:
             self.slug = slugify(f"{self.organisation}")
+
+        # Si l'admin active SEPA, on verifie que c'est bien actif dans Stripe
+        # If admin enables SEPA, check that it's actually active in Stripe
+        if self.stripe_accept_sepa:
+            sepa_is_active_in_stripe = self.check_stripe_sepa_capability()
+            if not sepa_is_active_in_stripe:
+                logger.warning(
+                    f"SEPA debit not active on Stripe for {self.organisation}, disabling stripe_accept_sepa"
+                )
+                self.stripe_accept_sepa = False
+                raise ValidationError(
+                    _("SEPA Direct Debit is not activated on your Stripe account. "
+                      "Please enable it at https://dashboard.stripe.com/settings/payment_methods "
+                      "then try again.")
+                )
+
         super().save(*args, **kwargs)
 
     class Meta:
@@ -2131,6 +2167,15 @@ class ScannerAPIKey(AbstractAPIKey):
         # unique_together = [['place', 'user', 'name']]
 
 
+### Pour terminaux LaBoutik (appairage via Discovery PIN)
+
+class LaBoutikAPIKey(AbstractAPIKey):
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = "LaBoutik API Key"
+        verbose_name_plural = "LaBoutik API Keys"
+
+
 class ScanApp(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=30)
@@ -2639,7 +2684,7 @@ class Membership(models.Model):
     current_iteration = models.IntegerField(null=True, blank=True)
 
     last_action = models.DateTimeField(auto_now=True, verbose_name=_("Presence"))
-    contribution_value = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True,
+    contribution_value = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True,
                                              verbose_name=_("Contribution"))
 
     payment_method = models.CharField(max_length=2, choices=PaymentMethod.choices, blank=True, null=True,
@@ -3170,15 +3215,15 @@ class ProductFormField(models.Model):
         return f"{self.product} • {self.label}"
 
     def save(self, *args, **kwargs):
+        # Genere le nom machine a partir du label si absent
         # Derive the machine key from the label only if it doesn't exist yet
         if not self.name:
-            base = slugify(self.label or "")[:64] if self.label else ""
+            base = slugify(self.label or "")[:50] if self.label else ""
             candidate = base or "field"
-            suffix = 1
-            # Ensure uniqueness per product by appending -2, -3 ... if needed
-            while ProductFormField.objects.filter(product=self.product, name=candidate).exclude(pk=self.pk).exists():
-                suffix += 1
-                tail = f"-{suffix}"
-                candidate = f"{base}{tail}"[:64]
+            # Si le slug existe deja pour ce produit, on ajoute un fragment du uuid (unique par nature)
+            # If the slug already exists for this product, append a uuid fragment (unique by design)
+            if ProductFormField.objects.filter(product=self.product, name=candidate).exclude(pk=self.pk).exists():
+                uuid_short = str(self.pk).replace("-", "")[:8]
+                candidate = f"{base}-{uuid_short}"
             self.name = candidate
         super().save(*args, **kwargs)

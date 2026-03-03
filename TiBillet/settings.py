@@ -148,6 +148,7 @@ SHARED_APPS = (
     'root_billet',
     'wsocket',
     'fedow_public',
+    'discovery',
 
     'django_extensions',
     'solo',
@@ -623,6 +624,19 @@ UNFOLD = {
                         "icon": "qr_code_scanner",  # Supported icon set: https://fonts.google.com/icons
                         "link": reverse_lazy("staff_admin:BaseBillet_scanapp_changelist"),
                         # "badge": "Administration.admin_tenant.badge_callback",
+                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+                    },
+                ],
+            },
+            {
+                "title": _("Caisse LaBoutik"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Device pairing (PIN)"),
+                        "icon": "phonelink_setup",
+                        "link": reverse_lazy("staff_admin:discovery_pairingdevice_changelist"),
                         "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
                     },
                 ],

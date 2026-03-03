@@ -1,54 +1,68 @@
 ##########################
+### CHANGE ME :
+##########################
+
+ADMIN_EMAIL=''
+
+# go Discord to get it or use yours :)
+# For transactionnal email :
+EMAIL_HOST="SSL0.OVH.NET"
+EMAIL_PORT="465"
+EMAIL_HOST_USER=""
+EMAIL_HOST_PASSWORD=""
+
+STRIPE_KEY_TEST=''
+STRIPE_ENDPOINT_SECRET_TEST=''
+TEST_STRIPE_CONNECT_ACCOUNT=''
+
+
+
+##########################
 # TiBillet / Lespass
-# All the env are needed
+# All the env are needed, this is example only, you can use it but change for production !!!
 ##########################
 
 # Secret
-DJANGO_SECRET='' # see documentation to create one
-FERNET_KEY='' # see documentation to create one
+DJANGO_SECRET='^6^$gftxk@nu-4@ld-5r@r^5*7twh@xv7emv17c(1e$q%@6*m2' # see upper to create one
+FERNET_KEY='sZG_NSiM11E_y2h_kKoyueJsLPUN2KhKyjFpsU_3dwh=' # see upper to create one
 
-STRIPE_KEY='' # from your stripe account
-# or 
-STRIPE_KEY_TEST=''
-STRIPE_TEST=0 # set to 1 for use stripe test env
+# FEDOW
+SECRET_KEY='^6^$gftxk@nu-4@ld-5r@r^5*7twh@xv7emv17c(1e$q%@6*m1' # see documentation to create one
+FERNET_KEY='sZG_NSiM11E_y2h_kKoyueJsLPUN2KhKyjFpsU_3dwg=' # see documentation to create one
 
 # Database
-POSTGRES_PASSWORD='' # strong ! use a generated fernet key
-POSTGRES_USER='lespass_postgres' # you can change it on production
-POSTGRES_DB='lespass'
+POSTGRES_USER='lespass_postgres_user'
+POSTGRES_PASSWORD='kKoyueJsLPUN2KhKyjFpsU' # strong ! generate a new fernet for exemple.
+POSTGRES_DB='tibillet'
 
-TIME_ZONE='Europe/Paris' # or where you are
+STRIPE_KEY='' # from your stripe account
 
+TIME_ZONE='UTC' # or where you are
 PUBLIC='TiBillet Coop.' # The name of the root instance
+
 DOMAIN='tibillet.localhost' # for the wildcard : without subdomain ! ex : tibillet.coop, not lespass.tibillet.coop
-SUB='lespass' # the sub domain of your first place ex : if 'festival', it will be accessible on https://festival.tibillet.coop. Set lespass for dev/test.
-META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
-
-ADDITIONAL_DOMAINS='' # optional - add additional domain for SaaS model, séparated with comma. ex : 'domainbis.localhost,domainter.localhost'
-
-ADMIN_EMAIL='' # needed for the first admin account
 
 FEDOW_DOMAIN='fedow.tibillet.localhost' # the same as Fedow
 
-
-
-#### OPTIONAL ENV
-
-# For transactionnal email.
-# Required on prod or if you want to test... emails !
-# Not required on dev' env.
-EMAIL_HOST=''
-EMAIL_PORT=''
-EMAIL_HOST_USER='' # Not required for local mail server
-EMAIL_HOST_PASSWORD='' # Not required for local mail server
-DEFAULT_FROM_EMAIL='' # If empty, we use the EMAIL_HOST_USER
+ADDITIONAL_DOMAINS='domainbis.localhost' # optional - add addiotional domain for SaaS model, séparated with comma. ex : 'domainbis.localhost,domainter.localhost'
+SUB='lespass' # the sub domain of your first place ex : if 'lespass', it will be accessible on https://lespass.tibillet.coop
+META='agenda' # the federated agenda for all events on all tenants. If 'agenda', it will be accessible, for exemple, on https://agenda.tibillet.coop
 
 
 # Usefull for dev/test
 # Auto login for admin, no https cert' verification, demonstration data, auto database flush, etc ...
 # don't set 1 to production !
-TEST=0
-DEBUG=0
+TEST=1
+DEBUG=1
+DEMO=1
+STRIPE_TEST=1 # set to 1 for use stripe test env
 
-# If you have already linked an account on stripe
-STRIPE_CONNECT_ACCOUNT=''
+
+
+DEMO_TAGID_CM='A49E8E2A'
+DEMO_TAGID_CLIENT1='52BE6543'
+DEMO_TAGID_CLIENT2='33BC1DAA'
+
+TEST_FORMBRICKS_API="1064a420e6449d074d59fee39cbb5f14"
+TEST_FORMBRICKS_EVENT_FORM=""
+TEST_FORMBRICKS_ADH_FORM=""

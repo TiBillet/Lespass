@@ -1,0 +1,72 @@
+{% load i18n %}
+
+{# Formulaire d'ajout d'un champ libre au custom_form #}
+{# Form to add a free-form field to custom_form #}
+
+<div id="custom-form-edit-container-{{ membership.uuid }}" class="space-y-4">
+    {# Erreurs de validation #}
+    {% if errors %}
+        <div class="p-3 rounded-md bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+            <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside space-y-1">
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    <form hx-post="/memberships/{{ membership.uuid }}/admin_add_custom_field/"
+          hx-target="#custom-form-edit-container-{{ membership.uuid }}"
+          hx-swap="outerHTML"
+          class="space-y-3">
+        {% csrf_token %}
+
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+            {% trans "Ajouter un champ personnalisé qui n'est pas prévu dans le formulaire d'adhésion." %}
+        </p>
+
+        {# Nom du champ #}
+        <div>
+            <label for="new_field_label" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {% trans "Nom du champ" %} <span class="text-red-600">*</span>
+            </label>
+            <input type="text"
+                   id="new_field_label"
+                   name="new_field_label"
+                   required
+                   placeholder="{% trans 'Ex : Numéro de licence, Allergies...' %}"
+                   class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+        </div>
+
+        {# Valeur du champ #}
+        <div>
+            <label for="new_field_value" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {% trans "Valeur" %}
+            </label>
+            <input type="text"
+                   id="new_field_value"
+                   name="new_field_value"
+                   placeholder="{% trans 'Valeur du champ (optionnel)' %}"
+                   class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+        </div>
+
+        {# Boutons Annuler / Ajouter #}
+        <div class="flex gap-2 justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
+            <button type="button"
+                    hx-get="/memberships/{{ membership.uuid }}/admin_cancel_edit/"
+                    hx-target="#custom-form-edit-container-{{ membership.uuid }}"
+                    hx-swap="outerHTML"
+                    data-testid="custom-form-add-cancel-btn"
+                    aria-label="{% trans "Annuler l'ajout" %}"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% trans "Annuler" %}
+            </button>
+            <button type="submit"
+                    data-testid="custom-form-add-submit-btn"
+                    aria-label="{% trans "Ajouter le champ" %}"
+                    class="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                {% trans "Ajouter" %}
+            </button>
+        </div>
+    </form>
+</div>

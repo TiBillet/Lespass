@@ -22,7 +22,12 @@ class Command(BaseCommand):
     """
     def create_waiting_tenant(self):
         """
-        Possible de créer des tenant ici, tout est fait avec le PUBLIC
+        Crée les tenants en attente jusqu'à atteindre le stock de 20.
+        Retourne la liste des schema_name nouvellement créés,
+        ou une liste vide si le stock est déjà suffisant.
+        / Creates waiting tenants up to a stock of 20.
+        Returns the list of newly created schema_names,
+        or an empty list if the stock is already sufficient.
         """
         with schema_context('public'):
             waiting_tenant_count = Client.objects.filter(categorie=Client.WAITING_CONFIG).count()
@@ -31,9 +36,10 @@ class Command(BaseCommand):
 
             if needed <= 0:
                 logger.info("No waiting tenant needed.")
-                return None
+                return []
 
             logger.info(f"Creating {needed} waiting tenants...")
+            new_schema_names = []
             for i in range(needed):
                 rand_uuid = uuid.uuid4().hex
                 tenant_waiting = Client(
@@ -45,27 +51,39 @@ class Command(BaseCommand):
                 tenant_waiting.save()
                 with connection.cursor() as cursor:
                     cursor.execute(f'CREATE SCHEMA IF NOT EXISTS "{rand_uuid}";')
+                new_schema_names.append(rand_uuid)
 
-            return True
+            return new_schema_names
 
-    def run_waiting_migrations(self):
-        import subprocess, sys, logging
-        logger = logging.getLogger(__name__)
+    def run_waiting_migrations(self, new_schema_names):
+        """
+        Migre uniquement les schemas nouvellement créés, un par un, de façon séquentielle.
+        On évite ainsi de migrer les 300+ tenants existants et on réduit la contention
+        de verrous PostgreSQL (max_locks_per_transaction).
+        / Migrates only the newly created schemas, one by one, sequentially.
+        This avoids migrating all 300+ existing tenants and reduces
+        PostgreSQL lock contention (max_locks_per_transaction).
+        """
+        import subprocess, sys
 
-        logger.info("Launching tenant migrations with multiprocessing...")
+        logger.info(f"Migrating {len(new_schema_names)} new tenant schemas sequentially...")
 
-        try:
-            # Ne pas capturer stdout/stderr pour laisser s'afficher la sortie du process dans le terminal
-            subprocess.run(
-                [sys.executable, "manage.py", "migrate_schemas", "--executor=multiprocessing"],
-                check=True,
-            )
-            logger.info("Migrations completed successfully.")
-        except subprocess.CalledProcessError as e:
-            # Quand on n'intercepte pas stdout/stderr, ils sont None.
-            # Les détails de l'erreur ont déjà été affichés dans le terminal par le sous-processus.
-            logger.error("Migration error (return code: %s). Voir la sortie ci-dessus pour les détails.", e.returncode)
-            raise e
+        for schema_name in new_schema_names:
+            logger.info(f"Migrating schema: {schema_name}")
+            try:
+                subprocess.run(
+                    [sys.executable, "manage.py", "migrate_schemas", "--schema", schema_name],
+                    check=True,
+                )
+                logger.info(f"Schema {schema_name} migrated successfully.")
+            except subprocess.CalledProcessError as e:
+                logger.error(
+                    "Migration failed for schema %s (return code: %s).",
+                    schema_name, e.returncode
+                )
+                raise e
+
+        logger.info("All new tenant schemas migrated successfully.")
 
 
 
@@ -77,8 +95,8 @@ class Command(BaseCommand):
         membership_renewal_reminder.delay()
 
     def handle(self, *args, **options):
-        need_migration = self.create_waiting_tenant()
-        if need_migration:
-            self.run_waiting_migrations()
+        new_schema_names = self.create_waiting_tenant()
+        if new_schema_names:
+            self.run_waiting_migrations(new_schema_names)
 
         self.send_task_membership_renewal_reminder()

@@ -5,7 +5,7 @@ from django.http import HttpRequest
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_api_key.permissions import BaseHasAPIKey
 
-from BaseBillet.models import ScannerAPIKey, ScanApp
+from BaseBillet.models import ScannerAPIKey, ScanApp, LaBoutikAPIKey
 
 logger = logging.getLogger(__name__)
 
@@ -25,4 +25,18 @@ class HasScanApi(BaseHasAPIKey):
             raise PermissionDenied("No app associated with this key.")
 
         request.scan_app = scan_app
+        return super().has_permission(request, view)
+
+
+class HasLaBoutikApi(BaseHasAPIKey):
+    model = LaBoutikAPIKey
+
+    def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:
+        key = self.get_key(request)
+        try:
+            api_key = LaBoutikAPIKey.objects.get_from_key(key)
+        except LaBoutikAPIKey.DoesNotExist:
+            raise PermissionDenied("Invalid LaBoutik API key.")
+
+        request.laboutik_api_key = api_key
         return super().has_permission(request, view)

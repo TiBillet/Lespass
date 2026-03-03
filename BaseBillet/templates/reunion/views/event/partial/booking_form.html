@@ -147,6 +147,7 @@
                                    type="number"
                                    name="custom_amount_{{ price.uuid }}"
                                    min="{{ price.prix }}"
+                                   max="999999.99"
                                    step="0.10"
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
                                    aria-describedby="custom-amount-help-{{ price.uuid }}"

@@ -33,6 +33,8 @@ from django.views.decorators.http import require_POST
 from django_htmx.http import HttpResponseClientRedirect
 from django_tenants.utils import tenant_context
 from import_export.admin import ImportExportModelAdmin, ExportActionModelAdmin
+from import_export import resources, fields
+from import_export.widgets import ForeignKeyWidget
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework_api_key.models import APIKey
@@ -258,6 +260,7 @@ class ScanAppAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
 
 
 @admin.register(Webhook, site=staff_admin_site)
@@ -1822,6 +1825,11 @@ class MembershipAddForm(ModelForm):
         card_number = cleaned_data.get('card_number')
         if card_number:
 
+            # Si clean_email a echoue, le wallet n'existe pas encore — on ne peut pas valider la carte
+            # If clean_email failed, the wallet doesn't exist yet — we can't validate the card
+            if not hasattr(self, 'user_wallet_serialized'):
+                raise forms.ValidationError(_("Please provide a valid email address first."))
+
             if self.user_wallet_serialized.get('has_user_card'):
                 raise forms.ValidationError(_("A card is already linked to this email address."))
 
@@ -2565,6 +2573,57 @@ class EventArchiveFilter(admin.SimpleListFilter):
         return queryset
 
 
+# Import/Export Resource pour Event
+# Resource for CSV import/export of events in admin
+class EventResource(resources.ModelResource):
+    """Ressource d'import/export pour les événements.
+    Resource for import/export of events.
+
+    Clés uniques: (name, datetime) — identifie si on crée ou met à jour.
+    Unique keys: (name, datetime) — determines create vs update.
+
+    Les ForeignKey (postal_address) sont exportées en clair (nom lisible).
+    ForeignKey fields (postal_address) are exported as human-readable names.
+
+    Les ManyToMany (products, tag) ne sont pas gérés ici.
+    ManyToMany fields (products, tag) are not handled here.
+    Il faudrait un widget M2MWidget personnalisé pour les gérer.
+    A custom M2MWidget would be needed to handle them.
+    """
+
+    # postal_address : on exporte/importe le nom de l'adresse au lieu de l'ID
+    # postal_address: export/import the address name instead of the raw PK
+    postal_address = fields.Field(
+        column_name='postal_address',
+        attribute='postal_address',
+        widget=ForeignKeyWidget(PostalAddress, field='name'),
+    )
+
+    class Meta:
+        model = Event
+        import_id_fields = ('name', 'datetime')
+        fields = (
+            'name', 'datetime', 'end_datetime', 'jauge_max', 'max_per_user',
+            'short_description', 'long_description', 'published', 'archived',
+            'private', 'show_time', 'show_gauge', 'slug', 'is_external',
+            'full_url', 'postal_address', 'reservation_button_name',
+            'minimum_cashless_required',
+        )
+        # Ordre des colonnes dans le CSV exporté
+        # Column order in the exported CSV
+        export_order = fields
+        widgets = {
+            'datetime': {'format': '%Y-%m-%d %H:%M:%S'},
+            'end_datetime': {'format': '%Y-%m-%d %H:%M:%S'},
+        }
+        # Ne pas lever d'erreur sur les lignes invalides, les ignorer
+        # Skip invalid rows instead of raising errors
+        skip_unchanged = True
+        # Afficher un diff des changements avant import
+        # Show a diff of changes before import
+        report_skipped = True
+
+
 @admin.register(Event, site=staff_admin_site)
 class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     form = EventForm
@@ -2572,6 +2631,12 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     warn_unsaved_form = True  # Default: False
     date_hierarchy = "datetime"
     ordering = ("-datetime",)
+    
+    # Import/Export configuration
+    resource_classes = [EventResource]
+    export_form_class = ExportForm
+    import_form_class = ImportForm
+    
     # Unfold sections (expandable rows)
     list_sections = [
         EventPricesSummaryTable,
@@ -3067,10 +3132,16 @@ class ReservationAddAdmin(ModelForm):
             )
 
         # Création de la ligne comptables
+        # Si offert, le montant est 0
+        if payment_method == PaymentMethod.FREE:
+            amount = 0
+        else:
+            amount = int(pricesold.prix * quantity * 100)
+
         vente = LigneArticle.objects.create(
             pricesold=pricesold,
             qty=quantity,
-            amount=int(pricesold.prix * quantity * 100),
+            amount=amount,
             payment_method=payment_method,
             status=LigneArticle.VALID,
             sale_origin=SaleOrigin.ADMIN,
