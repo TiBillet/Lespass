@@ -312,14 +312,15 @@
 
 /* ==========================================================================
    10. CONTENEUR PRINCIPAL
-   Zone de contenu avec motif de fond en pointillés
+   Zone de contenu avec motif de fond en croix
    ========================================================================== */
 .skin-faire-festival .conteneur-principal {
     background-color: #ffffff;
-    /* Motif de fond : petits points bleus espacés */
-    background-image: radial-gradient(circle, var(--couleur-bleu-vif) 1px, transparent 1px);
-    background-size: 40px 40px;
-    min-height: 60vh;
+    /* Image de fond du Faire Festival */
+    background-image: url('../image/fond.png');
+    background-size: 1500px;
+    background-repeat: repeat;
+    min-height: 100vh;
 }
 
 /* ==========================================================================
@@ -352,6 +353,15 @@
 .skin-faire-festival .en-tete-jour {
     transform: skew(-2deg);  /* Légère inclinaison pour dynamisme */
     display: inline-block;
+}
+
+/* --- Badge Gratuit (Jour 03) --- */
+.skin-faire-festival .badge-gratuit {
+    background-color: var(--couleur-blanc);
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 20px;
+    padding: 2px 8px;
+    box-shadow: 2px 2px 0px var(--couleur-bleu-vif);
 }
 
 /* ==========================================================================
