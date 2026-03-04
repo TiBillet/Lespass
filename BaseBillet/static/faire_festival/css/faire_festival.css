@@ -37,7 +37,7 @@
     --couleur-blanc: #FFFFFF;            /* Blanc pur pour les fonds */
 
     /* Épaisseur des bordures (style brutaliste) */
-    --epaisseur-bordure: 2.5px;
+    --epaisseur-bordure: 3px;
 
     /* Polices de caractères */
     --police-titre: 'fairestencil', sans-serif;    /* Police grasse pour les titres */
@@ -434,7 +434,7 @@
 
 .skin-faire-festival .carte-evenement:hover {
     transform: translate(-4px, -4px);  /* Déplacement en haut à gauche */
-    box-shadow: 8px 8px 0px var(--couleur-bleu-vif);
+    box-shadow: 3px 3px 0px var(--couleur-bleu-vif);
     z-index: 10;  /* Passe au-dessus des autres cartes */
 }
 

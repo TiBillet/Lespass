@@ -5,22 +5,19 @@
 
 {% block main %}
 
-<!-- =======================================================================
-     PAGE LISTE DES ÉVÉNEMENTS
-     Adaptée depuis la maquette events.html du Faire Festival
-
-     STRUCTURE DE dated_events :
-     C'est un dict {date: [event, event, ...]} classé par date.
-     On itère d'abord sur les dates, puis sur les événements de chaque date.
-     ======================================================================= -->
+<!-- =====================================================================
+     PAGE LISTE DES ÉVÉNEMENTS - Structure inspirée de la maquette
+     ===================================================================== -->
 
 <section class="container-fluid py-4 conteneur-principal">
     <div class="container">
 
-        <!-- Conteneur des boutons de filtre -->
-        <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-4">
+        <!-- =============================================================
+             FILTRES - Style maquette avec dropdowns
+             ============================================================= -->
+        <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-5">
 
-            <!-- Bouton Admin : Ajouter un événement (si autorisé) -->
+            <!-- Bouton Admin -->
             {% if user|can_create_event_tag %}
                 <button class="bouton-filtre fond-jaune texte-bleu"
                         type="button"
@@ -35,47 +32,83 @@
                 </button>
             {% endif %}
 
-            <!-- Filtre par tag/catégorie -->
+            <!-- Filtre Date -->
+            <div class="dropdown">
+                <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    {% translate 'Trier par date' %}
+                </button>
+                <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                    <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les dates' %}</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% for date_key, events in dated_events.items %}
+                        {% if events %}
+                            {% with first_event=events.0 %}
+                                <li>
+                                    <a class="dropdown-item police-mono" href="?date={{ date_key }}">
+                                        {{ first_event.datetime|date:"l d F" }}
+                                    </a>
+                                </li>
+                            {% endwith %}
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Filtre Catégories -->
             {% if all_tags %}
                 <div class="dropdown">
-                    <button class="bouton-filtre dropdown-toggle"
-                            type="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false">
-                        {% if active_tag %}
-                            {{ active_tag.name }}
-                        {% else %}
-                            {% translate 'Filtrer par tags' %}
-                        {% endif %}
+                    <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        {% if active_tag %}{{ active_tag.name }}{% else %}{% translate 'Trier par catégories' %}{% endif %}
                     </button>
                     <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
-                        <!-- Option "Tous" pour réinitialiser le filtre -->
-                        <li>
-                            <a class="dropdown-item police-mono" href="{% url 'event-list' %}">
-                                {% translate 'Effacer le filtre' %}
-                            </a>
-                        </li>
+                        <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les catégories' %}</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <!-- Liste de tous les tags disponibles -->
                         {% for tag in all_tags %}
-                            <li>
-                                <a class="dropdown-item police-mono"
-                                   href="?tag={{ tag.slug }}">
-                                    {{ tag.name }}
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item police-mono" href="?tag={{ tag.slug }}">{{ tag.name }}</a></li>
                         {% endfor %}
                     </ul>
                 </div>
             {% endif %}
 
+            <!-- TODO : Jonas doit travailler sur le back -->
+            <!-- Filtre Thématique -->
+            <div class="dropdown">
+                <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    {% translate 'Trier par thématique' %}
+                </button>
+                <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                    <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les thématiques' %}</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=formation">{% translate 'Formation' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=economie-circulaire">{% translate 'Économie Circulaire' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=manufacture">{% translate 'Manufacture' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=ecole">{% translate 'École' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=reparation">{% translate 'Réparation' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=recherche">{% translate 'Recherche' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=cape">{% translate 'CAPE' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=inclusion-numerique">{% translate 'Inclusion Numérique par le Faire' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=bois">{% translate 'Bois' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=metal">{% translate 'Métal' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=textile">{% translate 'Textile' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=terre">{% translate 'Terre' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=papier">{% translate 'Papier' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=plastique">{% translate 'Plastique' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=electronique">{% translate 'Électronique' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=mobilite">{% translate 'Mobilité' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=entreprise-innovante">{% translate 'Entreprise innovante' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=boite-a-outils">{% translate 'La boite à outils espace du faire' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=low-tech">{% translate 'Low Tech' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=artisan">{% translate 'Artisan' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=nourricier-bio-lab">{% translate 'Nourricier bio lab' %}</a></li>
+                    <li><a class="dropdown-item police-mono" href="?theme=commun-numerique">{% translate 'Commun numérique' %}</a></li>
+                </ul>
+            </div>
+
         </div>
 
-        <!-- =================================================================
+        <!-- =============================================================
              GRILLE D'ÉVÉNEMENTS
-             dated_events est un dict {date: [event, event, ...]}
-             On itère sur chaque date, puis sur chaque événement de cette date
-             ================================================================= -->
+             ============================================================= -->
         <div class="row g-4" id="event_list">
 
             {% for date_key, events in dated_events.items %}
@@ -85,55 +118,42 @@
                     <div class="col-12 col-md-6 col-lg-3">
                         <div class="carte-evenement">
                             <div>
-                                <!-- IMAGE DE L'ÉVÉNEMENT -->
-                                <a href="/event/{{ event.slug }}/"
-                                   hx-get="/event/{{ event.slug }}/"
-                                   hx-target="body"
-                                   hx-push-url="true"
-                                   class="d-block text-decoration-none">
-                                    <div class="image-evenement"
-                                         style="background-image: url('{% if event.sticker_img %}{{ event.sticker_img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');">
-                                    </div>
-                                </a>
+                                <!-- IMAGE -->
+                                <div class="image-evenement"
+                                     style="background-image: url('{% if event.sticker_img %}{{ event.sticker_img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');"></div>
 
-                                <!-- TAGS DE L'ÉVÉNEMENT -->
+                                <!-- TAGS -->
                                 <div class="mb-2">
                                     {% for tag in event.tag.all %}
                                         <span class="etiquette-categorie">{{ tag.name|lower }}</span>
                                     {% endfor %}
                                 </div>
 
-                                <!-- TITRE DE L'ÉVÉNEMENT -->
-                                <a href="/event/{{ event.slug }}/"
-                                   hx-get="/event/{{ event.slug }}/"
-                                   hx-target="body"
-                                   hx-push-url="true"
-                                   class="text-decoration-none">
-                                    <h3 class="titre-evenement">
-                                        {{ event.name|upper|truncatewords:6 }}
-                                    </h3>
-                                </a>
+                                <!-- TITRE -->
+                                <h3 class="titre-evenement">{{ event.name|upper|truncatewords:6 }}</h3>
 
-                                <!-- DATE ET HEURE -->
+                                <!-- INFOS -->
                                 <div class="infos-evenement d-flex justify-content-between">
                                     <span>→ {{ event.datetime|date:"l d F" }}</span>
-                                    <span>→ {{ event.datetime|date:"H" }}h
-                                        {% if event.end_datetime %}
-                                            - {{ event.end_datetime|date:"H" }}h
-                                        {% endif %}
-                                    </span>
+                                    <span>→ {{ event.datetime|date:"H" }}h{% if event.end_datetime %} - {{ event.end_datetime|date:"H" }}h{% endif %}</span>
                                 </div>
                             </div>
 
-                            <!-- PIED DE CARTE : Boutons d'action -->
+                            <!-- ACTIONS -->
                             <div class="pied-carte">
-                                <!-- Lien vers la page de détail (utilise le slug comme le skin reunion) -->
                                 <a href="/event/{{ event.slug }}/"
-                                   class="bouton-petit-jaune w-100 text-center"
+                                   class="bouton-petit-jaune"
                                    hx-get="/event/{{ event.slug }}/"
                                    hx-target="body"
                                    hx-push-url="true">
-                                    {% translate 'See more' %}
+                                    {% translate 'En voir +' %}
+                                </a>
+                                <a href="/event/{{ event.slug }}/"
+                                   class="bouton-petit-bleu"
+                                   hx-get="/event/{{ event.slug }}/"
+                                   hx-target="body"
+                                   hx-push-url="true">
+                                    {% translate "Je m'inscris" %}
                                 </a>
                             </div>
                         </div>
@@ -142,17 +162,12 @@
                 {% endfor %}
             {% empty %}
 
-                <!-- MESSAGE SI AUCUN ÉVÉNEMENT TROUVÉ -->
+                <!-- AUCUN ÉVÉNEMENT -->
                 <div class="col-12">
                     <div class="bordure-epaisse p-5 text-center bg-white">
-                        <h3 class="texte-bleu police-titre mb-3">
-                            {% translate 'No results for this search.' %}
-                        </h3>
-                        <p class="texte-bleu police-mono">
-                            {% translate 'No events match your search criteria. Try adjusting your filters.' %}
-                        </p>
-                        <a href="{% url 'event-list' %}"
-                           class="btn bouton-pilule fond-bleu text-white mt-3">
+                        <h3 class="texte-bleu police-titre mb-3">{% translate 'No results for this search.' %}</h3>
+                        <p class="texte-bleu police-mono">{% translate 'No events match your search criteria.' %}</p>
+                        <a href="{% url 'event-list' %}" class="btn bouton-pilule fond-bleu text-white mt-3">
                             {% translate 'Effacer le filtre' %}
                         </a>
                     </div>
@@ -160,33 +175,34 @@
 
             {% endfor %}
 
-        </div> <!-- Fin de la grille row -->
+        </div> <!-- Fin grille -->
 
-        <!-- PAGINATION : Bouton "Charger Plus" -->
+        <!-- BOUTON CHARGER PLUS -->
         {% if paginated_info.has_next %}
             <div class="text-center py-5">
-                <a href="?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
-                   class="bouton-charger-plus">
-                    {% translate 'Load more events' %}
-                </a>
+                <button class="bouton-charger-plus"
+                        hx-get="?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                        hx-target="#event_list"
+                        hx-swap="beforeend">
+                    {% translate 'CHARGER PLUS' %}
+                </button>
             </div>
         {% endif %}
 
     </div>
 </section>
 
-<!-- OFFCANVAS ADMIN : Ajout rapide d'événement (look reunion) -->
+<!-- OFFCANVAS ADMIN -->
 <style>
     #adminAddEventPanel { --bs-offcanvas-width: 100vw; }
     @media (min-width: 992px) { #adminAddEventPanel { --bs-offcanvas-width: 800px; } }
 </style>
-<div class="offcanvas-start offcanvas" tabindex="-1" id="adminAddEventPanel" aria-labelledby="adminAddEventPanelLabel">
+<div class="offcanvas offcanvas-start" tabindex="-1" id="adminAddEventPanel">
     <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="adminAddEventPanelLabel">{% translate 'Ajouter un évènement' %}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+        <h5 class="offcanvas-title">{% translate 'Ajouter un évènement' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
     <div class="offcanvas-body" id="offcanvas-event-admin">
-        {# Le contenu du formulaire est chargé ici via HTMX #}
         <div class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>

@@ -126,7 +126,8 @@
      Adaptée depuis la maquette event_detail.html du Faire Festival
      Affiche toutes les informations détaillées d'un événement
      ======================================================================= -->
-<main class="container py-5 conteneur-principal">
+<main class="container-fluid py-5 conteneur-principal">
+    <div class="container">
 
     <!-- ===================================================================
          SECTION HERO : Présentation principale de l'événement
@@ -157,6 +158,8 @@
              Titre, date, heure et bouton d'inscription
              ============================================================ -->
         <div class="col-md-6 ps-md-5">
+            <!-- Fond blanc pour séparer du motif -->
+            <div class="bg-white p-4 bordure-epaisse ombre-dure-petite">
 
             <!-- Titre de l'événement -->
             <h1 class="titre-detail mb-4 texte-bleu">
@@ -247,6 +250,8 @@
 
             <!-- Zone de résultat pour la réservation (HTMX) -->
             <div id="reservation-result" class="mt-3"></div>
+            
+            </div> <!-- Fin fond blanc informations -->
 
         </div> <!-- Fin colonne informations -->
 
@@ -258,7 +263,7 @@
          =================================================================== -->
     <div class="row mb-5">
         <div class="col-12">
-            <div class="boite-description bordure-epaisse">
+            <div class="boite-description bordure-epaisse bg-white">
                 {% if event.short_description or event.long_description %}
                     <div class="texte-description texte-bleu police-mono">
                         <!-- Description courte (si disponible) -->
@@ -439,6 +444,8 @@
             </a>
         </div>
     </div>
+
+    </div> <!-- Fin container -->
 
 </main>
 
