@@ -3224,5 +3224,4 @@ class Tenant(viewsets.ViewSet):
         return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
 
         #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
-        # return redirect('/tenant/new/')
+        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")

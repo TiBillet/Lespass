@@ -12,9 +12,9 @@
                  LOGO : Lien vers la page d'accueil
                  ================================================================ -->
             <a class="navbar-brand" href="/" hx-get="/" hx-target="body" hx-push-url="true">
-                {% if config.img %}
+                {% if config.logo %}
                     <!-- Logo personnalisé depuis la configuration -->
-                    <img src="{{ config.img.med.url }}"
+                    <img src="{{ config.logo.med.url }}"
                          alt="Logo {{ config.organisation }}"
                          class="img-fluid"
                          style="height: 50px; object-fit: contain;">
