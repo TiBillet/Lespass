@@ -36,7 +36,7 @@ PARTIE A — Import Fedow (fedow_core/management/commands/import_fedow_data.py)
 PARTIE B — Import LaBoutik (laboutik/management/commands/import_laboutik_data.py)
 
 4. Idem pour les donnees LaBoutik :
-   CategorieProduct (deja dans BaseBillet) → Product enrichi (champs POS) → PointDeVente → CarteMaitresse → Table
+   CategorieProduct (deja dans BaseBillet) → Product enrichi (champs POS) → PointDeVente → CartePrimaire → Table
 5. Les ArticleVendu sont deja dans LigneArticle (via webhook historique)
    → ne PAS reimporter
 

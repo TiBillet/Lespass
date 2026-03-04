@@ -872,6 +872,68 @@ class Tva(models.Model):
         verbose_name = _("TVA rate")
         verbose_name_plural = _("TVA rate")
 
+
+class CategorieProduct(models.Model):
+    """
+    Categorie de produit pour le point de vente (POS) et au-dela.
+    Regroupe les produits par famille (boissons, nourriture, etc.).
+    Reutilisable hors POS (vente en ligne, etc.).
+    / Product category for POS and beyond. Groups products by family.
+
+    LOCALISATION : BaseBillet/models.py
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid4, editable=False, unique=True, db_index=True,
+    )
+    name = models.CharField(
+        max_length=200,
+        verbose_name=_("Name"),
+        help_text=_("Category name displayed on the POS interface."),
+    )
+    icon = models.CharField(
+        max_length=50, blank=True, null=True,
+        verbose_name=_("Icon"),
+        help_text=_("Icon name (e.g. Bootstrap Icons class)."),
+    )
+    couleur_texte = models.CharField(
+        max_length=7, blank=True, null=True,
+        verbose_name=_("Text color"),
+        help_text=_("Hexadecimal color code for text (e.g. #FFFFFF)."),
+    )
+    couleur_fond = models.CharField(
+        max_length=7, blank=True, null=True,
+        verbose_name=_("Background color"),
+        help_text=_("Hexadecimal color code for background (e.g. #000000)."),
+    )
+    poid_liste = models.SmallIntegerField(
+        default=0,
+        verbose_name=_("Display order"),
+        help_text=_("Lower values are displayed first."),
+    )
+    # TVA par defaut pour les produits de cette categorie
+    # / Default VAT rate for products in this category
+    tva = models.ForeignKey(
+        Tva, on_delete=models.SET_NULL, blank=True, null=True,
+        verbose_name=_("Default VAT rate"),
+        help_text=_("Default VAT rate applied to products in this category."),
+    )
+    # Indique si la categorie concerne des articles cashless (tokens)
+    # / Whether this category is for cashless (token) items
+    cashless = models.BooleanField(
+        default=False,
+        verbose_name=_("Cashless"),
+        help_text=_("Check if this category is for cashless token items."),
+    )
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ('poid_liste', 'name')
+        verbose_name = _('Product category')
+        verbose_name_plural = _('Product categories')
+
+
 class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
@@ -991,6 +1053,84 @@ class Product(models.Model):
                                             help_text=_(
                                                 "'Subscribe' If empty. Only useful for membership or subscription products."))
 
+    # --- Champs POS (Point de Vente / Cash register) ---
+    # Tous nullable : ne concernent que les produits utilises en caisse.
+    # Convention : methode_caisse IS NOT NULL = produit disponible en caisse.
+    # / POS fields. All nullable. methode_caisse IS NOT NULL = available at POS.
+
+    VENTE = 'VT'
+    RECHARGE_EUROS = 'RE'
+    RECHARGE_CADEAU = 'RC'
+    RECHARGE_TEMPS = 'TM'
+    ADHESION_POS = 'AD'
+    RETOUR_CONSIGNE = 'CR'
+    VIDER_CARTE = 'VC'
+    FRACTIONNE_POS = 'FR'
+    BILLET_POS = 'BI'
+    FIDELITE = 'FD'
+
+    METHODE_CAISSE_CHOICES = [
+        (VENTE, _('Sale')),
+        (RECHARGE_EUROS, _('Euro top-up')),
+        (RECHARGE_CADEAU, _('Gift top-up')),
+        (RECHARGE_TEMPS, _('Time top-up')),
+        (ADHESION_POS, _('Membership')),
+        (RETOUR_CONSIGNE, _('Deposit return')),
+        (VIDER_CARTE, _('Empty card')),
+        (FRACTIONNE_POS, _('Split payment')),
+        (BILLET_POS, _('Ticket')),
+        (FIDELITE, _('Loyalty')),
+    ]
+
+    methode_caisse = models.CharField(
+        max_length=2, choices=METHODE_CAISSE_CHOICES,
+        blank=True, null=True,
+        verbose_name=_("POS method"),
+        help_text=_("Payment/action method at the cash register. Leave empty if this product is not sold at the POS."),
+    )
+    categorie_pos = models.ForeignKey(
+        CategorieProduct, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='products_pos',
+        verbose_name=_("POS category"),
+        help_text=_("Display category on the POS interface."),
+    )
+    couleur_texte_pos = models.CharField(
+        max_length=7, blank=True, null=True,
+        verbose_name=_("POS text color"),
+        help_text=_("Hexadecimal color for the product button text (e.g. #FFFFFF)."),
+    )
+    couleur_fond_pos = models.CharField(
+        max_length=7, blank=True, null=True,
+        verbose_name=_("POS background color"),
+        help_text=_("Hexadecimal color for the product button background (e.g. #3B82F6)."),
+    )
+    # Groupement de boutons sur l'interface caisse
+    # / Button group name on the POS interface
+    groupe_pos = models.CharField(
+        max_length=50, blank=True, null=True,
+        verbose_name=_("POS button group"),
+        help_text=_("Group name to cluster buttons together on the POS interface."),
+    )
+    # Paiement fractionne autorise pour cet article
+    # / Whether split payment is allowed for this product
+    fractionne = models.BooleanField(
+        default=False,
+        verbose_name=_("Split payment allowed"),
+        help_text=_("Allow partial/split payment for this product at the POS."),
+    )
+    # Necessite un scan de carte NFC avant ajout au panier
+    # / Requires NFC card scan before adding to cart
+    besoin_tag_id = models.BooleanField(
+        default=False,
+        verbose_name=_("Requires NFC tag"),
+        help_text=_("An NFC card must be scanned before this product can be added to the cart."),
+    )
+    icon_pos = models.CharField(
+        max_length=50, blank=True, null=True,
+        verbose_name=_("POS icon"),
+        help_text=_("Icon name for the POS button (e.g. Bootstrap Icons class)."),
+    )
 
     def fedow_category(self):
         self_category_map = {
@@ -1033,6 +1173,19 @@ class MembershipProduct(Product):
         proxy = True
         verbose_name = _('Membership product')
         verbose_name_plural = _('Membership products')
+
+
+class POSProduct(Product):
+    """Proxy pour afficher uniquement les produits de caisse dans l'admin.
+    Filtre : methode_caisse IS NOT NULL (= disponible au point de vente).
+    Proxy to display only POS products in admin.
+    Filter: methode_caisse IS NOT NULL (= available at point of sale).
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _('POS product')
+        verbose_name_plural = _('POS products')
 
 
 class PromotionalCode(models.Model):
@@ -1279,6 +1432,18 @@ class Price(models.Model):
                                               verbose_name=_("Token amount to send"),
                                               help_text=_("Raw token amount."),
                                               )
+
+    # Tarification multi-asset : si null → prix en EUR, si set → prix en unites de l'asset.
+    # Permet de definir des tarifs en tokens (monnaie locale, temps, fidelite, etc.).
+    # Precedent : fedow_reward_asset fait deja une FK tenant → shared (meme pattern).
+    # / Multi-asset pricing: null = EUR, set = asset units. Same cross-schema pattern as fedow_reward_asset.
+    asset = models.ForeignKey(
+        "fedow_core.Asset", on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='prices',
+        verbose_name=_("Asset"),
+        help_text=_("If set, the price is in asset units (tokens). If empty, the price is in euros."),
+    )
 
     # def range_max(self):
     #     return range(self.max_per_user + 1)

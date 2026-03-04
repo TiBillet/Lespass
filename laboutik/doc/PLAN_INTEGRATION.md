@@ -18,7 +18,7 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 **Resume executif — ou on en est :**
 - Branche : `integration_laboutik`
 - Front LaBoutik : 100% fait (templates, JS, cotton)
-- Backend : 100% mocke. Phase -1 terminee. Phase 0 TERMINEE (modeles + services + admin + tests). Prochaine etape = Phase 1 (modeles POS)
+- Backend : 100% mocke. Phase -1 terminee. Phase 0 TERMINEE. Phase 1 TERMINEE (modeles POS + admin Unfold + donnees de test). Prochaine etape = Phase 2 (vues/serializers)
 - fedow_core : app complete (Asset, Token, Transaction, Federation + admin + services + tests 8 pytest + 1 Playwright)
 - Toutes les decisions architecturales sont prises (section 16), dont 16.9 : Product unifie (pas de ArticlePOS)
 
@@ -553,7 +553,7 @@ Aucune migration de donnees necessaire. Backward compatible a 100%.
 | `CarteCashless` | `QrcodeCashless.CarteCashless` | **Enrichir** | Ajouter `wallet_ephemere` seulement (cf. decision 16.7) |
 | `Assets` (soldes) | `fedow_core.Token` | **Nouveau** | Token = solde d'un wallet pour un asset |
 | `Membre` | `AuthBillet.TibilletUser` + `BaseBillet.Membership` | **Existe** | |
-| `CarteMaitresse` | `laboutik.CarteMaitresse` | **Creer** | Carte responsable → PV autorises |
+| `CartePrimaire` | `laboutik.CartePrimaire` | **Creer** | Carte responsable → PV autorises |
 | `Table` + `CategorieTable` | `laboutik.Table` + `laboutik.CategorieTable` | **Creer** | Plan de salle restaurant |
 | `CommandeSauvegarde` | `laboutik.CommandeSauvegarde` | **Creer** | Commandes en cours |
 | `ArticleCommandeSauvegarde` | `laboutik.ArticleCommandeSauvegarde` | **Creer** | Lignes de commande |
@@ -650,7 +650,7 @@ Transaction
 ├── amount (PositiveIntegerField) — en centimes
 ├── action (CharField choices) — SALE, REFILL, etc. (10 types, cf. annexe B)
 ├── card (FK → CarteCashless, nullable) — carte utilisee
-├── primary_card (FK → CarteCashless, nullable) — carte maitresse
+├── primary_card (FK → CarteCashless, nullable) — carte primaire
 ├── datetime (DateTimeField)
 ├── comment (TextField, blank=True)
 ├── metadata (JSONField, default=dict)
@@ -805,10 +805,10 @@ PointDeVente
 └── products (M2M → Product) — les produits disponibles a ce point de vente
 ```
 
-#### `CarteMaitresse`
+#### `CartePrimaire`
 
 ```
-CarteMaitresse
+CartePrimaire
 ├── uuid (PK)
 ├── carte (OneToOne → QrcodeCashless.CarteCashless)
 ├── points_de_vente (M2M → PointDeVente)
@@ -933,8 +933,8 @@ ClotureCaisse
 
 #### `carte_primaire()` — Validation carte NFC
 1. `CarteCashless.objects.get(tag_id=tag_id)`
-2. `CarteMaitresse.objects.get(carte=carte_cashless)`
-3. `carte_maitresse.points_de_vente.all()` → PV autorises
+2. `CartePrimaire.objects.get(carte=carte_cashless)`
+3. `carte_primaire.points_de_vente.all()` → PV autorises
 4. Si un seul PV → redirect ; si plusieurs → choix
 
 #### `point_de_vente()` — Interface POS
@@ -978,7 +978,7 @@ WalletService.obtenir_solde_total(utilisateur) + Membership.objects.filter(user=
 | `POSProduct` (proxy Product) | Caisse > Articles POS |
 | `CategorieProduct` | Caisse > Categories |
 | `PointDeVente` | Caisse > Points de vente |
-| `CarteMaitresse` | Caisse > Cartes maitresses |
+| `CartePrimaire` | Caisse > Cartes primaires |
 | `Table` | Caisse > Tables |
 | `CommandeSauvegarde` | Caisse > Commandes en cours |
 | `ClotureCaisse` | Caisse > Clotures |
@@ -1029,7 +1029,7 @@ Ordre d'import :
 1. CategorieProduct ← Categorie (+ Couleur inline → champs hexa)
 2. Product (POS) ← Articles (+ Methode inline → methode_caisse, prix → Price en euros)
 3. PointDeVente ← PointDeVente (+ M2M products/categories)
-4. CarteMaitresse ← CarteMaitresse (tag_id → CarteCashless)
+4. CartePrimaire ← CartePrimaire (tag_id → CarteCashless)
 5. Table ← Table (+ CategorieTable)
 6. CommandeSauvegarde ← CommandeSauvegarde (si commandes en cours)
 7. ArticleVendu → DEJA dans LigneArticle (via webhook historique)
@@ -1046,7 +1046,7 @@ Apres chaque import, verifier :
 - Somme des Token.value == somme attendue par asset
 - Nombre de Transaction == nombre dans l'ancien Fedow
 - Chaque CarteCashless a un wallet lie
-- Chaque CarteMaitresse pointe vers une CarteCashless existante
+- Chaque CartePrimaire pointe vers une CarteCashless existante
 - Les transactions importees ont `migrated=True` et un `id` croissant
 - `manage.py verify_transactions` passe sans erreur
 
@@ -1116,7 +1116,7 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
    - Ajouter `asset` FK sur `BaseBillet.Price` (cf. section 8)
 8. Creer les modeles dans `laboutik/models.py` :
    - `PointDeVente` (M2M → Product, M2M → CategorieProduct)
-   - `CarteMaitresse`
+   - `CartePrimaire`
    - `Table`, `CategorieTable`
 9. Migrations (`migrate_schemas`)
 10. Admin Unfold : `POSProductAdmin`, `CategorieProductAdmin`, `PointDeVenteAdmin`
@@ -1124,7 +1124,7 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 
 ### Phase 2 — laboutik : remplacement des mocks
 
-12. `carte_primaire()` : CarteMaitresse + CarteCashless
+12. `carte_primaire()` : CartePrimaire + CarteCashless
 13. `point_de_vente()` : charger depuis DB
 14. `moyens_paiement()` + `confirmer()` : articles depuis DB
 15. `_payer_par_carte_ou_cheque()` + `_payer_en_especes()` : creer LigneArticle

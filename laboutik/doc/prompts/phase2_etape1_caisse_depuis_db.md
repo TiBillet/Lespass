@@ -19,10 +19,10 @@ Tache (1 fichier principal : laboutik/views.py) :
 
 1. carte_primaire() (POST) — remplacer le mock par :
    a) CarteCashless.objects.get(tag_id=tag_id) — la carte NFC
-   b) CarteMaitresse.objects.get(carte=carte_cashless) — est-ce une carte maitresse ?
-   c) carte_maitresse.points_de_vente.all() — PV autorises
+   b) CartePrimaire.objects.get(carte=carte_cashless) — est-ce une carte maitresse ?
+   c) carte_primaire.points_de_vente.all() — PV autorises
    d) Si 1 seul PV → redirect. Si plusieurs → choix.
-   e) Si pas CarteMaitresse → erreur (pas autorise)
+   e) Si pas CartePrimaire → erreur (pas autorise)
 
 2. point_de_vente() (GET) — remplacer le mock par :
    a) PointDeVente.objects.prefetch_related('categories', 'products').get(uuid=uuid_pv)

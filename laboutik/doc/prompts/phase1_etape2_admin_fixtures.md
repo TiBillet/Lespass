@@ -35,7 +35,7 @@ PARTIE A — Admin Unfold (1 fichier : Administration/admin_tenant.py)
    - list_display = name, comportement, service_direct, hidden
    - filter_horizontal pour products et categories
 
-   CarteMaitresseAdmin :
+   CartePrimaireAdmin :
    - list_display = carte, edit_mode, datetime
    - filter_horizontal pour points_de_vente
 

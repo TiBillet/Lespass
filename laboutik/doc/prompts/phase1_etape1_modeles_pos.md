@@ -53,7 +53,7 @@ PARTIE B — laboutik/models.py
    - PointDeVente (uuid PK, name, comportement choices D/K/C, service_direct,
      afficher_les_prix, accepte_especes/CB/cheque/commandes, poid_liste, hidden,
      products M2M → Product, categories M2M → CategorieProduct)
-   - CarteMaitresse (uuid PK, carte OneToOne → CarteCashless, points_de_vente M2M,
+   - CartePrimaire (uuid PK, carte OneToOne → CarteCashless, points_de_vente M2M,
      edit_mode, datetime auto_now_add)
    - CategorieTable (name unique, icon)
    - Table (uuid PK, name, categorie FK, poids, statut choices L/O/S,
@@ -78,7 +78,7 @@ PARTIE B — laboutik/models.py
 - Migrations creees et appliquees (BaseBillet/0201 + laboutik/0001)
 - En shell Django :
   - `from BaseBillet.models import CategorieProduct, POSProduct, Product, Price`
-  - `from laboutik.models import PointDeVente, CarteMaitresse, Table, CategorieTable`
+  - `from laboutik.models import PointDeVente, CartePrimaire, Table, CategorieTable`
   - `Product._meta.get_field('methode_caisse')` → CharField
   - `Price._meta.get_field('asset')` → ForeignKey
   - `POSProduct._meta.proxy` → True

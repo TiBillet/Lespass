@@ -5,16 +5,15 @@
 # Authentification : clé API LaBoutik (Discovery / PIN pairing) ou session admin tenant.
 # Authentication: LaBoutik API key (Discovery / PIN pairing) or tenant admin session.
 #
-# IMPORTANT : toutes les données sont mockées (JSON fichier).
-# Les vrais modèles Django seront créés plus tard.
-# IMPORTANT: all data is mocked (JSON file).
-# Real Django models will be created later.
+# CaisseViewSet : données depuis la DB (modèles ORM).
+# PaiementViewSet : données encore mockées (JSON fichier, étape 2).
 
 import logging
 import os
 from json import dumps
 
 from django.conf import settings
+from django.http import Http404
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -22,18 +21,22 @@ from django_htmx.http import HttpResponseClientRedirect
 from rest_framework import viewsets
 from rest_framework.decorators import action
 
+from django.db.models import Prefetch
+
+from BaseBillet.models import Configuration, Price
 from BaseBillet.permissions import HasLaBoutikAccess
+from QrcodeCashless.models import CarteCashless
+from laboutik.models import PointDeVente, CartePrimaire, Table
 from laboutik.utils import mockData
 from laboutik.utils import method as payment_method
 
 
 # --------------------------------------------------------------------------- #
-#  Constantes mock — seront remplacées par de vrais modèles plus tard         #
-#  Mock constants — will be replaced by real Django models later               #
+#  Constantes                                                                  #
 # --------------------------------------------------------------------------- #
 
-# Chemin vers la base de données JSON mock
-# Path to the mock JSON database
+# Chemin vers la base de données JSON mock (utilisé par PaiementViewSet)
+# Path to the mock JSON database (used by PaiementViewSet)
 MOCK_DB_PATH = os.path.join(os.path.dirname(__file__), "utils", "mockDb.json")
 
 # Devise utilisée pour l'affichage des prix
@@ -55,27 +58,41 @@ PAYMENT_METHOD_TRANSLATIONS = {
 # UUID of the "deposit" article — triggers a special refund flow
 UUID_ARTICLE_CONSIGNE = "8f08b90d-d3f0-49da-9dbd-8be795f689ef"
 
+# Catégorie par défaut quand un produit n'a pas de categorie_pos
+# Default category when a product has no categorie_pos
+CATEGORIE_PAR_DEFAUT = {
+    "id": "default",
+    "name": "Divers",
+    "icon": "fa-angry",
+    "couleur_backgr": "#FFFFFF",
+    "couleur_texte": "#333333",
+}
+
 logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
-#  Fonctions utilitaires — construire l'état et charger les données mock      #
-#  Utility functions — build state and load mock data                         #
+#  Fonctions utilitaires — état, articles, catégories                         #
+#  Utility functions — state, articles, categories                            #
 # --------------------------------------------------------------------------- #
 
-def _construire_state():
+def _construire_state(point_de_vente=None, carte_primaire_obj=None):
     """
     Construit le dictionnaire "state" à chaque requête.
     Builds the "state" dictionary on each request.
 
-    Pas de variable globale mutable : on reconstruit à chaque appel
-    pour éviter les effets de bord entre requêtes concurrentes.
-    No mutable global: we rebuild on each call
-    to avoid side effects between concurrent requests.
+    Le state est lu côté client (JS) via stateJson pour piloter l'interface.
+    State is read client-side (JS) via stateJson to drive the interface.
     """
-    return {
+    config = Configuration.get_solo()
+    state = {
         "version": "0.9.11",
-        "place": {"name": "lieu de test", "monnaie_name": "lémien"},
+        "place": {
+            "name": config.organisation,
+            # Placeholder — sera remplacé par fedow_core en Phase 3
+            # Placeholder — will be replaced by fedow_core in Phase 3
+            "monnaie_name": "Monnaie locale",
+        },
         "demo": {
             "active": getattr(settings, "DEMO", False),
             "tags_id": [
@@ -87,19 +104,155 @@ def _construire_state():
         },
     }
 
+    # Enrichir avec les propriétés du point de vente (si fourni).
+    # Ces champs ne sont pertinents que sur l'interface POS, pas sur la page d'attente.
+    # Enrich with point of sale properties (if provided).
+    if point_de_vente is not None:
+        state["comportement"] = point_de_vente.comportement
+        state["afficher_les_prix"] = point_de_vente.afficher_les_prix
+        state["accepte_especes"] = point_de_vente.accepte_especes
+        state["accepte_carte_bancaire"] = point_de_vente.accepte_carte_bancaire
+        state["accepte_cheque"] = point_de_vente.accepte_cheque
+        state["accepte_commandes"] = point_de_vente.accepte_commandes
+        state["service_direct"] = point_de_vente.service_direct
+        state["monnaie_principale_name"] = "TestCoin"
+        # passageModeGerant : autorise le caissier à basculer en mode gérant
+        # passageModeGerant: allows the cashier to switch to manager mode
+        state["passageModeGerant"] = True
+        state["mode_gerant"] = (
+            carte_primaire_obj.edit_mode if carte_primaire_obj else False
+        )
+
+    return state
+
+
+def _construire_donnees_articles(point_de_vente_instance):
+    """
+    Construit la liste de dicts articles au format attendu par les templates.
+    Builds the list of article dicts in the format expected by templates.
+
+    Chaque produit doit avoir au moins un prix publié en euros (asset=null).
+    Les produits sans prix sont ignorés.
+    Each product must have at least one published EUR price (asset=null).
+    Products without a price are skipped.
+    """
+    # Prefetch filtré : seuls les prix publiés en euros, triés par ordre d'affichage.
+    # Le .filter() dans la boucle utiliserait une nouvelle requête par produit (N+1).
+    # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
+    # Filtered prefetch: only published EUR prices, sorted by display order.
+    prix_euros_prefetch = Prefetch(
+        'prices',
+        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by('order'),
+        to_attr='prix_euros',
+    )
+    produits = (
+        point_de_vente_instance.products
+        .filter(methode_caisse__isnull=False)
+        .select_related('categorie_pos')
+        .prefetch_related(prix_euros_prefetch)
+        .order_by('poids', 'name')
+    )
+
+    articles = []
+    for product in produits:
+        # Premier prix publié en euros (déjà filtré par le Prefetch)
+        # First published EUR price (already filtered by Prefetch)
+        if not product.prix_euros:
+            continue
+        prix_obj = product.prix_euros[0]
+
+        prix_en_centimes = int(round(prix_obj.prix * 100))
+
+        # Catégorie POS du produit (ou catégorie par défaut)
+        # Product POS category (or default category)
+        categorie_pos = product.categorie_pos
+        if categorie_pos is not None:
+            categorie_dict = {
+                "id": str(categorie_pos.uuid),
+                "name": categorie_pos.name,
+                "icon": categorie_pos.icon or "fa-angry",
+                "couleur_backgr": categorie_pos.couleur_fond or "#17a2b8",
+                "couleur_texte": categorie_pos.couleur_texte,
+            }
+        else:
+            categorie_dict = CATEGORIE_PAR_DEFAUT
+
+        # Image du produit (thumbnail med)
+        # Product image (med thumbnail)
+        url_image = None
+        if product.img:
+            try:
+                url_image = product.img.med.url
+            except Exception:
+                url_image = None
+
+        article_dict = {
+            "id": str(product.uuid),
+            "name": product.name,
+            "prix": prix_en_centimes,
+            "categorie": categorie_dict,
+            "bt_groupement": {
+                "groupe": product.groupe_pos or f"groupe_{product.methode_caisse or 'VT'}",
+            },
+            "url_image": url_image,
+        }
+        articles.append(article_dict)
+
+    return articles
+
+
+def _construire_donnees_categories(point_de_vente_instance):
+    """
+    Construit la liste de dicts catégories au format attendu par les templates.
+    Builds the list of category dicts in the format expected by templates.
+    """
+    categories_qs = point_de_vente_instance.categories.order_by('poid_liste', 'name')
+    categories = []
+    for categorie in categories_qs:
+        categories.append({
+            "id": str(categorie.uuid),
+            "name": categorie.name,
+            "icon": categorie.icon or "fa-th",
+        })
+    return categories
+
+
+def _charger_carte_primaire(tag_id):
+    """
+    Cherche une carte primaire à partir d'un tag NFC.
+    Retourne (carte_primaire_obj, erreur_str). Si erreur_str n'est pas None, la carte n'a pas été trouvée.
+    / Looks up a primary card from an NFC tag. Returns (primary_card_obj, error_str).
+    """
+    try:
+        carte_cashless = CarteCashless.objects.get(tag_id=tag_id)
+    except CarteCashless.DoesNotExist:
+        return None, _("Carte inconnue")
+
+    try:
+        carte_primaire_obj = CartePrimaire.objects.get(carte=carte_cashless)
+    except CartePrimaire.DoesNotExist:
+        return None, _("Carte non primaire")
+
+    return carte_primaire_obj, None
+
+
+# --------------------------------------------------------------------------- #
+#  Fonctions utilitaires mock — utilisées uniquement par PaiementViewSet      #
+#  Mock utility functions — used only by PaiementViewSet                      #
+# --------------------------------------------------------------------------- #
 
 def _charger_mock_db():
     """
-    Charge la base de données JSON mock (relecture à chaque requête).
-    Loads the mock JSON database (re-read on each request).
+    Charge la base de données JSON mock (PaiementViewSet uniquement).
+    Loads the mock JSON database (PaiementViewSet only).
     """
     return mockData.mockDb(MOCK_DB_PATH)
 
 
 def _charger_points_de_vente():
     """
-    Charge les points de vente mock avec leurs articles corrigés.
-    Loads mock points of sale with their corrected articles.
+    Charge les points de vente mock (PaiementViewSet uniquement).
+    Loads mock points of sale (PaiementViewSet only).
     """
     return mockData.get_data_pvs()
 
@@ -137,56 +290,54 @@ class CaisseViewSet(viewsets.ViewSet):
     def carte_primaire(self, request):
         """
         POST /laboutik/caisse/carte_primaire/
-        Reçoit le tag NFC scanné, vérifie le type de carte, et redirige.
-        Receives the scanned NFC tag, checks the card type, and redirects.
+        Reçoit le tag NFC scanné, vérifie la carte, et redirige vers le PV.
+        Receives the scanned NFC tag, checks the card, and redirects to POS.
 
-        - Carte primaire → redirige vers le point de vente / redirects to POS
-        - Carte cliente → message "carte non primaire" / "not a primary card" message
-        - Carte inconnue → message "carte inconnue" / "unknown card" message
+        - Carte inconnue → "Carte inconnue" / unknown card
+        - Carte non primaire → "Carte non primaire" / not a primary card
+        - 0 PV → "Aucun point de vente configuré" / no POS configured
+        - 1 PV → redirect direct vers le PV / direct redirect to POS
+        - N PV → choix du PV (hx_choose_pv.html) / POS selection
         """
-        logger.debug("carte_primaire: Entrée dans la méthode")
-        db = _charger_mock_db()
         tag_id_carte_manager = request.POST.get("tag_id", "").upper()
         logger.debug(f"carte_primaire: tag_id reçu = {tag_id_carte_manager}")
 
-        # Chercher la carte dans la base mock par son tag NFC
-        # Look up the card in the mock database by its NFC tag
-        cartes_trouvees = db.get_by_index("cards", "tag_id", tag_id_carte_manager)
-        logger.debug(f"carte_primaire: cartes_trouvees = {cartes_trouvees}")
+        # Chercher la carte primaire depuis le tag NFC
+        # Look up the primary card from the NFC tag
+        carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
+        if erreur is not None:
+            logger.debug(f"carte_primaire: {erreur}")
+            return render(request, "laboutik/partial/hx_primary_card_message.html", {
+                "msg": erreur,
+            })
 
-        if not cartes_trouvees:
-            logger.debug("carte_primaire: Aucune carte trouvée, type set to unknown")
-            carte = {"type_card": "unknown"}
-        else:
-            carte = cartes_trouvees[0]
-            logger.debug(f"carte_primaire: Carte trouvée = {carte}")
+        # Points de vente accessibles (non masqués) — évalué une seule fois
+        # Accessible points of sale (not hidden) — evaluated once
+        pvs = list(
+            carte_primaire_obj.points_de_vente.filter(hidden=False).order_by('poid_liste')
+        )
+        nombre_de_pvs = len(pvs)
 
-        # Carte primaire (responsable de caisse) → rediriger vers le point de vente
-        # Primary card (cash register manager) → redirect to the point of sale
-        type_carte = carte.get("type_card")
-        logger.debug(f"carte_primaire: type_carte = {type_carte}")
+        if nombre_de_pvs == 0:
+            logger.debug("carte_primaire: Aucun PV configuré")
+            return render(request, "laboutik/partial/hx_primary_card_message.html", {
+                "msg": _("Aucun point de vente configuré"),
+            })
 
-        if type_carte == "primary_card":
-            uuid_premier_pv = carte["pvs_list"][0]["uuid"]
-            logger.debug(f"carte_primaire: Carte primaire détectée, uuid_premier_pv = {uuid_premier_pv}")
+        if nombre_de_pvs == 1:
+            # 1 seul PV → redirect direct
+            # Single POS → direct redirect
+            pv = pvs[0]
             url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
-            url_avec_params = f"{url_point_de_vente}?uuid_pv={uuid_premier_pv}&tag_id_cm={tag_id_carte_manager}"
+            url_avec_params = f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}"
             logger.debug(f"carte_primaire: Redirection vers {url_avec_params}")
             return HttpResponseClientRedirect(url_avec_params)
 
-        # Carte cliente — pas autorisée à ouvrir la caisse
-        # Client card — not authorized to open the register
-        if type_carte == "client_card":
-            logger.debug("carte_primaire: Carte cliente détectée, accès refusé")
-            return render(request, "laboutik/partial/hx_primary_card_message.html", {
-                "msg": _("Carte non primaire"),
-            })
-
-        # Carte inconnue — tag NFC non reconnu
-        # Unknown card — NFC tag not recognized
-        logger.debug("carte_primaire: Carte inconnue")
-        return render(request, "laboutik/partial/hx_primary_card_message.html", {
-            "msg": _("Carte inconnue"),
+        # Plusieurs PV → afficher le choix
+        # Multiple POS → show selection
+        return render(request, "laboutik/partial/hx_choose_pv.html", {
+            "points_de_vente": pvs,
+            "tag_id_cm": tag_id_carte_manager,
         })
 
     @action(detail=False, methods=["get"], url_path="point_de_vente", url_name="point_de_vente")
@@ -201,36 +352,49 @@ class CaisseViewSet(viewsets.ViewSet):
         - Tables (restaurant) → choix de table puis commande / table selection then order
         - Kiosk → interface borne libre-service / self-service kiosk interface
         """
-        state = _construire_state()
-        db = _charger_mock_db()
-        tous_les_points_de_vente = _charger_points_de_vente()
-
         uuid_pv = request.GET.get("uuid_pv")
         tag_id_carte_manager = request.GET.get("tag_id_cm")
 
-        # Récupérer l'ID de table (mode restaurant uniquement)
-        # Get the table ID (restaurant mode only)
-        try:
-            id_table = int(request.GET.get("id_table"))
-        except (TypeError, ValueError):
-            id_table = None
+        # Récupérer l'UUID de table (mode restaurant uniquement)
+        # Get the table UUID (restaurant mode only)
+        id_table = request.GET.get("id_table") or None
 
         # Le paramètre force_service_direct permet de court-circuiter le mode tables
         # The force_service_direct parameter bypasses table mode
         force_service_direct = request.GET.get("force_service_direct") == "true"
 
-        point_de_vente = mockData.get_pv_from_uuid(uuid_pv, tous_les_points_de_vente)
-        cartes_trouvees = db.get_by_index("cards", "tag_id", tag_id_carte_manager)
-        carte_manager = cartes_trouvees[0] if cartes_trouvees else {}
+        # --- Charger le point de vente depuis la DB ---
+        # --- Load the point of sale from DB ---
+        try:
+            pv = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            raise Http404(_("Point de vente introuvable"))
+
+        # --- Charger la carte primaire (opérateur de caisse) ---
+        # --- Load the primary card (POS operator) ---
+        carte_primaire_obj = None
+        pvs_list = []
+        if tag_id_carte_manager:
+            carte_primaire_obj, _erreur = _charger_carte_primaire(tag_id_carte_manager)
+            if carte_primaire_obj is not None:
+                pvs_list = list(
+                    carte_primaire_obj.points_de_vente
+                    .filter(hidden=False)
+                    .order_by('poid_liste')
+                    .values_list('uuid', 'name', 'poid_liste', 'icon')
+                )
+
+        # --- Construire les données articles et catégories ---
+        # --- Build article and category data ---
+        articles = _construire_donnees_articles(pv)
+        categories = _construire_donnees_categories(pv)
+
+        # --- Construire le state (enrichi avec PV + carte primaire) ---
+        # --- Build state (enriched with POS + primary card) ---
+        state = _construire_state(pv, carte_primaire_obj)
 
         # --- Choisir le template selon le mode du point de vente ---
         # --- Choose the template based on the point of sale mode ---
-        #
-        # Le champ "comportement" du point de vente détermine son mode :
-        # The "comportement" field of the point of sale determines its mode:
-        #   "C" = Cashless (vente directe / direct sale)
-        #   "K" = Kiosk (borne libre-service / self-service terminal)
-        #   autre = Restaurant (avec tables / with tables)
 
         # Par défaut : mode restaurant → afficher le choix des tables
         # Default: restaurant mode → show table selection
@@ -239,48 +403,63 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Service direct (pas de tables) → interface de vente directe
         # Direct service (no tables) → direct sales interface
-        if point_de_vente["service_direct"] or force_service_direct:
+        if pv.service_direct or force_service_direct:
             titre_page = _("Service direct")
             template_name = "laboutik/views/common_user_interface.html"
 
         # Une table spécifique est sélectionnée → interface de commande
         # A specific table is selected → order interface
         if id_table is not None:
-            nom_table = mockData.get_table_by_id(id_table)["name"]
+            try:
+                table_obj = Table.objects.get(uuid=id_table)
+                nom_table = table_obj.name
+            except (Table.DoesNotExist, ValueError):
+                nom_table = str(id_table)
             titre_page = _("Commande table ") + nom_table
             template_name = "laboutik/views/common_user_interface.html"
 
         # Mode kiosk (borne libre-service) → template spécifique
         # Kiosk mode (self-service terminal) → specific template
-        comportement_du_pv = point_de_vente["comportement"]
-        if comportement_du_pv == "K":
+        if pv.comportement == PointDeVente.KIOSK:
             template_name = "laboutik/views/kiosk.html"
 
-        # Enrichir le state avec les propriétés du point de vente.
-        # Le JS côté client lit "state" (via stateJson) pour piloter l'interface :
-        # afficher/masquer les boutons de paiement, activer le mode gérant, etc.
-        # Enrich state with point of sale properties.
-        # Client-side JS reads "state" (via stateJson) to drive the interface:
-        # show/hide payment buttons, enable manager mode, etc.
-        state["comportement"] = comportement_du_pv
-        state["afficher_les_prix"] = point_de_vente["afficher_les_prix"]
-        state["accepte_especes"] = point_de_vente["accepte_especes"]
-        state["accepte_carte_bancaire"] = point_de_vente["accepte_carte_bancaire"]
-        state["accepte_cheque"] = point_de_vente["accepte_cheque"]
-        state["accepte_commandes"] = point_de_vente["accepte_commandes"]
-        state["service_direct"] = point_de_vente["service_direct"]
-        state["monnaie_principale_name"] = "TestCoin"
-        # passageModeGerant : autorise le caissier à basculer en mode gérant (bouton visible)
-        # passageModeGerant: allows the cashier to switch to manager mode (button visible)
-        state["passageModeGerant"] = True
-        state["mode_gerant"] = carte_manager.get("mode_gerant", False)
+        # --- Construire le dict PV au format attendu par les templates ---
+        # --- Build POS dict in the format expected by templates ---
+        pv_dict = {
+            "id": str(pv.uuid),
+            "name": pv.name,
+            "icon": pv.icon or "",
+            "comportement": pv.comportement,
+            "service_direct": pv.service_direct,
+            "afficher_les_prix": pv.afficher_les_prix,
+            "articles": articles,
+        }
 
-        # Trier les points de vente par poids d'affichage
-        # Sort points of sale by display weight
-        carte_manager["pvs_list"] = sorted(
-            carte_manager.get("pvs_list", []),
-            key=lambda pv: pv["poid_liste"],
-        )
+        # --- Construire le dict carte au format attendu par les templates ---
+        # --- Build card dict in the format expected by templates ---
+        card_dict = {
+            "tag_id": tag_id_carte_manager or "",
+            "name": str(
+                carte_primaire_obj.carte.number or carte_primaire_obj.carte.tag_id
+            ) if carte_primaire_obj else "",
+            "mode_gerant": carte_primaire_obj.edit_mode if carte_primaire_obj else False,
+            "pvs_list": [
+                {"uuid": str(uuid), "name": name, "poid_liste": poid, "icon": icon or ""}
+                for uuid, name, poid, icon in pvs_list
+            ],
+        }
+
+        # --- Tables (mode restaurant) ---
+        # --- Tables (restaurant mode) ---
+        tables_list = []
+        if pv.accepte_commandes:
+            tables_qs = Table.objects.filter(archive=False).order_by('poids', 'name')
+            for table in tables_qs:
+                tables_list.append({
+                    "id": str(table.uuid),
+                    "name": table.name,
+                    "statut": table.statut,
+                })
 
         # Couleurs de statut des tables (mode restaurant)
         # Table status colors (restaurant mode) :
@@ -294,16 +473,16 @@ class CaisseViewSet(viewsets.ViewSet):
         }
 
         context = {
-            "hostname_client": "mock host name from device login",
+            "hostname_client": "",
             "state": state,
             "stateJson": dumps(state),
             # "pv" et "card" : noms courts imposés par les templates cotton et JS existants
             # "pv" and "card": short names required by existing cotton templates and JS
-            "pv": point_de_vente,
-            "card": carte_manager,
-            "categories": mockData.filter_categories(point_de_vente),
-            "categoriy_angry": mockData.categoriy_angry,
-            "tables": mockData.tables,
+            "pv": pv_dict,
+            "card": card_dict,
+            "categories": categories,
+            "categoriy_angry": CATEGORIE_PAR_DEFAUT,
+            "tables": tables_list,
             "table_status_colors": couleurs_statut_tables,
             "title": titre_page,
             "currency_data": CURRENCY_DATA,

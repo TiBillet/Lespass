@@ -73,11 +73,12 @@ from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissi
 from ApiBillet.serializers import get_or_create_price_sold
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration, OptionGenerale, Product, TicketProduct, MembershipProduct, \
-    Price, Paiement_stripe, Membership, Webhook, Tag, \
+from BaseBillet.models import Configuration, OptionGenerale, Product, TicketProduct, MembershipProduct, POSProduct, \
+    CategorieProduct, Price, Paiement_stripe, Membership, Webhook, Tag, \
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
     PromotionalCode, Tva
+from laboutik.models import PointDeVente, CartePrimaire, CategorieTable, Table
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -1375,6 +1376,297 @@ class MembershipProductAdmin(ProductAdmin):
         return qs.filter(categorie_article=Product.ADHESION)
 
 
+# ---------------------------------------------------------------------------
+# POSProduct — proxy pour les produits de caisse (methode_caisse IS NOT NULL)
+# Meme pattern que TicketProductAdmin / MembershipProductAdmin.
+# / POS products proxy admin. Same pattern as Ticket/Membership proxy admins.
+# ---------------------------------------------------------------------------
+
+
+class POSProductForm(ProductAdminCustomForm):
+    """Formulaire produit pour les articles de caisse.
+    Product form for POS items.
+    Le champ categorie_article est cache (pas pertinent en caisse)."""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = POSProduct
+
+    # En caisse, pas de categorie_article billetterie/adhesion :
+    # on cache le champ et on met NONE par defaut.
+    # / At POS, no ticket/membership category: hide the field, default to NONE.
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.NONE, _('Select a category')),
+        ],
+        widget=forms.HiddenInput(),
+        label=_("Product type"),
+        initial=Product.NONE,
+        required=False,
+    )
+
+    # Methode de caisse : obligatoire pour un produit POS
+    # / POS method: required for a POS product
+    methode_caisse = forms.ChoiceField(
+        choices=Product.METHODE_CAISSE_CHOICES,
+        widget=UnfoldAdminSelectWidget(),
+        label=_("POS method"),
+        help_text=_("Payment/action method at the cash register."),
+    )
+
+    def clean_categorie_article(self):
+        """Pas de validation de categorie pour les produits POS.
+        No category validation for POS products."""
+        return self.cleaned_data.get('categorie_article', Product.NONE)
+
+    def clean(self):
+        """Pas de validation de tarif obligatoire pour les produits POS.
+        No mandatory price validation for POS products."""
+        return super(ProductAdminCustomForm, self).clean()
+
+
+@admin.register(POSProduct, site=staff_admin_site)
+class POSProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits de caisse (methode_caisse IS NOT NULL).
+    Filtered admin view: only POS products (methode_caisse IS NOT NULL).
+    LOCALISATION : Administration/admin_tenant.py"""
+    form = POSProductForm
+    inlines = [PriceInline]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+
+    fieldsets = (
+        (_('General'), {
+            'fields': (
+                'name',
+                'categorie_article',
+                'methode_caisse',
+                'categorie_pos',
+                'tva',
+            ),
+        }),
+        (_('POS display'), {
+            'fields': (
+                'couleur_texte_pos',
+                'couleur_fond_pos',
+                'icon_pos',
+                'groupe_pos',
+                'poids',
+            ),
+        }),
+        (_('POS options'), {
+            'fields': (
+                'fractionne',
+                'besoin_tag_id',
+            ),
+        }),
+        (_('Publication'), {
+            'fields': (
+                'publish',
+                'archive',
+            ),
+        }),
+    )
+
+    list_display = (
+        'name',
+        'methode_caisse',
+        'categorie_pos',
+        'publish',
+        'poids',
+    )
+
+    list_filter = ['publish', 'methode_caisse', 'categorie_pos']
+    search_fields = ['name']
+
+    def get_queryset(self, request):
+        # Uniquement les produits avec une methode de caisse definie
+        # / Only products with a POS method set
+        qs = super().get_queryset(request)
+        return qs.filter(methode_caisse__isnull=False)
+
+
+# ---------------------------------------------------------------------------
+# CategorieProduct — categories de produits POS (boissons, nourriture, etc.)
+# / POS product categories (drinks, food, etc.)
+# ---------------------------------------------------------------------------
+
+@admin.register(CategorieProduct, site=staff_admin_site)
+class CategorieProductAdmin(ModelAdmin):
+    """Admin pour les categories de produits POS.
+    Admin for POS product categories.
+    LOCALISATION : Administration/admin_tenant.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ('name', 'icon', 'tva', 'poid_liste', 'cashless')
+    search_fields = ['name']
+    ordering = ('poid_liste', 'name')
+
+    fieldsets = (
+        (None, {
+            'fields': (
+                'name',
+                'icon',
+                'couleur_texte',
+                'couleur_fond',
+                'poid_liste',
+                'tva',
+                'cashless',
+            ),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# ---------------------------------------------------------------------------
+# Modeles laboutik : PointDeVente, CartePrimaire, CategorieTable, Table
+# / laboutik models: Point of sale, Primary card, Table category, Table
+# ---------------------------------------------------------------------------
+
+@admin.register(PointDeVente, site=staff_admin_site)
+class PointDeVenteAdmin(ModelAdmin):
+    """Admin pour les points de vente.
+    Admin for points of sale.
+    LOCALISATION : Administration/admin_tenant.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ('name', 'comportement', 'service_direct', 'hidden')
+    list_filter = ['comportement', 'hidden']
+    search_fields = ['name']
+    ordering = ('poid_liste', 'name')
+    filter_horizontal = ('products', 'categories')
+
+    fieldsets = (
+        (_('General'), {
+            'fields': (
+                'name',
+                'icon',
+                'comportement',
+                'poid_liste',
+                'hidden',
+            ),
+        }),
+        (_('Options'), {
+            'fields': (
+                'service_direct',
+                'afficher_les_prix',
+                'accepte_especes',
+                'accepte_carte_bancaire',
+                'accepte_cheque',
+                'accepte_commandes',
+            ),
+        }),
+        (_('Products & categories'), {
+            'fields': (
+                'products',
+                'categories',
+            ),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(CartePrimaire, site=staff_admin_site)
+class CartePrimaireAdmin(ModelAdmin):
+    """Admin pour les cartes primaires (operateurs de caisse).
+    Admin for primary cards (POS operators).
+    LOCALISATION : Administration/admin_tenant.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ('carte', 'edit_mode', 'datetime')
+    list_filter = ['edit_mode']
+    search_fields = ['carte__tag_id', 'carte__number']
+    filter_horizontal = ('points_de_vente',)
+
+    fieldsets = (
+        (None, {
+            'fields': (
+                'carte',
+                'edit_mode',
+                'points_de_vente',
+            ),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(CategorieTable, site=staff_admin_site)
+class CategorieTableAdmin(ModelAdmin):
+    """Admin minimal pour les categories de table (Phase 4 = restaurant).
+    Minimal admin for table categories (Phase 4 = restaurant).
+    LOCALISATION : Administration/admin_tenant.py"""
+    list_display = ('name', 'icon')
+    search_fields = ['name']
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(Table, site=staff_admin_site)
+class TableAdmin(ModelAdmin):
+    """Admin minimal pour les tables de restaurant (Phase 4 = restaurant).
+    Minimal admin for restaurant tables (Phase 4 = restaurant).
+    LOCALISATION : Administration/admin_tenant.py"""
+    list_display = ('name', 'categorie', 'statut', 'ephemere', 'archive')
+    list_filter = ['statut', 'categorie', 'archive']
+    search_fields = ['name']
+    ordering = ('poids', 'name')
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
 @admin.register(PromotionalCode, site=staff_admin_site)
 class PromotionalCodeAdmin(ModelAdmin):
     compressed_fields = True
@@ -2160,12 +2452,37 @@ def get_sidebar_navigation(request):
         })
 
     # --- module_caisse : Caisse LaBoutik ---
+    # --- module_caisse: POS LaBoutik ---
     if configuration.module_caisse:
         navigation.append({
             "title": _("Caisse LaBoutik"),
             "separator": True,
             "collapsible": True,
             "items": [
+                {
+                    "title": _("POS products"),
+                    "icon": "point_of_sale",
+                    "link": reverse_lazy("staff_admin:BaseBillet_posproduct_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("POS categories"),
+                    "icon": "category",
+                    "link": reverse_lazy("staff_admin:BaseBillet_categorieproduct_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Points of sale"),
+                    "icon": "store",
+                    "link": reverse_lazy("staff_admin:laboutik_pointdevente_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Primary cards"),
+                    "icon": "badge",
+                    "link": reverse_lazy("staff_admin:laboutik_carteprimaire_changelist"),
+                    "permission": admin_permission,
+                },
                 {
                     "title": _("Device pairing (PIN)"),
                     "icon": "phonelink_setup",
