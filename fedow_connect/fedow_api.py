@@ -433,7 +433,28 @@ class WalletFedow():
         if request_bank_stripe_deposit.status_code == 208:
             logger.info(f"Fedow global_asset_bank_stripe_deposit HTTP_208_ALREADY_REPORTED")
 
-        serialized_transaction = TransactionValidator(data=request_bank_stripe_deposit.json())
+        if not request_bank_stripe_deposit.ok:
+            error_body = request_bank_stripe_deposit.text[:500]
+            logger.error(
+                f"Fedow global_asset_bank_stripe_deposit: "
+                f"HTTP {request_bank_stripe_deposit.status_code} — {error_body}"
+            )
+            raise Exception(
+                f"Fedow global_asset_bank_stripe_deposit: "
+                f"HTTP {request_bank_stripe_deposit.status_code} — {error_body}"
+            )
+
+        try:
+            response_data = request_bank_stripe_deposit.json()
+        except ValueError:
+            logger.error(
+                f"Fedow global_asset_bank_stripe_deposit: reponse non-JSON — "
+                f"status={request_bank_stripe_deposit.status_code} "
+                f"body={request_bank_stripe_deposit.text[:500]}"
+            )
+            raise
+
+        serialized_transaction = TransactionValidator(data=response_data)
         if serialized_transaction.is_valid():
             serialized_transaction = serialized_transaction  # tout le serialized_transaction plutôt que validated data pour récupérer l'objet FedowTransaction créé en DB
             return serialized_transaction

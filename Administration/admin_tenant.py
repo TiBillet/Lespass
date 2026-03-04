@@ -3548,10 +3548,16 @@ class ReservationAddAdmin(ModelForm):
             )
 
         # Création de la ligne comptables
+        # Si offert, le montant est 0
+        if payment_method == PaymentMethod.FREE:
+            amount = 0
+        else:
+            amount = int(pricesold.prix * quantity * 100)
+
         vente = LigneArticle.objects.create(
             pricesold=pricesold,
             qty=quantity,
-            amount=int(pricesold.prix * quantity * 100),
+            amount=amount,
             payment_method=payment_method,
             status=LigneArticle.VALID,
             sale_origin=SaleOrigin.ADMIN,
