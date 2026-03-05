@@ -159,7 +159,7 @@
              ============================================================ -->
         <div class="col-md-6 ps-md-5">
             <!-- Fond blanc pour séparer du motif -->
-            <div class="bg-white p-4 bordure-epaisse ombre-dure-petite">
+            <div class="bg-white p-4">
 
             <!-- Titre de l'événement -->
             <h1 class="titre-detail mb-4 texte-bleu">
@@ -304,13 +304,21 @@
             {% endif %}
             {% endcomment %}
 
+             <!-- INTERVENANTS -->
+
+                <div class="mb-3">
+                    <p>Intervenant-e-s:</p>
+                </div>
+
+
             <!-- Lieu détaillé -->
             {% if event.postal_address %}
                 <div class="mb-3">
-                    <p class="fw-bold mb-2">{% translate 'Location:' %}</p>
+                    <p class="fw-bold mb-2">{% translate 'Lieu:' %}</p>
                     <p>{{ event.postal_address }}</p>
                 </div>
             {% endif %}
+
 
             <!-- Lien externe (si disponible) -->
             {% if event.external_link %}

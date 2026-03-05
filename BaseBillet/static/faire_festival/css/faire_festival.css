@@ -513,7 +513,7 @@
 /* --- Grande Image (Hero) --- */
 .skin-faire-festival .image-detail-grand {
     background-color: var(--couleur-jaune-principal);
-    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border: var(--epaisseur-bordure) solid var(--couleur-jaune-principal);
     height: 350px;
     width: 100%;
     border-radius: 20px;
