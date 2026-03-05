@@ -632,6 +632,18 @@
     height: auto;
 }
 
+/* Logo homepage - taille augmentée */
+.skin-faire-festival .logo-homepage {
+    width: 90%;
+    max-width: 800px;
+}
+
+/* Badge de date déplacé vers la gauche */
+.skin-faire-festival .date-badge-left {
+    margin-left: -100px;
+    margin-top: -30px;
+}
+
 /* ==========================================================================
    18. RESPONSIVE DESIGN (Adaptation mobile)
    ========================================================================== */
