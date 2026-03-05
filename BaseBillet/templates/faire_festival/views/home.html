@@ -99,10 +99,10 @@
                  VIDÉO ILLUSTRATIVE (Gauche)
                  Vidéo motion-table du Faire Festival
                  ============================================================ -->
-            <div class="col-md-5 mb-4 mb-md-0">
-                <div class="bordure-epaisse p-4 h-100 d-flex align-items-center justify-content-center bg-white">
+            <div class="col-md-5 mb-4 mb-md-0 bordure-epaisse">
+                <div class="h-100 d-flex align-items-center justify-content-center p-2">
                     <!-- Vidéo statique motion-table qui tourne en boucle -->
-                    <video autoplay loop muted playsinline class="img-fluid" style="max-height: 400px;">
+                    <video autoplay loop muted playsinline class="w-100" style="max-height: 380px; object-fit: cover;">
                         <source src="{% static 'faire_festival/image/motion-table.mp4' %}" type="video/mp4">
                         <!-- Fallback si la vidéo ne charge pas -->
                         Votre navigateur ne supporte pas la lecture vidéo.
