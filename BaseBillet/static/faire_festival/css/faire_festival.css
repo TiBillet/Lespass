@@ -154,7 +154,8 @@
 }
 
 .skin-faire-festival .bouton-pilule.active {
-    background-color: var(--couleur-jaune-principal) !important;
+    background-color: var(--couleur-bleu-vif) !important;
+    color: var(--couleur-blanc) !important;
     font-weight: 900;
 }
 

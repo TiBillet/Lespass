@@ -50,17 +50,35 @@
                 <div class="navbar-nav mx-auto gap-3 align-items-center mt-3 mt-md-0">
 
                     {%comment%} On n'affiche pas les pages fédération et contrib dans ce skin {%endcomment%}
-                    {% for nav_item in main_nav %}
-                        {% if nav_item.name != "federation" and nav_item.name != "crowd-list" %}
-                            <a href="{{ nav_item.url }}"
-                               class="btn bouton-pilule bg-white texte-bleu text-center {% if url_name == nav_item.name %}active{% endif %}"
-                               hx-get="{{ nav_item.url }}"
-                               hx-target="body"
-                               hx-push-url="true">
-                                {{ nav_item.label }}
-                            </a>
-                        {% endif %}
-                    {% endfor %}
+{% for nav_item in main_nav %}
+    {% if nav_item.name != "federation" and nav_item.name != "crowd-list" %}
+        {% if nav_item.name == 'memberships_mvt' and 'membership' in url_name %}
+            <a href="{{ nav_item.url }}"
+               class="btn bouton-pilule bg-white texte-bleu text-center active"
+               hx-get="{{ nav_item.url }}"
+               hx-target="body"
+               hx-push-url="true">
+                {{ nav_item.label }}
+            </a>
+        {% elif url_name == nav_item.name %}
+            <a href="{{ nav_item.url }}"
+               class="btn bouton-pilule bg-white texte-bleu text-center active"
+               hx-get="{{ nav_item.url }}"
+               hx-target="body"
+               hx-push-url="true">
+                {{ nav_item.label }}
+            </a>
+        {% else %}
+            <a href="{{ nav_item.url }}"
+               class="btn bouton-pilule bg-white texte-bleu text-center"
+               hx-get="{{ nav_item.url }}"
+               hx-target="body"
+               hx-push-url="true">
+                {{ nav_item.label }}
+            </a>
+        {% endif %}
+    {% endif %}
+{% endfor %}
 
                     <!-- Bouton Contact (déclenche l'offcanvas de réunion) -->
                     <a href=""
