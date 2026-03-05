@@ -7,7 +7,7 @@
 </style>
 
 
-<form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
+<form id="reservation_form" hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
         {% if user.is_anonymous %}

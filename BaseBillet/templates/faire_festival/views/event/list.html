@@ -148,13 +148,16 @@
                                    hx-push-url="true">
                                     {% translate 'En voir +' %}
                                 </a>
-                                <a href="/event/{{ event.slug }}/"
-                                   class="bouton-petit-bleu"
-                                   hx-get="/event/{{ event.slug }}/"
-                                   hx-target="body"
-                                   hx-push-url="true">
-                                    {% translate "Je m'inscris" %}
-                                </a>
+                                <button type="button"
+                                        class="bouton-petit-bleu"
+                                        hx-get="/event/{{ event.slug }}/booking_form/"
+                                        hx-target="#offcanvas-booking-form-content"
+                                        hx-swap="innerHTML"
+                                        data-bs-toggle="offcanvas"
+                                        data-bs-target="#bookingPanel"
+                                        aria-controls="bookingPanel">
+                                   {% translate "Je m'inscris" %}
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -191,6 +194,25 @@
 
     </div>
 </section>
+
+<!-- OFFCANVAS FORMULAIRE DE RÉSERVATION -->
+<style>
+    #bookingPanel { --bs-offcanvas-width: 100vw; }
+    @media (min-width: 992px) { #bookingPanel { --bs-offcanvas-width: 800px; } }
+</style>
+<div class="offcanvas offcanvas-start" tabindex="-1" id="bookingPanel" aria-labelledby="bookingPanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="bookingPanelLabel">{% translate 'Request booking' %}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% trans 'Close' %}"></button>
+    </div>
+    <div class="offcanvas-body" id="offcanvas-booking-form-content">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- OFFCANVAS ADMIN -->
 <style>
