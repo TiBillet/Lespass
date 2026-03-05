@@ -688,5 +688,15 @@
 }
 
 /* ==========================================================================
+   21. BOUTON CONTACT ACTIF (Quand le panel est ouvert)
+   ========================================================================== */
+
+/* Quand le contactPanel a la classe .show (Bootstrap offcanvas ouvert) */
+.skin-faire-festival:has(#contactPanel.show) .bouton-contact {
+    background-color: var(--couleur-bleu-vif) !important;
+    color: var(--couleur-blanc) !important;
+}
+
+/* ==========================================================================
    FIN DU FICHIER CSS FAIRE FESTIVAL
    ========================================================================== */

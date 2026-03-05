@@ -150,25 +150,24 @@
             {% block footer %}
             <!-- Footer à implémenter si nécessaire -->
             {% endblock %}
+
+            <!-- Panel de contact (déplacé ici pour CSS pur) -->
+            <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
+                <div class="offcanvas-header">
+                    <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Contact and support' %}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
+                </div>
+                <div class="offcanvas-body">
+                    {% include 'reunion/forms/contact.html' %}
+                </div>
+            </div>
         {% endif %}
     </div>
 
     <!-- =======================================================================
-         OFFCANVAS : Panneaux latéraux (look standard reunion / bootstrap)
-         Placés en dehors de .skin-faire-festival pour ne pas hériter des styles brutalistes
+         OFFCANVAS : Autres panneaux latéraux (look standard reunion / bootstrap)
          ======================================================================= -->
     {% if not embed %}
-        <!-- Panel de contact -->
-        <div class="offcanvas-start offcanvas" tabindex="-1" id="contactPanel" aria-labelledby="contactPanelLabel">
-            <div class="offcanvas-header">
-                <h5 class="offcanvas-title" id="contactPanelLabel">{% translate 'Contact and support' %}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="{% translate 'Close' %}"></button>
-            </div>
-            <div class="offcanvas-body">
-                {% include 'reunion/forms/contact.html' %}
-            </div>
-        </div>
-
         <!-- Panel de connexion -->
         <div class="offcanvas-start offcanvas" tabindex="-1" id="loginPanel" aria-labelledby="loginPanelLabel">
             <div class="offcanvas-header">
