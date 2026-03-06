@@ -122,9 +122,9 @@
                                 <h3 class="titre-evenement">{{ event.name|upper|truncatewords:6 }}</h3>
 
                                 <!-- DESCRIPTION -->
-                                {% if event.description %}
+                                {% if event.short_description %}
                                     <p class="description-evenement text-muted mb-2">
-                                        {{ event.description|striptags|truncatewords:15 }}
+                                        {{ event.short_description|striptags|truncatewords:15 }}
                                     </p>
                                 {% endif %}
 
