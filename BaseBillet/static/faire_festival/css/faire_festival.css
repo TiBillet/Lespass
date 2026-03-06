@@ -35,7 +35,8 @@
     /* Couleurs principales du thème */
     --couleur-jaune-principal: #FFCB05;  /* Jaune vif utilisé pour les highlights */
     --couleur-bleu-vif: #0055FF;         /* Bleu électrique pour le texte et bordures */
-    --couleur-blanc: #FFFFFF;            /* Blanc pur pour les fonds */
+    --couleur-blanc: #FFFFFF;       
+    --couleur-noir: #3c3c3b;     /* Blanc pur pour les fonds */
 
     /* Épaisseur des bordures (style brutaliste) */
     --epaisseur-bordure: 3px;
@@ -440,16 +441,13 @@
     z-index: 10;  /* Passe au-dessus des autres cartes */
 }
 
-/* --- Image de l'événement (Placeholder ou vraie image) --- */
+/* --- Image de l'événement (Placeholder ou vraie image) - Ratio 4:3 via Bootstrap --- */
 .skin-faire-festival .image-evenement {
     background-color: var(--couleur-jaune-principal);
     border: 1px solid var(--couleur-bleu-vif);
-    height: 150px;
-    width: 100%;
     margin-bottom: 1rem;
     border-radius: 10px;
-    position: relative;
-    overflow: hidden;  /* Cache les débordements */
+    overflow: hidden;
     background-size: cover;
     background-position: center;
 }
@@ -521,14 +519,11 @@
    15. PAGE DÉTAIL ÉVÉNEMENT
    ========================================================================== */
 
-/* --- Grande Image (Hero) --- */
+/* --- Grande Image (Hero) - Ratio 16:9 via Bootstrap --- */
 .skin-faire-festival .image-detail-grand {
     background-color: var(--couleur-jaune-principal);
     border: var(--epaisseur-bordure) solid var(--couleur-jaune-principal);
-    height: 350px;
-    width: 100%;
     border-radius: 20px;
-    position: relative;
     overflow: hidden;
     background-size: cover;
     background-position: center;
@@ -603,12 +598,10 @@
     box-shadow: 6px 6px 0px var(--couleur-bleu-vif);
 }
 
-/* --- Image de billet (Placeholder jaune) --- */
+/* --- Image de billet (Placeholder jaune) - Ratio 4:3 via Bootstrap --- */
 .skin-faire-festival .image-billet {
     background-color: var(--couleur-jaune-principal);
     border-radius: 10px;
-    width: 100%;
-    height: 200px;
     background-size: cover;
     background-position: center;
 }
@@ -794,7 +787,7 @@
 .skin-faire-festival .liste-transport li {
     font-family: var(--police-mono);
     font-size: 0.9rem;
-    color: var(--couleur-bleu-vif);
+    color: var(--couleur-noir);
     margin-bottom: 0.4rem;
     line-height: 1.4;
 }
@@ -861,6 +854,78 @@
     width: 100%;
     height: auto;
     max-width: 100%;
+}
+
+/* ==========================================================================
+   24. SECTION FOIRE AUX QUESTIONS
+   ========================================================================== */
+
+/* Badge "Foire aux questions" - même taille que "Se repérer dans le festival" */
+.skin-faire-festival .badge-faq {
+    font-size: 1.4rem;
+    font-weight: bold;
+    padding: 8px 24px;
+}
+
+/* Item FAQ (question + réponse) */
+.skin-faire-festival .faq-item {
+    margin-bottom: 2.5rem;
+}
+
+/* Question avec flèche */
+.skin-faire-festival .faq-question {
+    font-family: var(--police-mono);
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--couleur-bleu-vif);
+    text-transform: uppercase;
+    line-height: 1.4;
+    margin-bottom: 1rem;
+}
+
+/* Réponse FAQ */
+.skin-faire-festival .faq-reponse {
+    font-family: var(--police-mono);
+    font-size: 0.9rem;
+    color: var(--couleur-noir);
+    line-height: 1.6;
+}
+
+.skin-faire-festival .faq-reponse p {
+    margin-bottom: 1rem;
+}
+
+.skin-faire-festival .faq-reponse ul {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem 0;
+}
+
+.skin-faire-festival .faq-reponse ul li {
+    margin-bottom: 0.5rem;
+    padding-left: 0;
+}
+
+/* Conclusion FAQ (texte en gras) */
+.skin-faire-festival .faq-conclusion {
+    font-weight: bold;
+    margin-top: 1rem;
+}
+
+/* Contact FAQ - dernier paragraphe en bleu */
+.skin-faire-festival .faq-contact {
+    margin-top: 1.5rem;
+    color: var(--couleur-bleu-vif);
+}
+
+.skin-faire-festival .lien-contact {
+    color: var(--couleur-bleu-vif);
+    text-decoration: underline;
+    font-weight: bold;
+}
+
+.skin-faire-festival .lien-contact:hover {
+    color: var(--couleur-jaune-principal);
 }
 
 /* ==========================================================================

@@ -141,10 +141,10 @@
              ============================================================ -->
         <div class="col-md-6 mb-4 mb-md-0">
             <!-- Image principale de l'événement -->
-            <div class="image-detail-grand"
-                 role="img" aria-label="{{ event.name }}"
-                 style="background-image: url('{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ ""|randImg }}{% endif %}');">
-            </div>
+             <div class="image-detail-grand ratio ratio-16x9"
+                  role="img" aria-label="{{ event.name }}"
+                  style="background-image: url('{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ ""|randImg }}{% endif %}');">
+             </div>
 
             <!-- Tags de l'événement (catégories/thématiques) -->
             <div class="mt-3">

@@ -76,8 +76,8 @@
                          IMAGE DU PRODUIT
                          Affiche l'image ou un placeholder jaune
                          ================================================ -->
-                    <div class="image-billet mb-4"
-                         style="background-image: url('{% if product.img %}{{ product.img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}'); background-size: cover; background-position: center;">
+                    <div class="image-billet ratio ratio-4x3 mb-4"
+                         style="background-image: url('{% if product.img %}{{ product.img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');">
                     </div>
 
                     <!-- ================================================
