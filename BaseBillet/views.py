@@ -181,13 +181,20 @@ def get_context(request):
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
-            {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
-             'label': _('Infos pratiques'),
-             'icon': 'info-circle'},
         ]
     }
 
     navbar: list = context["main_nav"]
+
+    # Infos pratiques : uniquement pour le thème Faire Festival
+    # Practical info page: only for the Faire Festival skin
+    if config.skin == "faire_festival":
+        navbar.append(
+            {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
+             'label': _('Infos pratiques'),
+             'icon': 'info-circle'}
+        )
+
     agenda_federation_active = FederatedPlace.objects.exists()
     asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
     if agenda_federation_active or asset_federation_active:
