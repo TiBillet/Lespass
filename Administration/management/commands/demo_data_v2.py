@@ -59,242 +59,131 @@ class Command(BaseCommand):
             ),
         )
         parser.add_argument(
-            '--full',
+            '--quick',
             action='store_true',
             help=(
-                "Charge toutes les données de démo (5 tenants, initiatives, fédérations, assets Fedow). "
-                "Par défaut, seul le premier tenant est alimenté avec un jeu de données minimal."
+                "Mode rapide : restaure un dump SQL généré par une exécution précédente (sans --quick). "
+                "Drop + recreate la base puis importe le dump. Nécessite que le dump existe."
             ),
         )
 
-    def _get_light_fixtures(self):
-        """Fixtures minimales : 3 events + 2 adhésions pour le premier tenant uniquement.
-        Pas de création de tenant (utilise celui créé par install.py).
-        """
-        return {
-            "events": [
-                {
-                    "name": "Scène ouverte (réservation gratuite)",
-                    "categorie": "CONCERT",
-                    "jauge_max": 100,
-                    "max_per_user": 4,
-                    "short_description": "Entrée gratuite sur réservation",
-                    "long_description": "Scène ouverte, venez avec votre instrument ! Réservation gratuite pour gérer la jauge.",
-                    "tags": ["Gratuit", "Scène ouverte"],
-                    "products": [
-                        {
-                            "name": "Réservation gratuite",
-                            "categorie_article": "FREERES",
-                            "nominative": False,
-                            "short_description": "Billet gratuit",
-                        }
-                    ],
-                },
-                {
-                    "name": "Concert — deux tarifs",
-                    "categorie": "CONCERT",
-                    "jauge_max": 200,
-                    "max_per_user": 6,
-                    "short_description": "Concert payant avec tarif plein et réduit",
-                    "long_description": "Deux tarifs disponibles : plein et réduit.",
-                    "tags": ["Concert", "Payant"],
-                    "products": [
-                        {
-                            "name": "Billet concert",
-                            "categorie_article": "BILLET",
-                            "nominative": True,
-                            "short_description": "Billet d'entrée",
-                            "prices": [
-                                {"name": "Plein tarif", "prix": 15, "short_description": "Tarif normal"},
-                                {"name": "Tarif réduit", "prix": 8, "short_description": "Tarif réduit"},
-                            ],
-                        }
-                    ],
-                },
-                {
-                    "name": "Soirée à prix libre",
-                    "categorie": "CONCERT",
-                    "jauge_max": 150,
-                    "max_per_user": 4,
-                    "short_description": "Entrée à prix libre",
-                    "long_description": "Donnez ce que vous voulez !",
-                    "tags": ["Prix libre"],
-                    "products": [
-                        {
-                            "name": "Billet prix libre",
-                            "categorie_article": "BILLET",
-                            "nominative": False,
-                            "short_description": "Prix libre",
-                            "prices": [
-                                {"name": "Prix libre", "prix": 1, "free_price": True,
-                                 "short_description": "Montant libre"},
-                            ],
-                        }
-                    ],
-                },
-            ],
-            "adhesions": [
-                {
-                    "name": "Adhésion associative",
-                    "categorie_article": "ADHESION",
-                    "short_description": "Adhésion récurrente à tarif conseillé",
-                    "long_description": "Soutenez l'association avec un tarif mensuel conseillé.",
-                    "prices": [
-                        {"name": "Tarif conseillé", "prix": 5, "recurring_payment": True,
-                         "subscription_type": "MONTH", "short_description": "5 €/mois conseillé"},
-                    ],
-                },
-                {
-                    "name": "Adhésion prix libre",
-                    "categorie_article": "ADHESION",
-                    "short_description": "Adhésion ponctuelle à prix libre",
-                    "long_description": "Une seule fois, au montant de votre choix.",
-                    "prices": [
-                        {"name": "Prix libre", "prix": 1, "free_price": True,
-                         "subscription_type": "YEAR",
-                         "short_description": "Montant libre, valable un an"},
-                    ],
-                },
-            ],
-        }
-
     def handle(self, *args, **options):
-        full_mode = options.get('full', False)
+        quick_mode = options.get('quick', False)
 
-        if not full_mode:
-            self._handle_light(options)
+        if quick_mode:
+            self._handle_quick(options)
             return
 
-        # FALC: Mode complet (--full).
+        # FALC: Mode complet (par défaut).
         # - On prépare une grande liste d'objets (fixtures) pour 5 tenants.
         # - On crée chaque tenant (Client + Domain) si besoin.
         # - Puis, on ajoute les objets (adresse, adhésions, évènements, tarifs…).
         # - On utilise toujours get_or_create → pas de doublons si on relance.
         self._handle_full(options)
 
-    def _handle_light(self, options):
-        """Mode rapide : alimente le premier tenant (créé par install.py) avec un jeu minimal."""
-        from django.utils import timezone
+    # Chemin du dump SQL généré par le mode full, utilisé par --quick pour restaurer la base
+    DUMP_PATH = '/DjangoFiles/demo_data.sql.gz'
 
-        first_sub = os.environ['SUB']
-        schema = slugify(first_sub)
+    def _handle_quick(self, options):
+        """Mode rapide : restaure un dump SQL généré par le mode full (sans --quick)."""
+        import subprocess
 
-        with schema_context('public'):
-            tenant = Client.objects.filter(schema_name=schema).first()
-        if not tenant:
-            logger.error(f"Tenant '{schema}' introuvable. Lancez d'abord 'manage.py install'.")
+        dump_path = self.DUMP_PATH
+        if not os.path.isfile(dump_path):
+            self.stderr.write(self.style.ERROR(
+                f"Dump introuvable : {dump_path}\n"
+                f"Lancez d'abord la commande sans --quick pour générer les données et le dump."
+            ))
             return
 
-        light = self._get_light_fixtures()
+        pg_host = os.environ.get('POSTGRES_HOST', 'postgres')
+        pg_user = os.environ['POSTGRES_USER']
+        pg_password = os.environ['POSTGRES_PASSWORD']
+        pg_db = os.environ['POSTGRES_DB']
 
-        with tenant_context(tenant):
-            config = Configuration.get_solo()
-            changed = False
-            if not config.organisation:
-                config.organisation = first_sub.capitalize()
-                changed = True
-            # Stripe : mêmes champs que le mode full pour que les paiements fonctionnent
-            stripe_connect = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
-            if stripe_connect and config.stripe_connect_account_test != stripe_connect:
-                config.stripe_connect_account_test = stripe_connect
-                changed = True
-            if not config.stripe_mode_test:
-                config.stripe_mode_test = True
-                changed = True
-            if not config.stripe_payouts_enabled:
-                config.stripe_payouts_enabled = True
-                changed = True
-            if not config.email:
-                config.email = os.environ.get('ADMIN_EMAIL', '')
-                changed = True
-            if changed:
-                config.save()
+        env = {
+            **os.environ,
+            'PGPASSWORD': pg_password,
+            'PGUSER': pg_user,
+            'PGHOST': pg_host,
+        }
 
-            # Fedow
-            FedowAPI()
-            if not FedowConfig.get_solo().can_fedow():
-                raise Exception('Erreur : can_fedow = False')
+        self.stdout.write("Fermeture des connexions Django…")
+        from django.db import connections
+        for conn_name in connections:
+            connections[conn_name].close()
 
-            # Adhésions
-            for adh in light['adhesions']:
-                prod, _ = Product.objects.get_or_create(
-                    name=adh['name'],
-                    defaults={
-                        'categorie_article': Product.ADHESION,
-                        'short_description': adh.get('short_description', ''),
-                        'long_description': adh.get('long_description', ''),
-                    }
-                )
-                for pr in adh.get('prices', []):
-                    sub_label = (pr.get('subscription_type') or 'YEAR').upper()
-                    sub_value = getattr(Price, sub_label, Price.YEAR)
-                    Price.objects.get_or_create(
-                        product=prod,
-                        name=pr['name'],
-                        defaults={
-                            'prix': pr.get('prix', 0),
-                            'free_price': bool(pr.get('free_price')),
-                            'short_description': pr.get('short_description', ''),
-                            'recurring_payment': bool(pr.get('recurring_payment')),
-                            'subscription_type': sub_value,
-                        }
-                    )
+        # 1) Terminer les connexions actives sur la base
+        self.stdout.write(f"Terminaison des connexions actives sur '{pg_db}'…")
+        subprocess.run(
+            ['psql', '-d', 'postgres', '-c',
+             f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pg_db}' AND pid <> pg_backend_pid();"],
+            env=env, check=False,
+        )
 
-            # Évènements
-            fake = Faker('fr_FR')
-            for ev in light['events']:
-                try:
-                    when = fake.date_time_between(
-                        start_date="+180d", end_date="+540d",
-                        tzinfo=timezone.get_current_timezone(),
-                    )
-                except Exception:
-                    when = timezone.now() + timedelta(days=200)
+        # 2) Drop + create
+        self.stdout.write(f"Suppression et recréation de la base '{pg_db}'…")
+        subprocess.run(['dropdb', '--if-exists', pg_db], env=env, check=True)
+        subprocess.run(['createdb', pg_db], env=env, check=True)
 
-                event_obj, _ = Event.objects.get_or_create(
-                    name=ev['name'],
-                    defaults={
-                        'datetime': when,
-                        'categorie': getattr(Event, ev.get('categorie', 'CONCERT'), Event.CONCERT),
-                        'jauge_max': ev.get('jauge_max', 50),
-                        'max_per_user': ev.get('max_per_user', 10),
-                        'short_description': ev.get('short_description', ''),
-                        'long_description': ev.get('long_description', ''),
-                    }
-                )
-                # Tags
-                for tag_name in ev.get('tags', []):
-                    t, _ = Tag.objects.get_or_create(name=tag_name)
-                    event_obj.tag.add(t)
+        # 3) Restauration du dump gzippé
+        self.stdout.write(f"Restauration depuis {dump_path}…")
+        gunzip = subprocess.Popen(['gunzip', '-c', dump_path], stdout=subprocess.PIPE, env=env)
+        psql = subprocess.Popen(
+            ['psql', '-d', pg_db, '--quiet', '--no-psqlrc'],
+            stdin=gunzip.stdout, env=env,
+        )
+        gunzip.stdout.close()
+        psql.communicate()
 
-                # Produits
-                for prod_def in ev.get('products', []):
-                    cat_map = {'BILLET': Product.BILLET, 'FREERES': Product.FREERES}
-                    p, _ = Product.objects.get_or_create(
-                        name=prod_def['name'],
-                        defaults={
-                            'categorie_article': cat_map.get(prod_def.get('categorie_article', ''), Product.NONE),
-                            'nominative': bool(prod_def.get('nominative')),
-                            'short_description': prod_def.get('short_description', ''),
-                        }
-                    )
-                    for pr in prod_def.get('prices', []):
-                        Price.objects.get_or_create(
-                            product=p,
-                            name=pr['name'],
-                            defaults={
-                                'prix': pr.get('prix', 0),
-                                'free_price': bool(pr.get('free_price')),
-                                'short_description': pr.get('short_description', ''),
-                                'subscription_type': getattr(Price, (pr.get('subscription_type') or 'NA').upper(), Price.NA),
-                            }
-                        )
-                    event_obj.products.add(p)
+        if psql.returncode != 0:
+            self.stderr.write(self.style.ERROR(f"Erreur lors de la restauration (code {psql.returncode})."))
+            return
 
         self.stdout.write(self.style.SUCCESS(
-            f"Données minimales créées pour '{tenant.name}' (3 events, 2 adhésions). "
-            f"Utilisez --full pour charger toutes les données de démo."
+            f"Base restaurée depuis {dump_path}. Mode --quick terminé."
         ))
+
+    def _dump_database(self):
+        """Exporte la base complète dans un dump SQL gzippé pour --quick."""
+        import subprocess
+
+        dump_path = self.DUMP_PATH
+        pg_host = os.environ.get('POSTGRES_HOST', 'postgres')
+        pg_user = os.environ['POSTGRES_USER']
+        pg_password = os.environ['POSTGRES_PASSWORD']
+        pg_db = os.environ['POSTGRES_DB']
+
+        env = {
+            **os.environ,
+            'PGPASSWORD': pg_password,
+            'PGUSER': pg_user,
+            'PGHOST': pg_host,
+        }
+
+        self.stdout.write(f"Export de la base '{pg_db}' vers {dump_path}…")
+        try:
+            pg_dump = subprocess.Popen(
+                ['pg_dump', pg_db],
+                stdout=subprocess.PIPE, env=env,
+            )
+            with open(dump_path, 'wb') as f:
+                gzip_proc = subprocess.Popen(
+                    ['gzip'],
+                    stdin=pg_dump.stdout, stdout=f,
+                )
+                pg_dump.stdout.close()
+                gzip_proc.communicate()
+
+            if pg_dump.wait() != 0 or gzip_proc.returncode != 0:
+                self.stderr.write(self.style.ERROR("Erreur lors de l'export du dump SQL."))
+                return
+
+            self.stdout.write(self.style.SUCCESS(
+                f"Dump exporté : {dump_path}. Utilisez --quick pour restaurer rapidement."
+            ))
+        except Exception as e:
+            self.stderr.write(self.style.ERROR(f"Impossible d'exporter le dump : {e}"))
 
     def _handle_full(self, options):
         # Gros objet JSON de démonstration pour 4 lieux + 1 réseau régional (adhésions uniquement)
@@ -2005,3 +1894,6 @@ class Command(BaseCommand):
                         user.save(update_fields=['client_source'])
         except Exception as e:
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
+
+        # Export du dump SQL pour --quick
+        self._dump_database()
