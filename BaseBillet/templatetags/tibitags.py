@@ -80,8 +80,15 @@ def in_list(value:str, liste:list):
 
 @register.filter
 def is_membership(user, membership_product) -> bool:
-    # Recherche d'une adhésion valide chez l'utilisateur
-    # import ipdb; ipdb.set_trace()
+    # Recherche d'une adhesion valide chez l'utilisateur
+    # Accepte un Product unique OU un queryset M2M (logique OU : au moins une adhesion suffit)
+    # / Check if user has a valid membership. Accepts a single Product or a M2M queryset (OR logic).
+    if hasattr(membership_product, 'all'):
+        # M2M queryset : l'utilisateur doit avoir au moins une des adhesions
+        return user.memberships.filter(
+            price__product__in=membership_product.all(),
+            deadline__gte=timezone.now(),
+        ).exists()
     return user.memberships.filter(price__product=membership_product, deadline__gte=timezone.now()).exists()
 
 

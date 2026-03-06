@@ -37,6 +37,7 @@ TEST = os.environ.get('TEST') == '1'
 
 # Age of cookie, in seconds (default: 2 weeks).
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 7 * 12  # 12 weeks (3 month)
+SESSION_SAVE_EVERY_REQUEST = True
 
 # TODO montrer ça à Sham
 # Mecanisme qui permet d'etre loggue sur toute les instances tibillet multi tenant

@@ -555,8 +555,9 @@ class Command(BaseCommand):
                     short_description="Tarif adhérent",
                     prix=10,
                     product=billet,
-                    adhesion_obligatoire=adhesion_asso,
                 )
+                if created:
+                    tarif_adherant.adhesions_obligatoires.add(adhesion_asso)
 
                 event_payant_nominatif_tarif_asso, created = Event.objects.get_or_create(
                     name=f"What the Funk ? Spectacle payant",

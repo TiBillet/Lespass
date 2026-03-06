@@ -286,7 +286,8 @@ class TicketCreator():
                 promo_code=self.promo_code,
                 custom_amount=self.custom_amounts.get(price_generique.uuid))
 
-            # les lignes articles pour la vente
+            # Ligne comptable de la vente, liee a la reservation
+            # / Accounting line for the sale, linked to reservation
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
@@ -294,6 +295,7 @@ class TicketCreator():
                 qty=qty,
                 promotional_code=self.promo_code,
                 sale_origin=self.sale_origin,
+                reservation=reservation,
             )
             self.list_line_article_sold.append(line_article)
 
@@ -575,9 +577,11 @@ class ReservationValidator(serializers.Serializer):
                 total_ticket_qty += qty
 
                 # Check adhésion
-                if price.adhesion_obligatoire:
-                    if not user.memberships.filter(price__product=price.adhesion_obligatoire,
-                                                   deadline__gte=timezone.now()).exists():
+                if price.adhesions_obligatoires.exists():
+                    if not user.memberships.filter(
+                        price__product__in=price.adhesions_obligatoires.all(),
+                        deadline__gte=timezone.now(),
+                    ).exists():
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
 
@@ -853,6 +857,9 @@ class MembershipValidator(serializers.Serializer):
                 membership.first_contribution = now
             membership.last_contribution = now
             membership.save(update_fields=["status", "payment_method", "first_contribution", "last_contribution"])
+            # Calcul de la deadline a partir de last_contribution et du type d'abonnement
+            # / Compute deadline from last_contribution and subscription type
+            membership.set_deadline()
 
             price_sold = get_or_create_price_sold(self.price, custom_amount=membership.contribution_value)
             line = LigneArticle.objects.create(

@@ -1741,7 +1741,7 @@ class EventMVT(viewsets.ViewSet):
                     event.img = event.get_img()
                     event.sticker_img = event.get_sticker_img()
 
-                    date = event.datetime
+                    date = event.datetime.date()
                     # setdefault pour éviter de faire un if date exist dans le dict
                     dated_events.setdefault(date, []).append(event)
 
@@ -2464,11 +2464,89 @@ class MembershipMVT(viewsets.ViewSet):
     @action(detail=True, methods=['GET'])
     def get_checkout_for_membership(self, request, pk):
         """
-        Pour validation manuelle, redirige le lien reçu par l'user vers Stripe
+        Redirige l'utilisateur vers le checkout Stripe pour payer son adhesion.
+        Lien recu par email apres validation manuelle par un admin.
+        / Redirects user to Stripe checkout for membership payment.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Protection contre les doubles paiements :
+        - Si une session Stripe est encore ouverte, on reutilise l'URL existante.
+        - Si l'utilisateur a deja valide son prelevement (SEPA en cours),
+          on affiche une page d'information au lieu de creer un nouveau checkout.
+        - Sinon, on cree un nouveau checkout normalement.
+
+        FLUX :
+        1. Recoit GET depuis le lien email envoye par send_membership_payment_link_user
+        2. Cherche un Paiement_stripe existant lie a cette adhesion
+        3. Si trouve : verifie le statut de la session Stripe
+        4. Redirige vers Stripe ou affiche une page d'info
         """
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk), status=Membership.ADMIN_VALID)
+
+        # Chercher un paiement Stripe deja en cours pour cette adhesion
+        # On filtre sur PENDING et OPEN : ce sont les statuts avant encaissement
+        # / Look for an existing pending Stripe payment for this membership
+        paiement_stripe_existant = membership.stripe_paiement.filter(
+            status__in=[Paiement_stripe.PENDING, Paiement_stripe.OPEN],
+            checkout_session_id_stripe__isnull=False,
+        ).order_by('-order_date').first()
+
+        if paiement_stripe_existant:
+            try:
+                # Interroger l'API Stripe pour connaitre l'etat reel de la session
+                # / Query Stripe API to get the real session status
+                stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+                config = Configuration.get_solo()
+                session_stripe = stripe.checkout.Session.retrieve(
+                    paiement_stripe_existant.checkout_session_id_stripe,
+                    stripe_account=config.get_stripe_connect_account(),
+                )
+
+                # Cas 1 : Session encore ouverte — on reutilise l'URL
+                # L'utilisateur n'a pas encore rempli le formulaire de paiement
+                # / Case 1: Session still open — reuse the URL
+                if session_stripe.status == 'open' and session_stripe.url:
+                    logger.info(
+                        f"get_checkout_for_membership : reutilisation session existante {session_stripe.id}")
+                    return redirect(session_stripe.url)
+
+                # Cas 2 : Session "complete" — l'utilisateur a deja valide son paiement
+                # Pour le SEPA, le prelevement peut prendre jusqu'a 14 jours.
+                # On ne doit PAS creer un nouveau checkout.
+                # / Case 2: Session "complete" — user already submitted payment (SEPA pending)
+                if session_stripe.status == 'complete':
+                    logger.info(
+                        f"get_checkout_for_membership : session {session_stripe.id} deja completee, "
+                        f"paiement en cours de traitement")
+                    context = get_context(request)
+                    context['membership'] = membership
+                    return render(
+                        request,
+                        "reunion/views/membership/payment_already_pending.html",
+                        context=context,
+                    )
+
+                # Cas 3 : Session expiree cote Stripe — on marque et on repart
+                # / Case 3: Session expired on Stripe side — mark and create new one
+                logger.info(
+                    f"get_checkout_for_membership : session {session_stripe.id} "
+                    f"status={session_stripe.status}, on en cree une nouvelle")
+                paiement_stripe_existant.status = Paiement_stripe.EXPIRE
+                paiement_stripe_existant.save(update_fields=['status'])
+
+            except Exception as e:
+                # Erreur API Stripe : on marque comme expire et on continue
+                # / Stripe API error: mark as expired and continue
+                logger.warning(
+                    f"get_checkout_for_membership : erreur recuperation session Stripe : {e}")
+                paiement_stripe_existant.status = Paiement_stripe.EXPIRE
+                paiement_stripe_existant.save(update_fields=['status'])
+
+        # Aucun paiement existant ou session expiree : on cree un nouveau checkout
+        # / No existing payment or expired session: create a new checkout
         checkout_url = MembershipValidator.get_checkout_stripe(membership)
-        logger.info(f"get_checkout_for_membership : {checkout_url}")
+        logger.info(f"get_checkout_for_membership : nouveau checkout {checkout_url}")
         return redirect(checkout_url)
         # return HttpResponseClientRedirect(checkout_url)
 

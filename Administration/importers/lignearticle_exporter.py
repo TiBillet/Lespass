@@ -28,6 +28,7 @@ class LigneArticleExportResource(resources.ModelResource):
     paiement_stripe = Field(column_name=_("Stripe payment"))
     carte = Field(attribute='carte',column_name=_("Carte cashless"))
     wallet = Field(attribute='wallet',column_name=_("Wallet from"))
+    credit_note_ref = Field(column_name=_("Credit note ref."))  # Ref. avoir
 
     def get_export_headers(self, selected_fields=None, *args, **kwargs):
         fields = selected_fields or self.get_export_fields(*args, **kwargs)
@@ -56,9 +57,10 @@ class LigneArticleExportResource(resources.ModelResource):
             'user_email',
             'paiement_stripe',
             'carte',
-            'wallet'
+            'wallet',
+            'credit_note_ref',
         )
-        export_order = ('uuid', 'date','product','qty','amount','vat','total','payment_method','status','user_email','paiement_stripe','carte','wallet')
+        export_order = ('uuid', 'date','product','qty','amount','vat','total','payment_method','status','user_email','paiement_stripe','carte','wallet','credit_note_ref')
 
     def dehydrate_date(self, line):
         """
@@ -95,6 +97,11 @@ class LigneArticleExportResource(resources.ModelResource):
 
     def dehydrate_paiement_stripe(self, line):
         return line.paiement_stripe_uuid()
+
+    def dehydrate_credit_note_ref(self, line):
+        if line.credit_note_for_id:
+            return str(line.credit_note_for.uuid).partition('-')[0]
+        return ""
 
     @staticmethod
     def round_decimal(value, decimal_places=2):
