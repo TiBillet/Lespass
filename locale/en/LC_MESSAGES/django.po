@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-06 14:29+0000\n"
+"POT-Creation-Date: 2026-03-06 15:00+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -822,6 +822,7 @@ msgstr ""
 #: Administration/importers/lignearticle_exporter.py:24 BaseBillet/tasks.py:439
 #: BaseBillet/tasks.py:566 BaseBillet/tasks.py:682 BaseBillet/tasks.py:755
 #: BaseBillet/tasks.py:821
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:54
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:21
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:26
 #: crowds/templates/crowds/partial/budget_items.html:11
@@ -5332,6 +5333,42 @@ msgstr ""
 msgid "Join our community by subscribing to one of our membership options"
 msgstr ""
 
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:31
+msgid "Paiement en cours de traitement"
+msgstr "Payment being processed"
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:36
+msgid "Votre paiement a deja ete enregistre et est en cours de traitement."
+msgstr "Your payment has already been registered and is being processed."
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:39
+msgid ""
+"Le prelevement bancaire (SEPA) peut prendre jusqu'a 14 jours ouvrables. Vous "
+"recevrez un email de confirmation des que le paiement sera valide."
+msgstr ""
+"Bank transfers (SEPA) can take up to 14 business days. You will receive a "
+"confirmation email once the payment is validated."
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:46
+msgid "Recapitulatif"
+msgstr "Summary"
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:49
+msgid "Adhesion"
+msgstr "Membership"
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:63
+msgid "Navigation"
+msgstr "Navigation"
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:66
+msgid "Voir les adhesions"
+msgstr "View memberships"
+
+#: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:70
+msgid "Retour a l'accueil"
+msgstr "Back to home"
+
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:7
 msgid "Demande d'adhésion enregistrée"
 msgstr ""
@@ -6301,11 +6338,11 @@ msgstr ""
 msgid "Thank you! You are going to receive a validation email.."
 msgstr ""
 
-#: BaseBillet/views.py:2029 BaseBillet/views.py:2537
+#: BaseBillet/views.py:2029 BaseBillet/views.py:2615
 msgid "Your payment is awaiting validation."
 msgstr ""
 
-#: BaseBillet/views.py:2032 BaseBillet/views.py:2540
+#: BaseBillet/views.py:2032 BaseBillet/views.py:2618
 msgid "An error has occurred, please contact the administrator."
 msgstr ""
 
@@ -6325,71 +6362,71 @@ msgstr ""
 msgid "Check out registered!"
 msgstr ""
 
-#: BaseBillet/views.py:2493
+#: BaseBillet/views.py:2571
 msgid "Membership not in waiting state."
 msgstr ""
 
-#: BaseBillet/views.py:2508
+#: BaseBillet/views.py:2586
 msgid "L'adhésion a été acceptée. Un email de paiement a été envoyé."
 msgstr ""
 
-#: BaseBillet/views.py:2532
+#: BaseBillet/views.py:2610
 msgid ""
 "Your payment has been validated and is being processed. Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:2535
+#: BaseBillet/views.py:2613
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
 msgstr ""
 
-#: BaseBillet/views.py:2558
+#: BaseBillet/views.py:2636
 msgid "PDF generation error"
 msgstr ""
 
-#: BaseBillet/views.py:2711 BaseBillet/views.py:2732 BaseBillet/views.py:2749
-#: BaseBillet/views.py:2860 BaseBillet/views.py:2881
+#: BaseBillet/views.py:2789 BaseBillet/views.py:2810 BaseBillet/views.py:2827
+#: BaseBillet/views.py:2938 BaseBillet/views.py:2959
 msgid "Accès refusé"
 msgstr ""
 
-#: BaseBillet/views.py:2755
+#: BaseBillet/views.py:2833
 msgid "Produit non trouvé"
 msgstr ""
 
-#: BaseBillet/views.py:2789
+#: BaseBillet/views.py:2867
 #, python-brace-format
 msgid "Le champ '{field.label}' est obligatoire."
 msgstr ""
 
-#: BaseBillet/views.py:2835
+#: BaseBillet/views.py:2913
 msgid "Erreur lors de l'enregistrement : {str(e)}"
 msgstr ""
 
-#: BaseBillet/views.py:2895
+#: BaseBillet/views.py:2973
 msgid "Le nom du champ est obligatoire."
 msgstr ""
 
-#: BaseBillet/views.py:2901
+#: BaseBillet/views.py:2979
 #, python-brace-format
 msgid "Le champ '{field_label}' existe déjà."
 msgstr ""
 
-#: BaseBillet/views.py:2975
+#: BaseBillet/views.py:3053
 msgid "An error occurred. Please try again."
 msgstr ""
 
-#: BaseBillet/views.py:3057
+#: BaseBillet/views.py:3135
 msgid "This space already exists. Redirecting you to it."
 msgstr ""
 
-#: BaseBillet/views.py:3063
+#: BaseBillet/views.py:3141
 msgid ""
 "An error occurred while creating your space. It might be because the name is "
 "already taken or no free slot is available. Please contact us."
 msgstr ""
 
-#: BaseBillet/views.py:3077
+#: BaseBillet/views.py:3155
 msgid "Invalid token. Please request a new confirmation email."
 msgstr ""
 

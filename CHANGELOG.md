@@ -7,6 +7,38 @@
 
 ---
 
+### 0. Protection doublon paiement adhesion (SEPA) / Duplicate membership payment protection (SEPA)
+
+**FR :**
+Quand un utilisateur cliquait plusieurs fois sur le lien de paiement d'adhesion
+(recu par email apres validation admin), un nouveau checkout Stripe etait cree a chaque clic.
+Cela pouvait entrainer des **doubles prelevements SEPA** (signaie en production).
+
+La vue `get_checkout_for_membership` verifie maintenant si un paiement Stripe existe deja :
+- **Session Stripe encore ouverte** : reutilise l'URL existante (pas de doublon).
+- **Session "complete" (SEPA en cours)** : affiche une page d'information expliquant
+  que le prelevement est en cours de traitement (jusqu'a 14 jours).
+- **Session expiree** : cree un nouveau checkout normalement.
+
+**EN:**
+When a user clicked multiple times on the membership payment link
+(received by email after admin validation), a new Stripe checkout was created each time.
+This could cause **duplicate SEPA debits** (reported in production).
+
+The `get_checkout_for_membership` view now checks for an existing Stripe payment:
+- **Stripe session still open**: reuses the existing URL (no duplicate).
+- **Session "complete" (SEPA pending)**: displays an info page explaining
+  the debit is being processed (up to 14 days).
+- **Session expired**: creates a new checkout normally.
+
+**Fichiers / Files:**
+- `BaseBillet/views.py` — protection doublon dans `get_checkout_for_membership`
+- `BaseBillet/templates/reunion/views/membership/payment_already_pending.html` — nouveau template
+
+**Migration necessaire / Migration required:** Non
+
+---
+
 ### 1. Avoir comptable (credit note) sur les ventes / Credit note on sales
 
 **FR :**
