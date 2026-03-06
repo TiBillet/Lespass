@@ -629,19 +629,19 @@ UNFOLD = {
                     },
                 ],
             },
-            {
-                "title": _("Caisse LaBoutik"),
-                "separator": True,
-                "collapsible": True,
-                "items": [
-                    {
-                        "title": _("Device pairing (PIN)"),
-                        "icon": "phonelink_setup",
-                        "link": reverse_lazy("staff_admin:discovery_pairingdevice_changelist"),
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-                    },
-                ],
-            },
+            # {
+            #     "title": _("Caisse LaBoutik"),
+            #     "separator": True,
+            #     "collapsible": True,
+            #     "items": [
+            #         {
+            #             "title": _("Device pairing (PIN)"),
+            #             "icon": "phonelink_setup",
+            #             "link": reverse_lazy("staff_admin:discovery_pairingdevice_changelist"),
+            #             "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
+            #         },
+            #     ],
+            # },
             {
                 "title": _("Sales"),
                 "separator": True,  # Top border
