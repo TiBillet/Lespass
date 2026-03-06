@@ -1,132 +1,157 @@
-# Code Review : branche `template-faire-festival` vs `main`
+# Code Review : branche `template-faire-festival` — travail d'Adrienne
 
 **Date :** 2026-03-06
-**Scope :** 28 fichiers, +617 / -245 lignes
+**Auteur reviewe :** Adrienne (13 commits)
+**Scope :** Theme Faire Festival (CSS, templates, fonts) + 1 vue `booking_form`
+
+Les commits de JonasFW13 (merge main, bugfixes back-end, discovery, infra) ne sont pas couverts ici.
 
 ---
 
-## CRITIQUES (a corriger avant merge)
+## Contenu du travail d'Adrienne
 
-### 1. @font-face CSS casses (faire_festival.css)
+### Templates et CSS (theme brutaliste Faire Festival)
 
-- **Ligne 15** : `format('opentype')` sur un `.woff2` → doit etre `format('woff2')`
-- **Lignes 22-23** : double `src:` sur Faire-Stencil → la 2e ecrase la 1ere, le navigateur ne charge que `.otf` (perte du woff2 compresse)
-- **Ligne 22** : `format('Woff2')` avec majuscule → `format('woff2')`
+**Fichiers :**
+- `BaseBillet/static/faire_festival/` — CSS, fonts custom (Faire-Regular/Stencil), images, video
+- `BaseBillet/templates/faire_festival/` — base, navbar, home, event/list, event/retrieve, membership/list
+- `BaseBillet/templates/faire_festival/maquette/` — maquette HTML statique de reference
 
-**Fix :** fusionner en une seule declaration `src:` avec virgule, corriger les formats :
-```css
-@font-face {
-    font-family: 'faireregular';
-    src: url('../fonts/Faire-Regular.woff2') format('woff2'),
-         url('../fonts/Faire-Regular.woff') format('woff');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
+**Pages :**
+- Accueil avec video (`motion-table.mp4`)
+- Navbar avec boutons contact/login/mes billets
+- Page programmation (liste events) avec filtres par tags et dropdown thematiques
+- Page detail event avec offcanvas reservation (reutilise `reunion/views/event/partial/booking_form.html`)
 
-@font-face {
-    font-family: 'fairestencil';
-    src: url('../fonts/Faire-Stencil.woff2') format('woff2'),
-         url('../fonts/Faire-Stencil.otf') format('opentype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-```
+### Vue Python : `booking_form` (commit `19f7306`)
 
-### 2. Contraste jaune/blanc insuffisant (WCAG)
-
-- `#FFCB05` sur `#FFFFFF` = ratio 1.07:1 (minimum requis : 4.5:1)
-- `.bouton-charger-plus` (ligne ~273) : fond jaune + texte blanc → illisible
-- **Fix :** texte bleu (`--couleur-bleu-vif`) sur fond jaune partout
-
-Matrice de contraste :
-```
-Jaune (#FFCB05) + Blanc (#FFFFFF) = 1.07:1  FAIL
-Jaune (#FFCB05) + Bleu (#0055FF)  = 4.56:1  OK (AAA)
-Bleu (#0055FF)  + Blanc (#FFFFFF) = 8.59:1  OK (AAA)
-```
-
-### 3. i18n manquant
-
-- `retrieve.html:310` : `"Intervenant-e-s:"` sans `{% translate %}`
-- `booking_form.html` : erreurs JS en francais dur-code (lignes 37-38, 329, 354, 476) — impossible a traduire
-- `booking_form.html:425` : `"per buyer"` en anglais dur-code
-
-### 4. Fichiers PLANS/ a nettoyer
-
-Les fichiers de planification interne ne devraient pas atterrir dans le merge vers PreProd. A supprimer ou `.gitignore` avant merge.
-
-### 5. Maquette HTML statique (~2.4 MB)
-
-`BaseBillet/templates/faire_festival/maquette/` contient des fichiers HTML/CSS/PNG de prototypage non-fonctionnels. A supprimer ou deplacer dans `docs/` si valeur de reference.
+Action GET sur `EventMVT` pour charger le formulaire de reservation dans un offcanvas depuis la page liste. Duplique une partie du contexte de `retrieve()` (prix, limites par utilisateur).
 
 ---
 
-## WARNINGS (a considerer)
+## CRITIQUES
 
-### Accessibilite
+### 1. @font-face CSS casses — CORRIGE
 
-| Fichier | Ligne | Probleme | Fix |
-|---------|-------|----------|-----|
-| `list.html` | 123 | Image background sans alt/aria | `role="img" aria-label="{{ event.name }}"` |
-| `retrieve.html` | 145 | Image background sans alt/aria | Idem |
-| CSS global | — | Pas de `:focus-visible` custom | Ajouter outline bleu sur focus |
-| `retrieve.html` | 165→372 | Saut h1 → h3 (pas de h2) | Restructurer headings |
-| @font-face | — | Pas de `font-display: swap` | Ajouter (evite FOIT) |
+- Format MIME incorrect (woff2 declare comme opentype)
+- Double `src:` qui ecrasait le woff2
+- Majuscule dans `format('Woff2')`
 
-### Templates / HTMX
+**Statut :** corrige dans cette branche.
 
-| Fichier | Ligne | Probleme | Fix |
-|---------|-------|----------|-----|
-| `booking_form.html` | 24-67, 313-412 | ~150 lignes JS inline (validation) | Extraire en module ES6 |
-| `retrieve.html` | 276 | `{{ event.long_description\|safe }}` | Verifier sanitisation en DB |
-| `home.html` | 130 | `{{ config.long_description\|safe }}` | Idem |
-| `booking_form.html` | 4-6 | Style CSS inline en template | Deplacer en classe CSS |
-| `list.html` | 190-191 | Inline style sur badge | Creer classe CSS |
+### 2. Filtre par thematique : FRONT SANS BACK
+
+`list.html:73-104` affiche un dropdown avec **21 thematiques en dur** (`?theme=formation`, `?theme=bois`, etc.).
+
+**Probleme :** aucun code back ne traite le parametre `?theme=`. La methode `federated_events_filter()` ne prend que `tags`, `search` et `page`. Le commentaire ligne 73 le confirme :
+```html
+<!-- TODO : Jonas doit travailler sur le back -->
+```
+
+**Resultat :** cliquer sur une thematique change l'URL mais ne filtre rien. L'utilisateur est trompe.
+
+**Options :**
+1. Coder le filtrage back (ajouter `theme` dans `federated_events_filter`)
+2. Retirer le dropdown en attendant que le back soit pret
+3. A minima, griser/desactiver le dropdown avec un tooltip "Bientot disponible"
+
+### 3. Thematiques en dur dans le template
+
+Les 21 thematiques (Formation, Bois, Metal, Textile, etc.) sont codees en dur dans le HTML. Si on code le back, il faudra les lier a un modele (Tag ? Nouveau modele Thematique ?) pour qu'elles soient dynamiques et administrables.
+
+### 4. Contraste jaune/blanc (WCAG) — CHOIX ARTISTIQUE
+
+Jaune `#FFCB05` sur blanc = ratio 1.07:1 (WCAG demande 4.5:1).
+Le client a valide ce choix. Non bloquant pour le merge.
+
+### 5. i18n manquant — CORRIGE
+
+- `retrieve.html:310` : "Intervenant-e-s:" → `{% translate %}`
+- `booking_form.html` : erreurs JS en dur → `{% translate %}`
+
+**Statut :** corrige dans cette branche.
+
+### 6. Fichiers a nettoyer avant merge
+
+| Fichier | Raison |
+|---------|--------|
+| `PLANS/*.md` | Notes de travail internes, pas du code |
+| `BaseBillet/templates/faire_festival/maquette/` (~2.4 MB) | Maquette HTML statique de prototypage |
+
+---
+
+## WARNINGS
+
+### Accessibilite — CORRIGE (partiel)
+
+| Probleme | Statut |
+|----------|--------|
+| Images background sans `role="img"` / `aria-label` | CORRIGE |
+| Pas de `:focus-visible` custom | CORRIGE (outline bleu) |
+| Saut h1 → h3 (pas de h2) dans `retrieve.html` | CORRIGE (h3 → h2) |
+| `font-display: swap` manquant | CORRIGE |
 
 ### CSS
 
-| Fichier | Ligne | Probleme |
-|---------|-------|----------|
-| faire_festival.css | 652 | Media query unique (768px), pas de breakpoints intermediaires |
-| faire_festival.css | 393, 551 | Selecteurs vides `.carte-jour`, `.infos-clefs` |
-| faire_festival.css | 457-468, 528-539 | Duplication pseudo-element `::after` (croix placeholder) |
+| Probleme | Localisation |
+|----------|-------------|
+| Media query unique (768px), pas de breakpoints intermediaires | `faire_festival.css:652` |
+| Selecteurs vides `.carte-jour`, `.infos-clefs` | `faire_festival.css:393, 551` |
+| Duplication pseudo-element `::after` (croix placeholder) x2 | `faire_festival.css:457-468, 528-539` |
+
+### Templates
+
+| Probleme | Localisation |
+|----------|-------------|
+| `{{ event.long_description\|safe }}` — XSS si pas sanitise en DB | `retrieve.html:276` |
+| `{{ config.long_description\|safe }}` — idem | `home.html:130` |
+| Inline style sur badge | `list.html:190-191` |
+
+### Vue `booking_form` (Adrienne)
+
+- Duplique la logique de contexte de `retrieve()` (prix, limites par user). A terme, extraire dans une methode partagee pour eviter la desynchronisation.
+- Utilise le template `reunion/views/event/partial/booking_form.html` (partage avec le theme reunion) — OK pour la reutilisation, mais attention aux CSS specifiques Faire Festival dans ce partial.
 
 ---
 
 ## POSITIF
 
-### Python (solide)
-
-- **EventResource** (admin_tenant.py) : import/export CSV bien configure, skip_unchanged
-- **Bugfix MembershipAddForm** : `hasattr(self, 'user_wallet_serialized')` avant acces → previent erreur 500
-- **Bugfix ReservationAddAdmin** : `amount = 0` si `PaymentMethod.FREE`
-- **cron_morning.py** : migration sequentielle des nouveaux schemas uniquement (au lieu de tous les tenants) → fix critique de perf
-
 ### Templates
-
 - HTMX bien utilise : `hx-target`, `hx-swap="beforeend"` pour pagination, `hx-push-url`
 - CSRF global via `hx-headers` sur body
 - Partials bien structures (navbar, booking_form)
-- Commentaires FALC
+- Commentaires FALC en francais
 
 ### CSS
-
 - Variables CSS bien utilisees (~100% des cas)
 - Nommage FALC (`.bouton-pilule`, `.badge-date`, `.titre-evenement`)
 - Structure en sections numerotees (1-21)
 - Transitions coherentes et non-intrusives
+- Polices custom bien integrees (woff2 + fallback)
+
+### Filtrage par date
+- Le groupement `dated_events` par jour est du code **preexistant** (pas d'Adrienne). Elle l'utilise correctement dans ses templates. Fonctionnel.
+
+### Filtrage par tags
+- Le dropdown tags fonctionne (back deja code dans `federated_events_filter`). Adrienne l'utilise correctement.
 
 ---
 
 ## Checklist avant merge
 
-- [ ] Corriger les 3 @font-face (formats, double src, font-display)
-- [ ] Corriger contraste jaune/blanc sur `.bouton-charger-plus`
-- [ ] Ajouter `{% translate %}` sur "Intervenant-e-s:" et erreurs JS
+### Bloquant
+- [ ] **Filtre thematique** : retirer ou desactiver le dropdown (le back n'existe pas)
 - [ ] Nettoyer `PLANS/` avant merge vers PreProd
 - [ ] Supprimer ou deplacer `maquette/` (~2.4 MB)
-- [ ] Ajouter `role="img" aria-label` sur images background
+
+### Deja corrige (cette session)
+- [x] @font-face (formats, double src, font-display)
+- [x] i18n ("Intervenant-e-s:", erreurs JS)
+- [x] Accessibilite (aria-label, focus-visible, headings)
+
+### Non-bloquant (a traiter plus tard)
+- [ ] Coder le filtrage par thematique en back
 - [ ] Verifier sanitisation de `long_description|safe`
-- [ ] Ajouter `:focus-visible` pour accessibilite clavier
+- [ ] Extraire la logique partagee `booking_form` / `retrieve` dans une methode commune
+- [ ] Ajouter breakpoints CSS intermediaires (600px, 1200px)
+- [ ] Supprimer selecteurs CSS vides
