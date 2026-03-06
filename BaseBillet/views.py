@@ -1660,7 +1660,7 @@ class EventMVT(viewsets.ViewSet):
 
         return None
 
-    def federated_events_filter(self, tags=None, search=None, page=1):
+    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
         dated_events = {}
         paginated_info = {
             'page': page,
@@ -1729,6 +1729,9 @@ class EventMVT(viewsets.ViewSet):
                         Q(tag__name__icontains=search),
                     )
 
+                if thematique:
+                    events = events.filter(thematique__slug=thematique)
+
                 # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
                 paginator = Paginator(events.order_by('datetime').distinct(), 50)
                 paginated_events = paginator.get_page(page)
@@ -1769,8 +1772,11 @@ class EventMVT(viewsets.ViewSet):
 
         logger.info(f"request.GET : {request.GET}")
 
+        thematique_slug = request.GET.get('thematique')
         ctx = {}  # le dict de context pour template
-        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
+        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(
+            tags=tags, search=search, page=page, thematique=thematique_slug
+        )
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
@@ -1789,13 +1795,17 @@ class EventMVT(viewsets.ViewSet):
         if search:
             search = str(search)
         page = request.GET.get('page', 1)
+        thematique_slug = request.GET.get('thematique')
         # Data for tag filters UI
         context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search,
-                                                                                          page=page)
+        context['all_thematiques'] = Tag.objects.filter(events_thematique__isnull=False).distinct()
+        context['active_thematique'] = thematique_slug
+        context['dated_events'], context['paginated_info'] = self.federated_events_filter(
+            tags=tags, search=search, page=page, thematique=thematique_slug
+        )
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()

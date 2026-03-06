@@ -2671,6 +2671,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'show_gauge',
                 'postal_address',
                 'tag',
+                'thematique',
             )
         }),
         (_('Bookings'), {
@@ -2716,6 +2717,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     autocomplete_fields = [
         "tag",
+        "thematique",
         # "options_radio",
         # "options_checkbox",
         "carrousel",

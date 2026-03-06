@@ -70,7 +70,7 @@
                 </div>
             {% endif %}
 
-            <!-- TODO : Jonas doit travailler sur le back -->
+            {% if all_thematiques %}
             <!-- Filtre Thématique -->
             <div class="dropdown">
                 <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -79,30 +79,18 @@
                 <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
                     <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les thématiques' %}</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=formation">{% translate 'Formation' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=economie-circulaire">{% translate 'Économie Circulaire' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=manufacture">{% translate 'Manufacture' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=ecole">{% translate 'École' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=reparation">{% translate 'Réparation' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=recherche">{% translate 'Recherche' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=cape">{% translate 'CAPE' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=inclusion-numerique">{% translate 'Inclusion Numérique par le Faire' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=bois">{% translate 'Bois' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=metal">{% translate 'Métal' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=textile">{% translate 'Textile' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=terre">{% translate 'Terre' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=papier">{% translate 'Papier' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=plastique">{% translate 'Plastique' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=electronique">{% translate 'Électronique' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=mobilite">{% translate 'Mobilité' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=entreprise-innovante">{% translate 'Entreprise innovante' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=boite-a-outils">{% translate 'La boite à outils espace du faire' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=low-tech">{% translate 'Low Tech' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=artisan">{% translate 'Artisan' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=nourricier-bio-lab">{% translate 'Nourricier bio lab' %}</a></li>
-                    <li><a class="dropdown-item police-mono" href="?theme=commun-numerique">{% translate 'Commun numérique' %}</a></li>
+                    {% for thematique in all_thematiques %}
+                        <li><a class="dropdown-item police-mono" href="?thematique={{ thematique.slug }}">{{ thematique.name }}</a></li>
+                    {% endfor %}
                 </ul>
             </div>
+            {% endif %}
+
+            {% if active_tag or active_thematique or search %}
+                <a class="bouton-filtre" href="{% url 'event-list' %}" aria-label="{% translate 'Retirer les filtres' %}">
+                    ✕ {% translate 'Retirer les filtres' %}
+                </a>
+            {% endif %}
 
         </div>
 
