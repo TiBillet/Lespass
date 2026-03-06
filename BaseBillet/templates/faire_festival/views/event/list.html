@@ -120,6 +120,7 @@
                             <div>
                                 <!-- IMAGE -->
                                 <div class="image-evenement"
+                                     role="img" aria-label="{{ event.name }}"
                                      style="background-image: url('{% if event.sticker_img %}{{ event.sticker_img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');"></div>
 
                                 <!-- TAGS -->

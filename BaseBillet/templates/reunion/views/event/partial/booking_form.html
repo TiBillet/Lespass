@@ -34,8 +34,8 @@
                     const confirmEmail = confirmEl.value || "";
 
                     if (email !== confirmEmail) {
-                        confirmEl.setCustomValidity("Les emails ne correspondent pas.");
-                        errorDiv.textContent = "Les emails ne correspondent pas.";
+                        confirmEl.setCustomValidity("{% translate 'Les emails ne correspondent pas.' %}");
+                        errorDiv.textContent = "{% translate 'Les emails ne correspondent pas.' %}";
                         return false;
                     }
                     confirmEl.setCustomValidity("");
@@ -326,7 +326,7 @@
                         if (!anyChecked) {
                             ok = false;
                             if (error) {
-                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher au moins une option.';
+                                error.textContent = group.getAttribute('data-error-message') || "{% translate 'Veuillez cocher au moins une option.' %}";
                                 error.style.display = 'block';
                             }
                             boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
@@ -351,7 +351,7 @@
                         if (!input.checked) {
                             ok = false;
                             if (error) {
-                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher cette case.';
+                                error.textContent = group.getAttribute('data-error-message') || "{% translate 'Veuillez cocher cette case.' %}";
                                 error.style.display = 'block';
                             }
                             input.setAttribute('aria-invalid', 'true');

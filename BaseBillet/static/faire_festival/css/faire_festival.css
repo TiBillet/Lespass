@@ -8,22 +8,23 @@
  Import typographie local
    ========================================================================== */
  
-   @font-face {
+@font-face {
     font-family: 'faireregular';
-    src: 
-        url('../fonts/Faire-Regular.woff') format('woff'),
-        url('../fonts/Faire-Regular.woff2') format('opentype');
+    src: url('../fonts/Faire-Regular.woff2') format('woff2'),
+         url('../fonts/Faire-Regular.woff') format('woff');
     font-weight: normal;
     font-style: normal;
-    }
+    font-display: swap;
+}
 
-    @font-face {
-        font-family: 'fairestencil'; /* Nom que tu vas utiliser dans ton CSS */
-        src: url('../fonts/Faire-Stencil.woff2') format('Woff2');
-        src: url('../fonts/Faire-Stencil.otf') format('opentype'); /* Chemin vers le fichier */
-        font-weight: normal;
-        font-style: normal;
-    }
+@font-face {
+    font-family: 'fairestencil';
+    src: url('../fonts/Faire-Stencil.woff2') format('woff2'),
+         url('../fonts/Faire-Stencil.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
 
 
 /* ==========================================================================
@@ -709,6 +710,20 @@
 .skin-faire-festival:has(#contactPanel.show) .bouton-contact {
     background-color: var(--couleur-bleu-vif) !important;
     color: var(--couleur-blanc) !important;
+}
+
+/* ==========================================================================
+   22. ACCESSIBILITE CLAVIER
+   Outline visible pour la navigation au clavier (focus-visible)
+   ========================================================================== */
+
+.skin-faire-festival a:focus-visible,
+.skin-faire-festival button:focus-visible,
+.skin-faire-festival input:focus-visible,
+.skin-faire-festival select:focus-visible,
+.skin-faire-festival textarea:focus-visible {
+    outline: 3px solid var(--couleur-bleu-vif);
+    outline-offset: 2px;
 }
 
 /* ==========================================================================

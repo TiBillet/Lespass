@@ -142,6 +142,7 @@
         <div class="col-md-6 mb-4 mb-md-0">
             <!-- Image principale de l'événement -->
             <div class="image-detail-grand"
+                 role="img" aria-label="{{ event.name }}"
                  style="background-image: url('{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ ""|randImg }}{% endif %}');">
             </div>
 
@@ -307,7 +308,7 @@
              <!-- INTERVENANTS -->
 
                 <div class="mb-3">
-                    <p>Intervenant-e-s:</p>
+                    <p>{% translate 'Intervenant-e-s :' %}</p>
                 </div>
 
 
@@ -369,9 +370,9 @@
         <div class="row mb-5">
             <div class="col-12">
                 <div class="bordure-epaisse bg-white p-4">
-                    <h3 class="texte-bleu police-titre mb-4">
+                    <h2 class="texte-bleu police-titre mb-4">
                         {% translate 'Tickets and prices' %}
-                    </h3>
+                    </h2>
 
                     <div class="row g-3">
                         {% for product in event.products.all %}
