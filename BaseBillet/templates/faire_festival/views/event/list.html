@@ -121,6 +121,13 @@
                                 <!-- TITRE -->
                                 <h3 class="titre-evenement">{{ event.name|upper|truncatewords:6 }}</h3>
 
+                                <!-- DESCRIPTION -->
+                                {% if event.description %}
+                                    <p class="description-evenement text-muted mb-2">
+                                        {{ event.description|striptags|truncatewords:15 }}
+                                    </p>
+                                {% endif %}
+
                                 <!-- INFOS -->
                                 <div class="infos-evenement d-flex justify-content-between">
                                     <span>→ {{ event.datetime|date:"l d F" }}</span>
