@@ -122,6 +122,18 @@ def ligne_article_refunded(old_instance: LigneArticle, new_instance: LigneArticl
             f"    LIGNE ARTICLE ligne_article_refunded {new_instance} -> {old_instance.status} to {new_instance.status}")
         send_refund_to_laboutik.delay(new_instance.pk)
 
+
+def ligne_article_credit_note(old_instance: LigneArticle, new_instance: LigneArticle):
+    """
+    Avoir comptable : envoie l'info a LaBoutik si besoin.
+    / Credit note: notify LaBoutik if needed.
+    """
+    if not new_instance.sended_to_laboutik:
+        logger.info(
+            f"    LIGNE ARTICLE ligne_article_credit_note {new_instance} -> {old_instance.status} to {new_instance.status}")
+        # Reutilise le meme endpoint que le remboursement (meme structure : qty negative)
+        send_refund_to_laboutik.delay(new_instance.pk)
+
 ######################## SIGNAL RESERVATION ########################
 
 # @receiver(post_save, sender=Reservation)
@@ -282,6 +294,7 @@ PRE_SAVE_TRANSITIONS = {
         LigneArticle.CREATED: {
             LigneArticle.PAID: ligne_article_paid,
             LigneArticle.REFUNDED: ligne_article_refunded, # dans le cas ou on ajoute une nouvelle ligne pour annoncer un remboursement de billet ( le remboursement n'est pas une étape de paid -> refund, mais une nouvelle ligne crée )
+            LigneArticle.CREDIT_NOTE: ligne_article_credit_note,  # Avoir comptable / Credit note
         },
         LigneArticle.UNPAID: {
             LigneArticle.PAID: ligne_article_paid,

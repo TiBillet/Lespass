@@ -1,5 +1,101 @@
 # Changelog / Journal des modifications
 
+## v1.7.2 — Corrections production + Paiement admin adhesions + Avoir comptable
+
+**Date :** Mars 2026
+**Migration :** Oui (`migrate_schemas --executor=multiprocessing`)
+
+---
+
+### 1. Avoir comptable (credit note) sur les ventes / Credit note on sales
+
+**FR :**
+Les admins peuvent emettre un **avoir** sur une ligne de vente depuis l'admin (bouton "Avoir" dans la liste des ventes).
+Un avoir cree une ligne miroir avec quantite negative pour annuler comptablement la vente,
+sans supprimer l'ecriture originale (conformite fiscale francaise).
+Gardes : uniquement sur lignes confirmees ou payees, et un seul avoir par ligne.
+L'avoir est envoye a LaBoutik si un serveur cashless est configure.
+L'export CSV inclut une colonne "Ref. avoir" pour la tracabilite.
+
+**EN:**
+Admins can issue a **credit note** on a sale line from the admin (row action button in the sales list).
+A credit note creates a mirror line with negative quantity to cancel the sale for accounting purposes,
+without deleting the original entry (French fiscal compliance).
+Guards: only on confirmed or paid lines, and only one credit note per line.
+The credit note is sent to LaBoutik if a cashless server is configured.
+CSV export includes a "Credit note ref." column for traceability.
+
+**Fichiers / Files:**
+- `BaseBillet/models.py` — status `CREDIT_NOTE`, FK `credit_note_for`
+- `BaseBillet/signals.py` — transition CREATED → CREDIT_NOTE
+- `Administration/admin_tenant.py` — `LigneArticleAdmin.emettre_avoir()`
+- `Administration/importers/lignearticle_exporter.py` — colonne export
+- `BaseBillet/migrations/0199_credit_note_lignearticle.py`
+
+---
+
+### 2. Correction niveau de log API Brevo / Fix Brevo API log level
+
+**FR :**
+Quand un admin testait sa cle API Brevo depuis la configuration et que la cle etait invalide,
+l'erreur 401 remontait en `logger.error` dans Sentry, polluant les alertes.
+C'est une erreur de configuration utilisateur, pas un bug applicatif.
+Le niveau de log est passe a `logger.warning`.
+
+**EN:**
+When an admin tested their Brevo API key from the configuration and the key was invalid,
+the 401 error was logged as `logger.error` in Sentry, polluting alerts.
+This is a user configuration error, not an application bug.
+Log level changed to `logger.warning`.
+
+**Fichiers / Files:** `Administration/admin_tenant.py` — `BrevoConfigAdmin.test_api_brevo()`
+
+---
+
+### 3. Correction deconnexion automatique apres 3 mois / Fix automatic logout after 3 months
+
+**FR :**
+Les utilisateurs etaient deconnectes apres exactement 3 mois, meme s'ils utilisaient le site quotidiennement.
+Cause : `SESSION_SAVE_EVERY_REQUEST` n'etait pas defini (defaut Django = `False`),
+donc le cookie de session n'etait renouvele que lors de modifications de la session, pas a chaque visite.
+Ajout de `SESSION_SAVE_EVERY_REQUEST = True` pour que chaque visite renouvelle le cookie.
+
+**EN:**
+Users were logged out after exactly 3 months, even when using the site daily.
+Cause: `SESSION_SAVE_EVERY_REQUEST` was not set (Django default = `False`),
+so the session cookie was only renewed when the session was modified, not on every visit.
+Added `SESSION_SAVE_EVERY_REQUEST = True` so every visit renews the cookie.
+
+**Fichiers / Files:** `TiBillet/settings.py`
+
+---
+
+### 4. Bouton "Ajouter un paiement" sur les adhesions en attente / "Add payment" button on pending memberships
+
+**FR :**
+Les admins de lieux recoivent des adhesions remplies en ligne mais payees sur place
+(especes, cheque, virement). Ces adhesions restaient bloquees en "attente de paiement"
+sans moyen de les valider depuis l'admin.
+Nouveau bouton "Ajouter un paiement" sur la page detail d'une adhesion en attente (WP ou AW).
+Le formulaire demande le montant et le moyen de paiement, puis declenche toute la chaine :
+creation de la ligne de vente, calcul de la deadline, envoi de l'email de confirmation,
+transaction Fedow, et notification LaBoutik.
+
+**EN:**
+Venue admins receive memberships filled out online but paid on-site
+(cash, check, bank transfer). These memberships were stuck in "waiting for payment"
+with no way to validate them from the admin.
+New "Add payment" button on the detail page of a pending membership (WP or AW).
+The form asks for the amount and payment method, then triggers the full chain:
+sale line creation, deadline calculation, confirmation email,
+Fedow transaction, and LaBoutik notification.
+
+**Fichiers / Files:**
+- `Administration/admin_tenant.py` — `MembershipAdmin.ajouter_paiement()`
+- `Administration/templates/admin/membership/ajouter_paiement.html` (nouveau / new)
+
+---
+
 ## v1.6.8 — Corrections Sentry + Import/Export Events
 
 **Date :** Fevrier 2026

@@ -19,6 +19,7 @@ from django.db import models, connection, IntegrityError
 from django.db.models import Model, Count, Q, Prefetch
 from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
+from django.template.response import TemplateResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
@@ -70,7 +71,7 @@ from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from ApiBillet.serializers import get_or_create_price_sold
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
@@ -2166,7 +2167,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["send_invoice", "get_invoice", "renouveller"]
+    actions_detail = ["send_invoice", "get_invoice", "renouveller", "ajouter_paiement"]
 
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None):
@@ -2258,6 +2259,118 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         #     query = f"{query}&{option_query}" if query else option_query
 
         return redirect(f"{add_url}?{query}")
+
+    @action(
+        description=_("Ajouter un paiement"),
+        url_path="ajouter_paiement",
+        permissions=["custom_actions_detail"],
+    )
+    def ajouter_paiement(self, request, object_id):
+        """
+        Enregistre un paiement hors-ligne (especes, cheque, virement) sur une adhesion en attente.
+        Cree une LigneArticle et declenche toute la chaine : deadline, email, Fedow, LaBoutik.
+        / Records an offline payment on a pending membership and triggers the full processing chain.
+
+        LOCALISATION : Administration/admin_tenant.py
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('price', 'price__product', 'user'),
+            pk=object_id,
+        )
+
+        # Garde : uniquement pour les adhesions en attente de paiement
+        # / Guard: only for memberships awaiting payment
+        statuts_autorises = [Membership.WAITING_PAYMENT, Membership.ADMIN_WAITING]
+        if membership.status not in statuts_autorises:
+            messages.error(request, _("Cette adhésion n'est pas en attente de paiement."))
+            return redirect(request.META.get("HTTP_REFERER", "/"))
+
+        # Moyens de paiement hors-ligne (pas de Stripe)
+        # / Offline payment methods (no Stripe)
+        moyens_de_paiement = PaymentMethod.classic()
+
+        if request.method == "POST":
+            montant_str = request.POST.get("amount", "").strip()
+            moyen_paiement = request.POST.get("payment_method", "")
+
+            # Validation du montant
+            # / Amount validation
+            try:
+                montant_decimal = Decimal(montant_str)
+                if montant_decimal <= 0:
+                    raise ValueError
+            except Exception:
+                messages.error(request, _("Veuillez entrer un montant valide et positif."))
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            # Validation du moyen de paiement
+            # / Payment method validation
+            codes_valides = [code for code, label in moyens_de_paiement]
+            if moyen_paiement not in codes_valides:
+                messages.error(request, _("Moyen de paiement invalide."))
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            if moyen_paiement == PaymentMethod.FREE and montant_decimal > 0:
+                messages.error(request, _("Impossible d'utiliser 'Offert' avec un montant positif."))
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            # 1. Mise a jour de l'adhesion AVANT la creation de LigneArticle
+            #    trigger_A a besoin de last_contribution pour calculer la deadline
+            # / Update membership BEFORE creating LigneArticle (trigger_A needs last_contribution for deadline)
+            membership.contribution_value = dround(montant_decimal)
+            membership.payment_method = moyen_paiement
+            if not membership.first_contribution:
+                membership.first_contribution = timezone.localtime()
+            membership.last_contribution = timezone.localtime()
+            membership.status = Membership.ONCE
+            membership.save()
+
+            # 2. Creer la LigneArticle en CREATED puis la passer en PAID
+            #    Le passage CREATED → PAID declenche trigger_A via le signal pre_save :
+            #    set_deadline, email de confirmation, transaction Fedow, envoi LaBoutik, passage en VALID
+            # / Create LigneArticle as CREATED then set to PAID — triggers the full chain via trigger_A
+            pricesold = get_or_create_price_sold(membership.price)
+            vente = LigneArticle.objects.create(
+                pricesold=pricesold,
+                qty=1,
+                membership=membership,
+                amount=dec_to_int(membership.contribution_value),
+                payment_method=moyen_paiement,
+                status=LigneArticle.CREATED,
+                sale_origin=SaleOrigin.ADMIN,
+            )
+            vente.status = LigneArticle.PAID
+            vente.save()
+
+            messages.success(request, _("Paiement enregistré avec succès."))
+
+            # Redirect vers la page detail de l'adhesion
+            # / Redirect to the membership detail page
+            opts = self.model._meta
+            change_url = reverse(
+                f"{self.admin_site.name}:{opts.app_label}_{opts.model_name}_change",
+                args=[object_id],
+            )
+            return redirect(change_url)
+
+        # GET : formulaire intermediaire
+        # / GET: intermediate form
+        montant_par_defaut = membership.price.prix if membership.price else ""
+        opts = self.model._meta
+        cancel_url = reverse(
+            f"{self.admin_site.name}:{opts.app_label}_{opts.model_name}_change",
+            args=[object_id],
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            "membership": membership,
+            "montant_par_defaut": montant_par_defaut,
+            "moyens_de_paiement": moyens_de_paiement,
+            "opts": opts,
+            "cancel_url": cancel_url,
+            "title": _("Ajouter un paiement"),
+        }
+        return TemplateResponse(request, "admin/membership/ajouter_paiement.html", context)
 
     @display(description=_("Valid"), boolean=True)
     def display_is_valid(self, instance: Membership):
@@ -2367,12 +2480,70 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         return f"{obj.pricesold.productsold} - {obj.pricesold}"
 
     # noinspection PyTypeChecker
-    @display(description=_("Status"), label={None: "danger", True: "success"})
+    @display(description=_("Status"), label={None: "danger", True: "success", "warning": "warning"})
     def display_status(self, instance: LigneArticle):
         status = instance.status
         if status in [LigneArticle.VALID, LigneArticle.FREERES]:
             return True, f"{instance.get_status_display()}"
+        if status == LigneArticle.CREDIT_NOTE:
+            return "warning", f"{instance.get_status_display()}"
+        if instance.credit_notes.exists():
+            return "warning", f"{instance.get_status_display()} ⚠"
         return None, f"{instance.get_status_display()}"
+
+    actions_row = ["emettre_avoir"]
+
+    @action(
+        description=_("Credit note"),  # Avoir
+        url_path="emettre_avoir",
+        permissions=["custom_actions_row"],
+    )
+    def emettre_avoir(self, request, object_id):
+        """
+        Cree un avoir (ligne negative) pour annuler comptablement cette vente.
+        / Creates a credit note (negative line) to cancel this sale.
+        """
+        ligne_originale = get_object_or_404(
+            LigneArticle.objects.select_related('pricesold', 'pricesold__productsold'),
+            pk=object_id,
+        )
+
+        redirect_url = request.META.get("HTTP_REFERER", "/admin/")
+
+        # Garde : uniquement sur les lignes VALID ou PAID
+        if ligne_originale.status not in [LigneArticle.VALID, LigneArticle.PAID]:
+            messages.error(request, _("A credit note can only be issued for a confirmed or paid entry."))
+            return redirect(redirect_url)
+
+        # Garde : pas d'avoir si un avoir existe deja
+        if ligne_originale.credit_notes.exists():
+            messages.error(request, _("A credit note already exists for this entry."))
+            return redirect(redirect_url)
+
+        # Creer la ligne avoir / Create the credit note line
+        avoir = LigneArticle.objects.create(
+            pricesold=ligne_originale.pricesold,
+            qty=-ligne_originale.qty,
+            amount=ligne_originale.amount,
+            vat=ligne_originale.vat,
+            paiement_stripe=ligne_originale.paiement_stripe,
+            membership=ligne_originale.membership,
+            payment_method=ligne_originale.payment_method,
+            asset=ligne_originale.asset,
+            wallet=ligne_originale.wallet,
+            sale_origin=SaleOrigin.ADMIN,
+            credit_note_for=ligne_originale,
+            status=LigneArticle.CREATED,
+        )
+        # Declenche la machine a etat / Trigger state machine
+        avoir.status = LigneArticle.CREDIT_NOTE
+        avoir.save()
+
+        messages.success(request, _("Credit note created."))
+        return redirect(redirect_url)
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

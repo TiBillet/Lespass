@@ -2565,10 +2565,12 @@ class LigneArticle(models.Model):
     CANCELED, REFUNDED, CREATED = 'C', 'R', 'O',
     UNPAID, PAID, FREERES = 'U', 'P', 'F'
     VALID, FAILED = 'V', 'D'
+    CREDIT_NOTE = 'N'  # Avoir comptable / Accounting credit note
 
     TYPE_CHOICES = [
         (CANCELED, _('Cancelled')),
         (REFUNDED, _('Refunded')),
+        (CREDIT_NOTE, _('Credit note')),  # Avoir
         (CREATED, _('Not sent to payment')),
         (UNPAID, _('Not paid')),
         (FREERES, _('Free booking')),
@@ -2583,6 +2585,13 @@ class LigneArticle(models.Model):
     sended_to_laboutik = models.BooleanField(default=False, verbose_name=_("Sended to LaBoutik"))
 
     metadata = models.JSONField(blank=True, null=True)
+
+    # Avoir : lien vers la ligne originale / Credit note: link to original line
+    credit_note_for = models.ForeignKey(
+        'self', on_delete=models.PROTECT, blank=True, null=True,
+        related_name='credit_notes',
+        verbose_name=_("Credit note for"),  # Avoir pour
+    )
 
     class Meta:
         ordering = ('-datetime',)
