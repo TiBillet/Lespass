@@ -226,7 +226,7 @@ test.describe('Reservation limits / Limites reservation', () => {
       const openButton = page.locator('[data-testid="booking-open-panel"], button:has-text("book one or more seats"), button:has-text("réserver")').first();
       await openButton.click();
       const priceBlockLogged = page.locator('[data-testid^="booking-price-"], .js-order').filter({ hasText: restrictedPriceName }).first();
-      await expect(priceBlockLogged).toContainText('Suscribe to access this rate');
+      await expect(priceBlockLogged).toContainText('to book this rate');
     });
 
     await test.step('Member can see counter / Membre peut voir le compteur', async () => {
