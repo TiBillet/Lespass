@@ -4132,7 +4132,7 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
             messages.success(request, _(f"Api OK"))
         except ApiException as e:
             brevo_config.last_log = f"{e}"
-            logger.error("ApiException when calling AccountApi->get_account: %s\n" % e)
+            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
             messages.error(request, _(f"Api not OK : {e}"))
         except Exception as e:
             brevo_config.last_log = f"{type(e)} - {e}"

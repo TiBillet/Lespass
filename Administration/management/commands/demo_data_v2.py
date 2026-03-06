@@ -58,18 +58,246 @@ class Command(BaseCommand):
                 "des tenants de démo avant réimport. Ne supprime pas les assets ni la configuration."
             ),
         )
+        parser.add_argument(
+            '--full',
+            action='store_true',
+            help=(
+                "Charge toutes les données de démo (5 tenants, initiatives, fédérations, assets Fedow). "
+                "Par défaut, seul le premier tenant est alimenté avec un jeu de données minimal."
+            ),
+        )
+
+    def _get_light_fixtures(self):
+        """Fixtures minimales : 3 events + 2 adhésions pour le premier tenant uniquement.
+        Pas de création de tenant (utilise celui créé par install.py).
+        """
+        return {
+            "events": [
+                {
+                    "name": "Scène ouverte (réservation gratuite)",
+                    "categorie": "CONCERT",
+                    "jauge_max": 100,
+                    "max_per_user": 4,
+                    "short_description": "Entrée gratuite sur réservation",
+                    "long_description": "Scène ouverte, venez avec votre instrument ! Réservation gratuite pour gérer la jauge.",
+                    "tags": ["Gratuit", "Scène ouverte"],
+                    "products": [
+                        {
+                            "name": "Réservation gratuite",
+                            "categorie_article": "FREERES",
+                            "nominative": False,
+                            "short_description": "Billet gratuit",
+                        }
+                    ],
+                },
+                {
+                    "name": "Concert — deux tarifs",
+                    "categorie": "CONCERT",
+                    "jauge_max": 200,
+                    "max_per_user": 6,
+                    "short_description": "Concert payant avec tarif plein et réduit",
+                    "long_description": "Deux tarifs disponibles : plein et réduit.",
+                    "tags": ["Concert", "Payant"],
+                    "products": [
+                        {
+                            "name": "Billet concert",
+                            "categorie_article": "BILLET",
+                            "nominative": True,
+                            "short_description": "Billet d'entrée",
+                            "prices": [
+                                {"name": "Plein tarif", "prix": 15, "short_description": "Tarif normal"},
+                                {"name": "Tarif réduit", "prix": 8, "short_description": "Tarif réduit"},
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "name": "Soirée à prix libre",
+                    "categorie": "CONCERT",
+                    "jauge_max": 150,
+                    "max_per_user": 4,
+                    "short_description": "Entrée à prix libre",
+                    "long_description": "Donnez ce que vous voulez !",
+                    "tags": ["Prix libre"],
+                    "products": [
+                        {
+                            "name": "Billet prix libre",
+                            "categorie_article": "BILLET",
+                            "nominative": False,
+                            "short_description": "Prix libre",
+                            "prices": [
+                                {"name": "Prix libre", "prix": 1, "free_price": True,
+                                 "short_description": "Montant libre"},
+                            ],
+                        }
+                    ],
+                },
+            ],
+            "adhesions": [
+                {
+                    "name": "Adhésion associative",
+                    "categorie_article": "ADHESION",
+                    "short_description": "Adhésion récurrente à tarif conseillé",
+                    "long_description": "Soutenez l'association avec un tarif mensuel conseillé.",
+                    "prices": [
+                        {"name": "Tarif conseillé", "prix": 5, "recurring_payment": True,
+                         "subscription_type": "MONTH", "short_description": "5 €/mois conseillé"},
+                    ],
+                },
+                {
+                    "name": "Adhésion prix libre",
+                    "categorie_article": "ADHESION",
+                    "short_description": "Adhésion ponctuelle à prix libre",
+                    "long_description": "Une seule fois, au montant de votre choix.",
+                    "prices": [
+                        {"name": "Prix libre", "prix": 1, "free_price": True,
+                         "subscription_type": "YEAR",
+                         "short_description": "Montant libre, valable un an"},
+                    ],
+                },
+            ],
+        }
 
     def handle(self, *args, **options):
-        # FALC: On va créer des données de démonstration.
+        full_mode = options.get('full', False)
+
+        if not full_mode:
+            self._handle_light(options)
+            return
+
+        # FALC: Mode complet (--full).
         # - On prépare une grande liste d'objets (fixtures) pour 5 tenants.
         # - On crée chaque tenant (Client + Domain) si besoin.
         # - Puis, on ajoute les objets (adresse, adhésions, évènements, tarifs…).
         # - On utilise toujours get_or_create → pas de doublons si on relance.
+        self._handle_full(options)
 
+    def _handle_light(self, options):
+        """Mode rapide : alimente le premier tenant (créé par install.py) avec un jeu minimal."""
+        from django.utils import timezone
+
+        first_sub = os.environ['SUB']
+        schema = slugify(first_sub)
+
+        with schema_context('public'):
+            tenant = Client.objects.filter(schema_name=schema).first()
+        if not tenant:
+            logger.error(f"Tenant '{schema}' introuvable. Lancez d'abord 'manage.py install'.")
+            return
+
+        light = self._get_light_fixtures()
+
+        with tenant_context(tenant):
+            config = Configuration.get_solo()
+            changed = False
+            if not config.organisation:
+                config.organisation = first_sub.capitalize()
+                changed = True
+            # Stripe : mêmes champs que le mode full pour que les paiements fonctionnent
+            stripe_connect = os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT')
+            if stripe_connect and config.stripe_connect_account_test != stripe_connect:
+                config.stripe_connect_account_test = stripe_connect
+                changed = True
+            if not config.stripe_mode_test:
+                config.stripe_mode_test = True
+                changed = True
+            if not config.stripe_payouts_enabled:
+                config.stripe_payouts_enabled = True
+                changed = True
+            if not config.email:
+                config.email = os.environ.get('ADMIN_EMAIL', '')
+                changed = True
+            if changed:
+                config.save()
+
+            # Fedow
+            FedowAPI()
+            if not FedowConfig.get_solo().can_fedow():
+                raise Exception('Erreur : can_fedow = False')
+
+            # Adhésions
+            for adh in light['adhesions']:
+                prod, _ = Product.objects.get_or_create(
+                    name=adh['name'],
+                    defaults={
+                        'categorie_article': Product.ADHESION,
+                        'short_description': adh.get('short_description', ''),
+                        'long_description': adh.get('long_description', ''),
+                    }
+                )
+                for pr in adh.get('prices', []):
+                    sub_label = (pr.get('subscription_type') or 'YEAR').upper()
+                    sub_value = getattr(Price, sub_label, Price.YEAR)
+                    Price.objects.get_or_create(
+                        product=prod,
+                        name=pr['name'],
+                        defaults={
+                            'prix': pr.get('prix', 0),
+                            'free_price': bool(pr.get('free_price')),
+                            'short_description': pr.get('short_description', ''),
+                            'recurring_payment': bool(pr.get('recurring_payment')),
+                            'subscription_type': sub_value,
+                        }
+                    )
+
+            # Évènements
+            fake = Faker('fr_FR')
+            for ev in light['events']:
+                try:
+                    when = fake.date_time_between(
+                        start_date="+180d", end_date="+540d",
+                        tzinfo=timezone.get_current_timezone(),
+                    )
+                except Exception:
+                    when = timezone.now() + timedelta(days=200)
+
+                event_obj, _ = Event.objects.get_or_create(
+                    name=ev['name'],
+                    defaults={
+                        'datetime': when,
+                        'categorie': getattr(Event, ev.get('categorie', 'CONCERT'), Event.CONCERT),
+                        'jauge_max': ev.get('jauge_max', 50),
+                        'max_per_user': ev.get('max_per_user', 10),
+                        'short_description': ev.get('short_description', ''),
+                        'long_description': ev.get('long_description', ''),
+                    }
+                )
+                # Tags
+                for tag_name in ev.get('tags', []):
+                    t, _ = Tag.objects.get_or_create(name=tag_name)
+                    event_obj.tag.add(t)
+
+                # Produits
+                for prod_def in ev.get('products', []):
+                    cat_map = {'BILLET': Product.BILLET, 'FREERES': Product.FREERES}
+                    p, _ = Product.objects.get_or_create(
+                        name=prod_def['name'],
+                        defaults={
+                            'categorie_article': cat_map.get(prod_def.get('categorie_article', ''), Product.NONE),
+                            'nominative': bool(prod_def.get('nominative')),
+                            'short_description': prod_def.get('short_description', ''),
+                        }
+                    )
+                    for pr in prod_def.get('prices', []):
+                        Price.objects.get_or_create(
+                            product=p,
+                            name=pr['name'],
+                            defaults={
+                                'prix': pr.get('prix', 0),
+                                'free_price': bool(pr.get('free_price')),
+                                'short_description': pr.get('short_description', ''),
+                                'subscription_type': getattr(Price, (pr.get('subscription_type') or 'NA').upper(), Price.NA),
+                            }
+                        )
+                    event_obj.products.add(p)
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Données minimales créées pour '{tenant.name}' (3 events, 2 adhésions). "
+            f"Utilisez --full pour charger toutes les données de démo."
+        ))
+
+    def _handle_full(self, options):
         # Gros objet JSON de démonstration pour 4 lieux + 1 réseau régional (adhésions uniquement)
-        # Cet objet sera utilisé ultérieurement pour des opérations get_or_create idempotentes.
-        # Les cas couverts: évènement gratuit sans résa, gratuit avec résa, prix libre, payant nominatif avec tarif adhérent,
-        # adhésions prix libre, annuelles et récurrentes, initiatives avec et sans budget participatif.
         fake = Faker('fr_FR')
         fixtures = [
             {
