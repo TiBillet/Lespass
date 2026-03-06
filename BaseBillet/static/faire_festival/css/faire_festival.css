@@ -492,6 +492,15 @@
     text-align: center;
 }
 
+/* --- Description de l'événement --- */
+.skin-faire-festival .description-evenement {
+    font-family: var(--police-mono);
+    color: var(--couleur-bleu-vif);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin-bottom: 0.5rem;
+}
+
 /* --- Infos de l'événement (Date, Heure) --- */
 .skin-faire-festival .infos-evenement {
     font-family: var(--police-mono);

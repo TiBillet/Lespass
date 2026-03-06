@@ -181,6 +181,9 @@ def get_context(request):
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
+            {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
+             'label': _('Infos pratiques'),
+             'icon': 'info-circle'},
         ]
     }
 
@@ -1485,6 +1488,21 @@ def index(request):
     # Résolution du template avec fallback vers reunion si le skin n'a pas de home.html
     config = Configuration.get_solo()
     template_path = get_skin_template(config, "views/home.html")
+
+    return render(request, template_path, context=template_context)
+
+
+@require_GET
+def infos_pratiques(request):
+    """
+    FR: Page statique "Infos pratiques" pour le festival
+    EN: Static page "Practical information" for the festival
+    """
+    template_context = get_context(request)
+
+    # Résolution du template avec fallback vers reunion si le skin n'a pas de infos_pratiques.html
+    config = Configuration.get_solo()
+    template_path = get_skin_template(config, "views/infos_pratiques.html")
 
     return render(request, template_path, context=template_context)
 
