@@ -1580,8 +1580,10 @@ class Event(models.Model):
 
     @property
     def pricesold_for_sections(self):
-        from django.db.models import F, Count, Sum, Window
+        from django.db.models import Case, F, Count, Sum, Value, When, Window
+        from django.db.models import DecimalField
         # Tickets-based rows: one row per price (using Ticket queryset with window aggregates)
+        # Les billets offerts (payment_method="NA") comptent pour 0€
         valid_statuses = [Ticket.NOT_SCANNED, Ticket.SCANNED]
         return (
             Ticket.objects
@@ -1594,8 +1596,13 @@ class Event(models.Model):
                     expression=Count('pk'),
                     partition_by=[F('pricesold__price_id')],
                 ),
+                _ticket_prix=Case(
+                    When(payment_method="NA", then=Value(0)),
+                    default=F('pricesold__prix'),
+                    output_field=DecimalField(),
+                ),
                 section_euros_total=Window(
-                    expression=Sum(F('pricesold__price__prix')),
+                    expression=Sum('_ticket_prix'),
                     partition_by=[F('pricesold__price_id')],
                 ),
             )
@@ -2226,10 +2233,12 @@ class Ticket(models.Model):
     metadata = models.JSONField(null=True, blank=True, verbose_name=_('Metadata'), help_text=_('Custom metadata'))
 
     def paid(self):
+        # Billet offert = 0€
+        if self.payment_method == PaymentMethod.FREE:
+            return 0
         if self.pricesold:
             return self.pricesold.prix
         return 0
-        # return 666
 
     def pdf_filename(self):
         first_name = f"{self.first_name.upper()}" if self.first_name else ""
