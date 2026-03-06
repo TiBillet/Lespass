@@ -736,5 +736,97 @@
 }
 
 /* ==========================================================================
+   23. PAGE INFOS PRATIQUES
+   Styles spécifiques pour la page infos pratiques selon la maquette
+   ========================================================================== */
+
+/* Badge style "Infos pratiques" et "Accéder au Faire Festival" */
+.skin-faire-festival .badge-festival {
+    display: inline-block;
+    border: 2px solid var(--couleur-bleu-vif);
+    border-radius: 25px;
+    padding: 8px 24px;
+    font-family: var(--police-mono);
+    font-size: 1rem;
+    color: var(--couleur-bleu-vif);
+    background-color: var(--couleur-blanc);
+}
+
+/* Horaires en texte bleu */
+.skin-faire-festival .horaire-texte {
+    font-family: var(--police-mono);
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--couleur-bleu-vif);
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+}
+
+/* Texte accessibilité PMR */
+.skin-faire-festival .texte-accessibilite {
+    font-family: var(--police-mono);
+    font-size: 0.75rem;
+    color: var(--couleur-bleu-vif);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Titres des transports (VOITURE, BUS, TRAIN) */
+.skin-faire-festival .titre-transport {
+    font-family: var(--police-titre);
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--couleur-bleu-vif);
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--couleur-bleu-vif);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    letter-spacing: 1px;
+}
+
+/* Liste des transports */
+.skin-faire-festival .liste-transport {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.skin-faire-festival .liste-transport li {
+    font-family: var(--police-mono);
+    font-size: 0.9rem;
+    color: var(--couleur-bleu-vif);
+    margin-bottom: 0.4rem;
+    line-height: 1.4;
+}
+
+
+/* Badge adresse jaune */
+.skin-faire-festival .badge-adresse {
+    display: inline-block;
+    background-color: var(--couleur-jaune-principal);
+    color: var(--couleur-bleu-vif);
+    font-family: var(--police-mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    padding: 12px 24px;
+    border-radius: 25px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Badge dates sous le logo avec rotation */
+.skin-faire-festival .badge-dates {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: -33px;
+    transform: rotate(-5deg);
+}
+
+.skin-faire-festival .badge-dates img {
+    max-height: 55px;
+}
+
+/* ==========================================================================
    FIN DU FICHIER CSS FAIRE FESTIVAL
    ========================================================================== */
