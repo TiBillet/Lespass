@@ -2071,8 +2071,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'price',
         'contribution_value',
         # 'options',
-        'last_contribution',
-        'deadline',
+        'display_last_contribution',
+        'display_deadline',
         'display_is_valid',
         'status',
         'recurrence',
@@ -2372,6 +2372,18 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         }
         return TemplateResponse(request, "admin/membership/ajouter_paiement.html", context)
 
+    @display(description=_("Payment"), ordering="last_contribution")
+    def display_last_contribution(self, instance: Membership):
+        if instance.last_contribution:
+            return instance.last_contribution.strftime("%d/%m/%Y")
+        return "-"
+
+    @display(description=_("End"), ordering="deadline")
+    def display_deadline(self, instance: Membership):
+        if instance.deadline:
+            return instance.deadline.strftime("%d/%m/%Y")
+        return "-"
+
     @display(description=_("Valid"), boolean=True)
     def display_is_valid(self, instance: Membership):
         return instance.is_valid()
@@ -2391,7 +2403,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
     @action(
         description=_("Cancel"),
         url_path="cancel",
-        permissions=["custom_actions_detail"],
+        permissions=["custom_actions_row"],
     )
     def cancel(self, request, object_id):
         """
@@ -2467,6 +2479,9 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
             messages.success(request, _("Membership cancelled."))
 
         return redirect(redirect_url)
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_custom_actions_detail_permission(self, request, object_id=None):
         return TenantAdminPermissionWithRequest(request)
