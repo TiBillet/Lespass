@@ -107,8 +107,13 @@
                             </div>
                         {% elif not user|is_membership:price.adhesions_obligatoires %}
                             <!-- Adhésion obligatoire pour selectionner ce produit ! -->
-                            <div class="alert alert-danger" role="alert">
-                                {% trans "Suscribe to access this rate." %}
+                            <div class="alert alert-info" role="alert">
+                                {% trans "You must have" %}
+                                {% for adhesion in price.adhesions_obligatoires.all %}
+                                    <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
+                                    {% trans "or" %}{% endif %}
+                                {% endfor %}
+                                {% trans "to book this rate." %}
                             </div>
                         {% else %}
                             <span class="d-flex align-items-baseline gap-3">

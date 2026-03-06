@@ -857,6 +857,9 @@ class MembershipValidator(serializers.Serializer):
                 membership.first_contribution = now
             membership.last_contribution = now
             membership.save(update_fields=["status", "payment_method", "first_contribution", "last_contribution"])
+            # Calcul de la deadline a partir de last_contribution et du type d'abonnement
+            # / Compute deadline from last_contribution and subscription type
+            membership.set_deadline()
 
             price_sold = get_or_create_price_sold(self.price, custom_amount=membership.contribution_value)
             line = LigneArticle.objects.create(
