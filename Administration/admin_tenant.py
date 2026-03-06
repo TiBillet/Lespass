@@ -2390,16 +2390,83 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     @action(
         description=_("Cancel"),
+        url_path="cancel",
         permissions=["custom_actions_detail"],
     )
     def cancel(self, request, object_id):
-        logger.info(object_id)
-        membership = Membership.objects.get(pk=object_id)
+        """
+        GET : affiche une page de confirmation avec choix avoir ou non.
+        POST : annule l'adhesion, et cree un avoir si demande.
+        / GET: shows confirmation page. POST: cancels membership, optionally creates credit note.
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('user', 'price', 'price__product'),
+            pk=object_id,
+        )
+
+        redirect_url = reverse(
+            f"admin:{membership._meta.app_label}_{membership._meta.model_name}_changelist",
+        )
+
+        # Lignes de vente payees/confirmees liees a cette adhesion, sans avoir existant
+        # / Paid/confirmed sale lines linked to this membership, without existing credit note
+        lignes_payees = LigneArticle.objects.filter(
+            membership=membership,
+            status__in=[LigneArticle.VALID, LigneArticle.PAID],
+        ).exclude(
+            credit_notes__isnull=False,
+        ).select_related('pricesold', 'pricesold__productsold')
+
+        if request.method == "GET":
+            context = {
+                **self.admin_site.each_context(request),
+                "opts": self.model._meta,
+                "title": _("Cancel membership"),
+                "membership": membership,
+                "membership_email": membership.user.email if membership.user else "—",
+                "has_paid_lines": lignes_payees.exists(),
+                "paid_lines": lignes_payees,
+                "confirm_url": request.path,
+                "cancel_url": redirect_url,
+            }
+            return TemplateResponse(request, "admin/membership/cancel_confirm.html", context)
+
+        # POST : annuler l'adhesion / Cancel the membership
         membership.archiver = True
         membership.status = Membership.ADMIN_CANCELED
-        # membership.state = Membership.ADMIN_CANCELED
         membership.save()
-        return redirect(request.META["HTTP_REFERER"])
+
+        # Creer les avoirs si demande / Create credit notes if requested
+        with_credit_note = request.POST.get("with_credit_note") == "1"
+        if with_credit_note:
+            avoirs_crees = 0
+            for ligne in lignes_payees:
+                avoir = LigneArticle.objects.create(
+                    pricesold=ligne.pricesold,
+                    qty=-ligne.qty,
+                    amount=ligne.amount,
+                    vat=ligne.vat,
+                    paiement_stripe=ligne.paiement_stripe,
+                    membership=membership,
+                    payment_method=ligne.payment_method,
+                    asset=ligne.asset,
+                    wallet=ligne.wallet,
+                    sale_origin=SaleOrigin.ADMIN,
+                    credit_note_for=ligne,
+                    status=LigneArticle.CREATED,
+                )
+                avoir.status = LigneArticle.CREDIT_NOTE
+                avoir.save()
+                avoirs_crees += 1
+
+            if avoirs_crees:
+                messages.success(request, _("Membership cancelled. %(count)d credit note(s) created.") % {"count": avoirs_crees})
+            else:
+                messages.success(request, _("Membership cancelled. No sale lines to cancel."))
+        else:
+            messages.success(request, _("Membership cancelled."))
+
+        return redirect(redirect_url)
 
     def has_custom_actions_detail_permission(self, request, object_id=None):
         return TenantAdminPermissionWithRequest(request)
@@ -3316,6 +3383,7 @@ class ReservationAddAdmin(ModelForm):
             payment_method=payment_method,
             status=LigneArticle.VALID,
             sale_origin=SaleOrigin.ADMIN,
+            reservation=reservation,
         )
         # envoie à Laboutik
         send_sale_to_laboutik.delay(vente.pk)

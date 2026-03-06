@@ -1972,6 +1972,22 @@ class Reservation(models.Model):
         )
 
     def articles_paid(self):
+        """
+        Toutes les lignes comptables payees, confirmees ou remboursees de cette reservation.
+        Utilise la FK directe si elle existe, sinon fallback sur paiement_stripe (anciennes donnees).
+        / All paid, confirmed or refunded accounting lines for this reservation.
+        Uses direct FK if available, otherwise falls back to paiement_stripe (legacy data).
+        """
+        # Lignes liees directement a cette reservation (nouvelles donnees)
+        # / Lines linked directly to this reservation (new data)
+        lignes_directes = list(self.lignearticles.filter(
+            status__in=[LigneArticle.PAID, LigneArticle.VALID, LigneArticle.REFUNDED]
+        ))
+        if lignes_directes:
+            return lignes_directes
+
+        # Fallback : anciennes lignes liees via paiement_stripe (avant la FK reservation)
+        # / Fallback: legacy lines linked via paiement_stripe (before reservation FK)
         articles_paid = []
         for paiement in self.paiements.all():
             for ligne in paiement.lignearticles.filter(status__in=[
@@ -1996,11 +2012,77 @@ class Reservation(models.Model):
         else:
             return _("The deadline for getting a refund has passed.")
 
+    def _lignes_hors_stripe(self, pricesold_ids=None):
+        """
+        Retrouve les LigneArticle VALID/PAID sans paiement Stripe pour cette reservation.
+        Utilise la FK directe si possible, sinon fallback par pricesold des tickets.
+        / Finds VALID/PAID LigneArticle without Stripe payment for this reservation.
+        Uses direct FK if available, otherwise falls back to ticket pricesold matching.
+        """
+        # Filtre de base : pas de Stripe, statut VALID ou PAID, pas d'avoir existant
+        # / Base filter: no Stripe, VALID or PAID status, no existing credit note
+        base_filter = {
+            'paiement_stripe__isnull': True,
+            'status__in': [LigneArticle.VALID, LigneArticle.PAID],
+        }
+
+        # Essai via FK directe (nouvelles donnees)
+        # / Try via direct FK (new data)
+        lignes = self.lignearticles.filter(**base_filter).exclude(
+            credit_notes__isnull=False,
+        ).select_related('pricesold', 'pricesold__productsold')
+
+        if pricesold_ids is not None:
+            lignes = lignes.filter(pricesold_id__in=pricesold_ids)
+
+        if lignes.exists():
+            return lignes
+
+        # Fallback : recherche par pricesold des tickets (anciennes donnees sans FK reservation)
+        # / Fallback: search by ticket pricesold (legacy data without reservation FK)
+        if pricesold_ids is None:
+            pricesold_ids = list(
+                self.tickets.values_list('pricesold_id', flat=True).distinct()
+            )
+        return LigneArticle.objects.filter(
+            **base_filter,
+            pricesold_id__in=pricesold_ids,
+            sale_origin=SaleOrigin.ADMIN,
+        ).exclude(
+            credit_notes__isnull=False,
+        ).select_related('pricesold', 'pricesold__productsold')
+
+    @staticmethod
+    def _creer_avoir(ligne):
+        """
+        Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
+        / Creates a credit note for a non-Stripe LigneArticle.
+        """
+        avoir = LigneArticle.objects.create(
+            pricesold=ligne.pricesold,
+            qty=-ligne.qty,
+            amount=ligne.amount,
+            vat=ligne.vat,
+            paiement_stripe=ligne.paiement_stripe,
+            membership=ligne.membership,
+            payment_method=ligne.payment_method,
+            asset=ligne.asset,
+            wallet=ligne.wallet,
+            sale_origin=SaleOrigin.ADMIN,
+            credit_note_for=ligne,
+            status=LigneArticle.CREATED,
+        )
+        avoir.status = LigneArticle.CREDIT_NOTE
+        avoir.save()
+        return avoir
+
     @atomic
     def cancel_and_refund_resa(self):
         if self.tickets.filter(status=Ticket.SCANNED).exists():
             raise Exception(_("You cannot cancel a reservation that has been scanned."))
 
+        # 1) Remboursement Stripe (flow existant, inchange)
+        # / Stripe refund (existing flow, unchanged)
         if self.total_paid() > 0:
             config = Configuration.get_solo()
             # stripe.api_key = config.get_stripe_api()
@@ -2050,6 +2132,12 @@ class Reservation(models.Model):
                 except Exception as e:
                     logger.error(f"CheckoutStripe Refund Exception : {e}")
                     raise e
+
+        # 2) Avoir pour les lignes hors-Stripe (reservations admin : cheque, especes, etc.)
+        # / Credit note for non-Stripe lines (admin reservations: check, cash, etc.)
+        for ligne in self._lignes_hors_stripe():
+            self._creer_avoir(ligne)
+            logger.info(f"Credit note created for non-Stripe line {ligne.uuid}")
 
         self.status = Reservation.CANCELED
         for ticket in self.tickets.all():
@@ -2136,6 +2224,18 @@ class Reservation(models.Model):
                 except Exception as e:
                     logger.error(f"Partial Refund Exception : {e}")
                     raise e
+
+        # 2) Avoir pour les lignes hors-Stripe (ticket admin : cheque, especes, etc.)
+        # / Credit note for non-Stripe lines (admin ticket: check, cash, etc.)
+        if not refunded:
+            lignes_hors_stripe = self._lignes_hors_stripe(
+                pricesold_ids=[ticket.pricesold_id]
+            )
+            for ligne in lignes_hors_stripe:
+                self._creer_avoir(ligne)
+                logger.info(f"Credit note created for non-Stripe line {ligne.uuid} (single ticket cancel)")
+                refunded = True
+                break  # Un seul avoir pour un seul ticket
 
         # Cancel the ticket regardless of refund result
         ticket.status = Ticket.CANCELED
@@ -2549,6 +2649,10 @@ class LigneArticle(models.Model):
 
     paiement_stripe = models.ForeignKey(Paiement_stripe, on_delete=models.PROTECT, blank=True, null=True,
                                         related_name="lignearticles")
+    # Lien direct vers la reservation (nullable : adhesions, QR, NFC, crowdfunding n'ont pas de reservation)
+    # / Direct link to reservation (nullable: memberships, QR, NFC, crowdfunding have no reservation)
+    reservation = models.ForeignKey("Reservation", on_delete=models.PROTECT, blank=True, null=True,
+                                     related_name="lignearticles", verbose_name=_("Reservation"))
     membership = models.ForeignKey("Membership", on_delete=models.PROTECT, blank=True, null=True,
                                    verbose_name=_("Linked subscription"), related_name="lignearticles")
 

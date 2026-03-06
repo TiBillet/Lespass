@@ -32,9 +32,74 @@ CSV export includes a "Credit note ref." column for traceability.
 - `Administration/importers/lignearticle_exporter.py` — colonne export
 - `BaseBillet/migrations/0199_credit_note_lignearticle.py`
 
+**Annulation adhesion avec avoir :**
+L'action "Annuler" sur une adhesion affiche desormais une page de confirmation.
+Si l'adhesion a des lignes de vente payees, l'admin peut choisir "Annuler et creer un avoir".
+Les avoirs sont crees pour chaque ligne VALID/PAID liee a l'adhesion.
+
+**Fichiers / Files:**
+- `Administration/admin_tenant.py` — `MembershipAdmin.cancel()` (GET/POST avec confirmation)
+- `Administration/templates/admin/membership/cancel_confirm.html` (nouveau)
+
 ---
 
-### 2. Correction niveau de log API Brevo / Fix Brevo API log level
+### 2. Correction annulation reservation admin (cheque, especes) / Fix admin reservation cancellation (non-Stripe)
+
+**FR :**
+Quand un admin annulait une reservation creee manuellement (payee par cheque, especes, etc.),
+aucune ligne de remboursement ou d'avoir n'etait creee. La reservation passait en "annulee"
+sans trace comptable, car `cancel_and_refund_resa` ne cherchait les LigneArticle que via
+les `Paiement_stripe` (FK), et les reservations admin n'en ont pas.
+Desormais, lors de l'annulation, un avoir (CREDIT_NOTE) est automatiquement cree pour chaque
+LigneArticle hors-Stripe (sale_origin=ADMIN) liee a la reservation.
+Meme correction pour l'annulation de ticket individuel (`cancel_and_refund_ticket`).
+
+**EN:**
+When an admin cancelled a manually created reservation (paid by check, cash, etc.),
+no refund or credit note line was created. The reservation was marked as cancelled
+with no accounting trace, because `cancel_and_refund_resa` only looked for LigneArticle
+via `Paiement_stripe` (FK), and admin reservations don't have one.
+Now, upon cancellation, a credit note (CREDIT_NOTE) is automatically created for each
+non-Stripe LigneArticle (sale_origin=ADMIN) linked to the reservation.
+Same fix for single ticket cancellation (`cancel_and_refund_ticket`).
+
+**Fichiers / Files:**
+- `BaseBillet/models.py` — `Reservation._lignes_hors_stripe()`, `Reservation._creer_avoir()`,
+  `cancel_and_refund_resa()`, `cancel_and_refund_ticket()`
+
+---
+
+### 3. FK reservation sur LigneArticle / Reservation FK on LigneArticle
+
+**FR :**
+Ajout d'une FK directe `LigneArticle.reservation` pour lier une ligne comptable a sa reservation
+sans dependre de `Paiement_stripe` comme intermediaire.
+Avant, les reservations admin (cheque, especes) n'avaient aucun lien vers leurs LigneArticle.
+La FK est renseignee dans les 4 flows de creation (front, API v1, API v2, admin).
+Une data migration backfill les lignes existantes depuis `paiement_stripe.reservation`.
+Les methodes `articles_paid()` et `_lignes_hors_stripe()` utilisent la FK directe
+avec fallback sur l'ancien chemin pour compatibilite.
+
+**EN:**
+Added a direct FK `LigneArticle.reservation` to link an accounting line to its reservation
+without relying on `Paiement_stripe` as intermediary.
+Previously, admin reservations (check, cash) had no link to their LigneArticle.
+The FK is set in all 4 creation flows (front, API v1, API v2, admin).
+A data migration backfills existing lines from `paiement_stripe.reservation`.
+`articles_paid()` and `_lignes_hors_stripe()` use the direct FK with legacy fallback.
+
+**Fichiers / Files:**
+- `BaseBillet/models.py` — FK `reservation` + simplification `articles_paid()`, `_lignes_hors_stripe()`
+- `BaseBillet/validators.py` — `reservation=reservation` (front)
+- `ApiBillet/serializers.py` — `reservation=reservation` (API v1)
+- `api_v2/serializers.py` — `reservation=reservation` (API v2)
+- `Administration/admin_tenant.py` — `reservation=reservation` (admin)
+- `BaseBillet/migrations/0200_add_reservation_fk_to_lignearticle.py`
+- `BaseBillet/migrations/0201_backfill_lignearticle_reservation.py`
+
+---
+
+### 4. Correction niveau de log API Brevo / Fix Brevo API log level
 
 **FR :**
 Quand un admin testait sa cle API Brevo depuis la configuration et que la cle etait invalide,
@@ -52,7 +117,7 @@ Log level changed to `logger.warning`.
 
 ---
 
-### 3. Correction deconnexion automatique apres 3 mois / Fix automatic logout after 3 months
+### 5. Correction deconnexion automatique apres 3 mois / Fix automatic logout after 3 months
 
 **FR :**
 Les utilisateurs etaient deconnectes apres exactement 3 mois, meme s'ils utilisaient le site quotidiennement.
@@ -70,7 +135,7 @@ Added `SESSION_SAVE_EVERY_REQUEST = True` so every visit renews the cookie.
 
 ---
 
-### 4. Bouton "Ajouter un paiement" sur les adhesions en attente / "Add payment" button on pending memberships
+### 6. Bouton "Ajouter un paiement" sur les adhesions en attente / "Add payment" button on pending memberships
 
 **FR :**
 Les admins de lieux recoivent des adhesions remplies en ligne mais payees sur place

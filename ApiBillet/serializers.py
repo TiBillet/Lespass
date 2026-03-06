@@ -1171,12 +1171,13 @@ class ApiReservationValidator(serializers.Serializer):
 
             pricesold: PriceSold = get_or_create_price_sold(price_generique, event=event, custom_amount=custom_amount)
 
-            # les lignes articles pour la vente
+            # Ligne comptable de la vente, liee a la reservation
+            # / Accounting line for the sale, linked to reservation
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
                 sale_origin=SaleOrigin.API,
-                # pas d'objet reservation ?
+                reservation=reservation,
                 qty=qty,
             )
             list_line_article_sold.append(line_article)

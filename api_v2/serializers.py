@@ -1122,7 +1122,8 @@ class ReservationCreateSerializer(serializers.Serializer):
                     payment_method=PaymentMethod.FREE,
                     sale_origin=SaleOrigin.API,
                     status=LigneArticle.FREERES,
-                    metadata={"reservation_uuid": str(reservation.uuid), "source": "api"},
+                    reservation=reservation,
+                    metadata={"source": "api"},
                 )
 
         return reservation

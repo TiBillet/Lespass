@@ -286,7 +286,8 @@ class TicketCreator():
                 promo_code=self.promo_code,
                 custom_amount=self.custom_amounts.get(price_generique.uuid))
 
-            # les lignes articles pour la vente
+            # Ligne comptable de la vente, liee a la reservation
+            # / Accounting line for the sale, linked to reservation
             line_article = LigneArticle.objects.create(
                 pricesold=pricesold,
                 amount=dec_to_int(pricesold.prix),
@@ -294,6 +295,7 @@ class TicketCreator():
                 qty=qty,
                 promotional_code=self.promo_code,
                 sale_origin=self.sale_origin,
+                reservation=reservation,
             )
             self.list_line_article_sold.append(line_article)
 
