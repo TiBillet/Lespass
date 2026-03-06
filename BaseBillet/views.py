@@ -1943,64 +1943,6 @@ class EventMVT(viewsets.ViewSet):
 
         return render(request, template_path, context=template_context)
 
-    @action(detail=True, methods=['GET'])
-    def booking_form(self, request, pk=None):
-        """
-        Retourne le formulaire de réservation pour un événement.
-        Utilisé pour l'offcanvas sur la page liste des événements.
-        """
-        try:
-            event = get_object_or_404(Event, slug=pk)
-        except Event.DoesNotExist:
-            # Essaye avec les 8 premiers caractères de l'UUID
-            match = re.search(r'([0-9a-fA-F]{8})(?:/)?$', pk)
-            if match:
-                hex8 = match.group(1)
-                event = get_object_or_404(Event, uuid__startswith=hex8)
-            else:
-                raise Http404(_("Event not found"))
-
-        # Préparation du contexte comme dans retrieve()
-        event.img = event.get_img()
-        event.sticker_img = event.get_sticker_img()
-
-        # Récupération des produits et prix
-        products = list(event.products.prefetch_related("prices"))
-        prices = [price for product in products for price in product.prices.all()]
-
-        # Vérification des limites par utilisateur
-        product_max_per_user_reached = []
-        price_max_per_user_reached = []
-        event_max_per_user_reached = False
-
-        if request.user.is_authenticated:
-            for product in products:
-                if product.max_per_user_reached(user=request.user, event=event):
-                    product_max_per_user_reached.append(product)
-            for price in prices:
-                if price.max_per_user_reached(user=request.user, event=event):
-                    price_max_per_user_reached.append(price)
-            event_max_per_user_reached = event.max_per_user_reached_on_this_event(request.user)
-
-        # Prix publiés pour le template
-        event.published_prices = Price.objects.filter(
-            product__event=event, publish=True
-        ).order_by('product__poids', 'order', 'prix')
-        for p in event.published_prices:
-            if p.name is None:
-                p.name = ""
-
-        template_context = {
-            'event': event,
-            'product_max_per_user_reached': product_max_per_user_reached,
-            'price_max_per_user_reached': price_max_per_user_reached,
-            'event_max_per_user_reached': event_max_per_user_reached,
-            # URL absolue pour la soumission du formulaire depuis la page liste
-            'reservation_url': f"/event/{event.slug}/reservation/",
-        }
-
-        return render(request, "reunion/views/event/partial/booking_form.html", context=template_context)
-
     @action(detail=True, methods=['POST'], permission_classes=[permissions.IsAuthenticated])
     def action_reservation(self, request, pk=None):
         event = get_object_or_404(Event, pk=pk)
