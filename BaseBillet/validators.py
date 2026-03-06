@@ -577,9 +577,11 @@ class ReservationValidator(serializers.Serializer):
                 total_ticket_qty += qty
 
                 # Check adhésion
-                if price.adhesion_obligatoire:
-                    if not user.memberships.filter(price__product=price.adhesion_obligatoire,
-                                                   deadline__gte=timezone.now()).exists():
+                if price.adhesions_obligatoires.exists():
+                    if not user.memberships.filter(
+                        price__product__in=price.adhesions_obligatoires.all(),
+                        deadline__gte=timezone.now(),
+                    ).exists():
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
 

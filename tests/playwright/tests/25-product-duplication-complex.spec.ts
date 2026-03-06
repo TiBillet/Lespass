@@ -21,7 +21,6 @@ async function addInlinePrice(page: Page, priceData: {
   prix: number;
   subscription_type: string;
   prix_libre?: boolean;
-  adhesion_obligatoire?: boolean;
 }) {
   const countBefore = await page.locator('input[name*="prices-"][name$="-name"]:not([name*="__prefix__"])').count();
   const addButtons = await page.locator('a:has-text("Add another"), button:has-text("Add another")').all();
@@ -36,11 +35,6 @@ async function addInlinePrice(page: Page, priceData: {
 
   if (priceData.prix_libre) {
     const checkbox = page.locator(`input[name="prices-${formIndex}-prix_libre"]`);
-    if (await checkbox.count() > 0) await checkbox.check();
-  }
-
-  if (priceData.adhesion_obligatoire) {
-    const checkbox = page.locator(`input[name="prices-${formIndex}-adhesion_obligatoire"]`);
     if (await checkbox.count() > 0) await checkbox.check();
   }
 
@@ -131,7 +125,7 @@ test.describe('Product Duplication / Duplication de produit', () => {
       await page.locator('input[name="short_description"]').fill('Produit de test pour duplication');
 
       await addInlinePrice(page, { name: 'Tarif Original 1', prix: 10, subscription_type: 'Y', prix_libre: true });
-      await addInlinePrice(page, { name: 'Tarif Original 2', prix: 5, subscription_type: 'Y', adhesion_obligatoire: true });
+      await addInlinePrice(page, { name: 'Tarif Original 2', prix: 5, subscription_type: 'Y' });
       await addInlinePrice(page, { name: 'Tarif Original 3', prix: 20, subscription_type: 'M' });
 
       const saveAndContinueButton = page.locator('button[name="_continue"], input[name="_continue"]').first();

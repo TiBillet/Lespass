@@ -100,12 +100,12 @@
                         <div class="alert alert-danger" role="alert">
                             {% trans "This price is no longer available." %}
                         </div>
-                    {% elif price.adhesion_obligatoire %}
+                    {% elif price.adhesions_obligatoires.exists %}
                         {% if not user.is_authenticated %}
                             <div class="alert alert-danger" role="alert">
                                 {% trans "Log in to access this rate." %}
                             </div>
-                        {% elif not user|is_membership:price.adhesion_obligatoire %}
+                        {% elif not user|is_membership:price.adhesions_obligatoires %}
                             <!-- Adhésion obligatoire pour selectionner ce produit ! -->
                             <div class="alert alert-danger" role="alert">
                                 {% trans "Suscribe to access this rate." %}

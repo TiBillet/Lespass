@@ -742,11 +742,12 @@ class ProductSchemaSerializer(serializers.Serializer):
                     "name": "subscriptionType",
                     "value": price.subscription_type,
                 })
-            if price.adhesion_obligatoire_id:
+            adhesion_ids = list(price.adhesions_obligatoires.values_list('pk', flat=True))
+            if adhesion_ids:
                 additional_property.append({
                     "@type": "PropertyValue",
-                    "name": "membershipRequiredProduct",
-                    "value": str(price.adhesion_obligatoire_id),
+                    "name": "membershipRequiredProducts",
+                    "value": [str(pk) for pk in adhesion_ids],
                 })
             if price.manual_validation:
                 additional_property.append({
@@ -976,8 +977,7 @@ class ProductCreateSerializer(serializers.Serializer):
                         raise serializers.ValidationError({"membershipRequiredProduct": "Product not found."})
                     if membership_product.categorie_article != Product.ADHESION:
                         raise serializers.ValidationError({"membershipRequiredProduct": "Product must be a membership."})
-                    price_obj.adhesion_obligatoire = membership_product
-                    price_obj.save(update_fields=["adhesion_obligatoire"])
+                    price_obj.adhesions_obligatoires.add(membership_product)
 
             for idx, field in enumerate(form_fields):
                 label = field.get("label")

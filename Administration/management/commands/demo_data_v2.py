@@ -1408,17 +1408,17 @@ class Command(BaseCommand):
                                 'subscription_type': getattr(Price, (pr.get('subscription_type') or 'NA').upper(), Price.NA),
                             }
                             adhesion_name = pr.get('adhesion_obligatoire')
-                            if adhesion_name:
-                                try:
-                                    adhesion_prod = Product.objects.get(name=adhesion_name)
-                                    defaults['adhesion_obligatoire'] = adhesion_prod
-                                except Product.DoesNotExist:
-                                    logger.warning(f"Adhésion requise '{adhesion_name}' introuvable pour '{p.name}'.")
-                            Price.objects.get_or_create(
+                            price_obj, _created = Price.objects.get_or_create(
                                 product=p,
                                 name=pr['name'],
                                 defaults=defaults,
                             )
+                            if adhesion_name and _created:
+                                try:
+                                    adhesion_prod = Product.objects.get(name=adhesion_name)
+                                    price_obj.adhesions_obligatoires.add(adhesion_prod)
+                                except Product.DoesNotExist:
+                                    logger.warning(f"Adhésion requise '{adhesion_name}' introuvable pour '{p.name}'.")
                         event_obj.products.add(p)
 
                         # Champs de formulaire optionnels

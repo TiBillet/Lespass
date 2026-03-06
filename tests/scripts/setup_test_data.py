@@ -233,8 +233,7 @@ def link_price_to_membership(payload: dict, tenant: str):
         if not price:
             return {"status": "error", "message": f"Price not found for product: {price_product_name}"}
 
-        price.adhesion_obligatoire = membership_product
-        price.save(update_fields=["adhesion_obligatoire"])
+        price.adhesions_obligatoires.add(membership_product)
 
         return {"status": "success", "price_uuid": str(price.uuid)}
 

@@ -1191,14 +1191,21 @@ class ProductAdmin(ModelAdmin):
         Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
         """
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
-        if request.headers.get('Referer'):
-            logger.info(request.headers.get('Referer'))
-            if ("event" in request.headers['Referer']
-                    and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
+        if request.headers.get('Referer') and "admin/autocomplete" in request.path:
+            referer = request.headers['Referer']
+            logger.info(referer)
+            if "event" in referer:
+                # Autocomplete depuis EventAdmin : uniquement billets
                 queryset = queryset.filter(categorie_article__in=[
                     Product.BILLET,
                     Product.FREERES,
                 ]).exclude(archive=True)
+            elif "price" in referer:
+                # Autocomplete depuis PriceAdmin (adhesions_obligatoires) : uniquement adhesions
+                queryset = queryset.filter(
+                    categorie_article=Product.ADHESION,
+                    archive=False,
+                )
         return queryset, use_distinct
 
     def save_model(self, request, obj: Product, form, change):
@@ -1340,7 +1347,7 @@ class PriceChangeForm(ModelForm):
             'publish',
             'max_per_user',
             'stock',
-            'adhesion_obligatoire',
+            'adhesions_obligatoires',
             # topup when paid :
             'fedow_reward_enabled',
             'fedow_reward_asset',
@@ -1393,13 +1400,16 @@ class PriceChangeForm(ModelForm):
                 self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
                 # Filtrage des produits : uniquement des produits adhésions.
                 # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
-                self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+                self.fields['adhesions_obligatoires'].queryset = Product.objects.filter(
                     categorie_article=Product.ADHESION,
                     archive=False,
                 )
+                # Pas de bouton "+" pour creer un produit depuis ce champ
+                # / No "add" button to create a product from this field
+                self.fields['adhesions_obligatoires'].widget.can_add_related = False
             elif instance.product.categorie_article == Product.ADHESION:  # si c'est un produit qui n'est pas l'adhésion
                 self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
-                self.fields['adhesion_obligatoire'].widget = HiddenInput()
+                self.fields['adhesions_obligatoires'].widget = HiddenInput()
 
         except AttributeError as e:
             # NoneType' object has no attribute 'product
@@ -1436,6 +1446,7 @@ class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     form = PriceChangeForm
+    autocomplete_fields = ['adhesions_obligatoires']
 
     conditional_fields = {
         "iteration": "recurring_payment == true",
@@ -1455,7 +1466,7 @@ class PriceAdmin(ModelAdmin):
                 'order',
                 'max_per_user',
                 'stock',
-                'adhesion_obligatoire',
+                'adhesions_obligatoires',
                 'publish',
             ),
             'classes': ['tab'],

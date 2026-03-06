@@ -173,9 +173,10 @@ class ProductSerializer(serializers.ModelSerializer):
 
 class PriceSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
-    adhesion_obligatoire = serializers.PrimaryKeyRelatedField(
+    adhesions_obligatoires = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.filter(categorie_article=Product.ADHESION),
-        required=False
+        required=False,
+        many=True,
     )
 
     class Meta:
@@ -191,7 +192,7 @@ class PriceSerializer(serializers.ModelSerializer):
             'vat',
             'stock',
             'max_per_user',
-            'adhesion_obligatoire',
+            'adhesions_obligatoires',
             'subscription_type',
             'recurring_payment',
             'publish',
@@ -1102,8 +1103,8 @@ class ApiReservationValidator(serializers.Serializer):
         product_list = [product for product in event.products.all()]
         for product in product_list:
             for price in product.prices.all():
-                if price.adhesion_obligatoire:
-                    product_list.append(price.adhesion_obligatoire)
+                for adhesion in price.adhesions_obligatoires.all():
+                    product_list.append(adhesion)
 
         for price_object in self.prices_list:
             if price_object['price'].product not in product_list:
@@ -1124,11 +1125,15 @@ class ApiReservationValidator(serializers.Serializer):
         all_product_buy = [price.product for price in all_price_buy]
         for price_object in self.prices_list:
             price: Price = price_object['price']
-            if price.adhesion_obligatoire:
+            if price.adhesions_obligatoires.exists():
                 membership_products = [membership.price.product for membership in
                                        self.user_commande.membership.all()]
-                if (price.adhesion_obligatoire not in membership_products
-                        and price.adhesion_obligatoire not in all_product_buy):
+                # Logique OU : au moins une des adhesions obligatoires doit etre satisfaite
+                # / OR logic: at least one required membership must be satisfied
+                required = list(price.adhesions_obligatoires.all())
+                has_membership = any(adh in membership_products for adh in required)
+                buying_membership = any(adh in all_product_buy for adh in required)
+                if not has_membership and not buying_membership:
                     logger.warning(f"L'utilisateur n'est pas membre")
                     raise serializers.ValidationError(_(f"User is not subscribed and cannot be granted this rate."))
 

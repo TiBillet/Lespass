@@ -1139,12 +1139,17 @@ class Price(models.Model):
     #                                                 verbose_name=_("Maximum all user"),
     #                                                 help_text=_("Limit the maximum number of memberships for all users. Leave blank for unlimited."))
 
-    adhesion_obligatoire = models.ForeignKey(Product, on_delete=models.PROTECT,
-                                             related_name="adhesion_obligatoire",
-                                             verbose_name=_("Subscription required"),
-                                             help_text=_(
-                                                 "Rate available to suscribers only. Only works for reservation-type products. The rate will be visible if the user is logged in AND has paid their membership fees."),
-                                             blank=True, null=True)
+    adhesions_obligatoires = models.ManyToManyField(
+        Product,
+        related_name="adhesions_obligatoires",
+        verbose_name=_("Subscriptions required"),
+        help_text=_(
+            "Rate available to subscribers only (OR logic: having at least one of the selected subscriptions is enough). "
+            "Only works for reservation-type products. "
+            "The rate will be visible if the user is logged in AND has paid at least one of these membership fees."
+        ),
+        blank=True,
+    )
 
     NA, YEAR, MONTH = 'N', 'Y', 'M'
     CAL_MONTH, DAY, HOUR = 'O', 'D', 'H'
