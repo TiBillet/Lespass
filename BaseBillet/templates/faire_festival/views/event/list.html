@@ -15,7 +15,7 @@
         <!-- =============================================================
              FILTRES - Style maquette avec dropdowns
              ============================================================= -->
-        <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-5">
+        <div class="d-flex justify-content-center flex-wrap gap-3 conteneur-filtres mb-2">
 
             <!-- Bouton Admin -->
             {% if user|can_create_event_tag %}
@@ -86,7 +86,7 @@
             </div>
             {% endif %}
 
-            {% if active_tag or active_thematique or search %}
+        {% if active_tag or active_thematique or search %}
                 <a class="bouton-filtre" href="{% url 'event-list' %}" aria-label="{% translate 'Retirer les filtres' %}">
                     ✕ {% translate 'Retirer les filtres' %}
                 </a>
@@ -95,7 +95,57 @@
         </div>
 
         <!-- =============================================================
-             GRILLE D'ÉVÉNEMENTS
+              BARRE DE RECHERCHE
+              Recherche rapide en dessous des filtres
+              ============================================================= -->
+        <div class="row justify-content-center mb-4">
+            <div class="col-12 col-md-8 col-lg-6">
+                <form action="{% url 'event-list' %}" method="get" class="position-relative">
+                    <!-- Preserve active filters when searching -->
+                    {% if active_tag %}
+                        <input type="hidden" name="tag" value="{{ active_tag.slug }}">
+                    {% endif %}
+                    {% if active_thematique %}
+                        <input type="hidden" name="thematique" value="{{ active_thematique }}">
+                    {% endif %}
+
+                    <div class="input-group bordure-epaisse rounded-pill overflow-hidden bg-white">
+                        <!-- Icône de recherche -->
+                        <span class="input-group-text border-0 bg-white ps-3">
+                            <i class="bi bi-search texte-bleu" aria-hidden="true"></i>
+                        </span>
+
+                        <!-- Champ de recherche -->
+                        <input type="text"
+                               class="form-control border-0 police-mono texte-bleu py-2"
+                               id="event-search"
+                               name="search"
+                               placeholder="{% translate 'Rechercher un atelier, une conférence...' %}"
+                               value="{{ search|default:'' }}"
+                               aria-label="{% translate 'Rechercher un événement' %}">
+
+                        <!-- Bouton de recherche sans effet carré -->
+                        <button class="btn px-3 d-flex align-items-center"
+                                type="submit"
+                                style="background-color: var(--couleur-bleu-vif); color: var(--couleur-blanc); border: none; font-family: var(--police-titre); font-weight: 700; text-transform: uppercase;">
+                            <span class="small">{% translate 'Rechercher' %}</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Tag actif affiché sous la barre de recherche -->
+                {% if search %}
+                    <div class="mt-2 text-center">
+                        <span class="small police-mono texte-bleu">
+                            {% translate "Résultats pour :" %} <strong>"{{ search }}"</strong>
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- =============================================================
+              GRILLE D'ÉVÉNEMENTS
              ============================================================= -->
         <div class="row g-4" id="event_list">
 
