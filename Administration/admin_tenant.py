@@ -19,6 +19,7 @@ from django.db import models, connection, IntegrityError
 from django.db.models import Model, Count, Q, Prefetch
 from django.forms import ModelForm, Form, HiddenInput
 from django.http import HttpResponse, HttpRequest, HttpResponseRedirect
+from django.template.response import TemplateResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.template.defaultfilters import slugify
 from django.template.loader import render_to_string
@@ -70,7 +71,7 @@ from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from ApiBillet.serializers import get_or_create_price_sold
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import HumanUser, TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import Configuration, OptionGenerale, Product, Price, Paiement_stripe, Membership, Webhook, Tag, \
@@ -1190,14 +1191,21 @@ class ProductAdmin(ModelAdmin):
         Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
         """
         queryset, use_distinct = super().get_search_results(request, queryset, search_term)
-        if request.headers.get('Referer'):
-            logger.info(request.headers.get('Referer'))
-            if ("event" in request.headers['Referer']
-                    and "admin/autocomplete" in request.path):  # Cela vient bien de l'admin event
+        if request.headers.get('Referer') and "admin/autocomplete" in request.path:
+            referer = request.headers['Referer']
+            logger.info(referer)
+            if "event" in referer:
+                # Autocomplete depuis EventAdmin : uniquement billets
                 queryset = queryset.filter(categorie_article__in=[
                     Product.BILLET,
                     Product.FREERES,
                 ]).exclude(archive=True)
+            elif "price" in referer:
+                # Autocomplete depuis PriceAdmin (adhesions_obligatoires) : uniquement adhesions
+                queryset = queryset.filter(
+                    categorie_article=Product.ADHESION,
+                    archive=False,
+                )
         return queryset, use_distinct
 
     def save_model(self, request, obj: Product, form, change):
@@ -1339,7 +1347,7 @@ class PriceChangeForm(ModelForm):
             'publish',
             'max_per_user',
             'stock',
-            'adhesion_obligatoire',
+            'adhesions_obligatoires',
             # topup when paid :
             'fedow_reward_enabled',
             'fedow_reward_asset',
@@ -1392,13 +1400,16 @@ class PriceChangeForm(ModelForm):
                 self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
                 # Filtrage des produits : uniquement des produits adhésions.
                 # Possible facilement car Foreign Key (voir get_search_results dans ProductAdmin)
-                self.fields['adhesion_obligatoire'].queryset = Product.objects.filter(
+                self.fields['adhesions_obligatoires'].queryset = Product.objects.filter(
                     categorie_article=Product.ADHESION,
                     archive=False,
                 )
+                # Pas de bouton "+" pour creer un produit depuis ce champ
+                # / No "add" button to create a product from this field
+                self.fields['adhesions_obligatoires'].widget.can_add_related = False
             elif instance.product.categorie_article == Product.ADHESION:  # si c'est un produit qui n'est pas l'adhésion
                 self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
-                self.fields['adhesion_obligatoire'].widget = HiddenInput()
+                self.fields['adhesions_obligatoires'].widget = HiddenInput()
 
         except AttributeError as e:
             # NoneType' object has no attribute 'product
@@ -1435,6 +1446,7 @@ class PriceAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
     form = PriceChangeForm
+    autocomplete_fields = ['adhesions_obligatoires']
 
     conditional_fields = {
         "iteration": "recurring_payment == true",
@@ -1454,7 +1466,7 @@ class PriceAdmin(ModelAdmin):
                 'order',
                 'max_per_user',
                 'stock',
-                'adhesion_obligatoire',
+                'adhesions_obligatoires',
                 'publish',
             ),
             'classes': ['tab'],
@@ -2070,8 +2082,8 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
         'price',
         'contribution_value',
         # 'options',
-        'last_contribution',
-        'deadline',
+        'display_last_contribution',
+        'display_deadline',
         'display_is_valid',
         'status',
         'recurrence',
@@ -2166,7 +2178,7 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_detail = ["send_invoice", "get_invoice", "renouveller"]
+    actions_detail = ["send_invoice", "get_invoice", "renouveller", "ajouter_paiement"]
 
     def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
                         extra_context: Optional[Dict[str, bool]] = None):
@@ -2259,6 +2271,130 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
         return redirect(f"{add_url}?{query}")
 
+    @action(
+        description=_("Ajouter un paiement"),
+        url_path="ajouter_paiement",
+        permissions=["custom_actions_detail"],
+    )
+    def ajouter_paiement(self, request, object_id):
+        """
+        Enregistre un paiement hors-ligne (especes, cheque, virement) sur une adhesion en attente.
+        Cree une LigneArticle et declenche toute la chaine : deadline, email, Fedow, LaBoutik.
+        / Records an offline payment on a pending membership and triggers the full processing chain.
+
+        LOCALISATION : Administration/admin_tenant.py
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('price', 'price__product', 'user'),
+            pk=object_id,
+        )
+
+        # Garde : uniquement pour les adhesions en attente de paiement
+        # / Guard: only for memberships awaiting payment
+        statuts_autorises = [Membership.WAITING_PAYMENT, Membership.ADMIN_WAITING]
+        if membership.status not in statuts_autorises:
+            messages.error(request, _("Cette adhésion n'est pas en attente de paiement."))
+            return redirect(request.META.get("HTTP_REFERER", "/"))
+
+        # Moyens de paiement hors-ligne (pas de Stripe)
+        # / Offline payment methods (no Stripe)
+        moyens_de_paiement = PaymentMethod.classic()
+
+        if request.method == "POST":
+            montant_str = request.POST.get("amount", "").strip()
+            moyen_paiement = request.POST.get("payment_method", "")
+
+            # Validation du montant
+            # / Amount validation
+            try:
+                montant_decimal = Decimal(montant_str)
+                if montant_decimal <= 0:
+                    raise ValueError
+            except Exception:
+                messages.error(request, _("Veuillez entrer un montant valide et positif."))
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            # Validation du moyen de paiement
+            # / Payment method validation
+            codes_valides = [code for code, label in moyens_de_paiement]
+            if moyen_paiement not in codes_valides:
+                messages.error(request, _("Moyen de paiement invalide."))
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            if moyen_paiement == PaymentMethod.FREE and montant_decimal > 0:
+                messages.error(request, _("Impossible d'utiliser 'Offert' avec un montant positif."))
+                return redirect(request.META.get("HTTP_REFERER", "/"))
+
+            # 1. Mise a jour de l'adhesion AVANT la creation de LigneArticle
+            #    trigger_A a besoin de last_contribution pour calculer la deadline
+            # / Update membership BEFORE creating LigneArticle (trigger_A needs last_contribution for deadline)
+            membership.contribution_value = dround(montant_decimal)
+            membership.payment_method = moyen_paiement
+            if not membership.first_contribution:
+                membership.first_contribution = timezone.localtime()
+            membership.last_contribution = timezone.localtime()
+            membership.status = Membership.ONCE
+            membership.save()
+
+            # 2. Creer la LigneArticle en CREATED puis la passer en PAID
+            #    Le passage CREATED → PAID declenche trigger_A via le signal pre_save :
+            #    set_deadline, email de confirmation, transaction Fedow, envoi LaBoutik, passage en VALID
+            # / Create LigneArticle as CREATED then set to PAID — triggers the full chain via trigger_A
+            pricesold = get_or_create_price_sold(membership.price)
+            vente = LigneArticle.objects.create(
+                pricesold=pricesold,
+                qty=1,
+                membership=membership,
+                amount=dec_to_int(membership.contribution_value),
+                payment_method=moyen_paiement,
+                status=LigneArticle.CREATED,
+                sale_origin=SaleOrigin.ADMIN,
+            )
+            vente.status = LigneArticle.PAID
+            vente.save()
+
+            messages.success(request, _("Paiement enregistré avec succès."))
+
+            # Redirect vers la page detail de l'adhesion
+            # / Redirect to the membership detail page
+            opts = self.model._meta
+            change_url = reverse(
+                f"{self.admin_site.name}:{opts.app_label}_{opts.model_name}_change",
+                args=[object_id],
+            )
+            return redirect(change_url)
+
+        # GET : formulaire intermediaire
+        # / GET: intermediate form
+        montant_par_defaut = membership.price.prix if membership.price else ""
+        opts = self.model._meta
+        cancel_url = reverse(
+            f"{self.admin_site.name}:{opts.app_label}_{opts.model_name}_change",
+            args=[object_id],
+        )
+        context = {
+            **self.admin_site.each_context(request),
+            "membership": membership,
+            "montant_par_defaut": montant_par_defaut,
+            "moyens_de_paiement": moyens_de_paiement,
+            "opts": opts,
+            "cancel_url": cancel_url,
+            "title": _("Ajouter un paiement"),
+        }
+        return TemplateResponse(request, "admin/membership/ajouter_paiement.html", context)
+
+    @display(description=_("Payment"), ordering="last_contribution")
+    def display_last_contribution(self, instance: Membership):
+        if instance.last_contribution:
+            return instance.last_contribution.strftime("%d/%m/%Y")
+        return "-"
+
+    @display(description=_("End"), ordering="deadline")
+    def display_deadline(self, instance: Membership):
+        if instance.deadline:
+            return instance.deadline.strftime("%d/%m/%Y")
+        return "-"
+
     @display(description=_("Valid"), boolean=True)
     def display_is_valid(self, instance: Membership):
         return instance.is_valid()
@@ -2277,16 +2413,86 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
     @action(
         description=_("Cancel"),
-        permissions=["custom_actions_detail"],
+        url_path="cancel",
+        permissions=["custom_actions_row"],
     )
     def cancel(self, request, object_id):
-        logger.info(object_id)
-        membership = Membership.objects.get(pk=object_id)
+        """
+        GET : affiche une page de confirmation avec choix avoir ou non.
+        POST : annule l'adhesion, et cree un avoir si demande.
+        / GET: shows confirmation page. POST: cancels membership, optionally creates credit note.
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('user', 'price', 'price__product'),
+            pk=object_id,
+        )
+
+        redirect_url = reverse(
+            f"admin:{membership._meta.app_label}_{membership._meta.model_name}_changelist",
+        )
+
+        # Lignes de vente payees/confirmees liees a cette adhesion, sans avoir existant
+        # / Paid/confirmed sale lines linked to this membership, without existing credit note
+        lignes_payees = LigneArticle.objects.filter(
+            membership=membership,
+            status__in=[LigneArticle.VALID, LigneArticle.PAID],
+        ).exclude(
+            credit_notes__isnull=False,
+        ).select_related('pricesold', 'pricesold__productsold')
+
+        if request.method == "GET":
+            context = {
+                **self.admin_site.each_context(request),
+                "opts": self.model._meta,
+                "title": _("Cancel membership"),
+                "membership": membership,
+                "membership_email": membership.user.email if membership.user else "—",
+                "has_paid_lines": lignes_payees.exists(),
+                "paid_lines": lignes_payees,
+                "confirm_url": request.path,
+                "cancel_url": redirect_url,
+            }
+            return TemplateResponse(request, "admin/membership/cancel_confirm.html", context)
+
+        # POST : annuler l'adhesion / Cancel the membership
         membership.archiver = True
         membership.status = Membership.ADMIN_CANCELED
-        # membership.state = Membership.ADMIN_CANCELED
         membership.save()
-        return redirect(request.META["HTTP_REFERER"])
+
+        # Creer les avoirs si demande / Create credit notes if requested
+        with_credit_note = request.POST.get("with_credit_note") == "1"
+        if with_credit_note:
+            avoirs_crees = 0
+            for ligne in lignes_payees:
+                avoir = LigneArticle.objects.create(
+                    pricesold=ligne.pricesold,
+                    qty=-ligne.qty,
+                    amount=ligne.amount,
+                    vat=ligne.vat,
+                    paiement_stripe=ligne.paiement_stripe,
+                    membership=membership,
+                    payment_method=ligne.payment_method,
+                    asset=ligne.asset,
+                    wallet=ligne.wallet,
+                    sale_origin=SaleOrigin.ADMIN,
+                    credit_note_for=ligne,
+                    status=LigneArticle.CREATED,
+                )
+                avoir.status = LigneArticle.CREDIT_NOTE
+                avoir.save()
+                avoirs_crees += 1
+
+            if avoirs_crees:
+                messages.success(request, _("Membership cancelled. %(count)d credit note(s) created.") % {"count": avoirs_crees})
+            else:
+                messages.success(request, _("Membership cancelled. No sale lines to cancel."))
+        else:
+            messages.success(request, _("Membership cancelled."))
+
+        return redirect(redirect_url)
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_custom_actions_detail_permission(self, request, object_id=None):
         return TenantAdminPermissionWithRequest(request)
@@ -2367,12 +2573,70 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
         return f"{obj.pricesold.productsold} - {obj.pricesold}"
 
     # noinspection PyTypeChecker
-    @display(description=_("Status"), label={None: "danger", True: "success"})
+    @display(description=_("Status"), label={None: "danger", True: "success", "warning": "warning"})
     def display_status(self, instance: LigneArticle):
         status = instance.status
         if status in [LigneArticle.VALID, LigneArticle.FREERES]:
             return True, f"{instance.get_status_display()}"
+        if status == LigneArticle.CREDIT_NOTE:
+            return "warning", f"{instance.get_status_display()}"
+        if instance.credit_notes.exists():
+            return "warning", f"{instance.get_status_display()} ⚠"
         return None, f"{instance.get_status_display()}"
+
+    actions_row = ["emettre_avoir"]
+
+    @action(
+        description=_("Credit note"),  # Avoir
+        url_path="emettre_avoir",
+        permissions=["custom_actions_row"],
+    )
+    def emettre_avoir(self, request, object_id):
+        """
+        Cree un avoir (ligne negative) pour annuler comptablement cette vente.
+        / Creates a credit note (negative line) to cancel this sale.
+        """
+        ligne_originale = get_object_or_404(
+            LigneArticle.objects.select_related('pricesold', 'pricesold__productsold'),
+            pk=object_id,
+        )
+
+        redirect_url = request.META.get("HTTP_REFERER", "/admin/")
+
+        # Garde : uniquement sur les lignes VALID ou PAID
+        if ligne_originale.status not in [LigneArticle.VALID, LigneArticle.PAID]:
+            messages.error(request, _("A credit note can only be issued for a confirmed or paid entry."))
+            return redirect(redirect_url)
+
+        # Garde : pas d'avoir si un avoir existe deja
+        if ligne_originale.credit_notes.exists():
+            messages.error(request, _("A credit note already exists for this entry."))
+            return redirect(redirect_url)
+
+        # Creer la ligne avoir / Create the credit note line
+        avoir = LigneArticle.objects.create(
+            pricesold=ligne_originale.pricesold,
+            qty=-ligne_originale.qty,
+            amount=ligne_originale.amount,
+            vat=ligne_originale.vat,
+            paiement_stripe=ligne_originale.paiement_stripe,
+            membership=ligne_originale.membership,
+            payment_method=ligne_originale.payment_method,
+            asset=ligne_originale.asset,
+            wallet=ligne_originale.wallet,
+            sale_origin=SaleOrigin.ADMIN,
+            credit_note_for=ligne_originale,
+            status=LigneArticle.CREATED,
+        )
+        # Declenche la machine a etat / Trigger state machine
+        avoir.status = LigneArticle.CREDIT_NOTE
+        avoir.save()
+
+        messages.success(request, _("Credit note created."))
+        return redirect(redirect_url)
+
+    def has_custom_actions_row_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
@@ -3147,6 +3411,7 @@ class ReservationAddAdmin(ModelForm):
             payment_method=payment_method,
             status=LigneArticle.VALID,
             sale_origin=SaleOrigin.ADMIN,
+            reservation=reservation,
         )
         # envoie à Laboutik
         send_sale_to_laboutik.delay(vente.pk)
@@ -4134,7 +4399,7 @@ class BrevoConfigAdmin(SingletonModelAdmin, ModelAdmin):
             messages.success(request, _(f"Api OK"))
         except ApiException as e:
             brevo_config.last_log = f"{e}"
-            logger.error("ApiException when calling AccountApi->get_account: %s\n" % e)
+            logger.warning("ApiException when calling AccountApi->get_account: %s\n" % e)
             messages.error(request, _(f"Api not OK : {e}"))
         except Exception as e:
             brevo_config.last_log = f"{type(e)} - {e}"

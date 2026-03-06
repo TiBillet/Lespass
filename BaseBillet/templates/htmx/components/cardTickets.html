@@ -65,7 +65,7 @@
                 </legend>
                 <!-- prix -->
                 {% for price in product.prices.all %}
-                    {% if price.adhesion_obligatoire != None %}
+                    {% if price.adhesions_obligatoires.exists %}
                         
                         {% if user.is_authenticated == False %}
                             <!-- non connecté -->
@@ -83,7 +83,7 @@
                             </div>
                         {% else %}
                             <!-- connecté -->
-                            {% if  profile.membership|is_membership:price.adhesion_obligatoire == False %}
+                            {% if  profile.membership|is_membership:price.adhesions_obligatoires == False %}
                                 <!-- je ne suis pas adhérant -->
                                 <div id="tibillet-activation-price-{{ price.uuid }}"
                                      class="d-flex flex-row justify-content-between align-items-center  w-100 mb-3"
@@ -100,14 +100,16 @@
                                         <span class="ms-1">Je m'abonne</span>
                                     </button>
                                     <template id="tibillet-template-adhesion-required-{{ price.uuid }}">
-                                        {% include 'htmx/components/cardMembership.html' with adhesion=price.adhesion_obligatoire product_nominative=product.nominative %}
+                                        {% for adhesion in price.adhesions_obligatoires.all %}
+                                            {% include 'htmx/components/cardMembership.html' with adhesion=adhesion product_nominative=product.nominative %}
+                                        {% endfor %}
                                     </template>
                                 </div>
                             {% endif %}
                         {% endif %}
                     {% endif %}
-                    {#                        {% if price.adhesion_obligatoire == None or price.adhesion_obligatoire in valid_memberships %}#}
-                    {% if price.adhesion_obligatoire == None or profile.membership|is_membership:price.adhesion_obligatoire == True %}
+                    {#                        {% if not price.adhesions_obligatoires.exists or price.adhesions_obligatoires in valid_memberships %}#}
+                    {% if not price.adhesions_obligatoires.exists or profile.membership|is_membership:price.adhesions_obligatoires == True %}
                         <!-- pas d'adhésion obligatoire ou utilisateur possède l'adhésion -->
                         <div class="d-flex flex-row justify-content-between align-items-center w-100 mb-3" role="group"
                              aria-label="groupe interaction tarif {{ price.name }}">
@@ -145,7 +147,7 @@
             </fieldset>
         {% endif %}
         {% for price in product.prices.all %}
-            {% if price.adhesion_obligatoire != None %}
+            {% if price.adhesions_obligatoires.exists %}
                 <!-- position adhésions obligatoire -->
                 <div id="tibillet-adhesion-container-{{ price.uuid }}"></div>
             {% endif %}

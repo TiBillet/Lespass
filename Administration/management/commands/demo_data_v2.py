@@ -58,18 +58,135 @@ class Command(BaseCommand):
                 "des tenants de démo avant réimport. Ne supprime pas les assets ni la configuration."
             ),
         )
+        parser.add_argument(
+            '--quick',
+            action='store_true',
+            help=(
+                "Mode rapide : restaure un dump SQL généré par une exécution précédente (sans --quick). "
+                "Drop + recreate la base puis importe le dump. Nécessite que le dump existe."
+            ),
+        )
 
     def handle(self, *args, **options):
-        # FALC: On va créer des données de démonstration.
+        quick_mode = options.get('quick', False)
+
+        if quick_mode:
+            self._handle_quick(options)
+            return
+
+        # FALC: Mode complet (par défaut).
         # - On prépare une grande liste d'objets (fixtures) pour 5 tenants.
         # - On crée chaque tenant (Client + Domain) si besoin.
         # - Puis, on ajoute les objets (adresse, adhésions, évènements, tarifs…).
         # - On utilise toujours get_or_create → pas de doublons si on relance.
+        self._handle_full(options)
 
+    # Chemin du dump SQL généré par le mode full, utilisé par --quick pour restaurer la base
+    DUMP_PATH = '/DjangoFiles/demo_data.sql.gz'
+
+    def _handle_quick(self, options):
+        """Mode rapide : restaure un dump SQL généré par le mode full (sans --quick)."""
+        import subprocess
+
+        dump_path = self.DUMP_PATH
+        if not os.path.isfile(dump_path):
+            self.stderr.write(self.style.ERROR(
+                f"Dump introuvable : {dump_path}\n"
+                f"Lancez d'abord la commande sans --quick pour générer les données et le dump."
+            ))
+            return
+
+        pg_host = os.environ.get('POSTGRES_HOST', 'postgres')
+        pg_user = os.environ['POSTGRES_USER']
+        pg_password = os.environ['POSTGRES_PASSWORD']
+        pg_db = os.environ['POSTGRES_DB']
+
+        env = {
+            **os.environ,
+            'PGPASSWORD': pg_password,
+            'PGUSER': pg_user,
+            'PGHOST': pg_host,
+        }
+
+        self.stdout.write("Fermeture des connexions Django…")
+        from django.db import connections
+        for conn_name in connections:
+            connections[conn_name].close()
+
+        # 1) Terminer les connexions actives sur la base
+        self.stdout.write(f"Terminaison des connexions actives sur '{pg_db}'…")
+        subprocess.run(
+            ['psql', '-d', 'postgres', '-c',
+             f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{pg_db}' AND pid <> pg_backend_pid();"],
+            env=env, check=False,
+        )
+
+        # 2) Drop + create
+        self.stdout.write(f"Suppression et recréation de la base '{pg_db}'…")
+        subprocess.run(['dropdb', '--if-exists', pg_db], env=env, check=True)
+        subprocess.run(['createdb', pg_db], env=env, check=True)
+
+        # 3) Restauration du dump gzippé
+        self.stdout.write(f"Restauration depuis {dump_path}…")
+        gunzip = subprocess.Popen(['gunzip', '-c', dump_path], stdout=subprocess.PIPE, env=env)
+        psql = subprocess.Popen(
+            ['psql', '-d', pg_db, '--quiet', '--no-psqlrc'],
+            stdin=gunzip.stdout, env=env,
+        )
+        gunzip.stdout.close()
+        psql.communicate()
+
+        if psql.returncode != 0:
+            self.stderr.write(self.style.ERROR(f"Erreur lors de la restauration (code {psql.returncode})."))
+            return
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Base restaurée depuis {dump_path}. Mode --quick terminé."
+        ))
+
+    def _dump_database(self):
+        """Exporte la base complète dans un dump SQL gzippé pour --quick."""
+        import subprocess
+
+        dump_path = self.DUMP_PATH
+        pg_host = os.environ.get('POSTGRES_HOST', 'postgres')
+        pg_user = os.environ['POSTGRES_USER']
+        pg_password = os.environ['POSTGRES_PASSWORD']
+        pg_db = os.environ['POSTGRES_DB']
+
+        env = {
+            **os.environ,
+            'PGPASSWORD': pg_password,
+            'PGUSER': pg_user,
+            'PGHOST': pg_host,
+        }
+
+        self.stdout.write(f"Export de la base '{pg_db}' vers {dump_path}…")
+        try:
+            pg_dump = subprocess.Popen(
+                ['pg_dump', pg_db],
+                stdout=subprocess.PIPE, env=env,
+            )
+            with open(dump_path, 'wb') as f:
+                gzip_proc = subprocess.Popen(
+                    ['gzip'],
+                    stdin=pg_dump.stdout, stdout=f,
+                )
+                pg_dump.stdout.close()
+                gzip_proc.communicate()
+
+            if pg_dump.wait() != 0 or gzip_proc.returncode != 0:
+                self.stderr.write(self.style.ERROR("Erreur lors de l'export du dump SQL."))
+                return
+
+            self.stdout.write(self.style.SUCCESS(
+                f"Dump exporté : {dump_path}. Utilisez --quick pour restaurer rapidement."
+            ))
+        except Exception as e:
+            self.stderr.write(self.style.ERROR(f"Impossible d'exporter le dump : {e}"))
+
+    def _handle_full(self, options):
         # Gros objet JSON de démonstration pour 4 lieux + 1 réseau régional (adhésions uniquement)
-        # Cet objet sera utilisé ultérieurement pour des opérations get_or_create idempotentes.
-        # Les cas couverts: évènement gratuit sans résa, gratuit avec résa, prix libre, payant nominatif avec tarif adhérent,
-        # adhésions prix libre, annuelles et récurrentes, initiatives avec et sans budget participatif.
         fake = Faker('fr_FR')
         fixtures = [
             {
@@ -1291,17 +1408,17 @@ class Command(BaseCommand):
                                 'subscription_type': getattr(Price, (pr.get('subscription_type') or 'NA').upper(), Price.NA),
                             }
                             adhesion_name = pr.get('adhesion_obligatoire')
-                            if adhesion_name:
-                                try:
-                                    adhesion_prod = Product.objects.get(name=adhesion_name)
-                                    defaults['adhesion_obligatoire'] = adhesion_prod
-                                except Product.DoesNotExist:
-                                    logger.warning(f"Adhésion requise '{adhesion_name}' introuvable pour '{p.name}'.")
-                            Price.objects.get_or_create(
+                            price_obj, _created = Price.objects.get_or_create(
                                 product=p,
                                 name=pr['name'],
                                 defaults=defaults,
                             )
+                            if adhesion_name and _created:
+                                try:
+                                    adhesion_prod = Product.objects.get(name=adhesion_name)
+                                    price_obj.adhesions_obligatoires.add(adhesion_prod)
+                                except Product.DoesNotExist:
+                                    logger.warning(f"Adhésion requise '{adhesion_name}' introuvable pour '{p.name}'.")
                         event_obj.products.add(p)
 
                         # Champs de formulaire optionnels
@@ -1777,3 +1894,6 @@ class Command(BaseCommand):
                         user.save(update_fields=['client_source'])
         except Exception as e:
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
+
+        # Export du dump SQL pour --quick
+        self._dump_database()
