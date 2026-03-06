@@ -76,42 +76,79 @@
             </div>
             
             <!-- =============================================================
-                 COLONNE DROITE : Logo et carte
+                 COLONNE DROITE : Logo/badge et carte alignés verticalement
                  ============================================================= -->
             <div class="col-12 col-lg-6">
                 
-                <!-- LOGO + DATES -->
-                <div class="text-end mb-4 position-relative">
-                    <!-- Logo principal -->
-                    <img src="{% static 'faire_festival/image/logo.png' %}" 
-                         alt="Faire Festival" 
-                         class="img-fluid"
-                         style="max-height: 150px;">
+                <!-- Conteneur pour aligner logo et carte verticalement -->
+                <div class="logo-carte-container">
                     
-                    <!-- Badge dates positionné à droite du logo avec rotation -->
-                    <div class="badge-dates">
-                        <img src="{% static 'faire_festival/image/datehorizon.png' %}" 
-                             alt="{% translate '28-30 Mai 2026' %}" 
-                             class="img-fluid">
+                    <!-- LOGO + DATES -->
+                    <div class="text-center position-relative">
+                        <!-- Logo principal -->
+                        <img src="{% static 'faire_festival/image/logo.png' %}" 
+                             alt="Faire Festival" 
+                             class="img-fluid"
+                             style="max-height: 150px;">
+                        
+                        <!-- Badge dates positionné à droite du logo avec rotation -->
+                        <div class="badge-dates">
+                            <img src="{% static 'faire_festival/image/datehorizon.png' %}" 
+                                 alt="{% translate '28-30 Mai 2026' %}" 
+                                 class="img-fluid">
+                        </div>
                     </div>
-                </div>
+                    
+                    <!-- CARTE -->
+                    <div class="w-100">
+                        <img src="{% static 'faire_festival/image/carte.png' %}" 
+                             alt="{% translate 'Carte du Faire Festival' %}" 
+                             class="img-fluid w-100">
+                    </div>
                 
-                <!-- CARTE (avec espace pour le badge dates) -->
-                <div class="mt-5 pt-3">
-                    <img src="{% static 'faire_festival/image/carte.png' %}" 
-                         alt="{% translate 'Carte du Faire Festival' %}" 
-                         class="img-fluid w-100">
-                </div>
+                
+                </div><!-- Fin conteneur flex -->
                 
                 <!-- ADRESSE -->
-                <div class="text-center">
-                    <span class="badge-adresse">
+                <div class="text-center badge-adresse-container">
+                    <span class="badge-adresse text-white">
                         {% translate 'LA CITÉ - 55 AV. LOUIS BRÉGUET, 31400 TOULOUSE' %}
                     </span>
                 </div>
                 
             </div>
             
+        </div>
+        
+    </div>
+</section>
+
+<!-- =====================================================================
+     PAGE INFOS PRATIQUES - Deuxième partie (grid-1) : Le plan du festival
+     ===================================================================== -->
+
+<section class="container-fluid py-5 conteneur-principal">
+    <div class="container">
+        
+        <!-- GRID 1 COLONNE -->
+        <div class="row">
+            <div class="col-12">
+                
+                <!-- BADGE -->
+                <div>
+                    <span class="badge-festival horaire-texte">{% translate 'Se repérer dans le festival' %}</span>
+                </div>
+                
+                
+                <!-- PLAN -->
+                <div class="plan-container text-center m-0">
+                    <img src="{% static 'faire_festival/image/plan-festival.png' %}" 
+                         alt="{% translate 'Plan du Faire Festival' %}" 
+                         class="img-fluid"
+                         style="max-width: 100%; height: auto;">
+                </div>
+                
+            </div>
         </div>
         
     </div>

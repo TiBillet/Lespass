@@ -818,13 +818,49 @@
 .skin-faire-festival .badge-dates {
     position: absolute;
     top: 100%;
-    right: 0;
+    right: -1px;
     margin-top: -33px;
     transform: rotate(-5deg);
 }
 
 .skin-faire-festival .badge-dates img {
-    max-height: 55px;
+    max-height: 50px;
+}
+
+/* Conteneur pour centrer logo et carte verticalement */
+.skin-faire-festival .logo-carte-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+}
+
+/* Badge adresse avec marge en haut */
+.skin-faire-festival .badge-adresse-container {
+    margin-top: 3rem;
+}
+
+/* Titre du plan du festival */
+.skin-faire-festival .titre-plan {
+    font-family: var(--police-titre);
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--couleur-bleu-vif);
+    text-transform: uppercase;
+    line-height: 1.2;
+    margin-bottom: 2rem;
+}
+
+/* Conteneur du plan */
+.skin-faire-festival .plan-container {
+    margin-top: 2rem;
+    width: 100%;
+}
+
+.skin-faire-festival .plan-container img {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
 }
 
 /* ==========================================================================
