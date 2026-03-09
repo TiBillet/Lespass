@@ -48,7 +48,6 @@
                 {% endif %}
             </h1>
 
-            <div id="description_membership_page">{{config.description_membership_page | safe }}</div>
 
             <!-- Description introductive (si disponible dans la config) -->
             {% if config.short_description %}
@@ -58,6 +57,8 @@
             {% endif %}
         </div>
     </div>
+
+    <div id="description_membership_page">{{config.description_membership_page | safe }}</div>
 
     <!-- ===================================================================
          GRILLE DES CARTES DE PRODUITS (Adhésions / Billets)
