@@ -63,7 +63,7 @@
                    hx-get="{% url 'event-list' %}"
                    hx-target="body"
                    hx-push-url="true">
-                <p class="mb-0">Découvrir le programme</p>
+                <p class="mb-0">{% translate "Découvrir le programme" %}</p>
                 </a>
             </div>
 
@@ -105,7 +105,7 @@
                     <video autoplay loop muted playsinline class="w-100" style="max-height: 380px; object-fit: cover;">
                         <source src="{% static 'faire_festival/image/motion-table.mp4' %}" type="video/mp4">
                         <!-- Fallback si la vidéo ne charge pas -->
-                        Votre navigateur ne supporte pas la lecture vidéo.
+                        {% translate "Votre navigateur ne supporte pas la lecture vidéo." %}
                     </video>
                 </div>
             </div>
@@ -150,7 +150,7 @@
                 <!-- ========================================================
                      GRILLE DES JOURS (Jour 01, 02, 03)
                      ======================================================== -->
-                <div class="row g-3">
+                <div class="row g-3 justify-content-center text-center mb-5">
 
                     <!-- Carte Jour 01 -->
                     <div class="col-md-4">
