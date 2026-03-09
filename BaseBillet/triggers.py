@@ -186,8 +186,12 @@ class TRIGGER_LigneArticlePaid_ActionByCategorie:
         logger.info(f"    TRIGGER_A ADHESION PAID -> envoi à Fedow")
         # L'adhésion possède désormais une transaction fedow associé
         # Attention, réalise membership.save()
-        fedowAPI = FedowAPI()
-        serialized_transaction = fedowAPI.membership.create(membership=membership)
+        # Un échec Fedow ne doit jamais bloquer la validation de l'adhésion
+        try:
+            fedowAPI = FedowAPI()
+            serialized_transaction = fedowAPI.membership.create(membership=membership)
+        except Exception as exc:
+            logger.error(f"TRIGGER_A Fedow membership.create ERREUR (non bloquant) : {exc}")
 
         # Optional Fedow reward to user wallet (price setting)
         refill_from_lespass_to_user_wallet_from_price_solded.delay(ligne_article.pk)
