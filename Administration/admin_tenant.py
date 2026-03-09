@@ -1785,7 +1785,7 @@ class PriceChangeForm(ModelForm):
         return recurring_payment
 
     def clean_prix(self):
-        cleaned_data = self.cleaned_data  # récupère les donnée au fur et a mesure des validation, attention a l'ordre des fields
+        cleaned_data = self.cleaned_data
         prix = cleaned_data.get('prix')
         if 0 < prix < 1:
             raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
