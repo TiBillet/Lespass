@@ -975,6 +975,27 @@ class TvaAdmin(ModelAdmin):
 
 
 @admin.register(Product, site=staff_admin_site)
+class ProductArchiveFilter(admin.SimpleListFilter):
+    title = _("Archivé")
+    parameter_name = "archive"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("yes", _("Archivés")),
+            ("all", _("Tous")),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value is None:
+            return queryset.exclude(archive=True)
+        if value == "yes":
+            return queryset.filter(archive=True)
+        if value == "all":
+            return queryset
+        return queryset
+
+
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
@@ -1020,7 +1041,7 @@ class ProductAdmin(ModelAdmin):
     # autocomplete_fields = [
     #     "option_generale_radio", "option_generale_checkbox",
     # ]
-    list_filter = ['publish', 'categorie_article']
+    list_filter = ['publish', 'categorie_article', ProductArchiveFilter]
     search_fields = ['name']
 
     # Pour les bouton en haut de la vue change
@@ -1182,7 +1203,7 @@ class ProductAdmin(ModelAdmin):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
-        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
+        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
 
     def get_search_results(self, request, queryset, search_term):
         """
