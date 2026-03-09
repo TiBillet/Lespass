@@ -1,0 +1,78 @@
+{% load i18n unfold %}
+
+{# ----------------------------------------------------------------------- #}
+{# Template affiche au-dessus de la liste des federations.                  #}
+{# Montre les invitations en attente pour le tenant courant.                #}
+{# Template displayed above the federation list.                            #}
+{# Shows pending invitations for the current tenant.                        #}
+{# ----------------------------------------------------------------------- #}
+
+{% if invitations_en_attente and invitations_en_attente|length %}
+<div class="p-4 flex flex-col gap-4" data-testid="federation-invitations-panel">
+
+    {% component "unfold/components/card.html" with title=_("Invitations a rejoindre une federation") %}
+        <div class="flex flex-col divide-y divide-base-200 dark:divide-base-700">
+            {% for federation in invitations_en_attente %}
+                <div class="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                     data-testid="federation-invitation-{{ federation.pk }}">
+
+                    {# Informations sur la federation / Federation info #}
+                    <div class="flex flex-col gap-1 min-w-0">
+                        <span class="font-semibold text-base text-font-important-light dark:text-font-important-dark">
+                            {{ federation.name }}
+                        </span>
+
+                        {% if federation.description %}
+                            <span class="text-sm text-font-subtle-light dark:text-font-subtle-dark">
+                                {{ federation.description|truncatewords:20 }}
+                            </span>
+                        {% endif %}
+
+                        <div class="flex flex-wrap gap-3 text-xs text-base-500 dark:text-base-400 mt-1">
+                            {# Qui invite / Who invites #}
+                            {% if federation.created_by %}
+                                <span>
+                                    <i class="bi bi-person-fill" aria-hidden="true"></i>
+                                    {% trans "Invite par" %} <strong>{{ federation.created_by.name }}</strong>
+                                </span>
+                            {% endif %}
+
+                            {# Nombre de membres actuels / Current member count #}
+                            <span>
+                                <i class="bi bi-people-fill" aria-hidden="true"></i>
+                                {{ federation.tenants.count }}
+                                {% trans "membre(s)" %}
+                            </span>
+
+                            {# Assets partages / Shared assets #}
+                            {% with assets_list=federation.assets.all %}
+                                {% if assets_list %}
+                                    <span>
+                                        <i class="bi bi-coin" aria-hidden="true"></i>
+                                        {% for asset in assets_list %}
+                                            {{ asset.name }}{% if not forloop.last %}, {% endif %}
+                                        {% endfor %}
+                                    </span>
+                                {% endif %}
+                            {% endwith %}
+                        </div>
+                    </div>
+
+                    {# Bouton accepter / Accept button #}
+                    <form method="post"
+                          action="{% url 'staff_admin:federation-accept-invitation' federation.pk %}"
+                          class="flex-shrink-0">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="font-medium flex items-center gap-2 px-4 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                                data-testid="btn-accept-federation-{{ federation.pk }}">
+                            <i class="bi bi-check-lg" aria-hidden="true"></i>
+                            {% trans "Accepter l'invitation" %}
+                        </button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% endcomponent %}
+</div>
+{% endif %}

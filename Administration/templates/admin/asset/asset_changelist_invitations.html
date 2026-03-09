@@ -1,0 +1,65 @@
+{% load i18n unfold %}
+
+{# ----------------------------------------------------------------------- #}
+{# Template affiche au-dessus de la changelist des assets fedow_core.       #}
+{# Montre les invitations d'assets en attente pour le tenant courant.       #}
+{# Template displayed above the fedow_core asset changelist.                #}
+{# Shows pending asset invitations for the current tenant.                  #}
+{# ----------------------------------------------------------------------- #}
+
+{% if invitations_asset_en_attente and invitations_asset_en_attente|length %}
+<div class="p-4 flex flex-col gap-4" data-testid="asset-invitations-panel">
+
+    {% component "unfold/components/card.html" with title=_("Invitations de partage d'assets") %}
+        <div class="flex flex-col divide-y divide-base-200 dark:divide-base-700">
+            {% for asset in invitations_asset_en_attente %}
+                <div class="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                     data-testid="asset-invitation-{{ asset.pk }}">
+
+                    {# Informations sur l'asset / Asset info #}
+                    <div class="flex flex-col gap-1 min-w-0">
+                        <span class="font-semibold text-base text-font-important-light dark:text-font-important-dark">
+                            {{ asset.name }}
+                        </span>
+
+                        <div class="flex flex-wrap gap-3 text-xs text-base-500 dark:text-base-400 mt-1">
+                            {# Categorie / Category #}
+                            <span>
+                                <i class="bi bi-coin" aria-hidden="true"></i>
+                                {{ asset.get_category_display }}
+                            </span>
+
+                            {# Code devise / Currency code #}
+                            <span>
+                                <i class="bi bi-currency-exchange" aria-hidden="true"></i>
+                                {{ asset.currency_code }}
+                            </span>
+
+                            {# Lieu createur / Creator venue #}
+                            {% if asset.tenant_origin %}
+                                <span>
+                                    <i class="bi bi-building" aria-hidden="true"></i>
+                                    {% trans "Cree par" %} <strong>{{ asset.tenant_origin.name }}</strong>
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {# Bouton accepter / Accept button #}
+                    <form method="post"
+                          action="{% url 'staff_admin:asset-accept-invitation' asset.pk %}"
+                          class="flex-shrink-0">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="font-medium flex items-center gap-2 px-4 py-2 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                                data-testid="btn-accept-asset-{{ asset.pk }}">
+                            <i class="bi bi-check-lg" aria-hidden="true"></i>
+                            {% trans "Accepter le partage" %}
+                        </button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% endcomponent %}
+</div>
+{% endif %}

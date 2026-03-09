@@ -400,18 +400,20 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
     # Est ici pour éviter les double imports
     if instance.categorie_article in [Product.ADHESION, Product.BADGE]:
         # vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
-        fedow_config = FedowConfig.get_solo()
-        fedow_asset = AssetFedow(fedow_config=fedow_config)
-        if not instance.archive and instance.publish:
-            # Si l'adhésion n'est pas archivée et est publiée, on vérifie qu'elle existe bien dans Fedow.
-            # On ne crée pas d'asset pour les produits non publiés (ex: duplicatas en brouillon)
-            # pour éviter les conflits de nom côté Fedow.
-            asset, created = fedow_asset.get_or_create_membership_asset(instance)
-            logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
+        # Un échec Fedow ne doit jamais bloquer la sauvegarde du produit
+        try:
+            fedow_config = FedowConfig.get_solo()
+            fedow_asset = AssetFedow(fedow_config=fedow_config)
+            if not instance.archive:
+                # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
+                asset, created = fedow_asset.get_or_create_membership_asset(instance)
+                logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
 
-        if instance.archive:
-            # L'instance est archivé, on le notifie à Fedow :
-            fedow_asset.archive_asset(instance.uuid)
+            if instance.archive:
+                # L'instance est archivé, on le notifie à Fedow :
+                fedow_asset.archive_asset(instance.uuid)
+        except Exception as exc:
+            logger.error(f"send_membership_product_to_fedow ERREUR Fedow (non bloquant) : {exc}")
 
 
 @receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic

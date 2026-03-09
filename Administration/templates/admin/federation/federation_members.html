@@ -1,0 +1,57 @@
+{% load i18n unfold %}
+
+{# ----------------------------------------------------------------------- #}
+{# Template affiche au-dessus du formulaire de modification de federation.   #}
+{# Montre la liste des membres avec boutons "Exclure" pour le createur.     #}
+{# Template displayed above the federation change form.                      #}
+{# Shows the members list with "Remove" buttons for the creator.            #}
+{# ----------------------------------------------------------------------- #}
+
+{% if membres_de_la_federation %}
+<div class="p-4 flex flex-col gap-4" data-testid="federation-members-panel">
+
+    {% component "unfold/components/card.html" with title=_("Membres de la federation") %}
+        <div class="flex flex-col divide-y divide-base-200 dark:divide-base-700">
+            {% for membre in membres_de_la_federation %}
+                <div class="py-3 flex flex-row items-center justify-between gap-3"
+                     data-testid="federation-member-{{ membre.pk }}">
+
+                    {# Nom du lieu membre / Member venue name #}
+                    <div class="flex items-center gap-2 min-w-0">
+                        <i class="bi bi-building" aria-hidden="true"></i>
+                        <span class="font-medium text-font-important-light dark:text-font-important-dark">
+                            {{ membre.name }}
+                        </span>
+
+                        {# Badge "Createur" pour le tenant d'origine / "Creator" badge for origin tenant #}
+                        {% if federation.created_by_id == membre.pk %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200"
+                                  data-testid="badge-creator-{{ membre.pk }}">
+                                {% trans "Createur" %}
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    {# Bouton "Exclure" — visible uniquement pour le createur, #}
+                    {# et pas sur lui-meme.                                     #}
+                    {# "Remove" button — visible only for the creator,          #}
+                    {# and not on themselves.                                    #}
+                    {% if tenant_est_createur and federation.created_by_id != membre.pk %}
+                        <form method="post"
+                              action="{% url 'staff_admin:federation-remove-member' federation.pk membre.pk %}"
+                              class="flex-shrink-0">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="font-medium flex items-center gap-1 px-3 py-1.5 rounded-default justify-center whitespace-nowrap cursor-pointer text-sm border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                                    data-testid="btn-remove-member-{{ membre.pk }}">
+                                <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                {% trans "Exclure" %}
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endcomponent %}
+</div>
+{% endif %}
