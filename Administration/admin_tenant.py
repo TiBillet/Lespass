@@ -974,7 +974,6 @@ class TvaAdmin(ModelAdmin):
         return False
 
 
-@admin.register(Product, site=staff_admin_site)
 class ProductArchiveFilter(admin.SimpleListFilter):
     title = _("Archivé")
     parameter_name = "archive"
@@ -996,6 +995,7 @@ class ProductArchiveFilter(admin.SimpleListFilter):
         return queryset
 
 
+@admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
