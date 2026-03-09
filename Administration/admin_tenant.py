@@ -1430,7 +1430,7 @@ class PriceChangeForm(ModelForm):
                 self.fields['adhesions_obligatoires'].widget.can_add_related = False
             elif instance.product.categorie_article == Product.ADHESION:  # si c'est un produit qui n'est pas l'adhésion
                 self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
-                self.fields['adhesions_obligatoires'].widget = HiddenInput()
+                self.fields['adhesions_obligatoires'].widget = forms.MultipleHiddenInput()
 
         except AttributeError as e:
             # NoneType' object has no attribute 'product
