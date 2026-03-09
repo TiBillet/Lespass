@@ -183,7 +183,6 @@ def get_context(request):
              'icon': 'person-badge'},
         ]
     }
-
     navbar: list = context["main_nav"]
 
     # Infos pratiques : uniquement pour le thème Faire Festival
