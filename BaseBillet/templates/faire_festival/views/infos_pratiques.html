@@ -127,7 +127,7 @@
      PAGE INFOS PRATIQUES - Deuxième partie (grid-1) : Le plan du festival
      ===================================================================== -->
 
-<section class="container-fluid conteneur-principal">
+<section class="container-fluid conteneur-principal pb-0 mb-0" style="min-height: auto;">
     <div class="container">
         
         <!-- GRID 1 COLONNE -->
@@ -141,10 +141,10 @@
                 
                 
                 <!-- PLAN -->
-                <div class="plan-container text-center m-0">
+                <div class="plan-container text-center m-0 pb-0 mb-0">
                     <img src="{% static 'faire_festival/image/plan-festival.png' %}" 
                          alt="{% translate 'Plan du Faire Festival' %}" 
-                         class="img-fluid"
+                         class="img-fluid d-block"
                          style="max-width: 100%; height: auto;">
                 </div>
                 
@@ -158,15 +158,15 @@
      PAGE INFOS PRATIQUES - Troisième partie (grid-2) : FAQ et informations
      ===================================================================== -->
 
-<section class="container-fluid conteneur-principal">
+<section class="container-fluid conteneur-principal pt-0 mb-5">
     <div class="container">
         
-                   <!-- BADGE SECTION -->
-                   <div class="row mb-5">
-                    <div class="col-12">
-                        <span class="badge-festival horaire-texte badge-faq">{% translate 'Foire aux questions' %}</span>
-                    </div>
-                </div>
+        <!-- BADGE SECTION -->
+        <div class="row mb-5 mt-3">
+            <div class="col-12">
+                <span class="badge-festival horaire-texte badge-faq">{% translate 'Foire aux questions' %}</span>
+            </div>
+        </div>
         
         <!-- GRID 2 COLONNES -->
         <div class="row g-5">
