@@ -9,8 +9,11 @@
      PAGE INFOS PRATIQUES - Première partie (grid-2)
      ===================================================================== -->
 
+
 <section class="container-fluid py-5 conteneur-principal">
+   
     <div class="container">
+
         
         <!-- GRID 2 COLONNES -->
         <div class="row g-5">
@@ -21,12 +24,13 @@
             <div class="col-12 col-lg-6">
                 
                 <!-- TITRE -->
-                <div class="mb-4">
+                <div>
                     <span class="badge-festival horaire-texte">{% translate 'Infos pratiques' %}</span>
                 </div>
+                <div class="mb-2">{{config.description_membership_page | safe }}</div>
                 
                 <!-- HORAIRES -->
-                <div class="mb-5">
+                <div class="mb-4">
                     <p class="horaire-texte">
                         {% translate 'JEUDI & VENDREDI' %} 09h → 21h
                     </p>

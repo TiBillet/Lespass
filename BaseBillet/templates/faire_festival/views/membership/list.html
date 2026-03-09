@@ -48,6 +48,8 @@
                 {% endif %}
             </h1>
 
+            <div>{{config.description_membership_page | safe }}</div>
+
             <!-- Description introductive (si disponible dans la config) -->
             {% if config.short_description %}
                 <p class="texte-bleu police-mono mt-3">
@@ -141,7 +143,7 @@
                        data-bs-toggle="offcanvas"
                        data-bs-target="#subscribePanel"
                        aria-controls="subscribePanel"
-                       data-testid="membership-open-{{ product.uuid }}">
+                        data-tibi-testid="membership-open-{{ product.uuid }}">
                         {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                     </button>
 
