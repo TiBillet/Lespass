@@ -181,7 +181,7 @@
                                 <!-- INFOS -->
                                 <div class="infos-evenement d-flex justify-content-between">
                                     <span>→ {{ event.datetime|date:"l d F" }}</span>
-                                    <span>→ {{ event.datetime|date:"H" }}h{% if event.end_datetime %} - {{ event.end_datetime|date:"H" }}h{% endif %}</span>
+                                    <span>→ {{ event.datetime|date:"H:i" }}h{% if event.end_datetime %} - {{ event.end_datetime|date:"H:i" }}h{% endif %}</span>
                                 </div>
                             </div>
 
