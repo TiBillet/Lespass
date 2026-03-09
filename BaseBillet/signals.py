@@ -402,8 +402,10 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
         # vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
         fedow_config = FedowConfig.get_solo()
         fedow_asset = AssetFedow(fedow_config=fedow_config)
-        if not instance.archive:
-            # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
+        if not instance.archive and instance.publish:
+            # Si l'adhésion n'est pas archivée et est publiée, on vérifie qu'elle existe bien dans Fedow.
+            # On ne crée pas d'asset pour les produits non publiés (ex: duplicatas en brouillon)
+            # pour éviter les conflits de nom côté Fedow.
             asset, created = fedow_asset.get_or_create_membership_asset(instance)
             logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
 
