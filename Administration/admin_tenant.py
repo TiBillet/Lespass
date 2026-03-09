@@ -1503,6 +1503,12 @@ class PriceAdmin(ModelAdmin):
         }),
     )
 
+    def response_change(self, request, obj):
+        # Après sauvegarde d'un tarif, rediriger vers la page du produit parent
+        from django.urls import reverse
+        product_url = reverse("admin:BaseBillet_product_change", args=[obj.product.pk])
+        return redirect(product_url)
+
     def has_delete_permission(self, request, obj=None):
         return False
 
