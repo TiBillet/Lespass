@@ -1503,6 +1503,16 @@ class PriceAdmin(ModelAdmin):
         }),
     )
 
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Breadcrumb : afficher "Produits > [nom du produit]" au lieu de "Tarifs > [nom du tarif]"
+        extra_context = extra_context or {}
+        if object_id:
+            price = Price.objects.select_related('product').filter(pk=object_id).first()
+            if price:
+                extra_context['opts'] = Product._meta
+                extra_context['original'] = price.product
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
     def response_change(self, request, obj):
         # Après sauvegarde d'un tarif, rediriger vers la page du produit parent
         from django.urls import reverse
