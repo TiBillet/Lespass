@@ -48,8 +48,6 @@
                 {% endif %}
             </h1>
 
-            <div class="mb-4">{{config.description_membership_page | safe }}</div>
-
             <!-- Description introductive (si disponible dans la config) -->
             {% if config.short_description %}
                 <p class="texte-bleu police-mono mt-3">
@@ -59,6 +57,35 @@
         </div>
     </div>
 
+    <!-- ===================================================================
+         DESCRIPTION DE LA PAGE D'ADHÉSION (Liste déroulante)
+         Affiche la description complète dans un accordéon Bootstrap
+         =================================================================== -->
+    {% if config.description_membership_page %}
+        <div class="mb-4">
+            <div class="accordion" id="accordionDescriptionMembership">
+                <div class="accordion-item border-0 bg-transparent">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed bg-white bordure-epaisse"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapseDescriptionMembership"
+                                aria-expanded="false"
+                                aria-controls="collapseDescriptionMembership">
+                            {% translate 'More information about subscriptions' %}
+                        </button>
+                    </h2>
+                    <div id="collapseDescriptionMembership"
+                         class="accordion-collapse collapse"
+                         data-bs-parent="#accordionDescriptionMembership">
+                        <div class="accordion-body bg-white bordure-epaisse mt-2">
+                            {{ config.description_membership_page | safe }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
     <!-- ===================================================================
          GRILLE DES CARTES DE PRODUITS (Adhésions / Billets)
          Affiche les différents produits disponibles à l'achat
