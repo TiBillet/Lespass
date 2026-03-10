@@ -59,30 +59,21 @@
 
     <!-- ===================================================================
          DESCRIPTION DE LA PAGE D'ADHÉSION (Liste déroulante)
-         Affiche la description complète dans un accordéon Bootstrap
+         Affiche la description complète dans un collapse Bootstrap simple
          =================================================================== -->
     {% if config.description_membership_page %}
         <div class="mb-4">
-            <div class="accordion" id="accordionDescriptionMembership">
-                <div class="accordion-item border-0 bg-transparent">
-                    <h2 class="accordion-header">
-                        <button class="accordion-button collapsed bg-white bordure-epaisse"
-                                type="button"
-                                data-bs-toggle="collapse"
-                                data-bs-target="#collapseDescriptionMembership"
-                                aria-expanded="false"
-                                aria-controls="collapseDescriptionMembership">
-                            {% translate 'More information about subscriptions' %}
-                        </button>
-                    </h2>
-                    <div id="collapseDescriptionMembership"
-                         class="accordion-collapse collapse"
-                         data-bs-parent="#accordionDescriptionMembership">
-                        <div class="accordion-body bg-white bordure-epaisse mt-2">
-                            {{ config.description_membership_page | safe }}
-                        </div>
-                    </div>
-                </div>
+            <button class="btn bg-white bordure-epaisse w-100 text-start d-flex justify-content-between align-items-center"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#collapseDescriptionMembership"
+                    aria-expanded="false">
+                {% translate "Plus d'informations sur le Faire Festival"%}
+                <i class="bi bi-chevron-down"></i>
+            </button>
+            
+            <div id="collapseDescriptionMembership" class="collapse mt-2">
+                {{ config.description_membership_page | safe }}
             </div>
         </div>
     {% endif %}
