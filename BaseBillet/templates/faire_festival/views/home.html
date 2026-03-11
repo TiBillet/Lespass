@@ -102,9 +102,12 @@
             <div class="col-md-5 mb-4 mb-md-0 bordure-epaisse">
                 <div class="h-100 d-flex align-items-center justify-content-center p-2">
                     <!-- Vidéo statique motion-table qui tourne en boucle -->
-                    <video autoplay loop lazy loading  muted playsinline class="w-100" style="max-height: 380px; object-fit: cover;">
-                        <source src="{% static 'faire_festival/image/motion-table.mp4' %}" type="video/mp4">
-                        <!-- Fallback si la vidéo ne charge pas -->
+                    <!-- preload="none" empêche le téléchargement immédiat (fix blocage Firefox mobile) -->
+                    <!-- IntersectionObserver charge la vidéo quand elle entre dans le viewport -->
+                    <video loop muted playsinline preload="none"
+                           class="w-100 video-lazy"
+                           style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);"
+                           data-src="{% static 'faire_festival/image/motion-table.mp4' %}">
                         {% translate "Votre navigateur ne supporte pas la lecture vidéo." %}
                     </video>
                 </div>
@@ -207,4 +210,47 @@
 
 </main>
 
-{% endblock %}
+{% endblock main %}
+
+{% block scripts %}
+<script>
+/* Lazy-load des vidéos : charge le src uniquement quand visible dans le viewport */
+document.addEventListener("DOMContentLoaded", function () {
+    const videos = document.querySelectorAll("video.video-lazy");
+    if (!videos.length) return;
+
+    if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                const video = entry.target;
+                const src = video.getAttribute("data-src");
+                if (!src) return;
+                const source = document.createElement("source");
+                source.src = src;
+                source.type = "video/mp4";
+                video.appendChild(source);
+                video.load();
+                video.play();
+                video.removeAttribute("data-src");
+                observer.unobserve(video);
+            });
+        }, {rootMargin: "200px"});
+
+        videos.forEach(function (video) { observer.observe(video); });
+    } else {
+        /* Fallback navigateurs sans IntersectionObserver : chargement direct */
+        videos.forEach(function (video) {
+            const src = video.getAttribute("data-src");
+            if (!src) return;
+            const source = document.createElement("source");
+            source.src = src;
+            source.type = "video/mp4";
+            video.appendChild(source);
+            video.load();
+            video.play();
+        });
+    }
+});
+</script>
+{% endblock scripts %}

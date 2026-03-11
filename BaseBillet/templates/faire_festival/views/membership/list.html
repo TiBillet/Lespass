@@ -58,23 +58,20 @@
     </div>
 
     <!-- ===================================================================
-         DESCRIPTION DE LA PAGE D'ADHÉSION (Liste déroulante)
-         Affiche la description complète dans un collapse Bootstrap simple
+         DESCRIPTION DE LA PAGE D'ADHÉSION
+         Affichée en entier si courte, tronquée avec "Lire la suite" si longue
          =================================================================== -->
     {% if config.description_membership_page %}
-        <div class="mb-4">
-            <button class="btn bg-white bordure-epaisse w-100 text-start d-flex justify-content-between align-items-center"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#collapseDescriptionMembership"
-                    aria-expanded="false">
-                {% translate "Plus d'informations sur le Faire Festival"%}
-                <i class="bi bi-chevron-down"></i>
-            </button>
-            
-            <div id="collapseDescriptionMembership" class="collapse mt-2">
+        <div class="mb-4 description-membership-wrapper">
+            <div class="description-membership-content bordure-epaisse bg-white p-4"
+                 id="descriptionMembershipContent">
                 {{ config.description_membership_page | safe }}
             </div>
+            <button class="btn bg-white bordure-epaisse w-100 text-center mt-2 texte-bleu police-mono d-none"
+                    id="descriptionMembershipToggle"
+                    type="button">
+                {% translate "Lire la suite" %} <i class="bi bi-chevron-down"></i>
+            </button>
         </div>
     {% endif %}
     <!-- ===================================================================
@@ -279,4 +276,52 @@
 
 </main>
 
-{% endblock %}
+{% endblock main %}
+
+{% block scripts %}
+<style>
+    .description-membership-content.is-truncated {
+        max-height: 250px;
+        overflow: hidden;
+        position: relative;
+    }
+    .description-membership-content.is-truncated::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(transparent, white);
+        pointer-events: none;
+    }
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const content = document.getElementById("descriptionMembershipContent");
+    const toggle = document.getElementById("descriptionMembershipToggle");
+    if (!content || !toggle) return;
+
+    /* Seuil en px — environ 10-12 lignes de texte */
+    const SEUIL = 250;
+
+    if (content.scrollHeight > SEUIL) {
+        content.classList.add("is-truncated");
+        toggle.classList.remove("d-none");
+
+        toggle.addEventListener("click", function () {
+            const isTruncated = content.classList.contains("is-truncated");
+            if (isTruncated) {
+                content.classList.remove("is-truncated");
+                content.style.maxHeight = content.scrollHeight + "px";
+                toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up"></i>';
+            } else {
+                content.style.maxHeight = "";
+                content.classList.add("is-truncated");
+                toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down"></i>';
+            }
+        });
+    }
+});
+</script>
+{% endblock scripts %}
