@@ -107,6 +107,11 @@
     border-radius: 20px;
 }
 
+/* Bords très légèrement courbés sur le bouton menu burger mobile */
+.skin-faire-festival .navbar-toggler.bordure-epaisse {
+    border-radius: 7px;
+}
+
 .skin-faire-festival .bordure-bas-epaisse {
     border-bottom: var(--epaisseur-bordure) solid var(--couleur-blanc) !important;
 }
