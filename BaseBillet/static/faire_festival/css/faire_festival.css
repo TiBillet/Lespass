@@ -104,6 +104,12 @@
    ========================================================================== */
 .skin-faire-festival .bordure-epaisse {
     border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+    border-radius: 20px;
+}
+
+/* Bords très légèrement courbés sur le bouton menu burger mobile */
+.skin-faire-festival .navbar-toggler.bordure-epaisse {
+    border-radius: 7px;
 }
 
 .skin-faire-festival .bordure-bas-epaisse {
@@ -426,7 +432,7 @@
     background-color: var(--couleur-blanc);
     border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
     border-radius: 20px;
-    padding: 1.5rem;
+    padding: 1.5rem 1rem;
     height: 100%;
     display: flex;
     flex-direction: column;
@@ -444,7 +450,7 @@
 /* --- Image de l'événement (Placeholder ou vraie image) - Ratio 4:3 via Bootstrap --- */
 .skin-faire-festival .image-evenement {
     background-color: var(--couleur-jaune-principal);
-    border: 1px solid var(--couleur-bleu-vif);
+    border: 3px solid var(--couleur-bleu-vif);
     margin-bottom: 1rem;
     border-radius: 10px;
     overflow: hidden;
@@ -482,12 +488,14 @@
 
 /* --- Titre de l'événement --- */
 .skin-faire-festival .titre-evenement {
-    font-family: var(--police-titre);
+    font-family: var(--police-mono);
     color: var(--couleur-bleu-vif);
-    font-size: 1.5rem;
-    line-height: 1.1;
+    font-size: 1.1rem;
+    font-weight: bold;
+    line-height: 1.2;
     margin-bottom: 1rem;
     text-align: center;
+    hyphens: auto;
 }
 
 /* --- Description de l'événement --- */
@@ -497,6 +505,7 @@
     font-size: 0.9rem;
     line-height: 1.4;
     margin-bottom: 0.5rem;
+    hyphens: auto;
 }
 
 /* --- Infos de l'événement (Date, Heure) --- */
@@ -645,7 +654,7 @@
 
 /* Badge de date déplacé vers la gauche */
 .skin-faire-festival .date-badge-left {
-    margin-left: -100px;
+    margin-left: 0;
     margin-top: -30px;
 }
 

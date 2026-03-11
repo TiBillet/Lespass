@@ -307,9 +307,6 @@
 
              <!-- INTERVENANTS -->
 
-                <div class="mb-3">
-                    <p>{% translate 'Intervenant-e-s :' %}</p>
-                </div>
 
 
             <!-- Lieu détaillé -->
@@ -362,67 +359,7 @@
         </div>
     </div>
 
-    <!-- ===================================================================
-         SECTION PRODUITS ASSOCIÉS (Billetterie)
-         Affiche les différents tarifs/produits disponibles pour cet événement
-         =================================================================== -->
-    {% if event.products.exists %}
-        <div class="row mb-5">
-            <div class="col-12">
-                <div class="bordure-epaisse bg-white p-4">
-                    <h2 class="texte-bleu police-titre mb-4">
-                        {% translate 'Tickets and prices' %}
-                    </h2>
-
-                    <div class="row g-3">
-                        {% for product in event.products.all %}
-                            <div class="col-md-6">
-                                <div class="carte-evenement">
-                                    <div>
-                                        <h4 class="titre-evenement h5">
-                                            {{ product.name }}
-                                        </h4>
-
-                                        {% if product.short_description %}
-                                            <p class="small texte-bleu police-mono">
-                                                {{ product.short_description }}
-                                            </p>
-                                        {% endif %}
-
-                                        <!-- Prix -->
-                                        <div class="infos-evenement">
-                                            {% if product.prices.exists %}
-                                                {% for price in product.prices.all %}
-                                                    <span class="fw-bold">
-                                                        {{ price.prix }} €
-                                                        {% if price.name %}
-                                                            ({{ price.name }})
-                                                        {% endif %}
-                                                    </span>
-                                                {% endfor %}
-                                            {% else %}
-                                                <span class="fw-bold">{% translate 'Free' %}</span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-
-                                    <div class="pied-carte mt-3">
-                                        <button class="bouton-petit-bleu w-100"
-                                                data-bs-toggle="offcanvas"
-                                                data-bs-target="#bookingPanel"
-                                                aria-controls="bookingPanel"
-                                                data-testid="booking-open-panel">
-                                            {% translate 'Select' %}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
+  
 
     <!-- ===================================================================
          SECTION ÉVÉNEMENTS SIMILAIRES (Optionnel)

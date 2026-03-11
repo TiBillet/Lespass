@@ -48,7 +48,6 @@
                 {% endif %}
             </h1>
 
-
             <!-- Description introductive (si disponible dans la config) -->
             {% if config.short_description %}
                 <p class="texte-bleu police-mono mt-3">
@@ -58,8 +57,26 @@
         </div>
     </div>
 
-    <div id="description_membership_page">{{config.description_membership_page | safe }}</div>
-
+    <!-- ===================================================================
+         DESCRIPTION DE LA PAGE D'ADHÉSION (Liste déroulante)
+         Affiche la description complète dans un collapse Bootstrap simple
+         =================================================================== -->
+    {% if config.description_membership_page %}
+        <div class="mb-4">
+            <button class="btn bg-white bordure-epaisse w-100 text-start d-flex justify-content-between align-items-center"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#collapseDescriptionMembership"
+                    aria-expanded="false">
+                {% translate "Plus d'informations sur le Faire Festival"%}
+                <i class="bi bi-chevron-down"></i>
+            </button>
+            
+            <div id="collapseDescriptionMembership" class="collapse mt-2">
+                {{ config.description_membership_page | safe }}
+            </div>
+        </div>
+    {% endif %}
     <!-- ===================================================================
          GRILLE DES CARTES DE PRODUITS (Adhésions / Billets)
          Affiche les différents produits disponibles à l'achat
