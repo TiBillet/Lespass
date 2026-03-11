@@ -805,9 +805,10 @@ def send_membership_payment_link_user(membership_uuid: str):
         logger.warning("send_membership_payment_link_user: destinataire manquant")
         return False
 
-    amount = dround(membership.price.prix)
-    if membership.contribution_value and membership.price.free_price and membership.price.recurring_payment : # c'est un montant custom
+    try:
         amount = dround(membership.contribution_value)
+    except Exception:
+        amount = dround(membership.price.prix)
 
     title = _(f"{config.organisation} : Paiement de votre adhésion")
     context = {
