@@ -214,7 +214,14 @@
 
 {% block scripts %}
 <script>
-/* Lazy-load des vidéos : charge le src uniquement quand visible dans le viewport */
+/*
+ * Lazy-load des vidéos : charge le src uniquement quand visible dans le viewport
+ * Empêche le téléchargement immédiat qui bloque Firefox mobile
+ * / Lazy-load videos: loads src only when visible in viewport
+ * / Prevents immediate download that blocks Firefox mobile
+ *
+ * LOCALISATION : faire_festival/views/home.html
+ */
 document.addEventListener("DOMContentLoaded", function () {
     const videos = document.querySelectorAll("video.video-lazy");
     if (!videos.length) return;

@@ -69,8 +69,9 @@
             </div>
             <button class="btn bg-white bordure-epaisse w-100 text-center mt-2 texte-bleu police-mono d-none"
                     id="descriptionMembershipToggle"
-                    type="button">
-                {% translate "Lire la suite" %} <i class="bi bi-chevron-down"></i>
+                    type="button"
+                    data-testid="membership-description-toggle">
+                {% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>
             </button>
         </div>
     {% endif %}
@@ -302,7 +303,13 @@ document.addEventListener("DOMContentLoaded", function () {
     const toggle = document.getElementById("descriptionMembershipToggle");
     if (!content || !toggle) return;
 
-    /* Seuil en px — environ 10-12 lignes de texte */
+    /* Seuil en px — environ 10-12 lignes de texte
+     * Si le contenu dépasse ce seuil, on tronque et on affiche "Lire la suite"
+     * / Threshold in px — about 10-12 lines of text
+     * / If content exceeds this, truncate and show "Read more"
+     *
+     * LOCALISATION : faire_festival/views/membership/list.html
+     */
     const SEUIL = 250;
 
     if (content.scrollHeight > SEUIL) {
@@ -314,11 +321,11 @@ document.addEventListener("DOMContentLoaded", function () {
             if (isTruncated) {
                 content.classList.remove("is-truncated");
                 content.style.maxHeight = content.scrollHeight + "px";
-                toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up"></i>';
+                toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up" aria-hidden="true"></i>';
             } else {
                 content.style.maxHeight = "";
                 content.classList.add("is-truncated");
-                toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down"></i>';
+                toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>';
             }
         });
     }

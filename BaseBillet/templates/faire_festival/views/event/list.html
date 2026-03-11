@@ -35,16 +35,16 @@
             <!-- Filtre Date -->
             <div class="dropdown">
                 <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                    {% translate 'Trier par date' %}
+                    {% if active_date_obj %}{{ active_date_obj|date:"l d F" }}{% else %}{% translate 'Trier par date' %}{% endif %}
                 </button>
                 <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
                     <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les dates' %}</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    {% for date_key, events in dated_events.items %}
+                    {% for date_key, events in all_dates.items %}
                         {% if events %}
                             {% with first_event=events.0 %}
                                 <li>
-                                    <a class="dropdown-item police-mono" href="?date={{ date_key }}">
+                                    <a class="dropdown-item police-mono" href="?date={{ date_key|date:'Y-m-d' }}">
                                         {{ first_event.datetime|date:"l d F" }}
                                     </a>
                                 </li>
@@ -86,7 +86,7 @@
             </div>
             {% endif %}
 
-        {% if active_tag or active_thematique or search %}
+        {% if active_tag or active_thematique or search or active_date %}
                 <a class="bouton-filtre" href="{% url 'event-list' %}" aria-label="{% translate 'Retirer les filtres' %}">
                     ✕ {% translate 'Retirer les filtres' %}
                 </a>

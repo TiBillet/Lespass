@@ -5,7 +5,7 @@ import re
 import uuid
 
 from Administration.utils import clean_text
-from datetime import timedelta
+from datetime import date as date_type, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -378,7 +378,15 @@ def emailconfirmation(request, token):
             next_url = signing.loads(next_url)
             return HttpResponseRedirect(next_url)
         return redirect('index')
+    except ValueError as e:
+        # Message explicite venant du signal (réservation expirée, évènement complet)
+        # L'utilisateur voit le message sur la page d'accueil après la redirection
+        # / Explicit message from signal (expired reservation, full event)
+        # / User sees the message on the homepage after redirect
+        messages.add_message(request, messages.WARNING, str(e))
+        return redirect('index')
     except Exception as e:
+        logger.error(f"emailconfirmation error: {e}")
         raise Http404("Error on email confirmation")
 
 
@@ -1821,16 +1829,44 @@ class EventMVT(viewsets.ViewSet):
             search = str(search)
         page = request.GET.get('page', 1)
         thematique_slug = request.GET.get('thematique')
-        # Data for tag filters UI
+        # Paramètre de filtre par date (format ISO : "2025-03-15")
+        # / Date filter param (ISO format: "2025-03-15")
+        date_filter = request.GET.get('date')
+
+        # Données pour les filtres (tags, thématiques, recherche)
+        # / Data for filter UI (tags, thematiques, search)
         context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
         context['all_thematiques'] = Tag.objects.filter(events_thematique__isnull=False).distinct()
         context['active_thematique'] = thematique_slug
+        context['active_date'] = date_filter
         context['dated_events'], context['paginated_info'] = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
+
+        # Le dropdown des dates doit toujours montrer toutes les dates disponibles
+        # On copie le dict AVANT filtrage, sinon la référence pointe vers le même objet
+        # / The date dropdown must always show all available dates
+        # / Copy the dict BEFORE filtering, otherwise reference points to same object
+        context['all_dates'] = dict(context['dated_events'])
+
+        # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
+        # / Date filter: keep only the selected date for card display
+        if date_filter:
+            try:
+                selected_date = date_type.fromisoformat(date_filter)
+                dated_events_filtered = {}
+                for event_date, event_list in context['dated_events'].items():
+                    if event_date == selected_date:
+                        dated_events_filtered[event_date] = event_list
+                context['dated_events'] = dated_events_filtered
+                context['active_date_obj'] = selected_date
+            except (ValueError, TypeError):
+                # Paramètre invalide → on ignore, on affiche tout
+                # / Invalid param → ignore, show all
+                context['active_date'] = None
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
