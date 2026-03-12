@@ -21,3 +21,4 @@ class Migration(migrations.Migration):
             field=models.TextField(blank=True, help_text='Cle publique PEM pour audit cryptographique', null=True),
         ),
     ]
+

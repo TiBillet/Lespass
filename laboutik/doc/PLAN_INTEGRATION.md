@@ -15,12 +15,15 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 
 **Tests de validation par phase :** dans `memory/tests_validation.md` (fichier separe).
 
-**Resume executif — ou on en est :**
+**Resume executif — ou on en est (mise a jour 2026-03-12) :**
 - Branche : `integration_laboutik`
 - Front LaBoutik : 100% fait (templates, JS, cotton)
-- Backend : 100% mocke. Phase -1 terminee. Phase 0 TERMINEE. Phase 1 TERMINEE (modeles POS + admin Unfold + donnees de test). Prochaine etape = Phase 2 (vues/serializers)
-- fedow_core : app complete (Asset, Token, Transaction, Federation + admin + services + tests 8 pytest + 1 Playwright)
+- **Phase -1 TERMINEE** : Dashboard Groupware, 5 module_*, sidebar conditionnelle, proxy models
+- **Phase 0 TERMINEE** : fedow_core complet (4 modeles, 3 services, admin, 8 pytest, 1 Playwright federation)
+- **Phase 1 TERMINEE** : Product unifie (8 champs POS, CategorieProduct, POSProduct proxy, Price.asset FK) + 4 modeles laboutik + admin + donnees test
+- **→ Prochaine etape = Phase 2** (remplacement mocks → vues/serializers reels)
 - Toutes les decisions architecturales sont prises (section 16), dont 16.9 : Product unifie (pas de ArticlePOS)
+- Prompts detailles avec tests par phase : `laboutik/doc/prompts/README.md`
 
 **Les 3 regles a ne jamais oublier :**
 1. Ne jamais casser les vues BaseBillet qui utilisent `fedow_connect`
@@ -895,8 +898,12 @@ ClotureCaisse
 | Fichier | Modification |
 |---|---|
 | `laboutik/views.py` | Remplacer tous les appels `mockData.*` par des queries ORM. C'est LE fichier central. |
+| `laboutik/serializers.py` | **NOUVEAU** — validation DRF des POST (CartePrimaireSerializer, PanierSerializer, ArticleSerializer). Regle stack-ccc : pas de request.POST brut. |
 | `laboutik/utils/method.py` | A terme supprimer (Phase 7). Pendant Phase 2, adapter pour lire la DB au lieu du JSON. |
 | `laboutik/utils/mockData.py` | Ne plus importer. Les vues accedent directement aux modeles. |
+
+**⚠️ PriceSold + ProductSold (Phase 2, etape 2) :**
+`LigneArticle.pricesold` pointe vers `PriceSold` (pas `Price` directement). `PriceSold` pointe vers `ProductSold` (pas `Product`). Chaque vente doit creer ces intermediaires. LIRE ces modeles dans `BaseBillet/models.py` AVANT de coder les vues de paiement.
 
 **Phase 2 — templates potentiellement impactes :**
 
@@ -932,7 +939,8 @@ ClotureCaisse
 - OK tel quel (template statique + NFC).
 
 #### `carte_primaire()` — Validation carte NFC
-1. `CarteCashless.objects.get(tag_id=tag_id)`
+1. Valider avec `CartePrimaireSerializer` (serializers.Serializer, pas request.POST brut)
+2. `CarteCashless.objects.get(tag_id=tag_id)`
 2. `CartePrimaire.objects.get(carte=carte_cashless)`
 3. `carte_primaire.points_de_vente.all()` → PV autorises
 4. Si un seul PV → redirect ; si plusieurs → choix
@@ -1093,91 +1101,120 @@ Habitue les utilisateurs a l'activation modulaire avant meme que la V2 soit pret
 | `Administration/templates/admin/index.html` | Include dashboard |
 | `tests/playwright/tests/29-admin-proxy-products.spec.ts` | Tests proxy admins + sidebar (nouveau) |
 
-### Phase 0 — fedow_core : fondations (PRIORITE MAXIMALE)
+### Phase 0 — fedow_core : fondations ✅ TERMINEE
 
 C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 
-1. Creer l'app `fedow_core` (SHARED_APPS) avec `Asset`, `Token`, `Transaction`, `Federation`
-2. `Transaction` : `id` BigAutoField PK + `uuid` UUIDField unique (pour imports) + `hash` nullable
-3. Ecrire `fedow_core/services.py` (WalletService, TransactionService, AssetService)
-4. Migrations + tests unitaires (cf. MEMORY.md Phase 0)
-5. Admin Unfold pour Asset, Token, Transaction
+1. ✅ Creer l'app `fedow_core` (SHARED_APPS) avec `Asset`, `Token`, `Transaction`, `Federation`
+2. ✅ `Transaction` : `id` BigAutoField PK + `uuid` UUIDField unique (pour imports) + `hash` nullable
+3. ✅ Ecrire `fedow_core/services.py` (WalletService, TransactionService, AssetService)
+4. ✅ Migrations + tests unitaires (8 pytest + 1 Playwright)
+5. ✅ Admin Unfold pour Asset, Token, Transaction, Federation
    - AssetAdmin : flow d'invitation per-asset (pending_invitations → accept → federated_with)
    - FederationAdmin : permissions createur/invite, invitation de lieux, exclusion de membres
-6. **Test securite** : verifier l'isolation tenant (pas de leak cross-tenant)
+6. ✅ **Test securite** : isolation tenant verifiee (pas de leak cross-tenant)
 
-### Phase 1 — Product unifie + modeles POS
+**Fichiers crees :** `fedow_core/` (models.py, services.py, exceptions.py, admin.py, apps.py, migrations)
+**Fichiers modifies :** AuthBillet/models.py (+public_pem, +name sur Wallet), QrcodeCashless/models.py (+wallet_ephemere), TiBillet/settings.py (+SHARED_APPS)
+**Tests :** `tests/pytest/test_fedow_core.py` (8 tests), `tests/playwright/tests/31-admin-asset-federation.spec.ts`
 
-7. Enrichir `BaseBillet.Product` avec les champs POS (cf. section 10.2) :
-   - `methode_caisse`, `categorie_pos`, `couleur_texte_pos`, `couleur_fond_pos`,
-     `groupe_pos`, `fractionne`, `besoin_tag_id`, `icon_pos`
-   - Creer proxy `POSProduct`
-   - Creer `BaseBillet.CategorieProduct`
-   - Ajouter `asset` FK sur `BaseBillet.Price` (cf. section 8)
-8. Creer les modeles dans `laboutik/models.py` :
-   - `PointDeVente` (M2M → Product, M2M → CategorieProduct)
-   - `CartePrimaire`
-   - `Table`, `CategorieTable`
-9. Migrations (`migrate_schemas`)
-10. Admin Unfold : `POSProductAdmin`, `CategorieProductAdmin`, `PointDeVenteAdmin`
-11. Donnees initiales (fixture ou management command)
+### Phase 1 — Product unifie + modeles POS ✅ TERMINEE
 
-### Phase 2 — laboutik : remplacement des mocks
+7. ✅ Enrichir `BaseBillet.Product` avec les champs POS (cf. section 10.2)
+8. ✅ Creer les modeles dans `laboutik/models.py` (PointDeVente, CartePrimaire, Table, CategorieTable)
+9. ✅ Migrations (`migrate_schemas`)
+10. ✅ Admin Unfold : POSProductAdmin, CategorieProductAdmin, PointDeVenteAdmin
+11. ✅ Donnees initiales : `manage.py create_test_pos_data`
 
-12. `carte_primaire()` : CartePrimaire + CarteCashless
+**Fichiers modifies :** BaseBillet/models.py (CategorieProduct, 8 champs POS sur Product, POSProduct proxy, Price.asset FK), laboutik/models.py (4 modeles)
+**Tests :** `tests/playwright/tests/29-admin-proxy-products.spec.ts` couvre les proxy admins
+
+### Phase 2 — laboutik : remplacement des mocks ← PROCHAINE
+
+12. `carte_primaire()` : CartePrimaire + CarteCashless — validation via `serializers.Serializer` (pas request.POST brut)
 13. `point_de_vente()` : charger depuis DB
-14. `moyens_paiement()` + `confirmer()` : articles depuis DB
-15. `_payer_par_carte_ou_cheque()` + `_payer_en_especes()` : creer LigneArticle
+14. `moyens_paiement()` + `confirmer()` : articles depuis DB — validation via `PanierSerializer`
+15. `_payer_par_carte_ou_cheque()` + `_payer_en_especes()` : creer PriceSold + ProductSold + LigneArticle
+
+**⚠️ Points d'attention :**
+- **Serializers DRF obligatoires** pour toute validation de POST (regle stack-ccc)
+- **PriceSold + ProductSold** : LigneArticle pointe vers PriceSold (pas Price directement). LIRE ces modeles dans BaseBillet/models.py AVANT de coder.
+- **Tests** : `test_caisse_navigation.py` (6 tests) + `test_paiement_especes_cb.py` (8 tests) + Playwright `32-laboutik-caisse-db.spec.ts`
+- **Checklist** : CHANGELOG.md + "A TESTER et DOCUMENTER/" + i18n (makemessages/compilemessages)
 
 ### Phase 3 — Integration fedow_core dans laboutik
 
 16. `_payer_par_nfc()` : WalletService + TransactionService
 17. `retour_carte()` : vrai solde depuis Token
-18. Recharges (RE/RC) : TransactionService.creer_recharge()
+18. Recharges (RE/RC/TM) : TransactionService.creer_recharge()
 19. Adhesions (AD) : TransactionService + Membership
+20. **verify_transactions** management command (prerequis du stress test ET des phases 6-7)
+21. **Stress test** : `tests/stress/test_charge_festival.py` (4 tenants, 2000 tx concurrentes)
+
+**⚠️ Points d'attention :**
+- **Wallet du lieu** : le receiver du paiement NFC. Verifier si Configuration a un champ wallet/primary_wallet ou si Client a un wallet. Si rien n'existe, le signaler.
+- **Parametre `tenant` obligatoire** dans `TransactionService.creer_vente()` — ne pas oublier `tenant=connection.tenant`
+- **Sens des recharges** : sender=lieu, receiver=client (inverse de la vente)
+- **Tests** : 7 tests atomicite (pytest) + Playwright + stress test
+- **Checklist** : CHANGELOG + "A TESTER et DOCUMENTER/" + checkpoint securite (atomicite + isolation)
 
 ### Phase 4 — Mode restaurant
 
-20. Modeles : `CommandeSauvegarde`, `ArticleCommandeSauvegarde`
-21. Vues : gestion commandes par table
-22. Tables : mise a jour statuts
+22. Modeles : `CommandeSauvegarde`, `ArticleCommandeSauvegarde`
+23. Serializers : `CommandeSerializer`, `ArticleCommandeSerializer`
+24. Vues : `CommandeViewSet` (ouvrir, ajouter, servir, payer, annuler) — reutilise les methodes de paiement existantes
+25. Tables : mise a jour statuts (L→O→S→L)
+26. Admin : CommandeSauvegarde en lecture seule + ArticleCommandeSauvegarde inline
+
+**⚠️ LIRE le front JS des tables AVANT de coder** — le JS existe dans les templates laboutik.
+**Tests** : 9 tests pytest + Playwright `34-laboutik-commandes.spec.ts`
 
 ### Phase 5 — Cloture, rapports, Celery
 
-23. `ClotureCaisse` : modele + vue
-24. Rapport : calcul totaux par moyen de paiement
-25. Taches Celery : cloture auto, rapport quotidien
+27. `ClotureCaisse` : modele + migration
+28. Vue `cloturer()` : calcul totaux depuis LigneArticle (aggregation par payment_method)
+29. Rapport JSON detaille (par categorie, produit, moyen de paiement)
+30. Taches Celery : cloture auto, rapport quotidien (⚠️ optionnel, valider avec le mainteneur)
+
+**⚠️ Verifier le champ `amount` de LigneArticle** — est-il en centimes ou euros ? LIRE le modele.
+**Tests** : 7 tests pytest + Playwright `35-laboutik-cloture.spec.ts`
 
 ### Phase 6 — Migration des donnees
 
-26. Management command `import_fedow_data`
-27. Management command `import_laboutik_data`
-28. Script de verification
-29. Tests sur un environnement de staging avec vraies donnees
+31. **Prerequis** : definir le format du dump JSON avec le mainteneur
+32. Management command `import_fedow_data` (dry-run par defaut, --commit pour appliquer)
+33. Management command `import_laboutik_data` (idem)
+34. Management command `verify_import` (compare dump vs DB)
+35. Tests sur un environnement de staging avec vraies donnees
+
+**⚠️ Script d'export** : si necessaire, creer un script cote ancien serveur pour generer le dump JSON.
+**Tests** : 8 tests import Fedow + 4 tests import LaBoutik
 
 ### Phase 7 — Consolidation et nettoyage
 
-30. Management command `recalculate_hashes` : recalcul des hash individuels sur toutes les transactions
-31. Migration Django : `hash` NOT NULL + UNIQUE
-32. Supprimer les mocks : `utils/mockData.py`, `utils/dbJson.py`, `utils/mockDb.json`, `utils/method.py`
-33. Supprimer `fedow_connect/fedow_api.py` (remplace par fedow_core/services.py)
-34. Supprimer `fedow_connect.Asset`, `fedow_connect.FedowConfig`
-35. Supprimer ou archiver `fedow_public.AssetFedowPublic` (remplace par fedow_core.Asset)
-36. Adapter les vues `fedow_public` pour utiliser `fedow_core.Asset`
-37. ✅ **Flow d'invitation/acceptation de federation** — FAIT (avance en Phase 0.5) :
+36. Management command `recalculate_hashes` : recalcul des hash individuels sur toutes les transactions
+37. Migration Django : `hash` NOT NULL + UNIQUE (APRES recalculate_hashes)
+38. **Audit des imports** avant chaque suppression (chercher les references)
+39. Supprimer les mocks : `utils/mockData.py`, `utils/dbJson.py`, `utils/mockDb.json`, `utils/method.py`
+40. Supprimer `fedow_connect/fedow_api.py` (remplace par fedow_core/services.py)
+41. Supprimer `fedow_connect.Asset`, `fedow_connect.FedowConfig`
+42. Supprimer ou archiver `fedow_public.AssetFedowPublic` (remplace par fedow_core.Asset)
+43. Adapter les vues `fedow_public` pour utiliser `fedow_core.Asset`
+44. ✅ **Flow d'invitation/acceptation de federation** — FAIT (avance en Phase 0.5) :
     - `Federation` : permissions createur/invite, invitation de lieux (`pending_tenants`),
       exclusion de membres, template `federation_members.html`
     - `Asset` : invitation per-asset (`pending_invitations` → accept → `federated_with`),
       template `asset_changelist_invitations.html`, changelist avec assets propres + federes
     - Admin : le createur invite via autocomplete, les invites voient la carte et acceptent
     - Remplace le flow V1 qui passait par HTTP vers le serveur Fedow distant
-38. Supprimer les templates/JS legacy
-39. ✅ **Tests federation d'assets** — FAIT :
+45. Supprimer les templates/JS legacy
+46. ✅ **Tests federation d'assets** — FAIT :
     - Pytest (`tests/pytest/test_fedow_core.py`) : 3 tests ajoutes (tests 6-8) :
       pending_invitations, accept_invitation, visibilite queryset admin
     - Playwright (`tests/playwright/tests/31-admin-asset-federation.spec.ts`) :
       flow complet cross-tenant (Lespass cree + invite → Chantefrein accepte → verification bilaterale)
     - 8 pytest + 1 Playwright (12 steps, ~18s) — tous verts
+47. **Tests finaux** : tous les pytest + Playwright critiques (29, 31, 32, 33, 34, 35)
 
 ## 16. Decisions architecturales (toutes prises)
 
@@ -1541,6 +1578,34 @@ Si un des 3 echoue → corriger AVANT de toucher un autre fichier.
 5. Verifier les logs du serveur (pas de traceback)
 6. Seulement alors : passer au changement suivant
 ```
+
+### Checklist obligatoire en fin de phase (stack-ccc)
+
+Chaque phase DOIT se terminer par ces etapes :
+
+1. **Tests** : pytest + Playwright (cf. prompts de chaque phase pour le detail)
+2. **CHANGELOG.md** : mettre a jour avec les fichiers modifies et la description
+3. **"A TESTER et DOCUMENTER/"** : creer un fichier `.md` pour la phase
+4. **i18n** : si du texte visible a ete ajoute (`_()`, `{% translate %}`) :
+   ```bash
+   docker exec lespass_django poetry run django-admin makemessages -l fr -l en
+   # Editer les .po, corriger les fuzzy
+   docker exec lespass_django poetry run django-admin compilemessages
+   ```
+5. **data-testid** : chaque nouveau bouton/formulaire/zone dynamique
+6. **aria-live="polite"** : chaque zone HTMX dynamique
+7. **Serializers DRF** : toute validation de POST utilise `serializers.Serializer` (pas request.POST brut)
+
+### Prerequis a creer avant d'etre utilises
+
+Certains elements sont references dans des phases ulterieures mais doivent etre crees plus tot :
+
+| Element | Utilise par | Creer dans | Raison |
+|---|---|---|---|
+| `verify_transactions` management command | Phase 3 (stress test), Phase 6, Phase 7 | **Phase 3 etape 3** | Le stress test en a besoin |
+| `laboutik/serializers.py` | Phase 2 etape 1 | **Phase 2 etape 1** | Premiere validation POST |
+| Wallet du lieu (receiver paiement NFC) | Phase 3 etape 1 | **Phase 3 etape 1** | Verifier s'il existe, sinon le signaler |
+| Format dump JSON | Phase 6 | **Avant Phase 6** | A definir avec le mainteneur |
 
 ### Anti-hallucination
 
