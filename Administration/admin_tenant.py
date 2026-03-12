@@ -79,7 +79,11 @@ from BaseBillet.models import Configuration, OptionGenerale, Product, TicketProd
     LigneArticle, PaymentMethod, Reservation, ExternalApiKey, GhostConfig, Event, Ticket, PriceSold, SaleOrigin, \
     FormbricksConfig, FormbricksForms, FederatedPlace, PostalAddress, Carrousel, BrevoConfig, ScanApp, ProductFormField, \
     PromotionalCode, Tva
-from laboutik.models import PointDeVente, CartePrimaire, CategorieTable, Table
+from laboutik.models import (
+    PointDeVente, CartePrimaire, CategorieTable, Table,
+    CommandeSauvegarde, ArticleCommandeSauvegarde,
+    ClotureCaisse,
+)
 from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invoice_to_email, webhook_reservation, \
     webhook_membership, create_ticket_pdf, ticket_celery_mailer, send_ticket_cancellation_user, \
     send_reservation_cancellation_user, send_sale_to_laboutik, forge_connexion_url
@@ -1696,6 +1700,85 @@ class TableAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+# --- Commandes de restaurant (Phase 4) ---
+# --- Restaurant orders (Phase 4) ---
+
+class ArticleCommandeSauvegardeInline(TabularInline):
+    """Inline lecture seule pour les articles d'une commande.
+    Read-only inline for order articles.
+    LOCALISATION : Administration/admin_tenant.py"""
+    model = ArticleCommandeSauvegarde
+    extra = 0
+    fields = ('product', 'price', 'qty', 'reste_a_payer', 'reste_a_servir', 'statut')
+    readonly_fields = ('product', 'price', 'qty', 'reste_a_payer', 'reste_a_servir', 'statut')
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(CommandeSauvegarde, site=staff_admin_site)
+class CommandeSauvegardeAdmin(ModelAdmin):
+    """Admin lecture seule pour l'historique des commandes de restaurant.
+    Read-only admin for restaurant order history.
+    LOCALISATION : Administration/admin_tenant.py"""
+    list_display = ('uuid', 'table', 'statut', 'responsable', 'datetime', 'archive')
+    list_filter = ['statut', 'archive']
+    search_fields = ['uuid', 'commentaire']
+    ordering = ('-datetime',)
+    readonly_fields = (
+        'uuid', 'service', 'responsable', 'table', 'datetime',
+        'statut', 'commentaire', 'archive',
+    )
+    inlines = [ArticleCommandeSauvegardeInline]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# --- Cloture de caisse (Phase 5) ---
+# --- Cash register closure (Phase 5) ---
+
+@admin.register(ClotureCaisse, site=staff_admin_site)
+class ClotureCaisseAdmin(ModelAdmin):
+    """Admin lecture seule pour les clotures de caisse.
+    Read-only admin for cash register closures.
+    LOCALISATION : Administration/admin_tenant.py"""
+    list_display = ('point_de_vente', 'responsable', 'datetime_cloture', 'total_general', 'nombre_transactions')
+    list_filter = ['point_de_vente']
+    search_fields = ['point_de_vente__name', 'responsable__email']
+    ordering = ('-datetime_cloture',)
+    readonly_fields = (
+        'uuid', 'point_de_vente', 'responsable',
+        'datetime_ouverture', 'datetime_cloture',
+        'total_especes', 'total_carte_bancaire', 'total_cashless',
+        'total_general', 'nombre_transactions', 'rapport_json',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
 @admin.register(PromotionalCode, site=staff_admin_site)
 class PromotionalCodeAdmin(ModelAdmin):
     compressed_fields = True
@@ -2536,6 +2619,18 @@ def get_sidebar_navigation(request):
                     "title": _("Device pairing (PIN)"),
                     "icon": "phonelink_setup",
                     "link": reverse_lazy("staff_admin:discovery_pairingdevice_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Orders"),
+                    "icon": "receipt",
+                    "link": reverse_lazy("staff_admin:laboutik_commandesauvegarde_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Closures"),
+                    "icon": "summarize",
+                    "link": reverse_lazy("staff_admin:laboutik_cloturecaisse_changelist"),
                     "permission": admin_permission,
                 },
             ],

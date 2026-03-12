@@ -1,7 +1,7 @@
 {% load static i18n %}
 {% load laboutik_process %}
 
-<div id="messages" class="BF-col">
+<div id="messages" class="BF-col" data-testid="paiement-nfc-insuffisant" aria-live="polite">
   {% if payment.moyen_paiement == 'nfc' and step == 2 %}
   <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants" %}</div>
   <div class="fi-title1">{% translate "sur deuxième carte" %}</div>

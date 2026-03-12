@@ -17,15 +17,15 @@ Un fichier = une etape = une session (ou demi-session).
 | **1** | 2. Admin + fixtures | `phase1_etape2_admin_fixtures.md` | **FAIT** | Admin : section "Caisse" visible, `create_test_pos_data` OK |
 | **2** | 1. Caisse depuis DB | `phase2_etape1_caisse_depuis_db.md` | **FAIT** | pytest : 11 tests (`test_caisse_navigation.py`), PW : a ecrire |
 | **2** | 2. Paiement especes/CB | `phase2_etape2_paiement_especes_cb.md` | **FAIT** | pytest : 7 tests (`test_paiement_especes_cb.py`), PW : a ecrire |
-| **3** | 1. Paiement NFC | `phase3_etape1_paiement_nfc.md` | A FAIRE | pytest critique (atomicite) |
+| **3** | 1. Paiement NFC | `phase3_etape1_paiement_nfc.md` | **FAIT** | pytest : 7 tests (`test_paiement_cashless.py`) |
 | **3** | 2. Retour carte + recharges | `phase3_etape2_retour_carte_recharges.md` | A FAIRE | pytest |
 | **3** | 3. Stress test | `phase3_etape3_stress_test.md` | A FAIRE | `tests/stress/test_charge_festival.py` |
-| **4** | Commandes + tables | `phase4_commandes_tables.md` | A FAIRE | pytest + PW |
-| **5** | Cloture + rapports | `phase5_cloture_rapports.md` | A FAIRE | pytest + PW |
+| **4** | Commandes + tables | `phase4_commandes_tables.md` | **FAIT** | pytest : 9 tests (`test_commandes_tables.py`), PW : a ecrire |
+| **5** | Cloture + rapports | `phase5_cloture_rapports.md` | **FAIT** | pytest : 7 tests (`test_cloture_caisse.py`), PW : a ecrire |
 | **6** | Migration donnees | `phase6_migration.md` | A FAIRE | dry-run + verify_transactions |
 | **7** | Consolidation | `phase7_consolidation.md` | A FAIRE | manage.py check + verify_transactions |
 
-**Prochaine etape : Phase 3, etape 1** (paiement NFC)
+**Prochaine etape : Phase 3 etape 2** (retour carte + recharges) ou **Phase 6** (migration donnees)
 
 ## Comment utiliser
 
@@ -76,11 +76,11 @@ Phase 3 — Integration fedow_core
   phase3_etape2_retour_carte_recharges.md
   phase3_etape3_stress_test.md
 
-Phase 4 — Mode restaurant
-  phase4_commandes_tables.md
+Phase 4 — Mode restaurant                            [FAIT]
+  phase4_commandes_tables.md                           [FAIT]
 
-Phase 5 — Cloture et rapports
-  phase5_cloture_rapports.md
+Phase 5 — Cloture et rapports                      [FAIT]
+  phase5_cloture_rapports.md                         [FAIT]
 
 Phase 6 — Migration des donnees
   phase6_migration.md
@@ -143,22 +143,25 @@ Tests prevus :
 - **Stress** : `tests/stress/test_charge_festival.py` — 4 tenants, 2000 transactions concurrentes
 - **Prerequis** : creer `verify_transactions` management command AVANT le stress test
 
-### Phase 4 (A ECRIRE)
-Tests prevus :
-- **pytest** : `test_commandes_tables.py`
-  - `test_ouvrir_table` — Table.statut L → O
-  - `test_ajouter_articles_commande` — CommandeSauvegarde + ArticleCommandeSauvegarde crees
-  - `test_payer_commande` — reutilise _payer_* existants
-  - `test_table_liberee_apres_paiement` — Table.statut → L
-- **Playwright** : `33-laboutik-commandes.spec.ts` — flow complet table
+### Phase 4 (FAIT)
+- **pytest** : `test_commandes_tables.py` — 9 tests :
+  - `TestOuvrirCommande` (2 tests) : ouvrir commande Table L→O + validation articles vides
+  - `TestAjouterArticles` (2 tests) : ajouter articles a commande OPEN + erreur si commande PAID
+  - `TestMarquerServie` (1 test) : articles → SERVI, commande → SERVED
+  - `TestPayerCommande` (1 test) : payer especes → PAID, Table → L, LigneArticle crees
+  - `TestAnnulerCommande` (3 tests) : annuler → CANCEL + table reste O si autre commande + erreur si PAID
+- **Playwright** : `34-laboutik-commandes.spec.ts` (A ECRIRE)
 
-### Phase 5 (A ECRIRE)
-Tests prevus :
-- **pytest** : `test_cloture_caisse.py`
-  - `test_cloture_totaux_corrects` — especes + CB + cashless == LigneArticle
-  - `test_cloture_ferme_tables` — toutes les tables du PV passent a L
-  - `test_rapport_json_complet` — rapport_json contient les bons champs
-- **Playwright** : `34-laboutik-cloture.spec.ts` — 3 paiements → cloturer → verifier rapport
+### Phase 5 (FAIT)
+- **pytest** : `test_cloture_caisse.py` — 7 tests :
+  - `TestClotureTotauxCorrects` (1 test) : 3 LigneArticle (especes 500c + CB 1000c + NFC 2000c) → totaux corrects
+  - `TestClotureNombreTransactions` (1 test) : nombre_transactions >= 3
+  - `TestClotureFermeTables` (1 test) : 2 tables OCCUPEE → LIBRE apres cloture
+  - `TestClotureRapportJSON` (1 test) : rapport_json contient par_categorie, par_produit, par_moyen_paiement, commandes
+  - `TestClotureFiltreDatetime` (1 test) : LigneArticle hier non comptee, LigneArticle maintenant comptee
+  - `TestDoubleClotureMmePeriode` (1 test) : 2 clotures creees (pas de blocage)
+  - `TestClotureAnnuleCommandes` (1 test) : commande OPEN → CANCEL apres cloture
+- **Playwright** : `35-laboutik-cloture.spec.ts` (A ECRIRE)
 
 ### Phase 6 (A ECRIRE)
 Tests prevus :

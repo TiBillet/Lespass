@@ -28,6 +28,13 @@
   </div>
   {%  endif %}
 
+  <!-- Nouveau solde après paiement NFC / New balance after NFC payment -->
+  {% if nouveau_solde is not None %}
+  <div class="payment-msg1" data-testid="paiement-nfc-succes">
+    {% translate "Nouveau solde" %} {{ card_name }} :
+    <span data-testid="paiement-nfc-solde">{{ nouveau_solde }}</span> {{ monnaie_name }}
+  </div>
+  {% endif %}
 
   <!-- monnaie à rendre -->
   {% if payment.give_back > 0 %}

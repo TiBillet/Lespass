@@ -40,29 +40,44 @@ def _inject_cli_env(request):
     api_key = request.config.getoption("--api-key") or os.getenv("API_KEY")
 
     if not api_key:
-        result = subprocess.run(
-            [
-                "docker",
-                "exec",
-                "-e",
-                "TEST=1",
-                "lespass_django",
-                "poetry",
-                "run",
-                "python",
-                "manage.py",
-                "test_api_key",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            pytest.fail(
-                "Unable to fetch API key from docker. "
-                "Command failed: docker exec lespass_django poetry run python manage.py test_api_key\n"
-                f"stderr: {result.stderr.strip()}"
+        # Essayer d'abord via docker exec (depuis la machine hote).
+        # Si 'docker' n'existe pas (on est dans le conteneur), appeler manage.py directement.
+        # / Try docker exec first (from host). If 'docker' not found (inside container),
+        # call manage.py directly.
+        try:
+            result = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    "-e",
+                    "TEST=1",
+                    "lespass_django",
+                    "poetry",
+                    "run",
+                    "python",
+                    "manage.py",
+                    "test_api_key",
+                ],
+                capture_output=True,
+                text=True,
             )
-        api_key = result.stdout.strip()
+            if result.returncode == 0:
+                api_key = result.stdout.strip()
+        except FileNotFoundError:
+            # On est dans le conteneur — 'docker' n'existe pas ici.
+            # / We're inside the container — 'docker' binary doesn't exist here.
+            try:
+                result = subprocess.run(
+                    ["python", "manage.py", "test_api_key"],
+                    capture_output=True,
+                    text=True,
+                    cwd="/DjangoFiles",
+                    env={**os.environ, "TEST": "1"},
+                )
+                if result.returncode == 0:
+                    api_key = result.stdout.strip()
+            except Exception:
+                pass
 
     if not api_key:
         pytest.fail(

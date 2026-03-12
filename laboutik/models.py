@@ -1,18 +1,17 @@
 """
 Modeles POS (Point de Vente / Cash register) pour l'app laboutik.
-Points de vente, cartes maitresses, tables de restaurant.
-/ POS models for the laboutik app. Points of sale, primary cards, restaurant tables.
+Points de vente, cartes maitresses, tables de restaurant, commandes, cloture.
+/ POS models for the laboutik app. Points of sale, primary cards, restaurant tables, orders, closure.
 
 LOCALISATION : laboutik/models.py
-
-⚠️ CommandeSauvegarde et ClotureCaisse ne sont PAS ici (Phase 4 et 5).
 """
 import uuid as uuid_module
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from BaseBillet.models import CategorieProduct, Product
+from AuthBillet.models import TibilletUser
+from BaseBillet.models import CategorieProduct, Price, Product
 from QrcodeCashless.models import CarteCashless
 
 
@@ -281,3 +280,268 @@ class Table(models.Model):
         ordering = ('poids', 'name')
         verbose_name = _('Table')
         verbose_name_plural = _('Tables')
+
+
+# --- Commandes de restaurant ---
+# / Restaurant orders
+
+class CommandeSauvegarde(models.Model):
+    """
+    Commande sauvegardee pour le mode restaurant (table service).
+    Chaque commande est liee a une table et contient des articles.
+    / Saved order for restaurant mode (table service).
+    Each order is linked to a table and contains articles.
+
+    LOCALISATION : laboutik/models.py
+
+    Cycle de vie / Lifecycle :
+    OPEN → SERVED → PAID (→ archive=True apres cloture)
+    OPEN → CANCEL (annulation)
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False, unique=True, db_index=True,
+    )
+
+    # Identifiant du service en cours (un service = une periode de travail du PV)
+    # Current service identifier (a service = a POS work period)
+    service = models.UUIDField(
+        blank=True, null=True,
+        verbose_name=_("Service"),
+        help_text=_("Service session identifier (UUID). Groups orders by work period."),
+    )
+
+    # Responsable (caissier / serveur) qui a cree la commande
+    # Responsible (cashier / waiter) who created the order
+    responsable = models.ForeignKey(
+        TibilletUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='commandes_sauvegardees',
+        verbose_name=_("Operator"),
+        help_text=_("Cashier or waiter who created this order."),
+    )
+
+    # Table associee (nullable pour les commandes sans table)
+    # Associated table (nullable for orders without a table)
+    table = models.ForeignKey(
+        Table, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='commandes',
+        verbose_name=_("Table"),
+        help_text=_("Restaurant table for this order. Null for takeaway."),
+    )
+
+    datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Creation date"),
+    )
+
+    # Statut de la commande
+    # / Order status
+    OPEN = 'OP'
+    SERVED = 'SV'
+    PAID = 'PA'
+    CANCEL = 'AN'
+    STATUT_CHOICES = [
+        (OPEN, _('Open')),
+        (SERVED, _('Served')),
+        (PAID, _('Paid')),
+        (CANCEL, _('Cancelled')),
+    ]
+    statut = models.CharField(
+        max_length=2, choices=STATUT_CHOICES, default=OPEN,
+        verbose_name=_("Status"),
+    )
+
+    # Note libre pour la cuisine ou le serveur
+    # / Free note for the kitchen or waiter
+    commentaire = models.TextField(
+        blank=True, default='',
+        verbose_name=_("Comment"),
+        help_text=_("Kitchen notes or special requests."),
+    )
+
+    archive = models.BooleanField(
+        default=False,
+        verbose_name=_("Archived"),
+    )
+
+    def __str__(self):
+        table_name = self.table.name if self.table else _("No table")
+        return f"{table_name} — {self.get_statut_display()} ({self.datetime:%H:%M})"
+
+    class Meta:
+        ordering = ('-datetime',)
+        verbose_name = _('Saved order')
+        verbose_name_plural = _('Saved orders')
+
+
+class ArticleCommandeSauvegarde(models.Model):
+    """
+    Ligne d'article dans une commande sauvegardee.
+    / Article line in a saved order.
+
+    LOCALISATION : laboutik/models.py
+
+    Cycle de vie / Lifecycle :
+    EN_ATTENTE → EN_COURS → PRET → SERVI
+    EN_ATTENTE → ANNULE
+    """
+    commande = models.ForeignKey(
+        CommandeSauvegarde, on_delete=models.CASCADE,
+        related_name='articles',
+        verbose_name=_("Order"),
+    )
+    product = models.ForeignKey(
+        Product, on_delete=models.PROTECT,
+        related_name='articles_commande',
+        verbose_name=_("Product"),
+    )
+    price = models.ForeignKey(
+        Price, on_delete=models.PROTECT,
+        related_name='articles_commande',
+        verbose_name=_("Price"),
+    )
+
+    qty = models.SmallIntegerField(
+        default=1,
+        verbose_name=_("Quantity"),
+    )
+
+    # Montant restant a payer en centimes (utile pour paiement partiel)
+    # Remaining amount to pay in cents (useful for partial payment)
+    reste_a_payer = models.IntegerField(
+        default=0,
+        verbose_name=_("Remaining to pay (cents)"),
+        help_text=_("Remaining amount in cents. 0 = not yet billed."),
+    )
+
+    # Nombre d'unites restant a servir
+    # Number of units remaining to serve
+    reste_a_servir = models.SmallIntegerField(
+        default=0,
+        verbose_name=_("Remaining to serve"),
+    )
+
+    # Statut de l'article dans la commande
+    # / Article status in the order
+    EN_ATTENTE = 'AT'
+    EN_COURS = 'EC'
+    PRET = 'PR'
+    SERVI = 'SV'
+    ANNULE = 'AN'
+    STATUT_CHOICES = [
+        (EN_ATTENTE, _('Waiting')),
+        (EN_COURS, _('In progress')),
+        (PRET, _('Ready')),
+        (SERVI, _('Served')),
+        (ANNULE, _('Cancelled')),
+    ]
+    statut = models.CharField(
+        max_length=2, choices=STATUT_CHOICES, default=EN_ATTENTE,
+        verbose_name=_("Status"),
+    )
+
+    def __str__(self):
+        return f"{self.product.name} x{self.qty} ({self.get_statut_display()})"
+
+    class Meta:
+        ordering = ('commande', 'product__name')
+        verbose_name = _('Order article')
+        verbose_name_plural = _('Order articles')
+
+
+# --- Cloture de caisse ---
+# / Cash register closure
+
+class ClotureCaisse(models.Model):
+    """
+    Rapport de cloture de caisse.
+    Un rapport est cree a chaque fin de service pour un point de vente.
+    Les totaux sont en centimes (int).
+    / Cash register closure report.
+    A report is created at the end of each service for a point of sale.
+    All totals are in cents (int).
+
+    LOCALISATION : laboutik/models.py
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False, unique=True, db_index=True,
+    )
+
+    # Point de vente qui a declenche la cloture
+    # / Point of sale that triggered the closure
+    point_de_vente = models.ForeignKey(
+        PointDeVente, on_delete=models.PROTECT,
+        related_name='clotures',
+        verbose_name=_("Point of sale"),
+        help_text=_("Point of sale that triggered this closure."),
+    )
+
+    # Responsable (caissier) qui a declenche la cloture
+    # / Operator (cashier) who triggered the closure
+    responsable = models.ForeignKey(
+        TibilletUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='clotures_caisse',
+        verbose_name=_("Operator"),
+        help_text=_("Cashier who performed the closure."),
+    )
+
+    # Debut du service couvert par cette cloture
+    # / Start of the service period covered by this closure
+    datetime_ouverture = models.DateTimeField(
+        verbose_name=_("Service start"),
+        help_text=_("Start of the service period covered by this closure."),
+    )
+
+    # Moment de la cloture (automatique a la creation)
+    # / Closure timestamp (automatic on creation)
+    datetime_cloture = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Closure datetime"),
+    )
+
+    # Totaux par moyen de paiement — en centimes (ex: 50.10€ = 5010)
+    # / Totals by payment method — in cents (e.g. 50.10€ = 5010)
+    total_especes = models.IntegerField(
+        default=0,
+        verbose_name=_("Cash total (cents)"),
+        help_text=_("Total cash amount in cents."),
+    )
+    total_carte_bancaire = models.IntegerField(
+        default=0,
+        verbose_name=_("Credit card total (cents)"),
+        help_text=_("Total credit card amount in cents."),
+    )
+    total_cashless = models.IntegerField(
+        default=0,
+        verbose_name=_("Cashless total (cents)"),
+        help_text=_("Total cashless/NFC amount in cents."),
+    )
+    total_general = models.IntegerField(
+        default=0,
+        verbose_name=_("Grand total (cents)"),
+        help_text=_("Grand total in cents (cash + card + cashless)."),
+    )
+
+    nombre_transactions = models.IntegerField(
+        default=0,
+        verbose_name=_("Transaction count"),
+        help_text=_("Number of LigneArticle records in this period."),
+    )
+
+    # Detail complet du rapport (par categorie, produit, moyen de paiement, commandes)
+    # / Full report detail (by category, product, payment method, orders)
+    rapport_json = models.JSONField(
+        default=dict, blank=True,
+        verbose_name=_("JSON report"),
+        help_text=_("Detailed report: par_categorie, par_produit, par_moyen_paiement, commandes."),
+    )
+
+    def __str__(self):
+        return f"{self.point_de_vente.name} — {self.datetime_cloture}"
+
+    class Meta:
+        ordering = ('-datetime_cloture',)
+        verbose_name = _('Cash register closure')
+        verbose_name_plural = _('Cash register closures')

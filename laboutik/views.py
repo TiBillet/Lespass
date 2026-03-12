@@ -6,7 +6,7 @@
 # Authentication: LaBoutik API key (Discovery / PIN pairing) or tenant admin session.
 #
 # CaisseViewSet : données depuis la DB (modèles ORM).
-# PaiementViewSet : paiements espèces/CB depuis la DB (Phase 2). NFC encore placeholder (Phase 3).
+# PaiementViewSet : paiements espèces/CB/NFC depuis la DB (Phase 2 + Phase 3).
 
 import logging
 import os
@@ -22,16 +22,29 @@ from django_htmx.http import HttpResponseClientRedirect
 from rest_framework import viewsets
 from rest_framework.decorators import action
 
-from django.db.models import Prefetch
+from django.db import connection
+from django.db.models import Prefetch, Sum, Count, Q
+
+from fedow_core.exceptions import SoldeInsuffisant
+from fedow_core.models import Asset
+from fedow_core.services import TransactionService, WalletService
 
 from BaseBillet.models import (
-    Configuration, LigneArticle, Price, PriceSold, Product,
+    Configuration, LigneArticle, Membership, Price, PriceSold, Product,
     ProductSold, SaleOrigin, PaymentMethod,
 )
 from BaseBillet.permissions import HasLaBoutikAccess
 from QrcodeCashless.models import CarteCashless
-from laboutik.models import PointDeVente, CartePrimaire, Table
-from laboutik.serializers import CartePrimaireSerializer, PanierSerializer
+from laboutik.models import (
+    PointDeVente, CartePrimaire, Table,
+    CommandeSauvegarde, ArticleCommandeSauvegarde,
+    ClotureCaisse,
+)
+from laboutik.serializers import (
+    CartePrimaireSerializer, PanierSerializer,
+    CommandeSerializer, ArticleCommandeSerializer,
+    ClotureSerializer, EnvoyerRapportSerializer,
+)
 from laboutik.utils import mockData
 from laboutik.utils import method as payment_method
 
@@ -502,6 +515,329 @@ class CaisseViewSet(viewsets.ViewSet):
         }
         return render(request, template_name, context)
 
+    # ----------------------------------------------------------------------- #
+    #  Cloture de caisse (Phase 5)                                             #
+    #  Cash register closure (Phase 5)                                         #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="cloturer", url_name="cloturer")
+    def cloturer(self, request):
+        """
+        POST /laboutik/caisse/cloturer/
+        Cloture le service en cours : calcule les totaux, ferme les tables, cree le rapport.
+        Closes the current service: calculates totals, closes tables, creates the report.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX / FLOW :
+        1. Valider avec ClotureSerializer (datetime_ouverture + uuid_pv)
+        2. Agreger les LigneArticle par moyen de paiement (depuis datetime_ouverture)
+        3. Construire le rapport JSON (par categorie, produit, moyen de paiement, commandes)
+        4. Creer ClotureCaisse
+        5. Fermer tables ouvertes et commandes OPEN
+        6. Retourner le rapport (template partial)
+        """
+        serializer = ClotureSerializer(data=request.data)
+        if not serializer.is_valid():
+            premiere_erreur = next(iter(serializer.errors.values()))[0]
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(premiere_erreur),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        datetime_ouverture = serializer.validated_data["datetime_ouverture"]
+        uuid_pv = serializer.validated_data["uuid_pv"]
+
+        # Charger le point de vente
+        # Load the point of sale
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except PointDeVente.DoesNotExist:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        # --- Filtrer les LigneArticle de la periode ---
+        # --- Filter LigneArticle for the period ---
+        lignes_periode = LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+            datetime__gte=datetime_ouverture,
+            status=LigneArticle.VALID,
+        )
+
+        # --- Calculer les totaux par moyen de paiement (en centimes) ---
+        # --- Calculate totals by payment method (in cents) ---
+        total_especes = lignes_periode.filter(
+            payment_method=PaymentMethod.CASH,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        total_carte_bancaire = lignes_periode.filter(
+            payment_method=PaymentMethod.CC,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        # NFC / cashless : LOCAL_EURO (monnaie fiduciaire) + LOCAL_GIFT (cadeau)
+        # NFC / cashless: LOCAL_EURO (fiat) + LOCAL_GIFT (gift)
+        total_cashless = lignes_periode.filter(
+            payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
+        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        total_general = total_especes + total_carte_bancaire + total_cashless
+        nombre_transactions = lignes_periode.count()
+
+        # --- Construire le rapport JSON ---
+        # --- Build the JSON report ---
+
+        # Par moyen de paiement / By payment method
+        rapport_par_moyen_paiement = {
+            "especes": total_especes,
+            "cb": total_carte_bancaire,
+            "nfc": total_cashless,
+        }
+
+        # Par produit / By product
+        # Agreger par nom de produit via PriceSold → ProductSold → Product
+        # Aggregate by product name via PriceSold → ProductSold → Product
+        rapport_par_produit = {}
+        produits_agreg = lignes_periode.values(
+            'pricesold__productsold__product__name',
+        ).annotate(
+            total_amount=Sum('amount'),
+            total_qty=Sum('qty'),
+        ).order_by('pricesold__productsold__product__name')
+
+        for ligne in produits_agreg:
+            nom_produit = ligne['pricesold__productsold__product__name'] or _("Inconnu")
+            rapport_par_produit[nom_produit] = {
+                "total": ligne['total_amount'] or 0,
+                "qty": float(ligne['total_qty'] or 0),
+            }
+
+        # Par categorie / By category
+        # Agreger par categorie POS du produit
+        # Aggregate by product POS category
+        rapport_par_categorie = {}
+        categories_agreg = lignes_periode.values(
+            'pricesold__productsold__product__categorie_pos__name',
+        ).annotate(
+            total_amount=Sum('amount'),
+        ).order_by('pricesold__productsold__product__categorie_pos__name')
+
+        for ligne in categories_agreg:
+            nom_categorie = ligne['pricesold__productsold__product__categorie_pos__name'] or _("Sans catégorie")
+            rapport_par_categorie[str(nom_categorie)] = ligne['total_amount'] or 0
+
+        # Par taux de TVA / By VAT rate
+        # Agreger par taux de TVA — calcule HT et TVA depuis le TTC (amount) et le taux (vat)
+        # Aggregate by VAT rate — compute HT and VAT from TTC (amount) and rate (vat)
+        rapport_par_tva = {}
+        tva_agreg = lignes_periode.values('vat').annotate(
+            total_ttc=Sum('amount'),
+        ).order_by('vat')
+
+        for ligne in tva_agreg:
+            taux_tva = float(ligne['vat'] or 0)
+            total_ttc_centimes = ligne['total_ttc'] or 0
+
+            # Calcul du HT depuis le TTC : HT = TTC / (1 + taux/100)
+            # Calculate HT from TTC: HT = TTC / (1 + rate/100)
+            if taux_tva > 0:
+                total_ht_centimes = int(round(total_ttc_centimes / (1 + taux_tva / 100)))
+                total_tva_centimes = total_ttc_centimes - total_ht_centimes
+            else:
+                total_ht_centimes = total_ttc_centimes
+                total_tva_centimes = 0
+
+            cle_tva = f"{taux_tva:.2f}%"
+            rapport_par_tva[cle_tva] = {
+                "taux": taux_tva,
+                "total_ttc": total_ttc_centimes,
+                "total_ht": total_ht_centimes,
+                "total_tva": total_tva_centimes,
+            }
+
+        # Commandes / Orders
+        commandes_total = CommandeSauvegarde.objects.filter(
+            datetime__gte=datetime_ouverture,
+        ).count()
+        commandes_annulees = CommandeSauvegarde.objects.filter(
+            datetime__gte=datetime_ouverture,
+            statut=CommandeSauvegarde.CANCEL,
+        ).count()
+        rapport_commandes = {
+            "total": commandes_total,
+            "annulees": commandes_annulees,
+        }
+
+        rapport_json = {
+            "par_categorie": rapport_par_categorie,
+            "par_produit": rapport_par_produit,
+            "par_moyen_paiement": rapport_par_moyen_paiement,
+            "par_tva": rapport_par_tva,
+            "commandes": rapport_commandes,
+        }
+
+        # --- Creer la ClotureCaisse ---
+        # --- Create the ClotureCaisse ---
+        cloture = ClotureCaisse.objects.create(
+            point_de_vente=point_de_vente,
+            responsable=request.user if request.user.is_authenticated else None,
+            datetime_ouverture=datetime_ouverture,
+            total_especes=total_especes,
+            total_carte_bancaire=total_carte_bancaire,
+            total_cashless=total_cashless,
+            total_general=total_general,
+            nombre_transactions=nombre_transactions,
+            rapport_json=rapport_json,
+        )
+
+        # --- Fermer les tables ouvertes (OCCUPEE ou SERVIE → LIBRE) ---
+        # --- Close open tables (OCCUPIED or SERVED → FREE) ---
+        Table.objects.filter(
+            statut__in=[Table.OCCUPEE, Table.SERVIE],
+        ).update(statut=Table.LIBRE)
+
+        # --- Annuler les commandes encore ouvertes ---
+        # --- Cancel still-open orders ---
+        CommandeSauvegarde.objects.filter(
+            statut=CommandeSauvegarde.OPEN,
+        ).update(statut=CommandeSauvegarde.CANCEL)
+
+        logger.info(
+            f"Cloture caisse: PV={point_de_vente.name}, "
+            f"total={total_general}cts, transactions={nombre_transactions}"
+        )
+
+        # --- Convertir la TVA en euros pour l'affichage ---
+        # --- Convert VAT to euros for display ---
+        rapport_tva_euros = {}
+        for taux_label, tva_data in rapport_par_tva.items():
+            rapport_tva_euros[taux_label] = {
+                "total_ht_euros": f"{tva_data['total_ht'] / 100:.2f}",
+                "total_tva_euros": f"{tva_data['total_tva'] / 100:.2f}",
+                "total_ttc_euros": f"{tva_data['total_ttc'] / 100:.2f}",
+            }
+
+        # --- Retourner le rapport ---
+        # --- Return the report ---
+        context = {
+            "cloture": cloture,
+            "rapport": rapport_json,
+            "rapport_tva_euros": rapport_tva_euros,
+            "total_especes_euros": total_especes / 100,
+            "total_cb_euros": total_carte_bancaire / 100,
+            "total_nfc_euros": total_cashless / 100,
+            "total_general_euros": total_general / 100,
+            "nombre_transactions": nombre_transactions,
+            "currency_data": CURRENCY_DATA,
+        }
+        return render(request, "laboutik/partial/hx_cloture_rapport.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  Export PDF / CSV / Email du rapport de cloture (Phase 5)                #
+    #  PDF / CSV / Email export of the closure report (Phase 5)                #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=True, methods=["get"], url_path="rapport_pdf", url_name="rapport_pdf")
+    def rapport_pdf(self, request, pk=None):
+        """
+        GET /laboutik/caisse/<uuid>/rapport_pdf/
+        Telecharge le rapport de cloture en PDF.
+        Downloads the closure report as PDF.
+
+        LOCALISATION : laboutik/views.py
+        """
+        from laboutik.pdf import generer_pdf_cloture
+
+        try:
+            cloture = ClotureCaisse.objects.select_related(
+                'point_de_vente', 'responsable',
+            ).get(uuid=pk)
+        except ClotureCaisse.DoesNotExist:
+            raise Http404
+
+        pdf_bytes = generer_pdf_cloture(cloture)
+
+        date_str = cloture.datetime_cloture.strftime("%Y%m%d_%H%M")
+        nom_fichier = f"cloture_{date_str}.pdf"
+
+        from django.http import HttpResponse
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    @action(detail=True, methods=["get"], url_path="rapport_csv", url_name="rapport_csv")
+    def rapport_csv(self, request, pk=None):
+        """
+        GET /laboutik/caisse/<uuid>/rapport_csv/
+        Telecharge le rapport de cloture en CSV.
+        Downloads the closure report as CSV.
+
+        LOCALISATION : laboutik/views.py
+        """
+        from laboutik.csv_export import generer_csv_cloture
+
+        try:
+            cloture = ClotureCaisse.objects.select_related(
+                'point_de_vente', 'responsable',
+            ).get(uuid=pk)
+        except ClotureCaisse.DoesNotExist:
+            raise Http404
+
+        csv_string = generer_csv_cloture(cloture)
+
+        date_str = cloture.datetime_cloture.strftime("%Y%m%d_%H%M")
+        nom_fichier = f"cloture_{date_str}.csv"
+
+        from django.http import HttpResponse
+        response = HttpResponse(csv_string, content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    @action(detail=True, methods=["post"], url_path="envoyer_rapport", url_name="envoyer_rapport")
+    def envoyer_rapport(self, request, pk=None):
+        """
+        POST /laboutik/caisse/<uuid>/envoyer_rapport/
+        Envoie le rapport de cloture par email (PDF + CSV en PJ) via Celery.
+        Sends the closure report by email (PDF + CSV attachments) via Celery.
+
+        LOCALISATION : laboutik/views.py
+        """
+        from laboutik.tasks import envoyer_rapport_cloture
+
+        try:
+            cloture = ClotureCaisse.objects.get(uuid=pk)
+        except ClotureCaisse.DoesNotExist:
+            raise Http404
+
+        serializer = EnvoyerRapportSerializer(data=request.data)
+        if not serializer.is_valid():
+            premiere_erreur = next(iter(serializer.errors.values()))[0]
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(premiere_erreur),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        email = serializer.validated_data.get("email") or None
+
+        envoyer_rapport_cloture.delay(
+            connection.schema_name,
+            str(cloture.uuid),
+            email,
+        )
+
+        context = {
+            "msg_type": "info",
+            "msg_content": _("Rapport envoyé par email"),
+        }
+        return render(request, "laboutik/partial/hx_messages.html", context)
+
 
 # --------------------------------------------------------------------------- #
 #  Fonctions utilitaires — paiement ORM (Phase 2)                             #
@@ -516,6 +852,7 @@ MAPPING_CODES_PAIEMENT = {
     "CH": PaymentMethod.CHEQUE,
     "espece": PaymentMethod.CASH,
     "gift": PaymentMethod.FREE,
+    "nfc": PaymentMethod.LOCAL_EURO,  # TLF = token local fiduciaire adossé à l'euro
 }
 
 
@@ -625,7 +962,10 @@ def _determiner_moyens_paiement(point_de_vente):
     return moyens
 
 
-def _creer_lignes_articles(articles_panier, code_methode_paiement):
+def _creer_lignes_articles(
+    articles_panier, code_methode_paiement,
+    asset_uuid=None, carte=None, wallet=None,
+):
     """
     Crée ProductSold, PriceSold et LigneArticle pour chaque article du panier.
     Creates ProductSold, PriceSold and LigneArticle for each article in the cart.
@@ -633,12 +973,15 @@ def _creer_lignes_articles(articles_panier, code_methode_paiement):
     LOCALISATION : laboutik/views.py
 
     Cette fonction est appelée dans un bloc transaction.atomic() par les fonctions
-    de paiement (_payer_par_carte_ou_cheque, _payer_en_especes).
+    de paiement (_payer_par_carte_ou_cheque, _payer_en_especes, _payer_par_nfc).
     This function is called inside a transaction.atomic() block by the payment
-    functions (_payer_par_carte_ou_cheque, _payer_en_especes).
+    functions (_payer_par_carte_ou_cheque, _payer_en_especes, _payer_par_nfc).
 
     :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
-    :param code_methode_paiement: code du moyen de paiement ("carte_bancaire", "espece", "CH")
+    :param code_methode_paiement: code du moyen de paiement ("carte_bancaire", "espece", "CH", "nfc")
+    :param asset_uuid: UUID de l'asset fedow_core (NFC uniquement, None pour espèces/CB)
+    :param carte: CarteCashless (NFC uniquement, None pour espèces/CB)
+    :param wallet: Wallet du client (NFC uniquement, None pour espèces/CB)
     :return: liste de LigneArticle créées
     """
     methode_db = MAPPING_CODES_PAIEMENT.get(code_methode_paiement, PaymentMethod.UNKNOWN)
@@ -675,10 +1018,78 @@ def _creer_lignes_articles(articles_panier, code_methode_paiement):
             sale_origin=SaleOrigin.LABOUTIK,
             payment_method=methode_db,
             status=LigneArticle.VALID,
+            # Champs NFC (optionnels, None pour espèces/CB)
+            # NFC fields (optional, None for cash/CC)
+            asset=asset_uuid,
+            carte=carte,
+            wallet=wallet,
         )
         lignes_creees.append(ligne)
 
     return lignes_creees
+
+
+def _creer_ou_renouveler_adhesion(user, product, price):
+    """
+    Crée ou renouvelle une adhésion (Membership) pour un utilisateur.
+    Creates or renews a membership for a user.
+
+    LOCALISATION : laboutik/views.py
+
+    Appelée dans le bloc atomic de _payer_par_nfc() pour les articles AD.
+    Called inside the atomic block of _payer_par_nfc() for AD articles.
+
+    - Si user est None (carte anonyme) → ne rien faire.
+    - Si Membership existante pour ce (user, price) → renouveler.
+    - Sinon → créer une nouvelle Membership.
+
+    - If user is None (anonymous card) → do nothing.
+    - If existing Membership for this (user, price) → renew.
+    - Otherwise → create a new Membership.
+
+    :param user: TibilletUser ou None
+    :param product: Product avec methode_caisse=AD
+    :param price: Price associé au product
+    :return: Membership ou None
+    """
+    if user is None:
+        return None
+
+    from django.utils import timezone as tz
+
+    # Chercher une Membership existante pour ce user + price
+    # Find an existing Membership for this user + price
+    membership_existante = Membership.objects.filter(
+        user=user,
+        price=price,
+    ).exclude(
+        status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
+    ).first()
+
+    if membership_existante is not None:
+        # Renouveler : mettre à jour la date de contribution et recalculer la deadline
+        # Renew: update contribution date and recalculate deadline
+        membership_existante.last_contribution = tz.now()
+        membership_existante.status = Membership.LABOUTIK
+        membership_existante.contribution_value = price.prix
+        membership_existante.save(update_fields=[
+            'last_contribution', 'status', 'contribution_value',
+        ])
+        membership_existante.set_deadline()
+        return membership_existante
+
+    # Créer une nouvelle Membership
+    # Create a new Membership
+    nouvelle_adhesion = Membership.objects.create(
+        user=user,
+        price=price,
+        status=Membership.LABOUTIK,
+        last_contribution=tz.now(),
+        first_contribution=tz.now(),
+        contribution_value=price.prix,
+    )
+    nouvelle_adhesion.set_deadline()
+    return nouvelle_adhesion
 
 
 # --------------------------------------------------------------------------- #
@@ -884,8 +1295,10 @@ class PaiementViewSet(viewsets.ViewSet):
 
         if moyen_paiement_code == "nfc":
             return self._payer_par_nfc(
-                request, state, donnees_paiement,
-                total_en_euros, consigne_dans_panier, moyen_paiement_code,
+                request, state, donnees_paiement, articles_panier,
+                total_en_euros, total_centimes,
+                consigne_dans_panier, moyen_paiement_code,
+                point_de_vente,
             )
 
         # Moyen de paiement non reconnu → erreur
@@ -1015,26 +1428,321 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_par_nfc(
-        self, request, state, donnees_paiement,
-        total_en_euros, consigne_dans_panier, moyen_paiement_code,
+        self, request, state, donnees_paiement, articles_panier,
+        total_en_euros, total_centimes,
+        consigne_dans_panier, moyen_paiement_code,
+        point_de_vente,
     ):
         """
-        Paiement NFC (cashless) — Phase 3, pas encore implémenté.
-        NFC (cashless) payment — Phase 3, not yet implemented.
+        Paiement NFC (cashless) via fedow_core.
+        NFC (cashless) payment via fedow_core.
 
         LOCALISATION : laboutik/views.py
 
-        Retourne un message indiquant que le paiement NFC sera disponible
-        dans une prochaine mise à jour (intégration fedow_core).
-        Returns a message indicating that NFC payment will be available
-        in a future update (fedow_core integration).
+        Flux complet / Full flow:
+        1. Chercher la carte client par tag_id
+        2. Déterminer le wallet client (user.wallet ou wallet_ephemere)
+        3. Trouver l'asset TLF du tenant
+        4. Classifier les articles par methode_caisse (VT, RE, RC, TM, AD)
+        5. Vérifier le solde pour les articles qui débitent le client (VT + AD)
+        6. Bloc atomic : ventes + recharges + adhésions
+        7. Succès : afficher nouveau solde
         """
-        context_erreur = {
-            "msg_type": "warning",
-            "msg_content": _("Paiement NFC disponible en prochaine mise à jour"),
-            "selector_bt_retour": "#messages",
+        tag_id_client = request.POST.get("tag_id", "").upper().strip()
+
+        # 1. Chercher la carte client par tag_id
+        # 1. Find client card by tag_id
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+        except CarteCashless.DoesNotExist:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Carte inconnue"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        # 2. Déterminer le wallet client
+        #    - carte liée à un user → user.wallet
+        #    - carte anonyme → wallet_ephemere
+        # 2. Determine client wallet
+        #    - card linked to a user → user.wallet
+        #    - anonymous card → wallet_ephemere
+        wallet_client = None
+        if carte_client.user and carte_client.user.wallet:
+            wallet_client = carte_client.user.wallet
+        elif carte_client.wallet_ephemere:
+            wallet_client = carte_client.wallet_ephemere
+
+        if wallet_client is None:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Carte non associée à un portefeuille"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        # 3. Trouver l'asset TLF actif du tenant
+        # 3. Find the tenant's active TLF asset
+        asset_tlf = Asset.objects.filter(
+            tenant_origin=connection.tenant,
+            category=Asset.TLF,
+            active=True,
+        ).first()
+
+        if asset_tlf is None:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Monnaie locale non configurée"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        wallet_lieu = asset_tlf.wallet_origin
+
+        # 4. Classifier les articles par methode_caisse
+        #    VT (vente) + AD (adhésion) débitent le client en TLF
+        #    RE (recharge euros) crédite le client en TLF
+        #    RC (recharge cadeau) crédite le client en TNF
+        #    TM (recharge temps) crédite le client en TIM
+        # 4. Classify articles by methode_caisse
+        #    VT (sale) + AD (membership) debit client in TLF
+        #    RE (euro top-up) credits client in TLF
+        #    RC (gift top-up) credits client in TNF
+        #    TM (time top-up) credits client in TIM
+        articles_vente = []
+        articles_recharge_euros = []
+        articles_recharge_cadeau = []
+        articles_recharge_temps = []
+        articles_adhesion = []
+
+        for article in articles_panier:
+            methode = article['product'].methode_caisse
+            if methode == Product.RECHARGE_EUROS:
+                articles_recharge_euros.append(article)
+            elif methode == Product.RECHARGE_CADEAU:
+                articles_recharge_cadeau.append(article)
+            elif methode == Product.RECHARGE_TEMPS:
+                articles_recharge_temps.append(article)
+            elif methode == Product.ADHESION_POS:
+                articles_adhesion.append(article)
+            else:
+                # VT et tout autre methode → vente classique
+                # VT and any other method → standard sale
+                articles_vente.append(article)
+
+        total_vente_centimes = _calculer_total_panier_centimes(articles_vente)
+        total_adhesion_centimes = _calculer_total_panier_centimes(articles_adhesion)
+        total_recharge_euros_centimes = _calculer_total_panier_centimes(articles_recharge_euros)
+        total_recharge_cadeau_centimes = _calculer_total_panier_centimes(articles_recharge_cadeau)
+        total_recharge_temps_centimes = _calculer_total_panier_centimes(articles_recharge_temps)
+
+        # Le montant qui débite le client = ventes + adhésions
+        # Amount that debits the client = sales + memberships
+        total_debit_client_centimes = total_vente_centimes + total_adhesion_centimes
+
+        # 5. Vérifier le solde AVANT le bloc atomic (rejet rapide, sans verrou)
+        #    Seuls VT + AD débitent le client. RE/RC/TM le créditent.
+        # 5. Check balance BEFORE atomic block (fast reject, no lock)
+        #    Only VT + AD debit the client. RE/RC/TM credit the client.
+        if total_debit_client_centimes > 0:
+            solde_client = WalletService.obtenir_solde(wallet=wallet_client, asset=asset_tlf)
+            if solde_client < total_debit_client_centimes:
+                montant_manquant = total_debit_client_centimes - solde_client
+                donnees_paiement["missing"] = montant_manquant / 100
+                context_insuffisant = {
+                    "currency_data": CURRENCY_DATA,
+                    "payment": donnees_paiement,
+                    "card": {"name": carte_client.tag_id},
+                    "monnaie_name": asset_tlf.name,
+                    "payments_accepted": {
+                        "accepte_especes": point_de_vente.accepte_especes,
+                        "accepte_carte_bancaire": point_de_vente.accepte_carte_bancaire,
+                    },
+                    "uuid_transaction": "",
+                }
+                return render(request, "laboutik/partial/hx_funds_insufficient.html", context_insuffisant)
+
+        # Lookup assets TNF et TIM seulement si nécessaire
+        # Lookup TNF and TIM assets only if needed
+        asset_tnf = None
+        if total_recharge_cadeau_centimes > 0:
+            asset_tnf = Asset.objects.filter(
+                tenant_origin=connection.tenant,
+                category=Asset.TNF,
+                active=True,
+            ).first()
+            if asset_tnf is None:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Monnaie cadeau non configurée"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        asset_tim = None
+        if total_recharge_temps_centimes > 0:
+            asset_tim = Asset.objects.filter(
+                tenant_origin=connection.tenant,
+                category=Asset.TIM,
+                active=True,
+            ).first()
+            if asset_tim is None:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Monnaie temps non configurée"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        # 6. Bloc atomic : ventes + recharges + adhésions
+        # 6. Atomic block: sales + top-ups + memberships
+        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        tenant_courant = connection.tenant
+
+        try:
+            with db_transaction.atomic():
+                # a) Ventes (VT) — client → lieu
+                # a) Sales (VT) — client → venue
+                if total_vente_centimes > 0:
+                    TransactionService.creer_vente(
+                        sender_wallet=wallet_client,
+                        receiver_wallet=wallet_lieu,
+                        asset=asset_tlf,
+                        montant_en_centimes=total_vente_centimes,
+                        tenant=tenant_courant,
+                        card=carte_client,
+                        ip=ip_client,
+                    )
+                    _creer_lignes_articles(
+                        articles_vente, moyen_paiement_code,
+                        asset_uuid=asset_tlf.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                    )
+
+                # b) Recharge euros (RE) — lieu → client en TLF
+                # b) Euro top-up (RE) — venue → client in TLF
+                if total_recharge_euros_centimes > 0:
+                    TransactionService.creer_recharge(
+                        sender_wallet=wallet_lieu,
+                        receiver_wallet=wallet_client,
+                        asset=asset_tlf,
+                        montant_en_centimes=total_recharge_euros_centimes,
+                        tenant=tenant_courant,
+                        ip=ip_client,
+                    )
+                    _creer_lignes_articles(
+                        articles_recharge_euros, moyen_paiement_code,
+                        asset_uuid=asset_tlf.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                    )
+
+                # c) Recharge cadeau (RC) — lieu → client en TNF
+                # c) Gift top-up (RC) — venue → client in TNF
+                if total_recharge_cadeau_centimes > 0:
+                    TransactionService.creer_recharge(
+                        sender_wallet=asset_tnf.wallet_origin,
+                        receiver_wallet=wallet_client,
+                        asset=asset_tnf,
+                        montant_en_centimes=total_recharge_cadeau_centimes,
+                        tenant=tenant_courant,
+                        ip=ip_client,
+                    )
+                    _creer_lignes_articles(
+                        articles_recharge_cadeau, moyen_paiement_code,
+                        asset_uuid=asset_tnf.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                    )
+
+                # d) Recharge temps (TM) — lieu → client en TIM
+                # d) Time top-up (TM) — venue → client in TIM
+                if total_recharge_temps_centimes > 0:
+                    TransactionService.creer_recharge(
+                        sender_wallet=asset_tim.wallet_origin,
+                        receiver_wallet=wallet_client,
+                        asset=asset_tim,
+                        montant_en_centimes=total_recharge_temps_centimes,
+                        tenant=tenant_courant,
+                        ip=ip_client,
+                    )
+                    _creer_lignes_articles(
+                        articles_recharge_temps, moyen_paiement_code,
+                        asset_uuid=asset_tim.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                    )
+
+                # e) Adhésions (AD) — débit tokens TLF + création Membership
+                # e) Memberships (AD) — debit TLF tokens + create Membership
+                if total_adhesion_centimes > 0:
+                    TransactionService.creer_vente(
+                        sender_wallet=wallet_client,
+                        receiver_wallet=wallet_lieu,
+                        asset=asset_tlf,
+                        montant_en_centimes=total_adhesion_centimes,
+                        tenant=tenant_courant,
+                        card=carte_client,
+                        ip=ip_client,
+                    )
+                    _creer_lignes_articles(
+                        articles_adhesion, moyen_paiement_code,
+                        asset_uuid=asset_tlf.uuid,
+                        carte=carte_client,
+                        wallet=wallet_client,
+                    )
+
+                # Créer/renouveler les adhésions
+                # Create/renew memberships
+                for article in articles_adhesion:
+                    _creer_ou_renouveler_adhesion(
+                        carte_client.user,
+                        article['product'],
+                        article['price'],
+                    )
+
+        except SoldeInsuffisant:
+            # Race condition : solde a changé entre le check et le débit
+            # Race condition: balance changed between check and debit
+            solde_restant = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            montant_manquant = total_debit_client_centimes - solde_restant
+            donnees_paiement["missing"] = montant_manquant / 100
+            context_insuffisant = {
+                "currency_data": CURRENCY_DATA,
+                "payment": donnees_paiement,
+                "card": {"name": carte_client.tag_id},
+                "monnaie_name": asset_tlf.name,
+                "payments_accepted": {
+                    "accepte_especes": point_de_vente.accepte_especes,
+                    "accepte_carte_bancaire": point_de_vente.accepte_carte_bancaire,
+                },
+                "uuid_transaction": "",
+            }
+            return render(request, "laboutik/partial/hx_funds_insufficient.html", context_insuffisant)
+
+        # 7. Succès : lire le nouveau solde et afficher
+        # 7. Success: read new balance and display
+        nouveau_solde_centimes = WalletService.obtenir_solde(wallet=wallet_client, asset=asset_tlf)
+        nouveau_solde_euros = nouveau_solde_centimes / 100
+
+        context = {
+            "currency_data": CURRENCY_DATA,
+            "payment": donnees_paiement,
+            "monnaie_name": asset_tlf.name,
+            "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
+            "deposit_is_present": consigne_dans_panier,
+            "total": total_en_euros,
+            "state": state,
+            "original_payment": None,
+            # Données spécifiques NFC / NFC-specific data
+            "nouveau_solde": nouveau_solde_euros,
+            "card_name": carte_client.tag_id,
         }
-        return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+        return render(request, "laboutik/partial/hx_return_payment_success.html", context)
 
     # ----------------------------------------------------------------------- #
     #  Annexes : lecture et vérification de carte NFC                           #
@@ -1064,36 +1772,678 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         POST /laboutik/paiement/retour_carte/
         Reçoit le tag NFC scanné et retourne le feedback de la carte :
-        solde, type (fédérée/anonyme), couleur de fond selon le statut.
+        solde réel (fedow_core), type (fédérée/anonyme), adhésions actives.
         Receives the scanned NFC tag and returns card feedback:
-        balance, type (federated/anonymous), background color based on status.
+        real balance (fedow_core), type (federated/anonymous), active memberships.
         """
         state = _construire_state()
-        db = _charger_mock_db()
-        tag_id_scanne = request.POST.get("tag_id", "").upper()
+        tag_id_scanne = request.POST.get("tag_id", "").strip().upper()
 
-        # Couleur de fond par défaut : succès (carte connue avec email)
-        # Default background color: success (known card with email)
-        couleur_fond = "--success"
+        # 1. Chercher la carte par tag_id
+        # 1. Find the card by tag_id
+        try:
+            carte = CarteCashless.objects.get(tag_id=tag_id_scanne)
+        except CarteCashless.DoesNotExist:
+            context = {
+                "card": {"email": None},
+                "total_monnaie": 0,
+                "tokens": [],
+                "adhesions": [],
+                "tag_id": tag_id_scanne,
+                "background": "--error",
+                "state": state,
+                "erreur": _("Carte inconnue"),
+            }
+            return render(request, "laboutik/partial/hx_card_feedback.html", context)
 
-        cartes_trouvees = db.get_by_index("cards", "tag_id", tag_id_scanne)
-        if not cartes_trouvees:
-            # Carte inconnue → fond rouge
-            # Unknown card → red background
-            carte = {"type_card": "unknown", "wallets": 0, "wallets_gift": 0, "email": None}
-            couleur_fond = "--error"
-        else:
-            carte = cartes_trouvees[0]
-            if carte.get("email") is None:
-                # Carte anonyme (pas d'email associé) → fond orange
-                # Anonymous card (no associated email) → orange background
-                couleur_fond = "--warning"
+        # 2. Déterminer le wallet
+        # 2. Determine the wallet
+        wallet = None
+        if carte.user and carte.user.wallet:
+            wallet = carte.user.wallet
+        elif carte.wallet_ephemere:
+            wallet = carte.wallet_ephemere
+
+        if wallet is None:
+            context = {
+                "card": {"email": carte.user.email if carte.user else None},
+                "total_monnaie": 0,
+                "tokens": [],
+                "adhesions": [],
+                "tag_id": tag_id_scanne,
+                "background": "--error",
+                "state": state,
+                "erreur": _("Carte non associée à un portefeuille"),
+            }
+            return render(request, "laboutik/partial/hx_card_feedback.html", context)
+
+        # 3. Vrais soldes depuis fedow_core
+        # 3. Real balances from fedow_core
+        tokens_qs = WalletService.obtenir_tous_les_soldes(wallet)
+
+        # Préparer les données pour le template (centimes → euros)
+        # Prepare data for the template (cents → euros)
+        tokens = []
+        total_centimes = 0
+        solde_tlf_centimes = 0
+        solde_tnf_centimes = 0
+        for t in tokens_qs:
+            tokens.append({
+                'asset_name': t.asset.name,
+                'asset_category': t.asset.category,
+                'value_euros': t.value / 100,
+            })
+            total_centimes += t.value
+            if t.asset.category == Asset.TLF:
+                solde_tlf_centimes += t.value
+            elif t.asset.category == Asset.TNF:
+                solde_tnf_centimes += t.value
+
+        # 4. Adhésions actives (si user connu)
+        # 4. Active memberships (if user known)
+        adhesions = []
+        if carte.user:
+            toutes_adhesions = list(Membership.objects.filter(
+                user=carte.user,
+            ).exclude(
+                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
+            ).select_related('price__product'))
+            adhesions = [m for m in toutes_adhesions if m.is_valid()]
+
+        # 5. Couleur de fond selon le type de carte
+        # 5. Background color based on card type
+        email_carte = carte.user.email if carte.user else None
+        couleur_fond = "--success" if email_carte else "--warning"
 
         context = {
-            "card": carte,
-            "total_monnaie": carte["wallets"] + carte["wallets_gift"],
+            "card": {"email": email_carte},
+            "total_monnaie": total_centimes / 100,
+            "solde_tlf": solde_tlf_centimes / 100,
+            "solde_tnf": solde_tnf_centimes / 100,
+            "tokens": tokens,
+            "adhesions": adhesions,
             "tag_id": tag_id_scanne,
             "background": couleur_fond,
             "state": state,
         }
         return render(request, "laboutik/partial/hx_card_feedback.html", context)
+
+
+# --------------------------------------------------------------------------- #
+#  CommandeViewSet — commandes de restaurant (Phase 4)                        #
+#  CommandeViewSet — restaurant orders (Phase 4)                              #
+# --------------------------------------------------------------------------- #
+
+class CommandeViewSet(viewsets.ViewSet):
+    """
+    Gestion des commandes de restaurant (mode table).
+    Restaurant order management (table mode).
+
+    LOCALISATION : laboutik/views.py
+
+    Flux / Flow :
+    1. ouvrir_commande()    → crée une commande pour une table / creates order for a table
+    2. ajouter_articles()   → ajoute des articles a une commande OPEN / adds articles to an OPEN order
+    3. marquer_servie()     → passe la commande en SERVED / marks order as SERVED
+    4. payer_commande()     → réutilise les méthodes de paiement existantes / reuses existing payment methods
+    5. annuler_commande()   → annule la commande / cancels the order
+    """
+    permission_classes = [HasLaBoutikAccess]
+
+    # ----------------------------------------------------------------------- #
+    #  1. Ouvrir une commande                                                  #
+    #  1. Open an order                                                        #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="ouvrir", url_name="ouvrir")
+    def ouvrir_commande(self, request):
+        """
+        POST /laboutik/commande/ouvrir/
+        Crée une nouvelle commande pour une table.
+        Creates a new order for a table.
+
+        Corps attendu (JSON) / Expected body (JSON) :
+        {
+            "table_uuid": "uuid-de-la-table",
+            "uuid_pv": "uuid-du-point-de-vente",
+            "articles": [
+                {"product_uuid": "...", "price_uuid": "...", "qty": 2},
+                ...
+            ]
+        }
+        """
+        serializer = CommandeSerializer(data=request.data)
+        if not serializer.is_valid():
+            premiere_erreur = next(iter(serializer.errors.values()))
+            if isinstance(premiere_erreur, list):
+                premiere_erreur = premiere_erreur[0]
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(premiere_erreur),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        donnees = serializer.validated_data
+        table_uuid = donnees.get("table_uuid")
+        uuid_pv = donnees["uuid_pv"]
+        articles_data = donnees["articles"]
+
+        # Charger le point de vente
+        # Load the point of sale
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except PointDeVente.DoesNotExist:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        # Charger la table (si fournie)
+        # Load the table (if provided)
+        table_obj = None
+        if table_uuid is not None:
+            try:
+                table_obj = Table.objects.get(uuid=table_uuid)
+            except Table.DoesNotExist:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Table introuvable"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        # Charger les produits autorisés du PV (en une seule requête)
+        # Load authorized PV products (single query)
+        produits_autorises = {
+            str(p.uuid): p
+            for p in point_de_vente.products.filter(methode_caisse__isnull=False)
+        }
+
+        # Préparer les articles validés
+        # Prepare validated articles
+        articles_valides = []
+        for article_data in articles_data:
+            product_uuid_str = str(article_data["product_uuid"])
+            produit = produits_autorises.get(product_uuid_str)
+            if produit is None:
+                logger.warning(
+                    f"ouvrir_commande: produit {product_uuid_str} non autorisé dans PV {point_de_vente.name}"
+                )
+                continue
+
+            try:
+                prix = Price.objects.get(uuid=article_data["price_uuid"], product=produit)
+            except Price.DoesNotExist:
+                logger.warning(
+                    f"ouvrir_commande: prix {article_data['price_uuid']} non trouvé pour {produit.name}"
+                )
+                continue
+
+            articles_valides.append({
+                "product": produit,
+                "price": prix,
+                "qty": article_data["qty"],
+            })
+
+        if not articles_valides:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Aucun article valide dans la commande"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        # Bloc atomique : table → commande → articles
+        # Atomic block: table → order → articles
+        with db_transaction.atomic():
+            # Marquer la table comme occupée
+            # Mark table as occupied
+            if table_obj is not None:
+                table_obj.statut = Table.OCCUPEE
+                table_obj.save(update_fields=['statut'])
+
+            # Créer la commande
+            # Create the order
+            commande = CommandeSauvegarde.objects.create(
+                table=table_obj,
+                statut=CommandeSauvegarde.OPEN,
+                responsable=request.user if request.user.is_authenticated else None,
+                commentaire='',
+            )
+
+            # Créer les articles de la commande
+            # Create order articles
+            for article in articles_valides:
+                prix_centimes = int(round(article["price"].prix * 100))
+                ArticleCommandeSauvegarde.objects.create(
+                    commande=commande,
+                    product=article["product"],
+                    price=article["price"],
+                    qty=article["qty"],
+                    reste_a_payer=prix_centimes * article["qty"],
+                    reste_a_servir=article["qty"],
+                    statut=ArticleCommandeSauvegarde.EN_ATTENTE,
+                )
+
+        context = {
+            "msg_type": "success",
+            "msg_content": _("Commande créée"),
+            "selector_bt_retour": "#messages",
+        }
+        return render(request, "laboutik/partial/hx_messages.html", context, status=201)
+
+    # ----------------------------------------------------------------------- #
+    #  2. Ajouter des articles à une commande existante                        #
+    #  2. Add articles to an existing order                                    #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="ajouter/(?P<commande_uuid>[^/.]+)", url_name="ajouter")
+    def ajouter_articles(self, request, commande_uuid=None):
+        """
+        POST /laboutik/commande/ajouter/<commande_uuid>/
+        Ajoute des articles a une commande OPEN existante.
+        Adds articles to an existing OPEN order.
+        """
+        # Charger la commande
+        # Load the order
+        try:
+            commande = CommandeSauvegarde.objects.get(uuid=commande_uuid)
+        except (CommandeSauvegarde.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Commande introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        # Vérifier que la commande est encore ouverte
+        # Check that the order is still open
+        if commande.statut != CommandeSauvegarde.OPEN:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Cette commande n'est plus ouverte"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        # Valider les articles
+        # Validate articles
+        serializer = ArticleCommandeSerializer(data=request.data, many=True)
+        if not serializer.is_valid():
+            premiere_erreur = next(iter(serializer.errors))
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(premiere_erreur),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        articles_data = serializer.validated_data
+
+        if not articles_data:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Aucun article fourni"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        # Créer les articles dans un bloc atomique
+        # Create articles in an atomic block
+        with db_transaction.atomic():
+            for article_data in articles_data:
+                try:
+                    produit = Product.objects.get(uuid=article_data["product_uuid"])
+                    prix = Price.objects.get(uuid=article_data["price_uuid"], product=produit)
+                except (Product.DoesNotExist, Price.DoesNotExist):
+                    continue
+
+                prix_centimes = int(round(prix.prix * 100))
+                ArticleCommandeSauvegarde.objects.create(
+                    commande=commande,
+                    product=produit,
+                    price=prix,
+                    qty=article_data["qty"],
+                    reste_a_payer=prix_centimes * article_data["qty"],
+                    reste_a_servir=article_data["qty"],
+                    statut=ArticleCommandeSauvegarde.EN_ATTENTE,
+                )
+
+        context = {
+            "msg_type": "success",
+            "msg_content": _("Articles ajoutés"),
+            "selector_bt_retour": "#messages",
+        }
+        return render(request, "laboutik/partial/hx_messages.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  3. Marquer une commande comme servie                                    #
+    #  3. Mark an order as served                                              #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="servir/(?P<commande_uuid>[^/.]+)", url_name="servir")
+    def marquer_servie(self, request, commande_uuid=None):
+        """
+        POST /laboutik/commande/servir/<commande_uuid>/
+        Passe la commande en SERVED et ses articles PRET en SERVI.
+        Marks the order as SERVED and its READY articles as SERVED.
+        """
+        try:
+            commande = CommandeSauvegarde.objects.get(uuid=commande_uuid)
+        except (CommandeSauvegarde.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Commande introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        if commande.statut not in (CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Cette commande ne peut pas être marquée comme servie"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        with db_transaction.atomic():
+            # Marquer les articles PRET ou EN_ATTENTE comme SERVI
+            # Mark READY or WAITING articles as SERVED
+            commande.articles.filter(
+                statut__in=[
+                    ArticleCommandeSauvegarde.PRET,
+                    ArticleCommandeSauvegarde.EN_ATTENTE,
+                    ArticleCommandeSauvegarde.EN_COURS,
+                ],
+            ).update(
+                statut=ArticleCommandeSauvegarde.SERVI,
+                reste_a_servir=0,
+            )
+
+            commande.statut = CommandeSauvegarde.SERVED
+            commande.save(update_fields=['statut'])
+
+            # Mettre à jour le statut de la table
+            # Update table status
+            if commande.table is not None:
+                commande.table.statut = Table.SERVIE
+                commande.table.save(update_fields=['statut'])
+
+        context = {
+            "msg_type": "success",
+            "msg_content": _("Commande servie"),
+            "selector_bt_retour": "#messages",
+        }
+        return render(request, "laboutik/partial/hx_messages.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  4. Payer une commande                                                   #
+    #  4. Pay for an order                                                     #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="payer/(?P<commande_uuid>[^/.]+)", url_name="payer")
+    def payer_commande(self, request, commande_uuid=None):
+        """
+        POST /laboutik/commande/payer/<commande_uuid>/
+        Paie la commande en réutilisant le flux de paiement existant.
+        Pays the order by reusing the existing payment flow.
+
+        Corps attendu (POST form) / Expected body (POST form) :
+        - moyen_paiement : code du moyen ("espece", "carte_bancaire", "CH", "nfc")
+        - uuid_pv : UUID du point de vente
+        - given_sum : somme donnée (espèces, optionnel)
+        - tag_id : tag NFC du client (cashless, optionnel)
+
+        Les articles sont chargés depuis la commande (pas du POST).
+        Articles are loaded from the order (not from POST).
+        """
+        try:
+            commande = CommandeSauvegarde.objects.select_related('table').get(uuid=commande_uuid)
+        except (CommandeSauvegarde.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Commande introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        if commande.statut not in (CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Cette commande ne peut pas être payée"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        # Charger le PV
+        # Load the PV
+        uuid_pv = request.POST.get("uuid_pv")
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        # Construire articles_panier depuis les articles de la commande
+        # Build articles_panier from order articles
+        articles_commande = commande.articles.filter(
+            statut__in=[
+                ArticleCommandeSauvegarde.EN_ATTENTE,
+                ArticleCommandeSauvegarde.EN_COURS,
+                ArticleCommandeSauvegarde.PRET,
+                ArticleCommandeSauvegarde.SERVI,
+            ],
+        ).select_related('product', 'price')
+
+        articles_panier = []
+        for article_cmd in articles_commande:
+            prix_centimes = int(round(article_cmd.price.prix * 100))
+            articles_panier.append({
+                'product': article_cmd.product,
+                'price': article_cmd.price,
+                'quantite': article_cmd.qty,
+                'prix_centimes': prix_centimes,
+            })
+
+        if not articles_panier:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Aucun article à payer dans cette commande"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        total_centimes = _calculer_total_panier_centimes(articles_panier)
+        total_en_euros = total_centimes / 100
+
+        state = _construire_state(point_de_vente)
+
+        donnees_paiement = request.POST.dict()
+        donnees_paiement["total"] = total_centimes
+        somme_donnee_brute = donnees_paiement.get("given_sum", "")
+        if somme_donnee_brute == "":
+            donnees_paiement["given_sum"] = 0
+        else:
+            donnees_paiement["given_sum"] = int(somme_donnee_brute)
+        donnees_paiement["missing"] = 0
+
+        moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
+        logger.info(
+            f"payer_commande: commande={commande_uuid}, moyen={moyen_paiement_code}, "
+            f"total={total_centimes}cts, articles={len(articles_panier)}"
+        )
+
+        # --- Aiguillage NFC / non-NFC ---
+        # --- NFC / non-NFC routing ---
+        #
+        # NFC : _payer_par_nfc() a son propre bloc atomic (savepoint imbriqué).
+        #   On l'appelle dans un bloc atomic externe pour garantir l'atomicité
+        #   entre le paiement fedow_core et la mise à jour de la commande/table.
+        #   Détection du succès : on cherche 'paiement-succes' dans le HTML retourné.
+        #   render() retourne HttpResponse (pas TemplateResponse), donc template_name
+        #   n'est pas disponible — on utilise le contenu HTML directement.
+        # NFC: _payer_par_nfc() has its own atomic block (nested savepoint).
+        #   We wrap it in an outer atomic to guarantee atomicity between
+        #   the fedow_core payment and the order/table update.
+        #   Success detection: we look for 'paiement-succes' in the returned HTML.
+
+        if moyen_paiement_code == "nfc":
+            with db_transaction.atomic():
+                paiement_vs = PaiementViewSet()
+                response_nfc = paiement_vs._payer_par_nfc(
+                    request, state, donnees_paiement, articles_panier,
+                    total_en_euros, total_centimes,
+                    False, moyen_paiement_code,
+                    point_de_vente,
+                )
+
+                # Détecter le succès NFC via le data-testid dans le HTML
+                # Detect NFC success via data-testid in the HTML
+                nfc_paiement_reussi = b'paiement-succes' in response_nfc.content
+
+                if not nfc_paiement_reussi:
+                    # Fonds insuffisants, carte inconnue, etc.
+                    # Le savepoint interne a déjà rollback.
+                    # Insufficient funds, unknown card, etc.
+                    # The inner savepoint already rolled back.
+                    return response_nfc
+
+                # NFC réussi → mettre à jour commande + table
+                # NFC succeeded → update order + table
+                commande.statut = CommandeSauvegarde.PAID
+                commande.save(update_fields=['statut'])
+
+                commande.articles.exclude(
+                    statut=ArticleCommandeSauvegarde.ANNULE,
+                ).update(
+                    statut=ArticleCommandeSauvegarde.SERVI,
+                    reste_a_payer=0,
+                    reste_a_servir=0,
+                )
+
+                if commande.table is not None:
+                    autres_commandes_ouvertes = CommandeSauvegarde.objects.filter(
+                        table=commande.table,
+                        statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
+                    ).exclude(uuid=commande.uuid).exists()
+                    if not autres_commandes_ouvertes:
+                        commande.table.statut = Table.LIBRE
+                        commande.table.save(update_fields=['statut'])
+
+            return response_nfc
+
+        # --- Paiement non-NFC (espèces, CB, chèque) ---
+        # --- Non-NFC payment (cash, CC, check) ---
+        with db_transaction.atomic():
+            _creer_lignes_articles(articles_panier, moyen_paiement_code)
+
+            # Marquer la commande comme payée
+            # Mark order as paid
+            commande.statut = CommandeSauvegarde.PAID
+            commande.save(update_fields=['statut'])
+
+            # Marquer tous les articles comme servis
+            # Mark all articles as served
+            commande.articles.exclude(
+                statut=ArticleCommandeSauvegarde.ANNULE,
+            ).update(
+                statut=ArticleCommandeSauvegarde.SERVI,
+                reste_a_payer=0,
+                reste_a_servir=0,
+            )
+
+            # Libérer la table si pas d'autre commande ouverte dessus
+            # Free the table if no other open order on it
+            if commande.table is not None:
+                autres_commandes_ouvertes = CommandeSauvegarde.objects.filter(
+                    table=commande.table,
+                    statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
+                ).exclude(uuid=commande.uuid).exists()
+
+                if not autres_commandes_ouvertes:
+                    commande.table.statut = Table.LIBRE
+                    commande.table.save(update_fields=['statut'])
+
+        # Construire la réponse succès pour espèces/CB/chèque
+        # Build success response for cash/CC/check
+        donnees_paiement["give_back"] = 0
+        if moyen_paiement_code == "espece" and donnees_paiement["given_sum"] > total_centimes:
+            donnees_paiement["give_back"] = (donnees_paiement["given_sum"] - total_centimes) / 100
+
+        context = {
+            "currency_data": CURRENCY_DATA,
+            "payment": donnees_paiement,
+            "monnaie_name": state["place"]["monnaie_name"],
+            "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
+            "deposit_is_present": False,
+            "total": total_en_euros,
+            "state": state,
+            "original_payment": None,
+        }
+        return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  5. Annuler une commande                                                 #
+    #  5. Cancel an order                                                      #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="annuler/(?P<commande_uuid>[^/.]+)", url_name="annuler")
+    def annuler_commande(self, request, commande_uuid=None):
+        """
+        POST /laboutik/commande/annuler/<commande_uuid>/
+        Annule la commande et libère la table si nécessaire.
+        Cancels the order and frees the table if needed.
+        """
+        try:
+            commande = CommandeSauvegarde.objects.select_related('table').get(uuid=commande_uuid)
+        except (CommandeSauvegarde.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Commande introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        if commande.statut == CommandeSauvegarde.PAID:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Une commande payée ne peut pas être annulée"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        with db_transaction.atomic():
+            # Annuler la commande et ses articles
+            # Cancel the order and its articles
+            commande.statut = CommandeSauvegarde.CANCEL
+            commande.save(update_fields=['statut'])
+
+            commande.articles.exclude(
+                statut=ArticleCommandeSauvegarde.ANNULE,
+            ).update(statut=ArticleCommandeSauvegarde.ANNULE)
+
+            # Libérer la table si pas d'autre commande ouverte dessus
+            # Free the table if no other open order on it
+            if commande.table is not None:
+                autres_commandes_ouvertes = CommandeSauvegarde.objects.filter(
+                    table=commande.table,
+                    statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
+                ).exclude(uuid=commande.uuid).exists()
+
+                if not autres_commandes_ouvertes:
+                    commande.table.statut = Table.LIBRE
+                    commande.table.save(update_fields=['statut'])
+
+        context = {
+            "msg_type": "success",
+            "msg_content": _("Commande annulée"),
+            "selector_bt_retour": "#messages",
+        }
+        return render(request, "laboutik/partial/hx_messages.html", context)

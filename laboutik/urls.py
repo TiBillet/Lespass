@@ -18,10 +18,11 @@
 
 from rest_framework import routers
 
-from laboutik.views import CaisseViewSet, PaiementViewSet
+from laboutik.views import CaisseViewSet, CommandeViewSet, PaiementViewSet
 
 router = routers.DefaultRouter()
 router.register(r'caisse', CaisseViewSet, basename='laboutik-caisse')
 router.register(r'paiement', PaiementViewSet, basename='laboutik-paiement')
+router.register(r'commande', CommandeViewSet, basename='laboutik-commande')
 
 urlpatterns = router.urls

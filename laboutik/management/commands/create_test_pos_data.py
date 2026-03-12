@@ -87,9 +87,29 @@ class Command(BaseCommand):
                     "poid_liste": 4,
                 },
             )
+            categorie_cashless, _ = CategorieProduct.objects.update_or_create(
+                name="Cashless",
+                defaults={
+                    "icon": "fa-wallet",
+                    "couleur_texte": "#FFFFFF",
+                    "couleur_fond": "#10B981",
+                    "poid_liste": 5,
+                },
+            )
+            categorie_adhesions, _ = CategorieProduct.objects.update_or_create(
+                name="Adhesions",
+                defaults={
+                    "icon": "fa-id-card",
+                    "couleur_texte": "#FFFFFF",
+                    "couleur_fond": "#6366F1",
+                    "poid_liste": 6,
+                },
+            )
+
             self.stdout.write(
                 f"  Categories : {categorie_bar}, {categorie_restauration}, "
-                f"{categorie_boissons_chaudes}, {categorie_snacks}, {categorie_vins}"
+                f"{categorie_boissons_chaudes}, {categorie_snacks}, {categorie_vins}, "
+                f"{categorie_cashless}, {categorie_adhesions}"
             )
 
             # --- Produits POS avec prix et icones ---
@@ -264,10 +284,84 @@ class Command(BaseCommand):
                     "icon_pos": "fa-glass-whiskey",
                     "prix": Decimal("4.00"),
                 },
+                # --- Cashless : recharges ---
+                # / Cashless: top-ups
+                {
+                    "name": "Recharge 10€",
+                    "methode_caisse": Product.RECHARGE_EUROS,
+                    "categorie_pos": categorie_cashless,
+                    "couleur_fond_pos": "#10B981",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-coins",
+                    "prix": Decimal("10.00"),
+                },
+                {
+                    "name": "Recharge 20€",
+                    "methode_caisse": Product.RECHARGE_EUROS,
+                    "categorie_pos": categorie_cashless,
+                    "couleur_fond_pos": "#059669",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-coins",
+                    "prix": Decimal("20.00"),
+                },
+                {
+                    "name": "Cadeau 5€",
+                    "methode_caisse": Product.RECHARGE_CADEAU,
+                    "categorie_pos": categorie_cashless,
+                    "couleur_fond_pos": "#F472B6",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-gift",
+                    "prix": Decimal("5.00"),
+                },
+                {
+                    "name": "Cadeau 10€",
+                    "methode_caisse": Product.RECHARGE_CADEAU,
+                    "categorie_pos": categorie_cashless,
+                    "couleur_fond_pos": "#EC4899",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-gift",
+                    "prix": Decimal("10.00"),
+                },
+                {
+                    "name": "Temps 1h",
+                    "methode_caisse": Product.RECHARGE_TEMPS,
+                    "categorie_pos": categorie_cashless,
+                    "couleur_fond_pos": "#8B5CF6",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-clock",
+                    "prix": Decimal("1.00"),
+                },
+                # --- Adhesions ---
+                # / Memberships
+                {
+                    "name": "Adhesion annuelle",
+                    "methode_caisse": Product.ADHESION_POS,
+                    "categorie_article": Product.ADHESION,
+                    "categorie_pos": categorie_adhesions,
+                    "couleur_fond_pos": "#6366F1",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-id-card",
+                    "prix": Decimal("15.00"),
+                    "subscription_type": Price.YEAR,
+                },
+                {
+                    "name": "Adhesion mensuelle",
+                    "methode_caisse": Product.ADHESION_POS,
+                    "categorie_article": Product.ADHESION,
+                    "categorie_pos": categorie_adhesions,
+                    "couleur_fond_pos": "#818CF8",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-id-card",
+                    "prix": Decimal("5.00"),
+                    "subscription_type": Price.MONTH,
+                },
             ]
 
             for product_data in products_data:
                 prix_value = product_data.pop("prix")
+                # subscription_type est un champ de Price, pas de Product
+                # / subscription_type is a Price field, not a Product field
+                subscription_type = product_data.pop("subscription_type", Price.NA)
                 product, created = Product.objects.get_or_create(
                     name=product_data["name"],
                     defaults=product_data,
@@ -279,6 +373,7 @@ class Command(BaseCommand):
                         product=product,
                         name=f"Tarif {product.name}",
                         prix=prix_value,
+                        subscription_type=subscription_type,
                     )
                     self.stdout.write(f"  Produit cree : {product.name} ({prix_value} EUR)")
                 else:
@@ -341,6 +436,21 @@ class Command(BaseCommand):
                 },
             )
 
+            pdv_cashless, _ = PointDeVente.objects.update_or_create(
+                name="Cashless",
+                defaults={
+                    "icon": "fa-wallet",
+                    "comportement": PointDeVente.CASHLESS,
+                    "service_direct": True,
+                    "afficher_les_prix": True,
+                    "accepte_especes": False,
+                    "accepte_carte_bancaire": False,
+                    "accepte_cheque": False,
+                    "accepte_commandes": False,
+                    "poid_liste": 3,
+                },
+            )
+
             # Associe les produits aux points de vente
             # / Link products to points of sale
             all_pos_products = Product.objects.filter(methode_caisse__isnull=False)
@@ -349,6 +459,9 @@ class Command(BaseCommand):
             )
             restaurant_products = all_pos_products.filter(
                 categorie_pos__in=[categorie_restauration, categorie_boissons_chaudes]
+            )
+            cashless_products = all_pos_products.filter(
+                categorie_pos__in=[categorie_cashless, categorie_adhesions]
             )
 
             # Bar : boissons froides, vins, snacks
@@ -361,17 +474,25 @@ class Command(BaseCommand):
             pdv_restaurant.products.set(restaurant_products)
             pdv_restaurant.categories.set([categorie_restauration, categorie_boissons_chaudes])
 
-            # Terrasse : tout sauf les boissons chaudes
-            # / Terrasse: everything except hot drinks
-            terrasse_products = all_pos_products.exclude(categorie_pos=categorie_boissons_chaudes)
+            # Terrasse : tout sauf les boissons chaudes et cashless
+            # / Terrasse: everything except hot drinks and cashless
+            terrasse_products = all_pos_products.filter(
+                categorie_pos__in=[categorie_bar, categorie_restauration, categorie_vins, categorie_snacks]
+            )
             pdv_terrasse.products.set(terrasse_products)
             pdv_terrasse.categories.set([categorie_bar, categorie_restauration, categorie_vins, categorie_snacks])
+
+            # Cashless : recharges + adhesions
+            # / Cashless: top-ups + memberships
+            pdv_cashless.products.set(cashless_products)
+            pdv_cashless.categories.set([categorie_cashless, categorie_adhesions])
 
             self.stdout.write(
                 f"  Points de vente : "
                 f"{pdv_bar} ({bar_products.count()} produits), "
                 f"{pdv_restaurant} ({restaurant_products.count()} produits), "
-                f"{pdv_terrasse} ({terrasse_products.count()} produits)"
+                f"{pdv_terrasse} ({terrasse_products.count()} produits), "
+                f"{pdv_cashless} ({cashless_products.count()} produits)"
             )
 
             # --- Cartes primaires (uniquement en mode TEST) ---
@@ -417,7 +538,7 @@ class Command(BaseCommand):
                 carte=carte_cm,
                 defaults={"edit_mode": True},
             )
-            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse])
+            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse, pdv_cashless])
             if created_cm:
                 self.stdout.write(f"  Carte primaire creee : {tag_id_cm} (tous les PV, edit_mode=True)")
             else:

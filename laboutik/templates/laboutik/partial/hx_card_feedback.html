@@ -1,32 +1,36 @@
 {% load static i18n %}
 
-<div id="messages" style="background-color: var({{ background }});">
+<div id="messages" style="background-color: var({{ background }});" aria-live="polite">
   <div class="BF-col-uniforme check-carte-ok">
-    {% if not card.email %}
+    {% if erreur %}
+    <div class="f1r test-return-card-type" data-testid="retour-carte-erreur">
+      <span>{{ erreur }}</span>
+    </div>
+    {% elif not card.email %}
     <div class="f1r test-return-card-type">
       <span>{% trans "Carte anonyme" %}</span>
     </div>
     {% else %}
     <div class="f1r test-return-card-type">
-      <span>{% trans "Carte fédérée" %}</span>
+      <span>{% trans "Carte federee" %}</span>
     </div>
     {% endif %}
   </div>
 
-  <div class="return-container">
+  {% if not erreur %}
+  <div class="return-container" data-testid="retour-carte-soldes">
     <div class="return-header">
       <div>{% trans "Tirelire" %}</div>
       <div class="test-return-total-card" title="total">
-        {{total_monnaie}}
+        {{ total_monnaie }}
       </div>
     </div>
 
-
-    <!-- wallet -->
+    {% for token in tokens %}
     <div class="return-item">
-      <div class="test-return-monnaie-item-value{{ forloop.counter }}">{{ card.wallets }}</div>
+      <div class="test-return-monnaie-item-value{{ forloop.counter }}">{{ token.value_euros }}</div>
       <div class="test-return-monnaie-item-name{{ forloop.counter }}">
-        {{ state.place.monnaie_name }}
+        {{ token.asset_name }}
       </div>
       {% if state.place.name %}
       <div class="test-return-monnaie-item-place{{ forloop.counter }}">
@@ -35,21 +39,27 @@
       </div>
       {% endif %}
     </div>
-
-    <!-- wallet gift -->
+    {% empty %}
     <div class="return-item">
-      <div class="test-return-monnaie-item-value{{ forloop.counter }}">{{ card.wallets_gift }}</div>
-      <div class="test-return-monnaie-item-name{{ forloop.counter }}">
-        {{ state.place.monnaie_name }} {% trans "Cadeau" %}
-      </div>
-      {% if state.place.name %}
-      <div class="test-return-monnaie-item-place{{ forloop.counter }}">
-        <div>{% trans "Provenance" %}</div>
-        <div>{{ state.place.name }}</div>
-      </div>
-      {% endif %}
+      <div>{% trans "Aucun solde" %}</div>
     </div>
+    {% endfor %}
   </div>
+
+  {% if adhesions %}
+  <div class="return-container" data-testid="retour-carte-adhesions">
+    <div class="return-header">
+      <div>{% trans "Adhesions actives" %}</div>
+    </div>
+    {% for adhesion in adhesions %}
+    <div class="return-item">
+      <div>{{ adhesion.price.product.name }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endif %}
+
   <c-bt.return selector="#messages" />
 
   <style>
@@ -86,7 +96,7 @@
       width: 100%;
       display: grid;
       grid-template-columns: auto 2fr 1fr;
-      
+
     }
   </style>
 </div>
