@@ -61,7 +61,21 @@ PARTIE B — Donnees de test (management command)
    - 1 PointDeVente "Bar" (DIRECT, accepte tout)
    - 1 PointDeVente "Restaurant" (DIRECT, accepte_commandes=True)
 
+   Si settings.TEST == True (env TEST=1), creer aussi :
+   - 1 Detail (batch de cartes test, slug="test-pos-cards")
+   - 1 CarteCashless + CartePrimaire (tag_id=DEMO_TAGID_CM, edit_mode=True, liee a tous les PV)
+   - 2 CarteCashless client (DEMO_TAGID_CLIENT1, DEMO_TAGID_CLIENT2) — sans CartePrimaire,
+     pour tester les paiements NFC en Phase 3
+
+   Les tag_id viennent de settings (DEMO_TAGID_*), definis dans .env :
+     DEMO_TAGID_CM='A49E8E2A'
+     DEMO_TAGID_CLIENT1='52BE6543'
+     DEMO_TAGID_CLIENT2='33BC1DAA'
+
    ⚠️ Prix sur Price.prix (DecimalField euros), PAS en centimes.
+   ⚠️ Detail et CarteCashless sont en SHARED_APPS (schema public).
+      Utiliser Client.objects.get(schema_name=...) pour la FK Detail.origine,
+      pas connection.tenant (qui renvoie FakeTenant).
 
 4. Lancer :
    docker exec lespass_django poetry run python manage.py check
@@ -77,6 +91,8 @@ PARTIE B — Donnees de test (management command)
 - Les donnees de test sont creees (PointDeVente.objects.count() >= 2)
 - POSProduct changelist affiche les produits avec methode_caisse non null
 - Les proxy existants (TicketProduct, MembershipProduct) restent fonctionnels
+- Si TEST=1 : CartePrimaire liee a tous les PV, 2 cartes client creees
+- La commande est idempotente (relancer ne cree pas de doublons)
 
 ## Modele recommande
 

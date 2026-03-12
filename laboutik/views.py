@@ -324,21 +324,14 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg": _("Aucun point de vente configuré"),
             })
 
-        if nombre_de_pvs == 1:
-            # 1 seul PV → redirect direct
-            # Single POS → direct redirect
-            pv = pvs[0]
-            url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
-            url_avec_params = f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}"
-            logger.debug(f"carte_primaire: Redirection vers {url_avec_params}")
-            return HttpResponseClientRedirect(url_avec_params)
-
-        # Plusieurs PV → afficher le choix
-        # Multiple POS → show selection
-        return render(request, "laboutik/partial/hx_choose_pv.html", {
-            "points_de_vente": pvs,
-            "tag_id_cm": tag_id_carte_manager,
-        })
+        # Toujours rediriger vers le premier PV de la liste (tri par poid_liste).
+        # Comportement original de LaBoutik : pas de page de choix intermediaire.
+        # Always redirect to the first POS in the list (sorted by poid_liste).
+        pv = pvs[0]
+        url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
+        url_avec_params = f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}"
+        logger.debug(f"carte_primaire: Redirection vers {url_avec_params}")
+        return HttpResponseClientRedirect(url_avec_params)
 
     @action(detail=False, methods=["get"], url_path="point_de_vente", url_name="point_de_vente")
     def point_de_vente(self, request):
