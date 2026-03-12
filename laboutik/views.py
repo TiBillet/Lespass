@@ -6,7 +6,7 @@
 # Authentication: LaBoutik API key (Discovery / PIN pairing) or tenant admin session.
 #
 # CaisseViewSet : données depuis la DB (modèles ORM).
-# PaiementViewSet : données encore mockées (JSON fichier, étape 2).
+# PaiementViewSet : paiements espèces/CB depuis la DB (Phase 2). NFC encore placeholder (Phase 3).
 
 import logging
 import os
@@ -693,8 +693,8 @@ class PaiementViewSet(viewsets.ViewSet):
     Flux de paiement (3 étapes) / Payment flow (3 steps) :
     1. moyens_paiement() → affiche les boutons de paiement disponibles / shows available payment buttons
     2. confirmer()       → écran de confirmation + saisie espèce / confirmation screen + cash input
-    3. payer()           → exécute le paiement (mock) + retour succès ou fonds insuffisants
-                           executes payment (mock) + returns success or insufficient funds
+    3. payer()           → exécute le paiement (DB) + retour succès ou fonds insuffisants
+                           executes payment (DB) + returns success or insufficient funds
 
     Annexes / Utilities :
     - lire_nfc()       → attente lecture carte NFC pour paiement cashless / NFC card read for cashless payment
@@ -803,8 +803,8 @@ class PaiementViewSet(viewsets.ViewSet):
     def payer(self, request):
         """
         POST /laboutik/paiement/payer/
-        Exécute le paiement mock selon le moyen choisi.
-        Executes the mock payment according to the chosen method.
+        Exécute le paiement et crée les LigneArticle en base.
+        Executes the payment and creates LigneArticle records in DB.
 
         Le formulaire d'addition (côté client) envoie :
         The addition form (client-side) sends:
