@@ -1,0 +1,77 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<!--
+FORMULAIRE PAIEMENT HORS-LIGNE
+/ Offline payment form
+
+LOCALISATION : Administration/templates/admin/membership/ajouter_paiement.html
+
+Permet a un admin d'enregistrer un paiement par especes, cheque ou virement
+sur une adhesion en attente (statut WP ou AW).
+-->
+<div class="max-w-lg mx-auto mt-8">
+    <div class="bg-white dark:bg-base-900 rounded-default shadow-xs border border-base-200 dark:border-base-800 p-6">
+
+        <h2 class="text-lg font-semibold text-important mb-4">{{ title }}</h2>
+
+        <div class="mb-6 text-sm text-muted space-y-1">
+            <p><strong>{% translate "Adhérent·e" %} :</strong> {{ membership.first_name }} {{ membership.last_name }} ({{ membership.user.email }})</p>
+            <p><strong>{% translate "Produit" %} :</strong> {{ membership.price.product.name }} — {{ membership.price.name }}</p>
+            {% if membership.price.prix %}
+                <p><strong>{% translate "Prix catalogue" %} :</strong> {{ membership.price.prix }} €</p>
+            {% endif %}
+        </div>
+
+        <form method="post" data-testid="membership-add-payment-form">
+            {% csrf_token %}
+
+            <div class="mb-4">
+                <label for="id_amount" class="block text-sm font-medium text-important mb-1">
+                    {% translate "Montant (€)" %}
+                </label>
+                <input type="number"
+                       name="amount"
+                       id="id_amount"
+                       step="0.01"
+                       min="0"
+                       value="{{ montant_par_defaut }}"
+                       required
+                       class="w-full px-3 py-2 border border-base-300 dark:border-base-600 rounded-md bg-white dark:bg-base-800 text-important focus:outline-none focus:ring-2 focus:ring-primary-500"
+                       data-testid="membership-payment-amount">
+            </div>
+
+            <div class="mb-6">
+                <label for="id_payment_method" class="block text-sm font-medium text-important mb-1">
+                    {% translate "Moyen de paiement" %}
+                </label>
+                <select name="payment_method"
+                        id="id_payment_method"
+                        required
+                        class="w-full px-3 py-2 border border-base-300 dark:border-base-600 rounded-md bg-white dark:bg-base-800 text-important focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        data-testid="membership-payment-method">
+                    {% for code, label in moyens_de_paiement %}
+                        <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="flex gap-3 justify-end">
+                <a href="{{ cancel_url }}"
+                   class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                   data-testid="membership-payment-cancel">
+                    {% translate "Annuler" %}
+                </a>
+                <button type="submit"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                        data-testid="membership-payment-submit">
+                    {% translate "Enregistrer le paiement" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

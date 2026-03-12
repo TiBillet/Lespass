@@ -1015,6 +1015,27 @@ class TvaAdmin(ModelAdmin):
         return False
 
 
+class ProductArchiveFilter(admin.SimpleListFilter):
+    title = _("Archivé")
+    parameter_name = "archive"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("yes", _("Archivés")),
+            ("all", _("Tous")),
+        ]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value is None:
+            return queryset.exclude(archive=True)
+        if value == "yes":
+            return queryset.filter(archive=True)
+        if value == "all":
+            return queryset
+        return queryset
+
+
 @admin.register(Product, site=staff_admin_site)
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
@@ -1061,7 +1082,7 @@ class ProductAdmin(ModelAdmin):
     # autocomplete_fields = [
     #     "option_generale_radio", "option_generale_checkbox",
     # ]
-    list_filter = ['publish', 'categorie_article']
+    list_filter = ['publish', 'categorie_article', ProductArchiveFilter]
     search_fields = ['name']
 
     # Pour les bouton en haut de la vue change
@@ -1223,7 +1244,7 @@ class ProductAdmin(ModelAdmin):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
-        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]).exclude(archive=True)
+        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
 
     def get_search_results(self, request, queryset, search_term):
         """
@@ -1814,7 +1835,7 @@ class PriceChangeForm(ModelForm):
                 self.fields['adhesions_obligatoires'].widget.can_add_related = False
             elif instance.product.categorie_article == Product.ADHESION:  # si c'est un produit qui n'est pas l'adhésion
                 self.fields['product'].widget = HiddenInput()  # caché sauf si bouton + en haut a droite
-                self.fields['adhesions_obligatoires'].widget = HiddenInput()
+                self.fields['adhesions_obligatoires'].widget = forms.MultipleHiddenInput()
 
         except AttributeError as e:
             # NoneType' object has no attribute 'product
@@ -1886,6 +1907,22 @@ class PriceAdmin(ModelAdmin):
             'classes': ['tab'],
         }),
     )
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Breadcrumb : afficher "Produits > [nom du produit]" au lieu de "Tarifs > [nom du tarif]"
+        extra_context = extra_context or {}
+        if object_id:
+            price = Price.objects.select_related('product').filter(pk=object_id).first()
+            if price:
+                extra_context['opts'] = Product._meta
+                extra_context['original'] = price.product
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def response_change(self, request, obj):
+        # Après sauvegarde d'un tarif, rediriger vers la page du produit parent
+        from django.urls import reverse
+        product_url = reverse("admin:BaseBillet_product_change", args=[obj.product.pk])
+        return redirect(product_url)
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -3668,6 +3705,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
                 'show_gauge',
                 'postal_address',
                 'tag',
+                'thematique',
             )
         }),
         (_('Bookings'), {
@@ -3713,6 +3751,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
     autocomplete_fields = [
         "tag",
+        "thematique",
         # "options_radio",
         # "options_checkbox",
         "carrousel",

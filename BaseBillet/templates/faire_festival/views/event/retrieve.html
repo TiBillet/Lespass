@@ -126,7 +126,8 @@
      Adaptée depuis la maquette event_detail.html du Faire Festival
      Affiche toutes les informations détaillées d'un événement
      ======================================================================= -->
-<main class="container py-5 conteneur-principal">
+<main class="container-fluid py-5 conteneur-principal">
+    <div class="container">
 
     <!-- ===================================================================
          SECTION HERO : Présentation principale de l'événement
@@ -140,9 +141,10 @@
              ============================================================ -->
         <div class="col-md-6 mb-4 mb-md-0">
             <!-- Image principale de l'événement -->
-            <div class="image-detail-grand"
-                 style="background-image: url('{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ ""|randImg }}{% endif %}');">
-            </div>
+             <div class="image-detail-grand ratio ratio-16x9"
+                  role="img" aria-label="{{ event.name }}"
+                  style="background-image: url('{% if event.img %}{{ event.img.hdr.url }}{% else %}{{ ""|randImg }}{% endif %}');">
+             </div>
 
             <!-- Tags de l'événement (catégories/thématiques) -->
             <div class="mt-3">
@@ -157,6 +159,8 @@
              Titre, date, heure et bouton d'inscription
              ============================================================ -->
         <div class="col-md-6 ps-md-5">
+            <!-- Fond blanc pour séparer du motif -->
+            <div class="bg-white p-4">
 
             <!-- Titre de l'événement -->
             <h1 class="titre-detail mb-4 texte-bleu">
@@ -247,6 +251,8 @@
 
             <!-- Zone de résultat pour la réservation (HTMX) -->
             <div id="reservation-result" class="mt-3"></div>
+            
+            </div> <!-- Fin fond blanc informations -->
 
         </div> <!-- Fin colonne informations -->
 
@@ -258,7 +264,7 @@
          =================================================================== -->
     <div class="row mb-5">
         <div class="col-12">
-            <div class="boite-description bordure-epaisse">
+            <div class="boite-description bordure-epaisse bg-white">
                 {% if event.short_description or event.long_description %}
                     <div class="texte-description texte-bleu police-mono">
                         <!-- Description courte (si disponible) -->
@@ -299,13 +305,18 @@
             {% endif %}
             {% endcomment %}
 
+             <!-- INTERVENANTS -->
+
+
+
             <!-- Lieu détaillé -->
             {% if event.postal_address %}
                 <div class="mb-3">
-                    <p class="fw-bold mb-2">{% translate 'Location:' %}</p>
+                    <p class="fw-bold mb-2">{% translate 'Lieu:' %}</p>
                     <p>{{ event.postal_address }}</p>
                 </div>
             {% endif %}
+
 
             <!-- Lien externe (si disponible) -->
             {% if event.external_link %}
@@ -348,67 +359,7 @@
         </div>
     </div>
 
-    <!-- ===================================================================
-         SECTION PRODUITS ASSOCIÉS (Billetterie)
-         Affiche les différents tarifs/produits disponibles pour cet événement
-         =================================================================== -->
-    {% if event.products.exists %}
-        <div class="row mb-5">
-            <div class="col-12">
-                <div class="bordure-epaisse bg-white p-4">
-                    <h3 class="texte-bleu police-titre mb-4">
-                        {% translate 'Tickets and prices' %}
-                    </h3>
-
-                    <div class="row g-3">
-                        {% for product in event.products.all %}
-                            <div class="col-md-6">
-                                <div class="carte-evenement">
-                                    <div>
-                                        <h4 class="titre-evenement h5">
-                                            {{ product.name }}
-                                        </h4>
-
-                                        {% if product.short_description %}
-                                            <p class="small texte-bleu police-mono">
-                                                {{ product.short_description }}
-                                            </p>
-                                        {% endif %}
-
-                                        <!-- Prix -->
-                                        <div class="infos-evenement">
-                                            {% if product.prices.exists %}
-                                                {% for price in product.prices.all %}
-                                                    <span class="fw-bold">
-                                                        {{ price.prix }} €
-                                                        {% if price.name %}
-                                                            ({{ price.name }})
-                                                        {% endif %}
-                                                    </span>
-                                                {% endfor %}
-                                            {% else %}
-                                                <span class="fw-bold">{% translate 'Free' %}</span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-
-                                    <div class="pied-carte mt-3">
-                                        <button class="bouton-petit-bleu w-100"
-                                                data-bs-toggle="offcanvas"
-                                                data-bs-target="#bookingPanel"
-                                                aria-controls="bookingPanel"
-                                                data-testid="booking-open-panel">
-                                            {% translate 'Select' %}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
+  
 
     <!-- ===================================================================
          SECTION ÉVÉNEMENTS SIMILAIRES (Optionnel)
@@ -439,6 +390,8 @@
             </a>
         </div>
     </div>
+
+    </div> <!-- Fin container -->
 
 </main>
 

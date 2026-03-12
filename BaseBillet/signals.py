@@ -4,6 +4,7 @@ from datetime import timedelta
 import requests
 from django.conf import settings
 from django.db import connection
+from django.utils.translation import gettext as _
 from django.db.models import Q
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
@@ -229,11 +230,15 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
                 if valid_tickets_count + total_ticket_qty + under_purchase > event.jauge_max:
                     logger.warning(f"    {resa} : {valid_tickets_count} + {total_ticket_qty} + {under_purchase} > {event.jauge_max}")
                     remains = event.jauge_max - valid_tickets_count - under_purchase
-                    error_message = "Votre validation est supérieure de 15 minutes à votre réservation. "
+                    # Message d'erreur affiché à l'utilisateur via django.messages
+                    # Le ValueError est intercepté dans emailconfirmation() (BaseBillet/views.py)
+                    # / Error message shown to user via django.messages
+                    # / The ValueError is caught in emailconfirmation() (BaseBillet/views.py)
+                    error_message = _("Your confirmation took more than 15 minutes. ")
                     if remains > 0 :
-                        error_message += f"L'évènement est presque complet, il reste {remains} places, merci de relancer votre reservation."
+                        error_message += _("The event is almost full, only %(remains)d seat(s) left. Please make a new reservation.") % {"remains": remains}
                     else :
-                        error_message += "L'évènement est complet."
+                        error_message += _("The event is now full.")
                     resa.tickets.all().update(status=Ticket.NOT_ACTIV)
                     resa.status = Reservation.CANCELED
                     resa.save()
@@ -244,7 +249,10 @@ def activator_free_reservation(old_instance: TibilletUser, new_instance: Tibille
                     resa.save()
 
         if error_message:
-            #TODO: On préfèrerais passer par un error_message en front, mais ici on a pas le request.
+            # Le ValueError remonte jusqu'à emailconfirmation() qui le capte
+            # et affiche le message via django.messages + redirect
+            # / ValueError propagates up to emailconfirmation() which catches it
+            # / and displays the message via django.messages + redirect
             raise ValueError(error_message)
 
 ######################## MOTEUR SIGNAL ########################
@@ -400,16 +408,20 @@ def send_membership_and_badge_product_to_fedow(sender, instance: Product, create
     # Est ici pour éviter les double imports
     if instance.categorie_article in [Product.ADHESION, Product.BADGE]:
         # vérifie l'existante du produit Adhésion et Badge dans Fedow et le créé si besoin
-        fedow_config = FedowConfig.get_solo()
-        fedow_asset = AssetFedow(fedow_config=fedow_config)
-        if not instance.archive:
-            # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
-            asset, created = fedow_asset.get_or_create_membership_asset(instance)
-            logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
+        # Un échec Fedow ne doit jamais bloquer la sauvegarde du produit
+        try:
+            fedow_config = FedowConfig.get_solo()
+            fedow_asset = AssetFedow(fedow_config=fedow_config)
+            if not instance.archive:
+                # Si l'adhésion n'est pas archivé, on vérifie qu'elle existe bien :
+                asset, created = fedow_asset.get_or_create_membership_asset(instance)
+                logger.info(f"send_membership_product_to_fedow : created : {created} - asset {asset}")
 
-        if instance.archive:
-            # L'instance est archivé, on le notifie à Fedow :
-            fedow_asset.archive_asset(instance.uuid)
+            if instance.archive:
+                # L'instance est archivé, on le notifie à Fedow :
+                fedow_asset.archive_asset(instance.uuid)
+        except Exception as exc:
+            logger.error(f"send_membership_product_to_fedow ERREUR Fedow (non bloquant) : {exc}")
 
 
 @receiver(post_save, sender=Product) # Attention, les post_save depuis l'admin sont atomic

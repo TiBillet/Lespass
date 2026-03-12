@@ -5,7 +5,7 @@ import re
 import uuid
 
 from Administration.utils import clean_text
-from datetime import timedelta
+from datetime import date as date_type, timedelta
 from decimal import Decimal
 from io import BytesIO
 
@@ -185,6 +185,16 @@ def get_context(request):
     }
 
     navbar: list = context["main_nav"]
+
+    # Infos pratiques : uniquement pour le thème Faire Festival
+    # Practical info page: only for the Faire Festival skin
+    if config.skin == "faire_festival":
+        navbar.append(
+            {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
+             'label': _('Infos pratiques'),
+             'icon': 'info-circle'}
+        )
+
     agenda_federation_active = FederatedPlace.objects.exists()
     asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
     if agenda_federation_active or asset_federation_active:
@@ -368,7 +378,15 @@ def emailconfirmation(request, token):
             next_url = signing.loads(next_url)
             return HttpResponseRedirect(next_url)
         return redirect('index')
+    except ValueError as e:
+        # Message explicite venant du signal (réservation expirée, évènement complet)
+        # L'utilisateur voit le message sur la page d'accueil après la redirection
+        # / Explicit message from signal (expired reservation, full event)
+        # / User sees the message on the homepage after redirect
+        messages.add_message(request, messages.WARNING, str(e))
+        return redirect('index')
     except Exception as e:
+        logger.error(f"emailconfirmation error: {e}")
         raise Http404("Error on email confirmation")
 
 
@@ -1489,6 +1507,21 @@ def index(request):
     return render(request, template_path, context=template_context)
 
 
+@require_GET
+def infos_pratiques(request):
+    """
+    FR: Page statique "Infos pratiques" pour le festival
+    EN: Static page "Practical information" for the festival
+    """
+    template_context = get_context(request)
+
+    # Résolution du template avec fallback vers reunion si le skin n'a pas de infos_pratiques.html
+    config = Configuration.get_solo()
+    template_path = get_skin_template(config, "views/infos_pratiques.html")
+
+    return render(request, template_path, context=template_context)
+
+
 class FederationViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.AllowAny]
@@ -1660,7 +1693,7 @@ class EventMVT(viewsets.ViewSet):
 
         return None
 
-    def federated_events_filter(self, tags=None, search=None, page=1):
+    def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
         dated_events = {}
         paginated_info = {
             'page': page,
@@ -1729,6 +1762,9 @@ class EventMVT(viewsets.ViewSet):
                         Q(tag__name__icontains=search),
                     )
 
+                if thematique:
+                    events = events.filter(thematique__slug=thematique)
+
                 # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
                 paginator = Paginator(events.order_by('datetime').distinct(), 50)
                 paginated_events = paginator.get_page(page)
@@ -1769,8 +1805,11 @@ class EventMVT(viewsets.ViewSet):
 
         logger.info(f"request.GET : {request.GET}")
 
+        thematique_slug = request.GET.get('thematique')
         ctx = {}  # le dict de context pour template
-        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(tags=tags, search=search, page=page)
+        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(
+            tags=tags, search=search, page=page, thematique=thematique_slug
+        )
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
@@ -1789,13 +1828,45 @@ class EventMVT(viewsets.ViewSet):
         if search:
             search = str(search)
         page = request.GET.get('page', 1)
-        # Data for tag filters UI
+        thematique_slug = request.GET.get('thematique')
+        # Paramètre de filtre par date (format ISO : "2025-03-15")
+        # / Date filter param (ISO format: "2025-03-15")
+        date_filter = request.GET.get('date')
+
+        # Données pour les filtres (tags, thématiques, recherche)
+        # / Data for filter UI (tags, thematiques, search)
         context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(tags=tags, search=search,
-                                                                                          page=page)
+        context['all_thematiques'] = Tag.objects.filter(events_thematique__isnull=False).distinct()
+        context['active_thematique'] = thematique_slug
+        context['active_date'] = date_filter
+        context['dated_events'], context['paginated_info'] = self.federated_events_filter(
+            tags=tags, search=search, page=page, thematique=thematique_slug
+        )
+
+        # Le dropdown des dates doit toujours montrer toutes les dates disponibles
+        # On copie le dict AVANT filtrage, sinon la référence pointe vers le même objet
+        # / The date dropdown must always show all available dates
+        # / Copy the dict BEFORE filtering, otherwise reference points to same object
+        context['all_dates'] = dict(context['dated_events'])
+
+        # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
+        # / Date filter: keep only the selected date for card display
+        if date_filter:
+            try:
+                selected_date = date_type.fromisoformat(date_filter)
+                dated_events_filtered = {}
+                for event_date, event_list in context['dated_events'].items():
+                    if event_date == selected_date:
+                        dated_events_filtered[event_date] = event_list
+                context['dated_events'] = dated_events_filtered
+                context['active_date_obj'] = selected_date
+            except (ValueError, TypeError):
+                # Paramètre invalide → on ignore, on affiche tout
+                # / Invalid param → ignore, show all
+                context['active_date'] = None
 
         # Résolution du template avec fallback vers reunion
         config = Configuration.get_solo()
@@ -3302,5 +3373,4 @@ class Tenant(viewsets.ViewSet):
         return render(request, "reunion/views/tenant/after_onboard_stripe.html", context=context)
 
         #     _("Your Stripe account does not seem to be valid. "
-        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space."))
-        # return redirect('/tenant/new/')
+        #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")

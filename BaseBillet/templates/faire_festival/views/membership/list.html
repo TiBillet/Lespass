@@ -58,6 +58,24 @@
     </div>
 
     <!-- ===================================================================
+         DESCRIPTION DE LA PAGE D'ADHÉSION
+         Affichée en entier si courte, tronquée avec "Lire la suite" si longue
+         =================================================================== -->
+    {% if config.description_membership_page %}
+        <div class="mb-4 description-membership-wrapper">
+            <div class="description-membership-content bordure-epaisse bg-white p-4"
+                 id="descriptionMembershipContent">
+                {{ config.description_membership_page | safe }}
+            </div>
+            <button class="btn bg-white bordure-epaisse w-100 text-center mt-2 texte-bleu police-mono d-none"
+                    id="descriptionMembershipToggle"
+                    type="button"
+                    data-testid="membership-description-toggle">
+                {% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
+        </div>
+    {% endif %}
+    <!-- ===================================================================
          GRILLE DES CARTES DE PRODUITS (Adhésions / Billets)
          Affiche les différents produits disponibles à l'achat
          =================================================================== -->
@@ -76,15 +94,15 @@
                          IMAGE DU PRODUIT
                          Affiche l'image ou un placeholder jaune
                          ================================================ -->
-                    <div class="image-billet mb-4"
-                         style="background-image: url('{% if product.img %}{{ product.img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}'); background-size: cover; background-position: center;">
+                    <div class="image-billet ratio ratio-4x3 mb-4"
+                         style="background-image: url('{% if product.img %}{{ product.img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');">
                     </div>
 
                     <!-- ================================================
                          INFORMATIONS DU PRODUIT
                          ================================================ -->
                     <!-- Nom du produit (ex: "BILLET JOUR") -->
-                    <h2 class="titre-billet mb-2">
+                    <h2 class="titre-billet mb-2 flex">
                         {{ product.name|upper }}
                     </h2>
 
@@ -141,7 +159,7 @@
                        data-bs-toggle="offcanvas"
                        data-bs-target="#subscribePanel"
                        aria-controls="subscribePanel"
-                       data-testid="membership-open-{{ product.uuid }}">
+                        data-tibi-testid="membership-open-{{ product.uuid }}">
                         {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}{% translate 'Subscribe' %}{% endif %}
                     </button>
 
@@ -175,6 +193,7 @@
 
     </div> <!-- Fin row -->
 
+    {% comment %}
     <!-- ===================================================================
          SECTION FÉDÉRATION (Optionnel)
          Affiche les autres lieux/organisations de la fédération
@@ -227,6 +246,7 @@
             </div>
         </div>
     {% endif %}
+    {% endcomment %}
 
     <!-- ===================================================================
          INFORMATIONS COMPLÉMENTAIRES (Optionnel)
@@ -257,4 +277,58 @@
 
 </main>
 
-{% endblock %}
+{% endblock main %}
+
+{% block scripts %}
+<style>
+    .description-membership-content.is-truncated {
+        max-height: 250px;
+        overflow: hidden;
+        position: relative;
+    }
+    .description-membership-content.is-truncated::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(transparent, white);
+        pointer-events: none;
+    }
+</style>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const content = document.getElementById("descriptionMembershipContent");
+    const toggle = document.getElementById("descriptionMembershipToggle");
+    if (!content || !toggle) return;
+
+    /* Seuil en px — environ 10-12 lignes de texte
+     * Si le contenu dépasse ce seuil, on tronque et on affiche "Lire la suite"
+     * / Threshold in px — about 10-12 lines of text
+     * / If content exceeds this, truncate and show "Read more"
+     *
+     * LOCALISATION : faire_festival/views/membership/list.html
+     */
+    const SEUIL = 250;
+
+    if (content.scrollHeight > SEUIL) {
+        content.classList.add("is-truncated");
+        toggle.classList.remove("d-none");
+
+        toggle.addEventListener("click", function () {
+            const isTruncated = content.classList.contains("is-truncated");
+            if (isTruncated) {
+                content.classList.remove("is-truncated");
+                content.style.maxHeight = content.scrollHeight + "px";
+                toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up" aria-hidden="true"></i>';
+            } else {
+                content.style.maxHeight = "";
+                content.classList.add("is-truncated");
+                toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>';
+            }
+        });
+    }
+});
+</script>
+{% endblock scripts %}

@@ -1,0 +1,307 @@
+{% extends "faire_festival/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% translate 'Infos pratiques' %}{% endblock %}
+
+{% block main %}
+
+<!-- =====================================================================
+     PAGE INFOS PRATIQUES - Première partie (grid-2)
+     ===================================================================== -->
+
+
+<section class="container-fluid py-5 conteneur-principal">
+   
+    <div class="container">
+
+        
+        <!-- GRID 2 COLONNES -->
+        <div class="row g-5">
+            
+            <!-- =============================================================
+                 COLONNE GAUCHE : Infos et accès
+                 ============================================================= -->
+            <div class="col-12 col-lg-6">
+                
+                <!-- TITRE -->
+                <div>
+                    <span class="badge-festival horaire-texte">{% translate 'Infos pratiques' %}</span>
+                </div>
+                <p class="mb-2">Bienvenue dans le FAIRE Festival, trois jours pour FAIRE ensemble. <p>
+                
+                <!-- HORAIRES -->
+                <div class="mb-4">
+                    <p class="horaire-texte">
+                        {% translate 'JEUDI & VENDREDI' %} 09h → 21h
+                    </p>
+                    <p class="horaire-texte">
+                        {% translate 'SAMEDI' %} 10h → 19h
+                    </p>
+                </div>
+                
+                <!-- ACCÈS -->
+                <div class="mb-4">
+                    <span class="badge-festival horaire-texte">{% translate 'Accéder au Faire Festival' %}</span>
+                </div>
+                
+                <!-- Accessibilité -->
+                <p class="texte-accessibilite mb-4">
+                    {% translate 'LE FAIRE FESTIVAL EST ACCESSIBLE AUX PERSONNES À MOBILITÉ RÉDUITE.' %}
+                </p>
+                
+                <!-- VOITURE -->
+                <div class="mb-4">
+                    <h3 class="titre-transport">{% translate 'VOITURE' %}</h3>
+                    <ul class="liste-transport">
+                        <li>{% translate 'À 5 min des 2 périphériques' %}</li>
+                        <li>A620 – {% translate 'sortie 20 Complexe scientifique' %}</li>
+                        <li>A61 – {% translate 'sortie 18 Montaudran' %}</li>
+                    </ul>
+                </div>
+                
+                <!-- BUS -->
+                <div class="mb-4">
+                    <h3 class="titre-transport">{% translate 'BUS' %}</h3>
+                    <ul class="liste-transport">
+                        <li>{% translate "Ligne L9 L'union/Saint Orens - Arrêt Tahiti - 10 min. à pied" %}</li>
+                        <li>{% translate 'Ligne 37 Jolimont/Ramonville - Arrêt Bréguet - 3min. à pied' %}</li>
+                        <li>{% translate 'Ligne L8 Marengo SNCF/Gonin - Arrêt Aude - 15 min. à pied' %}</li>
+                    </ul>
+                </div>
+                
+                <!-- TRAIN -->
+                <div class="mb-4">
+                    <h3 class="titre-transport">{% translate 'TRAIN' %}</h3>
+                    <ul class="liste-transport">
+                        <li>{% translate "À 5 mn à pied de l'arrêt TER Montaudran" %}</li>
+                    </ul>
+                </div>
+                
+            </div>
+            
+            <!-- =============================================================
+                 COLONNE DROITE : Logo/badge et carte alignés verticalement
+                 ============================================================= -->
+            <div class="col-12 col-lg-6">
+                
+                <!-- Conteneur pour aligner logo et carte verticalement -->
+                <div class="logo-carte-container">
+                    
+                    <!-- LOGO + DATES -->
+                    <div class="text-center position-relative">
+                        <!-- Logo principal -->
+                        <img src="{% static 'faire_festival/image/logo.png' %}" 
+                             alt="Faire Festival" 
+                             class="img-fluid"
+                             style="max-height: 150px;">
+                        
+                        <!-- Badge dates positionné à droite du logo avec rotation -->
+                        <div class="badge-dates">
+                            <img src="{% static 'faire_festival/image/datehorizon.png' %}" 
+                                 alt="{% translate '28-30 Mai 2026' %}" 
+                                 class="img-fluid">
+                        </div>
+                    </div>
+                    
+                    <!-- CARTE -->
+                    <div class="w-100">
+                        <img src="{% static 'faire_festival/image/carte.png' %}" 
+                             alt="{% translate 'Carte du Faire Festival' %}" 
+                             class="img-fluid w-100">
+                    </div>
+                
+                
+                </div><!-- Fin conteneur flex -->
+                
+                <!-- ADRESSE -->
+                <div class="text-center badge-adresse-container">
+                    <span class="badge-adresse text-white">
+                        {% translate 'LA CITÉ - 55 AV. LOUIS BRÉGUET, 31400 TOULOUSE' %}
+                    </span>
+                </div>
+                
+            </div>
+            
+        </div>
+        
+    </div>
+</section>
+
+<!-- =====================================================================
+     PAGE INFOS PRATIQUES - Deuxième partie (grid-1) : Le plan du festival
+     ===================================================================== -->
+
+<section class="container-fluid conteneur-principal pb-0 mb-0" style="min-height: auto;">
+    <div class="container">
+        
+        <!-- GRID 1 COLONNE -->
+        <div class="row">
+            <div class="col-12">
+                
+                <!-- BADGE -->
+                <div>
+                    <span class="badge-festival horaire-texte">{% translate 'Se repérer dans le festival' %}</span>
+                </div>
+                
+                
+                <!-- PLAN -->
+                <div class="plan-container text-center m-0 pb-0 mb-0">
+                    <img src="{% static 'faire_festival/image/plan-festival.png' %}" 
+                         alt="{% translate 'Plan du Faire Festival' %}" 
+                         class="img-fluid d-block"
+                         style="max-width: 100%; height: auto;">
+                </div>
+                
+            </div>
+        </div>
+        
+    </div>
+</section>
+
+<!-- =====================================================================
+     PAGE INFOS PRATIQUES - Troisième partie (grid-2) : FAQ et informations
+     ===================================================================== -->
+
+<section class="container-fluid conteneur-principal pt-0 mb-5">
+    <div class="container">
+        
+        <!-- BADGE SECTION -->
+        <div class="row mb-5 mt-3">
+            <div class="col-12">
+                <span class="badge-festival horaire-texte badge-faq">{% translate 'Foire aux questions' %}</span>
+            </div>
+        </div>
+        
+        <!-- GRID 2 COLONNES -->
+        <div class="row g-5">
+            
+            <!-- =============================================================
+                 COLONNE GAUCHE : Questions 1 à 3
+                 ============================================================= -->
+            <div class="col-12 col-lg-6">
+
+                <!-- QUESTION 1 -->
+                <div class="faq-item mb-5">
+                    <h3 class="faq-question">
+                        → {% translate "POUVEZ-VOUS NOUS PRÉSENTER LE FAIRE FESTIVAL ?" %}
+                    </h3>
+                    <div class="faq-reponse">
+                        <p>
+                            {% translate "Le Faire Festival est un festival pour FAIRE ensemble. Autour de la matière et de la matérialité, les FabLabs, Espaces et Communautés du Faire, le grand public se retrouvent pour partager des savoir-faire, découvrir des machines et outils, expérimenter des techniques, rencontrer des partenaires et d'autres lieux de fabrication..." %}
+                        </p>
+                        <p>
+                            {% translate "Open Source, collectif et évolutif comme tout prototype, ce festival de fabrication partagée et distribuée donne la possibilité de :" %}
+                        </p>
+                        <ul>
+                            <li>→ {% translate "Faire découvrir la fabrication au plus grand nombre." %}</li>
+                            <li>→ {% translate "Partager, mutualiser, expérimenter le Faire (techniques, outils, machines, savoir-faire, matières)." %}</li>
+                            <li>→ {% translate "Produire des communs de fabrication (matériauthèque, guide d'animation...)." %}</li>
+                            <li>→ {% translate "Repenser le lien entre production et consommation pour contribuer à changer le monde." %}</li>
+                        </ul>
+                        <p class="faq-conclusion">
+                            {% translate "Trois jours pour presque tout fabriquer ensemble !" %}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- QUESTION 2 -->
+                <div class="faq-item mb-5">
+                    <h3 class="faq-question">
+                        → {% translate "EXPLIQUEZ-NOUS CETTE TENDANCE DES 'ESPACES DU FAIRE' ?" %}
+                    </h3>
+                    <div class="faq-reponse">
+                        <p>
+                            {% translate "Un Espace du Faire est un FabLab (Laboratoire de fabrication), une Manufacture, un HackerSpace, un Atelier de bricoleurs, un MakerSpace, un Espace de couture partagé, un Tiers-Lieu de fabrication... c'est un lieu qui partage des outils, machines et savoir-faire ouvert à tous les publics (artisans, citoyen.ne.s, salarié.e.s, étudiant.e.s...) pour fabriquer localement tout en étant globalement connecté." %}
+                        </p>
+                        <p>
+                            {% translate "Il mutualise des outils et savoir-faire de la fabrication artisanale, conventionnelle, industrielle et numérique pour passer rapidement de l'idée à l'objet et pour presque tout concevoir, fabriquer et réparer. Il permet de produire des communs par la documentation et le faire ensemble." %}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- QUESTION 3 -->
+                <div class="faq-item mb-5">
+                    <h3 class="faq-question">
+                        → {% translate "QUI SONT LES MAKERS ?" %}
+                    </h3>
+                    <div class="faq-reponse">
+                        <p>
+                            {% translate "Pour commencer, les Makers (du verbe Make = Faire en anglais) sont littéralement des « faiseurs ». Ils conçoivent, fabriquent, ou réparent toutes sortes d'objets. Un.e Maker est une personne qui fabrique par elle-même et avec les autres dans les loisirs créatifs (DIY), l'artisanat, la réparation, la bricole, l'industrie..." %}
+                        </p>
+                        <p>
+                            {% translate "pour se réapproprier la production pour consommer différemment. Sans limites, les Makers fabriquent ensemble et contribuent à avoir une société plus circulaire, plus durable, plus locale tout en étant globalement connecté, plus inclusive, plus accessible en participant aux changements climatiques et sociales !" %}
+                        </p>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- =============================================================
+                 COLONNE DROITE : Questions 4 à 6
+                 ============================================================= -->
+            <div class="col-12 col-lg-6">
+                
+                <!-- QUESTION 4 -->
+                <div class="faq-item mb-5">
+                    <h3 class="faq-question">
+                        → {% translate "POUVEZ-VOUS NOUS EN DIRE PLUS SUR QUI PORTE LE FAIRE FESTIVAL ?" %}
+                    </h3>
+                    <div class="faq-reponse">
+                        <p>
+                            {% translate "Le Faire Festival est un événement open source et collectif coporté par le RedLab (Réseau des Labs d'Occitanie), le RoseLab et le Laboratoire Organique de Lustar (deux Espaces du Faire occitans) regroupés dans la Manufacture Distribuée." %}
+                        </p>
+                        <p>
+                            {% translate "Il a lieu à Toulouse à La Cité, cœur de l'innovation collaborative et durable, avec la collaboration des réseaux Tiers-Lieux/Makers comme la Rosée, le RFFLabs, l'Association Nationale des Tiers-Lieux et avec le soutien de La Région Occitanie et de Toulouse Métropole. Plus que des acteur.rice.s, c'est un commun qui appartient à toutes et à tous." %}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- QUESTION 5 -->
+                <div class="faq-item mb-5">
+                    <h3 class="faq-question">
+                        → {% translate "QUI SONT LES PARTICIPANT·E·S DU FAIRE FESTIVAL ?" %}
+                    </h3>
+                    <div class="faq-reponse">
+                        <p>
+                            {% translate "Littéralement, tout le monde. La Fabrication, le Faire Ensemble, Les Espaces du Faire sont partout et touchent tout le monde. Ce Festival de 3 jours est à la fois un salon professionnel pour ceux.celles qui ont fait de la fabrication leurs métiers (jeudi, vendredi) et à la fois un moment de partage pour le grand public pour découvrir, expérimenter et presque tout fabriquer (samedi)." %}
+                        </p>
+                        <p class="faq-conclusion">
+                            {% translate "Simplement, c'est un festival pour FABRIQUER et FAIRE ENSEMBLE !" %}
+                        </p>
+                    </div>
+                </div>
+                
+                <!-- QUESTION 6 -->
+                <div class="faq-item mb-5">
+                    <h3 class="faq-question">
+                        → {% translate "COMMENT POUVONS-NOUS CONTRIBUER AU FAIRE FESTIVAL ?" %}
+                    </h3>
+                    <div class="faq-reponse">
+                        <p>
+                            {% translate "Le Faire Festival appartient à toutes et à tous. Tout le monde peut contribuer de différentes façons :" %}
+                        </p>
+                        <p>
+                            <strong>{% translate "En devenant bénévoles :" %}</strong> {% translate "aidez-nous à penser, concevoir, et organiser le plus grand festival de fabrication. Que ce soit en amont ou pendant le festival, nous avons besoin de vous !" %}
+                        </p>
+                        <p>
+                            <strong>{% translate "En relayant et diffusant" %}</strong> {% translate "le Faire Festival sur vos réseaux sociaux, newsletter." %}
+                        </p>
+                        <p>
+                            <strong>{% translate "En participant" %}</strong> {% translate "à un de nos Labs Distribués." %}
+                        </p>
+                        <p class="faq-contact mt-4">
+                            {% translate "L'équipe du Faire Festival reste disponible sur l'adresse mail" %} 
+                            <a href="mailto:contact@fairefestival.fr" class="lien-contact">contact@fairefestival.fr</a> 
+                            {% translate "pour répondre à toutes vos questions !" %}
+                        </p>
+                    </div>
+                </div>
+                
+            </div>
+            
+        </div>
+        
+    </div>
+</section>
+
+{% endblock %}

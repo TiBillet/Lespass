@@ -1,0 +1,80 @@
+{% load i18n static %}
+<!--
+PAGE "PAIEMENT DEJA EN COURS" — PROTECTION DOUBLON SEPA
+/ "Payment already pending" page — SEPA duplicate protection
+
+LOCALISATION : BaseBillet/templates/reunion/views/membership/payment_already_pending.html
+
+Affichee quand un utilisateur clique sur le lien de paiement
+alors qu'un prelevement SEPA est deja en cours de traitement.
+Le prelevement SEPA peut prendre jusqu'a 14 jours ouvrables.
+
+FLUX :
+1. L'utilisateur clique (a nouveau) sur le lien de paiement recu par email
+2. BaseBillet/views.py:get_checkout_for_membership detecte un paiement existant
+3. La session Stripe est "complete" (l'utilisateur a deja valide son prelevement)
+4. Cette page est affichee a la place d'un nouveau checkout
+-->
+
+{% extends base_template %}
+
+{% block content %}
+<div class="container py-5" data-testid="membership-payment-already-pending">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+
+                    <div class="text-center mb-4">
+                        <i class="bi bi-hourglass-split fs-1 text-warning" aria-hidden="true"></i>
+                        <h2 class="mt-3">{% translate "Paiement en cours de traitement" %}</h2>
+                    </div>
+
+                    <div class="alert alert-info" role="alert" aria-live="polite">
+                        <p class="mb-2">
+                            {% translate "Votre paiement a deja ete enregistre et est en cours de traitement." %}
+                        </p>
+                        <p class="mb-0">
+                            {% translate "Le prelevement bancaire (SEPA) peut prendre jusqu'a 14 jours ouvrables. Vous recevrez un email de confirmation des que le paiement sera valide." %}
+                        </p>
+                    </div>
+
+                    {% if membership %}
+                    <div class="card bg-light mb-4" data-testid="membership-payment-pending-summary">
+                        <div class="card-body">
+                            <h6 class="card-subtitle text-muted mb-2">{% translate "Recapitulatif" %}</h6>
+                            <ul class="list-unstyled mb-0">
+                                <li>
+                                    <strong>{% translate "Adhesion" %} :</strong>
+                                    {{ membership.price.product.name }} — {{ membership.price.name }}
+                                </li>
+                                {% if membership.contribution_value %}
+                                <li>
+                                    <strong>{% translate "Montant" %} :</strong>
+                                    {{ membership.contribution_value }} &euro;
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="text-center" role="group" aria-label="{% translate 'Navigation' %}">
+                        <a href="/memberships/" class="btn btn-primary"
+                           data-testid="membership-payment-pending-link-memberships">
+                            {% translate "Voir les adhesions" %}
+                        </a>
+                        <a href="/" class="btn btn-outline-secondary ms-2"
+                           data-testid="membership-payment-pending-link-home">
+                            {% translate "Retour a l'accueil" %}
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

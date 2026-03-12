@@ -18,95 +18,73 @@
     <section class="container py-5 position-relative">
 
         <!-- Motif de grille en arrière-plan (effet blueprint) -->
-        <div class="fond-grille"></div>
+        
 
-        <div class="row align-items-center">
+        <div class="row align-items-start">
 
             <!-- ============================================================
                  BLOC DATE (Gauche) - Visible uniquement sur desktop
-                 Badge stylisé avec la date de l'événement principal
+                 Image du badge de date du festival
                  ============================================================ -->
             <div class="col-md-2 d-none d-md-block">
-                {% comment %}
-                <!-- Badge de date - À adapter avec les vraies données d'événement -->
-                <div class="badge-date bordure-epaisse p-3 texte-jaune fond-blanc">
-                    <span class="d-block grande-date fw-bold">28→30</span>
-                    <span class="d-block mois-annee fw-bold">MAI</span>
-                    <span class="d-block mois-annee fw-bold">2026</span>
-                </div>
-                {% endcomment %}
+                <img src="{% static 'faire_festival/image/dateaccueil.png' %}" 
+                     alt="28-30 MAI 2026" 
+                     class="img-fluid date-badge-left">
             </div>
 
             <!-- ============================================================
                  TITRE PRINCIPAL (Centre)
-                 Utilise l'image de configuration ou le nom de l'organisation
+                 Logo Faire Festival avec sous-titre intégré
                  ============================================================ -->
             <div class="col-md-8 text-center position-relative">
-                <!-- Image du titre stylisé (si disponible) -->
                 <div class="titre-principal mb-4">
-                    {% if config.img %}
-                        <img src="{{ config.img.hdr.url }}"
-                             alt="{{ config.organisation }}"
-                             class="img-fluid w-75">
-                    {% else %}
-                        <!-- Titre en texte si pas d'image -->
-                        <h1 class="texte-bleu police-titre" style="font-size: 4rem;">
-                            {{ config.organisation|upper }}
-                        </h1>
-                    {% endif %}
+                    <img src="{% static 'faire_festival/image/logopage.png' %}"
+                         alt="Faire Festival"
+                         class="img-fluid logo-homepage">
                 </div>
-
-                <!-- Sous-titre : Description courte de la configuration -->
-                {% if config.short_description %}
-                    <h2 class="texte-bleu police-mono fw-bold h3">
-                        {{ config.short_description|upper }}
-                    </h2>
-                {% endif %}
             </div>
 
-            <!-- Colonne vide pour l'équilibre à droite (structure en grille) -->
+            <!-- Colonne vide pour l'équilibre à droite -->
             <div class="col-md-2"></div>
         </div>
     </section>
 
     <!-- ===================================================================
-         SECTION APPEL À L'ACTION (CTA - Call To Action)
-         Boutons principaux pour naviguer vers les sections importantes
-         =================================================================== -->
+          SECTION APPEL À L'ACTION (CTA - Call To Action)
+          Boutons principaux pour naviguer vers les sections importantes
+          =================================================================== -->
     <section class="container py-4">
         <div class="row g-4 justify-content-center">
 
             <!-- Bouton vers la liste des événements -->
             <div class="col-md-4">
                 <a href="{% url 'event-list' %}"
-                   class="btn btn-block w-100 bouton-action"
+                   class="btn btn-block w-100 bouton-action police-titre"
                    hx-get="{% url 'event-list' %}"
                    hx-target="body"
                    hx-push-url="true">
-                    {% if config.event_menu_name %}{{ config.event_menu_name }}{% else %}{% translate 'Calendar' %}{% endif %}
+                <p class="mb-0">{% translate "Découvrir le programme" %}</p>
                 </a>
             </div>
 
             <!-- Bouton vers la liste des adhésions/billets -->
             <div class="col-md-4">
                 <a href="{% url 'membership_mvt-list' %}"
-                   class="btn btn-block w-100 bouton-action"
+                   class="btn btn-block w-100 bouton-action police-titre"
                    hx-get="{% url 'membership_mvt-list' %}"
                    hx-target="body"
                    hx-push-url="true">
-                    {% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Subscriptions' %}{% endif %}
+                    {% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Prendre mes billets' %}{% endif %}
                 </a>
             </div>
 
-            <!-- Bouton vers la newsletter (optionnel) -->
-            {% comment %}
+            <!-- Bouton vers la newsletter -->
             <div class="col-md-4">
-                <a href="#newsletter"
-                   class="btn btn-block w-100 bouton-action">
-                    {% translate 'Subscribe to newsletter' %}
+                <a href="https://48f51656.sibforms.com/serve/MUIFAArFIX33ZM9-a7q9l01i5hINeSqwQgaWsymRXJiTLCHEqCoivWnhvTE99gbq6bXLyM77Q2PAup8lpgZvyBxA5mtfST8GrTwqJ-vm6OblXffc6MBqKCi1qsB55MsSLzSQhJcXPHEZCK7T6dhOVNxtMzaWmzkf4DgtX1sizFjj3I9W64f-3xPF56EDw0rV94p1ryPqALhK5j05?utm_content=link_in_bio&utm_medium=social&utm_source=ig"
+                   class="btn btn-block w-100 bouton-action police-titre">
+                    {% translate "S'inscrire à la newsletter" %}
                 </a>
             </div>
-            {% endcomment %}
         </div>
     </section>
 
@@ -118,38 +96,37 @@
         <div class="row">
 
             <!-- ============================================================
-                 IMAGE ILLUSTRATIVE (Gauche)
-                 Affiche l'image de configuration ou une image par défaut
+                 VIDÉO ILLUSTRATIVE (Gauche)
+                 Vidéo motion-table du Faire Festival
                  ============================================================ -->
-            <div class="col-md-5 mb-4 mb-md-0">
-                <div class="bordure-epaisse p-4 h-100 d-flex align-items-center justify-content-center bg-white">
-                    {% if config.img %}
-                        <img src="{{ config.img.med.url }}"
-                             alt="{{ config.organisation }}"
-                             class="img-fluid">
-                    {% else %}
-                        <!-- Image aléatoire si pas d'image de configuration -->
-                        <img src="{{ ""|randImg }}"
-                             alt="{{ config.organisation }}"
-                             class="img-fluid">
-                    {% endif %}
+            <div class="col-md-5 mb-4 mb-md-0 bordure-epaisse">
+                <div class="h-100 d-flex align-items-center justify-content-center p-2">
+                    <!-- Vidéo statique motion-table qui tourne en boucle -->
+                    <!-- preload="none" empêche le téléchargement immédiat (fix blocage Firefox mobile) -->
+                    <!-- IntersectionObserver charge la vidéo quand elle entre dans le viewport -->
+                    <video loop muted playsinline preload="none"
+                           class="w-100 video-lazy"
+                           style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);"
+                           data-src="{% static 'faire_festival/image/motion-table.mp4' %}">
+                        {% translate "Votre navigateur ne supporte pas la lecture vidéo." %}
+                    </video>
                 </div>
             </div>
 
             <!-- ============================================================
                  TEXTE EXPLICATIF (Droite)
-                 Présentation de l'organisation et description longue
+                 Présentation de l'organisation et description
                  ============================================================ -->
             <div class="col-md-7 ps-md-5">
                 <div class="mb-4">
-                    <!-- Titre encadré légèrement tourné -->
-                    <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 ombre-dure-petite">
+                    <!-- Titre encadré -->
+                    <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 rounded-pill">
                         <h3 class="m-0 texte-bleu police-mono fw-bold">
-                            {{ config.organisation }}, {% translate "what is it?" %}
+                            {% translate "Le Faire Festival, c'est quoi ?" %}
                         </h3>
                     </div>
 
-                    <!-- Description longue en 2 colonnes (responsive) -->
+                    <!-- Description longue en 2 colonnes -->
                     {% if config.long_description %}
                         <div class="row texte-bleu police-mono small lh-sm">
                             <div class="col-12">
@@ -157,19 +134,16 @@
                             </div>
                         </div>
                     {% else %}
-                        <!-- Texte par défaut si pas de description -->
+                        <!-- Texte par défaut du Faire Festival -->
                         <div class="row texte-bleu police-mono small lh-sm">
                             <div class="col-md-6 mb-3">
                                 <p>
-                                    {% blocktranslate with org=config.organisation %}
-                                    Welcome to {{ org }}. Discover our program of events,
-                                    workshops, conferences and meetings throughout the year.
-                                    {% endblocktranslate %}
+                                    FabLabs et Espace du FAIRE... Bienvenue dans le FAIRE Festival, trois jours pour FAIRE ensemble. Un festival géant avec des ateliers, rencontres, conférences, animations, stands, démonstrations, une exposition, une boutique et un SuperLab...
                                 </p>
                             </div>
                             <div class="col-md-6">
                                 <p>
-                                    {% translate "Join us to share, experiment and create together in a space accessible to all." %}
+                                    Pour aller plus loin dans la fabrication partagée et distribuée. Trois jours de rencontres entre le public, les Espaces, et Communautés du Faire et les entreprises pour se rencontrer, se comprendre, expérimenter et faire ensemble dans un espace accessible à tous·tes.
                                 </p>
                             </div>
                         </div>
@@ -177,49 +151,58 @@
                 </div>
 
                 <!-- ========================================================
-                     GRILLE DES INFORMATIONS COMPLÉMENTAIRES (Optionnel)
-                     Cartes pour présenter des infos supplémentaires
+                     GRILLE DES JOURS (Jour 01, 02, 03)
                      ======================================================== -->
-                {% comment %}
-                <!-- Exemple de cartes "Jours" comme dans la maquette -->
-                <div class="row g-3">
-                    <!-- Carte Info 1 -->
+                <div class="row g-3 justify-content-center text-center mb-5">
+
+                    <!-- Carte Jour 01 -->
                     <div class="col-md-4">
                         <div class="carte-jour">
-                            <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
-                                <h4 class="m-0 texte-bleu police-titre">INFO 01</h4>
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 pr-3 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h4>
                             </div>
                             <p class="small texte-bleu police-mono">
-                                Informations complémentaires
+                                {% translate "Entre Espaces," %}<br>
+                                {% translate "Communautés du Faire" %}<br>
+                                {% translate "et Entreprises" %}
                             </p>
                         </div>
                     </div>
 
-                    <!-- Carte Info 2 -->
+                    <!-- Carte Jour 02 -->
                     <div class="col-md-4">
                         <div class="carte-jour">
-                            <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
-                                <h4 class="m-0 texte-bleu police-titre">INFO 02</h4>
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h4>
                             </div>
                             <p class="small texte-bleu police-mono">
-                                Informations complémentaires
+                                {% translate "Entre Espaces," %}<br>
+                                {% translate "Communautés du Faire" %}<br>
+                                {% translate "et Entreprises" %}
                             </p>
                         </div>
                     </div>
 
-                    <!-- Carte Info 3 -->
+                    <!-- Carte Jour 03 (Avec badge gratuit) -->
                     <div class="col-md-4">
                         <div class="carte-jour">
-                            <div class="en-tete-jour fond-jaune bordure-epaisse px-2 py-1 mb-2">
-                                <h4 class="m-0 texte-bleu police-titre">INFO 03</h4>
+                            <!-- En-tête avec badge positionné par rapport à lui -->
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2 position-relative">
+                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h4>
+                                <!-- Badge 'Gratuit' collé à l'en-tête -->
+                                <div class="badge-gratuit position-absolute"
+                                     style="top:-20px; right:-34px; transform: rotate(30deg); background: white; border: 2px solid blue; padding: 0px 8px; border-radius: 20px; z-index: 10;">
+                                    <span class="texte-bleu police-mono small fw-bold">{% translate "gratuit" %}</span>
+                                </div>
                             </div>
                             <p class="small texte-bleu police-mono">
-                                Informations complémentaires
+                                {% translate "Entre Grand Public," %}<br>
+                                {% translate "Espaces et" %}<br>
+                                {% translate "Communautés du Faire" %}
                             </p>
                         </div>
                     </div>
-                </div>
-                {% endcomment %}
+                </div> <!-- Fin Row Jours -->
 
             </div> <!-- Fin Col Droite -->
         </div> <!-- Fin Row Principale -->
@@ -227,4 +210,54 @@
 
 </main>
 
-{% endblock %}
+{% endblock main %}
+
+{% block scripts %}
+<script>
+/*
+ * Lazy-load des vidéos : charge le src uniquement quand visible dans le viewport
+ * Empêche le téléchargement immédiat qui bloque Firefox mobile
+ * / Lazy-load videos: loads src only when visible in viewport
+ * / Prevents immediate download that blocks Firefox mobile
+ *
+ * LOCALISATION : faire_festival/views/home.html
+ */
+document.addEventListener("DOMContentLoaded", function () {
+    const videos = document.querySelectorAll("video.video-lazy");
+    if (!videos.length) return;
+
+    if ("IntersectionObserver" in window) {
+        const observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                const video = entry.target;
+                const src = video.getAttribute("data-src");
+                if (!src) return;
+                const source = document.createElement("source");
+                source.src = src;
+                source.type = "video/mp4";
+                video.appendChild(source);
+                video.load();
+                video.play();
+                video.removeAttribute("data-src");
+                observer.unobserve(video);
+            });
+        }, {rootMargin: "200px"});
+
+        videos.forEach(function (video) { observer.observe(video); });
+    } else {
+        /* Fallback navigateurs sans IntersectionObserver : chargement direct */
+        videos.forEach(function (video) {
+            const src = video.getAttribute("data-src");
+            if (!src) return;
+            const source = document.createElement("source");
+            source.src = src;
+            source.type = "video/mp4";
+            video.appendChild(source);
+            video.load();
+            video.play();
+        });
+    }
+});
+</script>
+{% endblock scripts %}

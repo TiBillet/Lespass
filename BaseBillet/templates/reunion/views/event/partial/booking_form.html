@@ -7,7 +7,7 @@
 </style>
 
 
-<form id="reservation_form" hx-post="reservation/" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
+<form id="reservation_form" hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
         {% if user.is_anonymous %}
@@ -34,8 +34,8 @@
                     const confirmEmail = confirmEl.value || "";
 
                     if (email !== confirmEmail) {
-                        confirmEl.setCustomValidity("Les emails ne correspondent pas.");
-                        errorDiv.textContent = "Les emails ne correspondent pas.";
+                        confirmEl.setCustomValidity("{% translate 'Les emails ne correspondent pas.' %}");
+                        errorDiv.textContent = "{% translate 'Les emails ne correspondent pas.' %}";
                         return false;
                     }
                     confirmEl.setCustomValidity("");
@@ -331,7 +331,7 @@
                         if (!anyChecked) {
                             ok = false;
                             if (error) {
-                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher au moins une option.';
+                                error.textContent = group.getAttribute('data-error-message') || "{% translate 'Veuillez cocher au moins une option.' %}";
                                 error.style.display = 'block';
                             }
                             boxes.forEach(cb => cb.setAttribute('aria-invalid', 'true'));
@@ -356,7 +356,7 @@
                         if (!input.checked) {
                             ok = false;
                             if (error) {
-                                error.textContent = group.getAttribute('data-error-message') || 'Veuillez cocher cette case.';
+                                error.textContent = group.getAttribute('data-error-message') || "{% translate 'Veuillez cocher cette case.' %}";
                                 error.style.display = 'block';
                             }
                             input.setAttribute('aria-invalid', 'true');

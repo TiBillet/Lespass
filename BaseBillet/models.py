@@ -1512,6 +1512,16 @@ class Event(models.Model):
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="events", verbose_name=_("Tags"))
 
+    thematique = models.ForeignKey(
+        Tag,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='events_thematique',
+        verbose_name=_("Thématique"),
+        help_text=_("Valide uniquement pour le thème graphique Faire Festival"),
+    )
+
     options_radio = models.ManyToManyField(OptionGenerale, blank=True, related_name="options_radio",
                                            verbose_name=_("Single choice menu"),
                                            help_text=_(
