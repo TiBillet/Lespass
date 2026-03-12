@@ -1,7 +1,7 @@
 {% load static i18n %}
 {% load laboutik_process %}
 
-<div id="messages" class="BF-col">
+<div id="messages" class="BF-col" data-testid="paiement-moyens" aria-live="polite">
   <!-- consignes -->
   {% if deposit_is_present %}
    <h1 class="message-title">{% translate "Rembourser la consigne par :" %}</h1>

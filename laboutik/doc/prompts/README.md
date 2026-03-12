@@ -15,8 +15,8 @@ Un fichier = une etape = une session (ou demi-session).
 | **0** | 3. Admin + tests securite | `phase0_etape3_admin_tests_securite.md` | **FAIT** | pytest : 8 tests (`test_fedow_core.py`), PW : `31-admin-asset-federation.spec.ts` |
 | **1** | 1. Modeles POS | `phase1_etape1_modeles_pos.md` | **FAIT** | Shell : CategorieProduct, POSProduct, Price.asset |
 | **1** | 2. Admin + fixtures | `phase1_etape2_admin_fixtures.md` | **FAIT** | Admin : section "Caisse" visible, `create_test_pos_data` OK |
-| **2** | 1. Caisse depuis DB | `phase2_etape1_caisse_depuis_db.md` | A FAIRE | pytest + PW a ecrire (voir ci-dessous) |
-| **2** | 2. Paiement especes/CB | `phase2_etape2_paiement_especes_cb.md` | A FAIRE | pytest + PW a ecrire |
+| **2** | 1. Caisse depuis DB | `phase2_etape1_caisse_depuis_db.md` | **FAIT** | pytest : 11 tests (`test_caisse_navigation.py`), PW : a ecrire |
+| **2** | 2. Paiement especes/CB | `phase2_etape2_paiement_especes_cb.md` | **FAIT** | pytest : 7 tests (`test_paiement_especes_cb.py`), PW : a ecrire |
 | **3** | 1. Paiement NFC | `phase3_etape1_paiement_nfc.md` | A FAIRE | pytest critique (atomicite) |
 | **3** | 2. Retour carte + recharges | `phase3_etape2_retour_carte_recharges.md` | A FAIRE | pytest |
 | **3** | 3. Stress test | `phase3_etape3_stress_test.md` | A FAIRE | `tests/stress/test_charge_festival.py` |
@@ -25,7 +25,7 @@ Un fichier = une etape = une session (ou demi-session).
 | **6** | Migration donnees | `phase6_migration.md` | A FAIRE | dry-run + verify_transactions |
 | **7** | Consolidation | `phase7_consolidation.md` | A FAIRE | manage.py check + verify_transactions |
 
-**Prochaine etape : Phase 2, etape 1** (caisse depuis la DB)
+**Prochaine etape : Phase 3, etape 1** (paiement NFC)
 
 ## Comment utiliser
 
@@ -67,9 +67,9 @@ Phase 1 — Product unifie + modeles POS (decision 16.9) [FAIT]
   phase1_etape1_modeles_pos.md                          [FAIT]
   phase1_etape2_admin_fixtures.md                       [FAIT]
 
-Phase 2 — Remplacement des mocks                       [PROCHAINE]
-  phase2_etape1_caisse_depuis_db.md
-  phase2_etape2_paiement_especes_cb.md
+Phase 2 — Remplacement des mocks
+  phase2_etape1_caisse_depuis_db.md                       [FAIT]
+  phase2_etape2_paiement_especes_cb.md                    [FAIT]
 
 Phase 3 — Integration fedow_core
   phase3_etape1_paiement_nfc.md
@@ -112,19 +112,24 @@ Phase 7 — Consolidation
 - **Admin** : section "Caisse" visible/cachee
 - **Management command** : `create_test_pos_data` cree 5 products + 2 PV
 
-### Phase 2 (A ECRIRE)
-Tests prevus :
-- **pytest** : `test_caisse_navigation.py`
-  - `test_carte_primaire_valide` — POST tag_id → redirect PV
-  - `test_carte_primaire_inconnue` — tag_id inconnu → erreur 404
-  - `test_carte_non_primaire` — carte normale (pas CartePrimaire) → 403
-  - `test_point_de_vente_charge_produits` — GET PV → vrais produits depuis DB
-  - `test_paiement_especes_cree_ligne_article` — payer → LigneArticle(payment_method='CA')
-  - `test_paiement_cb_cree_ligne_article` — payer → LigneArticle(payment_method='CC')
-  - `test_total_centimes_correct` — int(round(prix * 100)) == attendu
-  - `test_sans_api_key_403` — requete sans auth → 403
-- **Playwright** : `32-laboutik-caisse-db.spec.ts`
-  - Scenario : login admin → activer module_caisse → scan carte primaire → voir PV → ajouter article → payer especes → verifier LigneArticle
+### Phase 2, etape 1 (FAIT)
+- **pytest** : `test_caisse_navigation.py` — 11 tests :
+  - `TestCartePrimaireSerializer` (4 tests) : tag_id valide, vide, absent, espaces
+  - `TestCartePrimaireVue` (4 tests) : carte valide → redirect, inconnue, non primaire, tag vide via vue
+  - `TestPointDeVenteVue` (1 test) : vrais produits depuis DB
+  - `TestSansAuthentification` (2 tests) : GET et POST sans auth → 403
+- **Playwright** : `32-laboutik-caisse-db.spec.ts` (A ECRIRE)
+
+### Phase 2, etape 2 (FAIT)
+- **pytest** : `test_paiement_especes_cb.py` — 7 tests :
+  - `TestPaiementEspeces` (1 test) : payer CA → LigneArticle(payment_method='CA', sale_origin='LB')
+  - `TestPaiementCB` (1 test) : payer CB → LigneArticle(payment_method='CC')
+  - `TestTotalCentimes` (1 test) : int(round(prix * 100)) == amount dans LigneArticle
+  - `TestProductSoldPriceSold` (1 test) : ProductSold + PriceSold crees
+  - `TestPanierVide` (1 test) : panier vide → aucune LigneArticle
+  - `TestPaiementNFCDesactive` (1 test) : NFC → message "non disponible"
+  - `TestPaiementAtomique` (1 test) : UUID inexistant → ignore, aucune ligne
+- **Playwright** : `32-laboutik-caisse-db.spec.ts` (A ECRIRE)
 
 ### Phase 3 (A ECRIRE)
 Tests prevus :

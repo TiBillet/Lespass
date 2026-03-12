@@ -1,7 +1,7 @@
 {% load static i18n %}
 {% load laboutik_process %}
 
-<div id="confirm" class="BF-col">
+<div id="confirm" class="BF-col" data-testid="paiement-confirmation" aria-live="polite">
   <div>uuid_transaction = {{ uuid_transaction }}</div>
   <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
   {% if method == 'espece' %}

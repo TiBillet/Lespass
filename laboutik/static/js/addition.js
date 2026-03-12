@@ -165,6 +165,20 @@ function additionReset() {
 	document.querySelector('#addition-uuid-transaction').value = ''
 	document.querySelector('#addition-given-sum').value = ''
 
+	// Réinitialise l'URL et le trigger HTMX du formulaire.
+	// additionDisplayPaymentTypes() change hx-trigger vers 'click',
+	// additionManageForm('postUrl') change hx-post vers /payer/.
+	// Sans ce reset, le 2ème paiement envoie directement à /payer/ sans passer par /moyens_paiement/.
+	// / Reset the form's HTMX URL and trigger.
+	// Without this, the 2nd payment posts directly to /payer/ skipping /moyens_paiement/.
+	const form = document.querySelector('#addition-form')
+	const urlInitiale = form.getAttribute('data-url-reset')
+	if (urlInitiale) {
+		form.setAttribute('hx-post', urlInitiale)
+	}
+	form.setAttribute('hx-trigger', 'validerPaiement')
+	htmx.process(form)
+
 	const totalAddition = calculateTotal()
 
 	sendEvent('organizerMsg', '#event-organizer', {

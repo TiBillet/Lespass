@@ -4,12 +4,12 @@
 {% block content %}
 <c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm" submit-url="{% url 'laboutik-caisse-carte_primaire' %}">
 	<form id="form-nfc" class="hide" hx-post="{% url 'laboutik-caisse-carte_primaire' %}" hx-trigger="nfcResult" hx-target=".message-nfc"
-		hx-swap="innerHTML">
+		hx-swap="innerHTML" data-testid="caisse-carte-primaire-form">
 		{% csrf_token %}
 		<input id="nfc-tag-id" name="tag_id" />
 	</form>
 	<h1>{% translate "Attente carte primaire" %}</h1>
-	<h3 class="message-nfc">{{msg}}</h3>
+	<h3 class="message-nfc" aria-live="polite">{{msg}}</h3>
 </c-read-nfc>
 
 <script>

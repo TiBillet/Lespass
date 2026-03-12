@@ -13,6 +13,7 @@ import os
 from json import dumps
 
 from django.conf import settings
+from django.db import transaction as db_transaction
 from django.http import Http404
 from django.shortcuts import render
 from django.urls import reverse
@@ -23,10 +24,14 @@ from rest_framework.decorators import action
 
 from django.db.models import Prefetch
 
-from BaseBillet.models import Configuration, Price
+from BaseBillet.models import (
+    Configuration, LigneArticle, Price, PriceSold, Product,
+    ProductSold, SaleOrigin, PaymentMethod,
+)
 from BaseBillet.permissions import HasLaBoutikAccess
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import PointDeVente, CartePrimaire, Table
+from laboutik.serializers import CartePrimaireSerializer, PanierSerializer
 from laboutik.utils import mockData
 from laboutik.utils import method as payment_method
 
@@ -299,7 +304,18 @@ class CaisseViewSet(viewsets.ViewSet):
         - 1 PV → redirect direct vers le PV / direct redirect to POS
         - N PV → choix du PV (hx_choose_pv.html) / POS selection
         """
-        tag_id_carte_manager = request.POST.get("tag_id", "").upper()
+        # Valider le tag NFC avec le serializer DRF (règle stack-ccc)
+        # Validate the NFC tag with DRF serializer (stack-ccc rule)
+        serializer = CartePrimaireSerializer(data=request.data)
+        if not serializer.is_valid():
+            # Extraire le premier message d'erreur pour l'affichage
+            # Extract the first error message for display
+            premiere_erreur = next(iter(serializer.errors.values()))[0]
+            return render(request, "laboutik/partial/hx_primary_card_message.html", {
+                "msg": str(premiere_erreur),
+            })
+
+        tag_id_carte_manager = serializer.validated_data["tag_id"]
         logger.debug(f"carte_primaire: tag_id reçu = {tag_id_carte_manager}")
 
         # Chercher la carte primaire depuis le tag NFC
@@ -488,6 +504,184 @@ class CaisseViewSet(viewsets.ViewSet):
 
 
 # --------------------------------------------------------------------------- #
+#  Fonctions utilitaires — paiement ORM (Phase 2)                             #
+#  Utility functions — ORM payment (Phase 2)                                  #
+# --------------------------------------------------------------------------- #
+
+# Correspondance entre les codes de moyens de paiement de l'interface
+# et les valeurs de l'enum PaymentMethod dans BaseBillet.
+# Mapping between interface payment method codes and BaseBillet PaymentMethod enum.
+MAPPING_CODES_PAIEMENT = {
+    "carte_bancaire": PaymentMethod.CC,
+    "CH": PaymentMethod.CHEQUE,
+    "espece": PaymentMethod.CASH,
+    "gift": PaymentMethod.FREE,
+}
+
+
+def _extraire_articles_du_panier(donnees_post, point_de_vente):
+    """
+    Extrait les articles du formulaire POST et les charge depuis la DB.
+    Extracts articles from the POST form and loads them from DB.
+
+    LOCALISATION : laboutik/views.py
+
+    Le formulaire d'addition envoie les quantités avec les clés "repid-<uuid>".
+    Pour chaque article, on charge le Product et son premier prix publié en euros.
+    The addition form sends quantities with "repid-<uuid>" keys.
+    For each article, we load the Product and its first published EUR price.
+
+    :param donnees_post: QueryDict ou dict des données POST
+    :param point_de_vente: instance PointDeVente (pour filtrer les produits autorisés)
+    :return: liste de dicts {'product': Product, 'price': Price, 'quantite': int, 'prix_centimes': int}
+    """
+    articles_extraits = PanierSerializer.extraire_articles_du_post(donnees_post)
+    if not articles_extraits:
+        return []
+
+    # Charger tous les produits du PV en une seule requête (avec prix EUR préchargés)
+    # Load all PV products in a single query (with EUR prices prefetched)
+    prix_euros_prefetch = Prefetch(
+        'prices',
+        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by('order'),
+        to_attr='prix_euros',
+    )
+    produits_du_pv = {
+        str(p.uuid): p
+        for p in point_de_vente.products
+        .filter(methode_caisse__isnull=False)
+        .prefetch_related(prix_euros_prefetch)
+    }
+
+    articles_panier = []
+    for article_data in articles_extraits:
+        uuid_str = article_data['uuid']
+        quantite = article_data['quantite']
+
+        produit = produits_du_pv.get(uuid_str)
+        if produit is None:
+            logger.warning(f"Produit {uuid_str} non trouvé dans le PV {point_de_vente.name}")
+            continue
+
+        if not produit.prix_euros:
+            logger.warning(f"Produit {produit.name} n'a pas de prix EUR publié")
+            continue
+
+        prix_obj = produit.prix_euros[0]
+        prix_en_centimes = int(round(prix_obj.prix * 100))
+
+        articles_panier.append({
+            'product': produit,
+            'price': prix_obj,
+            'quantite': quantite,
+            'prix_centimes': prix_en_centimes,
+        })
+
+    return articles_panier
+
+
+def _calculer_total_panier_centimes(articles_panier):
+    """
+    Calcule le total du panier en centimes.
+    Calculates the cart total in centimes.
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: total en centimes (int)
+    """
+    total_centimes = 0
+    for article in articles_panier:
+        total_centimes += article['prix_centimes'] * article['quantite']
+    return total_centimes
+
+
+def _determiner_moyens_paiement(point_de_vente):
+    """
+    Détermine les moyens de paiement disponibles selon la config du PV.
+    Determines available payment methods based on PV configuration.
+
+    NFC (cashless) est toujours proposé si le PV n'est pas en mode cashless pur.
+    Le vrai paiement NFC sera implémenté en Phase 3.
+    NFC (cashless) is always offered unless the PV is in pure cashless mode.
+    Actual NFC payment will be implemented in Phase 3.
+
+    :param point_de_vente: instance PointDeVente
+    :return: liste de codes moyens de paiement (ex: ["nfc", "espece", "carte_bancaire"])
+    """
+    moyens = []
+
+    # NFC toujours proposé (géré en Phase 3)
+    # NFC always offered (handled in Phase 3)
+    moyens.append('nfc')
+
+    if point_de_vente.accepte_especes:
+        moyens.append('espece')
+
+    if point_de_vente.accepte_carte_bancaire:
+        moyens.append('carte_bancaire')
+
+    if point_de_vente.accepte_cheque:
+        moyens.append('CH')
+
+    return moyens
+
+
+def _creer_lignes_articles(articles_panier, code_methode_paiement):
+    """
+    Crée ProductSold, PriceSold et LigneArticle pour chaque article du panier.
+    Creates ProductSold, PriceSold and LigneArticle for each article in the cart.
+
+    LOCALISATION : laboutik/views.py
+
+    Cette fonction est appelée dans un bloc transaction.atomic() par les fonctions
+    de paiement (_payer_par_carte_ou_cheque, _payer_en_especes).
+    This function is called inside a transaction.atomic() block by the payment
+    functions (_payer_par_carte_ou_cheque, _payer_en_especes).
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :param code_methode_paiement: code du moyen de paiement ("carte_bancaire", "espece", "CH")
+    :return: liste de LigneArticle créées
+    """
+    methode_db = MAPPING_CODES_PAIEMENT.get(code_methode_paiement, PaymentMethod.UNKNOWN)
+
+    lignes_creees = []
+    for article in articles_panier:
+        produit = article['product']
+        prix_obj = article['price']
+        quantite = article['quantite']
+        prix_centimes = article['prix_centimes']
+
+        # ProductSold : snapshot du produit au moment de la vente
+        # ProductSold: product snapshot at the time of sale
+        product_sold, _ = ProductSold.objects.get_or_create(
+            product=produit,
+            event=None,
+            defaults={'categorie_article': produit.categorie_article},
+        )
+
+        # PriceSold : snapshot du prix au moment de la vente
+        # PriceSold: price snapshot at the time of sale
+        price_sold, _ = PriceSold.objects.get_or_create(
+            productsold=product_sold,
+            price=prix_obj,
+            defaults={'prix': prix_obj.prix},
+        )
+
+        # LigneArticle : ligne comptable de la vente
+        # LigneArticle: accounting line of the sale
+        ligne = LigneArticle.objects.create(
+            pricesold=price_sold,
+            qty=quantite,
+            amount=prix_centimes,
+            sale_origin=SaleOrigin.LABOUTIK,
+            payment_method=methode_db,
+            status=LigneArticle.VALID,
+        )
+        lignes_creees.append(ligne)
+
+    return lignes_creees
+
+
+# --------------------------------------------------------------------------- #
 #  PaiementViewSet — HTMX partials du flux de paiement                        #
 # --------------------------------------------------------------------------- #
 
@@ -523,38 +717,53 @@ class PaiementViewSet(viewsets.ViewSet):
         Receives selected articles (from the addition form),
         calculates the total and returns available payment buttons.
         """
-        state = _construire_state()
-        tous_les_points_de_vente = _charger_points_de_vente()
-
+        # --- Charger le PV depuis la DB ---
+        # --- Load PV from DB ---
         uuid_pv = request.POST.get("uuid_pv")
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(request.POST)
-        point_de_vente = mockData.get_pv_from_uuid(uuid_pv, tous_les_points_de_vente)
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
 
-        moyens_paiement_disponibles = payment_method.selectionner_moyens_paiement(
-            point_de_vente, uuids_articles_selectionnes, request.POST,
-        )
-        total_addition = payment_method.calculer_total_addition(
-            point_de_vente, uuids_articles_selectionnes, request.POST,
-        )
+        state = _construire_state(point_de_vente)
 
-        # Mode gérant désactivé pour l'instant (mock)
-        # Manager mode disabled for now (mock)
+        # --- Extraire les articles du panier depuis le POST ---
+        # --- Extract cart articles from POST ---
+        articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+
+        # --- Calculer le total en centimes puis convertir en euros ---
+        # --- Calculate total in centimes then convert to euros ---
+        total_centimes = _calculer_total_panier_centimes(articles_panier)
+        total_en_euros = total_centimes / 100
+
+        # --- Déterminer les moyens de paiement disponibles ---
+        # --- Determine available payment methods ---
+        moyens_paiement_disponibles = _determiner_moyens_paiement(point_de_vente)
+
+        # Mode gérant : activé si la carte primaire est en mode édition
+        # Manager mode: enabled if primary card is in edit mode
         est_mode_gerant = False
 
         # Une consigne dans le panier déclenche un flux de remboursement
         # A deposit in the basket triggers a refund flow
+        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(request.POST)
         consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
         if consigne_dans_panier:
-            total_addition = abs(total_addition)
+            total_en_euros = abs(total_en_euros)
 
         context = {
             "state": state,
             "moyens_paiement": moyens_paiement_disponibles,
             "currency_data": CURRENCY_DATA,
-            "total": total_addition,
+            "total": total_en_euros,
             "mode_gerant": est_mode_gerant,
             "deposit_is_present": consigne_dans_panier,
-            "comportement": point_de_vente["comportement"],
+            "comportement": point_de_vente.comportement,
         }
         return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
@@ -608,12 +817,21 @@ class PaiementViewSet(viewsets.ViewSet):
                              previous transaction UUID (insufficient funds top-up)
         - repid-<uuid> : quantité de chaque article / quantity of each article
         """
-        state = _construire_state()
-        db = _charger_mock_db()
-        tous_les_points_de_vente = _charger_points_de_vente()
-
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(request.POST)
+        # --- Charger le PV depuis la DB ---
+        # --- Load PV from DB ---
         donnees_paiement = request.POST.dict()
+        uuid_pv = donnees_paiement.get("uuid_pv")
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        state = _construire_state(point_de_vente)
 
         # --- Normaliser les montants (les champs texte du formulaire → entiers) ---
         # --- Normalize amounts (form text fields → integers) ---
@@ -625,59 +843,49 @@ class PaiementViewSet(viewsets.ViewSet):
             donnees_paiement["given_sum"] = int(somme_donnee_brute)
         donnees_paiement["missing"] = 0
 
-        # --- Calculer le total de l'addition ---
-        # --- Calculate the addition total ---
-        consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
-        point_de_vente = mockData.get_pv_from_uuid(
-            donnees_paiement.get("uuid_pv"), tous_les_points_de_vente,
-        )
-        total_addition = payment_method.calculer_total_addition(
-            point_de_vente, uuids_articles_selectionnes, request.POST,
-        )
-        # Les consignes ont un prix négatif (remboursement), on prend la valeur absolue
-        # Deposits have a negative price (refund), we take the absolute value
-        if consigne_dans_panier:
-            total_addition = abs(total_addition)
+        # --- Extraire les articles du panier depuis la DB ---
+        # --- Extract cart articles from DB ---
+        articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
 
-        # --- Chercher une transaction précédente (complément après fonds insuffisants) ---
-        # --- Look for a previous transaction (top-up after insufficient funds) ---
-        # Quand un paiement NFC échoue par manque de fonds, on sauvegarde la transaction.
-        # Le caissier peut ensuite compléter par espèces ou CB. Le uuid_transaction
-        # permet de retrouver le premier versement.
-        # When an NFC payment fails due to lack of funds, we save the transaction.
-        # The cashier can then complete with cash or credit card. The uuid_transaction
-        # lets us find the first payment.
+        # --- Calculer le total en centimes ---
+        # --- Calculate total in centimes ---
+        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(request.POST)
+        consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
+        total_centimes = _calculer_total_panier_centimes(articles_panier)
+        total_en_euros = total_centimes / 100
+        if consigne_dans_panier:
+            total_en_euros = abs(total_en_euros)
+            total_centimes = abs(total_centimes)
+
+        # --- Transaction précédente (complément après fonds insuffisants) ---
+        # --- Previous transaction (top-up after insufficient funds) ---
+        # Phase 3 : sera implémenté avec fedow_core
+        # Phase 3: will be implemented with fedow_core
         transaction_precedente = None
-        uuid_transaction_precedente = donnees_paiement.get("uuid_transaction", "")
-        if uuid_transaction_precedente != "":
-            resultats_recherche = db.get_by_index(
-                "transactions", "id", uuid_transaction_precedente,
-            )
-            if resultats_recherche and len(resultats_recherche) == 1:
-                transaction_precedente = resultats_recherche[0]
 
         # --- Aiguillage vers le bon flux de paiement ---
         # --- Route to the correct payment flow ---
         moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
-        logger.info(f"moyen_paiement_code: {moyen_paiement_code}")
+        logger.info(f"payer: moyen={moyen_paiement_code}, total={total_centimes}cts, articles={len(articles_panier)}")
 
         if moyen_paiement_code in ("carte_bancaire", "CH"):
             return self._payer_par_carte_ou_cheque(
-                request, state, donnees_paiement, total_addition,
+                request, state, donnees_paiement, articles_panier,
+                total_en_euros, total_centimes,
                 consigne_dans_panier, transaction_precedente, moyen_paiement_code,
             )
 
         if moyen_paiement_code == "espece":
             return self._payer_en_especes(
-                request, state, donnees_paiement, total_addition,
+                request, state, donnees_paiement, articles_panier,
+                total_en_euros, total_centimes,
                 consigne_dans_panier, transaction_precedente, moyen_paiement_code,
             )
 
         if moyen_paiement_code == "nfc":
             return self._payer_par_nfc(
-                request, state, db, donnees_paiement, point_de_vente,
-                total_addition, consigne_dans_panier, transaction_precedente,
-                moyen_paiement_code,
+                request, state, donnees_paiement,
+                total_en_euros, consigne_dans_panier, moyen_paiement_code,
             )
 
         # Moyen de paiement non reconnu → erreur
@@ -695,29 +903,37 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_par_carte_ou_cheque(
-        self, request, state, donnees_paiement, total_addition,
+        self, request, state, donnees_paiement, articles_panier,
+        total_en_euros, total_centimes,
         consigne_dans_panier, transaction_precedente, moyen_paiement_code,
     ):
         """
         Paiement par carte bancaire ("carte_bancaire") ou chèque ("CH").
         Credit card or check payment.
 
-        Pas de vérification côté serveur (le TPE ou le chèque est géré en dehors).
-        On affiche directement le succès.
-        No server-side verification (the card terminal or check is handled externally).
-        We directly display success.
-        """
-        # Convertir le total de centimes en euros pour l'affichage
-        # Convert total from cents to euros for display
-        donnees_paiement["total"] = donnees_paiement["total"] / 100
+        LOCALISATION : laboutik/views.py
 
+        Pas de vérification côté serveur (le TPE ou le chèque est géré en dehors).
+        On crée les LigneArticle en base puis on affiche le succès.
+        No server-side verification (the card terminal or check is handled externally).
+        We create LigneArticle records in DB then display success.
+        """
+        # Créer les lignes articles en base (atomique)
+        # Create article lines in DB (atomic)
+        with db_transaction.atomic():
+            _creer_lignes_articles(articles_panier, moyen_paiement_code)
+
+        # Le total dans donnees_paiement reste en centimes pour le template
+        # (le filtre divide_by:100 convertit en euros pour l'affichage)
+        # Total in donnees_paiement stays in centimes for the template
+        # (the divide_by:100 filter converts to euros for display)
         context = {
             "currency_data": CURRENCY_DATA,
             "payment": donnees_paiement,
             "monnaie_name": state["place"]["monnaie_name"],
             "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
             "deposit_is_present": consigne_dans_panier,
-            "total": total_addition,
+            "total": total_en_euros,
             "state": state,
             "original_payment": transaction_precedente,
         }
@@ -729,57 +945,48 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_en_especes(
-        self, request, state, donnees_paiement, total_addition,
+        self, request, state, donnees_paiement, articles_panier,
+        total_en_euros, total_centimes,
         consigne_dans_panier, transaction_precedente, moyen_paiement_code,
     ):
         """
         Paiement en espèces.
         Cash payment.
 
+        LOCALISATION : laboutik/views.py
+
         Deux cas :
         1. Paiement exact (given_sum vide ou == 0) → succès immédiat
         2. Le caissier saisit la somme donnée → on calcule la monnaie à rendre
 
-        Si c'est un complément (après fonds insuffisants NFC), on prend en compte
-        le montant déjà payé lors de la première transaction.
-
         Two cases:
         1. Exact payment (given_sum empty or == 0) → immediate success
         2. The cashier enters the given amount → we calculate the change
-
-        If it's a top-up (after NFC insufficient funds), we account for
-        the amount already paid in the first transaction.
         """
-        # Si c'est un complément, calculer ce qui a déjà été payé
-        # If it's a top-up, calculate what was already paid
-        montant_deja_paye = 0
-        if transaction_precedente:
-            montant_deja_paye = (
-                transaction_precedente["total"]
-                - (transaction_precedente["missing"] * 100)
-            )
-
         somme_donnee_en_centimes = donnees_paiement["given_sum"]
-        total_en_centimes = donnees_paiement["total"]
 
         # La somme est suffisante si :
         # - le caissier n'a rien saisi (= paiement exact, pas de monnaie à rendre)
-        # - ou la somme donnée + le premier versement couvre le total
+        # - ou la somme donnée couvre le total
         # The amount is sufficient if:
         # - the cashier entered nothing (= exact payment, no change to give)
-        # - or the given sum + first payment covers the total
+        # - or the given sum covers the total
         somme_est_suffisante = (
             somme_donnee_en_centimes == 0
-            or (somme_donnee_en_centimes + montant_deja_paye) >= total_en_centimes
+            or somme_donnee_en_centimes >= total_centimes
         )
 
         if somme_est_suffisante:
+            # Créer les lignes articles en base (atomique)
+            # Create article lines in DB (atomic)
+            with db_transaction.atomic():
+                _creer_lignes_articles(articles_panier, moyen_paiement_code)
+
             # Calculer la monnaie à rendre (en euros)
             # Calculate change to give back (in euros)
             donnees_paiement["give_back"] = 0
-            if somme_donnee_en_centimes > total_en_centimes:
-                donnees_paiement["give_back"] = (somme_donnee_en_centimes - total_en_centimes) / 100
-            donnees_paiement["total"] = total_addition
+            if somme_donnee_en_centimes > total_centimes:
+                donnees_paiement["give_back"] = (somme_donnee_en_centimes - total_centimes) / 100
 
             context = {
                 "currency_data": CURRENCY_DATA,
@@ -787,7 +994,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "monnaie_name": state["place"]["monnaie_name"],
                 "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
                 "deposit_is_present": consigne_dans_panier,
-                "total": total_addition,
+                "total": total_en_euros,
                 "state": state,
                 "original_payment": transaction_precedente,
             }
@@ -795,8 +1002,6 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Somme insuffisante → ne rien faire (le JS gère la validation côté client)
         # Insufficient amount → do nothing (JS handles client-side validation)
-        # NOTE : ce cas ne devrait pas arriver car le JS valide avant d'envoyer.
-        # NOTE: this case should not happen because JS validates before sending.
         context_erreur = {
             "msg_type": "warning",
             "msg_content": _("Il y a une erreur !"),
@@ -810,106 +1015,26 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_par_nfc(
-        self, request, state, db, donnees_paiement, point_de_vente,
-        total_addition, consigne_dans_panier, transaction_precedente,
-        moyen_paiement_code,
+        self, request, state, donnees_paiement,
+        total_en_euros, consigne_dans_panier, moyen_paiement_code,
     ):
         """
-        Paiement NFC (cashless) — débite le portefeuille de la carte du client.
-        NFC (cashless) payment — debits the client's card wallet.
+        Paiement NFC (cashless) — Phase 3, pas encore implémenté.
+        NFC (cashless) payment — Phase 3, not yet implemented.
 
-        Trois issues possibles :
-        1. Consigne dans le panier → succès immédiat (remboursement, pas de débit)
-        2. Solde suffisant → succès (débit du portefeuille)
-        3. Solde insuffisant → on sauvegarde la transaction et on propose un complément
-           par espèces, CB ou une autre carte NFC
+        LOCALISATION : laboutik/views.py
 
-        Three possible outcomes:
-        1. Deposit in the basket → immediate success (refund, no debit)
-        2. Sufficient balance → success (wallet debit)
-        3. Insufficient balance → we save the transaction and offer a top-up
-           via cash, credit card or another NFC card
+        Retourne un message indiquant que le paiement NFC sera disponible
+        dans une prochaine mise à jour (intégration fedow_core).
+        Returns a message indicating that NFC payment will be available
+        in a future update (fedow_core integration).
         """
-        # Consigne → pas besoin de vérifier le solde, remboursement direct
-        # Deposit → no need to check balance, direct refund
-        if consigne_dans_panier:
-            context = {
-                "currency_data": CURRENCY_DATA,
-                "payment": donnees_paiement,
-                "monnaie_name": state["place"]["monnaie_name"],
-                "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
-                "deposit_is_present": True,
-                "total": total_addition,
-                "state": state,
-                "original_payment": transaction_precedente,
-            }
-            return render(request, "laboutik/partial/hx_return_payment_success.html", context)
-
-        # --- Chercher la carte NFC du client ---
-        # --- Look up the client's NFC card ---
-        tag_id_client = donnees_paiement.get("tag_id", "")
-        cartes_trouvees = db.get_by_index("cards", "tag_id", tag_id_client)
-
-        # Carte inconnue → avertissement et retour
-        # Unknown card → warning and return
-        if not cartes_trouvees:
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _("Carte inconnue !"),
-                "selector_bt_retour": "#messages",
-            }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
-
-        carte_client = cartes_trouvees[0]
-
-        # Solde total = portefeuille principal + portefeuille cadeau
-        # Total balance = main wallet + gift wallet
-        solde_portefeuille = carte_client["wallets"]
-        solde_portefeuille_cadeau = carte_client["wallets_gift"]
-        solde_total_carte = solde_portefeuille + solde_portefeuille_cadeau
-
-        # Récupérer les moyens de paiement acceptés par le PV
-        # (affiché sur l'écran "fonds insuffisants" pour proposer un complément)
-        # Get payment methods accepted by the POS
-        # (shown on the "insufficient funds" screen to offer a top-up)
-        resultats_pv = db.get_by_index("pvs", "id", donnees_paiement.get("uuid_pv"))
-        pv_depuis_db = resultats_pv[0] if resultats_pv else point_de_vente
-
-        context_nfc = {
-            "payment": donnees_paiement,
-            "monnaie_name": state["place"]["monnaie_name"],
-            "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
-            "state": state,
-            "original_payment": transaction_precedente,
-            "currency_data": CURRENCY_DATA,
-            "wallets": {
-                "monnaie": solde_portefeuille,
-                "gift_monnaie": solde_portefeuille_cadeau,
-            },
-            "payments_accepted": {
-                "accepte_especes": pv_depuis_db.get("accepte_especes", False),
-                "accepte_carte_bancaire": pv_depuis_db.get("accepte_carte_bancaire", False),
-                "accepte_cheque": pv_depuis_db.get("accepte_cheque", False),
-            },
-            "card": carte_client,
+        context_erreur = {
+            "msg_type": "warning",
+            "msg_content": _("Paiement NFC disponible en prochaine mise à jour"),
+            "selector_bt_retour": "#messages",
         }
-        if transaction_precedente:
-            context_nfc["original_moyen_paiement"] = PAYMENT_METHOD_TRANSLATIONS.get(
-                transaction_precedente.get("moyen_paiement"), "",
-            )
-
-        # --- Fonds insuffisants → sauvegarder et proposer un complément ---
-        # --- Insufficient funds → save and offer a top-up ---
-        if solde_total_carte < total_addition:
-            montant_manquant = ((total_addition * 100) - (solde_total_carte * 100)) / 100
-            donnees_paiement["missing"] = montant_manquant
-            uuid_nouvelle_transaction = db.add("transactions", donnees_paiement)
-            context_nfc["uuid_transaction"] = uuid_nouvelle_transaction
-            return render(request, "laboutik/partial/hx_funds_insufficient.html", context_nfc)
-
-        # --- Solde suffisant → paiement réussi ---
-        # --- Sufficient balance → payment successful ---
-        return render(request, "laboutik/partial/hx_return_payment_success.html", context_nfc)
+        return render(request, "laboutik/partial/hx_messages.html", context_erreur)
 
     # ----------------------------------------------------------------------- #
     #  Annexes : lecture et vérification de carte NFC                           #

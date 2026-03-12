@@ -8,8 +8,13 @@
 		<div>{% translate "PRIX" %}</div>
 	</div>
 	<div id="addition-list"></div>
-	<form id="addition-form" class="hide" hx-post="{% url 'laboutik-paiement-moyens_paiement' %}" hx-trigger="validerPaiement"
-		hx-target="#messages" hx-swap="outerHTML" hx-on::after-request="hideAndEmptyElement('#confirm')">
+	<form id="addition-form" class="hide"
+		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
+		hx-trigger="validerPaiement"
+		hx-target="#messages"
+		hx-swap="outerHTML"
+		hx-on::after-request="hideAndEmptyElement('#confirm')"
+		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
 		<input type="text" name="id_table" value="{{ id_table }}" />
 		<input type="text" name="uuid_pv" value="{{ pv.id }}" />
 		<input type="text" name="responsable" value="{{ card.name }}" />
