@@ -32,25 +32,6 @@
                 </button>
             {% endif %}
 
-
-            <!-- Filtre Catégories -->
-            {% if all_tags %}
-                <div class="dropdown">
-                    <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        {% if active_tag %}{{ active_tag.name }}{% else %}{% translate 'Trier par catégories' %}{% endif %}
-                    </button>
-                    <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
-                        <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les catégories' %}</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        {% for tag in all_tags %}
-                            <li><a class="dropdown-item police-mono" href="?tag={{ tag.slug }}">{{ tag.name }}</a></li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            {% endif %}
-
-            {% if all_thematiques %}
-
              <!-- Filtre Date -->
              <div class="dropdown">
                 <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
@@ -72,7 +53,26 @@
                     {% endfor %}
                 </ul>
             </div>
-            
+
+            <!-- Filtre Catégories -->
+            {% if all_tags %}
+                <div class="dropdown">
+                    <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        {% if active_tag %}{{ active_tag.name }}{% else %}{% translate 'Trier par catégories' %}{% endif %}
+                    </button>
+                    <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
+                        <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les catégories' %}</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% for tag in all_tags %}
+                            <li><a class="dropdown-item police-mono" href="?tag={{ tag.slug }}">{{ tag.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+
+            {% if all_thematiques %}
+
+
             <!-- Filtre Thématique -->
             <div class="dropdown">
                 <button class="bouton-filtre dropdown-toggle" type="button" data-bs-toggle="dropdown">
