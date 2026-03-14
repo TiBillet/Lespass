@@ -1,6 +1,28 @@
 {% load i18n %}
-<div class="p-2 rounded-md bg-green-100 text-green-900 border border-green-200">
-  <p class="text-sm">
-    {% trans "Adhésion validée par un.e admin : Notification envoyé à l'utilisateur.ices par email : en attente du paiement" %}
+<!--
+CONFIRMATION D'ENVOI DU LIEN DE PAIEMENT
+/ Payment link sent confirmation
+
+LOCALISATION : Administration/templates/admin/membership/partials/admin_accept_success.html
+
+Partial HTMX retourné par POST sur /memberships/{uuid}/admin_accept/.
+Remplace le contenu de #response-accept (texte d'aide + bouton) dans le panneau d'actions.
+
+Utilisé dans 2 cas :
+- Première validation (AW → AV) : passe le statut en AV puis envoie le lien
+- Renvoi du lien (AV → AV)     : renvoie uniquement le mail, pas de changement de statut
+
+Même langage visuel que les cartes AW/AV : bordure latérale accentuée, fond teinté.
+/ Same visual language as AW/AV cards: left accent border, tinted background.
+-->
+<div style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.125rem;background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:.375rem">
+  <svg style="width:1rem;height:1rem;color:#16a34a;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+  <p style="font-size:.8125rem;color:#166534;margin:0;line-height:1.5625">
+    <strong>{% translate "Email envoyé." %}</strong>
+    {% if membership.price %}
+      {% blocktrans with amount=membership.price.prix %}L'adhérent·e recevra le lien de paiement pour régler {{ amount }} €.{% endblocktrans %}
+    {% else %}
+      {% translate "L'adhérent·e recevra le lien de paiement par email." %}
+    {% endif %}
   </p>
 </div>

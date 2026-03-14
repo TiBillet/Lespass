@@ -1280,3 +1280,32 @@ class EventQuickCreateSerializer(serializers.Serializer):
             event.products.add(free_res_product)
 
         return event
+
+
+class PaiementHorsLigneSerializer(serializers.Serializer):
+    """
+    Valide les données d'un paiement hors-ligne (espèces, chèque, virement).
+    / Validates offline payment data (cash, check, transfer).
+
+    LOCALISATION : BaseBillet/validators.py
+    """
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    payment_method = serializers.ChoiceField(choices=PaymentMethod.classic())
+
+    def validate_amount(self, valeur_montant):
+        # Le montant doit être positif
+        # / Amount must be positive
+        if valeur_montant <= 0:
+            raise serializers.ValidationError(_("Le montant doit être positif."))
+        return valeur_montant
+
+    def validate(self, donnees_validees):
+        # FREE avec montant > 0 est interdit
+        # / FREE with amount > 0 is forbidden
+        montant = donnees_validees.get('amount')
+        moyen = donnees_validees.get('payment_method')
+        if moyen == PaymentMethod.FREE and montant and montant > 0:
+            raise serializers.ValidationError(
+                _("Impossible d'utiliser 'Offert' avec un montant positif.")
+            )
+        return donnees_validees

@@ -1,0 +1,257 @@
+{% load i18n unfold static %}
+<script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+
+<!--
+PANNEAU D'ACTIONS ADMINISTRATEUR — ADHÉSION (barre de commandes compacte)
+/ Admin action panel — Membership (compact command bar)
+
+LOCALISATION : Administration/templates/admin/membership/actions_panel.html
+
+Affiché AVANT le formulaire de modification (change_form_before_template).
+
+Architecture :
+- Barre horizontale : tous les boutons toujours visibles
+- Zones de réponse (#response-*) : vides au chargement, remplies par HTMX
+- Les boutons ne disparaissent PAS quand un formulaire s'ouvre
+- "Retour"/"Annuler" dans les formulaires vide la zone de réponse (retour GET → "")
+
+/ Architecture:
+- Horizontal bar: all buttons always visible
+- Response zones (#response-*): empty on load, filled by HTMX
+- Buttons do NOT disappear when a form opens
+- "Back"/"Cancel" in forms empties the response zone (GET → "")
+
+FLUX PAR ACTION :
+- Envoyer reçu  : hx-post → send_invoice      → response-send-invoice ← send_invoice_success.html
+- Reçu PDF      : lien direct → invoice (PDF inline)
+- Renouveller   : hx-get  → renouveller       → response-renouveller ← renouveller_confirm.html
+- Valider       : hx-post → admin_accept       → response-accept     ← admin_accept_success.html  [si status AW ou AV]
+- Paiement      : hx-get  → ajouter_paiement  → response-paiement   ← ajouter_paiement_form.html [si status WP/AW/AV]
+- Annuler       : hx-get  → cancel            → response-cancel     ← cancel_form.html
+
+CONTEXTE REQUIS (injecté par MembershipAdmin.changeform_view) :
+- membership              : instance Membership
+- renouveller_url         : URL du formulaire d'ajout pré-rempli (injecté dans le partial de confirmation)
+- statuts_attente_paiement : liste des statuts qui affichent le bouton paiement
+-->
+
+<div class="p-4"
+     hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+  {% component "unfold/components/card.html" with title=_("Actions") %}
+
+    {# ─── Barre d'actions / Action bar ─────────────────────────────── #}
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;min-height:2.25rem">
+
+      {# 1. Envoyer le reçu par email / Send receipt by email #}
+      <button data-testid="membership-action-send-invoice"
+              hx-post="/memberships/{{ membership.pk }}/send_invoice/"
+              hx-target="#response-send-invoice"
+              hx-swap="innerHTML"
+              hx-confirm="{% translate 'Envoyer le reçu par email ?' %}"
+              style="display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:var(--color-primary-600,#7c3aed);color:#fff;border:none;cursor:pointer;white-space:nowrap">
+        <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+        {% translate "Envoyer le reçu" %}
+      </button>
+
+      {# 2. Reçu PDF — lien direct, pas HTMX / PDF receipt — direct link, no HTMX #}
+      <a href="/memberships/{{ membership.pk }}/invoice/"
+         target="_blank" rel="noopener"
+         data-testid="membership-action-download-invoice"
+         style="display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid var(--color-base-300,#d1d5db);color:var(--color-base-700,#374151);text-decoration:none;background:transparent;white-space:nowrap">
+        <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        {% translate "Reçu PDF" %}
+      </a>
+
+      {# 3. Renouveller / Renew — affiche une confirmation inline avant de naviguer #}
+      {# / Shows an inline confirmation before navigating to the pre-filled add form #}
+      <button data-testid="membership-action-renouveller"
+              hx-get="/memberships/{{ membership.pk }}/renouveller/"
+              hx-target="#response-renouveller"
+              hx-swap="innerHTML"
+              style="display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid var(--color-base-300,#d1d5db);color:var(--color-base-700,#374151);background:transparent;cursor:pointer;white-space:nowrap">
+        <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        {% translate "Renouveller" %}
+      </button>
+
+      {# Séparateur visuel : séparé les actions neutres du paiement hors-ligne #}
+      {# Visible uniquement si le bouton paiement est aussi affiché             #}
+      {# / Visual separator: only shown when the offline payment button is also visible #}
+      {% if membership.status in statuts_attente_paiement %}
+      <span style="display:inline-block;width:1px;height:1.25rem;background:var(--color-base-200,#e5e7eb);margin:0 .125rem;align-self:center" aria-hidden="true"></span>
+      {% endif %}
+
+      {# 5. Paiement hors-ligne / Offline payment — visible si statut en attente #}
+      {# / Only visible when membership is awaiting payment #}
+      {% if membership.status in statuts_attente_paiement %}
+      <button data-testid="membership-action-ajouter-paiement"
+              hx-get="/memberships/{{ membership.pk }}/ajouter_paiement/"
+              hx-target="#response-paiement"
+              hx-swap="innerHTML"
+              style="display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:#16a34a;color:#fff;border:none;cursor:pointer;white-space:nowrap">
+        <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+        {% translate "Enregistrer un paiement" %}
+      </button>
+      {% endif %}
+
+      {# Poussoir flexible : isole l'annulation à droite / Flex spacer: isolates cancel on the right #}
+      <span style="flex:1;min-width:.25rem" aria-hidden="true"></span>
+
+      {# 6. Annuler l'adhésion / Cancel membership — séparé et à droite #}
+      <button data-testid="membership-action-cancel"
+              hx-get="/memberships/{{ membership.pk }}/cancel/"
+              hx-target="#response-cancel"
+              hx-swap="innerHTML"
+              style="display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid #dc2626;color:#dc2626;background:transparent;cursor:pointer;white-space:nowrap">
+        <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        {% translate "Annuler l'adhésion" %}
+      </button>
+
+    </div>
+
+    {# ─── Zones de réponse HTMX / HTMX response zones ──────────────── #}
+    {# Vides au chargement de la page. Remplies par les actions HTMX ci-dessus.   #}
+    {# "Retour"/"Annuler" dans les formulaires appellent *_reset qui retourne ""  #}
+    {# et vide la zone. Les boutons de la barre restent toujours visibles.         #}
+    {# / Empty on page load. Filled by HTMX actions above.                         #}
+    {# "Back"/"Cancel" in forms call *_reset which returns "" and clears the zone. #}
+    {# Toolbar buttons always remain visible.                                       #}
+
+    <div id="response-send-invoice" aria-live="polite" style="margin-top:.75rem"> </div>
+
+    <div id="response-renouveller" aria-live="polite" style="margin-top:.75rem"> </div>
+
+    {# ─── Carte de validation manuelle ──────────────────────────────── #}
+    {#                                                                    #}
+    {# Zone pré-remplie : contient À LA FOIS le texte d'aide ET le bouton. #}
+    {# Le clic déclenche hx-post sur la zone elle-même (hx-swap=innerHTML) #}
+    {# → le contenu entier (texte + bouton) est remplacé par le partial    #}
+    {#   admin_accept_success.html.                                         #}
+    {# Le bouton disparaît uniquement quand la personne paie (status=ONCE). #}
+    {#                                                                       #}
+    {# / Pre-filled zone: contains BOTH the help text AND the button.        #}
+    {# Clicking fires hx-post on this zone (hx-swap=innerHTML)               #}
+    {# → entire content (text + button) replaced by admin_accept_success.html #}
+    {# Button disappears only when member pays (status=ONCE).                 #}
+    {% if membership.status == 'AW' or membership.status == 'AV' %}
+    <div id="response-accept" aria-live="polite" style="margin-top:.75rem">
+
+      {% if membership.status == 'AW' %}
+      {# ── État AW : première validation ─────────────────────────── #}
+      {# Carte bleue — accent latéral fort pour signaler une action requise #}
+      {# / State AW: first validation — blue card, strong left accent #}
+      <div style="display:flex;align-items:center;gap:1.25rem;padding:.875rem 1.125rem;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #2563eb;border-radius:.375rem">
+
+        {# Icône + texte explicatif #}
+        <div style="display:flex;align-items:flex-start;gap:.5rem;flex:1;min-width:0">
+          <svg style="width:1rem;height:1rem;color:#1d4ed8;flex-shrink:0;margin-top:.125rem" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <p style="font-size:.8125rem;color:#1e40af;margin:0;line-height:1.5625">
+            {% if membership.price %}
+              {% blocktrans with amount=membership.price.prix %}Cette adhésion demande une validation manuelle. La personne concernée recevra un email pour régler la somme de {{ amount }} €.{% endblocktrans %}
+            {% else %}
+              {% translate "Cette adhésion demande une validation manuelle. La personne concernée recevra un email avec le lien de paiement." %}
+            {% endif %}
+          </p>
+        </div>
+
+        {# Bouton de première validation — plein, bleu #}
+        {# / First validation button — solid blue #}
+        <button data-testid="membership-action-accept"
+                hx-post="/memberships/{{ membership.uuid }}/admin_accept/"
+                hx-target="#response-accept"
+                hx-swap="innerHTML"
+                style="flex-shrink:0;display:inline-flex;align-items:center;gap:.375rem;padding:.4375rem 1rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:#2563eb;color:#fff;border:none;cursor:pointer;white-space:nowrap">
+          <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+          {% translate "Valider l'adhésion" %}
+        </button>
+
+      </div>
+
+      {% elif membership.status == 'AV' %}
+      {# ── État AV : renvoi du lien ───────────────────────────────── #}
+      {# Carte ambre — plus douce, signale une info plutôt qu'une urgence #}
+      {# / State AV: resend link — amber card, softer tone #}
+      <div style="display:flex;align-items:center;gap:1.25rem;padding:.875rem 1.125rem;background:#fffbeb;border:1px solid #fde68a;border-left:3px solid #d97706;border-radius:.375rem">
+
+        {# Icône + texte informatif #}
+        <div style="display:flex;align-items:flex-start;gap:.5rem;flex:1;min-width:0">
+          <svg style="width:1rem;height:1rem;color:#b45309;flex-shrink:0;margin-top:.125rem" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          <p style="font-size:.8125rem;color:#92400e;margin:0;line-height:1.5625">
+            {% translate "Le mail de paiement a déjà été envoyé. Voulez-vous le renvoyer ?" %}
+          </p>
+        </div>
+
+        {# Boutons d'action : renvoyer par email + copier le lien #}
+        {# / Action buttons: resend by email + copy link #}
+        <div style="display:flex;flex-shrink:0;gap:.5rem;align-items:center">
+
+          {# Bouton de renvoi — contour ambre, ton plus léger #}
+          {# / Resend button — amber outline, lighter tone #}
+          <button data-testid="membership-action-accept"
+                  hx-post="/memberships/{{ membership.uuid }}/admin_accept/"
+                  hx-target="#response-accept"
+                  hx-swap="innerHTML"
+                  style="display:inline-flex;align-items:center;gap:.375rem;padding:.375rem .875rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:transparent;color:#b45309;border:1.5px solid #d97706;cursor:pointer;white-space:nowrap">
+            <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            {% translate "Renvoyer le lien" %}
+          </button>
+
+          {# Bouton copier le lien de paiement dans le presse-papier #}
+          {# Même URL que celle envoyée par email — pas de risque de double paiement #}
+          {# / Copy payment link to clipboard — same URL as email, no double payment risk #}
+          {% if lien_paiement %}
+          <button data-testid="membership-action-copy-payment-link"
+                  id="btn-copy-payment-link"
+                  type="button"
+                  style="display:inline-flex;align-items:center;gap:.375rem;padding:.375rem .875rem;font-size:.8125rem;font-weight:600;border-radius:.375rem;background:transparent;color:#b45309;border:1.5px solid #d97706;cursor:pointer;white-space:nowrap">
+            <svg style="width:.875em;height:.875em;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+            <span id="btn-copy-payment-link-text">{% translate "Copier le lien" %}</span>
+          </button>
+          <script>
+            /**
+             * Copie le lien de paiement dans le presse-papier
+             * et affiche une confirmation visuelle temporaire.
+             * / Copies payment link to clipboard and shows temporary visual feedback.
+             *
+             * LOCALISATION : Administration/templates/admin/membership/actions_panel.html
+             */
+            (function() {
+              var bouton = document.getElementById('btn-copy-payment-link');
+              var texteOriginal = document.getElementById('btn-copy-payment-link-text');
+              var lien = '{{ lien_paiement }}';
+
+              bouton.addEventListener('click', function() {
+                navigator.clipboard.writeText(lien).then(function() {
+                  // Confirmation visuelle temporaire (2 secondes)
+                  // / Temporary visual feedback (2 seconds)
+                  var ancienTexte = texteOriginal.textContent;
+                  texteOriginal.textContent = '✓ {% translate "Copié !" %}';
+                  bouton.style.borderColor = '#16a34a';
+                  bouton.style.color = '#16a34a';
+                  setTimeout(function() {
+                    texteOriginal.textContent = ancienTexte;
+                    bouton.style.borderColor = '#d97706';
+                    bouton.style.color = '#b45309';
+                  }, 2000);
+                });
+              });
+            })();
+          </script>
+          {% endif %}
+
+        </div>
+
+      </div>
+      {% endif %}
+
+    </div>
+    {% endif %}
+
+    {% if membership.status in statuts_attente_paiement %}
+    <div id="response-paiement" aria-live="polite" style="margin-top:.75rem"> </div>
+    {% endif %}
+
+    <div id="response-cancel" aria-live="polite" style="margin-top:.75rem"> </div>
+
+  {% endcomponent %}
+</div>

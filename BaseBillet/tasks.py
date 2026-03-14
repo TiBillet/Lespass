@@ -150,21 +150,35 @@ def create_membership_invoice_pdf(membership: Membership):
 
     user = membership.user
 
-    # Determine recipient email safely; membership may be anonymous (no linked user)
-    email = None
-    try:
-        email = getattr(user, 'email', None)
-    except Exception:
-        email = None
-    # As a last resort, leave empty string to avoid AttributeError downstream
-    if not email:
-        email = ''
+    # Email du destinataire (peut être absent pour une adhésion anonyme)
+    # / Recipient email (may be absent for an anonymous membership)
+    email = getattr(user, 'email', None) or ''
+
+    # Paiement Stripe associé (None si paiement hors-ligne : espèces, chèque, virement)
+    # / Associated Stripe payment (None if offline payment: cash, check, transfer)
+    paiement_stripe = membership.stripe_paiement.filter(
+        status=Paiement_stripe.VALID
+    ).order_by('-datetime').first()
+
+    # Lignes d'articles hors-ligne (utilisées dans le template quand paiement_stripe est absent)
+    # / Offline sale lines (used in the template when paiement_stripe is absent)
+    lignes_hors_ligne = []
+    if not paiement_stripe:
+        lignes_hors_ligne = membership.lignearticles.filter(
+            status__in=[LigneArticle.PAID, LigneArticle.VALID]
+        ).select_related('pricesold', 'pricesold__price', 'pricesold__price__product')
 
     context = {
         'config': config,
-        'paiement': membership.stripe_paiement.filter(status=Paiement_stripe.VALID).order_by('-datetime').first(),
+        'paiement': paiement_stripe,
+        'lignes_hors_ligne': lignes_hors_ligne,
         'membership': membership,
         'email': email,
+        # Variables utilisées directement par le template (indépendantes de config.*)
+        # / Variables used directly by the template (independent from config.*)
+        'title': f"{config.organisation} — Reçu",
+        'tva_number': config.tva_number,
+        'siren': config.siren,
     }
 
     html = template.render(context)

@@ -22,6 +22,7 @@ from django.core.signing import TimestampSigner
 from django.db import connection, IntegrityError
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
+from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.utils import timezone
@@ -41,6 +42,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ApiBillet.permissions import TenantAdminPermission, CanInitiatePaymentPermission, CanCreateEventPermission
+from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
 from AuthBillet.models import TibilletUser, Wallet, HumanUser
 from AuthBillet.serializers import MeSerializer
 from AuthBillet.utils import get_or_create_user
@@ -54,7 +56,8 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     send_ticket_cancellation_user, send_email_generique, \
     send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
-    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer
+    ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
+    PaiementHorsLigneSerializer
 from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
@@ -2630,30 +2633,56 @@ class MembershipMVT(viewsets.ViewSet):
 
     @action(detail=True, methods=['POST'])
     def admin_accept(self, request, pk):
-        """Accept a membership requiring manual validation and send the checkout link to the member.
-        Only accessible to tenant administrators from the admin UI.
+        """
+        Valide une adhésion en attente et envoie le lien de paiement par email.
+        / Validates a pending membership and sends the payment link by email.
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        FLUX :
+        - Statut AW (1re validation) : passe en ADMIN_VALID + envoie le mail de paiement
+        - Statut AV (renvoi)         : ne change pas le statut, renvoie juste le mail
+        - Autres statuts             : avertissement + redirection
+
+        Utilise uuid comme pk (non standard — historique). Ne pas modifier.
+        / Uses uuid as pk (non-standard — legacy). Do not modify.
+
+        DÉPENDANCES :
+        - Celery : send_membership_payment_link_user (BaseBillet/tasks.py)
+        - Template : admin/membership/partials/admin_accept_success.html
         """
         user = request.user
         tenant = request.tenant
 
         try:
-            is_admin = user.is_authenticated and hasattr(user, 'is_tenant_admin') and user.is_tenant_admin(tenant)
+            est_admin = user.is_authenticated and hasattr(user, 'is_tenant_admin') and user.is_tenant_admin(tenant)
         except Exception:
-            is_admin = False
-        if not is_admin:
+            est_admin = False
+        if not est_admin:
             return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
 
         membership = get_object_or_404(Membership, uuid=uuid.UUID(pk))
-        # Update state to admin validated
-        if membership.status != Membership.ADMIN_WAITING:
-            messages.add_message(request, messages.WARNING, _("Membership not in waiting state."))
+
+        # Première validation : statut AW → AV
+        # / First validation: status AW → AV
+        if membership.status == Membership.ADMIN_WAITING:
+            membership.status = Membership.ADMIN_VALID
+            membership.save(update_fields=["status"])
+
+        # Renvoi du mail : statut déjà AV, pas de changement de statut
+        # / Resend email: status already AV, no status change
+        elif membership.status == Membership.ADMIN_VALID:
+            pass
+
+        # Statut incompatible avec cette action
+        # / Status incompatible with this action
+        else:
+            messages.add_message(request, messages.WARNING, _("Cette adhésion n'est pas en attente de validation."))
             referer = request.headers.get('Referer') or f"/admin/BaseBillet/membership/{membership.pk}/change/"
             return HttpResponseClientRedirect(referer)
 
-        membership.status = Membership.ADMIN_VALID
-        membership.save(update_fields=["status"])
-
-        # Send payment link email to user via Celery
+        # Envoie le lien de paiement par email (tâche de fond Celery)
+        # / Send payment link by email (Celery background task)
         try:
             send_membership_payment_link_user.delay(str(membership.uuid))
         except Exception as e:
@@ -2665,7 +2694,8 @@ class MembershipMVT(viewsets.ViewSet):
         except Exception:
             pass
 
-        # If HTMX request, return success partial to replace the button area
+        # Réponse HTMX : retourne le partial de succès pour la zone #response-accept
+        # / HTMX response: return success partial for the #response-accept zone
         if request.headers.get('HX-Request'):
             return render(request, "admin/membership/partials/admin_accept_success.html",
                           context={"membership": membership})
@@ -3078,11 +3108,311 @@ class MembershipMVT(viewsets.ViewSet):
         }
         return render(request, "admin/membership/partials/custom_form_edit_success.html", context)
 
+    @action(detail=True, methods=['POST'])
+    def send_invoice(self, request, pk=None):
+        """
+        Envoie le reçu PDF par email à l'adhérent.
+        / Sends the PDF receipt by email to the member.
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        FLUX :
+        1. Reçoit POST depuis le panneau HTMX admin (actions_panel.html)
+        2. Récupère l'adhésion par pk (entier Django)
+        3. Lance la tâche Celery send_membership_invoice_to_email
+        4. Retourne un partial HTML de confirmation
+
+        DÉPENDANCES :
+        - Celery : send_membership_invoice_to_email (BaseBillet/tasks.py)
+        - Template : admin/membership/partials/send_invoice_success.html
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('user'),
+            pk=pk,
+        )
+        # Lance l'envoi du PDF par email en tâche de fond
+        # / Sends the PDF by email as a background task
+        send_membership_invoice_to_email.delay(str(membership.uuid))
+
+        return render(request, "admin/membership/partials/send_invoice_success.html", {
+            "membership": membership,
+        })
+
+    @action(detail=True, methods=['GET', 'POST'])
+    def ajouter_paiement(self, request, pk=None):
+        """
+        Enregistre un paiement hors-ligne sur une adhésion en attente.
+        / Records an offline payment on a pending membership.
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        FLUX :
+        GET  : retourne le formulaire de paiement (partial HTMX)
+        POST :
+          1. Valide avec PaiementHorsLigneSerializer
+          2. Met à jour l'adhésion (contribution_value, payment_method, status → ONCE)
+          3. Crée LigneArticle CREATED puis PAID → déclenche trigger_A (deadline, email, Fedow)
+          4. Retourne un partial de succès
+
+        DÉPENDANCES :
+        - PaiementHorsLigneSerializer (BaseBillet/validators.py)
+        - get_or_create_price_sold, dec_to_int (ApiBillet/serializers.py)
+        - Signal pre_save sur LigneArticle → trigger_A (BaseBillet/signals.py)
+        - Templates : admin/membership/partials/ajouter_paiement_form.html
+                      admin/membership/partials/ajouter_paiement_success.html
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('price', 'price__product', 'price__fedow_reward_asset', 'user'),
+            pk=pk,
+        )
+
+        # Garde : uniquement pour les adhésions en attente de paiement
+        # / Guard: only for memberships awaiting payment
+        statuts_autorises = [Membership.WAITING_PAYMENT, Membership.ADMIN_WAITING, Membership.ADMIN_VALID]
+        if membership.status not in statuts_autorises:
+            return render(request, "admin/membership/partials/ajouter_paiement_form.html", {
+                "membership": membership,
+                "error": _("Cette adhésion n'est pas en attente de paiement."),
+                "moyens_de_paiement": PaymentMethod.classic(),
+            })
+
+        if request.method == 'GET':
+            # Retourne le formulaire avec le montant par défaut pré-rempli
+            # / Returns the form with the default amount pre-filled
+            montant_par_defaut = membership.price.prix if membership.price else ""
+            return render(request, "admin/membership/partials/ajouter_paiement_form.html", {
+                "membership": membership,
+                "montant_par_defaut": montant_par_defaut,
+                "moyens_de_paiement": PaymentMethod.classic(),
+            })
+
+        # POST : validation avec serializer (stack-ccc : jamais de try/except inline)
+        # / POST: validate with serializer (stack-ccc: never inline try/except)
+        serializer_paiement = PaiementHorsLigneSerializer(data=request.POST)
+        if not serializer_paiement.is_valid():
+            # Retourne le formulaire avec les erreurs inline
+            # / Returns the form with inline errors
+            return render(request, "admin/membership/partials/ajouter_paiement_form.html", {
+                "membership": membership,
+                "montant_par_defaut": request.POST.get("amount", ""),
+                "moyens_de_paiement": PaymentMethod.classic(),
+                "errors": serializer_paiement.errors,
+            })
+
+        montant_valide = serializer_paiement.validated_data['amount']
+        moyen_paiement_valide = serializer_paiement.validated_data['payment_method']
+
+        # 1. Mise à jour de l'adhésion AVANT la création de LigneArticle
+        #    trigger_A a besoin de last_contribution pour calculer la deadline
+        # / Update membership BEFORE creating LigneArticle (trigger_A needs last_contribution)
+        membership.contribution_value = dround(montant_valide)
+        membership.payment_method = moyen_paiement_valide
+        if not membership.first_contribution:
+            membership.first_contribution = timezone.localtime()
+        membership.last_contribution = timezone.localtime()
+        membership.status = Membership.ONCE
+        membership.save()
+
+        # 2. Crée la LigneArticle en CREATED puis la passe en PAID
+        #    CREATED → PAID déclenche trigger_A via signal pre_save
+        # / Creates LigneArticle as CREATED then sets to PAID — triggers trigger_A
+        pricesold = get_or_create_price_sold(membership.price)
+        ligne_article_paiement = LigneArticle.objects.create(
+            pricesold=pricesold,
+            qty=1,
+            membership=membership,
+            amount=dec_to_int(membership.contribution_value),
+            payment_method=moyen_paiement_valide,
+            status=LigneArticle.CREATED,
+            sale_origin=SaleOrigin.ADMIN,
+        )
+        ligne_article_paiement.status = LigneArticle.PAID
+        ligne_article_paiement.save()
+
+        return render(request, "admin/membership/partials/ajouter_paiement_success.html", {
+            "membership": membership,
+        })
+
+    @action(detail=True, methods=['GET', 'POST'])
+    def cancel(self, request, pk=None):
+        """
+        Annule une adhésion avec option de créer un avoir comptable.
+        / Cancels a membership with option to create a credit note.
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        FLUX :
+        GET  : retourne le formulaire de confirmation inline (partial HTMX)
+        POST :
+          1. Passe l'adhésion en ADMIN_CANCELED
+          2. Crée les avoirs si demandé (with_credit_note=1 dans le POST)
+          3. Retourne HX-Redirect vers la changelist (adhésion terminée)
+
+        DÉPENDANCES :
+        - LigneArticle.credit_notes (related_name de credit_note_for FK)
+        - Template : admin/membership/partials/cancel_form.html
+        """
+        membership = get_object_or_404(
+            Membership.objects.select_related('user', 'price', 'price__product'),
+            pk=pk,
+        )
+
+        # Lignes de vente payées liées à cette adhésion, sans avoir existant
+        # / Paid sale lines for this membership, without existing credit note
+        lignes_de_vente_payees = LigneArticle.objects.filter(
+            membership=membership,
+            status__in=[LigneArticle.VALID, LigneArticle.PAID],
+        ).exclude(
+            credit_notes__isnull=False,
+        ).select_related('pricesold', 'pricesold__productsold')
+
+        if request.method == 'GET':
+            # Retourne le formulaire de confirmation inline
+            # / Returns the inline confirmation form
+            return render(request, "admin/membership/partials/cancel_form.html", {
+                "membership": membership,
+                "membership_email": membership.user.email if membership.user else "—",
+                "has_paid_lines": lignes_de_vente_payees.exists(),
+                "lignes_payees": lignes_de_vente_payees,
+            })
+
+        # POST : annulation effective
+        # / POST: actual cancellation
+        membership.archiver = True
+        membership.status = Membership.ADMIN_CANCELED
+        membership.save()
+
+        # Crée les avoirs si demandé
+        # / Creates credit notes if requested
+        creation_avoirs_demandee = request.POST.get("with_credit_note") == "1"
+        if creation_avoirs_demandee:
+            nombre_avoirs_crees = 0
+            for ligne in lignes_de_vente_payees:
+                avoir = LigneArticle.objects.create(
+                    pricesold=ligne.pricesold,
+                    qty=-ligne.qty,
+                    amount=ligne.amount,
+                    vat=ligne.vat,
+                    paiement_stripe=ligne.paiement_stripe,
+                    membership=membership,
+                    payment_method=ligne.payment_method,
+                    asset=ligne.asset,
+                    wallet=ligne.wallet,
+                    sale_origin=SaleOrigin.ADMIN,
+                    credit_note_for=ligne,
+                    status=LigneArticle.CREATED,
+                )
+                avoir.status = LigneArticle.CREDIT_NOTE
+                avoir.save()
+                nombre_avoirs_crees += 1
+
+            messages.success(
+                request,
+                _("Adhésion annulée. %(count)d avoir(s) créé(s).") % {"count": nombre_avoirs_crees}
+            )
+        else:
+            messages.success(request, _("Adhésion annulée."))
+
+        # Redirige vers la liste des adhésions (HX-Redirect pour HTMX)
+        # / Redirects to the membership list (HX-Redirect for HTMX)
+        url_liste_adhesions = reverse('staff_admin:BaseBillet_membership_changelist')
+        response = HttpResponse(status=204)
+        response['HX-Redirect'] = url_liste_adhesions
+        return response
+
+    @action(detail=True, methods=['GET'])
+    def cancel_reset(self, request, pk=None):
+        """
+        Vide la zone de réponse #response-cancel (utilisateur clique "Retour" dans le formulaire).
+        / Clears the #response-cancel response zone (user clicks "Back" in the form).
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        Le bouton "Annuler l'adhésion" reste toujours visible dans la barre d'actions.
+        Retourner "" suffit à vider la zone via hx-swap="innerHTML".
+        / The "Cancel membership" button stays visible in the toolbar at all times.
+        Returning "" is enough to clear the zone via hx-swap="innerHTML".
+        """
+        return HttpResponse("")
+
+    @action(detail=True, methods=['GET'])
+    def ajouter_paiement_reset(self, request, pk=None):
+        """
+        Vide la zone de réponse #response-paiement (utilisateur clique "Annuler" dans le formulaire).
+        / Clears the #response-paiement response zone (user clicks "Cancel" in the form).
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        Le bouton "Enregistrer un paiement" reste toujours visible dans la barre d'actions.
+        / The "Register payment" button stays visible in the toolbar at all times.
+        """
+        return HttpResponse("")
+
+    @action(detail=True, methods=['GET'])
+    def renouveller(self, request, pk=None):
+        """
+        Affiche une boîte de confirmation avant de naviguer vers le formulaire de renouvellement.
+        / Shows a confirmation box before navigating to the renewal form.
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+
+        FLUX :
+        GET : retourne le partial de confirmation avec l'URL pré-remplie en contexte.
+        / GET: returns the confirmation partial with the pre-filled URL as context.
+        Le bouton "Continuer" du partial est un lien direct (navigation normale).
+        / The partial's "Continue" button is a direct link (normal navigation).
+
+        DÉPENDANCES :
+        - Template : admin/membership/partials/renouveller_confirm.html
+        """
+        from urllib.parse import urlencode as urllib_urlencode
+
+        membership = get_object_or_404(
+            Membership.objects.select_related('user', 'price', 'price__product'),
+            pk=pk,
+        )
+
+        # Construction de l'URL du formulaire d'ajout avec les champs pré-remplis
+        # / Build the add form URL with pre-filled fields
+        url_formulaire_ajout = reverse('staff_admin:BaseBillet_membership_add')
+        params_renouvellement = {}
+        if getattr(membership, 'user', None) and getattr(membership.user, 'email', None):
+            params_renouvellement['email'] = membership.user.email
+        if membership.price_id:
+            params_renouvellement['price'] = membership.price_id
+        if membership.contribution_value is not None:
+            params_renouvellement['contribution'] = str(membership.contribution_value)
+        if membership.payment_method:
+            params_renouvellement['payment_method'] = membership.payment_method
+        if membership.first_name:
+            params_renouvellement['first_name'] = membership.first_name
+        if membership.last_name:
+            params_renouvellement['last_name'] = membership.last_name
+        url_renouvellement = f"{url_formulaire_ajout}?{urllib_urlencode(params_renouvellement, doseq=True)}"
+
+        return render(request, "admin/membership/partials/renouveller_confirm.html", {
+            "membership": membership,
+            "renouveller_url": url_renouvellement,
+        })
+
+    @action(detail=True, methods=['GET'])
+    def renouveller_reset(self, request, pk=None):
+        """
+        Vide la zone de réponse #response-renouveller (utilisateur clique "Annuler").
+        / Clears the #response-renouveller response zone (user clicks "Cancel").
+
+        LOCALISATION : BaseBillet/views.py — MembershipMVT
+        """
+        return HttpResponse("")
+
     def get_permissions(self):
         if self.action in [
             'invoice_to_mail', 'admin_accept',
             'admin_edit_json_form', 'admin_cancel_edit', 'admin_change_json_form',
             'admin_add_custom_field_form', 'admin_add_custom_field',
+            'send_invoice', 'cancel', 'ajouter_paiement',
+            'cancel_reset', 'ajouter_paiement_reset',
+            'renouveller', 'renouveller_reset',
         ]:
             permission_classes = [TenantAdminPermission, ]
 

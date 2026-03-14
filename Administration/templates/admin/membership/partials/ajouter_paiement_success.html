@@ -1,0 +1,30 @@
+{% load i18n %}
+<!--
+CONFIRMATION PAIEMENT ENREGISTRE
+/ Payment recorded confirmation
+
+LOCALISATION : Administration/templates/admin/membership/partials/ajouter_paiement_success.html
+
+Partial HTMX retourné après enregistrement d'un paiement hors-ligne.
+Remplace le formulaire de paiement dans la carte du panneau d'actions.
+-->
+<div data-testid="membership-paiement-success"
+     style="padding:.75rem;border-radius:.375rem;background:#f0fdf4;border:1px solid #86efac;font-size:.875rem;color:#166534">
+    <p style="margin:0">
+        ✓ {% translate "Paiement enregistré avec succès." %}
+        {% if membership.contribution_value %}
+            {{ membership.contribution_value }} € — {{ membership.get_payment_method_display }}
+        {% endif %}
+    </p>
+    <p style="margin:.375rem 0 0 0;font-size:.8125rem" data-testid="membership-paiement-success-ligne-comptable">
+        {% translate "Une ligne comptable a été créée dans les" %}
+        <a href="/admin/BaseBillet/lignearticle/"
+           target="_blank" rel="noopener"
+           style="color:#166534;text-decoration:underline">{% translate "Ventes" %}</a>.
+    </p>
+    {% if membership.price.fedow_reward_enabled and membership.price.fedow_reward_asset and membership.price.fedow_reward_amount %}
+    <p style="margin:.375rem 0 0 0;font-size:.8125rem" data-testid="membership-paiement-success-trigger-tokens">
+        ⚡ {% blocktrans with amount=membership.price.fedow_reward_amount asset_name=membership.price.fedow_reward_asset.name %}Déclencheur activé : {{ amount }} {{ asset_name }} ajoutés au portefeuille.{% endblocktrans %}
+    </p>
+    {% endif %}
+</div>

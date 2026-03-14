@@ -1,0 +1,128 @@
+{% load i18n %}
+<!--
+FORMULAIRE DE PAIEMENT HORS-LIGNE (PARTIAL HTMX)
+/ Offline payment form (HTMX partial)
+
+LOCALISATION : Administration/templates/admin/membership/partials/ajouter_paiement_form.html
+
+Partial HTMX retourné en GET depuis /memberships/{pk}/ajouter_paiement/.
+Remplace le bouton "Enregistrer un paiement" dans le panneau d'actions admin.
+Le POST retourne soit ce formulaire avec erreurs, soit ajouter_paiement_success.html.
+-->
+<form data-testid="membership-paiement-form"
+      hx-post="/memberships/{{ membership.pk }}/ajouter_paiement/"
+      hx-target="#response-paiement"
+      hx-swap="innerHTML">
+    {% csrf_token %}
+
+    <div style="padding:1rem;border-radius:.375rem;border:1px solid #e5e7eb;background:#f9fafb;font-size:.875rem">
+
+        {# Informations adhérent / Member info #}
+        <div style="margin-bottom:.875rem;color:#6b7280;font-size:.8125rem">
+            <p>
+                <strong>{% translate "Adhérent·e" %} :</strong>
+                {{ membership.first_name }} {{ membership.last_name }}
+                {% if membership.user %}({{ membership.user.email }}){% endif %}
+            </p>
+            {% if membership.price %}
+            <p>
+                <strong>{% translate "Produit" %} :</strong>
+                {{ membership.price.product.name }} — {{ membership.price.name }}
+            </p>
+            {% if membership.price.prix %}
+            <p>
+                <strong>{% translate "Prix catalogue" %} :</strong>
+                {{ membership.price.prix }} €
+            </p>
+            {% endif %}
+            {% endif %}
+        </div>
+
+        {# Erreur globale / Global error #}
+        {% if error %}
+        <div style="margin-bottom:.75rem;padding:.5rem .75rem;border-radius:.25rem;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;font-size:.8125rem">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        {# Montant / Amount #}
+        <div style="margin-bottom:.75rem">
+            <label for="id_amount_htmx"
+                   style="display:block;font-size:.8125rem;font-weight:500;color:#374151;margin-bottom:.25rem">
+                {% translate "Montant (€)" %}
+            </label>
+            <input type="number"
+                   name="amount"
+                   id="id_amount_htmx"
+                   step="0.01"
+                   min="0.01"
+                   value="{{ montant_par_defaut }}"
+                   required
+                   data-testid="membership-payment-amount"
+                   style="width:100%;padding:.375rem .625rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.875rem;background:#fff">
+            {% if errors.amount %}
+            <p style="margin-top:.25rem;font-size:.8125rem;color:#dc2626">{{ errors.amount.0 }}</p>
+            {% endif %}
+        </div>
+
+        {# Moyen de paiement / Payment method #}
+        <div style="margin-bottom:.875rem">
+            <label for="id_payment_method_htmx"
+                   style="display:block;font-size:.8125rem;font-weight:500;color:#374151;margin-bottom:.25rem">
+                {% translate "Moyen de paiement" %}
+            </label>
+            <select name="payment_method"
+                    id="id_payment_method_htmx"
+                    required
+                    data-testid="membership-payment-method"
+                    style="width:100%;padding:.375rem .625rem;border:1px solid #d1d5db;border-radius:.375rem;font-size:.875rem;background:#fff">
+                {% for code, label in moyens_de_paiement %}
+                <option value="{{ code }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+            {% if errors.payment_method %}
+            <p style="margin-top:.25rem;font-size:.8125rem;color:#dc2626">{{ errors.payment_method.0 }}</p>
+            {% endif %}
+            {% if errors.non_field_errors %}
+            <p style="margin-top:.25rem;font-size:.8125rem;color:#dc2626">{{ errors.non_field_errors.0 }}</p>
+            {% endif %}
+        </div>
+
+        {# Information : une ligne comptable sera créée / Info: a sale line will be created #}
+        <div style="margin-bottom:.75rem;padding:.5rem .75rem;border-radius:.25rem;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;font-size:.8125rem;line-height:1.5"
+             data-testid="membership-payment-info-ligne-comptable">
+            <p style="margin:0">
+                <strong>{% translate "Information" %} :</strong>
+                {% translate "L'enregistrement du paiement créera automatiquement une ligne comptable dans les" %}
+                <a href="/admin/BaseBillet/lignearticle/"
+                   target="_blank" rel="noopener"
+                   style="color:#2563eb;text-decoration:underline">{% translate "Ventes" %}</a>.
+            </p>
+            {% if membership.price.fedow_reward_enabled and membership.price.fedow_reward_asset and membership.price.fedow_reward_amount %}
+            {# Déclencheur tokens : informe que le paiement crédite aussi le wallet / Token trigger info #}
+            <p style="margin:.375rem 0 0 0" data-testid="membership-payment-info-trigger-tokens">
+                ⚡ {% blocktrans with amount=membership.price.fedow_reward_amount asset_name=membership.price.fedow_reward_asset.name %}Ce tarif possède un déclencheur : {{ amount }} {{ asset_name }} seront ajoutés au portefeuille de l'adhérent·e.{% endblocktrans %}
+            </p>
+            {% endif %}
+        </div>
+
+        {# Boutons / Buttons #}
+        <div style="display:flex;gap:.5rem;justify-content:flex-end">
+            {# Annuler : réinitialise la zone avec le bouton initial / Cancel: resets zone with initial button #}
+            <button type="button"
+                    hx-get="/memberships/{{ membership.pk }}/ajouter_paiement_reset/"
+                    hx-target="#response-paiement"
+                    hx-swap="innerHTML"
+                    data-testid="membership-payment-cancel"
+                    style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid #d1d5db;background:transparent;color:#374151;cursor:pointer">
+                {% translate "Annuler" %}
+            </button>
+            <button type="submit"
+                    data-testid="membership-payment-submit"
+                    style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:#2563eb;color:#fff;border:none;cursor:pointer">
+                {% translate "Enregistrer le paiement" %}
+            </button>
+        </div>
+
+    </div>
+</form>

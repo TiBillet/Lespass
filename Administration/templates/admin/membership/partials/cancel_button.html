@@ -1,0 +1,18 @@
+{% load i18n %}
+<!--
+BOUTON INITIAL ANNULATION
+/ Initial cancel button
+
+LOCALISATION : Administration/templates/admin/membership/partials/cancel_button.html
+
+Retourné par cancel_reset (GET /memberships/{pk}/cancel_reset/).
+Réinitialise #cancel-area après que l'utilisateur a cliqué "Retour" dans cancel_form.html.
+/ Returned by cancel_reset. Resets #cancel-area after user clicks "Retour" in cancel_form.html.
+-->
+<button data-testid="membership-action-cancel"
+        hx-get="/memberships/{{ membership.pk }}/cancel/"
+        hx-target="#cancel-area"
+        hx-swap="innerHTML"
+        style="display:inline-flex;align-items:center;gap:.375rem;padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:#dc2626;color:#fff;border:none;cursor:pointer">
+    {% translate "Annuler l'adhésion" %}
+</button>
