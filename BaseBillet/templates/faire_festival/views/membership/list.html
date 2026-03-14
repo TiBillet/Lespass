@@ -298,17 +298,21 @@
     }
 </style>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+/* Initialise le collapse de la description d'adhésion.
+ * Appelé sur DOMContentLoaded ET sur htmx:afterSettle pour gérer
+ * la première visite via navigation HTMX (pas de rechargement complet).
+ * / Called on DOMContentLoaded AND htmx:afterSettle to handle
+ * first visit via HTMX navigation (no full page reload).
+ *
+ * LOCALISATION : faire_festival/views/membership/list.html
+ */
+function initDescriptionMembershipCollapse() {
     const content = document.getElementById("descriptionMembershipContent");
     const toggle = document.getElementById("descriptionMembershipToggle");
     if (!content || !toggle) return;
 
     /* Seuil en px — environ 10-12 lignes de texte
-     * Si le contenu dépasse ce seuil, on tronque et on affiche "Lire la suite"
      * / Threshold in px — about 10-12 lines of text
-     * / If content exceeds this, truncate and show "Read more"
-     *
-     * LOCALISATION : faire_festival/views/membership/list.html
      */
     const SEUIL = 250;
 
@@ -316,19 +320,29 @@ document.addEventListener("DOMContentLoaded", function () {
         content.classList.add("is-truncated");
         toggle.classList.remove("d-none");
 
-        toggle.addEventListener("click", function () {
-            const isTruncated = content.classList.contains("is-truncated");
-            if (isTruncated) {
-                content.classList.remove("is-truncated");
-                content.style.maxHeight = content.scrollHeight + "px";
-                toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up" aria-hidden="true"></i>';
-            } else {
-                content.style.maxHeight = "";
-                content.classList.add("is-truncated");
-                toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>';
-            }
-        });
+        /* Eviter d'ajouter plusieurs fois le même listener si la fonction
+         * est appelée plusieurs fois (navigation HTMX répétée).
+         * / Avoid adding the listener multiple times on repeated HTMX navigations.
+         */
+        if (!toggle.dataset.collapseInitialized) {
+            toggle.dataset.collapseInitialized = "true";
+            toggle.addEventListener("click", function () {
+                const isTruncated = content.classList.contains("is-truncated");
+                if (isTruncated) {
+                    content.classList.remove("is-truncated");
+                    content.style.maxHeight = content.scrollHeight + "px";
+                    toggle.innerHTML = '{% translate "Réduire" %} <i class="bi bi-chevron-up" aria-hidden="true"></i>';
+                } else {
+                    content.style.maxHeight = "";
+                    content.classList.add("is-truncated");
+                    toggle.innerHTML = '{% translate "Lire la suite" %} <i class="bi bi-chevron-down" aria-hidden="true"></i>';
+                }
+            });
+        }
     }
-});
+}
+
+document.addEventListener("DOMContentLoaded", initDescriptionMembershipCollapse);
+document.addEventListener("htmx:afterSettle", initDescriptionMembershipCollapse);
 </script>
 {% endblock scripts %}

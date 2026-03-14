@@ -2394,6 +2394,13 @@ class MembershipMVT(viewsets.ViewSet):
         elif membership_validator.checkout_stripe_url:
             return HttpResponseClientRedirect(membership_validator.checkout_stripe_url)
 
+        # Adhésion gratuite (montant 0€) : validée directement sans passer par Stripe
+        # Free membership (0€ amount): validated directly, no Stripe redirect
+        elif membership_validator.membership.status == Membership.ONCE:
+            membership: Membership = membership_validator.membership
+            context = {'membership': membership}
+            return render(request, "reunion/views/membership/free_confirmed.html", context=context)
+
         else:
             msg = "Une erreur lors de la gestion de vos adhésion est survenue, merci de contacter un administrateur."
             logger.error(f"MembershipViewset ERROR {msg} : {membership_validator.membership}")
