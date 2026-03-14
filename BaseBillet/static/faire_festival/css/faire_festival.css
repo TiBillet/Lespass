@@ -412,7 +412,6 @@
     border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
     border-radius: 20px;
     padding: 2px 8px;
-    box-shadow: 2px 2px 0px var(--couleur-bleu-vif);
 }
 
 /* ==========================================================================
