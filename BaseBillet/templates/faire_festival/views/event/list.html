@@ -180,9 +180,20 @@
                                     </p>
                                 {% endif %}
 
-                                <!-- INFOS -->
+                                <!-- INFOS : Date et heure -->
+                                <!-- Dans les cards, on affiche un format compact -->
                                 <div class="infos-evenement d-flex justify-content-between">
-                                    <span>→ {{ event.datetime|date:"l d F" }}</span>
+                                    <span>→
+                                        {% if event.end_datetime %}
+                                            {% if event.datetime|date:"Y-m-d" == event.end_datetime|date:"Y-m-d" %}
+                                                {{ event.datetime|date:"l d F" }}
+                                            {% else %}
+                                                {% translate "Du" %} {{ event.datetime|date:"l d" }} {% translate "au" %} {{ event.end_datetime|date:"l d" }}
+                                            {% endif %}
+                                        {% else %}
+                                            {{ event.datetime|date:"l d F" }}
+                                        {% endif %}
+                                    </span>
                                     <span>→ {{ event.datetime|date:"H:i" }}h{% if event.end_datetime %} - {{ event.end_datetime|date:"H:i" }}h{% endif %}</span>
                                 </div>
                             </div>
