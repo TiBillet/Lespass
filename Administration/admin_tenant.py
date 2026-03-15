@@ -4860,7 +4860,7 @@ class InitiativeAdmin(ModelAdmin):
         "short_description",
         "description",
         "currency",
-        # "direct_debit",
+        "direct_debit",
         "img",
         "tags",
         "archived",

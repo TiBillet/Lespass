@@ -360,6 +360,25 @@ class Contribution(models.Model):
     paid_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Payée le"))
     created_at = models.DateTimeField(default=timezone.now)
 
+    # FR: Lien vers le paiement Stripe (si direct_debit actif sur l'initiative)
+    # EN: Link to Stripe payment (if direct_debit enabled on the initiative)
+    paiement_stripe = models.ForeignKey(
+        "BaseBillet.Paiement_stripe",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="contributions_crowds",
+        verbose_name=_("Paiement Stripe"),
+    )
+    # FR: Ligne comptable associée (pour le suivi des ventes dans l'admin)
+    # EN: Associated accounting line (for sales tracking in admin)
+    ligne_article = models.ForeignKey(
+        "BaseBillet.LigneArticle",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="contributions_crowds",
+        verbose_name=_("Ligne comptable"),
+    )
+
     @property
     def amount_eur(self) -> float:
         return (self.amount or 0) / 100
