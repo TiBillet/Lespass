@@ -1515,7 +1515,11 @@ class PriceAdmin(ModelAdmin):
 
     def response_change(self, request, obj):
         # Après sauvegarde d'un tarif, rediriger vers la page du produit parent
+        # Ajouter un message de succès avant la redirection
+        # / After saving a price, redirect to the parent product page with a success message
+        from django.contrib import messages
         from django.urls import reverse
+        self.message_user(request, _('The price "%(name)s" was changed successfully.') % {'name': obj}, messages.SUCCESS)
         product_url = reverse("admin:BaseBillet_product_change", args=[obj.product.pk])
         return redirect(product_url)
 

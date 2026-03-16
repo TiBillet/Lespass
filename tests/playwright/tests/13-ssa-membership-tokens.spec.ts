@@ -29,8 +29,10 @@ test.describe('SSA Membership and Tokens / Adhesion SSA et Jetons', () => {
       await page.goto('/memberships/');
       await page.waitForLoadState('domcontentloaded');
 
-      // Click the SSA membership button via data-testid (hx-get + offcanvas)
-      const ssaButton = page.locator('[data-testid="membership-open-959c70d2-2c14-42aa-96d9-4dd458b575f9"]');
+      // Trouver la carte SSA par son titre, puis cliquer le bouton Subscribe dans son card-footer
+      // Find the SSA card by its title, then click the Subscribe button in its card-footer
+      const ssaCard = page.locator('.card').filter({ hasText: /sécurité sociale alimentaire/i }).first();
+      const ssaButton = ssaCard.locator('button.js-membership-form-btn');
       await ssaButton.click();
 
       // Wait for the offcanvas to open AND the HTMX form to load inside it
@@ -46,6 +48,18 @@ test.describe('SSA Membership and Tokens / Adhesion SSA et Jetons', () => {
       // Fill the free price amount (single price, already selected via hidden input)
       const amountInput = page.locator('.custom-amount-input').first();
       await amountInput.fill('10');
+
+      // Remplir les champs dynamiques obligatoires (ex: "Pseudonyme" sur le produit SSA)
+      // Fill required dynamic form fields (e.g., "Pseudonyme" on the SSA product)
+      const requiredDynamicFields = page.locator('#membership-form input[required][name^="form__"], #membership-form textarea[required][name^="form__"]');
+      const fieldCount = await requiredDynamicFields.count();
+      for (let i = 0; i < fieldCount; i++) {
+        const field = requiredDynamicFields.nth(i);
+        const currentValue = await field.inputValue();
+        if (!currentValue) {
+          await field.fill('TestSSA');
+        }
+      }
 
       // Submit
       await page.locator('#membership-submit').click();
