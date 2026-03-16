@@ -58,7 +58,7 @@
 					ele.style.display = "flex"
 				})
 				document.querySelector('#bt-hide-addition').style.display = "none"
-				document.querySelector('#products').style.display = "flex"
+				document.querySelector('#products').style.display = "grid"
 				document.querySelector('#addition').style.display = "none"
 			}
 
@@ -175,6 +175,14 @@
 		.category-item {
 			height: 90px;
 			margin: 10px 0;
+		}
+	}
+
+	/* Mobile : sidebar plus étroite pour maximiser l'espace articles
+	   / Mobile: narrower sidebar to maximize articles space */
+	@media only screen and (max-width: 599px) {
+		.category-item {
+			height: 52px;
 		}
 	}
 

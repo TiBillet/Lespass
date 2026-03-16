@@ -81,7 +81,7 @@ function additionInsertArticle({ detail }) {
 				</div>
 				<div id="addition-quantity-${uuid}" class="addition-col-quantity BF-col">${quantity}</div>
 				<div class="addition-col-name BF-col">${name}</div>
-				<div class="addition-col-price BF-col">${price / 100}${currency}</div>
+				<div class="addition-col-price BF-col">${(price / 100).toFixed(2)}${currency}</div>
 			</div>
 		`
 		document.querySelector('#addition-list').insertAdjacentHTML('beforeend', additionLine)

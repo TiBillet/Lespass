@@ -48,16 +48,32 @@
 <script src="{% static 'js/articles.js' %}"></script>
 
 <style>
+	/* Surcharge du flex de common_user_interface.html par CSS Grid auto-fill
+	   Les articles remplissent automatiquement la largeur disponible.
+	   / Override flex from common_user_interface.html with CSS Grid auto-fill
+	   Articles automatically fill the available width. */
+	#products {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(var(--bt-article-width), 1fr));
+		gap: 8px;
+		padding: 8px;
+		align-content: start;
+	}
+
 	.article-container {
 		position: relative;
-		width: var(--bt-article-width);
-		height: var(--bt-article-height);
+		width: auto;
+		height: 0;
+		padding-bottom: 100%;  /* ratio 1:1 — aspect-ratio ne fonctionne pas en grid avec children absolute */
 		box-sizing: border-box;
 		overflow: hidden;
-		margin: 20px 0 0 20px;
+		margin: 0;
 		font-family: "Luciole-regular";
 		border-radius: 15px;
 		transition: transform 100ms ease-in-out;
+		/* Couleur par défaut pour articles sans catégorie (surchargé par l'inline style quand catégorie présente)
+		   / Default color for uncategorized articles (overridden by inline style when category exists) */
+		background-color: var(--gris01);
 	}
 
 	.article-container:active {
@@ -76,6 +92,8 @@
 		padding: 0;
 		overflow: hidden;
 		text-align: center;
+		color: var(--blanc01);
+		text-shadow: 2px 2px 3px var(--gris01);
 	}
 
 	.article-img-layer {
@@ -105,6 +123,8 @@
 		position: absolute;
 		left: 8px;
 		bottom: 8px;
+		color: var(--blanc01);
+		text-shadow: 2px 2px 3px var(--gris01);
 	}
 
 	.article-icon {

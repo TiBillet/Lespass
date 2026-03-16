@@ -176,7 +176,7 @@ Contient 3 boutons principaux pour les actions de la caisse :
 			<div>{% translate "VALIDER" %}</div>
 			<div class="BF-ligne">
 				<!-- Affichage du total en temps réel (mis à jour par updateBtValider) -->
-				<div id="bt-valider-total" class="md4px">0</div>
+				<div id="bt-valider-total" class="md4px">0.00</div>
 				<div> {{ currency_data.symbol }}</div>
 			</div>
 		</div>
@@ -403,9 +403,10 @@ Breakpoints principaux :
 		height: 100%;
 		color: var(--blanc01);
 		cursor: pointer;
+		gap: 6px;
 
 		i {
-			margin-right: 4px;
+			margin-right: 0;
 			font-size: 1.5rem;
 		}
 	}
@@ -475,6 +476,14 @@ Breakpoints principaux :
 	Augmente la hauteur du footer pour une meilleure accessibilité
 	sur les grands écrans tactiles
 	*/
+	/* Mobile : footer texte plus petit pour gagner de la place
+	   / Mobile: smaller footer text to save space */
+	@media only screen and (max-width: 599px) {
+		footer {
+			font-size: 1.4rem;
+		}
+	}
+
 	@media only screen and (width > 1199px) {
 		:root {
 			--footer-container-height: 120px;

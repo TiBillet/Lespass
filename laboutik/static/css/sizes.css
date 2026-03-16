@@ -19,7 +19,10 @@
 	--no-main-container-height: calc(var(--header-height) + var(--footer-container-height));
 	--main-container-height: calc(100% - var(--no-main-container-height));
 
-	/* bouton article */
+	/* bouton article — hauteur via aspect-ratio: 1 dans articles.html,
+	   --bt-article-height conservé pour les media queries existantes
+	   / article button — height via aspect-ratio: 1 in articles.html,
+	   --bt-article-height kept for existing media queries */
 	--bt-article-width: 120px;
 	--bt-article-height: 120px;
 
@@ -38,4 +41,15 @@
 	--bt-basic-height: 120px;
 	--bt-basic-icon-width: 28%;
 	--bt-basic-text-width: 72%;
+}
+
+/* Mobile : sidebar et footer plus compacts
+   / Mobile: more compact sidebar and footer */
+@media only screen and (max-width: 599px) {
+	:root {
+		--cat-width: 56px;
+		--cat-icon-size: 1.8rem;
+		--cat-name-size: 0.7rem;
+		--footer-container-height: 64px;
+	}
 }

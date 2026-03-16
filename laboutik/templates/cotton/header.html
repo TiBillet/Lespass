@@ -7,8 +7,8 @@
 		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
 	</div>
 	<div class="header-status">
-		<div id="header-status-info1">inf</div>
-		<div id="header-status-info2">inf</div>
+		<div id="header-status-info1"></div>
+		<div id="header-status-info2"></div>
 	</div>
 	<div id="header-title">
 		<div>
@@ -143,7 +143,8 @@
 		flex-direction: column;
 		justify-content: flex-end;
 		align-items: center;
-		background-color: var(--vert01);
+		/* Masqué tant que non fonctionnel / Hidden until functional */
+		background-color: var(--noir03);
 	}
 
 	#header-title {
@@ -200,7 +201,7 @@
 		left: 0;
 		width: 100%;
 		height: 100%;
-		background-color: rgba(0, 0, 0, 0.5);
+		background-color: rgba(0, 0, 0, 0.65);
 		z-index: 1;
 		opacity: 0;
 		visibility: hidden;
