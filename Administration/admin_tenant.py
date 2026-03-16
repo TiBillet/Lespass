@@ -4860,13 +4860,13 @@ class InitiativeAdmin(ModelAdmin):
         "short_description",
         "description",
         "currency",
-        "direct_debit",
         "img",
         "tags",
         "archived",
         "vote",
         "budget_contributif",
-        "adaptative_funding_goal_on_participation",
+        "direct_debit",
+        # "adaptative_funding_goal_on_participation",
 
     )
 
