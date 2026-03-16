@@ -75,20 +75,24 @@ function additionInsertArticle({ detail }) {
 		`)
 		
 		const additionLine = `
-			<div id="addition-line-${uuid}" data-quantity="${quantity}" data-price="${uuid}" class="addition-line-grid">
-				<div class="addition-col-bt BF-col">
-					<i class="fas fa-minus-square" onclick="additionRemoveArticle('${uuid}');" title="Enlever un article !"></i>
+			<div id="addition-line-${uuid}" data-quantity="${quantity}" data-price="${uuid}" data-unit-price="${price}" class="addition-line-grid">
+				<div class="addition-col-bt">
+					<button type="button" class="addition-remove-btn" onclick="additionRemoveArticle('${uuid}');" title="Enlever un article" aria-label="Enlever ${name}">
+						<i class="fas fa-minus" aria-hidden="true"></i>
+					</button>
 				</div>
-				<div id="addition-quantity-${uuid}" class="addition-col-quantity BF-col">${quantity}</div>
-				<div class="addition-col-name BF-col">${name}</div>
-				<div class="addition-col-price BF-col">${(price / 100).toFixed(2)}${currency}</div>
+				<div class="addition-col-info">
+					<div class="addition-col-name">${name}</div>
+					<div id="addition-quantity-${uuid}" class="addition-col-quantity-label">&times; ${quantity}</div>
+				</div>
+				<div class="addition-col-price">${(price / 100).toFixed(2)}${currency}</div>
 			</div>
 		`
 		document.querySelector('#addition-list').insertAdjacentHTML('beforeend', additionLine)
 	} else {
 		// Article existant : mise à jour quantité
 		input.value = Number(quantity)
-		document.querySelector(`#addition-line-${uuid} .addition-col-quantity`).innerText = quantity
+		document.querySelector(`#addition-quantity-${uuid}`).innerHTML = `&times; ${quantity}`
 	}
 	
 	const totalAddition = calculateTotal()
@@ -115,10 +119,10 @@ function additionInsertArticle({ detail }) {
  */
 function additionRemoveArticle(uuid) {
 	const eleQuantity = document.querySelector(`#addition-quantity-${uuid}`)
-	let quantity = Number(eleQuantity.innerText)
+	let quantity = Number(eleQuantity.textContent.replace('×', '').trim())
 	quantity--
-	
-	eleQuantity.innerText = quantity
+
+	eleQuantity.innerHTML = `&times; ${quantity}`
 	document.querySelector(`#addition-form [name="repid-${uuid}"]`).value = Number(quantity)
 	
 	if (quantity === 0) {
