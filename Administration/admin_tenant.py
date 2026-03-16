@@ -4860,13 +4860,13 @@ class InitiativeAdmin(ModelAdmin):
         "short_description",
         "description",
         "currency",
-        # "direct_debit",
         "img",
         "tags",
         "archived",
         "vote",
         "budget_contributif",
-        "adaptative_funding_goal_on_participation",
+        "direct_debit",
+        # "adaptative_funding_goal_on_participation",
 
     )
 
@@ -4912,6 +4912,24 @@ class InitiativeAdmin(ModelAdmin):
         obj: Initiative
         # Sanitize all TextField inputs to avoid XSS via WYSIWYG/TextField
         sanitize_textfields(obj)
+
+        # FR: Si direct_debit est activé, vérifier qu'un compte Stripe est connecté.
+        #     Sans Stripe, le paiement en ligne ne peut pas fonctionner.
+        # EN: If direct_debit is enabled, check that a Stripe account is connected.
+        if obj.direct_debit:
+            config = Configuration.get_solo()
+            stripe_est_configure = bool(
+                config.stripe_connect_account or config.stripe_connect_account_test
+            )
+            if not stripe_est_configure:
+                from django.contrib import messages
+                obj.direct_debit = False
+                messages.error(
+                    request,
+                    _("Paiement direct désactivé : aucun compte Stripe n'est connecté. "
+                      "Configurez Stripe dans Paramètres avant d'activer le paiement direct.")
+                )
+
         super().save_model(request, obj, form, change)
 
     def currency(self, obj: Initiative):
