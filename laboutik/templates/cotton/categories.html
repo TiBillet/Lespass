@@ -62,9 +62,15 @@
 				document.querySelector('#addition').style.display = "none"
 			}
 
-			// display select category
+			// Afficher les articles d'une catégorie spécifique
+			// / Display articles of a specific category
 			if (ele.getAttribute('data-sel') !== null) {
 				const category = ele.getAttribute('data-sel')
+
+				// Mettre à jour le highlight de la catégorie sélectionnée
+				// / Update the selected category highlight
+				allRemoveCatActive()
+				ele.classList.add('category-item-active')
 
 				// dispatch event "articlesDisplayCategory"
 				sendEvent('organizerMsg', '#event-organizer', {
@@ -74,8 +80,14 @@
 				})
 			}
 
-			// display all categories
+			// Afficher tous les articles (bouton "Tous")
+			// / Display all articles ("All" button)
 			if (ele.id === "category-all") {
+				// Mettre à jour le highlight
+				// / Update highlight
+				allRemoveCatActive()
+				ele.classList.add('category-item-active')
+
 				// dispatch event "articlesDisplayCategory"
 				sendEvent('organizerMsg', '#event-organizer', {
 					src: { file: 'categories.html', method: 'manageCategories' },
@@ -125,6 +137,8 @@
 
 	.category-item-active {
 		color: var(--blanc01);
+		background-color: rgba(255, 255, 255, 0.06);
+		border-left: 3px solid var(--vert01);
 	}
 
 	#bt-hide-addition {

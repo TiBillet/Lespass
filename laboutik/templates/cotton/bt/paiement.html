@@ -7,9 +7,9 @@
 	</div>
 	<div class="bt-basic-text">
 		<div>{{ name }}</div>
-		<div class="paiement-bt-total">
+		<div class="paiement-bt-total" style="font-variant-numeric: tabular-nums;">
 			<span>{% translate "TOTAL" %}</span>
-			<span>{{ total }}</span>
+			<span>{{ total|floatformat:2 }}</span>
 			<span>{{ currency_data.symbol }}</span>
 		</div>
 	</div>

@@ -21,14 +21,14 @@
   <div class="return-container" data-testid="retour-carte-soldes">
     <div class="return-header">
       <div>{% trans "Tirelire" %}</div>
-      <div class="test-return-total-card" title="total">
-        {{ total_monnaie }}
+      <div class="test-return-total-card" title="total" style="font-variant-numeric: tabular-nums;">
+        {{ total_monnaie|floatformat:2 }}
       </div>
     </div>
 
     {% for token in tokens %}
     <div class="return-item">
-      <div class="test-return-monnaie-item-value{{ forloop.counter }}">{{ token.value_euros }}</div>
+      <div class="test-return-monnaie-item-value{{ forloop.counter }}" style="font-variant-numeric: tabular-nums;">{{ token.value_euros|floatformat:2 }}</div>
       <div class="test-return-monnaie-item-name{{ forloop.counter }}">
         {{ token.asset_name }}
       </div>

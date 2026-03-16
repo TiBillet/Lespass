@@ -145,22 +145,47 @@ function articlesReset() {
 }
 
 /**
- * Filtre l'affichage par catégorie (Handler)
- * / Filters display by category
- * 
- * Reçoit 'articlesDisplayCategory' depuis categories.js.
- * TODO : Implémentation en cours - permettra de filtrer les articles visibles.
- * 
- * @param {Object} event - Événement avec event.detail.category
+ * Filtre l'affichage des articles par catégorie
+ * / Filters article display by category
+ *
+ * LOCALISATION : laboutik/static/js/articles.js
+ *
+ * Reçoit l'événement 'articlesDisplayCategory' depuis categories.html.
+ * Montre ou cache les articles selon leur classe CSS 'cat-<uuid>'.
+ *
+ * FLUX :
+ * 1. Clic catégorie dans categories.html:manageCategories()
+ * 2. Routage via tibilletUtils.js:eventsOrganizer()
+ * 3. CETTE FONCTION filtre les articles visibles
+ *
+ * Si 'cat-all' : tous les articles sont visibles.
+ * Sinon : seuls les articles qui ont la classe 'cat-<uuid>' sont visibles.
+ *
+ * @param {Object} event - Événement avec event.detail.category ('cat-all' ou 'cat-<uuid>')
  */
 function articlesDisplayCategory(event) {
 	const category = event.detail.category
 	try {
-		console.log('-> articlesDisplayCategory, category =', category)
+		// Sélectionne tous les articles de la grille
+		// / Selects all articles in the grid
+		const tousLesArticles = document.querySelectorAll('#products .article-container')
+
 		if (category === 'cat-all') {
-			// TODO : Afficher tous les articles
+			// Afficher tous les articles
+			// / Show all articles
+			for (const article of tousLesArticles) {
+				article.style.display = ''
+			}
 		} else {
-			// TODO : Afficher uniquement les articles de cette catégorie
+			// Afficher uniquement les articles de cette catégorie
+			// / Show only articles of this category
+			for (const article of tousLesArticles) {
+				if (article.classList.contains(category)) {
+					article.style.display = ''
+				} else {
+					article.style.display = 'none'
+				}
+			}
 		}
 	} catch (error) {
 		console.log('-> article.js - articlesDisplayCategory,', error)

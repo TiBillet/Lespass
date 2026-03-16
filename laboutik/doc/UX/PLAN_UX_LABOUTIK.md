@@ -545,13 +545,13 @@ Verifier :
 
 ## Resume des sessions
 
-| Session | Contenu | Modele | Priorite |
-|---------|---------|--------|----------|
-| **1** | Filtre categorie + highlight + format total | Sonnet | **CRITIQUE** |
-| **2** | Articles (badge, feedback, couleurs, panier vide, prix) | Sonnet | Haute |
-| **3** | Paiement (couleurs boutons, confirmation, succes, retour carte) | Sonnet | Moyenne |
-| **4** | Header, sidebar, footer, menu burger | Sonnet | Moyenne |
-| **5** | Responsive tablette, zones tactiles | Sonnet | Haute |
+| Session | Contenu | Modele | Statut |
+|---------|---------|--------|--------|
+| **1** | Filtre categorie + highlight + format total + masquer uuid | Sonnet | **TERMINEE** |
+| **2** | Articles (badge, feedback, couleurs, panier vide, prix) | Sonnet | A FAIRE |
+| **3** | Paiement (couleurs boutons, confirmation, succes, retour carte) | Sonnet | A FAIRE |
+| **4** | Header, sidebar, footer, menu burger | Sonnet | A FAIRE |
+| **5** | Responsive tablette, zones tactiles | Sonnet | A FAIRE |
 
 **Ordre recommande** : Session 1 → Session 2 → Session 5 → Session 3 → Session 4
 

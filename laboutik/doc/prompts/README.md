@@ -27,6 +27,16 @@ Un fichier = une etape = une session (ou demi-session).
 
 **Prochaine etape : Phase 3 etape 3** (stress test + verify_transactions) ou ameliorations existant
 
+## Phases UX
+
+Les plans d'amelioration UX/FALC de l'interface POS sont documentes dans `laboutik/doc/UX/`.
+Fichier principal : `laboutik/doc/UX/PLAN_UX_LABOUTIK.md`
+
+| Session UX | Statut |
+|------------|--------|
+| Session 1 — Corrections fonctionnelles | **TERMINEE** |
+| Sessions 2-5 — Polish et responsive | A FAIRE |
+
 ## Comment utiliser
 
 1. Ouvrir le fichier de l'etape en cours
