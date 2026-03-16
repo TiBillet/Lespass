@@ -1,0 +1,36 @@
+{% load i18n %}
+<!--
+TEMPLATE EMAIL — Resume cloture de caisse
+/ EMAIL TEMPLATE — Cash register closure summary
+
+LOCALISATION : laboutik/templates/laboutik/email/cloture_rapport_email.html
+
+Corps leger : totaux + message sur les PJ.
+Lightweight body: totals + message about attachments.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="font-family: sans-serif; font-size: 14px; color: #333; max-width: 600px; margin: 0 auto;">
+
+  <h2 style="color: #17a2b8;">{% translate "Rapport de clôture de caisse" %}</h2>
+
+  {% if config.organisation %}
+  <p><strong>{{ config.organisation }}</strong></p>
+  {% endif %}
+
+  <p>
+    <strong>{% translate "Point de vente" %} :</strong> {{ point_de_vente.name }}<br>
+    <strong>{% translate "Total général" %} :</strong> {{ total_general_euros|floatformat:2 }} €<br>
+    <strong>{% translate "Transactions" %} :</strong> {{ nombre_transactions }}
+  </p>
+
+  <p>{% translate "Les détails complets sont en pièces jointes (PDF et CSV)." %}</p>
+
+  <hr style="border: none; border-top: 1px solid #ccc; margin: 1em 0;">
+  <p style="font-size: 12px; color: #999;">{% translate "Généré par TiBillet" %}</p>
+
+</body>
+</html>
