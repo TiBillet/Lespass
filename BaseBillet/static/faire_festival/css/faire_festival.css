@@ -399,9 +399,9 @@
    ========================================================================== */
 .skin-faire-festival .conteneur-principal {
     background-color: #ffffff;
-    /* Image de fond du Faire Festival */
+    /* Image de fond du Faire Festival — tuile 270x270 répétée */
     background-image: url('../image/fond.png');
-    background-size: 1500px;
+    background-size: 56px 56px;
     background-repeat: repeat;
     min-height: 100vh;
 }
