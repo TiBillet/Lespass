@@ -126,7 +126,7 @@ Contient 3 boutons principaux pour les actions de la caisse :
 	Déclencheur : Clic sur #bt-reset
 	Événement émis : 'resetArticles' → eventsOrganizer → additionReset + articlesReset
 	-->
-	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset">
+	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset" data-testid="footer-reset">
 		<i class="fas fa-trash md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "RESET" %}</div>
@@ -140,7 +140,7 @@ Contient 3 boutons principaux pour les actions de la caisse :
 	Cible : Remplace le contenu de #messages par la réponse du serveur
 	Affiche : Solde du portefeuille, informations de la carte, historique
 	-->
-	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" data-testid="footer-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
 		hx-target="#messages" hx-swap="outerHTML">
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
@@ -170,7 +170,7 @@ Contient 3 boutons principaux pour les actions de la caisse :
 	Le total affiché est mis à jour en temps réel via l'événement 'updateBtValider'
 	déclenché lors de chaque modification de l'addition (additionTotalChange)
 	-->
-	<div id="bt-valider" class="BF-ligne footer-bt fond-ok">
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" data-testid="footer-valider">
 		<i class="fas fa-check-circle md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "VALIDER" %}</div>
@@ -267,7 +267,7 @@ Contient 3 boutons principaux pour les actions de la caisse :
 	* @param {Event} event - Événement contenant event.detail.totalAddition (total en centimes)
 	*/
 	function updateBtValider(event) {
-		document.querySelector('#bt-valider-total').innerText = (event.detail.totalAddition / 100)
+		document.querySelector('#bt-valider-total').innerText = (event.detail.totalAddition / 100).toFixed(2)
 	}
 
 	/**
@@ -430,7 +430,13 @@ Breakpoints principaux :
 		background-color: var(--bleu02);
 	}
 
-	/* 
+	/* Chiffres à largeur fixe pour éviter le décalage du total
+	   / Fixed-width digits to prevent total shifting */
+	#bt-valider-total {
+		font-variant-numeric: tabular-nums;
+	}
+
+	/*
 	COULEUR DU BOUTON VALIDER
 	Vert pour indiquer la confirmation et la validation
 	*/

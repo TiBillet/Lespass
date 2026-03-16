@@ -39,6 +39,10 @@ function addArticle(uuid, price, name, currency) {
 		quantity++
 		eleQuantity.innerText = quantity
 
+		// Rend le badge visible (transition CSS opacity 200ms)
+		// / Makes badge visible (CSS opacity transition 200ms)
+		eleQuantity.classList.add('badge-visible')
+
 		// Envoie l'événement pour ajouter au panier
 		sendEvent('organizerMsg', '#event-organizer', {
 			src: { file: 'articles.js', method: 'addArticle' },
@@ -112,7 +116,14 @@ function articlesRemove(event) {
 	
 	try {
 		const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
-		article.querySelector(`#article-quantity-number-${uuid}`).innerText = quantity
+		const eleQuantity = article.querySelector(`#article-quantity-number-${uuid}`)
+		eleQuantity.innerText = quantity
+
+		// Cache le badge quand la quantite revient a zero
+		// / Hides badge when quantity returns to zero
+		if (quantity <= 0) {
+			eleQuantity.classList.remove('badge-visible')
+		}
 	} catch (error) {
 		console.log('-> article.js - articlesRemove,', error)
 	}
@@ -134,7 +145,12 @@ function articlesReset() {
 	try {
 		document.querySelectorAll('#products .article-container').forEach(article => {
 			const uuid = article.dataset.uuid
-			document.querySelector(`#article-quantity-number-${uuid}`).innerText = 0
+			const eleQuantity = document.querySelector(`#article-quantity-number-${uuid}`)
+			eleQuantity.innerText = 0
+
+			// Cache le badge (quantite remise a zero)
+			// / Hides badge (quantity reset to zero)
+			eleQuantity.classList.remove('badge-visible')
 			article.removeAttribute('data-disable')
 			article.querySelector('.article-lock-layer').style.display = "none"
 		})

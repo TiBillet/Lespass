@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-16 16:38+0000\n"
+"POT-Creation-Date: 2026-03-16 20:15+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -612,9 +612,8 @@ msgstr ""
 #: BaseBillet/templates/invoice/invoice.html:189
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:46
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:28
-#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:35
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:23
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:27
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:76
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:38
 msgid "Total"
 msgstr ""
 
@@ -1388,7 +1387,7 @@ msgid "Can create event on agenda page"
 msgstr ""
 
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:136
-#: laboutik/templates/laboutik/partial/hx_card_feedback.html:23
+#: laboutik/templates/laboutik/partial/hx_card_feedback.html:43
 msgid "Tirelire"
 msgstr ""
 
@@ -7823,7 +7822,6 @@ msgstr ""
 
 #: crowds/templates/crowds/partial/participations.html:90
 #: crowds/templates/crowds/views/detail.html:752
-#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:24
 msgid "Valider"
 msgstr ""
 
@@ -9314,7 +9312,12 @@ msgstr ""
 msgid "PRIX"
 msgstr ""
 
-#: laboutik/templates/cotton/bt/paiement.html:11
+#: laboutik/templates/cotton/addition.html:10
+#: laboutik/templates/cotton/addition.html:13
+msgid "Panier vide"
+msgstr "Empty cart"
+
+#: laboutik/templates/cotton/bt/paiement.html:23
 msgid "TOTAL"
 msgstr ""
 
@@ -9326,23 +9329,31 @@ msgstr ""
 msgid "Note"
 msgstr ""
 
-#: laboutik/templates/cotton/header.html:26
+#: laboutik/templates/cotton/header.html:20
+msgid "Menu"
+msgstr "Menu"
+
+#: laboutik/templates/cotton/header.html:24
+msgid "Menu principal"
+msgstr "Main menu"
+
+#: laboutik/templates/cotton/header.html:28
 msgid "POINTS DE VENTES"
 msgstr ""
 
-#: laboutik/templates/cotton/header.html:30
+#: laboutik/templates/cotton/header.html:32
 msgid "PREPARATIONS"
 msgstr ""
 
-#: laboutik/templates/cotton/header.html:34
+#: laboutik/templates/cotton/header.html:36
 msgid "TABLES"
 msgstr ""
 
-#: laboutik/templates/cotton/header.html:38
+#: laboutik/templates/cotton/header.html:40
 msgid "VENTES"
 msgstr ""
 
-#: laboutik/templates/cotton/header.html:42
+#: laboutik/templates/cotton/header.html:44
 msgid "PARAMÈTRES"
 msgstr ""
 
@@ -9359,27 +9370,25 @@ msgstr ""
 msgid "Généré par TiBillet"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_card_feedback.html:11
+#: laboutik/templates/laboutik/partial/hx_card_feedback.html:27
 msgid "Carte anonyme"
-msgstr ""
+msgstr "Anonymous card"
 
-#: laboutik/templates/laboutik/partial/hx_card_feedback.html:15
-msgid "Carte federee"
-msgstr ""
+#: laboutik/templates/laboutik/partial/hx_card_feedback.html:33
+msgid "Carte avec nom"
+msgstr "Named card"
 
-#: laboutik/templates/laboutik/partial/hx_card_feedback.html:37
+#: laboutik/templates/laboutik/partial/hx_card_feedback.html:69
 msgid "Provenance"
-msgstr ""
+msgstr "Origin"
 
-#: laboutik/templates/laboutik/partial/hx_card_feedback.html:44
+#: laboutik/templates/laboutik/partial/hx_card_feedback.html:76
 msgid "Aucun solde"
-msgstr ""
+msgstr "No balance"
 
-#: laboutik/templates/laboutik/partial/hx_card_feedback.html:52
-#, fuzzy
-#| msgid "Adhesion"
+#: laboutik/templates/laboutik/partial/hx_card_feedback.html:85
 msgid "Adhesions actives"
-msgstr "Membership"
+msgstr "Active memberships"
 
 #: laboutik/templates/laboutik/partial/hx_check_card.html:9
 #: laboutik/templates/laboutik/partial/hx_read_nfc.html:5
@@ -9419,61 +9428,72 @@ msgstr ""
 msgid "Envoyer par email"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:6
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:18
 msgid "Confirmez le paiement par"
-msgstr ""
+msgstr "Confirm payment by"
 
-#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:9
-msgid "somme donnée"
-msgstr ""
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:22
+msgid "A encaisser"
+msgstr "To collect"
 
-#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:35
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:25
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:31
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:57
+msgid "Somme donnée"
+msgstr "Amount given"
+
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:49
+#: laboutik/templates/laboutik/views/common_user_interface.html:176
+msgid "VALIDER"
+msgstr "CONFIRM"
+
+#: laboutik/templates/laboutik/partial/hx_confirm_payment.html:76
 msgid "Somme incorrecte !"
-msgstr ""
+msgstr "Incorrect amount!"
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:7
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:21
 msgid "Rembourser la consigne par :"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:10
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:57
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:24
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:76
 #: laboutik/templates/laboutik/partial/hx_funds_insufficient.html:37
 msgid "CASHLESS"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:16
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:28
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:65
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:30
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:46
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:84
 #: laboutik/templates/laboutik/partial/hx_funds_insufficient.html:22
 msgid "ESPÈCE"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:25
-msgid "Recharge : scannez la carte client"
-msgstr "Top-up: scan the client card"
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:40
+msgid "Posez la carte du client sur le lecteur"
+msgstr "Place the customer card on the reader"
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:36
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:77
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:54
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:96
 #: laboutik/templates/laboutik/partial/hx_funds_insufficient.html:30
 msgid "CB"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:44
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:84
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:62
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:104
 msgid "CHÈQUE"
-msgstr ""
+msgstr "CHECK"
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:54
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:72
 msgid "Types de paiement"
-msgstr ""
+msgstr "Payment types"
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:91
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:113
 msgid "OFFRIR"
-msgstr ""
+msgstr "GIFT"
 
-#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:100
+#: laboutik/templates/laboutik/partial/hx_display_type_payment.html:124
 msgid "Aucun moyen de paiement"
-msgstr ""
+msgstr "No payment method"
 
 #: laboutik/templates/laboutik/partial/hx_funds_insufficient.html:6
 msgid "Fonds insuffisants"
@@ -9496,33 +9516,33 @@ msgstr ""
 msgid "Achat possible par :"
 msgstr ""
 
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:7
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:21
 msgid "Retour de consigne ok"
-msgstr ""
+msgstr "Deposit return OK"
 
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:10
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:24
 msgid "Votre carte est crédité de"
-msgstr ""
+msgstr "Your card has been credited with"
 
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:14
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:28
 msgid "A rembourser"
-msgstr ""
+msgstr "To refund"
 
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:18
-msgid "Transaction ok"
-msgstr ""
-
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:34
-msgid "Nouveau solde"
-msgstr ""
-
-#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:41
-msgid "Somme donnée"
-msgstr ""
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:33
+msgid "Paiement réussi"
+msgstr "Payment successful"
 
 #: laboutik/templates/laboutik/partial/hx_return_payment_success.html:42
+msgid "Payé en"
+msgstr "Paid by"
+
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:49
+msgid "Nouveau solde"
+msgstr "New balance"
+
+#: laboutik/templates/laboutik/partial/hx_return_payment_success.html:61
 msgid "Monnaie à rendre"
-msgstr ""
+msgstr "Change to give back"
 
 #: laboutik/templates/laboutik/partial/new-hardware-error.html:5
 #: laboutik/templates/laboutik/views/login_hardware.html:44
@@ -9553,10 +9573,6 @@ msgstr ""
 #: laboutik/templates/laboutik/views/common_user_interface.html:148
 #: laboutik/templates/laboutik/views/tables.html:30
 msgid "CARTE"
-msgstr ""
-
-#: laboutik/templates/laboutik/views/common_user_interface.html:176
-msgid "VALIDER"
 msgstr ""
 
 #: laboutik/templates/laboutik/views/tables.html:37
@@ -9720,6 +9736,9 @@ msgstr ""
 #: laboutik/views.py:2610
 msgid "Commande annulée"
 msgstr ""
+
+#~ msgid "Recharge : scannez la carte client"
+#~ msgstr "Top-up: scan the client card"
 
 #, fuzzy
 #~| msgid "Please login to access this page."

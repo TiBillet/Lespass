@@ -1,4 +1,17 @@
 {% load static i18n %}
+<!--
+ECRAN RETOUR CARTE — affiche les informations de la carte NFC scannee
+Type de carte (anonyme ou avec nom), soldes par type d'asset, adhesions actives.
+Les icones par type d'asset aident le caissier a identifier rapidement le contenu.
+/ Card feedback screen — shows NFC card info: type, balances per asset, active memberships.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
+
+FLUX :
+1. L'utilisateur scanne une carte NFC (CHECK CARTE)
+2. Le serveur lit la carte et renvoie ce partial
+3. Le caissier voit le solde et les adhesions du client
+-->
 
 <div id="messages" style="background-color: var({{ background }});" aria-live="polite">
   <div class="BF-col-uniforme check-carte-ok">
@@ -7,17 +20,24 @@
       <span>{{ erreur }}</span>
     </div>
     {% elif not card.email %}
-    <div class="f1r test-return-card-type">
+    <!-- carte anonyme / anonymous card -->
+    <i class="fas fa-id-card card-icon" aria-hidden="true"></i>
+    <div class="f1r test-return-card-type" data-testid="retour-carte-anonyme">
+      <i class="fas fa-user-secret" aria-hidden="true"></i>
       <span>{% trans "Carte anonyme" %}</span>
     </div>
     {% else %}
-    <div class="f1r test-return-card-type">
-      <span>{% trans "Carte federee" %}</span>
+    <!-- carte avec nom (email connu) / named card (email known) -->
+    <i class="fas fa-id-card card-icon" aria-hidden="true"></i>
+    <div class="f1r test-return-card-type" data-testid="retour-carte-nom">
+      <span>{% trans "Carte avec nom" %}</span>
     </div>
+    <div class="card-email" data-testid="retour-carte-email">{{ card.email }}</div>
     {% endif %}
   </div>
 
   {% if not erreur %}
+  <!-- soldes par type d'asset / balances per asset type -->
   <div class="return-container" data-testid="retour-carte-soldes">
     <div class="return-header">
       <div>{% trans "Tirelire" %}</div>
@@ -27,7 +47,19 @@
     </div>
 
     {% for token in tokens %}
-    <div class="return-item">
+    <div class="return-item" data-testid="retour-carte-solde-{{ forloop.counter }}">
+      <div class="return-item-icon">
+        <!-- icone selon la categorie d'asset / icon per asset category -->
+        {% if token.asset_category == "TLF" %}
+        <i class="fas fa-euro-sign" aria-hidden="true"></i>
+        {% elif token.asset_category == "TNF" %}
+        <i class="fas fa-gift" aria-hidden="true"></i>
+        {% elif token.asset_category == "TIM" %}
+        <i class="fas fa-clock" aria-hidden="true"></i>
+        {% else %}
+        <i class="fas fa-coins" aria-hidden="true"></i>
+        {% endif %}
+      </div>
       <div class="test-return-monnaie-item-value{{ forloop.counter }}" style="font-variant-numeric: tabular-nums;">{{ token.value_euros|floatformat:2 }}</div>
       <div class="test-return-monnaie-item-name{{ forloop.counter }}">
         {{ token.asset_name }}
@@ -46,20 +78,25 @@
     {% endfor %}
   </div>
 
+  <!-- adhesions actives / active memberships -->
   {% if adhesions %}
   <div class="return-container" data-testid="retour-carte-adhesions">
     <div class="return-header">
-      <div>{% trans "Adhesions actives" %}</div>
+      <div><i class="fas fa-id-badge" aria-hidden="true"></i> {% trans "Adhesions actives" %}</div>
     </div>
     {% for adhesion in adhesions %}
-    <div class="return-item">
+    <div class="return-item" data-testid="retour-carte-adhesion-{{ forloop.counter }}">
       <div>{{ adhesion.price.product.name }}</div>
+      {% if adhesion.deadline %}
+      <div style="font-variant-numeric: tabular-nums;">{{ adhesion.deadline }}</div>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
   {% endif %}
   {% endif %}
 
+  <!-- bouton retour / back button -->
   <c-bt.return selector="#messages" />
 
   <style>
@@ -75,6 +112,17 @@
       align-items: center;
       background-color: var(--noir01);
       color: var(--blanc01);
+    }
+
+    .card-icon {
+      font-size: 3rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .card-email {
+      font-size: 1rem;
+      opacity: 0.85;
+      margin-top: 0.25rem;
     }
 
     .return-container {
@@ -95,8 +143,12 @@
     .return-item {
       width: 100%;
       display: grid;
-      grid-template-columns: auto 2fr 1fr;
+      grid-template-columns: 2rem auto 2fr 1fr;
+      align-items: center;
+    }
 
+    .return-item-icon {
+      text-align: center;
     }
   </style>
 </div>

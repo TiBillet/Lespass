@@ -1,9 +1,23 @@
 {% load static i18n %}
 {% load laboutik_process %}
+<!--
+ECRAN SUCCES DE PAIEMENT
+Affiche le resultat du paiement : icone animee, montant, monnaie a rendre.
+Le caissier doit voir en 1 seconde si tout est OK et combien rendre.
+/ Payment success screen — animated icon, amount, change to give back.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_return_payment_success.html
+
+FLUX :
+1. Le serveur traite le paiement (laboutik-paiement-payer)
+2. Renvoie ce partial avec les details du paiement
+3. Le caissier lit le resultat et clique RETOUR pour revenir a l'addition
+-->
 
 <div id="messages" class="BF-col" data-testid="paiement-succes" aria-live="polite">
   {% if deposit_is_present %}
-  <!-- consigne -->
+  <!-- consigne / deposit -->
+  <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
   <div class="payment-title1 test-return-title-content">{% translate "Retour de consigne ok" %}</div>
   {% if payment.moyen_paiement == 'nfc' %}
   <div class="payment-msg1">
@@ -14,21 +28,22 @@
   <div class="payment-msg1">{% translate "A rembourser" %} : {{ total }} {{ currency_data.symbol }}</div>
   {% endif %}
   {% else %}
-  <!-- pas de consigne -->
-  <div class="payment-title1 test-return-title-content">{% translate "Transaction ok" %}</div>
+  <!-- pas de consigne / no deposit -->
+  <i class="fas fa-check-circle success-icon" aria-hidden="true"></i>
+  <div class="payment-title1 test-return-title-content">{% translate "Paiement réussi" %}</div>
 
-  <!-- complément pour fonds insuffisants -->
+  <!-- complement pour fonds insuffisants / complement for insufficient funds -->
   {% if original_payment %}
-  <div class="payment-msg1 test-return-total-achats">
-    {% translate "Total" %}({{ original_moyen_paiement }}/{{ moyen_paiement }}) {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
+  <div class="payment-detail test-return-total-achats" style="font-variant-numeric: tabular-nums;">
+    {% translate "Total" %} ({{ original_moyen_paiement }}/{{ moyen_paiement }}) : {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
   </div>
   {% else %}
-    <div class="payment-msg1 test-return-total-achats">
-    {% translate "Total" %}({{ moyen_paiement }}) {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
+  <div class="payment-detail test-return-total-achats" style="font-variant-numeric: tabular-nums;">
+    {% translate "Payé en" %} {{ moyen_paiement }} : {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
   </div>
-  {%  endif %}
+  {% endif %}
 
-  <!-- Nouveau solde après paiement NFC / New balance after NFC payment -->
+  <!-- Nouveau solde apres paiement NFC / New balance after NFC payment -->
   {% if nouveau_solde is not None %}
   <div class="payment-msg1" data-testid="paiement-nfc-succes">
     {% translate "Nouveau solde" %} {{ card_name }} :
@@ -36,19 +51,29 @@
   </div>
   {% endif %}
 
-  <!-- monnaie à rendre -->
+  <!-- monnaie a rendre / change to give back -->
   {% if payment.give_back > 0 %}
-  <div class="payment-msg1"> {% translate "Somme donnée" %} {{ payment.given_sum|divide_by:100 }} {{ currency_data.symbol }}</div>
-  <div class="payment-title1"> {% translate "Monnaie à rendre" %} {{ payment.give_back }} {{ currency_data.symbol }}</div>
-  {% endif %}
-  
+  <div class="payment-msg-discret" style="font-variant-numeric: tabular-nums;">
+    {% translate "Somme donnée" %} : {{ payment.given_sum|divide_by:100 }} {{ currency_data.symbol }}
+  </div>
+  <div class="give-back-box" data-testid="paiement-monnaie-a-rendre">
+    <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
+    {% translate "Monnaie à rendre" %} : {{ payment.give_back }} {{ currency_data.symbol }}
+  </div>
   {% endif %}
 
-  <!--TODO: imprimer ticket-->
+  {% endif %}
+
+  <!--TODO: imprimer ticket / print receipt -->
 
   <c-bt.return selector="#messages" layer="1" action="manageReset()" />
 
   <style>
+    @keyframes scale-in {
+      from { transform: scale(0); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
     #messages {
       position: absolute;
       left: 0;
@@ -62,16 +87,53 @@
       text-align: center;
     }
 
+    .success-icon {
+      font-size: 4rem;
+      animation: scale-in 300ms ease both;
+    }
+
     .payment-title1 {
       font-size: 2.5rem;
       font-weight: bold;
       text-align: center;
     }
 
+    .payment-detail {
+      font-size: 1.5rem;
+      font-weight: bold;
+      text-align: center;
+      margin-top: 0.5rem;
+    }
+
     .payment-msg1 {
       font-size: 1.5rem;
       font-weight: bold;
       text-align: center;
+    }
+
+    .payment-msg-discret {
+      font-size: 1.2rem;
+      text-align: center;
+      opacity: 0.85;
+      margin-top: 0.5rem;
+    }
+
+    /* Zone monnaie a rendre — fond rouge + bordure doree pour attirer l'attention */
+    /* / Change to give back — red background + gold border to draw attention */
+    .give-back-box {
+      font-size: 2.5rem;
+      font-weight: bold;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      padding: 1rem 2rem;
+      margin-top: 0.5rem;
+      background-color: var(--rouge07);
+      border: 3px solid var(--warning00);
+      border-radius: 12px;
+    }
+
+    .give-back-box i {
+      margin-right: 0.5rem;
     }
   </style>
 </div>

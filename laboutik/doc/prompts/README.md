@@ -35,7 +35,10 @@ Fichier principal : `laboutik/doc/UX/PLAN_UX_LABOUTIK.md`
 | Session UX | Statut |
 |------------|--------|
 | Session 1 — Corrections fonctionnelles | **TERMINEE** |
-| Sessions 2-5 — Polish et responsive | A FAIRE |
+| Session 2 — Polish articles et panier | **TERMINEE** |
+| Session 3 — Polish paiement et ecrans modaux | **TERMINEE** (98 pytest verts, conformite stack-ccc) |
+| Session 4 — Polish header, sidebar et footer | A FAIRE |
+| Session 5 — Responsive et tactile | **TERMINEE** |
 
 ## Comment utiliser
 

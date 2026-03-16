@@ -7,7 +7,12 @@
 		<div>{% translate "PRODUIT" %}</div>
 		<div>{% translate "PRIX" %}</div>
 	</div>
-	<div id="addition-list"></div>
+	<div id="addition-list" data-empty-text="{% translate 'Panier vide' %}">
+		<div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
+			<i class="fas fa-shopping-basket" aria-hidden="true"></i>
+			<span>{% translate "Panier vide" %}</span>
+		</div>
+	</div>
 	<form id="addition-form" class="hide"
 		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
 		hx-trigger="validerPaiement"
@@ -49,11 +54,19 @@
 		scrollbar-width: none
 	}
 
+	/* Grille panier : colonnes 16% / 12% / 56% / 16%
+	   FIX : la 1ère colonne (bouton "-") passée de 12% à 16% pour respecter
+	   le seuil tactile de 44px minimum (WCAG 2.5.8).
+	   min-height passé de 29px (variable) à 44px fixe.
+	   / Cart grid: columns 16% / 12% / 56% / 16%
+	   FIX: 1st column ("-" button) widened from 12% to 16% to meet
+	   the 44px minimum touch target (WCAG 2.5.8).
+	   min-height changed from 29px (variable) to 44px fixed. */
 	.addition-legend-grid {
 		width: 100%;
 		height: 20px;
 		display: grid;
-		grid-template-columns: 12% 12% 60% 16%;
+		grid-template-columns: 16% 12% 56% 16%;
 		font-size: 14px;
 		font-weight: 600;
 		color: var(--gris03);
@@ -62,9 +75,9 @@
 
 	.addition-line-grid {
 		width: 100%;
-		min-height: var(--addition-line-heigh);
+		min-height: 44px;
 		display: grid;
-		grid-template-columns: 12% 12% 60% 16%;
+		grid-template-columns: 16% 12% 56% 16%;
 		color: var(--blanc01);
 		font-size: 16px;
 		font-weight: 400;
@@ -80,6 +93,23 @@
 	.addition-col-name,
 	.addition-col-price {
 		overflow: hidden;
+	}
+
+	.addition-col-price,
+	.addition-col-quantity {
+		font-variant-numeric: tabular-nums;
+	}
+
+	.addition-placeholder {
+		height: 100%;
+		opacity: 0.4;
+		color: var(--gris03);
+		font-size: 1.2rem;
+		gap: 12px;
+	}
+
+	.addition-placeholder i {
+		font-size: 2.5rem;
 	}
 
 	#addition-form {

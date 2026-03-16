@@ -61,6 +61,11 @@ function calculateTotal() {
 function additionInsertArticle({ detail }) {
 	const { uuid, price, quantity, name, currency } = detail
 
+	// Supprime le placeholder "Panier vide" si le panier etait vide
+	// / Removes "Empty cart" placeholder if cart was empty
+	const emptyPlaceholder = document.querySelector('#addition-empty')
+	if (emptyPlaceholder) { emptyPlaceholder.remove() }
+
 	const input = document.querySelector(`#addition-form [name="repid-${uuid}"]`)
 	
 	if (input === null) {
@@ -158,7 +163,16 @@ function additionReset() {
 		}
 	})
 
-	document.querySelector('#addition-list').innerHTML = ''
+	// Remet le placeholder "Panier vide" (le texte traduit est dans data-empty-text)
+	// / Restores "Empty cart" placeholder (translated text is in data-empty-text)
+	const additionList = document.querySelector('#addition-list')
+	const emptyText = additionList.dataset.emptyText || 'Panier vide'
+	additionList.innerHTML = `
+		<div id="addition-empty" class="BF-col addition-placeholder" data-testid="addition-empty-placeholder">
+			<i class="fas fa-shopping-basket" aria-hidden="true"></i>
+			<span>${emptyText}</span>
+		</div>
+	`
 	document.querySelector('#addition-comportement').value = ''
 	document.querySelector('#addition-total').value = ''
 	document.querySelector('#addition-moyen-paiement').value = ''

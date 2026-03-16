@@ -1,5 +1,45 @@
 # Changelog / Journal des modifications
 
+## 2. Polish header, sidebar categories et footer / Header, sidebar & footer polish
+
+**Quoi / What:** Ameliorations visuelles et d'accessibilite sur les zones permanentes de l'interface POS : header, sidebar categories, footer et menu burger.
+**Pourquoi / Why:** Un benevole en festival doit comprendre chaque zone en 1 seconde, sur desktop ET mobile.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/templates/cotton/header.html` | Bordure accent vert 3px, `text-wrap: balance` sur titre, aria-label + data-testid sur burger, animation slide-down + overlay sombre sur menu burger, menu pleine largeur mobile |
+| `laboutik/templates/cotton/categories.html` | Separateur visuel sous "Tous", `text-wrap: balance` + overflow sur noms longs |
+| `laboutik/templates/laboutik/views/common_user_interface.html` | `tabular-nums` sur total, `.toFixed(2)` pour 2 decimales, `data-testid` sur les 3 boutons footer |
+| `locale/fr/LC_MESSAGES/django.po` | Traductions "Menu", "Menu principal" |
+| `locale/en/LC_MESSAGES/django.po` | Traductions "Menu", "Main menu" |
+
+### Migration
+- **Migration necessaire / Migration required:** Non
+
+---
+
+## 1. Polish paiement et ecrans modaux (FALC) / Payment screens polish (FALC)
+
+**Quoi / What:** Refonte FALC des 5 ecrans de paiement de la caisse POS pour qu'un benevole comprenne chaque ecran en 1 seconde.
+**Pourquoi / Why:** Les ecrans de paiement etaient fonctionnels mais peu lisibles : boutons tous identiques (vert), pas de total visible avant saisie especes, monnaie a rendre peu visible, carte "federee" incomprehensible pour un benevole.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/templates/cotton/bt/paiement.html` | Variable Cotton `bg` pour couleur de fond, `aria-hidden` sur icone, commentaire LOCALISATION |
+| `laboutik/templates/laboutik/partial/hx_display_type_payment.html` | Couleurs par moyen (CASHLESS bleu, CB marine, CHEQUE gris, OFFRIR dore), titre recharge FALC, total affiche, `data-testid` sur tous les boutons |
+| `laboutik/templates/laboutik/partial/hx_confirm_payment.html` | Total en grand, champ 80px avec devise, `inputmode="decimal"`, `autofocus`, `aria-label`, `role="alert"`, media query mobile, commentaires FALC bilingues |
+| `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | Icone check animee, "Paiement reussi", "Paye en", monnaie a rendre en box rouge/dore, `data-testid` |
+| `laboutik/templates/laboutik/partial/hx_card_feedback.html` | Icone carte, "Carte avec nom", icones par asset (TLF/TNF/TIM), `data-testid` par section, commentaires bilingues |
+| `locale/fr/LC_MESSAGES/django.po` | Traductions FR + correction fuzzy "Paiement reussi" (etait "Envoye a Stripe") |
+| `locale/en/LC_MESSAGES/django.po` | Traductions EN completes |
+
+### Migration
+- **Migration necessaire / Migration required:** Non
+
+---
+
 ## v1.7.6 — Skin Faire Festival + Corrections UX et Sentry
 
 **Date :** Mars 2026
@@ -151,6 +191,62 @@ The missing value is now handled gracefully.
 - **Integration Fedow** : gestion d'erreur non-bloquante lors de la creation d'assets et validation d'adhesion
 - **Newsletter** : ajout de l'URL newsletter dans le skin
 - **Traductions** : nouvelles chaines FR/EN pour les filtres, messages d'erreur, et boutons
+
+**Migration necessaire / Migration required:** Non
+
+### 9. UX POS Session 5 — Responsive et ecrans tactiles / POS UX Session 5 — Responsive and touch screens
+
+**FR :**
+4 corrections CSS pour garantir le bon fonctionnement sur ecrans tactiles (Sunmi D3mini 1278x800) :
+- Suppression `width`/`height` parasites sur `:root` dans la media query >1278px (contraignait `<html>` a 160px, casse potentiel sur Android WebView)
+- Correction typo selecteur CSS `.categorie-nom` → `.category-nom` (le `font-size` ne s'appliquait jamais)
+- Elargissement colonne bouton "-" du panier (12% → 16%) et `min-height: 44px` pour respecter le seuil tactile WCAG 2.5.8
+- Ajout font-smoothing (`antialiased`) sur `body` pour le texte blanc sur fond sombre
+
+**EN:**
+4 CSS fixes to ensure proper behavior on touch screens (Sunmi D3mini 1278x800):
+- Removed parasitic `width`/`height` on `:root` in >1278px media query (constrained `<html>` to 160px, potential breakage on Android WebView)
+- Fixed CSS selector typo `.categorie-nom` → `.category-nom` (`font-size` was never applied)
+- Widened cart "-" button column (12% → 16%) and `min-height: 44px` to meet WCAG 2.5.8 touch target threshold
+- Added font-smoothing (`antialiased`) on `body` for white text on dark backgrounds
+
+**Fichiers / Files:**
+- `laboutik/templates/cotton/articles.html` — suppression width/height sur :root
+- `laboutik/templates/cotton/categories.html` — correction selecteur .category-nom
+- `laboutik/templates/cotton/addition.html` — grille 16/12/56/16 + min-height 44px
+- `laboutik/static/css/modele00.css` — font-smoothing sur body
+
+**Migration necessaire / Migration required:** Non
+
+---
+
+### 8. UX POS Session 2 — Polish articles et panier / POS UX Session 2 — Article and cart polish
+
+**FR :**
+Ameliorations visuelles de l'interface caisse (POS LaBoutik) :
+- Badge quantite invisible quand 0 (opacity 0, transition 200ms au lieu d'afficher "0" en permanence)
+- Feedback tactile au clic sur les articles (scale 0.95, 100ms)
+- Placeholder "Panier vide" avec icone quand le panier est vide (disparait au premier article, reapparait au RESET)
+- Alignement numerique propre (`font-variant-numeric: tabular-nums`) sur prix et quantites
+- Anti-debordement des prix (`text-overflow: ellipsis`) y compris sur le breakpoint Sunmi 1278px
+- Traductions i18n "Panier vide" / "Empty cart"
+
+**EN:**
+Visual improvements to the POS (LaBoutik) interface:
+- Quantity badge hidden when 0 (opacity 0, 200ms transition instead of showing "0" permanently)
+- Tactile feedback on article click (scale 0.95, 100ms)
+- "Empty cart" placeholder with icon when cart is empty (disappears on first article, reappears on RESET)
+- Clean numeric alignment (`font-variant-numeric: tabular-nums`) on prices and quantities
+- Price overflow prevention (`text-overflow: ellipsis`) including on Sunmi 1278px breakpoint
+- i18n translations "Panier vide" / "Empty cart"
+
+**Fichiers / Files:**
+- `laboutik/templates/cotton/articles.html` — CSS badge, feedback tactile, tabular-nums, overflow
+- `laboutik/static/js/articles.js` — classList toggle badge-visible
+- `laboutik/templates/cotton/addition.html` — placeholder HTML + CSS
+- `laboutik/static/js/addition.js` — placeholder remove/recreate
+- `locale/fr/LC_MESSAGES/django.po` — traduction "Panier vide"
+- `locale/en/LC_MESSAGES/django.po` — traduction "Empty cart"
 
 **Migration necessaire / Migration required:** Non
 

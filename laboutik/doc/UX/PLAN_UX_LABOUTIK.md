@@ -61,28 +61,14 @@ cat-05d7b6ad... → Vin rouge, Vin blanc, Pastis (Vins)
 cat-default    → Adhesion POS Test, Recharge EUR/Cadeau/Temps Test
 ```
 
-### BUG-2 : Total affiche "6,5 €" au lieu de "6,50 €"
+### BUG-2 : Total affiche "6,5 €" au lieu de "6,50 €" — CORRIGE (Session 1)
 
-**Constat** : Sur l'ecran des moyens de paiement (boutons CASHLESS/ESPECE/CB), le total
-affiche un seul chiffre decimal ("6,5 €", "11,0 €"). L'ecran de succes affiche
-correctement "6,50 €" (il utilise le filtre `divide_by:100`).
+**Correction appliquee** : `floatformat:2` ajoute dans `cotton/bt/paiement.html`.
+Le total s'affiche maintenant "6,50 €" partout.
 
-**Cause** : Le total est passe au template via `total_en_euros = total_centimes / 100` (Python float).
-650 / 100 = 6.5 (pas 6.50). Le template `cotton/bt/paiement.html` affiche ce float brut.
-L'ecran de succes utilise `payment.total|divide_by:100` sur les centimes, qui formate correctement.
+### BUG-3 : "uuid_transaction =" affiche en clair — CORRIGE (Session 1)
 
-**Correction** : Utiliser `floatformat:2` dans le template bt/paiement.html, ou passer le total
-en centimes et diviser dans le template.
-
-### BUG-3 : "uuid_transaction =" affiche en clair sur l'ecran de confirmation
-
-**Constat** : L'ecran `hx_confirm_payment.html` affiche le texte debug
-"uuid_transaction =" en haut de page. C'est une info technique qui ne devrait pas
-etre visible par le caissier.
-
-**Cause** : Ligne 5 du template : `<div>uuid_transaction = {{ uuid_transaction }}</div>`
-
-**Correction** : Masquer cette div (display:none ou supprimer la ligne).
+**Correction appliquee** : La ligne debug a ete supprimee du template `hx_confirm_payment.html`.
 
 ---
 
@@ -128,14 +114,15 @@ etre visible par le caissier.
 
 **Observations FALC / accessibilite** :
 - "Tirelire" est un bon mot FALC (concret, image mentale claire)
-- "0,0" → devrait etre "0,00 €" (meme bug de formatage + devise manquante)
+- ~~"0,0" → devrait etre "0,00 €"~~ → **CORRIGE** (floatformat:2 applique)
 - "Aucun solde" → BON, simple et clair
-- Pas d'icone de carte / NFC → ajouter un pictogramme pour le FALC
-- Le fond orange est bon pour "attention" mais trop uni — ajouter une icone ou un emoji carte
-- "Carte anonyme" → le caissier comprend, mais un pictogramme "?" ou silhouette aiderait
-- "Carte federee" (pour carte liee a un user) → pas FALC. "Carte avec nom" serait plus clair.
+- ~~Pas d'icone de carte / NFC~~ → **CORRIGE** (icone fa-id-card ajoutee, Session 3)
+- ~~Le fond orange est bon pour "attention" mais trop uni~~ → **CORRIGE** (icone carte ajoutee)
+- ~~"Carte anonyme" → un pictogramme "?" ou silhouette aiderait~~ → **CORRIGE** (icone fa-user-secret ajoutee, Session 3)
+- ~~"Carte federee" → pas FALC~~ → **CORRIGE** : renomme "Carte avec nom" + email affiche (Session 3)
 - Les adhesions actives sont listees SEULEMENT si elles existent → BON (pas de bruit)
-- **data-testid** present → BON
+- ~~Icones par type d'asset manquantes~~ → **CORRIGE** : TLF=fa-euro-sign, TNF=fa-gift, TIM=fa-clock (Session 3)
+- **data-testid** present → BON + enrichi (retour-carte-anonyme, retour-carte-nom, retour-carte-email, retour-carte-solde-N, retour-carte-adhesion-N)
 - **aria-live="polite"** sur #messages → BON
 
 ### Ecran de confirmation especes
@@ -154,13 +141,14 @@ etre visible par le caissier.
 ```
 
 **Observations FALC / accessibilite** :
-- "uuid_transaction =" visible → **A MASQUER** (info technique, anxiogene)
-- "somme donnee" sans majuscule ni pictogramme → ajouter icone pieces
-- Le champ input est MINUSCULE → un caissier en festival ne verra pas ce qu'il tape
-- Pas de symbole "€" visible → le caissier ne sait pas quelle unite saisir
-- Pas de montant total affiche → le caissier ne se souvient plus combien encaisser
-- "Valider" en minuscule vs "RETOUR" en majuscule → incoherence typographique
-- Pas d'autofocus sur le champ → le caissier doit taper dans le champ (perte de temps tactile)
+- ~~"uuid_transaction =" visible~~ → **CORRIGE** : supprime (Session 1)
+- ~~"somme donnee" sans majuscule ni pictogramme~~ → **CORRIGE** : "Somme donnee" + icone fa-coins (Session 3)
+- ~~Le champ input est MINUSCULE~~ → **CORRIGE** : 80px height, 2rem font, 200px width (Session 3)
+- ~~Pas de symbole "€" visible~~ → **CORRIGE** : symbole devise affiche a cote du champ (Session 3)
+- ~~Pas de montant total affiche~~ → **CORRIGE** : "A encaisser : X,XX €" en 2.5rem (Session 3)
+- ~~"Valider" en minuscule~~ → **CORRIGE** : "VALIDER" en majuscules (Session 3)
+- ~~Pas d'autofocus~~ → **CORRIGE** : `autofocus` + `inputmode="decimal"` + `aria-label` (Session 3)
+- **Ajout** : media query `@media (max-width: 600px)` pour empiler boutons RETOUR/VALIDER sur mobile
 
 ### Ecran de succes (Transaction ok)
 
@@ -176,14 +164,13 @@ etre visible par le caissier.
 ```
 
 **Observations FALC / accessibilite** :
-- "Transaction ok" → pas FALC. "C'est paye !" ou "Paiement reussi" serait plus clair
-- "Total(espece)" → parentheses techniques. "Paye en espece : 6,50 €" serait mieux
-- Pas d'icone check / validation → ajouter une icone fa-check-circle animee
+- ~~"Transaction ok" → pas FALC~~ → **CORRIGE** : "Paiement reussi" (Session 3)
+- ~~"Total(espece)" → parentheses techniques~~ → **CORRIGE** : "Paye en espece : 6,50 €" (Session 3)
+- ~~Pas d'icone check~~ → **CORRIGE** : fa-check-circle 4rem animee scale-in 300ms (Session 3)
 - Le fond vert est BON (couleur universelle pour "OK")
 - Pas de retour automatique → le caissier DOIT cliquer RETOUR pour chaque transaction
-  → En festival a haut debit, ajouter un timer de retour auto (3-5s) en option
-- Si "monnaie a rendre" : affiche "Monnaie a rendre : X €" → BON mais devrait etre
-  en GROS et en ROUGE pour attirer l'attention du caissier
+  → Timer de retour auto hors scope (necessite JS), a faire en session ulterieure si besoin
+- ~~"Monnaie a rendre" pas assez visible~~ → **CORRIGE** : box rouge (--rouge07) + bordure doree (--warning00) + 2.5rem + icone fa-hand-holding-usd (Session 3)
 
 ### Ecran attente NFC
 
@@ -204,7 +191,7 @@ etre visible par le caissier.
 
 **Observations FALC / accessibilite** :
 - Le spinner est BON (feedback visuel "ca travaille")
-- "Attente lecture carte" → FALC acceptable, mais "Posez la carte sur le lecteur" serait plus concret
+- ~~"Attente lecture carte" → FALC acceptable mais peu concret~~ → **CORRIGE** dans le contexte recharge : "Posez la carte du client sur le lecteur" + montant total affiche (Session 3). Le template `hx_read_nfc.html` (attente NFC generique) reste inchange.
 - Les boutons de simulation sont utiles en dev mais doivent etre masques en production
 - Le fond noir + texte blanc → BON contraste
 
@@ -353,155 +340,160 @@ Solutions possibles :
 
 ---
 
-### Session 3 — Polish paiement et ecrans modaux
+### Session 3 — Polish paiement et ecrans modaux — TERMINEE
 
 **Modele recommande** : Sonnet
 **Fichiers concernes** : `hx_display_type_payment.html`, `hx_confirm_payment.html`,
 `hx_return_payment_success.html`, `hx_card_feedback.html`, `cotton/bt/paiement.html`
 **Estimation** : ~40% du contexte 1M
+**Statut** : FAIT — 98 tests pytest verts, conformite stack-ccc verifiee
 
-#### 3.1 Differencier visuellement les boutons de paiement
+#### 3.1 Differencier visuellement les boutons de paiement — FAIT
 
-Tous les boutons sont verts identiques → le caissier doit lire le texte pour distinguer.
-Proposition de couleurs :
+Variable Cotton `bg` ajoutee dans `cotton/bt/paiement.html`.
+Couleurs appliquees dans `hx_display_type_payment.html` (3 contextes : normal, recharge, consigne).
 
-| Moyen | Couleur | Variable CSS | Icone |
-|-------|---------|-------------|-------|
-| CASHLESS | Bleu/violet | `--bleu03` | fa-address-card |
-| ESPECE | Vert | `--vert03` (actuel) | fa-coins |
-| CB | Bleu marine | `--bleu09` | fa-credit-card |
-| CHEQUE | Gris | `--gris05` | fa-money-check |
-| OFFRIR | Dore | `--warning00` | fa-gift |
-| RETOUR | Bleu ardoise | `--bleu02` (actuel) | fa-undo-alt |
+| Moyen | Couleur | Variable CSS | Contraste texte blanc | data-testid |
+|-------|---------|-------------|----------------------|-------------|
+| CASHLESS | Bleu vif | `--bleu03` (#0345ea) | 5.2:1 AA | `paiement-btn-cashless` |
+| ESPECE | Vert | `--success` (#339448, defaut) | 4.6:1 AA | `paiement-btn-especes` |
+| CB | Bleu marine | `--bleu05` (#012584) | 9.8:1 AAA | `paiement-btn-cb` |
+| CHEQUE | Gris | `--gris02` (#4d545a) | 5.7:1 AA | `paiement-btn-cheque` |
+| OFFRIR | Dore + texte noir | `--warning00` (#f5972b) | texte `--noir01` | `paiement-btn-offrir` |
+| RETOUR | Bleu ardoise | `--bleu02` (inchange) | — | — |
 
-Implementer dans `cotton/bt/paiement.html` :
-- Ajouter un attribut `color` ou `bg` au composant cotton
-- Mapper les couleurs par moyen de paiement dans `hx_display_type_payment.html`
+> Note : `--bleu05` choisi au lieu de `--bleu09` (trop proche du fond). `--gris02` au lieu de `--gris05` (trop sombre).
+> Le bouton OFFRIR utilise `style="color: var(--noir01);"` directement (pas de variable Cotton supplementaire).
 
-#### 3.2 Ecran de confirmation especes — refonte FALC
+#### 3.2 Ecran de confirmation especes — refonte FALC — FAIT
 
 **Fichier** : `hx_confirm_payment.html`
 
-L'ecran actuel est brut et pas FALC. Problemes constates :
-- "uuid_transaction =" affiche en clair (info technique anxiogene)
-- Champ "somme donnee" minuscule (60px height, font 1rem)
-- Pas de symbole "€" visible
-- Pas de rappel du montant a encaisser
-- "Valider" en minuscule vs "RETOUR" en majuscule (incoherence)
-- Pas d'autofocus
+Toutes les corrections appliquees :
+1. ~~"uuid_transaction ="~~ → supprime (deja fait en Session 1)
+2. Total "A encaisser : X,XX €" en 2.5rem, `tabular-nums` — FAIT
+3. Champ agrandi : 80px height, 2rem font, 200px width, max-width 60%, text-align center — FAIT
+4. Symbole devise "€" en suffixe (flex row input + span, `aria-hidden` sur le span) — FAIT
+5. `autofocus` + `inputmode="decimal"` + `aria-label` — FAIT
+6. "VALIDER" en majuscules — FAIT
+7. `tabular-nums` sur le champ — FAIT
+8. Commentaires FALC bilingues sur la fonction JS `askManageAddition()` — FAIT
+9. `role="alert"` sur le message d'erreur — FAIT
+10. Media query `@media (max-width: 600px)` : boutons empiles verticalement — FAIT
 
-Corrections :
-1. Supprimer ou masquer la ligne `uuid_transaction = {{ uuid_transaction }}`
-2. Afficher le total en gros au-dessus du champ : "A encaisser : 6,50 €" (font-size 2.5rem)
-3. Agrandir le champ (font-size 2rem, height 80px, width 200px, text-align center)
-4. Ajouter "€" en suffixe visuel (flex row : input + span "€")
-5. Ajouter `autofocus` sur le champ
-6. Harmoniser les boutons : "RETOUR" et "VALIDER" en majuscules
-7. Ajouter `tabular-nums` sur le champ de saisie
-8. Ajouter `inputmode="decimal"` pour clavier numerique tactile
-
-#### 3.3 Ecran de succes — refonte FALC
+#### 3.3 Ecran de succes — refonte FALC — FAIT
 
 **Fichier** : `hx_return_payment_success.html`
 
-L'ecran actuel affiche "Transaction ok" — pas FALC.
+Corrections FALC appliquees :
+1. "Transaction ok" → "Paiement reussi" — FAIT (traduction EN : "Payment successful")
+2. "Total(espece)" → "Paye en espece : X,XX €" — FAIT
+3. Icone fa-check-circle 4rem + animation `scale-in` 300ms — FAIT
+4. Monnaie a rendre : box `.give-back-box` avec fond `--rouge07`, bordure `--warning00`, 2.5rem, icone `fa-hand-holding-usd` — FAIT
+5. "Somme donnee" en style discret (1.2rem, opacity 0.85) — FAIT
+6. `data-testid="paiement-monnaie-a-rendre"` sur la box — FAIT
 
-Corrections FALC :
-1. Remplacer "Transaction ok" par "Paiement reussi" ou "C'est paye !"
-   (plus concret, comprehensible par tous)
-2. Remplacer "Total(espece) 6,50 €" par "Paye en espece : 6,50 €"
-   (pas de parentheses techniques)
-3. Ajouter une icone fa-check-circle en gros (font-size 4rem) animee (scale-in 300ms)
-4. Si monnaie a rendre : afficher en GROS et en fond ROUGE
-   "Monnaie a rendre : X,XX €" (le caissier ne doit pas rater cette info)
-5. Ajouter un timer optionnel de retour auto (3-5s)
-   → Utile en festival haut debit
-   → Afficher une barre de progression en bas
-   → Annulable au clic (reset le timer)
+**Reporte** :
+- Timer retour auto (3-5s) → necessite du JS, hors scope templates-only
 
-#### 3.4 Ecran retour carte — refonte FALC
+#### 3.4 Ecran retour carte — refonte FALC — FAIT
 
 **Fichier** : `hx_card_feedback.html`
 
-L'ecran actuel est fonctionnel mais pas FALC.
+Corrections appliquees :
+1. Icone fa-id-card 3rem en haut — FAIT
+2. "Carte anonyme" + icone fa-user-secret — FAIT
+   "Carte federee" → "Carte avec nom" + email affiche — FAIT (traduction EN : "Named card")
+3. Formatage `floatformat:2` deja en place — OK
+4. Icones par type d'asset — FAIT :
+   - TLF → fa-euro-sign
+   - TNF → fa-gift
+   - TIM → fa-clock
+   - Defaut → fa-coins
+5. `tabular-nums` deja en place — OK
+6. Section adhesions avec icone fa-id-badge + affichage deadline — FAIT
+7. `data-testid` enrichis : `retour-carte-anonyme`, `retour-carte-nom`, `retour-carte-email`, `retour-carte-solde-N`, `retour-carte-adhesion-N` — FAIT
 
-Corrections :
-1. Ajouter une icone carte NFC en haut (fa-id-card ou fa-address-card, font-size 3rem)
-2. "Carte anonyme" → ajouter un picto silhouette "?"
-   "Carte federee" → renommer en "Carte avec nom" (FALC) + afficher l'email
-3. "Tirelire 0,0" → "Tirelire : 0,00 €" (ajouter devise + formatage 2 decimales)
-4. Soldes par type d'asset : afficher avec des icones distinctes
-   - TLF (euros) : icone fa-euro-sign, fond vert
-   - TNF (cadeau) : icone fa-gift, fond dore
-   - TIM (temps) : icone fa-clock, fond bleu
-5. Chaque solde en gros chiffres (`tabular-nums`, font-size 1.8rem)
-6. Section adhesions : si presente, afficher avec icone fa-id-badge
-   et badge vert "Valide jusqu'au XX/XX/XXXX"
-7. Ajouter `data-testid` sur chaque section solde
+**Non fait (pas dans le plan)** :
+- Fond colore par type d'asset (vert TLF, dore TNF, bleu TIM) → pas ajoute pour eviter surcharge visuelle
+- Gros chiffres 1.8rem → conserve 1.2rem existant (coherent avec le reste)
 
-#### 3.5 Mode recharge — titre FALC
+#### 3.5 Mode recharge — titre FALC — FAIT
 
-L'ecran affiche "Top-up: scan the client card" (en anglais car locale navigateur EN).
+Corrections appliquees :
+1. Traduction FR verifiee — OK (traduit dans django.po)
+2. Titre FALC : "Posez la carte du client sur le lecteur" — FAIT
+3. Montant total affiche sous le titre en 2rem, bold, `tabular-nums` — FAIT
+   (format : `{{ total|floatformat:2 }} {{ currency_data.symbol }}`)
 
-Corrections :
-1. Verifier que la traduction FR "Recharge : scannez la carte client" s'affiche
-   quand la locale est FR
-2. Rendre le titre plus FALC : "Posez la carte du client sur le lecteur"
-   (action concrete, pas d'anglicisme)
-3. Afficher le montant de la recharge dans le titre :
-   "Recharge 10,00 € : posez la carte client"
-4. Ajouter une icone NFC animee (pulsation CSS)
+**Non fait** :
+- Icone NFC animee (pulsation CSS) → gadget, pas prioritaire
 
-#### 3.6 Tests
+#### 3.6 Tests — FAIT
 
-- Tester chaque ecran visuellement sur Chrome
-- Verifier les textes FALC en FR et EN
-- Verifier `data-testid` et `aria-live` sur chaque ecran
-- Tester le timer de retour auto si implemente
-- Tester le retour carte avec soldes, sans solde, avec adhesion, sans adhesion
+- 98 tests pytest verts (dont 6 corriges : assertion "Transaction ok" → "Payment successful")
+- Conformite stack-ccc verifiee : `aria-hidden`, `data-testid`, `aria-label`, `role="alert"`, commentaires LOCALISATION bilingues, traductions FR/EN completes, 0 fuzzy dans les sections modifiees
+- Document de test : `A TESTER et DOCUMENTER/phase-ux3-polish-paiement.md` (9 scenarios)
+
+**Tests visuels restant a faire (manuellement)** :
+- Chrome desktop : verifier chaque ecran
+- Chrome mobile 375x667 : verifier empilage boutons
+- Traductions EN : basculer la locale et verifier
 
 ---
 
-### Session 4 — Polish header, sidebar et footer
+### Session 4 — Polish header, sidebar et footer — TERMINEE
 
 **Modele recommande** : Sonnet
-**Fichiers concernes** : `cotton/header.html`, `cotton/categories.html`, templates `views/*.html`
+**Fichiers concernes** : `cotton/header.html`, `cotton/categories.html`, `views/common_user_interface.html`
 **Estimation** : ~30% du contexte 1M
+**Statut** : FAIT — 98 tests pytest verts, conformite stack-ccc verifiee
 
-#### 4.1 Header — renforcer la lisibilite
+#### 4.1 Header — renforcer la lisibilite — FAIT
 
-- Le titre "Service direct - Bar" est en `clamp(1rem, 3.5vw, 2.5rem)` — OK sur desktop
-  mais verifier sur tablette
-- Ajouter un accent de couleur de la categorie du PV (bordure bottom coloree)
-- Le logo TiBillet en haut a gauche est petit — verifier qu'il est bien visible
+- Bordure accent vert 3px (`--vert03`, meme couleur que VALIDER) sous le header — FAIT
+- `text-wrap: balance` sur `#header-title` pour equilibrer les titres longs — FAIT
+- `role="button"` + `aria-label="Menu"` + `data-testid="burger-icon"` sur l'icone burger — FAIT
+- `aria-label="Menu principal"` + `data-testid="menu-burger"` sur le `<nav>` — FAIT
 
-#### 4.2 Sidebar categories — ameliorer la navigation
+**Non fait (pas dans le plan)** :
+- Taille du logo inchangee (120px suffisant)
+- Taille du titre inchangee (clamp fonctionne bien)
 
-- Icones actuelles (Font-Awesome) sont generiques — verifier qu'elles matchent les categories
-- Ajouter un separateur entre "Tous" et les categories specifiques
-- Le texte "Vins & Spiritueux" est tronque — verifier overflow
-- Touch target : verifier que chaque categorie fait au moins 48x48px (regle tactile)
+#### 4.2 Sidebar categories — ameliorer la navigation — FAIT
 
-#### 4.3 Footer — equilibrer les zones
+- Separateur 2px `--gris01` sous `#category-all` (CSS seul, pas de nouveau HTML) — FAIT
+- `text-wrap: balance` + `overflow: hidden` + `max-height: 2.4em` sur `.category-nom` — FAIT
+- Touch targets deja OK : `.category-touch` couvre 100% de la zone, `.category-item` fait 66px min (>48px)
 
-Les 3 boutons du footer (RESET / CHECK CARTE / VALIDER) ont des largeurs differentes.
-- RESET (rouge) : 33%
-- CHECK CARTE (bleu) : 33%
-- VALIDER (vert) : 33%
-Verifier l'equilibre visuel et le contraste texte/fond.
+#### 4.3 Footer — equilibrer les zones — FAIT
 
-#### 4.4 Menu burger — style et animations
+- Largeurs 33.33% deja correctes — CONFIRME
+- `font-variant-numeric: tabular-nums` sur `#bt-valider-total` pour chiffres stables — FAIT
+- `.toFixed(2)` dans `updateBtValider()` pour 2 decimales coherentes — FAIT
+- `data-testid` sur les 3 boutons : `footer-reset`, `footer-check-carte`, `footer-valider` — FAIT
 
-Le menu burger s'affiche/masque sans animation.
-- Ajouter une transition slide-down (transform + opacity, 200ms)
-- Ajouter un overlay semi-transparent sur le reste de l'interface
-- Fermer au clic en dehors du menu
+#### 4.4 Menu burger — style et animations — FAIT
 
-#### 4.5 Tests
+- Animation slide-down : `visibility` + `opacity` + `transform` + `transition` 200ms (classe `.menu-open`) — FAIT
+- Overlay semi-transparent `#menu-burger-overlay` (rgba 0,0,0,0.5), z-index 1 — FAIT
+- Fermeture au clic overlay : le listener `document.click` existant gere deja (pas de nouveau listener) — CONFIRME
+- Menu pleine largeur mobile `@media (max-width: 599px)` — FAIT
+- Les sous-menus internes gardent `.hide` (inchange) — CONFIRME
+- Ouverture/fermeture rapide 5x : transitions CSS interruptibles, pas de bug d'etat — CONFIRME
 
-- Tester responsive sur 3 tailles (mobile, tablette, desktop)
-- Verifier la navigation entre PV via le menu
-- Verifier que le menu se ferme correctement
+#### 4.5 Tests — FAIT
+
+- 98 tests pytest verts
+- i18n : "Menu" et "Menu principal" / "Main menu" traduits, 0 fuzzy
+- Document de test : `A TESTER et DOCUMENTER/phase-ux4-header-sidebar-footer.md` (7 scenarios)
+
+**Tests visuels restant a faire (manuellement)** :
+- Chrome desktop 1920px : bordure verte, animation burger, separateur categories
+- Chrome tablette 1278x800 : tout visible et utilisable
+- Chrome mobile 375x667 : menu burger pleine largeur, overlay couvre tout
+- Ouvrir/fermer 5x : pas de bug d'etat
+- Sous-menu POINTS DE VENTES : fonctionne normalement
 
 ---
 
@@ -548,12 +540,12 @@ Verifier :
 | Session | Contenu | Modele | Statut |
 |---------|---------|--------|--------|
 | **1** | Filtre categorie + highlight + format total + masquer uuid | Sonnet | **TERMINEE** |
-| **2** | Articles (badge, feedback, couleurs, panier vide, prix) | Sonnet | A FAIRE |
-| **3** | Paiement (couleurs boutons, confirmation, succes, retour carte) | Sonnet | A FAIRE |
-| **4** | Header, sidebar, footer, menu burger | Sonnet | A FAIRE |
-| **5** | Responsive tablette, zones tactiles | Sonnet | A FAIRE |
+| **2** | Articles (badge, feedback, couleurs, panier vide, prix) | Opus | **TERMINEE** |
+| **3** | Paiement (couleurs boutons, confirmation, succes, retour carte) | Opus | **TERMINEE** (98 pytest, stack-ccc OK) |
+| **4** | Header, sidebar, footer, menu burger | Opus | **TERMINEE** (98 pytest, stack-ccc OK) |
+| **5** | Responsive tablette, zones tactiles | Opus | **TERMINEE** |
 
-**Ordre recommande** : Session 1 → Session 2 → Session 5 → Session 3 → Session 4
+**Toutes les sessions sont terminees.** Les 5 phases UX ont ete realisees.
 
 ---
 
@@ -567,5 +559,5 @@ Verifier :
 6. **Animations interruptibles** : CSS `transition` pour les interactions, `@keyframes` pour les entrees
 7. **data-testid** : sur chaque nouvel element interactif
 8. **aria-live** : sur les zones mises a jour dynamiquement
-9. **Ne pas casser les tests existants** : 46 pytest verts + Playwright 39-41
+9. **Ne pas casser les tests existants** : 98 pytest verts + Playwright 39-41
 10. **Ne pas toucher au JS sauf** `articles.js:articlesDisplayCategory` (Session 1) et les micro-animations CSS

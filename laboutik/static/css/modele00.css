@@ -22,6 +22,12 @@
   }
 
   body {
+    /* Lissage du texte blanc sur fond sombre — évite le rendu trop épais
+       sur macOS et certains écrans Android.
+       / Font smoothing for white text on dark backgrounds — prevents
+       thick rendering on macOS and some Android screens. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     -webkit-user-select: none;
     -moz-user-select: none;
     -khtml-user-select: none;

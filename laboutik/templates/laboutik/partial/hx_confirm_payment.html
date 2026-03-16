@@ -1,40 +1,83 @@
 {% load static i18n %}
 {% load laboutik_process %}
+<!--
+ECRAN CONFIRMATION DE PAIEMENT
+Demande une validation avant de finaliser le paiement.
+Pour les especes : affiche le total a encaisser et un champ pour la somme donnee.
+/ Payment confirmation screen — validates before finalizing. Cash: shows total and given amount field.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_confirm_payment.html
+
+FLUX :
+1. Clic sur un bouton paiement dans hx_display_type_payment.html
+2. Ce partial s'affiche avec le moyen de paiement et le total
+3. Clic VALIDER → soumet le formulaire d'addition vers laboutik-paiement-payer
+-->
 
 <div id="confirm" class="BF-col" data-testid="paiement-confirmation" aria-live="polite">
   <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
   {% if method == 'espece' %}
-  <!-- <div id="given-sum-container" class="BF-col"> -->
-  <div class="info-sum-given">{% translate "somme donnée" %}</div>
-  <input type="number" id="given-sum" class="addition-fractionnee-input">
-  <small id="given-sum-msg-erreur"></small>
-  <!-- </div> -->
+  <!-- total a encaisser, bien visible pour le caissier / total to collect, clearly visible -->
+  <div class="confirm-total" style="font-size: 2.5rem; font-weight: bold; font-variant-numeric: tabular-nums;">
+    {% translate "A encaisser" %} : {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </div>
+  <div class="info-sum-given">
+    <i class="fas fa-coins" aria-hidden="true"></i> {% translate "Somme donnée" %}
+  </div>
+  <!-- champ de saisie de la somme donnee par le client / input for amount given by customer -->
+  <div class="confirm-input-wrapper">
+    <input type="number" id="given-sum" class="addition-fractionnee-input"
+      inputmode="decimal" autofocus
+      aria-label="{% translate "Somme donnée" %}"
+      data-testid="paiement-input-somme-donnee">
+    <span class="confirm-currency" aria-hidden="true">{{ currency_data.symbol }}</span>
+  </div>
+  <small id="given-sum-msg-erreur" role="alert"></small>
   {% endif %}
 
   <div id="confirm-action-container">
-    <!-- include bt_return.html -->
+    <!-- bouton retour / back button -->
     <c-bt.return selector="#confirm" layer="2" />
 
-    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success" onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }} {% endif %})" ;>
+    <div id="bt-valider-layer2" class="bt-basic-container bt-basic-bg-success"
+      onclick="askManageAddition('{{ method }}' {% if method == 'espece' %}, {{ total|force_dot }} {% endif %})"
+      data-testid="paiement-btn-valider">
       <div class="bt-basic-icon">
-        <i class="fas fa-check-circle"></i>
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
       </div>
       <div class="bt-basic-text">
-        <div>{% translate "Valider" %}</div>
+        <div>{% translate "VALIDER" %}</div>
       </div>
     </div>
   </div>
 
   <script>
+    /**
+     * Valide et soumet le paiement
+     * Verifie que la somme donnee est suffisante (si especes),
+     * puis soumet le formulaire d'addition.
+     * / Validates and submits payment — checks given amount for cash, then submits.
+     *
+     * LOCALISATION : laboutik/templates/laboutik/partial/hx_confirm_payment.html
+     *
+     * COMMUNICATION :
+     * Emet : 'additionManageForm' → #event-organizer (updateInput, postUrl, submit)
+     *
+     * @param {string} method - moyen de paiement (espece, carte_bancaire, CH, gift, nfc)
+     * @param {number} total - total en euros (uniquement pour especes)
+     */
     function askManageAddition(method, total) {
       if (method === 'espece') {
+        // Verifie que la somme donnee couvre le total
+        // / Checks given amount covers the total
         const inputGivenSum = document.querySelector('#given-sum').value
         const givenSum = Number(inputGivenSum)
         if (inputGivenSum !== '' && givenSum < total) {
           document.querySelector('#given-sum-msg-erreur').innerText = `{% translate "Total" %} : ${total} {{ currency_data.symbol }} - {% translate "Somme incorrecte !" %}`
           return
         } else {
-          // insérer la somme donnée en centimes d'euro dans le formulaire de l'addition
+          // Insere la somme donnee en centimes dans le formulaire de l'addition
+          // / Inserts given amount in cents into the addition form
           sendEvent('organizerMsg', '#event-organizer', {
             src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
             msg: 'additionManageForm',
@@ -43,14 +86,16 @@
         }
       }
 
-      // hx-post = 'hx_payment'
+      // Definit l'URL de soumission du formulaire
+      // / Sets the form submission URL
       sendEvent('organizerMsg', '#event-organizer', {
         src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
         msg: 'additionManageForm',
         data: { actionType: 'postUrl', selector: null, value: '{% url "laboutik-paiement-payer" %}' }
       })
 
-      // submit le formulaire
+      // Soumet le formulaire d'addition
+      // / Submits the addition form
       sendEvent('organizerMsg', '#event-organizer', {
         src: { file: 'hx_confirm_payment.html', method: 'submitAddition' },
         msg: 'additionManageForm',
@@ -79,15 +124,36 @@
       margin-top: 2rem;
     }
 
+    .confirm-total {
+      margin-bottom: 1rem;
+    }
+
     .info-sum-given {
       font-size: 1.5rem;
       font-weight: bold;
     }
 
+    .confirm-input-wrapper {
+      display: flex;
+      flex-direction: row;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+
     .addition-fractionnee-input {
-      height: 60px;
-      margin-top: 2rem;
-      font-size: 1rem;
+      height: 80px;
+      width: 200px;
+      max-width: 60%;
+      font-size: 2rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .confirm-currency {
+      font-size: 2rem;
+      font-weight: bold;
     }
 
     #bt-valider-layer2 {
@@ -99,6 +165,17 @@
       width: 100%;
       height: 24px;
       color: var(--warning);
+    }
+
+    /* Sur mobile : boutons empiles verticalement / Mobile: stack buttons vertically */
+    @media (max-width: 600px) {
+      #confirm-action-container {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      #bt-valider-layer2 {
+        margin-left: 0;
+      }
     }
   </style>
 </div>

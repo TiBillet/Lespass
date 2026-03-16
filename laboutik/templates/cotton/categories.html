@@ -123,8 +123,24 @@
 		text-shadow: 2px 2px var(--gris02)
 	}
 
-	.categorie-nom {
+	/* Séparateur entre "Tous" et les catégories spécifiques
+	   / Separator between "All" and specific categories */
+	#category-all {
+		margin-bottom: 6px;
+		border-bottom: 2px solid var(--gris01);
+	}
+
+	/* FIX : le sélecteur était .categorie-nom (FR) mais le HTML utilise .category-nom (EN).
+	   La règle ne s'appliquait jamais.
+	   / FIX: selector was .categorie-nom (FR) but HTML uses .category-nom (EN).
+	   The rule was never applied. */
+	.category-nom {
 		font-size: var(--cat-name-size);
+		text-wrap: balance;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-height: 2.4em;
+		line-height: 1.2;
 	}
 
 	.category-touch {

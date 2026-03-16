@@ -307,7 +307,7 @@ class TestPaiementNFCAtomique:
             # Verifier que la reponse est bien un succes (pas un message d'erreur)
             # / Verify the response is a success (not an error message)
             contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
+            assert "Payment successful" in contenu, (
                 f"Attendu 'Transaction ok' dans la reponse, obtenu : {contenu[:200]}"
             )
 
@@ -474,7 +474,7 @@ class TestPaiementNFCWalletEphemere:
             # Verifier que la reponse est bien un succes
             # / Verify the response is a success
             contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
+            assert "Payment successful" in contenu, (
                 f"Attendu 'Transaction ok', obtenu : {contenu[:200]}"
             )
 

@@ -560,7 +560,7 @@ class TestRechargeCadeau:
             response = client.post('/laboutik/paiement/payer/', data=post_data)
             assert response.status_code == 200
             contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
+            assert "Payment successful" in contenu, (
                 f"Attendu 'Transaction ok', obtenu : {contenu[:300]}"
             )
 
@@ -615,7 +615,7 @@ class TestRechargeTemps:
             response = client.post('/laboutik/paiement/payer/', data=post_data)
             assert response.status_code == 200
             contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
+            assert "Payment successful" in contenu, (
                 f"Attendu 'Transaction ok', obtenu : {contenu[:300]}"
             )
 
@@ -670,7 +670,7 @@ class TestAdhesionCreeMembership:
             response = client.post('/laboutik/paiement/payer/', data=post_data)
             assert response.status_code == 200
             contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
+            assert "Payment successful" in contenu, (
                 f"Attendu 'Transaction ok', obtenu : {contenu[:300]}"
             )
 
@@ -735,7 +735,7 @@ class TestAdhesionRenouvelle:
             response = client.post('/laboutik/paiement/payer/', data=post_data)
             assert response.status_code == 200
             contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
+            assert "Payment successful" in contenu, (
                 f"Attendu 'Transaction ok', obtenu : {contenu[:300]}"
             )
 
