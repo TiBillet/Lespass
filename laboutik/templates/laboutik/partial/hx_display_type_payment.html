@@ -18,6 +18,39 @@
 
   {% else %}
   <!-- pas de consignes -->
+
+  {% if panier_a_recharges %}
+  {# --- MODE RECHARGE : scan NFC client obligatoire avant paiement --- #}
+  {# --- TOP-UP MODE: client NFC scan required before payment --- #}
+  <h1 class="message-title">{% translate "Recharge : scannez la carte client" %}</h1>
+
+  {% if 'espece' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins"
+    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
+    hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')"
+    data-testid="recharge-btn-especes" />
+  {% endif %}
+
+  {% if 'carte_bancaire' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card"
+    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
+    hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')"
+    data-testid="recharge-btn-cb" />
+  {% endif %}
+
+  {% if 'CH' in moyens_paiement %}
+  <c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check"
+    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
+    hx-trigger="click" hx-swap="outerHTML"
+    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')"
+    data-testid="recharge-btn-cheque" />
+  {% endif %}
+
+  {% else %}
+  {# --- MODE NORMAL (pas de recharges) --- #}
+  {# --- NORMAL MODE (no top-ups) --- #}
   <h1 class="message-title">{% translate "Types de paiement" %}</h1>
   <!-- cashless -->
   {% if 'nfc' in moyens_paiement %}
@@ -59,6 +92,8 @@
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')" />
   {% endif %}
+
+  {% endif %}{# fin panier_a_recharges / end top-up check #}
 
   <!-- pas de moyens de paiement -->
   {% if moyens_paiement|length == 0%}

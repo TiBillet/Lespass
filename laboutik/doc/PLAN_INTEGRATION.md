@@ -15,13 +15,18 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 
 **Tests de validation par phase :** dans `memory/tests_validation.md` (fichier separe).
 
-**Resume executif — ou on en est (mise a jour 2026-03-12) :**
+**Resume executif — ou on en est (mise a jour 2026-03-16) :**
 - Branche : `integration_laboutik`
 - Front LaBoutik : 100% fait (templates, JS, cotton)
 - **Phase -1 TERMINEE** : Dashboard Groupware, 5 module_*, sidebar conditionnelle, proxy models
 - **Phase 0 TERMINEE** : fedow_core complet (4 modeles, 3 services, admin, 8 pytest, 1 Playwright federation)
 - **Phase 1 TERMINEE** : Product unifie (8 champs POS, CategorieProduct, POSProduct proxy, Price.asset FK) + 4 modeles laboutik + admin + donnees test
-- **→ Prochaine etape = Phase 2** (remplacement mocks → vues/serializers reels)
+- **Phase 2 TERMINEE** : Remplacement mocks (caisse DB, paiement especes/CB)
+- **Phase 3 etape 1 TERMINEE** : Paiement NFC cashless (_payer_par_nfc atomique)
+- **Phase 3 etape 2 TERMINEE** : Recharges especes/CB + securite (wallet ephemere, validation PV, garde NFC recharges)
+- **Phase 4 TERMINEE** : Commandes restaurant (CommandeSauvegarde, tables)
+- **Phase 5 TERMINEE** : Cloture caisse (ClotureCaisse, rapport JSON, email/PDF)
+- **→ Prochaine etape = Phase 3.3** (stress test + verify_transactions) ou ameliorations existant
 - Toutes les decisions architecturales sont prises (section 16), dont 16.9 : Product unifie (pas de ArticlePOS)
 - Prompts detailles avec tests par phase : `laboutik/doc/prompts/README.md`
 

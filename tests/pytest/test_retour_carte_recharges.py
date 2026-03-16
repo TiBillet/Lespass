@@ -449,9 +449,12 @@ class TestRetourCarteSansWallet:
                 data={'tag_id': carte_orpheline.tag_id},
             )
             assert response.status_code == 200
-            contenu = response.content.decode()
-            assert 'portefeuille' in contenu.lower() or 'wallet' in contenu.lower(), (
-                f"Attendu un message d'erreur wallet, obtenu : {contenu[:300]}"
+
+            # Un wallet ephemere a ete cree automatiquement
+            # / An ephemeral wallet was auto-created
+            carte_orpheline.refresh_from_db()
+            assert carte_orpheline.wallet_ephemere is not None, (
+                "Un wallet ephemere aurait du etre cree automatiquement"
             )
 
 
@@ -461,14 +464,14 @@ class TestRetourCarteSansWallet:
 
 @pytest.mark.usefixtures("test_data")
 class TestRechargeEuros:
-    """Test 4 : recharge euros (RE) → lieu debite, client credite en TLF."""
+    """Test 4 : recharge euros (RE) payee en especes → lieu debite, client credite en TLF."""
 
     def test_recharge_euros(
         self, admin_user, tenant, premier_pv, asset_tlf,
         wallet_lieu, wallet_client, carte_client,
         produit_recharge_euros,
     ):
-        """POST payer avec produit RE → Token TLF client credite."""
+        """POST payer avec produit RE + moyen espece + tag_id client → Token TLF client credite."""
         with schema_context(TENANT_SCHEMA):
             produit, prix = produit_recharge_euros
             prix_centimes = int(round(prix.prix * 100))
@@ -488,7 +491,7 @@ class TestRechargeEuros:
             client = _make_client(admin_user, tenant)
             post_data = {
                 'uuid_pv': str(premier_pv.uuid),
-                'moyen_paiement': 'nfc',
+                'moyen_paiement': 'espece',
                 'total': str(prix_centimes),
                 'given_sum': '',
                 'tag_id': carte_client.tag_id,
@@ -497,10 +500,6 @@ class TestRechargeEuros:
 
             response = client.post('/laboutik/paiement/payer/', data=post_data)
             assert response.status_code == 200
-            contenu = response.content.decode()
-            assert "Transaction ok" in contenu, (
-                f"Attendu 'Transaction ok', obtenu : {contenu[:300]}"
-            )
 
             # Token TLF client credite du montant
             # / Client TLF Token credited by amount
@@ -551,7 +550,7 @@ class TestRechargeCadeau:
             client = _make_client(admin_user, tenant)
             post_data = {
                 'uuid_pv': str(premier_pv.uuid),
-                'moyen_paiement': 'nfc',
+                'moyen_paiement': 'espece',
                 'total': str(prix_centimes),
                 'given_sum': '',
                 'tag_id': carte_client.tag_id,
@@ -606,7 +605,7 @@ class TestRechargeTemps:
             client = _make_client(admin_user, tenant)
             post_data = {
                 'uuid_pv': str(premier_pv.uuid),
-                'moyen_paiement': 'nfc',
+                'moyen_paiement': 'espece',
                 'total': str(prix_centimes),
                 'given_sum': '',
                 'tag_id': carte_client.tag_id,
@@ -634,14 +633,14 @@ class TestRechargeTemps:
 
 @pytest.mark.usefixtures("test_data")
 class TestAdhesionCreeMembership:
-    """Test 7 : adhesion (AD) → Membership creee avec status=LABOUTIK."""
+    """Test 7 : adhesion (AD) payee en NFC → Membership creee avec status=LABOUTIK."""
 
     def test_adhesion_cree_membership(
         self, admin_user, tenant, premier_pv, asset_tlf,
         wallet_client, carte_client, user_client,
         produit_adhesion,
     ):
-        """POST payer avec produit AD → Membership creee."""
+        """POST payer avec produit AD + moyen nfc → Membership creee."""
         with schema_context(TENANT_SCHEMA):
             produit, prix = produit_adhesion
             prix_centimes = int(round(prix.prix * 100))
@@ -693,7 +692,7 @@ class TestAdhesionCreeMembership:
 
 @pytest.mark.usefixtures("test_data")
 class TestAdhesionRenouvelle:
-    """Test 8 : adhesion (AD) avec membership expiree → renouvellement."""
+    """Test 8 : adhesion (AD) NFC avec membership expiree → renouvellement."""
 
     def test_adhesion_renouvelle(
         self, admin_user, tenant, premier_pv, asset_tlf,
@@ -779,7 +778,7 @@ class TestRechargeSensCorrect:
             client = _make_client(admin_user, tenant)
             post_data = {
                 'uuid_pv': str(premier_pv.uuid),
-                'moyen_paiement': 'nfc',
+                'moyen_paiement': 'espece',
                 'total': str(prix_centimes),
                 'given_sum': '',
                 'tag_id': carte_client.tag_id,
@@ -804,3 +803,167 @@ class TestRechargeSensCorrect:
             assert derniere_tx.receiver == wallet_client, (
                 f"Attendu receiver=wallet_client, obtenu receiver={derniere_tx.receiver}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Tests — securite (Phase 3.2)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("test_data")
+class TestRechargeNFCRejete:
+    """Test 10 : recharge (RE) payee en NFC → rejete explicitement."""
+
+    def test_recharge_nfc_rejete(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, wallet_client, carte_client,
+        produit_recharge_euros,
+    ):
+        """POST payer moyen=nfc + produit RE → rejet 400, pas de Transaction."""
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = produit_recharge_euros
+            prix_centimes = int(round(prix.prix * 100))
+
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            nb_tx_avant = Transaction.objects.filter(tenant=tenant).count()
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'nfc',
+                'total': str(prix_centimes),
+                'given_sum': '',
+                'tag_id': carte_client.tag_id,
+                f'repid-{produit.uuid}': '1',
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 400
+            contenu = response.content.decode()
+            assert 'cashless' in contenu.lower() or 'recharge' in contenu.lower(), (
+                f"Attendu message d'erreur recharge/cashless, obtenu : {contenu[:300]}"
+            )
+
+            # Aucune transaction creee
+            # / No transaction created
+            nb_tx_apres = Transaction.objects.filter(tenant=tenant).count()
+            assert nb_tx_apres == nb_tx_avant
+
+
+@pytest.mark.usefixtures("test_data")
+class TestPanierMixteForceEspecesCB:
+    """Test 11 : panier VT+RE → NFC absent des moyens proposes."""
+
+    def test_panier_mixte_pas_de_nfc(
+        self, admin_user, tenant, premier_pv,
+        produit_recharge_euros,
+    ):
+        """POST moyens_paiement avec article RE → 'nfc' pas dans la reponse."""
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = produit_recharge_euros
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                f'repid-{produit.uuid}': '1',
+            }
+
+            response = client.post('/laboutik/paiement/moyens_paiement/', data=post_data)
+            assert response.status_code == 200
+            contenu = response.content.decode()
+
+            # Le bouton CASHLESS ne doit pas apparaitre
+            # / The CASHLESS button must not appear
+            assert 'CASHLESS' not in contenu, (
+                f"Le bouton CASHLESS ne devrait pas etre propose pour une recharge"
+            )
+            # Mais ESPECE ou CB doivent etre proposes
+            # / But CASH or CC must be offered
+            assert 'recharge' in contenu.lower() or 'ESP' in contenu or 'CB' in contenu, (
+                f"Attendu des moyens espece/CB, contenu : {contenu[:500]}"
+            )
+
+
+@pytest.mark.usefixtures("test_data")
+class TestWalletEphemereAutoCree:
+    """Test 12 : carte sans wallet → wallet ephemere cree automatiquement."""
+
+    def test_wallet_ephemere_auto_cree(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, produit_recharge_euros,
+    ):
+        """Carte sans user ni wallet → wallet ephemere cree, recharge OK."""
+        with schema_context(TENANT_SCHEMA):
+            # Creer une carte orpheline (pas de user, pas de wallet_ephemere)
+            # / Create an orphan card (no user, no wallet_ephemere)
+            carte_orpheline, _ = CarteCashless.objects.get_or_create(
+                tag_id='NFCEPH01',
+                defaults={'number': 'NFCNME01', 'uuid': None},
+            )
+            carte_orpheline.user = None
+            carte_orpheline.wallet_ephemere = None
+            carte_orpheline.save(update_fields=['user', 'wallet_ephemere'])
+
+            produit, prix = produit_recharge_euros
+            prix_centimes = int(round(prix.prix * 100))
+
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'espece',
+                'total': str(prix_centimes),
+                'given_sum': '',
+                'tag_id': carte_orpheline.tag_id,
+                f'repid-{produit.uuid}': '1',
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 200
+
+            # Wallet ephemere cree automatiquement
+            # / Ephemeral wallet auto-created
+            carte_orpheline.refresh_from_db()
+            assert carte_orpheline.wallet_ephemere is not None, (
+                "Wallet ephemere aurait du etre cree"
+            )
+
+            # Solde credite sur le wallet ephemere
+            # / Balance credited on ephemeral wallet
+            solde = WalletService.obtenir_solde(
+                wallet=carte_orpheline.wallet_ephemere, asset=asset_tlf,
+            )
+            assert solde == prix_centimes
+
+
+@pytest.mark.usefixtures("test_data")
+class TestValidationPVCartePrimaire:
+    """Test 13 : PV non autorise pour la carte primaire → PermissionDenied."""
+
+    def test_validation_pv_carte_primaire(
+        self, admin_user, tenant, premier_pv,
+    ):
+        """Acces a un PV non autorise via carte primaire → 403."""
+        with schema_context(TENANT_SCHEMA):
+            from laboutik.models import CartePrimaire
+
+            # Creer une carte primaire SANS acces au premier PV
+            # / Create a primary card WITHOUT access to the first PV
+            carte_cm, _ = CarteCashless.objects.get_or_create(
+                tag_id='NFCPV01',
+                defaults={'number': 'NFCNPV01', 'uuid': None},
+            )
+            carte_prim, _ = CartePrimaire.objects.get_or_create(
+                carte=carte_cm,
+                defaults={'edit_mode': False},
+            )
+            # S'assurer qu'elle n'a PAS acces au premier PV
+            # / Ensure it does NOT have access to the first PV
+            carte_prim.points_de_vente.clear()
+
+            client = _make_client(admin_user, tenant)
+            response = client.get(
+                f'/laboutik/caisse/point_de_vente/?uuid_pv={premier_pv.uuid}&tag_id_cm={carte_cm.tag_id}',
+            )
+            assert response.status_code == 403

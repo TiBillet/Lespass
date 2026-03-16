@@ -18,14 +18,14 @@ Un fichier = une etape = une session (ou demi-session).
 | **2** | 1. Caisse depuis DB | `phase2_etape1_caisse_depuis_db.md` | **FAIT** | pytest : 11 tests (`test_caisse_navigation.py`), PW : a ecrire |
 | **2** | 2. Paiement especes/CB | `phase2_etape2_paiement_especes_cb.md` | **FAIT** | pytest : 7 tests (`test_paiement_especes_cb.py`), PW : a ecrire |
 | **3** | 1. Paiement NFC | `phase3_etape1_paiement_nfc.md` | **FAIT** | pytest : 7 tests (`test_paiement_cashless.py`) |
-| **3** | 2. Retour carte + recharges | `phase3_etape2_retour_carte_recharges.md` | A FAIRE | pytest |
+| **3** | 2. Retour carte + recharges | `phase3_etape2_retour_carte_recharges.md` | **FAIT** | pytest : 13 tests (`test_retour_carte_recharges.py`) |
 | **3** | 3. Stress test | `phase3_etape3_stress_test.md` | A FAIRE | `tests/stress/test_charge_festival.py` |
 | **4** | Commandes + tables | `phase4_commandes_tables.md` | **FAIT** | pytest : 9 tests (`test_commandes_tables.py`), PW : a ecrire |
 | **5** | Cloture + rapports | `phase5_cloture_rapports.md` | **FAIT** | pytest : 7 tests (`test_cloture_caisse.py`), PW : a ecrire |
 | **6** | Migration donnees | `phase6_migration.md` | A FAIRE | dry-run + verify_transactions |
 | **7** | Consolidation | `phase7_consolidation.md` | A FAIRE | manage.py check + verify_transactions |
 
-**Prochaine etape : Phase 3 etape 2** (retour carte + recharges) ou **Phase 6** (migration donnees)
+**Prochaine etape : Phase 3 etape 3** (stress test + verify_transactions) ou ameliorations existant
 
 ## Comment utiliser
 
@@ -72,8 +72,8 @@ Phase 2 — Remplacement des mocks
   phase2_etape2_paiement_especes_cb.md                    [FAIT]
 
 Phase 3 — Integration fedow_core
-  phase3_etape1_paiement_nfc.md
-  phase3_etape2_retour_carte_recharges.md
+  phase3_etape1_paiement_nfc.md                          [FAIT]
+  phase3_etape2_retour_carte_recharges.md                [FAIT]
   phase3_etape3_stress_test.md
 
 Phase 4 — Mode restaurant                            [FAIT]
@@ -131,15 +131,36 @@ Phase 7 — Consolidation
   - `TestPaiementAtomique` (1 test) : UUID inexistant → ignore, aucune ligne
 - **Playwright** : `32-laboutik-caisse-db.spec.ts` (A ECRIRE)
 
-### Phase 3 (A ECRIRE)
-Tests prevus :
-- **pytest** : `test_paiement_cashless.py`
+### Phase 3, etape 1 (FAIT)
+- **pytest** : `test_paiement_cashless.py` — 7 tests :
   - `test_paiement_nfc_atomique` — solde suffisant → Transaction + Token + LigneArticle OK
   - `test_paiement_nfc_rollback_solde_insuffisant` — rien ne change si solde < montant
-  - `test_paiement_nfc_rollback_si_erreur` — exception mid-bloc → tout rollback
-  - `test_retour_carte_vrais_soldes` — Token.value == affichage
-  - `test_recharge_euros` — REFILL + Token credite
-  - `test_recharge_cadeau` — REFILL TNF + Token credite
+  - `test_paiement_nfc_carte_inconnue` — tag inexistant → erreur propre
+  - `test_paiement_nfc_wallet_ephemere` — carte anonyme → debite wallet_ephemere
+  - `test_paiement_nfc_cree_pricesold_productsold` — snapshots crees
+  - `test_paiement_nfc_tenant_sur_transaction` — Transaction.tenant correct
+  - `test_atomicite_si_erreur_lignearticle` — erreur mid-bloc → tout rollback
+
+### Phase 3, etape 2 (FAIT)
+- **pytest** : `test_retour_carte_recharges.py` — 13 tests :
+  - `test_retour_carte_affiche_vrais_soldes` — Token.value TLF/TNF == affichage
+  - `test_retour_carte_affiche_adhesions` — Membership active visible
+  - `test_retour_carte_sans_wallet` — carte orpheline → wallet ephemere auto-cree
+  - `test_recharge_euros` — RE especes → REFILL + Token TLF credite + LigneArticle
+  - `test_recharge_cadeau` — RC especes → REFILL + Token TNF credite
+  - `test_recharge_temps` — TM especes → Token TIM credite
+  - `test_adhesion_cree_membership` — AD NFC → Membership creee (status=LABOUTIK)
+  - `test_adhesion_renouvelle` — AD NFC + membership expiree → deadline recalculee
+  - `test_recharge_sens_correct` — sender=wallet_lieu, receiver=wallet_client
+  - `test_recharge_nfc_rejete` — RE + moyen=nfc → 400 (garde serveur)
+  - `test_panier_mixte_pas_de_nfc` — moyens_paiement → CASHLESS absent si recharge
+  - `test_wallet_ephemere_auto_cree` — carte orpheline → wallet cree + recharge OK
+  - `test_validation_pv_carte_primaire` — PV non autorise → 403
+- **"A TESTER et DOCUMENTER"** : `phase3-etape2-retour-carte-recharges.md`
+
+### Phase 3, etape 3 (A ECRIRE)
+Tests prevus :
+- **Management command** : `verify_transactions` — verifie sequence, soldes, tenant
 - **Stress** : `tests/stress/test_charge_festival.py` — 4 tenants, 2000 transactions concurrentes
 - **Prerequis** : creer `verify_transactions` management command AVANT le stress test
 

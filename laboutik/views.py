@@ -22,6 +22,7 @@ from django_htmx.http import HttpResponseClientRedirect
 from rest_framework import viewsets
 from rest_framework.decorators import action
 
+from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.db.models import Prefetch, Sum, Count, Q
 
@@ -29,6 +30,7 @@ from fedow_core.exceptions import SoldeInsuffisant
 from fedow_core.models import Asset
 from fedow_core.services import TransactionService, WalletService
 
+from AuthBillet.models import Wallet
 from BaseBillet.models import (
     Configuration, LigneArticle, Membership, Price, PriceSold, Product,
     ProductSold, SaleOrigin, PaymentMethod,
@@ -254,6 +256,92 @@ def _charger_carte_primaire(tag_id):
     return carte_primaire_obj, None
 
 
+def _obtenir_ou_creer_wallet(carte):
+    """
+    Retourne le wallet associé à une CarteCashless.
+    Returns the wallet associated with a CarteCashless.
+
+    LOCALISATION : laboutik/views.py
+
+    Priorité / Priority :
+    1. carte.user.wallet (si user et wallet existent)
+    2. carte.wallet_ephemere (si existe)
+    3. Créer un wallet éphémère et l'attacher à la carte
+
+    :param carte: CarteCashless
+    :return: Wallet
+    """
+    # 1. Carte liée à un user qui a déjà un wallet
+    # 1. Card linked to a user who already has a wallet
+    if carte.user and carte.user.wallet:
+        return carte.user.wallet
+
+    # 2. Carte anonyme avec wallet éphémère existant
+    # 2. Anonymous card with existing ephemeral wallet
+    if carte.wallet_ephemere:
+        return carte.wallet_ephemere
+
+    # 3. Pas de wallet → créer un wallet éphémère
+    # 3. No wallet → create an ephemeral wallet
+    wallet = Wallet.objects.create(
+        origin=connection.tenant,
+        name=f"Éphémère - {carte.tag_id}",
+    )
+    carte.wallet_ephemere = wallet
+    carte.save(update_fields=['wallet_ephemere'])
+    logger.info(f"Wallet éphémère créé pour carte {carte.tag_id}: {wallet.uuid}")
+    return wallet
+
+
+def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
+    """
+    Vérifie que la carte primaire a accès au point de vente demandé.
+    Checks that the primary card has access to the requested point of sale.
+
+    LOCALISATION : laboutik/views.py
+
+    :param tag_id_carte_manager: tag_id de la carte primaire (opérateur)
+    :param uuid_pv: UUID du point de vente
+    :raises PermissionDenied: si la carte n'a pas accès au PV
+    """
+    if not tag_id_carte_manager:
+        # Pas de carte primaire (accès admin session) → pas de restriction PV
+        # No primary card (admin session access) → no PV restriction
+        return
+
+    carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
+    if erreur is not None:
+        raise PermissionDenied(erreur)
+
+    pv_autorise = carte_primaire_obj.points_de_vente.filter(uuid=uuid_pv).exists()
+    if not pv_autorise:
+        logger.warning(
+            f"Carte primaire {tag_id_carte_manager} n'a pas accès au PV {uuid_pv}"
+        )
+        raise PermissionDenied(_("Accès non autorisé à ce point de vente"))
+
+
+# Constantes : methodes de caisse qui représentent des recharges cashless
+# Constants: POS methods that represent cashless top-ups
+METHODES_RECHARGE = (Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
+
+
+def _panier_contient_recharges(articles_panier):
+    """
+    Vérifie si le panier contient au moins un article de recharge (RE/RC/TM).
+    Checks if the cart contains at least one top-up article (RE/RC/TM).
+
+    LOCALISATION : laboutik/views.py
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si au moins une recharge, False sinon
+    """
+    for article in articles_panier:
+        if article['product'].methode_caisse in METHODES_RECHARGE:
+            return True
+    return False
+
+
 # --------------------------------------------------------------------------- #
 #  Fonctions utilitaires mock — utilisées uniquement par PaiementViewSet      #
 #  Mock utility functions — used only by PaiementViewSet                      #
@@ -391,6 +479,10 @@ class CaisseViewSet(viewsets.ViewSet):
             pv = PointDeVente.objects.get(uuid=uuid_pv)
         except (PointDeVente.DoesNotExist, ValueError):
             raise Http404(_("Point de vente introuvable"))
+
+        # --- Vérifier que la carte primaire a accès au PV ---
+        # --- Check that the primary card has access to the PV ---
+        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
 
         # --- Charger la carte primaire (opérateur de caisse) ---
         # --- Load the primary card (POS operator) ---
@@ -549,6 +641,11 @@ class CaisseViewSet(viewsets.ViewSet):
 
         datetime_ouverture = serializer.validated_data["datetime_ouverture"]
         uuid_pv = serializer.validated_data["uuid_pv"]
+
+        # --- Vérifier que la carte primaire a accès au PV ---
+        # --- Check that the primary card has access to the PV ---
+        tag_id_carte_manager = request.POST.get("tag_id_cm", "")
+        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
 
         # Charger le point de vente
         # Load the point of sale
@@ -931,24 +1028,29 @@ def _calculer_total_panier_centimes(articles_panier):
     return total_centimes
 
 
-def _determiner_moyens_paiement(point_de_vente):
+def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     """
-    Détermine les moyens de paiement disponibles selon la config du PV.
-    Determines available payment methods based on PV configuration.
+    Détermine les moyens de paiement disponibles selon la config du PV et le panier.
+    Determines available payment methods based on PV config and cart contents.
 
-    NFC (cashless) est toujours proposé si le PV n'est pas en mode cashless pur.
-    Le vrai paiement NFC sera implémenté en Phase 3.
-    NFC (cashless) is always offered unless the PV is in pure cashless mode.
-    Actual NFC payment will be implemented in Phase 3.
+    LOCALISATION : laboutik/views.py
+
+    RÈGLE MÉTIER : si le panier contient des recharges (RE/RC/TM), le paiement NFC
+    est interdit. Une recharge cashless ne peut pas être payée en cashless.
+    BUSINESS RULE: if the cart contains top-ups (RE/RC/TM), NFC payment is forbidden.
+    A cashless top-up cannot be paid with cashless.
 
     :param point_de_vente: instance PointDeVente
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier() (optionnel)
     :return: liste de codes moyens de paiement (ex: ["nfc", "espece", "carte_bancaire"])
     """
     moyens = []
 
-    # NFC toujours proposé (géré en Phase 3)
-    # NFC always offered (handled in Phase 3)
-    moyens.append('nfc')
+    # NFC interdit si le panier contient des recharges
+    # NFC forbidden if the cart contains top-ups
+    panier_a_recharges = articles_panier and _panier_contient_recharges(articles_panier)
+    if not panier_a_recharges:
+        moyens.append('nfc')
 
     if point_de_vente.accepte_especes:
         moyens.append('espece')
@@ -1092,6 +1194,132 @@ def _creer_ou_renouveler_adhesion(user, product, price):
     return nouvelle_adhesion
 
 
+def _executer_recharges(articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client):
+    """
+    Exécute les recharges (RE/RC/TM) contenues dans le panier.
+    Executes top-ups (RE/RC/TM) contained in the cart.
+
+    LOCALISATION : laboutik/views.py
+
+    DOIT être appelée à l'intérieur d'un bloc transaction.atomic().
+    MUST be called inside a transaction.atomic() block.
+
+    Pour chaque type de recharge :
+    - Trouve l'asset correspondant (TLF, TNF, TIM) du tenant courant
+    - Appelle TransactionService.creer_recharge(sender=wallet_lieu, receiver=wallet_client)
+    - Crée les LigneArticle avec la carte et l'asset renseignés
+    For each top-up type:
+    - Finds the corresponding asset (TLF, TNF, TIM) of the current tenant
+    - Calls TransactionService.creer_recharge(sender=venue_wallet, receiver=client_wallet)
+    - Creates LigneArticle with the card and asset filled in
+
+    :param articles_panier: liste de dicts (seulement les articles recharge)
+    :param wallet_client: Wallet du client à créditer
+    :param carte_client: CarteCashless du client
+    :param code_methode_paiement: code du moyen de paiement ("espece", "carte_bancaire", "CH")
+    :param ip_client: adresse IP de la requête
+    :return: None
+    :raises ValueError: si un asset requis n'est pas configuré
+    """
+    tenant_courant = connection.tenant
+
+    # Classifier les recharges par type
+    # Classify top-ups by type
+    articles_re = []  # Recharge euros (TLF)
+    articles_rc = []  # Recharge cadeau (TNF)
+    articles_tm = []  # Recharge temps (TIM)
+
+    for article in articles_panier:
+        methode = article['product'].methode_caisse
+        if methode == Product.RECHARGE_EUROS:
+            articles_re.append(article)
+        elif methode == Product.RECHARGE_CADEAU:
+            articles_rc.append(article)
+        elif methode == Product.RECHARGE_TEMPS:
+            articles_tm.append(article)
+
+    # Recharge euros (RE) → TLF : lieu → client
+    # Euro top-up (RE) → TLF: venue → client
+    if articles_re:
+        asset_tlf = Asset.objects.filter(
+            tenant_origin=tenant_courant,
+            category=Asset.TLF,
+            active=True,
+        ).first()
+        if asset_tlf is None:
+            raise ValueError(_("Monnaie locale non configurée"))
+
+        total_re = _calculer_total_panier_centimes(articles_re)
+        TransactionService.creer_recharge(
+            sender_wallet=asset_tlf.wallet_origin,
+            receiver_wallet=wallet_client,
+            asset=asset_tlf,
+            montant_en_centimes=total_re,
+            tenant=tenant_courant,
+            ip=ip_client,
+        )
+        _creer_lignes_articles(
+            articles_re, code_methode_paiement,
+            asset_uuid=asset_tlf.uuid,
+            carte=carte_client,
+            wallet=wallet_client,
+        )
+
+    # Recharge cadeau (RC) → TNF : lieu → client
+    # Gift top-up (RC) → TNF: venue → client
+    if articles_rc:
+        asset_tnf = Asset.objects.filter(
+            tenant_origin=tenant_courant,
+            category=Asset.TNF,
+            active=True,
+        ).first()
+        if asset_tnf is None:
+            raise ValueError(_("Monnaie cadeau non configurée"))
+
+        total_rc = _calculer_total_panier_centimes(articles_rc)
+        TransactionService.creer_recharge(
+            sender_wallet=asset_tnf.wallet_origin,
+            receiver_wallet=wallet_client,
+            asset=asset_tnf,
+            montant_en_centimes=total_rc,
+            tenant=tenant_courant,
+            ip=ip_client,
+        )
+        _creer_lignes_articles(
+            articles_rc, code_methode_paiement,
+            asset_uuid=asset_tnf.uuid,
+            carte=carte_client,
+            wallet=wallet_client,
+        )
+
+    # Recharge temps (TM) → TIM : lieu → client
+    # Time top-up (TM) → TIM: venue → client
+    if articles_tm:
+        asset_tim = Asset.objects.filter(
+            tenant_origin=tenant_courant,
+            category=Asset.TIM,
+            active=True,
+        ).first()
+        if asset_tim is None:
+            raise ValueError(_("Monnaie temps non configurée"))
+
+        total_tm = _calculer_total_panier_centimes(articles_tm)
+        TransactionService.creer_recharge(
+            sender_wallet=asset_tim.wallet_origin,
+            receiver_wallet=wallet_client,
+            asset=asset_tim,
+            montant_en_centimes=total_tm,
+            tenant=tenant_courant,
+            ip=ip_client,
+        )
+        _creer_lignes_articles(
+            articles_tm, code_methode_paiement,
+            asset_uuid=asset_tim.uuid,
+            carte=carte_client,
+            wallet=wallet_client,
+        )
+
+
 # --------------------------------------------------------------------------- #
 #  PaiementViewSet — HTMX partials du flux de paiement                        #
 # --------------------------------------------------------------------------- #
@@ -1141,6 +1369,11 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
 
+        # --- Vérifier que la carte primaire a accès au PV ---
+        # --- Check that the primary card has access to the PV ---
+        tag_id_carte_manager = request.POST.get("tag_id_cm", "")
+        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
+
         state = _construire_state(point_de_vente)
 
         # --- Extraire les articles du panier depuis le POST ---
@@ -1154,7 +1387,13 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Déterminer les moyens de paiement disponibles ---
         # --- Determine available payment methods ---
-        moyens_paiement_disponibles = _determiner_moyens_paiement(point_de_vente)
+        # Si le panier contient des recharges (RE/RC/TM), NFC est exclu
+        # If the cart contains top-ups (RE/RC/TM), NFC is excluded
+        moyens_paiement_disponibles = _determiner_moyens_paiement(point_de_vente, articles_panier)
+
+        # Si le panier contient des recharges, le template doit demander un scan NFC client
+        # If the cart contains top-ups, the template must request a client NFC scan
+        panier_a_recharges = _panier_contient_recharges(articles_panier)
 
         # Mode gérant : activé si la carte primaire est en mode édition
         # Manager mode: enabled if primary card is in edit mode
@@ -1175,6 +1414,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "mode_gerant": est_mode_gerant,
             "deposit_is_present": consigne_dans_panier,
             "comportement": point_de_vente.comportement,
+            "panier_a_recharges": panier_a_recharges,
         }
         return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
@@ -1241,6 +1481,11 @@ class PaiementViewSet(viewsets.ViewSet):
                 "selector_bt_retour": "#messages",
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+
+        # --- Vérifier que la carte primaire a accès au PV ---
+        # --- Check that the primary card has access to the PV ---
+        tag_id_carte_manager = donnees_paiement.get("tag_id_cm", "")
+        _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
 
         state = _construire_state(point_de_vente)
 
@@ -1328,18 +1573,39 @@ class PaiementViewSet(viewsets.ViewSet):
 
         Pas de vérification côté serveur (le TPE ou le chèque est géré en dehors).
         On crée les LigneArticle en base puis on affiche le succès.
+        Si le panier contient des recharges (RE/RC/TM), on crédite le wallet client.
         No server-side verification (the card terminal or check is handled externally).
         We create LigneArticle records in DB then display success.
+        If the cart contains top-ups (RE/RC/TM), we credit the client wallet.
         """
-        # Créer les lignes articles en base (atomique)
-        # Create article lines in DB (atomic)
-        with db_transaction.atomic():
-            _creer_lignes_articles(articles_panier, moyen_paiement_code)
+        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
 
-        # Le total dans donnees_paiement reste en centimes pour le template
-        # (le filtre divide_by:100 convertit en euros pour l'affichage)
-        # Total in donnees_paiement stays in centimes for the template
-        # (the divide_by:100 filter converts to euros for display)
+        # Séparer articles normaux et recharges
+        # Separate normal articles and top-ups
+        articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
+        articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
+
+        with db_transaction.atomic():
+            # Articles normaux (ventes, adhésions) → juste LigneArticle
+            # Normal articles (sales, memberships) → just LigneArticle
+            if articles_normaux:
+                _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+
+            # Recharges → TransactionService + LigneArticle avec carte et asset
+            # Top-ups → TransactionService + LigneArticle with card and asset
+            if articles_recharge:
+                tag_id_client = request.POST.get("tag_id", "").upper().strip()
+                if not tag_id_client:
+                    raise ValueError(_("Tag NFC client requis pour les recharges"))
+
+                carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+                wallet_client = _obtenir_ou_creer_wallet(carte_client)
+                _executer_recharges(
+                    articles_recharge, wallet_client, carte_client,
+                    code_methode_paiement=moyen_paiement_code,
+                    ip_client=ip_client,
+                )
+
         context = {
             "currency_data": CURRENCY_DATA,
             "payment": donnees_paiement,
@@ -1390,10 +1656,35 @@ class PaiementViewSet(viewsets.ViewSet):
         )
 
         if somme_est_suffisante:
+            ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
+
+            # Séparer articles normaux et recharges
+            # Separate normal articles and top-ups
+            articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
+            articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
+
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
             with db_transaction.atomic():
-                _creer_lignes_articles(articles_panier, moyen_paiement_code)
+                # Articles normaux (ventes, adhésions) → juste LigneArticle
+                # Normal articles (sales, memberships) → just LigneArticle
+                if articles_normaux:
+                    _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+
+                # Recharges → TransactionService + LigneArticle avec carte et asset
+                # Top-ups → TransactionService + LigneArticle with card and asset
+                if articles_recharge:
+                    tag_id_client = request.POST.get("tag_id", "").upper().strip()
+                    if not tag_id_client:
+                        raise ValueError(_("Tag NFC client requis pour les recharges"))
+
+                    carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+                    wallet_client = _obtenir_ou_creer_wallet(carte_client)
+                    _executer_recharges(
+                        articles_recharge, wallet_client, carte_client,
+                        code_methode_paiement=moyen_paiement_code,
+                        ip_client=ip_client,
+                    )
 
             # Calculer la monnaie à rendre (en euros)
             # Calculate change to give back (in euros)
@@ -1448,6 +1739,16 @@ class PaiementViewSet(viewsets.ViewSet):
         6. Bloc atomic : ventes + recharges + adhésions
         7. Succès : afficher nouveau solde
         """
+        # GARDE : le paiement NFC est interdit si le panier contient des recharges
+        # GUARD: NFC payment is forbidden if the cart contains top-ups
+        if _panier_contient_recharges(articles_panier):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Les recharges ne peuvent pas être payées en cashless"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
         tag_id_client = request.POST.get("tag_id", "").upper().strip()
 
         # 1. Chercher la carte client par tag_id
@@ -1462,25 +1763,9 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur)
 
-        # 2. Déterminer le wallet client
-        #    - carte liée à un user → user.wallet
-        #    - carte anonyme → wallet_ephemere
-        # 2. Determine client wallet
-        #    - card linked to a user → user.wallet
-        #    - anonymous card → wallet_ephemere
-        wallet_client = None
-        if carte_client.user and carte_client.user.wallet:
-            wallet_client = carte_client.user.wallet
-        elif carte_client.wallet_ephemere:
-            wallet_client = carte_client.wallet_ephemere
-
-        if wallet_client is None:
-            context_erreur = {
-                "msg_type": "warning",
-                "msg_content": _("Carte non associée à un portefeuille"),
-                "selector_bt_retour": "#messages",
-            }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+        # 2. Déterminer le wallet client (get or create éphémère si besoin)
+        # 2. Determine client wallet (get or create ephemeral if needed)
+        wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
         # 3. Trouver l'asset TLF actif du tenant
         # 3. Find the tenant's active TLF asset
@@ -1501,30 +1786,15 @@ class PaiementViewSet(viewsets.ViewSet):
         wallet_lieu = asset_tlf.wallet_origin
 
         # 4. Classifier les articles par methode_caisse
-        #    VT (vente) + AD (adhésion) débitent le client en TLF
-        #    RE (recharge euros) crédite le client en TLF
-        #    RC (recharge cadeau) crédite le client en TNF
-        #    TM (recharge temps) crédite le client en TIM
+        #    NFC = seulement VT (vente) et AD (adhésion). Les recharges sont rejetées par la garde.
         # 4. Classify articles by methode_caisse
-        #    VT (sale) + AD (membership) debit client in TLF
-        #    RE (euro top-up) credits client in TLF
-        #    RC (gift top-up) credits client in TNF
-        #    TM (time top-up) credits client in TIM
+        #    NFC = only VT (sale) and AD (membership). Top-ups are rejected by the guard.
         articles_vente = []
-        articles_recharge_euros = []
-        articles_recharge_cadeau = []
-        articles_recharge_temps = []
         articles_adhesion = []
 
         for article in articles_panier:
             methode = article['product'].methode_caisse
-            if methode == Product.RECHARGE_EUROS:
-                articles_recharge_euros.append(article)
-            elif methode == Product.RECHARGE_CADEAU:
-                articles_recharge_cadeau.append(article)
-            elif methode == Product.RECHARGE_TEMPS:
-                articles_recharge_temps.append(article)
-            elif methode == Product.ADHESION_POS:
+            if methode == Product.ADHESION_POS:
                 articles_adhesion.append(article)
             else:
                 # VT et tout autre methode → vente classique
@@ -1533,9 +1803,6 @@ class PaiementViewSet(viewsets.ViewSet):
 
         total_vente_centimes = _calculer_total_panier_centimes(articles_vente)
         total_adhesion_centimes = _calculer_total_panier_centimes(articles_adhesion)
-        total_recharge_euros_centimes = _calculer_total_panier_centimes(articles_recharge_euros)
-        total_recharge_cadeau_centimes = _calculer_total_panier_centimes(articles_recharge_cadeau)
-        total_recharge_temps_centimes = _calculer_total_panier_centimes(articles_recharge_temps)
 
         # Le montant qui débite le client = ventes + adhésions
         # Amount that debits the client = sales + memberships
@@ -1563,40 +1830,8 @@ class PaiementViewSet(viewsets.ViewSet):
                 }
                 return render(request, "laboutik/partial/hx_funds_insufficient.html", context_insuffisant)
 
-        # Lookup assets TNF et TIM seulement si nécessaire
-        # Lookup TNF and TIM assets only if needed
-        asset_tnf = None
-        if total_recharge_cadeau_centimes > 0:
-            asset_tnf = Asset.objects.filter(
-                tenant_origin=connection.tenant,
-                category=Asset.TNF,
-                active=True,
-            ).first()
-            if asset_tnf is None:
-                context_erreur = {
-                    "msg_type": "warning",
-                    "msg_content": _("Monnaie cadeau non configurée"),
-                    "selector_bt_retour": "#messages",
-                }
-                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
-
-        asset_tim = None
-        if total_recharge_temps_centimes > 0:
-            asset_tim = Asset.objects.filter(
-                tenant_origin=connection.tenant,
-                category=Asset.TIM,
-                active=True,
-            ).first()
-            if asset_tim is None:
-                context_erreur = {
-                    "msg_type": "warning",
-                    "msg_content": _("Monnaie temps non configurée"),
-                    "selector_bt_retour": "#messages",
-                }
-                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
-
-        # 6. Bloc atomic : ventes + recharges + adhésions
-        # 6. Atomic block: sales + top-ups + memberships
+        # 6. Bloc atomic : ventes + adhésions (pas de recharges en NFC)
+        # 6. Atomic block: sales + memberships (no top-ups in NFC)
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
         tenant_courant = connection.tenant
 
@@ -1621,62 +1856,8 @@ class PaiementViewSet(viewsets.ViewSet):
                         wallet=wallet_client,
                     )
 
-                # b) Recharge euros (RE) — lieu → client en TLF
-                # b) Euro top-up (RE) — venue → client in TLF
-                if total_recharge_euros_centimes > 0:
-                    TransactionService.creer_recharge(
-                        sender_wallet=wallet_lieu,
-                        receiver_wallet=wallet_client,
-                        asset=asset_tlf,
-                        montant_en_centimes=total_recharge_euros_centimes,
-                        tenant=tenant_courant,
-                        ip=ip_client,
-                    )
-                    _creer_lignes_articles(
-                        articles_recharge_euros, moyen_paiement_code,
-                        asset_uuid=asset_tlf.uuid,
-                        carte=carte_client,
-                        wallet=wallet_client,
-                    )
-
-                # c) Recharge cadeau (RC) — lieu → client en TNF
-                # c) Gift top-up (RC) — venue → client in TNF
-                if total_recharge_cadeau_centimes > 0:
-                    TransactionService.creer_recharge(
-                        sender_wallet=asset_tnf.wallet_origin,
-                        receiver_wallet=wallet_client,
-                        asset=asset_tnf,
-                        montant_en_centimes=total_recharge_cadeau_centimes,
-                        tenant=tenant_courant,
-                        ip=ip_client,
-                    )
-                    _creer_lignes_articles(
-                        articles_recharge_cadeau, moyen_paiement_code,
-                        asset_uuid=asset_tnf.uuid,
-                        carte=carte_client,
-                        wallet=wallet_client,
-                    )
-
-                # d) Recharge temps (TM) — lieu → client en TIM
-                # d) Time top-up (TM) — venue → client in TIM
-                if total_recharge_temps_centimes > 0:
-                    TransactionService.creer_recharge(
-                        sender_wallet=asset_tim.wallet_origin,
-                        receiver_wallet=wallet_client,
-                        asset=asset_tim,
-                        montant_en_centimes=total_recharge_temps_centimes,
-                        tenant=tenant_courant,
-                        ip=ip_client,
-                    )
-                    _creer_lignes_articles(
-                        articles_recharge_temps, moyen_paiement_code,
-                        asset_uuid=asset_tim.uuid,
-                        carte=carte_client,
-                        wallet=wallet_client,
-                    )
-
-                # e) Adhésions (AD) — débit tokens TLF + création Membership
-                # e) Memberships (AD) — debit TLF tokens + create Membership
+                # b) Adhésions (AD) — débit tokens TLF + création Membership
+                # b) Memberships (AD) — debit TLF tokens + create Membership
                 if total_adhesion_centimes > 0:
                     TransactionService.creer_vente(
                         sender_wallet=wallet_client,
@@ -1796,26 +1977,9 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_card_feedback.html", context)
 
-        # 2. Déterminer le wallet
-        # 2. Determine the wallet
-        wallet = None
-        if carte.user and carte.user.wallet:
-            wallet = carte.user.wallet
-        elif carte.wallet_ephemere:
-            wallet = carte.wallet_ephemere
-
-        if wallet is None:
-            context = {
-                "card": {"email": carte.user.email if carte.user else None},
-                "total_monnaie": 0,
-                "tokens": [],
-                "adhesions": [],
-                "tag_id": tag_id_scanne,
-                "background": "--error",
-                "state": state,
-                "erreur": _("Carte non associée à un portefeuille"),
-            }
-            return render(request, "laboutik/partial/hx_card_feedback.html", context)
+        # 2. Déterminer le wallet (get or create éphémère si besoin)
+        # 2. Determine the wallet (get or create ephemeral if needed)
+        wallet = _obtenir_ou_creer_wallet(carte)
 
         # 3. Vrais soldes depuis fedow_core
         # 3. Real balances from fedow_core
