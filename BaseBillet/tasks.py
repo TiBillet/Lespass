@@ -886,7 +886,7 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
             },
             data=json_data,
             verify=bool(not settings.DEBUG),
-            timeout=2,
+            timeout=10,
         )
         if response.status_code == 200:
             logger.info("send_stripe_bank_deposit_to_laboutik sended_to_laboutik = True")
@@ -1595,7 +1595,7 @@ def send_to_ghost_email(email, name=None):
         headers = {'Authorization': f'Ghost {token}'}
 
         # Récupérer la liste des membres de l'instance Ghost
-        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
+        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers, timeout=10)
 
         # Vérifier que la réponse de l'API est valide
         if response.ok:
@@ -1618,7 +1618,7 @@ def send_to_ghost_email(email, name=None):
 
                 # Ajouter le nouveau membre à l'instance Ghost
                 response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
-                                         timeout=2)
+                                         timeout=10)
 
                 # Vérifier que la réponse de l'API est valide
                 if response.status_code == 201:
@@ -1630,12 +1630,20 @@ def send_to_ghost_email(email, name=None):
                     # Idempotent case: member already exists in Ghost, treat as success
                     logger.info(f"Le membre {email} existe déjà (détection via 422), aucune action nécessaire.")
                 else:
-                    logger.warning(f"Erreur lors de la création du nouveau membre : {response.text}")
+                    logger.warning(
+                        f"Erreur lors de la création du nouveau membre Ghost : "
+                        f"status={response.status_code}, email={email}, "
+                        f"response={response.text[:500] if response.text else '(vide)'}"
+                    )
             else:
                 # Afficher la liste des membres
                 logger.info(f"Le membre {email} existe déja dans : {members}")
         else:
-            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
+            logger.error(
+                f"Erreur lors de la récupération des membres Ghost : "
+                f"status={response.status_code}, url={ghost_url}, email={email}, "
+                f"response={response.text[:500] if response.text else '(vide)'}"
+            )
 
         # On met à jour les logs pour debug
         try:
