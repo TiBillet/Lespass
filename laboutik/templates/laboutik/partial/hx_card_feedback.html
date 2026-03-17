@@ -2,54 +2,56 @@
 <!--
 ECRAN RETOUR CARTE — affiche les informations de la carte NFC scannee
 Type de carte (anonyme ou avec nom), soldes par type d'asset, adhesions actives.
-Les icones par type d'asset aident le caissier a identifier rapidement le contenu.
 / Card feedback screen — shows NFC card info: type, balances per asset, active memberships.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
-
-FLUX :
-1. L'utilisateur scanne une carte NFC (CHECK CARTE)
-2. Le serveur lit la carte et renvoie ce partial
-3. Le caissier voit le solde et les adhesions du client
 -->
 
-<div id="messages" style="background-color: var({{ background }});" aria-live="polite">
-  <div class="BF-col-uniforme check-carte-ok">
+<div id="messages" aria-live="polite">
+
+  <!-- EN-TETE CARTE / CARD HEADER -->
+  <div class="cf-card-header" style="background-color: var({{ background }});">
     {% if erreur %}
-    <div class="f1r test-return-card-type" data-testid="retour-carte-erreur">
+    <div class="cf-card-type" data-testid="retour-carte-erreur">
+      <i class="fas fa-exclamation-triangle cf-card-type-icon" aria-hidden="true"></i>
       <span>{{ erreur }}</span>
     </div>
+
     {% elif not card.email %}
-    <!-- carte anonyme / anonymous card -->
-    <i class="fas fa-id-card card-icon" aria-hidden="true"></i>
-    <div class="f1r test-return-card-type" data-testid="retour-carte-anonyme">
-      <i class="fas fa-user-secret" aria-hidden="true"></i>
+    <div class="cf-card-type" data-testid="retour-carte-anonyme">
+      <i class="fas fa-user-secret cf-card-type-icon" aria-hidden="true"></i>
       <span>{% trans "Carte anonyme" %}</span>
     </div>
+
     {% else %}
-    <!-- carte avec nom (email connu) / named card (email known) -->
-    <i class="fas fa-id-card card-icon" aria-hidden="true"></i>
-    <div class="f1r test-return-card-type" data-testid="retour-carte-nom">
+    <div class="cf-card-type" data-testid="retour-carte-nom">
+      <i class="fas fa-user-check cf-card-type-icon" aria-hidden="true"></i>
       <span>{% trans "Carte avec nom" %}</span>
     </div>
-    <div class="card-email" data-testid="retour-carte-email">{{ card.email }}</div>
+    <div class="cf-card-email" data-testid="retour-carte-email">{{ card.email }}</div>
+    {% endif %}
+
+    {% if not erreur and state.place.name %}
+    <div class="cf-card-place">
+      <i class="fas fa-map-marker-alt" aria-hidden="true"></i> {{ state.place.name }}
+    </div>
     {% endif %}
   </div>
 
   {% if not erreur %}
-  <!-- soldes par type d'asset / balances per asset type -->
-  <div class="return-container" data-testid="retour-carte-soldes">
-    <div class="return-header">
-      <div>{% trans "Tirelire" %}</div>
-      <div class="test-return-total-card" title="total" style="font-variant-numeric: tabular-nums;">
-        {{ total_monnaie|floatformat:2 }}
-      </div>
+  <!-- CONTENU SCROLLABLE / SCROLLABLE CONTENT -->
+  <div class="cf-content">
+
+    <!-- SOLDE TOTAL / TOTAL BALANCE -->
+    <div class="cf-total" data-testid="retour-carte-soldes">
+      <div class="cf-total-label">{% trans "Solde total" %}</div>
+      <div class="cf-total-value test-return-total-card">{{ total_monnaie|floatformat:2 }} &euro;</div>
     </div>
 
+    <!-- DETAIL PAR TOKEN / BALANCE PER TOKEN -->
     {% for token in tokens %}
-    <div class="return-item" data-testid="retour-carte-solde-{{ forloop.counter }}">
-      <div class="return-item-icon">
-        <!-- icone selon la categorie d'asset / icon per asset category -->
+    <div class="cf-token-row" data-testid="retour-carte-solde-{{ forloop.counter }}">
+      <div class="cf-token-icon">
         {% if token.asset_category == "TLF" %}
         <i class="fas fa-euro-sign" aria-hidden="true"></i>
         {% elif token.asset_category == "TNF" %}
@@ -60,46 +62,50 @@ FLUX :
         <i class="fas fa-coins" aria-hidden="true"></i>
         {% endif %}
       </div>
-      <div class="test-return-monnaie-item-value{{ forloop.counter }}" style="font-variant-numeric: tabular-nums;">{{ token.value_euros|floatformat:2 }}</div>
-      <div class="test-return-monnaie-item-name{{ forloop.counter }}">
-        {{ token.asset_name }}
+      <div class="cf-token-info">
+        <div class="cf-token-name test-return-monnaie-item-name{{ forloop.counter }}">{{ token.asset_name }}</div>
+        {% if token.provenance %}
+        <div class="cf-token-place test-return-monnaie-item-place{{ forloop.counter }}">{{ token.provenance }}</div>
+        {% endif %}
       </div>
-      {% if state.place.name %}
-      <div class="test-return-monnaie-item-place{{ forloop.counter }}">
-        <div>{% trans "Provenance" %}</div>
-        <div>{{ state.place.name }}</div>
-      </div>
-      {% endif %}
+      <div class="cf-token-value test-return-monnaie-item-value{{ forloop.counter }}">{{ token.value_euros|floatformat:2 }}</div>
     </div>
     {% empty %}
-    <div class="return-item">
-      <div>{% trans "Aucun solde" %}</div>
+    <div class="cf-token-row cf-token-empty">
+      <div class="cf-token-icon"><i class="fas fa-wallet" aria-hidden="true"></i></div>
+      <div class="cf-token-info"><div class="cf-token-name">{% trans "Aucun solde" %}</div></div>
+      <div class="cf-token-value">0.00</div>
     </div>
     {% endfor %}
-  </div>
 
-  <!-- adhesions actives / active memberships -->
-  {% if adhesions %}
-  <div class="return-container" data-testid="retour-carte-adhesions">
-    <div class="return-header">
-      <div><i class="fas fa-id-badge" aria-hidden="true"></i> {% trans "Adhesions actives" %}</div>
+    <!-- ADHESIONS ACTIVES / ACTIVE MEMBERSHIPS -->
+    {% if adhesions %}
+    <div class="cf-section-title">
+      <i class="fas fa-id-badge" aria-hidden="true"></i> {% trans "Adhesions actives" %}
     </div>
     {% for adhesion in adhesions %}
-    <div class="return-item" data-testid="retour-carte-adhesion-{{ forloop.counter }}">
-      <div>{{ adhesion.price.product.name }}</div>
-      {% if adhesion.deadline %}
-      <div style="font-variant-numeric: tabular-nums;">{{ adhesion.deadline }}</div>
-      {% endif %}
+    <div class="cf-adhesion-row" data-testid="retour-carte-adhesion-{{ forloop.counter }}">
+      <div class="cf-adhesion-icon">
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
+      </div>
+      <div class="cf-adhesion-info">
+        <div class="cf-adhesion-name">{{ adhesion.price.product.name }}</div>
+        {% if adhesion.deadline %}
+        <div class="cf-adhesion-deadline">{% trans "Expire" %} {{ adhesion.deadline|date:"d/m/Y" }}</div>
+        {% endif %}
+      </div>
     </div>
     {% endfor %}
+    {% endif %}
+
   </div>
   {% endif %}
-  {% endif %}
 
-  <!-- bouton retour / back button -->
+  <!-- BOUTON RETOUR / BACK BUTTON -->
   <c-bt.return selector="#messages" />
 
   <style>
+    /* Conteneur principal plein ecran / Full-screen container */
     #messages {
       position: absolute;
       left: 0;
@@ -108,47 +114,165 @@ FLUX :
       height: 100%;
       display: flex;
       flex-direction: column;
-      justify-content: space-evenly;
-      align-items: center;
-      background-color: var(--noir01);
+      background-color: var(--noir03);
       color: var(--blanc01);
     }
 
-    .card-icon {
-      font-size: 3rem;
-      margin-bottom: 0.5rem;
+    /* En-tete avec couleur de statut / Status-colored header */
+    .cf-card-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 20px 16px 16px;
+      flex-shrink: 0;
     }
 
-    .card-email {
+    .cf-card-type {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .cf-card-type-icon {
+      font-size: 1.6rem;
+    }
+
+    .cf-card-email {
       font-size: 1rem;
-      opacity: 0.85;
-      margin-top: 0.25rem;
+      opacity: 0.9;
     }
 
-    .return-container {
-      width: 70%;
-      font-size: 1.2rem;
+    .cf-card-place {
+      font-size: 0.85rem;
+      opacity: 0.75;
+      margin-top: 2px;
     }
 
-    .return-header {
-      width: 100%;
-      display: grid;
-      grid-template-columns: 70% 30%;
+    /* Zone scrollable / Scrollable area */
+    .cf-content {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: none;
+      padding: 0 16px 16px;
+    }
+
+    /* Solde total / Total balance */
+    .cf-total {
+      display: flex;
       justify-content: space-between;
-      align-items: center;
-      border-bottom: 2px solid;
-      margin-bottom: .5rem;
+      align-items: baseline;
+      padding: 16px 12px;
+      margin: 12px 0;
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.08);
     }
 
-    .return-item {
-      width: 100%;
+    .cf-total-label {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .cf-total-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Ligne token / Token row */
+    .cf-token-row {
       display: grid;
-      grid-template-columns: 2rem auto 2fr 1fr;
+      grid-template-columns: 40px 1fr auto;
       align-items: center;
+      min-height: 48px;
+      padding: 8px 12px;
+      margin: 4px 0;
+      border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
-    .return-item-icon {
-      text-align: center;
+    .cf-token-empty {
+      opacity: 0.5;
+    }
+
+    .cf-token-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background-color: rgba(255, 255, 255, 0.1);
+      font-size: 0.9rem;
+    }
+
+    .cf-token-name {
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+
+    .cf-token-place {
+      font-size: 0.75rem;
+      color: var(--gris07);
+    }
+
+    .cf-token-value {
+      font-size: 1.2rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    /* Titre de section / Section title */
+    .cf-section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--gris07);
+      padding: 16px 12px 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      margin-top: 8px;
+    }
+
+    /* Ligne adhesion / Membership row */
+    .cf-adhesion-row {
+      display: grid;
+      grid-template-columns: 40px 1fr;
+      align-items: center;
+      min-height: 48px;
+      padding: 8px 12px;
+      margin: 4px 0;
+      border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.04);
+    }
+
+    .cf-adhesion-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--vert02);
+      font-size: 1.1rem;
+    }
+
+    .cf-adhesion-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+
+    .cf-adhesion-deadline {
+      font-size: 0.8rem;
+      color: var(--gris07);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Bouton retour centre / Centered back button */
+    #messages > .bt-basic-container {
+      align-self: center;
     }
   </style>
 </div>

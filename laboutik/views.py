@@ -1996,6 +1996,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 'asset_name': t.asset.name,
                 'asset_category': t.asset.category,
                 'value_euros': t.value / 100,
+                'provenance': t.asset.tenant_origin.name,
             })
             total_centimes += t.value
             if t.asset.category == Asset.TLF:

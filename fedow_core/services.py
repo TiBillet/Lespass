@@ -190,7 +190,7 @@ class WalletService:
         """
         tous_les_tokens = Token.objects.filter(
             wallet=wallet,
-        ).select_related('asset')
+        ).select_related('asset', 'asset__tenant_origin')
 
         return tous_les_tokens
 
@@ -424,9 +424,13 @@ class TransactionService:
         with transaction.atomic():
 
             # --- Debit du sender ---
-            # Certaines actions ne debitent pas (FIRST, CREATION).
-            # Some actions don't debit (FIRST, CREATION).
-            actions_sans_debit = [Transaction.FIRST, Transaction.CREATION]
+            # Certaines actions ne debitent pas le sender :
+            # - FIRST / CREATION : genesis, pas de debit
+            # - REFILL : le lieu emet des tokens, il ne depense pas les siens
+            # Some actions don't debit the sender:
+            # - FIRST / CREATION: genesis, no debit
+            # - REFILL: the venue issues tokens, it doesn't spend its own
+            actions_sans_debit = [Transaction.FIRST, Transaction.CREATION, Transaction.REFILL]
             action_necessite_debit = action not in actions_sans_debit
 
             if action_necessite_debit:
