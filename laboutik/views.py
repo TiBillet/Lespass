@@ -122,6 +122,7 @@ def _construire_state(point_de_vente=None, carte_primaire_obj=None):
                 {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
                 {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
                 {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT4, "name": _("Carte inconnue")},
             ],
         },
     }
