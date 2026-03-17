@@ -580,4 +580,31 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write(f"  Carte client existante : {tag_id_client}")
 
+            # Carte client 3 "jetable" — remise a zero a chaque run en mode DEBUG.
+            # Utilisee par les tests Playwright pour avoir une carte propre a chaque test.
+            # En mode DEBUG, son user et son wallet_ephemere sont supprimes.
+            # / Client card 3 "disposable" — reset on each run in DEBUG mode.
+            # Used by Playwright tests to have a clean card for each test.
+            # In DEBUG mode, its user and wallet_ephemere are removed.
+            tag_id_client3 = getattr(settings, "DEMO_TAGID_CLIENT3", "D74B1B5D")
+            carte_client3, created_client3 = CarteCashless.objects.get_or_create(
+                tag_id=tag_id_client3,
+                defaults={
+                    "uuid": uuid_module.uuid4(),
+                    "number": tag_id_client3,
+                    "detail": detail_test,
+                },
+            )
+            if created_client3:
+                self.stdout.write(f"  Carte client 3 (jetable) creee : {tag_id_client3}")
+            else:
+                self.stdout.write(f"  Carte client 3 (jetable) existante : {tag_id_client3}")
+
+            # Reset de la carte 3 en mode DEBUG
+            # / Reset card 3 in DEBUG mode
+            if settings.DEBUG:
+                from laboutik.utils.test_helpers import reset_carte
+                reset_carte(tag_id_client3)
+                self.stdout.write(f"  Carte 3 remise a zero (DEBUG=True)")
+
             self.stdout.write(self.style.SUCCESS("Donnees de test POS creees avec succes."))

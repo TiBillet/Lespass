@@ -27,6 +27,8 @@ from django.utils import timezone
 from fedow_core.exceptions import SoldeInsuffisant
 from fedow_core.models import Asset, Federation, Token, Transaction
 
+from AuthBillet.models import Wallet
+
 logger = logging.getLogger(__name__)
 
 
@@ -268,6 +270,131 @@ class WalletService:
         token_verrouille.save(update_fields=['value'])
 
         return token_verrouille
+
+    @staticmethod
+    def fusionner_wallet_ephemere(carte, user, tenant, ip="0.0.0.0"):
+        """
+        Fusionne le wallet_ephemere d'une carte vers le wallet du user.
+        Reproduit le mecanisme de LinkWalletCardQrCode.fusion()
+        de l'ancien Fedow (V1), mais en acces DB direct (pas de HTTP).
+        / Merges a card's wallet_ephemere into the user's wallet.
+        Reproduces LinkWalletCardQrCode.fusion() from the old Fedow (V1),
+        but with direct DB access (no HTTP).
+
+        LOCALISATION : fedow_core/services.py
+
+        DOIT etre appelee dans un bloc transaction.atomic() externe.
+        Le caller (laboutik/views.py:_creer_adhesions_depuis_panier) fournit
+        ce bloc atomic.
+        / MUST be called inside an outer transaction.atomic() block.
+        The caller (laboutik/views.py:_creer_adhesions_depuis_panier) provides
+        that atomic block.
+
+        FLUX :
+        1. Si pas de wallet_ephemere → juste poser carte.user et retourner
+        2. Creer user.wallet si inexistant (Wallet + FK sur TibilletUser)
+        3. Pour chaque Token du wallet_ephemere avec value > 0 :
+           → TransactionService.creer(action=FUSION, sender=eph, receiver=user)
+           → Debit wallet_ephemere + credit user.wallet (via select_for_update)
+        4. carte.user = user, carte.wallet_ephemere = None
+
+        COEXISTENCE V1/V2 :
+        Cette methode ne touche que fedow_core (SHARED_APPS) et CarteCashless.
+        Les anciens tenants (V1, server_cashless renseigne) ne passent jamais
+        par ce code — ils utilisent fedow_connect/fedow_api.py → serveur Fedow
+        distant. Les deux systemes de tokens sont disjoints (BD locale vs BD distante).
+        Le seul etat partage est CarteCashless.user, mais V1 ne l'utilise pas
+        pour les operations cashless (elle passe par le serveur Fedow distant).
+        / This method only touches fedow_core (SHARED_APPS) and CarteCashless.
+        Old tenants (V1, server_cashless set) never call this code — they use
+        fedow_connect/fedow_api.py → remote Fedow server. The two token systems
+        are disjoint (local DB vs remote DB). The only shared state is
+        CarteCashless.user, but V1 doesn't use it for cashless operations.
+
+        :param carte: CarteCashless (la carte NFC scannee / the scanned NFC card)
+        :param user: TibilletUser (le membre identifie / the identified member)
+        :param tenant: Client (le tenant courant / the current tenant)
+        :param ip: str (adresse IP de la requete / request IP address)
+        """
+        # --- Garde : pas de wallet_ephemere → rien a fusionner ---
+        # On pose quand meme le lien carte → user si ce n'est pas deja fait.
+        # / Guard: no wallet_ephemere → nothing to merge.
+        # We still set the card → user link if not already done.
+        carte_a_un_wallet_ephemere = carte.wallet_ephemere is not None
+        if not carte_a_un_wallet_ephemere:
+            carte_user_est_deja_correct = (carte.user == user)
+            if not carte_user_est_deja_correct:
+                carte.user = user
+                carte.save(update_fields=['user'])
+            return
+
+        wallet_source = carte.wallet_ephemere
+
+        # --- Creer user.wallet si inexistant ---
+        # Certains users viennent d'etre crees par get_or_create_user()
+        # et n'ont pas encore de wallet.
+        # / Some users were just created by get_or_create_user()
+        # and don't have a wallet yet.
+        user_a_deja_un_wallet = user.wallet is not None
+        if not user_a_deja_un_wallet:
+            nouveau_wallet = Wallet.objects.create(
+                origin=tenant,
+                name=f"Wallet {user.email}",
+            )
+            user.wallet = nouveau_wallet
+            user.save(update_fields=['wallet'])
+
+        wallet_cible = user.wallet
+
+        # --- Garde defensive : source == cible ---
+        # Cas improbable mais possible si quelqu'un a manuellement
+        # pointe wallet_ephemere vers le meme wallet que user.wallet.
+        # / Unlikely but possible if someone manually pointed
+        # wallet_ephemere to the same wallet as user.wallet.
+        wallet_source_est_le_meme_que_cible = (wallet_source.pk == wallet_cible.pk)
+        if wallet_source_est_le_meme_que_cible:
+            carte.user = user
+            carte.wallet_ephemere = None
+            carte.save(update_fields=['user', 'wallet_ephemere'])
+            return
+
+        # --- Transferer chaque Token avec solde > 0 ---
+        # Un wallet ephemere peut avoir plusieurs assets (TLF, TNF, TIM, FID...).
+        # On transfere chaque asset separement, avec une Transaction FUSION
+        # pour l'audit trail.
+        # / An ephemeral wallet can have multiple assets (TLF, TNF, TIM, FID...).
+        # We transfer each asset separately, with a FUSION Transaction
+        # for the audit trail.
+        tokens_avec_solde = Token.objects.filter(
+            wallet=wallet_source,
+            value__gt=0,
+        )
+        for token_a_transferer in tokens_avec_solde:
+            TransactionService.creer(
+                sender=wallet_source,
+                receiver=wallet_cible,
+                asset=token_a_transferer.asset,
+                montant_en_centimes=token_a_transferer.value,
+                action=Transaction.FUSION,
+                tenant=tenant,
+                card=carte,
+                ip=ip,
+                comment=f"Fusion ephemere vers {user.email}",
+            )
+
+        # --- Poser le lien carte → user et detacher le wallet ephemere ---
+        # Le wallet_source reste en base pour audit (on ne le supprime pas).
+        # Il est juste detache de la carte.
+        # / wallet_source stays in DB for audit (we don't delete it).
+        # It's just detached from the card.
+        carte.user = user
+        carte.wallet_ephemere = None
+        carte.save(update_fields=['user', 'wallet_ephemere'])
+
+        logger.info(
+            f"Fusion wallet ephemere terminee pour carte {carte.tag_id} "
+            f"vers user {user.email} (tenant={tenant.schema_name})"
+        )
 
     @staticmethod
     def debiter(wallet, asset, montant_en_centimes):

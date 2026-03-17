@@ -15,7 +15,7 @@ FLUX :
 3. Clic sur un bouton → hx_confirm_payment.html ou lecture NFC
 -->
 
-<div id="messages" class="BF-col" data-testid="paiement-moyens" aria-live="polite">
+<div class="BF-col" data-testid="paiement-moyens" aria-live="polite">
   <!-- consignes / deposit refund -->
   {% if deposit_is_present %}
    <h1 class="message-title">{% translate "Rembourser la consigne par :" %}</h1>
@@ -72,10 +72,12 @@ FLUX :
   <h1 class="message-title">{% translate "Adhesion" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}</h1>
 
   {# --- CASHLESS : scan NFC direct (la carte identifie le membre) --- #}
+  {# Meme pattern que le CASHLESS normal : hx-target="#confirm" hx-swap="outerHTML" #}
+  {# / Same pattern as normal CASHLESS: hx-target="#confirm" hx-swap="outerHTML" #}
   {% if 'nfc' in moyens_paiement %}
   <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" bg="--bleu03"
     hx-get="{% url 'laboutik-paiement-lire_nfc_adhesion' %}?method=nfc"
-    hx-target="#messages" hx-trigger="click" hx-swap="innerHTML"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')"
     data-testid="adhesion-btn-nfc" />
   {% endif %}

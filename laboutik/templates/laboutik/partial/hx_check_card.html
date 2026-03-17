@@ -1,8 +1,23 @@
 {% load static i18n %}
 
-<c-read-nfc id="messages" selector="#messages" event-manage-form="checkCardManageForm" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
+<!--
+ECRAN ATTENTE LECTURE CARTE NFC (check carte)
+/ NFC card read waiting screen (card check)
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_check_card.html
+
+Ce partial est injecte dans #messages via innerHTML (pas outerHTML).
+On ne met PAS id="messages" sur le composant read-nfc car l'element
+#messages existe deja dans base.html et porte un listener 'tarifSelection'
+(tarif.js) qu'on ne doit pas detruire.
+/ This partial is injected into #messages via innerHTML (not outerHTML).
+We do NOT set id="messages" on the read-nfc component because the #messages
+element already exists in base.html and carries a 'tarifSelection' listener
+(tarif.js) that must not be destroyed.
+-->
+<c-read-nfc selector="#messages" event-manage-form="checkCardManageForm" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
   <form id="form-check-nfc" class="hide" hx-post="{% url 'laboutik-paiement-retour_carte' %}" hx-trigger="" hx-target="#messages"
-    hx-swap="outerHTML">
+    hx-swap="innerHTML">
     {% csrf_token %}
     <input id="nfc-tag-id" name="tag_id" />
   </form>

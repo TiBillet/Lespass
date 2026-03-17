@@ -12,11 +12,19 @@
 			<span>{% translate "Panier vide" %}</span>
 		</div>
 	</div>
+	<!-- IMPORTANT — innerHTML et non outerHTML sur #messages :
+	L'element #messages porte un listener 'tarifSelection' (tarif.js)
+	attache au DOMContentLoaded. outerHTML remplacerait l'element DOM
+	et le listener serait perdu (les articles multi-tarif ne repondent plus).
+	/ IMPORTANT — innerHTML not outerHTML on #messages:
+	The #messages element has a 'tarifSelection' listener (tarif.js)
+	attached on DOMContentLoaded. outerHTML would replace the DOM element
+	and lose the listener (multi-rate articles would stop responding). -->
 	<form id="addition-form" class="hide"
 		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
 		hx-trigger="validerPaiement"
 		hx-target="#messages"
-		hx-swap="outerHTML"
+		hx-swap="innerHTML"
 		hx-on::after-request="hideAndEmptyElement('#confirm')"
 		data-url-reset="{% url 'laboutik-paiement-moyens_paiement' %}">
 		<input type="text" name="id_table" value="{{ id_table }}" />

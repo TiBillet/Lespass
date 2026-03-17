@@ -230,6 +230,51 @@ Le tenant ne peut pas activer V2 tant que la migration n'est pas faite.
 - Plus de double-chemin `if use_fedow_core` dans le nouveau code laboutik :
   les vues laboutik utilisent TOUJOURS fedow_core (elles sont nouvelles)
 
+### 3.3 Lien carte NFC ↔ user — 3 etats, compatibilite V1/V2
+
+Le modele `CarteCashless` (SHARED_APPS, `QrcodeCashless/models.py`) est le meme
+pour V1 et V2. On ne change pas le modele, on utilise ses champs existants.
+
+```
+CarteCashless
+├── tag_id      CharField(8)           ex: "52BE6543"
+├── user        FK(TibilletUser, null) identite du porteur (ou None si anonyme)
+└── wallet_ephemere  OneToOne(Wallet, null)  wallet temporaire avant identification
+```
+
+**3 etats possibles d'une carte :**
+
+| Etat | `user` | `wallet_ephemere` | Signification |
+|------|--------|--------------------|---------------|
+| Anonyme neuve | `None` | `None` | Jamais utilisee |
+| Anonyme avec solde | `None` | `Wallet(...)` | Rechargee mais pas identifiee |
+| Identifiee | `TibilletUser(...)` | `None` | Le user possede son propre `user.wallet` |
+
+**En V1** (anciens tenants, `server_cashless` renseigne) : le lien carte↔user
+est gere cote serveur Fedow distant via `fedow_connect/fedow_api.py`.
+`NFCcardFedow.linkwallet_cardqrcode()` appelle le serveur HTTP qui associe la carte.
+
+**En V2** (nouveaux tenants, `server_cashless IS NULL`) : pas d'appel HTTP.
+Le lien carte↔user se fait directement en DB :
+- `CarteCashless.user = tibilletuser` (FK directe)
+- `tibilletuser.wallet` (FK sur Wallet dans AuthBillet)
+
+**Qui pose le lien user ↔ carte (V2) :**
+1. L'admin via l'admin Django (CarteCashless dans Unfold)
+2. `create_test_pos_data` pour les cartes de test
+3. Future feature "associer carte" sur la caisse POS
+4. Future feature "reset carte" : `reset_carte()` dans `laboutik/utils/test_helpers.py` detache le user
+
+**Le flow adhesion POS fusionne wallet_ephemere → user.wallet (comme V1) :**
+Quand une carte NFC est scannee pour une adhesion, `_creer_adhesions_depuis_panier()` :
+1. Identifie le user (via `carte.user` ou `get_or_create_user(email)`)
+2. Appelle `WalletService.fusionner_wallet_ephemere(carte, user, tenant)` qui :
+   - Cree `user.wallet` si inexistant
+   - Pour chaque Token du `wallet_ephemere` avec value > 0 → `Transaction(FUSION)`
+   - Pose `carte.user = user` et `carte.wallet_ephemere = None`
+3. Reproduit `LinkWalletCardQrCode.fusion()` de l'ancien Fedow (V1)
+4. Audit trail via `Transaction.FUSION` en base
+
 ---
 
 # PARTIE B — FEDOW : INTERNALISATION

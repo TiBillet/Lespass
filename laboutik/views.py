@@ -1320,22 +1320,23 @@ def _creer_ou_renouveler_adhesion(user, product, price, contribution_value=None,
     return nouvelle_adhesion
 
 
-def _creer_adhesions_depuis_panier(request, articles_panier):
+def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=None):
     """
-    Crée les Memberships pour les articles adhesion du panier (CB/espèces).
+    Cree les Memberships pour les articles adhesion du panier (CB/especes).
+    Rattache chaque Membership a sa LigneArticle correspondante (FK membership).
     Creates Memberships for membership articles in the cart (card/cash).
+    Links each Membership to its corresponding LigneArticle (FK membership).
 
     LOCALISATION : laboutik/views.py
 
     Identification du client par :
     1. Scan NFC (tag_id dans le POST) → carte.user
-    2. Formulaire email/nom/prénom (email_adhesion dans le POST) → get_or_create_user
-
-    Si aucune identification, les adhesions ne sont PAS créées (seulement la LigneArticle).
-    If no identification, memberships are NOT created (only LigneArticle).
+    2. Formulaire email/nom/prenom (email_adhesion dans le POST) → get_or_create_user
 
     :param request: HttpRequest (pour lire le POST)
-    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
+    :param lignes_articles: liste de LigneArticle creees par _creer_lignes_articles() (pour rattacher membership)
+    :return: liste de Membership creees
     """
     from decimal import Decimal
 
@@ -1344,9 +1345,10 @@ def _creer_adhesions_depuis_panier(request, articles_panier):
         if a['product'].categorie_article == Product.ADHESION
     ]
     if not articles_adhesion:
-        return
+        return []
 
     user_adhesion = None
+    carte_client = None
 
     # Option 1 : identification par scan NFC
     # / Option 1: identification by NFC scan
@@ -1356,22 +1358,41 @@ def _creer_adhesions_depuis_panier(request, articles_panier):
             carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
             user_adhesion = carte_client.user
         except CarteCashless.DoesNotExist:
-            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhésion")
+            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhesion")
 
-    # Option 2 : identification par formulaire email/nom/prénom
+    # Option 2 : identification par formulaire email/nom/prenom
     # / Option 2: identification by email/name form
     email_client = request.POST.get("email_adhesion", "").strip().lower()
     if email_client and user_adhesion is None:
         user_adhesion = get_or_create_user(email_client, send_mail=False)
 
     if user_adhesion is None:
-        # REFUS : pas d'identification → pas d'adhésion (validation serveur obligatoire)
+        # REFUS : pas d'identification → pas d'adhesion (validation serveur obligatoire)
         # REJECT: no identification → no membership (mandatory server-side validation)
         raise ValueError(_("Identification du membre obligatoire pour les adhesions"))
+
+    # Fusion wallet ephemere → wallet user (si carte NFC scannee)
+    # / Merge ephemeral wallet → user wallet (if NFC card was scanned)
+    if tag_id_client and carte_client:
+        WalletService.fusionner_wallet_ephemere(
+            carte=carte_client,
+            user=user_adhesion,
+            tenant=connection.tenant,
+            ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+        )
 
     prenom = request.POST.get("prenom_adhesion", "").strip()
     nom = request.POST.get("nom_adhesion", "").strip()
 
+    # Construire un index LigneArticle par product_uuid pour le rattachement
+    # / Build a LigneArticle index by product_uuid for linking
+    lignes_par_product = {}
+    if lignes_articles:
+        for ligne in lignes_articles:
+            product_uuid = str(ligne.pricesold.productsold.product.uuid)
+            lignes_par_product[product_uuid] = ligne
+
+    memberships_creees = []
     for article in articles_adhesion:
         # Montant : prix libre (custom) ou prix standard
         # / Amount: free price (custom) or standard price
@@ -1381,7 +1402,7 @@ def _creer_adhesions_depuis_panier(request, articles_panier):
         else:
             contribution = article['price'].prix
 
-        _creer_ou_renouveler_adhesion(
+        membership = _creer_ou_renouveler_adhesion(
             user=user_adhesion,
             product=article['product'],
             price=article['price'],
@@ -1389,6 +1410,18 @@ def _creer_adhesions_depuis_panier(request, articles_panier):
             first_name=prenom,
             last_name=nom,
         )
+
+        # Rattacher la Membership a sa LigneArticle
+        # / Link the Membership to its LigneArticle
+        if membership:
+            memberships_creees.append(membership)
+            product_uuid = str(article['product'].uuid)
+            ligne_correspondante = lignes_par_product.get(product_uuid)
+            if ligne_correspondante:
+                ligne_correspondante.membership = membership
+                ligne_correspondante.save(update_fields=['membership'])
+
+    return memberships_creees
 
 
 def _executer_recharges(articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client):
@@ -1793,14 +1826,15 @@ class PaiementViewSet(viewsets.ViewSet):
         articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
 
         with db_transaction.atomic():
-            # Articles normaux (ventes, adhésions) → juste LigneArticle
-            # Normal articles (sales, memberships) → just LigneArticle
+            # Articles normaux (ventes, adhesions) → LigneArticle
+            # Normal articles (sales, memberships) → LigneArticle
+            lignes_normales = []
             if articles_normaux:
-                _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+                lignes_normales = _creer_lignes_articles(articles_normaux, moyen_paiement_code)
 
-            # Adhésions → créer les Memberships (si client identifié par NFC ou email)
-            # Memberships → create Membership records (if client identified by NFC or email)
-            _creer_adhesions_depuis_panier(request, articles_normaux)
+            # Adhesions → creer les Memberships et les rattacher aux LigneArticle
+            # Memberships → create Membership records and link them to LigneArticle
+            _creer_adhesions_depuis_panier(request, articles_normaux, lignes_articles=lignes_normales)
 
             # Recharges → TransactionService + LigneArticle avec carte et asset
             # Top-ups → TransactionService + LigneArticle with card and asset
@@ -1877,14 +1911,15 @@ class PaiementViewSet(viewsets.ViewSet):
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
             with db_transaction.atomic():
-                # Articles normaux (ventes, adhésions) → juste LigneArticle
-                # Normal articles (sales, memberships) → just LigneArticle
+                # Articles normaux (ventes, adhesions) → LigneArticle
+                # Normal articles (sales, memberships) → LigneArticle
+                lignes_normales = []
                 if articles_normaux:
-                    _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+                    lignes_normales = _creer_lignes_articles(articles_normaux, moyen_paiement_code)
 
-                # Adhésions → créer les Memberships (si client identifié par NFC ou email)
-                # Memberships → create Membership records (if client identified by NFC or email)
-                _creer_adhesions_depuis_panier(request, articles_normaux)
+                # Adhesions → creer les Memberships et les rattacher aux LigneArticle
+                # Memberships → create Membership records and link them to LigneArticle
+                _creer_adhesions_depuis_panier(request, articles_normaux, lignes_articles=lignes_normales)
 
                 # Recharges → TransactionService + LigneArticle avec carte et asset
                 # Top-ups → TransactionService + LigneArticle with card and asset
@@ -2082,21 +2117,37 @@ class PaiementViewSet(viewsets.ViewSet):
                         card=carte_client,
                         ip=ip_client,
                     )
-                    _creer_lignes_articles(
+                    lignes_adhesion = _creer_lignes_articles(
                         articles_adhesion, moyen_paiement_code,
                         asset_uuid=asset_tlf.uuid,
                         carte=carte_client,
                         wallet=wallet_client,
                     )
 
-                # Créer/renouveler les adhésions
-                # Create/renew memberships
-                for article in articles_adhesion:
-                    _creer_ou_renouveler_adhesion(
-                        carte_client.user,
-                        article['product'],
-                        article['price'],
-                    )
+                # Creer/renouveler les adhesions et rattacher aux LigneArticle
+                # Create/renew memberships and link to LigneArticle
+                if articles_adhesion:
+                    # Construire un index LigneArticle par product_uuid
+                    # / Build LigneArticle index by product_uuid
+                    lignes_par_product = {}
+                    for ligne in lignes_adhesion:
+                        product_uuid = str(ligne.pricesold.productsold.product.uuid)
+                        lignes_par_product[product_uuid] = ligne
+
+                    for article in articles_adhesion:
+                        membership = _creer_ou_renouveler_adhesion(
+                            carte_client.user,
+                            article['product'],
+                            article['price'],
+                        )
+                        # Rattacher la Membership a sa LigneArticle
+                        # / Link the Membership to its LigneArticle
+                        if membership:
+                            product_uuid = str(article['product'].uuid)
+                            ligne = lignes_par_product.get(product_uuid)
+                            if ligne:
+                                ligne.membership = membership
+                                ligne.save(update_fields=['membership'])
 
         except SoldeInsuffisant:
             # Race condition : solde a changé entre le check et le débit
@@ -2245,13 +2296,17 @@ class PaiementViewSet(viewsets.ViewSet):
             nom = serializer.validated_data["nom_adhesion"]
 
             user = get_or_create_user(email, send_mail=False)
+            # Mettre a jour prenom/nom si pas deja renseignes
+            # / Update first/last name if not already set
+            nom_ou_prenom_modifie = False
             if prenom and not user.first_name:
                 user.first_name = prenom
+                nom_ou_prenom_modifie = True
             if nom and not user.last_name:
                 user.last_name = nom
-            if (prenom and not user.first_name) or (nom and not user.last_name):
-                pass  # déjà géré ci-dessus
-            user.save()
+                nom_ou_prenom_modifie = True
+            if nom_ou_prenom_modifie:
+                user.save(update_fields=["first_name", "last_name"])
 
         # User identifié → écran confirmation
         # / User identified → confirmation screen
@@ -2380,10 +2435,11 @@ class PaiementViewSet(viewsets.ViewSet):
         # 5. Couleur de fond selon le type de carte
         # 5. Background color based on card type
         email_carte = carte.user.email if carte.user else None
+        prenom_carte = carte.user.first_name if carte.user else None
         couleur_fond = "--success" if email_carte else "--warning"
 
         context = {
-            "card": {"email": email_carte},
+            "card": {"email": email_carte, "first_name": prenom_carte},
             "total_monnaie": total_centimes / 100,
             "solde_tlf": solde_tlf_centimes / 100,
             "solde_tnf": solde_tnf_centimes / 100,

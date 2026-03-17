@@ -39,7 +39,7 @@ from BaseBillet.models import (
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
 from fedow_core.models import Asset, Token, Transaction
-from fedow_core.services import AssetService, WalletService
+from fedow_core.services import AssetService, TransactionService, WalletService
 from laboutik.models import PointDeVente
 
 
@@ -663,9 +663,11 @@ class TestAdhesionCreeMembership:
             produit, prix = produit_adhesion
             prix_centimes = int(round(prix.prix * 100))
 
-            # Supprimer les anciennes adhesions pour ce test
-            # / Delete old memberships for this test
-            Membership.objects.filter(user=user_client, price=prix).delete()
+            # Supprimer les anciennes adhesions (et leurs LigneArticle liees)
+            # / Delete old memberships (and their linked LigneArticle)
+            anciennes_memberships = Membership.objects.filter(user=user_client, price=prix)
+            LigneArticle.objects.filter(membership__in=anciennes_memberships).delete()
+            anciennes_memberships.delete()
 
             # Crediter le wallet client avec assez pour payer
             # / Credit client wallet with enough to pay
@@ -722,9 +724,11 @@ class TestAdhesionRenouvelle:
             produit, prix = produit_adhesion
             prix_centimes = int(round(prix.prix * 100))
 
-            # Creer une membership expiree
-            # / Create an expired membership
-            Membership.objects.filter(user=user_client, price=prix).delete()
+            # Supprimer les memberships existantes (et leurs LigneArticle liees)
+            # / Delete existing memberships (and their linked LigneArticle)
+            anciennes_memberships = Membership.objects.filter(user=user_client, price=prix)
+            LigneArticle.objects.filter(membership__in=anciennes_memberships).delete()
+            anciennes_memberships.delete()
             membership_expiree = Membership.objects.create(
                 user=user_client,
                 price=prix,
@@ -985,3 +989,139 @@ class TestValidationPVCartePrimaire:
                 f'/laboutik/caisse/point_de_vente/?uuid_pv={premier_pv.uuid}&tag_id_cm={carte_cm.tag_id}',
             )
             assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Tests — fusion wallet ephemere (adhesion)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("test_data")
+class TestFusionWalletEphemere:
+    """Test 14 : carte anonyme rechargee → adhesion → fusion wallet_ephemere → user.wallet."""
+
+    def test_fusion_wallet_ephemere_lors_adhesion(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, produit_adhesion,
+    ):
+        """
+        1. Carte anonyme rechargee 50€ → wallet_ephemere cree avec 5000 centimes TLF
+        2. Adhesion avec email → get_or_create_user
+        3. Verifier : carte.user = user, carte.wallet_ephemere = None
+        4. Verifier : user.wallet contient les 5000 centimes
+        5. Verifier : Transaction.FUSION existe en base
+        """
+        with schema_context(TENANT_SCHEMA):
+            # --- Setup : carte anonyme avec wallet ephemere ---
+            # / Setup: anonymous card with ephemeral wallet
+            carte_anonyme, _ = CarteCashless.objects.get_or_create(
+                tag_id='NFCFUS01',
+                defaults={'number': 'NFCNMF01', 'uuid': None},
+            )
+            # Reset : detacher user et wallet_ephemere
+            # / Reset: detach user and wallet_ephemere
+            carte_anonyme.user = None
+            carte_anonyme.wallet_ephemere = None
+            carte_anonyme.save(update_fields=['user', 'wallet_ephemere'])
+
+            # Creer un wallet ephemere et le crediter (simule recharge anonyme)
+            # / Create an ephemeral wallet and credit it (simulates anonymous top-up)
+            wallet_eph = Wallet.objects.create(name='[test_fusion] Ephemere')
+            carte_anonyme.wallet_ephemere = wallet_eph
+            carte_anonyme.save(update_fields=['wallet_ephemere'])
+
+            montant_recharge = 5000  # 50,00 EUR en centimes
+            _crediter_wallet(wallet_eph, asset_tlf, montant_recharge)
+
+            # Verifier le solde initial du wallet ephemere
+            # / Verify initial ephemeral wallet balance
+            solde_eph_avant = WalletService.obtenir_solde(wallet=wallet_eph, asset=asset_tlf)
+            assert solde_eph_avant == montant_recharge
+
+            # Compter les transactions FUSION avant
+            # / Count FUSION transactions before
+            nb_fusion_avant = Transaction.objects.filter(
+                tenant=tenant, action=Transaction.FUSION,
+            ).count()
+
+            # --- Adhesion avec email (le user n'existe pas encore) ---
+            # / Membership with email (user doesn't exist yet)
+            produit, prix = produit_adhesion
+            prix_centimes = int(round(prix.prix * 100))
+
+            # Crediter le wallet lieu pour les distributions
+            # / Credit venue wallet for distributions
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            email_nouveau = 'fusion-test-adhesion@tibillet.localhost'
+            # Supprimer le user s'il existe d'un ancien run
+            # / Delete user if it exists from a previous run
+            TibilletUser.objects.filter(email=email_nouveau).delete()
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'espece',
+                'total': str(prix_centimes),
+                'given_sum': '',
+                'tag_id': carte_anonyme.tag_id,
+                'email_adhesion': email_nouveau,
+                'prenom_adhesion': 'Test',
+                'nom_adhesion': 'Fusion',
+                f'repid-{produit.uuid}': '1',
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 200
+
+            # --- Verifications ---
+
+            # 1. Le user a ete cree
+            # / The user was created
+            user_fusion = TibilletUser.objects.get(email=email_nouveau)
+
+            # 2. carte.user = user et carte.wallet_ephemere = None
+            # / card.user = user and card.wallet_ephemere = None
+            carte_anonyme.refresh_from_db()
+            assert carte_anonyme.user == user_fusion, (
+                f"Attendu carte.user={user_fusion.email}, "
+                f"obtenu carte.user={carte_anonyme.user}"
+            )
+            assert carte_anonyme.wallet_ephemere is None, (
+                "wallet_ephemere aurait du etre detache apres fusion"
+            )
+
+            # 3. user.wallet contient les 5000 centimes (transferes depuis wallet_eph)
+            # / user.wallet contains the 5000 cents (transferred from wallet_eph)
+            user_fusion.refresh_from_db()
+            assert user_fusion.wallet is not None, "user.wallet aurait du etre cree"
+            solde_user = WalletService.obtenir_solde(
+                wallet=user_fusion.wallet, asset=asset_tlf,
+            )
+            assert solde_user == montant_recharge, (
+                f"Attendu solde user={montant_recharge}, obtenu {solde_user}"
+            )
+
+            # 4. wallet_ephemere vide (debite par la fusion)
+            # / ephemeral wallet empty (debited by the merge)
+            solde_eph_apres = WalletService.obtenir_solde(wallet=wallet_eph, asset=asset_tlf)
+            assert solde_eph_apres == 0, (
+                f"Attendu solde ephemere=0, obtenu {solde_eph_apres}"
+            )
+
+            # 5. Transaction FUSION creee
+            # / FUSION Transaction created
+            nb_fusion_apres = Transaction.objects.filter(
+                tenant=tenant, action=Transaction.FUSION,
+            ).count()
+            assert nb_fusion_apres == nb_fusion_avant + 1, (
+                f"Attendu {nb_fusion_avant + 1} transactions FUSION, obtenu {nb_fusion_apres}"
+            )
+
+            # 6. La transaction FUSION a le bon sens : ephemere → user
+            # / The FUSION transaction has correct direction: ephemeral → user
+            tx_fusion = Transaction.objects.filter(
+                tenant=tenant, action=Transaction.FUSION,
+            ).order_by('-id').first()
+            assert tx_fusion.sender == wallet_eph
+            assert tx_fusion.receiver == user_fusion.wallet
+            assert tx_fusion.amount == montant_recharge

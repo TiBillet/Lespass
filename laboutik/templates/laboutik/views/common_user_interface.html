@@ -132,16 +132,31 @@ Contient 3 boutons principaux pour les actions de la caisse :
 			<div>{% translate "RESET" %}</div>
 		</div>
 	</div>
-	<!-- 
-	BOUTON CHECK CARTE - VÉRIFIER LE SOLDE NFC/CASHLESS
-	Action : Vérifie le solde et les informations d'une carte NFC/cashless
-	Utilise HTMX pour charger la vue de vérification de carte.
+	<!--
+	BOUTON CHECK CARTE — VERIFIER LE SOLDE NFC/CASHLESS
+	/ Check card button — verify NFC/cashless balance
+
+	LOCALISATION : laboutik/templates/laboutik/views/common_user_interface.html
+
+	Utilise HTMX pour charger la vue de verification de carte.
 	Endpoint : laboutik-paiement-verifier_carte
-	Cible : Remplace le contenu de #messages par la réponse du serveur
-	Affiche : Solde du portefeuille, informations de la carte, historique
+	Cible : Injecte le contenu dans #messages (innerHTML, pas outerHTML).
+	/ Uses HTMX to load the card check view.
+	Target: injects content into #messages (innerHTML, not outerHTML).
+
+	IMPORTANT — innerHTML et non outerHTML :
+	L'element #messages porte un listener 'tarifSelection' (tarif.js ligne 230)
+	attache au DOMContentLoaded. Si on utilise outerHTML, l'element DOM est
+	remplace par un nouveau et le listener est perdu.
+	Consequence : apres un check carte, les articles multi-tarif ne repondent plus.
+	Avec innerHTML, l'element #messages d'origine est conserve avec ses listeners.
+	/ IMPORTANT — innerHTML not outerHTML:
+	The #messages element carries a 'tarifSelection' listener (tarif.js line 230)
+	attached on DOMContentLoaded. outerHTML replaces the DOM element and loses
+	the listener. With innerHTML, the original #messages element is preserved.
 	-->
 	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" data-testid="footer-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
-		hx-target="#messages" hx-swap="outerHTML">
+		hx-target="#messages" hx-swap="innerHTML">
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>

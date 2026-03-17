@@ -1,13 +1,19 @@
 {% load static i18n %}
 <!--
-ECRAN RETOUR CARTE — affiche les informations de la carte NFC scannee
-Type de carte (anonyme ou avec nom), soldes par type d'asset, adhesions actives.
-/ Card feedback screen — shows NFC card info: type, balances per asset, active memberships.
+ECRAN RETOUR CARTE — informations de la carte NFC scannee.
+Type de carte (anonyme / prenom / carte liee), soldes par asset, adhesions.
+/ Card feedback screen — NFC card info: type, balances per asset, memberships.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
--->
 
-<div id="messages" aria-live="polite">
+Injecte dans #messages via innerHTML (pas outerHTML).
+Pas de id="messages" ici : l'element #messages existe dans base.html
+et porte un listener 'tarifSelection' (tarif.js) qu'on ne doit pas detruire.
+/ Injected into #messages via innerHTML (not outerHTML).
+No id="messages" here: the element is in base.html and carries
+a 'tarifSelection' listener (tarif.js) that must not be destroyed.
+-->
+<div aria-live="polite">
 
   <!-- EN-TETE CARTE / CARD HEADER -->
   <div class="cf-card-header" style="background-color: var({{ background }});">
@@ -26,9 +32,12 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
     {% else %}
     <div class="cf-card-type" data-testid="retour-carte-nom">
       <i class="fas fa-user-check cf-card-type-icon" aria-hidden="true"></i>
-      <span>{% trans "Carte avec nom" %}</span>
+      {% if card.first_name %}
+      <span>{{ card.first_name|title }}</span>
+      {% else %}
+      <span>{% trans "Carte liée" %}</span>
+      {% endif %}
     </div>
-    <div class="cf-card-email" data-testid="retour-carte-email">{{ card.email }}</div>
     {% endif %}
 
     {% if not erreur and state.place.name %}
@@ -139,11 +148,6 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
 
     .cf-card-type-icon {
       font-size: 1.6rem;
-    }
-
-    .cf-card-email {
-      font-size: 1rem;
-      opacity: 0.9;
     }
 
     .cf-card-place {
