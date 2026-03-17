@@ -1,12 +1,14 @@
 # LaBoutik — Caisse enregistreuse tactile
 
-Application de caisse enregistreuse (POS) pour terminaux tactiles, integrée dans l'ecosystème TiBillet/Lespass.
+Application de caisse enregistreuse (POS) pour terminaux tactiles, integree dans l'ecosysteme TiBillet/Lespass.
 
-Interface full-screen pensée pour tablettes et écrans tactiles, avec lecture NFC pour les cartes cashless.
+Interface full-screen pensee pour tablettes et ecrans tactiles, avec lecture NFC pour les cartes cashless.
 
 ## Statut actuel
 
-**Données 100% mockées.** L'interface est fonctionnelle mais toutes les données (articles, points de vente, cartes, paiements) viennent de fichiers JSON statiques dans `utils/`. Les vrais modèles Django seront construits dans une étape ultérieure.
+**Backend ORM complet.** Les donnees (articles, points de vente, cartes, paiements) viennent de la base PostgreSQL via les modeles Django. Les fichiers mock dans `utils/` sont encore presents mais ne sont plus utilises par les vues principales.
+
+**Phases terminees :** modeles POS, paiements especes/CB/NFC, recharges, commandes restaurant, cloture caisse, POS Adhesion multi-tarif.
 
 ## Architecture
 
@@ -17,146 +19,231 @@ Interface full-screen pensée pour tablettes et écrans tactiles, avec lecture N
 | Backend | Django 4.2 + DRF ViewSets (pattern FALC) |
 | Frontend | HTMX 2.0.6 + django-cotton (composants `<c-xxx>`) |
 | CSS | CSS custom properties (palette, sizes) — pas de framework CSS |
-| Icônes | FontAwesome 5 (migration Bootstrap Icons prévue) |
-| NFC | Web NFC API + simulation en mode démo |
+| JS | Vanilla JS, pas de bundler. Event bus custom (`tibilletUtils.js`) |
+| Icones | FontAwesome 5 |
+| NFC | Web NFC API + simulation en mode demo |
 
-### Authentification — deux modes d'accès
+### Modeles
 
-**1. Terminal / appareil (API Key)**
+| Modele | App | Role |
+|--------|-----|------|
+| `PointDeVente` | laboutik | Point de vente physique ou virtuel |
+| `CartePrimaire` | laboutik | Carte NFC du caissier (acces aux PV) |
+| `Table` + `CategorieTable` | laboutik | Tables restaurant (mode commande) |
+| `CommandeSauvegarde` + `ArticleCommandeSauvegarde` | laboutik | Commandes restaurant persistees |
+| `ClotureCaisse` | laboutik | Rapport de cloture (totaux, JSON detail) |
+| `Product` | BaseBillet | Catalogue produits (unifie POS + billetterie + adhesion) |
+| `Price` | BaseBillet | Tarifs (EUR ou tokens, prix libre, abonnement) |
+| `CategorieProduct` | BaseBillet | Categories produits (couleurs, icones POS) |
+| `Membership` | BaseBillet | Fiches adherent (deadline, statut, contribution) |
 
-Le flux d'appairage passe par l'app Discovery :
+### Types de points de vente
 
-```
-Admin crée un PairingDevice (PIN 6 chiffres) dans l'admin Unfold
-     ↓
-Terminal POST /api/discovery/claim/ avec le PIN
-     ↓
-Lespass valide le PIN, crée une LaBoutikAPIKey dans le schema tenant
-     ↓
-Terminal reçoit { api_key, server_url, device_name }
-     ↓
-Toutes les requêtes suivantes : Authorization: Api-Key <key>
-```
+Le champ `PointDeVente.comportement` determine le mode de fonctionnement :
 
-Le PIN est à usage unique — détruit après claim.
+| Type | Code | Comportement |
+|------|------|-------------|
+| **Direct** | `D` | Vente au comptoir classique (bar, restauration) |
+| **Kiosk** | `K` | Libre-service (placeholder) |
+| **Cashless** | `C` | Recharges NFC uniquement |
+| **Adhesion** | `A` | Adhesions/abonnements — charge dynamiquement les produits `Product(categorie_article=ADHESION)` |
 
-**2. Navigateur admin (session Django)**
+Le type **Adhesion** est special : il n'a pas besoin de produits dans son M2M `products`.
+Il charge automatiquement tous les produits adhesion publies du tenant.
+L'admin peut aussi ajouter des produits manuellement au M2M (ils apparaitront en plus).
 
-Un admin connecté au tenant peut accéder directement à `/laboutik/caisse/` via son navigateur. La permission `HasLaBoutikAccess` (`BaseBillet/permissions.py`) vérifie :
-- Soit une clé API valide (header `Authorization`)
-- Soit un user authentifié + admin du tenant courant (`is_tenant_admin`)
+---
 
-### Multi-tenancy
+## Adhesions au POS — multi-tarif et prix libre
 
-LaBoutik est une **tenant app** (dans `TENANT_APPS`). Les URLs sont routées via `urls_tenants.py`, donc accessibles uniquement sur les sous-domaines tenant (ex: `lespass.tibillet.localhost/laboutik/`), pas sur le domaine racine.
+### Principe
 
-### ViewSets DRF
+Les produits adhesion existent deja dans `BaseBillet.Product` (avec `categorie_article=ADHESION`).
+Ils ont des tarifs (`Price`) avec duree d'abonnement, prix libre, etc.
 
-Deux ViewSets, tous avec `permission_classes = [HasLaBoutikAccess]` :
+Le POS de type ADHESION les affiche tels quels. Pas de duplication de produits.
+Pas de `methode_caisse` necessaire — c'est le type du PV qui determine le contenu.
 
-**`CaisseViewSet`** (prefix: `/laboutik/caisse/`)
+### Donnees de test
 
-| URL | Méthode | Action | Description |
-|-----|---------|--------|-------------|
-| `/caisse/` | GET | `list` | Page d'attente carte primaire |
-| `/caisse/carte_primaire/` | POST | `carte_primaire` | Valide la carte NFC, redirige vers le PV |
-| `/caisse/point_de_vente/` | GET | `point_de_vente` | Interface POS (service direct / tables / kiosk) |
+La commande `create_test_pos_data` cree :
 
-**`PaiementViewSet`** (prefix: `/laboutik/paiement/`)
+- **Adhesion annuelle** : 3 tarifs (Plein tarif 15 EUR, Tarif reduit 8 EUR, Prix libre min 5 EUR)
+- **Adhesion mensuelle** : 1 tarif (Tarif unique 5 EUR)
+- **PV "Adhesions"** : type `ADHESION`, accepte especes et CB
 
-| URL | Méthode | Action | Description |
-|-----|---------|--------|-------------|
-| `/paiement/moyens_paiement/` | POST | `moyens_paiement` | Affiche les types de paiement disponibles |
-| `/paiement/confirmer/` | GET | `confirmer` | Ecran de confirmation avant paiement |
-| `/paiement/payer/` | POST | `payer` | Exécute le paiement (mock) |
-| `/paiement/lire_nfc/` | GET | `lire_nfc` | Partial attente lecture NFC |
-| `/paiement/verifier_carte/` | GET | `verifier_carte` | Partial vérification carte |
-| `/paiement/retour_carte/` | POST | `retour_carte` | Feedback après lecture carte NFC |
+### Multi-tarif : overlay de selection
 
-### Arborescence des fichiers
-
-```
-laboutik/
-├── __init__.py
-├── apps.py                          # AppConfig (verbose_name: "LaBoutik (Caisse)")
-├── models.py                        # Vide (modèles à créer)
-├── views.py                         # 2 ViewSets DRF
-├── urls.py                          # DRF router
-├── migrations/
-│   └── __init__.py
-├── utils/
-│   ├── __init__.py
-│   ├── mockData.py                  # Données mock : PVs, articles, cartes, tables + classe mockDb
-│   ├── method.py                    # Fonctions utilitaires paiement
-│   ├── dbJson.py                    # Version standalone du mock (non utilisée)
-│   └── mockDb.json                  # Base de données JSON fichier (transactions runtime)
-├── templatetags/
-│   ├── __init__.py
-│   └── laboutik_process.py          # Filtres : sel, divide_by, mul, force_dot
-├── templates/
-│   ├── cotton/                      # Composants django-cotton (réutilisables)
-│   │   ├── addition.html            # Panneau addition (formulaire HTMX caché)
-│   │   ├── articles.html            # Grille d'articles cliquables
-│   │   ├── categories.html          # Barre latérale catégories
-│   │   ├── header.html              # Header avec menu burger + navigation PV
-│   │   ├── read_nfc.html            # Composant lecture NFC (spinner + simulation démo)
-│   │   ├── spinner.html             # Animation spinner SVG
-│   │   ├── status_wallets.html      # Affichage solde portefeuille
-│   │   └── bt/
-│   │       ├── paiement.html        # Bouton moyen de paiement
-│   │       └── return.html          # Bouton retour (ferme un layer)
-│   └── laboutik/                    # Templates namespacés
-│       ├── base.html                # Layout HTML (HTMX, FontAwesome, NFC, state JSON)
-│       ├── views/
-│       │   ├── ask_primary_card.html    # Attente carte primaire (entrée de l'app)
-│       │   ├── common_user_interface.html  # Interface POS principale
-│       │   ├── tables.html              # Sélection de table (mode restaurant)
-│       │   ├── kiosk.html               # Mode kiosque (placeholder)
-│       │   ├── login_hardware.html      # Login hardware (legacy, non utilisé)
-│       │   └── test.html
-│       └── partial/                 # Fragments HTMX (swaps)
-│           ├── hx_display_type_payment.html  # Choix moyen de paiement
-│           ├── hx_confirm_payment.html       # Confirmation paiement
-│           ├── hx_return_payment_success.html # Paiement réussi
-│           ├── hx_funds_insufficient.html    # Fonds insuffisants (paiement fractionné)
-│           ├── hx_read_nfc.html              # Attente NFC pour paiement
-│           ├── hx_check_card.html            # Vérification carte (check solde)
-│           ├── hx_card_feedback.html         # Résultat vérification carte
-│           ├── hx_primary_card_message.html  # Messages carte primaire
-│           ├── hx_messages.html              # Messages génériques
-│           └── no_articles.html              # Aucun article
-├── static/
-│   ├── css/
-│   │   ├── modele00.css             # Styles principaux + layout flex
-│   │   ├── palette.css              # Variables CSS couleurs
-│   │   ├── sizes.css                # Variables CSS dimensions
-│   │   ├── vk.css                   # Styles clavier virtuel
-│   │   └── all_fontawesome-free-5-11-2.css  # FontAwesome 5
-│   ├── js/
-│   │   ├── addition.js              # Logique addition (ajout/suppression articles)
-│   │   ├── articles.js              # Gestion grille articles
-│   │   ├── nfc.js                   # Classe NfcReader (Web NFC API + simulation)
-│   │   ├── tibilletUtils.js         # Utilitaires (sendEvent, hideElement, etc.)
-│   │   ├── big.js                   # Bibliothèque calcul décimal
-│   │   ├── htmx@2.0.6.min.js       # HTMX
-│   │   ├── socket.io.3.0.4.js       # Socket.IO (préparation comm temps réel)
-│   │   ├── login_hardware.js        # Login hardware (legacy)
-│   │   └── modules/                 # Modules JS supplémentaires
-│   └── images/                      # Logos, icônes, images de fond
-└── doc/                             # Documentation design (excalidraw)
-```
-
-### Flux HTMX
-
-L'interface fonctionne en layers superposés :
+Quand un produit a **plusieurs tarifs** ou un **prix libre**, le clic sur l'article
+ouvre un overlay plein ecran au lieu d'ajouter directement au panier.
 
 ```
-Layer 0 : Interface principale (articles, catégories, addition)
-Layer 1 : #messages — types de paiement, vérification carte, fonds insuffisants
+┌──────────────────────────────────────────┐
+│         Adhesion annuelle                │
+│         Choisir un tarif                 │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │  Plein tarif                      │  │
+│  │  15,00 EUR                        │  │
+│  └────────────────────────────────────┘  │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │  Tarif reduit                     │  │
+│  │  8,00 EUR                         │  │
+│  └────────────────────────────────────┘  │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │  Prix libre (min 5,00 EUR)        │  │
+│  │  ┌──────────┐  EUR  [OK]          │  │
+│  │  │  ______  │                     │  │
+│  │  └──────────┘                     │  │
+│  └────────────────────────────────────┘  │
+│                                          │
+│            [ <- RETOUR ]                 │
+└──────────────────────────────────────────┘
+```
+
+**Comportement :**
+
+- **Tarif fixe** : un clic ajoute l'article au panier avec ce prix et ferme l'overlay.
+- **Prix libre** : un champ input apparait. Le caissier entre le montant. Le bouton OK valide que le montant est >= au minimum. Puis l'article est ajoute au panier avec le montant saisi.
+- **Produit avec 1 seul tarif fixe** : pas d'overlay. Ajout direct au panier (meme comportement qu'un article de vente classique).
+
+### Format du panier (formulaire HTML)
+
+Le panier est un formulaire HTML cache (`#addition-form`). Chaque article ajoute des inputs :
+
+**Articles classiques (mono-tarif) :**
+```html
+<input type="number" name="repid-<product_uuid>" value="2" />
+```
+
+**Articles multi-tarif (adhesion avec tarif choisi) :**
+```html
+<!-- Le separateur '--' distingue le product_uuid du price_uuid -->
+<input type="number" name="repid-<product_uuid>--<price_uuid>" value="1" />
+```
+
+**Articles prix libre (montant custom) :**
+```html
+<input type="number" name="repid-<product_uuid>--<price_uuid>" value="1" />
+<!-- Montant en centimes choisi par le caissier -->
+<input type="hidden" name="custom-<product_uuid>--<price_uuid>" value="2500" />
+```
+
+Le backend (`PanierSerializer.extraire_articles_du_post()`) parse les deux formats :
+- `repid-<uuid>` → ancien format, `price_uuid=None`, premier prix EUR
+- `repid-<uuid>--<price_uuid>` → nouveau format, charge le `Price` specifique
+- `custom-<uuid>--<price_uuid>` → montant libre en centimes
+
+### Identification client pour les adhesions
+
+Quand le panier contient des adhesions, l'ecran de paiement affiche deux options :
+
+```
+┌──────────────────────────────────────────┐
+│     Adhesion — Identifier le client      │
+│                                          │
+│  ┌────────────────────────────────────┐  │
+│  │  SCANNER CARTE NFC                │  │
+│  └────────────────────────────────────┘  │
+│                                          │
+│  — ou —                                  │
+│                                          │
+│  Email :    [___________________]        │
+│  Prenom :   [___________]                │
+│  Nom :      [___________]                │
+│                                          │
+│  [ ESPECE ]  [ CB ]  [ CHEQUE ]          │
+└──────────────────────────────────────────┘
+```
+
+**Option 1 — Scan NFC** : identifie le client via `CarteCashless.user`. Meme flux que les recharges.
+
+**Option 2 — Formulaire email** : le caissier saisit l'email du client (obligatoire) et
+son nom/prenom (optionnel). Le backend appelle `get_or_create_user(email)` pour creer
+ou retrouver le `TibilletUser`. Puis `_creer_ou_renouveler_adhesion()` cree ou renouvelle
+la `Membership` avec le `Price` choisi et le montant paye.
+
+**Si aucune identification** : les `LigneArticle` sont creees (comptabilite), mais pas de `Membership`.
+L'adhesion pourra etre rattachee plus tard.
+
+### Flux technique complet (adhesion CB avec email)
+
+```
+1. Caissier ouvre le PV "Adhesions"
+   → _construire_donnees_articles() charge dynamiquement les Product(categorie_article=ADHESION)
+   → Inclut tous les Price EUR dans les data-attributes de chaque tuile
+
+2. Clic sur "Adhesion annuelle" (3 tarifs)
+   → articles.js:manageKey() detecte data-multi-tarif="true"
+   → Emet 'tarifSelection' au lieu d'appeler addArticle()
+
+3. tibilletUtils.js route vers tarif.js:tarifSelection()
+   → Genere l'overlay HTML dans #messages (cote client, pas d'aller-retour serveur)
+
+4. Clic sur "Plein tarif — 15,00 EUR"
+   → tarif.js:tarifSelectFixed() ferme l'overlay
+   → Appelle addArticleWithPrice(productUuid, priceUuid, 1500, ...)
+   → Emet 'articlesAdd' avec priceUuid et prixCentimes
+
+5. addition.js:additionInsertArticle() recoit l'evenement
+   → Cree input "repid-<product_uuid>--<price_uuid>" value="1"
+   → Affiche la ligne dans le panier avec le nom "Adhesion annuelle (Plein tarif)"
+
+6. Clic VALIDER
+   → POST /paiement/moyens_paiement/
+   → moyens_paiement() detecte panier_a_adhesions=True
+   → Retourne hx_display_type_payment.html en mode adhesion (scan NFC + formulaire email)
+
+7. Caissier saisit email + nom + prenom, clique CB
+   → adhesionCopyFieldsToForm() copie les champs dans #addition-form (inputs caches)
+   → hx-get /paiement/confirmer/?method=carte_bancaire
+
+8. Clic VALIDER sur la confirmation
+   → POST /paiement/payer/ avec les inputs repid-*, custom-*, email_adhesion, etc.
+   → _payer_par_carte_ou_cheque() :
+     a. _creer_lignes_articles() → ProductSold + PriceSold + LigneArticle
+     b. _creer_adhesions_depuis_panier() :
+        - Lit email_adhesion → get_or_create_user(email)
+        - _creer_ou_renouveler_adhesion(user, product, price, contribution_value)
+        - Membership creee avec status=LABOUTIK, deadline calculee
+
+9. Ecran succes → RETOUR → interface POS
+```
+
+### Flux prix libre (variante de l'etape 4)
+
+```
+4b. Clic sur "Prix libre (min 5,00 EUR)"
+    → L'overlay affiche un input numerique + bouton OK
+    → Caissier saisit "25" (= 25 EUR)
+    → tarif.js:tarifValidateFreePrix() verifie 25 >= 5
+    → Appelle addArticleWithPrice(..., customAmount=2500)
+    → addition.js cree DEUX inputs :
+      - "repid-<product>--<price>" value="1"
+      - "custom-<product>--<price>" value="2500"
+    → Le total du panier utilise 2500 centimes (pas le prix de base)
+
+Au paiement :
+    → _extraire_articles_du_panier() lit custom-* → prix_centimes=2500
+    → PriceSold cree avec prix=25.00 EUR
+    → Membership.contribution_value = 25.00
+```
+
+---
+
+## Flux HTMX — layers superposes
+
+L'interface fonctionne en layers superposes :
+
+```
+Layer 0 : Interface principale (articles, categories, addition)
+Layer 1 : #messages — types de paiement, verification carte, selection tarif
 Layer 2 : #confirm  — confirmation paiement, lecture NFC
 ```
 
-Flux de paiement typique :
+### Flux de paiement standard (especes)
 
 ```
 [Articles] → clic VALIDER → trigger "validerPaiement"
@@ -167,182 +254,120 @@ clic ESPECE → hx-get /paiement/confirmer/?method=espece → swap #confirm (lay
     ↓
 clic VALIDER → JS postUrl → hx-post /paiement/payer/ → swap #messages (layer 1)
     ↓
-Paiement réussi → bouton RETOUR → manageReset() → retour layer 0
+Paiement reussi → bouton RETOUR → manageReset() → retour layer 0
 ```
 
-Pour le cashless (NFC) :
+### Flux cashless (NFC)
 
 ```
 clic CASHLESS → hx-get /paiement/lire_nfc/ → swap #confirm (layer 2)
     ↓
-Composant <c-read-nfc> démarre NfcReader
+Composant <c-read-nfc> demarre NfcReader
     ↓
 Lecture carte → JS injecte tag_id dans le formulaire addition
     ↓
 Submit → hx-post /paiement/payer/ avec moyen_paiement=nfc + tag_id
     ↓
-Si fonds insuffisants → partial hx_funds_insufficient (paiement fractionné)
+Si fonds insuffisants → partial hx_funds_insufficient (paiement fractionne)
 ```
 
-### Communication JS ↔ HTMX
+---
 
-Les templates utilisent un pattern "event organizer" pour piloter les formulaires HTMX depuis le JS :
+## Communication JS — Event Bus
+
+Les fichiers JS communiquent via un systeme d'evenements personnalises
+route par `tibilletUtils.js`.
+
+### Table de routage (`switches`)
 
 ```javascript
-// Envoyer une commande au formulaire addition
-sendEvent('organizerMsg', '#event-organizer', {
-    msg: 'additionManageForm',
-    data: { actionType: 'updateInput', selector: '#addition-moyen-paiement', value: 'espece' }
-})
-
-// actionType peut être :
-// - 'updateInput' : met à jour un champ caché du formulaire
-// - 'postUrl'     : change l'URL hx-post du formulaire
-// - 'submit'      : soumet le formulaire
+const switches = {
+    articlesAdd:               → additionInsertArticle sur #addition
+    additionTotalChange:       → updateBtValider sur #bt-valider
+    additionRemoveArticle:     → articlesRemove sur #products
+    resetArticles:             → additionReset + articlesReset
+    articlesDisplayCategory:   → articlesDisplayCategory sur #products
+    additionDisplayPaymentTypes: → additionDisplayPaymentTypes sur #addition
+    additionManageForm:        → additionManageForm sur #addition
+    tarifSelection:            → tarifSelection sur #messages
+}
 ```
 
-### Variables d'environnement
+### Flux d'un evenement
 
-| Variable | Défaut | Description |
-|----------|--------|-------------|
-| `DEMO` | `0` | Active le mode démo (simulation NFC) |
-| `DEMO_TAGID_CM` | `A49E8E2A` | Tag ID carte primaire mock |
-| `DEMO_TAGID_CLIENT1` | `B52F9F3B` | Tag ID client 1 mock |
-| `DEMO_TAGID_CLIENT2` | `C63A0A4C` | Tag ID client 2 mock |
-| `DEMO_TAGID_CLIENT3` | `D74B1B5D` | Tag ID client 3 mock |
-
-### django-cotton
-
-Les composants réutilisables sont dans `templates/cotton/`. Syntaxe :
-
-```html
-<!-- Utilisation -->
-<c-header :title="title" />
-<c-bt.paiement name="ESPECE" icon="fa-coins" hx-get="/paiement/confirmer/" />
-<c-read-nfc id="confirm" event-manage-form="additionManageForm" submit-url="/paiement/payer/" />
-
-<!-- Le composant reçoit les attributs via {{ attrs }} et le contenu via {{ slot }} -->
+```
+1. articles.js:addArticle() envoie { msg: 'articlesAdd', data: { uuid, price... } }
+2. eventsOrganizer() recoit et consulte switches['articlesAdd']
+3. sendEvent('additionInsertArticle', '#addition', data)
+4. addition.js:additionInsertArticle() est execute
 ```
 
-Configuration requise dans `settings.py` :
-- `APP_DIRS: False` + loaders explicites (`cotton_loader`, `filesystem`, `app_directories`)
-- `builtins: ['django_cotton.templatetags.cotton']`
-- `django_cotton` dans `SHARED_APPS`
+### Fichiers JS
+
+| Fichier | Role |
+|---------|------|
+| `tibilletUtils.js` | Event bus central (sendEvent, switches, eventsOrganizer) |
+| `articles.js` | Grille d'articles (clic, quantite, groupes, categories) |
+| `addition.js` | Panier (ajout, suppression, total, formulaire HTMX) |
+| `tarif.js` | Overlay selection tarif + prix libre (multi-tarif adhesion) |
+| `nfc.js` | Classe NfcReader (Web NFC + simulation demo) |
 
 ---
 
-## Fichiers modifiés hors de laboutik/
+## Arborescence des fichiers
 
-| Fichier | Modification |
-|---------|-------------|
-| `pyproject.toml` | Ajout `django-cotton = "^2.6.1"` |
-| `TiBillet/settings.py` | `django_cotton` SHARED_APPS, `laboutik` TENANT_APPS, TEMPLATES loaders, variables DEMO_* |
-| `TiBillet/urls_tenants.py` | `path('laboutik/', include('laboutik.urls'))` |
-| `BaseBillet/permissions.py` | Fix `HasLaBoutikApi` (key=None), ajout `HasLaBoutikAccess` (API key OU admin tenant) |
-
----
-
-## Ce qui reste à faire
-
-### Priorité haute — Modèles Django
-
-Remplacer les données mock par de vrais modèles. Tout est dans `utils/mockData.py`.
-
-**Modèles à créer dans `laboutik/models.py` :**
-
-| Modèle | Remplace | Champs principaux |
-|--------|----------|-------------------|
-| `PointDeVente` | `mockData.pvs` | uuid, name, icon, comportement (A/K/C), service_direct, accepte_especes, accepte_carte_bancaire, accepte_cheque, afficher_les_prix, accepte_commandes, poid_liste |
-| `CategorieArticle` | categories dans pvs | uuid, name, icon, couleur_texte, couleur_fond, poid_liste, FK → PointDeVente |
-| `Article` | articles dans pvs | uuid, name, prix (centimes), methode_name, couleur_texte, couleur_fond, icon, poid_liste, FK → CategorieArticle, FK → PointDeVente, bt_groupement (JSONField ou FK) |
-| `Table` | `mockData.tables` | id, name, statut (L/S/O), FK → PointDeVente |
-| `CarteCashless` | `mockData.cards` | tag_id, type_card (primary/client), name, email, wallets (Decimal), wallets_gift (Decimal), mode_gerant, memberships (JSONField), ManyToMany → PointDeVente (pvs_list) |
-| `Transaction` | table "transactions" dans mockDb | uuid, payment data (JSONField), total, missing, moyen_paiement, timestamps |
-| `GroupementBouton` | `mockData.bt_groupement` | methode_name, moyens_paiement, besoin_tag_id, groupe, nb_commande_max |
-
-**Points d'attention :**
-- Les prix sont stockés en **centimes** dans le mock (int). Utiliser `DecimalField` ou garder en centimes.
-- `CarteCashless` pourrait être un proxy vers le modèle Fedow existant (wallets fédérés).
-- `PointDeVente` et `Article` pourraient être liés aux `Product` de BaseBillet.
-- Penser à la relation avec le modèle `Configuration` de BaseBillet (monnaie_name, lieu, etc.).
-
-### Priorité haute — Supprimer le state mutable
-
-La fonction `_construire_state()` dans views.py construit le state à chaque requête (corrigé par rapport au global mutable original). Mais les données dedans sont en dur ("lieu de test", "lémien"). A remplacer par :
-
-```python
-# Exemple futur
-def _construire_state(request):
-    config = Configuration.get_solo()
-    return {
-        "version": config.version,
-        "place": {"name": config.organisation, "monnaie_name": config.monnaie_name},
-        # ...
-    }
 ```
-
-### Priorité moyenne — Kiosque
-
-Le template `kiosk.html` est un placeholder (`<h1>Kiosk</h1>`). A implémenter pour le mode libre-service.
-
-### Priorité moyenne — Mode restaurant (tables + commandes)
-
-Le mode tables fonctionne visuellement mais :
-- Les statuts de table (L/S/O) ne sont pas mis à jour.
-- Pas de persistence des commandes par table.
-- Pas de vue "préparations" (cuisine).
-
-### Priorité basse — Migration FontAwesome → Bootstrap Icons
-
-L'interface utilise FontAwesome 5 (`all_fontawesome-free-5-11-2.css`). Le reste de Lespass utilise Bootstrap Icons. Migration à planifier (chercher `fa-` dans les templates et le JS).
-
-### Priorité basse — HTMX embarqué
-
-L'app embarque sa propre copie de HTMX (`static/js/htmx@2.0.6.min.js`). Le reste de Lespass utilise aussi HTMX via `django-htmx`. A terme, utiliser une seule version partagée.
-
-### Priorité basse — Cordova
-
-Le `base.html` charge `<script src="http://localhost/cordova.js"></script>` pour la compatibilité avec les apps mobiles Cordova. A conditionner ou supprimer si non utilisé.
-
-### Priorité basse — Socket.IO
-
-`socket.io.3.0.4.js` est chargé mais pas utilisé activement. Prévu pour la communication temps réel (préparations cuisine, synchronisation caisses).
-
-### Priorité basse — Tests
-
-Le plan prévoyait un test Playwright `31-laboutik-basic-flow.spec.ts` :
-1. Créer un PairingDevice via l'admin
-2. Claim le PIN → récupérer l'API key
-3. GET `/laboutik/caisse/` avec API key → vérifier 200
-4. GET sans auth → vérifier 403
-5. Naviguer vers le PV mock → vérifier que l'interface se charge
-
-### Nettoyage
-
-- `laboutik/utils/dbJson.py` : version standalone du mock, quasi-identique à `mockData.py`. A supprimer quand les vrais modèles seront en place.
-- `laboutik/views/login_hardware.html` : template de l'ancien login hardware (remplacé par Discovery). A supprimer.
-- `laboutik/static/js/login_hardware.js` : idem.
+laboutik/
+├── models.py                        # 6 modeles POS (PointDeVente, CartePrimaire, Table, etc.)
+├── views.py                         # 3 ViewSets DRF (Caisse, Paiement, Commande)
+├── serializers.py                   # 7 serializers DRF (validation POST, extraction panier)
+├── urls.py                          # DRF router
+├── tasks.py                         # Tache Celery (envoi rapport cloture par email)
+├── pdf.py                           # Generation PDF cloture (WeasyPrint)
+├── csv_export.py                    # Generation CSV cloture
+├── management/commands/
+│   └── create_test_pos_data.py      # Donnees de test (categories, produits, PV, cartes)
+├── templates/
+│   ├── cotton/                      # Composants django-cotton (reutilisables)
+│   │   ├── articles.html            # Grille d'articles + styles + chargement JS
+│   │   ├── addition.html            # Panier + formulaire HTMX cache
+│   │   ├── categories.html          # Barre laterale categories
+│   │   ├── header.html              # Header avec menu burger
+│   │   └── bt/paiement.html         # Bouton moyen de paiement
+│   └── laboutik/
+│       ├── base.html                # Layout HTML (HTMX, FontAwesome, NFC, state JSON)
+│       ├── views/
+│       │   ├── common_user_interface.html  # Interface POS principale
+│       │   └── tables.html                # Selection de table
+│       └── partial/                 # Fragments HTMX
+│           ├── hx_display_type_payment.html  # Choix paiement (normal/recharge/adhesion)
+│           ├── hx_confirm_payment.html       # Confirmation paiement
+│           └── hx_return_payment_success.html # Succes
+├── static/js/
+│   ├── tibilletUtils.js             # Event bus central
+│   ├── articles.js                  # Grille articles (clic, groupes)
+│   ├── addition.js                  # Panier (ajout, suppression, total)
+│   ├── tarif.js                     # Overlay selection tarif + prix libre
+│   └── nfc.js                       # Lecture NFC
+└── doc/
+    ├── PLAN_INTEGRATION.md          # Plan de fusion mono-repo (toutes les phases)
+    └── UX/PLAN_UX_LABOUTIK.md       # Plan UX (5 sessions, toutes terminees)
+```
 
 ---
 
 ## Commandes utiles
 
 ```bash
-# Accéder à la caisse (navigateur, admin connecté)
+# Acceder a la caisse (navigateur, admin connecte)
 https://lespass.tibillet.localhost/laboutik/caisse/
 
-# Accéder via API key
-curl -H "Authorization: Api-Key <key>" https://lespass.tibillet.localhost/laboutik/caisse/
+# Creer les donnees de test POS
+docker exec lespass_django poetry run python manage.py create_test_pos_data
 
-# Créer une clé API manuellement (shell Django)
-from django.db import connection
-connection.set_schema('lespass')
-from BaseBillet.models import LaBoutikAPIKey
-api_key, key = LaBoutikAPIKey.objects.create_key(name='test')
-print(key)
+# Lancer les tests POS
+docker exec lespass_django poetry run pytest tests/pytest/test_pos_models.py -v
 
-# Ou via Discovery (flux normal)
-# 1. Admin crée PairingDevice dans l'admin Unfold → obtient un PIN
-# 2. POST /api/discovery/claim/ {"pin_code": "123456"}
-# 3. Réponse : {"api_key": "xxx", "server_url": "https://...", "device_name": "..."}
+# Lancer tous les tests
+docker exec lespass_django poetry run pytest tests/pytest/ -x --tb=short
 ```

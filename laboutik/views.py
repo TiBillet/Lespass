@@ -44,6 +44,7 @@ from laboutik.models import (
     ClotureCaisse,
 )
 from laboutik.serializers import (
+    AdhesionIdentificationSerializer,
     CartePrimaireSerializer, PanierSerializer,
     CommandeSerializer, ArticleCommandeSerializer,
     ClotureSerializer, EnvoyerRapportSerializer,
@@ -1042,15 +1043,21 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by('order'),
         to_attr='prix_euros',
     )
+    # Produits du PV : ceux avec methode_caisse (articles POS) OU categorie_article=ADHESION
+    # Les adhesions n'ont pas forcement de methode_caisse (elles sont identifiees par categorie_article).
+    # / POS products: those with methode_caisse (POS articles) OR categorie_article=ADHESION
+    # Memberships don't necessarily have methode_caisse (identified by categorie_article).
     produits_du_pv = {
         str(p.uuid): p
         for p in point_de_vente.products
-        .filter(methode_caisse__isnull=False)
+        .filter(Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION))
         .prefetch_related(prix_euros_prefetch)
     }
 
-    # Pour les PV ADHESION : ajouter les produits adhesion publiés (chargement dynamique)
-    # For ADHESION POS: add published membership products (dynamic loading)
+    # Pour les PV ADHESION : ajouter aussi les produits adhesion publiés du tenant (dynamique)
+    # Meme s'ils ne sont pas dans le M2M du PV.
+    # For ADHESION POS: also add published membership products from the tenant (dynamic).
+    # Even if they are not in the POS M2M.
     if point_de_vente.comportement == PointDeVente.ADHESION:
         produits_adhesion = (
             Product.objects
@@ -1358,8 +1365,9 @@ def _creer_adhesions_depuis_panier(request, articles_panier):
         user_adhesion = get_or_create_user(email_client, send_mail=False)
 
     if user_adhesion is None:
-        logger.info("Adhésion sans identification client — Membership non créée")
-        return
+        # REFUS : pas d'identification → pas d'adhésion (validation serveur obligatoire)
+        # REJECT: no identification → no membership (mandatory server-side validation)
+        raise ValueError(_("Identification du membre obligatoire pour les adhesions"))
 
     prenom = request.POST.get("prenom_adhesion", "").strip()
     nom = request.POST.get("nom_adhesion", "").strip()
@@ -1992,20 +2000,19 @@ class PaiementViewSet(viewsets.ViewSet):
 
         wallet_lieu = asset_tlf.wallet_origin
 
-        # 4. Classifier les articles par methode_caisse
-        #    NFC = seulement VT (vente) et AD (adhésion). Les recharges sont rejetées par la garde.
-        # 4. Classify articles by methode_caisse
-        #    NFC = only VT (sale) and AD (membership). Top-ups are rejected by the guard.
+        # 4. Classifier les articles : adhesion (categorie_article=ADHESION) vs vente
+        #    NFC = seulement ventes et adhesions. Les recharges sont rejetées par la garde.
+        # 4. Classify articles: membership (categorie_article=ADHESION) vs sale
+        #    NFC = only sales and memberships. Top-ups are rejected by the guard.
         articles_vente = []
         articles_adhesion = []
 
         for article in articles_panier:
-            methode = article['product'].methode_caisse
-            if methode == Product.ADHESION_POS:
+            if article['product'].categorie_article == Product.ADHESION:
                 articles_adhesion.append(article)
             else:
-                # VT et tout autre methode → vente classique
-                # VT and any other method → standard sale
+                # Vente classique (VT ou tout autre type)
+                # / Standard sale (VT or any other type)
                 articles_vente.append(article)
 
         total_vente_centimes = _calculer_total_panier_centimes(articles_vente)
@@ -2131,6 +2138,154 @@ class PaiementViewSet(viewsets.ViewSet):
             "card_name": carte_client.tag_id,
         }
         return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  Flow adhésion : identification obligatoire avant paiement               #
+    #  Membership flow: mandatory identification before payment                #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get"], url_path="adhesion_choisir_identification", url_name="adhesion_choisir_identification")
+    def adhesion_choisir_identification(self, request):
+        """
+        GET /laboutik/paiement/adhesion_choisir_identification/?method=espece
+        Ecran : "Scanner carte TiBillet" ou "Saisir email / nom".
+        Affiché après le choix espèce/CB/chèque pour une adhésion.
+        / Screen: "Scan TiBillet card" or "Enter email / name".
+        Shown after cash/CB/check choice for a membership.
+        """
+        method = request.GET.get("method", "espece")
+        context = {"method": method}
+        return render(request, "laboutik/partial/hx_adhesion_choose_id.html", context)
+
+    @action(detail=False, methods=["get"], url_path="lire_nfc_adhesion", url_name="lire_nfc_adhesion")
+    def lire_nfc_adhesion(self, request):
+        """
+        GET /laboutik/paiement/lire_nfc_adhesion/?method=nfc
+        Attente NFC pour adhésion. Après scan, POST vers identifier_membre.
+        / NFC read wait for membership. After scan, POST to identifier_membre.
+        """
+        method = request.GET.get("method", "nfc")
+        context = {"method": method}
+        return render(request, "laboutik/partial/hx_read_nfc_adhesion.html", context)
+
+    @action(detail=False, methods=["get"], url_path="adhesion_formulaire", url_name="adhesion_formulaire")
+    def adhesion_formulaire(self, request):
+        """
+        GET /laboutik/paiement/adhesion_formulaire/?method=espece
+        Affiche le formulaire email/nom/prénom vierge.
+        / Displays the blank email/name form.
+        """
+        method = request.GET.get("method", "espece")
+        context = {"moyen_paiement": method}
+        return render(request, "laboutik/partial/hx_adhesion_form.html", context)
+
+    @action(detail=False, methods=["post"], url_path="identifier_membre", url_name="identifier_membre")
+    def identifier_membre(self, request):
+        """
+        POST /laboutik/paiement/identifier_membre/
+
+        Reçoit tag_id (scan NFC) OU email/nom/prénom (formulaire).
+        Retourne :
+        - Si user identifié → hx_adhesion_confirm.html (résumé + CONFIRMER)
+        - Si carte anonyme → hx_adhesion_form.html (formulaire pré-rempli avec tag_id)
+        - Si formulaire soumis avec email → validation puis hx_adhesion_confirm.html
+
+        Receives tag_id (NFC scan) OR email/name (form).
+        Returns:
+        - If user identified → hx_adhesion_confirm.html (summary + CONFIRM)
+        - If anonymous card → hx_adhesion_form.html (pre-filled form with tag_id)
+        - If form submitted with email → validation then hx_adhesion_confirm.html
+        """
+        tag_id = request.POST.get("tag_id", "").upper().strip()
+        email = request.POST.get("email_adhesion", "").strip().lower()
+        prenom = request.POST.get("prenom_adhesion", "").strip()
+        nom = request.POST.get("nom_adhesion", "").strip()
+        moyen_paiement = request.POST.get("moyen_paiement", "nfc")
+
+        user = None
+        carte = None
+
+        # Option 1 : scan NFC — chercher la carte et son user
+        # / Option 1: NFC scan — find the card and its user
+        if tag_id:
+            try:
+                carte = CarteCashless.objects.get(tag_id=tag_id)
+                user = carte.user
+            except CarteCashless.DoesNotExist:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Carte inconnue"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        # Option 2 : formulaire email — valider avec le serializer
+        # / Option 2: email form — validate with serializer
+        if email and not user:
+            serializer = AdhesionIdentificationSerializer(data=request.POST)
+            if not serializer.is_valid():
+                # Première erreur trouvée pour l'affichage
+                # / First error found for display
+                premiere_erreur = ""
+                for champ, erreurs in serializer.errors.items():
+                    premiere_erreur = erreurs[0]
+                    break
+                context = {
+                    "moyen_paiement": moyen_paiement,
+                    "tag_id": tag_id,
+                    "email": email,
+                    "prenom": prenom,
+                    "nom": nom,
+                    "erreur": premiere_erreur,
+                }
+                return render(request, "laboutik/partial/hx_adhesion_form.html", context)
+
+            email = serializer.validated_data["email_adhesion"]
+            prenom = serializer.validated_data["prenom_adhesion"]
+            nom = serializer.validated_data["nom_adhesion"]
+
+            user = get_or_create_user(email, send_mail=False)
+            if prenom and not user.first_name:
+                user.first_name = prenom
+            if nom and not user.last_name:
+                user.last_name = nom
+            if (prenom and not user.first_name) or (nom and not user.last_name):
+                pass  # déjà géré ci-dessus
+            user.save()
+
+        # User identifié → écran confirmation
+        # / User identified → confirmation screen
+        if user:
+            solde = 0
+            if hasattr(user, 'wallet') and user.wallet:
+                try:
+                    solde = WalletService.obtenir_total_en_centimes(user.wallet) / 100
+                except Exception:
+                    solde = 0
+
+            context = {
+                "user_email": user.email,
+                "user_prenom": user.first_name or prenom,
+                "user_nom": user.last_name or nom,
+                "user_solde": solde,
+                "tag_id": tag_id,
+                "moyen_paiement": moyen_paiement,
+            }
+            return render(request, "laboutik/partial/hx_adhesion_confirm.html", context)
+
+        # Carte anonyme (scan NFC mais pas de user) → formulaire avec tag_id
+        # / Anonymous card (NFC scan but no user) → form with tag_id
+        if carte and not user:
+            context = {
+                "tag_id": tag_id,
+                "moyen_paiement": moyen_paiement,
+            }
+            return render(request, "laboutik/partial/hx_adhesion_form.html", context)
+
+        # Aucune info → formulaire vierge
+        # / No info → blank form
+        context = {"moyen_paiement": moyen_paiement}
+        return render(request, "laboutik/partial/hx_adhesion_form.html", context)
 
     # ----------------------------------------------------------------------- #
     #  Annexes : lecture et vérification de carte NFC                           #

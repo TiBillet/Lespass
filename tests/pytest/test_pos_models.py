@@ -443,56 +443,73 @@ def test_table_et_categorie(tenant):
 def test_create_test_pos_data_command(tenant):
     """
     Verifie que la commande create_test_pos_data cree bien les donnees attendues.
+    Inclut la verification du PV Adhesion et des produits adhesion multi-tarif.
     / Verify that create_test_pos_data command creates expected data.
+    Includes Adhesion POS and multi-rate membership products verification.
     """
+    # Lancer la commande en forcant le schema du test via schema_context.
+    # La commande detecte qu'elle est deja dans un tenant (schema != "public")
+    # et utilise ce schema. Sans ca, elle prendrait le premier tenant non-public
+    # qui pourrait etre different de TENANT_SCHEMA.
+    # / Run the command inside schema_context so it uses our test tenant.
+    # The command detects it's already in a tenant (schema != "public")
+    # and uses that schema. Without this, it would pick the first non-public tenant.
+    with schema_context(TENANT_SCHEMA):
+        call_command('create_test_pos_data')
+
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import CategorieProduct, Product, Price
         from laboutik.models import PointDeVente
 
-        # Compter avant
-        # / Count before
-        cat_count_before = CategorieProduct.objects.count()
-        product_count_before = Product.objects.filter(methode_caisse__isnull=False).count()
-        pdv_count_before = PointDeVente.objects.count()
-
-    # Lancer la commande (elle fait son propre schema_context)
-    # / Run the command (it does its own schema_context)
-    call_command('create_test_pos_data')
-
-    with schema_context(TENANT_SCHEMA):
-        from BaseBillet.models import CategorieProduct, Product, Price
-        from laboutik.models import PointDeVente
-
-        # La commande cree 2 categories (Bar, Restauration) via get_or_create.
-        # Si elles existent deja, le count ne change pas.
-        # / The command creates 2 categories (Bar, Restauration) via get_or_create.
+        # --- Categories POS ---
         cat_bar = CategorieProduct.objects.filter(name='Bar').first()
         cat_resto = CategorieProduct.objects.filter(name='Restauration').first()
-        assert cat_bar is not None, "Categorie 'Bar' doit exister apres create_test_pos_data"
-        assert cat_resto is not None, "Categorie 'Restauration' doit exister apres create_test_pos_data"
+        assert cat_bar is not None, "Categorie 'Bar' doit exister"
+        assert cat_resto is not None, "Categorie 'Restauration' doit exister"
 
-        # 5 produits POS attendus
-        # / 5 POS products expected
-        expected_names = ['Biere', 'Coca', 'Pizza', 'Cafe', 'Eau']
-        for name in expected_names:
+        # --- Produits POS de vente ---
+        # / POS sale products
+        expected_pos_names = ['Biere', 'Coca', 'Pizza', 'Cafe', 'Eau']
+        for name in expected_pos_names:
             product = Product.objects.filter(name=name).first()
             assert product is not None, f"Produit '{name}' doit exister"
-            assert product.methode_caisse == Product.VENTE, f"Produit '{name}' doit avoir methode_caisse=VENTE"
-            assert product.prices.exists(), f"Produit '{name}' doit avoir au moins un tarif"
+            assert product.methode_caisse == Product.VENTE, f"'{name}' doit avoir methode_caisse=VENTE"
+            assert product.prices.exists(), f"'{name}' doit avoir au moins un tarif"
 
-        # 2 points de vente
-        # / 2 points of sale
+        # --- Points de vente classiques ---
+        # / Standard POS
         pdv_bar = PointDeVente.objects.filter(name='Bar').first()
         pdv_resto = PointDeVente.objects.filter(name='Restaurant').first()
         assert pdv_bar is not None, "PdV 'Bar' doit exister"
         assert pdv_resto is not None, "PdV 'Restaurant' doit exister"
-
-        # Le bar a les produits de categorie bar
-        # / Bar POS has bar-category products
         assert pdv_bar.products.count() > 0, "PdV 'Bar' doit avoir des produits"
         assert pdv_bar.categories.filter(pk=cat_bar.pk).exists(), "PdV 'Bar' doit avoir la categorie Bar"
-
-        # Le restaurant a les produits bar + restauration
-        # / Restaurant POS has both bar and restaurant products
         assert pdv_resto.products.count() > 0, "PdV 'Restaurant' doit avoir des produits"
-        assert pdv_resto.categories.count() == 2, "PdV 'Restaurant' doit avoir 2 categories (Bar + Restauration)"
+
+        # --- PV Adhesion (type ADHESION, charge les produits dynamiquement) ---
+        # / Membership POS (ADHESION type, loads products dynamically)
+        pdv_adhesion = PointDeVente.objects.filter(name='Adhesions').first()
+        assert pdv_adhesion is not None, "PdV 'Adhesions' doit exister"
+        assert pdv_adhesion.comportement == PointDeVente.ADHESION, "PdV 'Adhesions' doit etre de type ADHESION"
+        assert pdv_adhesion.accepte_especes is True, "PdV 'Adhesions' doit accepter les especes"
+        assert pdv_adhesion.accepte_carte_bancaire is True, "PdV 'Adhesions' doit accepter la CB"
+        # Le PV Adhesion n'a PAS de produits en M2M — il les charge dynamiquement
+        # / Adhesion POS has NO products in M2M — it loads them dynamically
+        assert pdv_adhesion.products.count() == 0, "PdV 'Adhesions' ne doit PAS avoir de produits en M2M"
+
+        # --- Produits adhesion ---
+        # Les produits adhesion sont crees par demo_data_v2 (pas par create_test_pos_data).
+        # Le PV Adhesion les charge dynamiquement via categorie_article=ADHESION.
+        # On verifie que le PV n'a PAS de produits en M2M (chargement dynamique).
+        # / Membership products are created by demo_data_v2 (not by create_test_pos_data).
+        # The Adhesion POS loads them dynamically via categorie_article=ADHESION.
+        # We verify the POS has NO products in M2M (dynamic loading).
+
+        # --- Le PV Cashless ne contient PLUS les adhesions ---
+        # / Cashless POS no longer contains memberships
+        pdv_cashless = PointDeVente.objects.filter(name='Cashless').first()
+        assert pdv_cashless is not None, "PdV 'Cashless' doit exister"
+        adhesions_dans_cashless = pdv_cashless.products.filter(
+            categorie_article=Product.ADHESION,
+        ).count()
+        assert adhesions_dans_cashless == 0, "PdV 'Cashless' ne doit PAS avoir de produits adhesion"

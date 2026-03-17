@@ -370,66 +370,18 @@ class Command(BaseCommand):
                     product.save(update_fields=list(pos_fields_to_update.keys()))
                     self.stdout.write(f"  Produit mis a jour : {product.name}")
 
-            # --- Produits adhesion (vrais produits BaseBillet, pas de methode_caisse) ---
-            # Ces produits sont affiches automatiquement dans les PV de type ADHESION
-            # grace a leur categorie_article=ADHESION. Pas besoin de M2M.
-            # / Membership products (real BaseBillet products, no methode_caisse).
-            # These products are auto-displayed in ADHESION-typed POS
-            # via their categorie_article=ADHESION. No M2M needed.
-            adhesion_annuelle, created_aa = Product.objects.get_or_create(
-                name="Adhesion annuelle",
-                defaults={
-                    "categorie_article": Product.ADHESION,
-                    "publish": True,
-                },
-            )
-            if created_aa:
-                # 3 tarifs : plein tarif, reduit, prix libre
-                # / 3 rates: full price, reduced, open price
-                Price.objects.create(
-                    product=adhesion_annuelle,
-                    name="Plein tarif",
-                    prix=Decimal("15.00"),
-                    subscription_type=Price.YEAR,
-                    order=0,
-                )
-                Price.objects.create(
-                    product=adhesion_annuelle,
-                    name="Tarif reduit",
-                    prix=Decimal("8.00"),
-                    subscription_type=Price.YEAR,
-                    order=1,
-                )
-                Price.objects.create(
-                    product=adhesion_annuelle,
-                    name="Prix libre",
-                    prix=Decimal("5.00"),
-                    free_price=True,
-                    subscription_type=Price.YEAR,
-                    order=2,
-                )
-                self.stdout.write(f"  Adhesion creee : {adhesion_annuelle.name} (3 tarifs)")
-            else:
-                self.stdout.write(f"  Adhesion existante : {adhesion_annuelle.name}")
-
-            adhesion_mensuelle, created_am = Product.objects.get_or_create(
-                name="Adhesion mensuelle",
-                defaults={
-                    "categorie_article": Product.ADHESION,
-                    "publish": True,
-                },
-            )
-            if created_am:
-                Price.objects.create(
-                    product=adhesion_mensuelle,
-                    name="Tarif unique",
-                    prix=Decimal("5.00"),
-                    subscription_type=Price.MONTH,
-                    order=0,
-                )
-                self.stdout.write(f"  Adhesion creee : {adhesion_mensuelle.name} (1 tarif)")
-            else:
-                self.stdout.write(f"  Adhesion existante : {adhesion_mensuelle.name}")
+            # --- Produits adhesion ---
+            # Les produits adhesion ne sont PAS crees ici.
+            # Ils sont crees par demo_data_v2.py (ou par l'admin dans l'interface).
+            # Le PV de type ADHESION les charge dynamiquement via
+            # Product.objects.filter(categorie_article=ADHESION, publish=True).
+            # / Membership products are NOT created here.
+            # They are created by demo_data_v2.py (or by admin in the interface).
+            # The ADHESION-typed POS loads them dynamically.
+            nb_adhesions = Product.objects.filter(
+                categorie_article=Product.ADHESION, publish=True,
+            ).count()
+            self.stdout.write(f"  Adhesions existantes : {nb_adhesions} produit(s) publies")
 
             # --- 3 points de vente ---
             # update_or_create pour mettre a jour l'icone meme si le PDV existait avant.

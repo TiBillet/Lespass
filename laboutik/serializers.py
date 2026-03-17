@@ -257,6 +257,50 @@ class ClotureSerializer(serializers.Serializer):
 #  Phase 5 serializer — Closure report export                                  #
 # --------------------------------------------------------------------------- #
 
+class AdhesionIdentificationSerializer(serializers.Serializer):
+    """
+    Valide le formulaire d'identification pour une adhésion POS.
+    Validates the identification form for a POS membership.
+
+    LOCALISATION : laboutik/serializers.py
+
+    Utilisé par PaiementViewSet.identifier_membre() quand le formulaire est soumis
+    (pas pour le scan NFC — dans ce cas, l'identification vient de la carte).
+    Used by PaiementViewSet.identifier_membre() when the form is submitted
+    (not for NFC scan — in that case, identification comes from the card).
+    """
+    email_adhesion = serializers.EmailField(
+        error_messages={
+            'required': _("L'email est obligatoire pour une adhésion"),
+            'invalid': _("Email invalide"),
+        },
+    )
+    prenom_adhesion = serializers.CharField(
+        required=True,
+        max_length=200,
+        error_messages={
+            'required': _("Le prénom est obligatoire"),
+            'blank': _("Le prénom ne peut pas être vide"),
+        },
+    )
+    nom_adhesion = serializers.CharField(
+        required=True,
+        max_length=200,
+        error_messages={
+            'required': _("Le nom est obligatoire"),
+            'blank': _("Le nom ne peut pas être vide"),
+        },
+    )
+    tag_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    moyen_paiement = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+
 class EnvoyerRapportSerializer(serializers.Serializer):
     """
     Valide l'adresse email pour l'envoi du rapport de cloture.

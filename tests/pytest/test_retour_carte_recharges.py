@@ -299,17 +299,35 @@ def produit_recharge_temps(premier_pv, test_data):
 
 @pytest.fixture(scope="module")
 def produit_adhesion(premier_pv, test_data):
-    """Product avec methode_caisse=AD + Price avec subscription_type=YEAR.
-    / Product with methode_caisse=AD + Price with subscription_type=YEAR."""
+    """Product adhesion (categorie_article=ADHESION) + Price avec subscription_type=YEAR.
+    Pas de methode_caisse — les adhesions sont identifiees par categorie_article.
+    / Membership product (categorie_article=ADHESION) + Price with subscription_type=YEAR.
+    No methode_caisse — memberships are identified by categorie_article."""
     with schema_context(TENANT_SCHEMA):
         produit, _ = Product.objects.get_or_create(
             name='Adhesion POS Test',
             defaults={
-                'methode_caisse': Product.ADHESION_POS,
                 'categorie_article': Product.ADHESION,
                 'publish': True,
             },
         )
+        # S'assurer que le produit est bien configure (peut exister d'un ancien run)
+        # / Ensure the product is properly configured (may exist from an older run)
+        champs_a_corriger = []
+        if produit.categorie_article != Product.ADHESION:
+            produit.categorie_article = Product.ADHESION
+            champs_a_corriger.append('categorie_article')
+        if not produit.publish:
+            produit.publish = True
+            champs_a_corriger.append('publish')
+        if produit.methode_caisse is not None:
+            produit.methode_caisse = None
+            champs_a_corriger.append('methode_caisse')
+        if champs_a_corriger:
+            produit.save(update_fields=champs_a_corriger)
+
+        # Ajoute au PV pour les tests NFC (le PV n'est pas de type ADHESION ici)
+        # / Add to POS for NFC tests (the POS is not ADHESION-typed here)
         if not premier_pv.products.filter(pk=produit.pk).exists():
             premier_pv.products.add(produit)
 
