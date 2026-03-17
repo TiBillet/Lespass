@@ -124,17 +124,27 @@ test.describe('Adhesions obligatoires M2M / Adhesions obligatoires M2M', () => {
       await addAdhesionSelect2(page, membershipName2);
     });
 
-    // --- Save and continue ---
+    // --- Save — PriceAdmin.response_change redirige vers la page Product parent ---
+    // --- Save — PriceAdmin.response_change redirects to the parent Product page ---
     await test.step('Save price / Enregistrer le tarif', async () => {
-      await page.locator('button[name="_continue"], input[name="_continue"]').first().click();
+      await page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first().click();
       await page.waitForLoadState('networkidle');
+      // Apres save, on est redirige vers la page Product parent avec un message de succes
+      // After save, we are redirected to the parent Product page with a success message
       const successMsg = page.locator('.messagelist .success, .alert-success, div.bg-green-100');
       await expect(successMsg).toBeVisible({ timeout: 5000 });
       console.log('Price saved with 2 adhesions');
     });
 
-    // --- Verify both adhesions are present after save ---
+    // --- Re-ouvrir la page Price pour verifier les adhesions ---
+    // --- Re-open the Price page to verify adhesions ---
     await test.step('Verify both adhesions saved / Verifier les 2 adhesions', async () => {
+      // Naviguer vers le tarif via le lien Change dans l'inline
+      // Navigate to the price via the Change link in the inline
+      const changeLink = page.locator('a[href*="/admin/BaseBillet/price/"]').first();
+      await changeLink.click();
+      await page.waitForLoadState('networkidle');
+
       const selected = await getSelectedAdhesions(page);
       expect(selected).toContain(membershipName1);
       expect(selected).toContain(membershipName2);
@@ -145,16 +155,22 @@ test.describe('Adhesions obligatoires M2M / Adhesions obligatoires M2M', () => {
     await test.step('Remove adhesion A / Retirer adhesion A', async () => {
       await removeAdhesionSelect2(page, membershipName1);
 
-      // Save
-      await page.locator('button[name="_continue"], input[name="_continue"]').first().click();
+      // Save — redirige vers Product parent
+      // Save — redirects to parent Product
+      await page.locator('button[type="submit"]:has-text("Save"), input[type="submit"]').first().click();
       await page.waitForLoadState('networkidle');
       const successMsg = page.locator('.messagelist .success, .alert-success, div.bg-green-100');
       await expect(successMsg).toBeVisible({ timeout: 5000 });
       console.log(`Removed adhesion A: ${membershipName1}`);
     });
 
-    // --- Verify only adhesion B remains ---
+    // --- Re-ouvrir la page Price et verifier ---
+    // --- Re-open Price page and verify ---
     await test.step('Verify only adhesion B remains / Verifier seule B reste', async () => {
+      const changeLink = page.locator('a[href*="/admin/BaseBillet/price/"]').first();
+      await changeLink.click();
+      await page.waitForLoadState('networkidle');
+
       const selected = await getSelectedAdhesions(page);
       expect(selected).not.toContain(membershipName1);
       expect(selected).toContain(membershipName2);

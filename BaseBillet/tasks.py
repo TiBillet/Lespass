@@ -150,21 +150,35 @@ def create_membership_invoice_pdf(membership: Membership):
 
     user = membership.user
 
-    # Determine recipient email safely; membership may be anonymous (no linked user)
-    email = None
-    try:
-        email = getattr(user, 'email', None)
-    except Exception:
-        email = None
-    # As a last resort, leave empty string to avoid AttributeError downstream
-    if not email:
-        email = ''
+    # Email du destinataire (peut être absent pour une adhésion anonyme)
+    # / Recipient email (may be absent for an anonymous membership)
+    email = getattr(user, 'email', None) or ''
+
+    # Paiement Stripe associé (None si paiement hors-ligne : espèces, chèque, virement)
+    # / Associated Stripe payment (None if offline payment: cash, check, transfer)
+    paiement_stripe = membership.stripe_paiement.filter(
+        status=Paiement_stripe.VALID
+    ).order_by('-datetime').first()
+
+    # Lignes d'articles hors-ligne (utilisées dans le template quand paiement_stripe est absent)
+    # / Offline sale lines (used in the template when paiement_stripe is absent)
+    lignes_hors_ligne = []
+    if not paiement_stripe:
+        lignes_hors_ligne = membership.lignearticles.filter(
+            status__in=[LigneArticle.PAID, LigneArticle.VALID]
+        ).select_related('pricesold', 'pricesold__price', 'pricesold__price__product')
 
     context = {
         'config': config,
-        'paiement': membership.stripe_paiement.filter(status=Paiement_stripe.VALID).order_by('-datetime').first(),
+        'paiement': paiement_stripe,
+        'lignes_hors_ligne': lignes_hors_ligne,
         'membership': membership,
         'email': email,
+        # Variables utilisées directement par le template (indépendantes de config.*)
+        # / Variables used directly by the template (independent from config.*)
+        'title': f"{config.organisation} — Reçu",
+        'tva_number': config.tva_number,
+        'siren': config.siren,
     }
 
     html = template.render(context)
@@ -872,7 +886,7 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
             },
             data=json_data,
             verify=bool(not settings.DEBUG),
-            timeout=2,
+            timeout=10,
         )
         if response.status_code == 200:
             logger.info("send_stripe_bank_deposit_to_laboutik sended_to_laboutik = True")
@@ -1581,7 +1595,7 @@ def send_to_ghost_email(email, name=None):
         headers = {'Authorization': f'Ghost {token}'}
 
         # Récupérer la liste des membres de l'instance Ghost
-        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers)
+        response = requests.get(ghost_url + "/ghost/api/admin/members/", params=filter, headers=headers, timeout=10)
 
         # Vérifier que la réponse de l'API est valide
         if response.ok:
@@ -1604,7 +1618,7 @@ def send_to_ghost_email(email, name=None):
 
                 # Ajouter le nouveau membre à l'instance Ghost
                 response = requests.post(ghost_url + "/ghost/api/admin/members/", json=member_data, headers=headers,
-                                         timeout=2)
+                                         timeout=10)
 
                 # Vérifier que la réponse de l'API est valide
                 if response.status_code == 201:
@@ -1616,12 +1630,20 @@ def send_to_ghost_email(email, name=None):
                     # Idempotent case: member already exists in Ghost, treat as success
                     logger.info(f"Le membre {email} existe déjà (détection via 422), aucune action nécessaire.")
                 else:
-                    logger.warning(f"Erreur lors de la création du nouveau membre : {response.text}")
+                    logger.warning(
+                        f"Erreur lors de la création du nouveau membre Ghost : "
+                        f"status={response.status_code}, email={email}, "
+                        f"response={response.text[:500] if response.text else '(vide)'}"
+                    )
             else:
                 # Afficher la liste des membres
                 logger.info(f"Le membre {email} existe déja dans : {members}")
         else:
-            logger.error(f"Erreur lors de la récupération des membres : {response.text}")
+            logger.error(
+                f"Erreur lors de la récupération des membres Ghost : "
+                f"status={response.status_code}, url={ghost_url}, email={email}, "
+                f"response={response.text[:500] if response.text else '(vide)'}"
+            )
 
         # On met à jour les logs pour debug
         try:

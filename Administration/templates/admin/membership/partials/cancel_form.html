@@ -1,0 +1,125 @@
+{% load i18n %}
+<!--
+FORMULAIRE DE CONFIRMATION D'ANNULATION D'ADHESION
+/ Membership cancellation confirmation form
+
+LOCALISATION : Administration/templates/admin/membership/partials/cancel_form.html
+
+Partial HTMX retourné en GET depuis /memberships/{pk}/cancel/.
+Remplace le bouton "Annuler l'adhésion" dans le panneau d'actions admin.
+Le POST renvoie un HX-Redirect vers la changelist.
+-->
+<form data-testid="membership-cancel-form"
+      hx-post="/memberships/{{ membership.pk }}/cancel/"
+      hx-target="#response-cancel"
+      hx-swap="innerHTML">
+    {% csrf_token %}
+
+    <div style="padding:1rem;border-radius:.375rem;background:#fef2f2;border:1px solid #fca5a5;font-size:.875rem">
+
+        <p style="font-weight:600;color:#991b1b;margin-bottom:.5rem">
+            {% translate "Confirmer l'annulation ?" %}
+        </p>
+
+        {# Récap de l'adhérent / Member summary #}
+        <p style="color:#7f1d1d;margin-bottom:.75rem">
+            <strong>{% translate "Adhérent·e" %} :</strong> {{ membership_email }}
+            {% if membership.price %}
+                — {{ membership.price.product.name }} / {{ membership.price.name }}
+            {% endif %}
+        </p>
+
+        {# Lignes de vente payées / Paid sale lines #}
+        {% if has_paid_lines %}
+        <div style="margin-bottom:.875rem;padding:.75rem;border-radius:.25rem;background:#fefce8;border:1px solid #fde68a">
+            <p style="font-size:.8125rem;font-weight:500;color:#92400e;margin-bottom:.375rem">
+                {% translate "Lignes de vente payées :" %}
+            </p>
+            <ul style="font-size:.8125rem;color:#a16207;list-style:disc;padding-left:1.25rem;margin-bottom:0">
+                {% for ligne in lignes_payees %}
+                <li>{{ ligne.pricesold }} — {{ ligne.total_decimal }} € (× {{ ligne.qty|floatformat:0 }})</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {# Explication des conséquences selon le contexte / Consequences explanation based on context #}
+        {% if has_paid_lines %}
+
+            {# Option sans avoir / Without credit note option #}
+            <div style="margin-bottom:.625rem;padding:.75rem;border-radius:.25rem;background:#fef2f2;border:1px solid #fca5a5">
+                <p style="font-size:.8125rem;font-weight:600;color:#991b1b;margin-bottom:.25rem">
+                    {% translate "Annuler sans avoir" %}
+                </p>
+                <p style="font-size:.8125rem;color:#7f1d1d;margin-bottom:0">
+                    {% translate "Supprime la fiche d'adhésion. Aucune ligne comptable n'est créée. Le remboursement éventuel est entièrement à votre charge." %}
+                </p>
+            </div>
+
+            {# Option avec avoir / With credit note option #}
+            <div style="margin-bottom:.875rem;padding:.75rem;border-radius:.25rem;background:#fff7ed;border:1px solid #fed7aa">
+                <p style="font-size:.8125rem;font-weight:600;color:#c2410c;margin-bottom:.25rem">
+                    {% translate "Annuler avec avoir" %}
+                </p>
+                <ul style="font-size:.8125rem;color:#9a3412;list-style:disc;padding-left:1.25rem;margin-bottom:.5rem;line-height:1.6">
+                    <li>{% translate "Supprime la fiche d'adhésion." %}</li>
+                    <li>
+                        {% translate "Crée une ligne comptable négative (avoir) visible dans" %}
+                        <a href="{% url 'staff_admin:BaseBillet_lignearticle_changelist' %}?membership={{ membership.pk }}"
+                           target="_blank" rel="noopener"
+                           style="color:#c2410c;text-decoration:underline">{% translate "l'admin Ventes" %}</a>.
+                    </li>
+                </ul>
+                <p style="font-size:.8125rem;color:#9a3412;font-style:italic;margin-bottom:0">
+                    {% translate "⚠ TiBillet ne procède à aucun remboursement automatique. Il vous appartient de vérifier que le remboursement a bien été effectué auprès de l'adhérent·e." %}
+                </p>
+            </div>
+
+        {% else %}
+
+            {# Pas de paiement : simple suppression / No payment: simple deletion #}
+            <div style="margin-bottom:.875rem;padding:.625rem .75rem;border-radius:.25rem;background:#fef2f2;border:1px solid #fca5a5">
+                <p style="font-size:.8125rem;color:#7f1d1d;margin-bottom:0">
+                    {% translate "Supprime la fiche d'adhésion. Aucune ligne de vente payée n'est associée à cette adhésion." %}
+                </p>
+            </div>
+
+        {% endif %}
+
+        {# Boutons / Buttons #}
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+
+            {# Retour : réinitialise la zone / Back: clears the response zone #}
+            <button type="button"
+                    hx-get="/memberships/{{ membership.pk }}/cancel_reset/"
+                    hx-target="#response-cancel"
+                    hx-swap="innerHTML"
+                    style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid #d1d5db;background:transparent;color:#374151;cursor:pointer">
+                {% translate "Retour" %}
+            </button>
+
+            <button type="submit"
+                    name="with_credit_note"
+                    value="0"
+                    data-testid="membership-cancel-confirm"
+                    style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:#dc2626;color:#fff;border:none;cursor:pointer">
+                {% if has_paid_lines %}
+                    {% translate "Annuler sans avoir" %}
+                {% else %}
+                    {% translate "Confirmer l'annulation" %}
+                {% endif %}
+            </button>
+
+            {% if has_paid_lines %}
+            <button type="submit"
+                    name="with_credit_note"
+                    value="1"
+                    data-testid="membership-cancel-with-credit-note"
+                    style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:#d97706;color:#fff;border:none;cursor:pointer">
+                {% translate "Annuler avec avoir" %}
+            </button>
+            {% endif %}
+
+        </div>
+    </div>
+</form>

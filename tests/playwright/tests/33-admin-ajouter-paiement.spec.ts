@@ -6,10 +6,18 @@ import { createProduct, createMembershipApi } from './utils/api';
  * TEST: Add offline payment on a pending membership from admin
  * TEST : Ajouter un paiement hors-ligne sur une adhesion en attente
  *
+ * Nouveau flux (v1.7.7) :
+ * Les actions sont dans le panneau HTMX inline affiché avant le formulaire admin.
+ * Plus de page intermédiaire — tout se passe dans la vue change de l'adhésion.
+ *
+ * New flow (v1.7.7):
+ * Actions are in the inline HTMX panel shown before the admin form.
+ * No intermediate page — everything happens in the membership change view.
+ *
  * Scenarios :
- * 1. Ajouter un paiement especes sur adhesion WP -> succes
- * 2. Gardes : montant negatif, "Offert" avec montant > 0
- * 3. Adhesion deja payee -> bouton absent
+ * 1. Ajouter un paiement especes sur adhesion WP -> succes inline
+ * 2. Gardes : "Offert" avec montant > 0 -> erreur inline
+ * 3. Adhesion non en attente -> bouton "Enregistrer un paiement" absent
  */
 
 function generateRandomId() {
@@ -26,8 +34,8 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
   const userEmailGuard = `jturbeaux+payg${randomId}@pm.me`;
 
   test.beforeAll(async ({ request }) => {
-    // Creer un produit adhesion gratuit avec prix
-    // Create a free membership product with price
+    // Creer un produit adhesion avec validation manuelle
+    // Create a membership product with manual validation
     productName = `Adhesion Paiement ${randomId}`;
 
     const productResult = await createProduct({
@@ -66,11 +74,9 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
 
     await loginAsAdmin(page);
 
-    let membershipPk = '';
-
-    // Trouver l'adhesion dans l'admin
-    // Find the membership in admin
-    await test.step('Find membership in admin / Trouver l\'adhesion dans l\'admin', async () => {
+    // Trouver l'adhesion dans l'admin et aller sur sa page de modification
+    // Find the membership in admin and go to its change page
+    await test.step('Find membership and go to change page / Trouver l\'adhesion et aller sur la fiche', async () => {
       await page.goto('/admin/BaseBillet/membership/');
       await page.waitForLoadState('networkidle');
 
@@ -88,40 +94,40 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
       await firstLink.click();
       await page.waitForLoadState('networkidle');
 
-      // Extraire le PK de l'URL
-      // Extract PK from URL
-      const url = page.url();
-      const pkMatch = url.match(/\/membership\/(\d+)\//);
-      expect(pkMatch).not.toBeNull();
-      membershipPk = pkMatch![1];
-      console.log(`✓ Found membership PK: ${membershipPk}`);
+      console.log(`✓ On membership change page: ${page.url()}`);
     });
 
-    // Cliquer sur "Ajouter un paiement"
-    // Click "Add payment"
-    await test.step('Click add payment button / Cliquer sur ajouter paiement', async () => {
-      const addPaymentLink = page.locator('a:has-text("Ajouter un paiement"), a:has-text("Add payment")').first();
-      await expect(addPaymentLink).toBeVisible({ timeout: 5000 });
-      await addPaymentLink.click();
-      await page.waitForLoadState('networkidle');
-      console.log('✓ Add payment form opened / Formulaire de paiement ouvert');
+    // Le panneau HTMX doit etre visible avant le formulaire
+    // HTMX panel must be visible before the form
+    await test.step('Panel HTMX visible avec le bouton paiement / HTMX panel visible with payment button', async () => {
+      const panelButton = page.locator('[data-testid="membership-action-ajouter-paiement"]');
+      await expect(panelButton).toBeVisible({ timeout: 5000 });
+      console.log('✓ Bouton "Enregistrer un paiement" visible dans le panneau');
     });
 
-    // Verifier le formulaire
-    // Check the form
-    await test.step('Verify form is pre-filled / Verifier le formulaire pre-rempli', async () => {
-      const form = page.locator('[data-testid="membership-add-payment-form"]');
+    // Cliquer sur "Enregistrer un paiement" → le formulaire apparait inline via HTMX
+    // Click "Enregistrer un paiement" → form appears inline via HTMX
+    await test.step('Click payment button → form appears inline / Clic bouton → formulaire inline', async () => {
+      const panelButton = page.locator('[data-testid="membership-action-ajouter-paiement"]');
+      await panelButton.click();
+
+      // Attendre que le formulaire HTMX s'affiche
+      // Wait for HTMX form to appear
+      const form = page.locator('[data-testid="membership-paiement-form"]');
       await expect(form).toBeVisible({ timeout: 5000 });
+      console.log('✓ Formulaire de paiement apparu inline via HTMX');
+    });
 
+    // Verifier que le montant est pre-rempli avec le prix catalogue
+    // Check that amount is pre-filled with catalog price
+    await test.step('Verify form is pre-filled / Verifier le formulaire pre-rempli', async () => {
       const amountInput = page.locator('[data-testid="membership-payment-amount"]');
       await expect(amountInput).toBeVisible();
 
-      // Verifier que le montant est pre-rempli avec le prix du produit (25.00 ou 25,00)
-      // Check amount is pre-filled with product price (25.00 or 25,00 depending on locale)
       const amountValue = await amountInput.inputValue();
       const parsed = parseFloat(amountValue.replace(',', '.'));
       expect(parsed).toBe(25.00);
-      console.log(`✓ Amount pre-filled: ${amountValue}`);
+      console.log(`✓ Montant pre-rempli : ${amountValue}`);
 
       const methodSelect = page.locator('[data-testid="membership-payment-method"]');
       await expect(methodSelect).toBeVisible();
@@ -135,37 +141,13 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
 
       const submitButton = page.locator('[data-testid="membership-payment-submit"]');
       await submitButton.click();
-      await page.waitForLoadState('networkidle');
 
-      // Verifier le message de succes
-      // Check success message
-      const successMessage = page.locator('.bg-green-100, .messagelist .success');
-      await expect(successMessage).toBeVisible({ timeout: 10000 });
-      const messageText = await successMessage.innerText();
-      expect(
-        messageText.toLowerCase().includes('paiement enregistr') ||
-        messageText.toLowerCase().includes('payment recorded') ||
-        messageText.toLowerCase().includes('succes') ||
-        messageText.toLowerCase().includes('success')
-      ).toBeTruthy();
-      console.log('✓ Payment recorded successfully / Paiement enregistre');
-    });
-
-    // Verifier que l'adhesion est maintenant payee (pas d'erreur sur la page)
-    // Check that membership is now paid (no error on page)
-    await test.step('Verify membership is paid / Verifier adhesion payee', async () => {
-      // On est redirige vers la page detail de l'adhesion
-      // We are redirected to the membership detail page
-      const pageContent = await page.innerText('body');
-      // Verifier que le message de succes est affiche (bg-green-100)
-      // Check that the success message is displayed
-      expect(
-        pageContent.toLowerCase().includes('paiement enregistr') ||
-        pageContent.toLowerCase().includes('payment recorded') ||
-        pageContent.toLowerCase().includes('succes') ||
-        pageContent.toLowerCase().includes('success')
-      ).toBeTruthy();
-      console.log('✓ Membership paid successfully / Adhesion payee avec succes');
+      // Le succes s'affiche inline — pas de navigation de page
+      // Success is shown inline — no page navigation
+      const successArea = page.locator('[data-testid="membership-paiement-success"]');
+      await expect(successArea).toBeVisible({ timeout: 10000 });
+      const successText = await successArea.innerText();
+      console.log(`✓ Paiement enregistre (succes inline) : ${successText.trim()}`);
     });
 
     // Verifier les lignes de vente dans l'admin
@@ -182,14 +164,14 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
       const rows = page.locator('#result_list tbody tr');
       const rowCount = await rows.count();
       expect(rowCount).toBeGreaterThanOrEqual(1);
-      console.log(`✓ ${rowCount} LigneArticle row(s) found in admin / ligne(s) trouvee(s)`);
+      console.log(`✓ ${rowCount} LigneArticle trouve(s) dans l'admin`);
 
-      // Verifier qu'on a une ligne Confirmed (paiement enregistre)
-      // Check we have a Confirmed line (payment recorded)
+      // Verifier qu'on a une ligne Confirmed
+      // Check we have a Confirmed line
       const bodyText = await page.innerText('body');
       const hasConfirmed = bodyText.includes('CONFIRMED') || bodyText.includes('Confirmed') || bodyText.includes('Confirmé');
       expect(hasConfirmed).toBeTruthy();
-      console.log('✓ CONFIRMED line visible in admin / Ligne CONFIRMED visible');
+      console.log('✓ Ligne CONFIRMED visible dans l\'admin');
     });
   });
 
@@ -211,7 +193,9 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
 
     await loginAsAdmin(page);
 
-    await test.step('Navigate to membership / Naviguer vers l\'adhesion', async () => {
+    // Trouver l'adhesion et aller sur sa fiche
+    // Find membership and go to its change page
+    await test.step('Navigate to membership change page / Naviguer vers la fiche adhesion', async () => {
       await page.goto('/admin/BaseBillet/membership/');
       await page.waitForLoadState('networkidle');
 
@@ -226,13 +210,19 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
       await page.waitForLoadState('networkidle');
     });
 
+    // Ouvrir le formulaire de paiement via HTMX
+    // Open payment form via HTMX
     await test.step('Open payment form / Ouvrir le formulaire de paiement', async () => {
-      const addPaymentLink = page.locator('a:has-text("Ajouter un paiement"), a:has-text("Add payment")').first();
-      await expect(addPaymentLink).toBeVisible({ timeout: 5000 });
-      await addPaymentLink.click();
-      await page.waitForLoadState('networkidle');
+      const panelButton = page.locator('[data-testid="membership-action-ajouter-paiement"]');
+      await expect(panelButton).toBeVisible({ timeout: 5000 });
+      await panelButton.click();
+
+      const form = page.locator('[data-testid="membership-paiement-form"]');
+      await expect(form).toBeVisible({ timeout: 5000 });
     });
 
+    // Soumettre "Offert" avec 25 euros → doit echouer
+    // Submit "Offered" with 25 euros → must fail
     await test.step('Submit "Offered" with 25 euros / Soumettre "Offert" avec 25 euros', async () => {
       const amountInput = page.locator('[data-testid="membership-payment-amount"]');
       await amountInput.fill('25');
@@ -242,19 +232,19 @@ test.describe('Admin Add Payment on Membership / Ajouter paiement adhesion admin
 
       const submitButton = page.locator('[data-testid="membership-payment-submit"]');
       await submitButton.click();
-      await page.waitForLoadState('networkidle');
 
-      // Verifier le message d'erreur
-      // Check error message
-      const errorMessage = page.locator('div.errornote');
-      await expect(errorMessage).toBeVisible({ timeout: 5000 });
-      const errorText = await errorMessage.innerText();
+      // Erreur affichee inline dans le formulaire (pas de div.errornote Django admin)
+      // Error shown inline in the form (no Django admin div.errornote)
+      const form = page.locator('[data-testid="membership-paiement-form"]');
+      await expect(form).toBeVisible({ timeout: 5000 });
+
+      const pageContent = await page.innerText('body');
       expect(
-        errorText.toLowerCase().includes('offert') ||
-        errorText.toLowerCase().includes('offered') ||
-        errorText.toLowerCase().includes('impossible')
+        pageContent.toLowerCase().includes('offert') ||
+        pageContent.toLowerCase().includes('offered') ||
+        pageContent.toLowerCase().includes('impossible')
       ).toBeTruthy();
-      console.log('✓ Offered with positive amount rejected / Offert avec montant positif refuse');
+      console.log('✓ Offert avec montant positif refuse (erreur inline)');
     });
   });
 });

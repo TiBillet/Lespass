@@ -64,7 +64,7 @@
                 </div>
 
                 {# Conteneur des tags: collapse sur xs/sm; visible sur ≥ md (d-md-flex) #}
-                <div class="collapse d-md-flex flex-wrap align-items-center gap-2 mt-2" id="tagFiltersCollapse">
+                <div class="collapse d-md-flex flex-wrap align-items-center gap-2 mt-2" id="tagFiltersCollapse" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
                     {% for tag in all_tags %}
                         <a class="btn btn-sm mb-1"
                            style="{{ tag.style_attr }}"
@@ -73,7 +73,7 @@
                            hx-target="body"
                            hx-swap="innerHTML"
                            hx-push-url="true"
-                            aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
+                                                      aria-label="{% blocktrans %}Filtrer par le tag {{ tag.name }}{% endblocktrans %}">
                             {{ tag.name }}
                         </a>
                     {% empty %}

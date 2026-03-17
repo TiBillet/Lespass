@@ -1,0 +1,18 @@
+{% load i18n %}
+<!--
+BOUTON INITIAL PAIEMENT
+/ Initial payment button
+
+LOCALISATION : Administration/templates/admin/membership/partials/ajouter_paiement_button.html
+
+Retourné par ajouter_paiement_reset (GET /memberships/{pk}/ajouter_paiement_reset/).
+Réinitialise #ajouter-paiement-area après que l'utilisateur a cliqué "Annuler".
+/ Returned by ajouter_paiement_reset. Resets #ajouter-paiement-area after user clicks "Annuler".
+-->
+<button data-testid="membership-action-ajouter-paiement"
+        hx-get="/memberships/{{ membership.pk }}/ajouter_paiement/"
+        hx-target="#ajouter-paiement-area"
+        hx-swap="innerHTML"
+        style="display:inline-flex;align-items:center;gap:.375rem;padding:.5rem 1rem;font-size:.875rem;font-weight:500;border-radius:.375rem;background:#16a34a;color:#fff;border:none;cursor:pointer">
+    {% translate "Enregistrer un paiement" %}
+</button>

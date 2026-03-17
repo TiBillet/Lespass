@@ -4,7 +4,7 @@
 {% block title %}{% translate 'My account' %}{% endblock %}
 
 {% block account_page %}
-<div class="row row-cols-1 row-cols-md-2 g-3 text-center">
+<div class="row row-cols-1 row-cols-md-2 g-3 text-center mb-3">
     <div class="col">
         <a class="w-100 btn btn-lg btn-outline-primary{% if account_tab == 'balance' %} active" aria-current="page{% endif %}"
             href="/my_account/balance/">
@@ -20,11 +20,11 @@
         </a>
     </div>
     <div class="col">
-    <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}"
-        href="/my_account/my_reservations/">
-        <i class="bi bi-ticket-perforated-fill fs-1"></i>
-        <span class="d-block">{% trans 'My bookings' %}</span>
-    </a>
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'reservations' %} active" aria-current="page{% endif %}"
+            href="/my_account/my_reservations/">
+            <i class="bi bi-ticket-perforated-fill fs-1"></i>
+            <span class="d-block">{% trans 'My bookings' %}</span>
+        </a>
     </div>
     <!-- <div class="col"> -->
 {#                    <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'punchclock' %} active" aria-current="page{% endif %}"#}
@@ -53,7 +53,7 @@
             <i class="bi bi-key-fill fs-1"></i>
             <span class="d-block">{% trans 'Admin panel' %}</span>
         </a>
-{% endif %}
+    {% endif %}
     </div>
     <div class="col">
         <a class="w-100 btn btn-lg btn-outline-secondary" href="/deconnexion/">

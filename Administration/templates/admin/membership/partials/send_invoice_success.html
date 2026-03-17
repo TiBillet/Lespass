@@ -1,0 +1,14 @@
+{% load i18n %}
+<!--
+CONFIRMATION ENVOI RECU PAR EMAIL
+/ Receipt sent by email confirmation
+
+LOCALISATION : Administration/templates/admin/membership/partials/send_invoice_success.html
+
+Partial HTMX retourné après l'envoi du reçu PDF par email.
+Remplace le bouton dans la carte "Reçu" du panneau d'actions.
+-->
+<div data-testid="membership-send-invoice-success"
+     style="padding:.75rem;border-radius:.375rem;background:#f0fdf4;border:1px solid #86efac;font-size:.875rem;color:#166534">
+    ✓ {% blocktranslate with email=membership.user.email %}Reçu envoyé à {{ email }}.{% endblocktranslate %}
+</div>

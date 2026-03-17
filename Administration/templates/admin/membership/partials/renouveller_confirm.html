@@ -1,0 +1,71 @@
+{% load i18n %}
+<!--
+CONFIRMATION DE RENOUVELLEMENT D'ADHÉSION
+/ Membership renewal confirmation
+
+LOCALISATION : Administration/templates/admin/membership/partials/renouveller_confirm.html
+
+Partial HTMX retourné en GET depuis /memberships/{pk}/renouveller/.
+Affiche un résumé et les avertissements avant de naviguer vers le formulaire d'ajout pré-rempli.
+Le bouton "Continuer" est un lien direct (navigation normale) vers le formulaire d'ajout.
+Le bouton "Annuler" vide la zone via renouveller_reset.
+-->
+<div style="padding:1rem;border-radius:.375rem;border:1px solid #e5e7eb;background:#f9fafb;font-size:.875rem">
+
+    {# Adhérent concerné / Member info #}
+    <p style="font-weight:600;color:#374151;margin-bottom:.625rem">
+        {% translate "Renouveller l'adhésion ?" %}
+    </p>
+
+    <div style="margin-bottom:.75rem;color:#6b7280;font-size:.8125rem">
+        <p>
+            <strong>{% translate "Adhérent·e" %} :</strong>
+            {{ membership.first_name }} {{ membership.last_name }}
+            {% if membership.user %}({{ membership.user.email }}){% endif %}
+        </p>
+        {% if membership.price %}
+        <p>
+            <strong>{% translate "Produit actuel" %} :</strong>
+            {{ membership.price.product.name }} — {{ membership.price.name }}
+        </p>
+        {% endif %}
+        {% if membership.contribution_value %}
+        <p>
+            <strong>{% translate "Contribution actuelle" %} :</strong>
+            {{ membership.contribution_value }} €
+        </p>
+        {% endif %}
+    </div>
+
+    {# Explication de l'action / Action explanation #}
+    <div style="margin-bottom:.875rem;padding:.75rem;border-radius:.25rem;background:#eff6ff;border:1px solid #bfdbfe">
+        <p style="font-size:.8125rem;font-weight:500;color:#1e40af;margin-bottom:.375rem">
+            {% translate "Ce que va faire cette action :" %}
+        </p>
+        <ul style="font-size:.8125rem;color:#1d4ed8;list-style:disc;padding-left:1.25rem;margin-bottom:0;line-height:1.6">
+            <li>{% translate "Ouvrir un nouveau formulaire d'adhésion pré-rempli avec les informations actuelles" %}</li>
+            <li>{% translate "Vérifiez le moyen de paiement et la contribution avant de sauvegarder" %}</li>
+            <li>{% translate "La nouvelle adhésion ne sera créée qu'après avoir cliqué sur « Enregistrer »" %}</li>
+        </ul>
+    </div>
+
+    {# Boutons / Buttons #}
+    <div style="display:flex;gap:.5rem;justify-content:flex-end">
+
+        {# Annuler : vide la zone de réponse / Cancel: clears the response zone #}
+        <button type="button"
+                hx-get="/memberships/{{ membership.pk }}/renouveller_reset/"
+                hx-target="#response-renouveller"
+                hx-swap="innerHTML"
+                style="padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;border:1px solid #d1d5db;background:transparent;color:#374151;cursor:pointer">
+            {% translate "Annuler" %}
+        </button>
+
+        {# Continuer : navigation directe vers le formulaire pré-rempli / Continue: direct navigation to pre-filled form #}
+        <a href="{{ renouveller_url }}"
+           style="display:inline-flex;align-items:center;gap:.25rem;padding:.4rem .875rem;font-size:.8125rem;font-weight:500;border-radius:.375rem;background:#2563eb;color:#fff;text-decoration:none">
+            {% translate "Continuer vers le formulaire" %} →
+        </a>
+
+    </div>
+</div>

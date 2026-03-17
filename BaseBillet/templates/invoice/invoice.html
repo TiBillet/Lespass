@@ -155,9 +155,17 @@
 
 <dl id="informations">
     <dt>{% trans 'Number' %}</dt>
+    {% if paiement %}
     <dd>{{ paiement.invoice_number }}</dd>
+    {% else %}
+    <dd>{{ membership.last_contribution|date:"ymd" }}-{{ membership.pk }}</dd>
+    {% endif %}
     <dt>{% trans 'Date' %}</dt>
+    {% if paiement %}
     <dd>{{ paiement.order_date }}</dd>
+    {% else %}
+    <dd>{{ membership.last_contribution }}</dd>
+    {% endif %}
 </dl>
 <table>
     <thead>
@@ -170,13 +178,23 @@
     </tr>
     </thead>
     <tbody>
-    {% for line in paiement.lignearticles.all %}<tr>
-        <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
-        <td>{{ line.amount_decimal }}€</td>
-        <td>{{ line.qty | floatformat:2 }}</td>
-        <td>{{ line.vat }}%</td>
-        <td>{{ line.total_decimal }}€</td>
-    </tr>{% endfor %}
+    {% if paiement %}
+        {% for line in paiement.lignearticles.all %}<tr>
+            <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
+            <td>{{ line.amount_decimal }}€</td>
+            <td>{{ line.qty | floatformat:2 }}</td>
+            <td>{{ line.vat }}%</td>
+            <td>{{ line.total_decimal }}€</td>
+        </tr>{% endfor %}
+    {% else %}
+        {% for line in lignes_hors_ligne %}<tr>
+            <td>{{ line.pricesold.price.product.name }} / {{ line.pricesold.price.name }}</td>
+            <td>{{ line.amount_decimal }}€</td>
+            <td>{{ line.qty | floatformat:2 }}</td>
+            <td>{{ line.vat }}%</td>
+            <td>{{ line.total_decimal }}€</td>
+        </tr>{% endfor %}
+    {% endif %}
     </tbody>
 </table>
 
@@ -191,9 +209,15 @@
         </thead>
         <tbody>
         <tr>
+            {% if paiement %}
             <td>{{ paiement.last_action }}</td>
             <td>Stripe</td>
-            <td>{{ paiement.total}}€</td>
+            <td>{{ paiement.total }}€</td>
+            {% else %}
+            <td>{{ membership.last_contribution }}</td>
+            <td>{{ membership.payment_method_name }}</td>
+            <td>{{ membership.contribution_value }}€</td>
+            {% endif %}
         </tr>
         </tbody>
     </table>

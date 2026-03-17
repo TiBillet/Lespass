@@ -1,6 +1,6 @@
 {% load i18n %}
 
-<nav class="navbar navbar-expand-xl bg-body">
+<nav class="navbar navbar-expand-xl bg-body" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
     <div class="container-lg justify-content-between">
       <a class="navbar-brand flex-grow-1" href="/" hx-get="/" hx-target="body" hx-push-url="true">
         {% if config.logo %}

@@ -170,11 +170,22 @@
             <!-- Informations clés avec flèches -->
             <div class="infos-clefs texte-bleu mb-4">
 
-                <!-- Date de l'événement -->
+                <!-- Date et heure de l'événement -->
+                <!-- On affiche la période complète si une date de fin existe -->
                 <div class="d-flex align-items-center mb-2">
                     <span class="fleche-info me-3">→</span>
                     <span class="h4 police-mono fw-bold m-0">
-                        {{ event.datetime|date:"l d F Y" }}
+                        {% if event.end_datetime %}
+                            <!-- Si c'est le même jour, on affiche juste le jour -->
+                            {% if event.datetime|date:"Y-m-d" == event.end_datetime|date:"Y-m-d" %}
+                                {{ event.datetime|date:"l d F Y" }}
+                            <!-- Sinon, on affiche la période du ... au ... -->
+                            {% else %}
+                                {% translate "Du" %} {{ event.datetime|date:"l d" }} {% translate "au" %} {{ event.end_datetime|date:"l d F Y" }}
+                            {% endif %}
+                        {% else %}
+                            {{ event.datetime|date:"l d F Y" }}
+                        {% endif %}
                     </span>
                 </div>
 

@@ -3494,7 +3494,7 @@ class FormbricksConfig(SingletonModel):
     """
 
     api_key = models.CharField(max_length=200, blank=True, null=True)
-    api_host = models.CharField(max_length=220, default="https://app.formbricks.com")
+    api_host = models.CharField(max_length=220, default="", blank=True)
 
     def get_api_key(self):
         return fernet_decrypt(self.api_key) if self.api_key else None

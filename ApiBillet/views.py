@@ -1086,6 +1086,47 @@ class Webhook_stripe(APIView):
                         except Exception as e:
                             logger.error(f"Erreur envoi email SEPA pending: {e}")
 
+                # FR: Si c'est une contribution Crowds payée via Stripe (direct_debit),
+                #     on met à jour la contribution en PAID et on envoie l'email de confirmation.
+                #     Cela couvre le cas où l'utilisateur ne revient pas sur le site après Stripe
+                #     (navigateur fermé, timeout, etc.).
+                # EN: If this is a Crowds contribution paid via Stripe (direct_debit),
+                #     update the contribution to PAID and send the confirmation email.
+                #     This covers the case where the user doesn't return to the site after Stripe
+                #     (browser closed, timeout, etc.).
+                contribution_uuid = metadata.get("contribution_uuid")
+                if contribution_uuid and paiement_stripe.status in [Paiement_stripe.PAID, Paiement_stripe.VALID]:
+                    try:
+                        from crowds.models import Contribution
+                        from crowds.tasks import email_contribution_paid_user
+                        contribution = Contribution.objects.select_related(
+                            "ligne_article",
+                        ).get(pk=contribution_uuid)
+                        if contribution.payment_status != Contribution.PaymentStatus.PAID:
+                            contribution.payment_status = Contribution.PaymentStatus.PAID
+                            contribution.paid_at = timezone.now()
+                            contribution.save(update_fields=["payment_status", "paid_at"])
+                            logger.info(f"Webhook_stripe: Contribution Crowds {contribution_uuid} marquée PAID")
+
+                            # FR: Passer la LigneArticle en VALID et libérer traitement_en_cours.
+                            #     Le produit "crowdfunding" a categorie_article=NONE, pas de trigger automatique.
+                            # EN: Set LigneArticle to VALID and release traitement_en_cours flag.
+                            if contribution.ligne_article:
+                                contribution.ligne_article.status = LigneArticle.VALID
+                                contribution.ligne_article.save(update_fields=["status"])
+                            paiement_stripe.traitement_en_cours = False
+                            paiement_stripe.status = Paiement_stripe.VALID
+                            paiement_stripe.save(update_fields=["traitement_en_cours", "status"])
+
+                            # FR: Envoyer l'email de confirmation (async via Celery)
+                            # EN: Send confirmation email (async via Celery)
+                            email_contribution_paid_user.delay(
+                                tenant.schema_name,
+                                str(contribution.pk),
+                            )
+                    except Exception as e:
+                        logger.error(f"Webhook_stripe: erreur mise à jour contribution Crowds: {e}")
+
                 return Response(f"Traité par /api/Webhook_stripe : {paiement_stripe.get_status_display()}", status=status.HTTP_200_OK)
 
         elif payload.get('type') == "checkout.session.async_payment_failed":

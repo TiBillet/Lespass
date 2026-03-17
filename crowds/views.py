@@ -92,6 +92,120 @@ def clear_user_funded_cache(user):
     cache.delete(_user_funded_cache_key(tenant_id, user.pk))
 
 
+def contribution_stripe_return(request, initiative_uuid, contribution_uuid, paiement_uuid):
+    """
+    FR: Page de retour après paiement Stripe d'une contribution Crowds.
+        Vérifie le statut du paiement auprès de Stripe,
+        met à jour la contribution si le paiement est confirmé,
+        puis redirige vers la page de l'initiative.
+    EN: Return page after Stripe payment for a Crowds contribution.
+
+    LOCALISATION : crowds/views.py
+
+    FLUX :
+    1. L'utilisateur paye sur Stripe et est redirigé ici
+    2. On vérifie que le paiement Stripe correspond à la contribution
+    3. Si le webhook n'a pas déjà traité le paiement, on interroge Stripe
+    4. Si confirmé : contribution PAID + email de confirmation via Celery
+    5. Redirection vers la page de l'initiative
+
+    COMMUNICATION :
+    - Reçoit : GET depuis Stripe Checkout (success_url / cancel_url)
+    - Appelle : crowds.tasks.email_contribution_paid_user (Celery)
+    - Redirige : /crowd/<initiative_uuid>/
+    """
+    contribution = get_object_or_404(
+        Contribution.objects.select_related("paiement_stripe", "ligne_article"),
+        pk=contribution_uuid,
+        initiative__pk=initiative_uuid,
+    )
+
+    # FR: On vérifie que l'UUID du paiement correspond bien
+    # EN: Verify the payment UUID matches
+    paiement = get_object_or_404(Paiement_stripe, uuid=paiement_uuid)
+
+    if contribution.paiement_stripe_id and contribution.paiement_stripe_id == paiement.pk:
+        # FR: Si la contribution est déjà PAID (traitée par le webhook Stripe),
+        #     pas besoin de re-vérifier ni de renvoyer l'email.
+        # EN: If contribution is already PAID (processed by Stripe webhook),
+        #     no need to re-check or re-send email.
+        contribution_deja_payee = contribution.payment_status == Contribution.PaymentStatus.PAID
+
+        if not contribution_deja_payee:
+            # FR: Interroger Stripe pour mettre à jour le statut du paiement
+            # EN: Query Stripe to update payment status
+            paiement.update_checkout_status()
+            paiement.refresh_from_db()
+
+            # FR: Si Stripe confirme le paiement, on passe la contribution en PAID
+            # EN: If Stripe confirms payment, set contribution to PAID
+            paiement_est_confirme = paiement.status in [
+                Paiement_stripe.PAID,
+                Paiement_stripe.VALID,
+            ]
+            if paiement_est_confirme:
+                contribution.payment_status = Contribution.PaymentStatus.PAID
+                contribution.paid_at = timezone.now()
+                contribution.save(update_fields=["payment_status", "paid_at"])
+
+                # FR: Passer la LigneArticle en VALID et libérer le flag traitement_en_cours.
+                #     Le produit "crowdfunding" a categorie_article=NONE, donc le trigger
+                #     TRIGGER_LigneArticlePaid_ActionByCategorie ne fait rien pour cette catégorie.
+                #     On doit le faire manuellement ici.
+                # EN: Set LigneArticle to VALID and release the traitement_en_cours flag.
+                #     The "crowdfunding" product has categorie_article=NONE, so the trigger
+                #     doesn't handle this category. We must do it manually here.
+                if contribution.ligne_article:
+                    contribution.ligne_article.status = LigneArticle.VALID
+                    contribution.ligne_article.save(update_fields=["status"])
+                if contribution.paiement_stripe:
+                    contribution.paiement_stripe.traitement_en_cours = False
+                    contribution.paiement_stripe.status = Paiement_stripe.VALID
+                    contribution.paiement_stripe.save(update_fields=["traitement_en_cours", "status"])
+
+                # FR: Envoyer un email de confirmation au contributeur (async via Celery)
+                # EN: Send a confirmation email to the contributor (async via Celery)
+                from crowds.tasks import email_contribution_paid_user
+                email_contribution_paid_user.delay(
+                    connection.tenant.schema_name,
+                    str(contribution.pk),
+                )
+
+    # FR: Invalider le cache du montant financé par l'utilisateur
+    # EN: Invalidate user funded amount cache
+    if request.user.is_authenticated:
+        clear_user_funded_cache(request.user)
+
+    # FR: Redirection vers la page de détail de l'initiative
+    # EN: Redirect to the initiative detail page
+    return HttpResponseRedirect(f"/crowd/{initiative_uuid}/")
+
+
+def _get_or_create_crowdfunding_price() -> Price:
+    """
+    FR: Récupère ou crée le produit technique utilisé pour le financement (global et contributions).
+    EN: Retrieves or creates the technical product used for funding (global and contributions).
+    """
+    product = Product.objects.filter(name__iexact="crowdfunding").order_by("pk").first()
+    if not product:
+        product = Product.objects.create(
+            name="crowdfunding",
+            categorie_article=Product.NONE,
+            publish=False,
+            nominative=False,
+        )
+    price = product.prices.order_by("pk").first()
+    if not price:
+        price = Price.objects.create(
+            product=product,
+            name="Libre",
+            prix=Decimal("0.00"),
+            free_price=True,
+            publish=False,
+        )
+    return price
+
+
 class GlobalFundingViewset(viewsets.ViewSet):
     """
     FR: Gère le financement "global" (don non affecté à un projet précis au départ).
@@ -99,30 +213,6 @@ class GlobalFundingViewset(viewsets.ViewSet):
     """
     authentication_classes = [SessionAuthentication]
     permission_classes = [permissions.AllowAny]
-
-    def _get_or_create_crowdfunding_price(self) -> Price:
-        """
-        FR: Récupère ou crée le produit technique utilisé pour le financement global.
-        EN: Retrieves or creates the technical product used for global funding.
-        """
-        product = Product.objects.filter(name__iexact="crowdfunding").order_by("pk").first()
-        if not product:
-            product = Product.objects.create(
-                name="crowdfunding",
-                categorie_article=Product.NONE,
-                publish=False,
-                nominative=False,
-            )
-        price = product.prices.order_by("pk").first()
-        if not price:
-            price = Price.objects.create(
-                product=product,
-                name="Libre",
-                prix=Decimal("0.00"),
-                free_price=True,
-                publish=False,
-            )
-        return price
 
     def create(self, request):
         """
@@ -143,7 +233,7 @@ class GlobalFundingViewset(viewsets.ViewSet):
 
         # FR: Préparation de la ligne comptable (LigneArticle)
         # EN: Accounting line preparation (LigneArticle)
-        price_obj = self._get_or_create_crowdfunding_price()
+        price_obj = _get_or_create_crowdfunding_price()
         amount_decimal = (Decimal(amount_cents) / Decimal("100")).quantize(Decimal("0.01"))
         price_sold_obj = get_or_create_price_sold(price_obj, custom_amount=amount_decimal)
 
@@ -1013,9 +1103,22 @@ class InitiativeViewSet(viewsets.ViewSet):
     def contribute(self, request, pk=None):
         """
         FR: Crée une contribution financière à une initiative.
-            Champs attendus: amount (en centimes), contributor_name, description.
+            Si direct_debit est activé, redirige vers Stripe Checkout.
+            Sinon, la contribution reste en attente (PENDING).
         EN: Creates a financial contribution to an initiative.
-            Expected fields: amount (in cents), contributor_name, description.
+
+        LOCALISATION : crowds/views.py (InitiativeViewSet)
+
+        FLUX :
+        1. Reçoit POST depuis le popup SweetAlert2 (detail.html, openContributionModal)
+        2. Valide via ContributionCreateSerializer
+        3. Crée la Contribution en base
+        4. Si direct_debit=True : crée LigneArticle + Paiement_stripe, retourne JSON {"stripe_url": ...}
+        5. Si direct_debit=False : retourne le partial HTML contributions.html (comportement par défaut)
+
+        COMMUNICATION :
+        - Reçoit : POST HTMX depuis detail.html (openContributionModal)
+        - Retourne : HTML partial (sans direct_debit) ou JSON avec stripe_url (avec direct_debit)
         """
         initiative = get_object_or_404(Initiative, pk=pk)
         
@@ -1036,14 +1139,94 @@ class InitiativeViewSet(viewsets.ViewSet):
             return _render_contributions(400)
 
         validated_contrib_data = contribution_serializer.validated_data
-        Contribution.objects.create(
+        contribution = Contribution.objects.create(
             initiative=initiative,
             contributor=request.user,
             contributor_name=validated_contrib_data.get("contributor_name") or "",
             description=validated_contrib_data.get("description") or "",
             amount=validated_contrib_data.get("amount") or 0,
         )
-        
+
+        # FR: Si l'initiative demande un paiement direct (direct_debit=True),
+        #     on crée une session Stripe Checkout et on redirige l'utilisateur.
+        #     Sinon, la contribution reste en attente (PENDING) — c'est le comportement par défaut.
+        # EN: If the initiative requires direct payment (direct_debit=True),
+        #     we create a Stripe Checkout session and redirect the user.
+        #     Otherwise, the contribution stays pending (PENDING) — default behavior.
+        if initiative.direct_debit:
+            # FR: Convertir le montant de centimes (int) vers euros (Decimal) pour Stripe
+            # EN: Convert amount from cents (int) to euros (Decimal) for Stripe
+            montant_en_centimes = contribution.amount
+            montant_en_euros = (Decimal(montant_en_centimes) / Decimal("100")).quantize(Decimal("0.01"))
+
+            # FR: Récupérer ou créer le produit technique "crowdfunding" et son prix libre
+            # EN: Get or create the "crowdfunding" technical product and its free price
+            price_crowdfunding = _get_or_create_crowdfunding_price()
+            price_sold_obj = get_or_create_price_sold(price_crowdfunding, custom_amount=montant_en_euros)
+
+            # FR: Créer la ligne comptable (LigneArticle) pour le suivi des ventes
+            # EN: Create the accounting line (LigneArticle) for sales tracking
+            ligne_comptable = LigneArticle.objects.create(
+                pricesold=price_sold_obj,
+                qty=1,
+                amount=montant_en_centimes,
+                payment_method=PaymentMethod.STRIPE_NOFED,
+                sale_origin=SaleOrigin.LESPASS,
+            )
+
+            # FR: Métadonnées envoyées à Stripe (visibles dans le dashboard Stripe)
+            # EN: Metadata sent to Stripe (visible in the Stripe dashboard)
+            stripe_metadata = {
+                "tenant": f"{connection.tenant.uuid}",
+                "contribution_uuid": f"{contribution.pk}",
+                "user": f"{request.user.email}",
+            }
+
+            # FR: Créer la session de paiement Stripe.
+            #     L'URL de retour sera :
+            #     /crowd/<initiative>/<contributions>/<contribution>/<paiement_stripe>/stripe-return/
+            #     (CreationPaiementStripe insère automatiquement l'UUID du paiement entre absolute_domain et success_url)
+            # EN: Create the Stripe payment session.
+            #     The return URL will be:
+            #     /crowd/<initiative>/contributions/<contribution>/<paiement_stripe>/stripe-return/
+            #     (CreationPaiementStripe automatically inserts the payment UUID between absolute_domain and success_url)
+            payment_builder = CreationPaiementStripe(
+                user=request.user,
+                liste_ligne_article=[ligne_comptable],
+                metadata=stripe_metadata,
+                reservation=None,
+                source=Paiement_stripe.FRONT_CROWDS,
+                success_url="stripe-return/",
+                cancel_url="stripe-return/",
+                absolute_domain=request.build_absolute_uri(
+                    f"/crowd/{initiative.pk}/contributions/{contribution.pk}/"
+                ),
+            )
+
+            if not payment_builder.is_valid():
+                return JsonResponse(
+                    {"error": _("Erreur lors de la création du paiement.")},
+                    status=400,
+                )
+
+            # FR: Marquer la ligne comptable comme "non payée" en attendant le retour Stripe
+            # EN: Mark the accounting line as "unpaid" while waiting for Stripe return
+            paiement_stripe_db = payment_builder.paiement_stripe_db
+            paiement_stripe_db.lignearticles.all().update(status=LigneArticle.UNPAID)
+
+            # FR: Lier le paiement Stripe et la ligne comptable à la contribution
+            # EN: Link the Stripe payment and accounting line to the contribution
+            contribution.paiement_stripe = paiement_stripe_db
+            contribution.ligne_article = ligne_comptable
+            contribution.save(update_fields=["paiement_stripe", "ligne_article"])
+
+            # FR: Invalider le cache et retourner l'URL Stripe en JSON
+            #     Le JS côté client (htmx:afterOnLoad) redirige automatiquement vers cette URL
+            # EN: Invalidate cache and return the Stripe URL as JSON
+            #     Client-side JS (htmx:afterOnLoad) automatically redirects to this URL
+            clear_user_funded_cache(request.user)
+            return JsonResponse({"stripe_url": payment_builder.checkout_session.url})
+
         return _render_contributions(200)
 
     @action(detail=True, methods=["post"], url_path=r"contributions/(?P<cid>[^/.]+)/mark-paid")
@@ -1079,6 +1262,9 @@ class InitiativeViewSet(viewsets.ViewSet):
             pass
             
         return _render_contributions(status_code=200)
+
+    # contribution_stripe_return est une vue standalone dans crowds/urls.py
+    # (pas une action DRF, car CreationPaiementStripe insère l'UUID du paiement dans l'URL)
 
     @action(detail=True, methods=["post"], url_path="close")
     def close_initiative(self, request, pk=None):

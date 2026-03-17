@@ -586,30 +586,47 @@
                 });
             }
 
-            // Gère uniquement les réponses JSON (paiement) et ignore le HTML (ex: vote badge)
+            // FR: Empêcher HTMX de faire le swap quand la réponse est du JSON (paiement Stripe).
+            //     Sans ça, le JSON brut s'affiche dans #contributions_list avant la redirection.
+            // EN: Prevent HTMX from swapping when the response is JSON (Stripe payment).
+            //     Without this, raw JSON shows in #contributions_list before redirect.
+            document.body.addEventListener('htmx:beforeSwap', function (event) {
+                try {
+                    var xhr = event.detail.xhr;
+                    var ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
+                    if (ctype.includes('application/json')) {
+                        // FR: Annuler le swap — le JSON sera traité par afterOnLoad ci-dessous
+                        // EN: Cancel the swap — JSON will be handled by afterOnLoad below
+                        event.detail.shouldSwap = false;
+                    }
+                } catch (e) { /* noop */ }
+            });
+
+            // FR: Gère les réponses JSON (paiement Stripe, erreurs).
+            //     Ignore les réponses HTML (partials HTMX comme vote badge).
+            // EN: Handles JSON responses (Stripe payment, errors).
+            //     Ignores HTML responses (HTMX partials like vote badge).
             document.body.addEventListener('htmx:afterOnLoad', function (event) {
                 try {
-                    const xhr = event.detail.xhr;
-                    const ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
+                    var xhr = event.detail.xhr;
+                    var ctype = (xhr.getResponseHeader('Content-Type') || '').toLowerCase();
                     if (!ctype.includes('application/json')) {
-                        return; // rien à faire pour les réponses HTML (partials HTMX)
+                        return;
                     }
-                    const data = JSON.parse(xhr.responseText || 'null');
+                    var data = JSON.parse(xhr.responseText || 'null');
                     if (!data) return;
                     if (data.stripe_url) {
                         Swal.fire({
                             icon: 'success',
-                            title: 'Redirection vers le paiement...',
+                            title: '{% translate "Redirection vers le paiement..." %}',
                             showConfirmButton: false,
                             timer: 1500
                         });
-                        setTimeout(() => window.location.href = data.stripe_url, 1200);
+                        setTimeout(function () { window.location.href = data.stripe_url; }, 1200);
                     } else if (data.error) {
-                        Swal.fire('Erreur', data.error, 'error');
+                        Swal.fire('{% translate "Erreur" %}', data.error, 'error');
                     }
-                } catch (e) {
-                    // ignore
-                }
+                } catch (e) { /* noop */ }
             });
 
             // --- Vote (detail page): only login helper, swap handled by HTMX returning HTML ---

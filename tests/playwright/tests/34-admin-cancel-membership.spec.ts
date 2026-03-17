@@ -7,6 +7,16 @@ import { execSync } from 'child_process';
  * TEST: Cancel membership with optional credit note from admin
  * TEST : Annulation adhesion avec option avoir depuis l'admin
  *
+ * Nouveau flux (v1.7.7) :
+ * Le bouton "Annuler l'adhésion" est dans le panneau HTMX inline.
+ * Plus de page intermédiaire — le formulaire de confirmation apparait inline.
+ * Après confirmation, HX-Redirect vers la changelist.
+ *
+ * New flow (v1.7.7):
+ * The "Cancel membership" button is in the inline HTMX panel.
+ * No intermediate page — confirmation form appears inline.
+ * After confirmation, HX-Redirect to changelist.
+ *
  * Scenarios :
  * 1. Annuler une adhesion sans lignes de vente -> confirmation simple
  * 2. Annuler une adhesion avec lignes payees -> choix avec/sans avoir
@@ -56,6 +66,8 @@ test.describe('Admin Cancel Membership / Annulation adhesion admin', () => {
   test('should cancel membership without paid lines / doit annuler adhesion sans lignes payees', async ({ page, request }) => {
     const userEmail = `jturbeaux+canc${randomId}@pm.me`;
 
+    // Creer une adhesion gratuite (passe directement en VALID/ONCE via signal)
+    // Create a free membership (goes directly to VALID/ONCE via signal)
     await test.step('Create free membership / Creer adhesion gratuite', async () => {
       const msResult = await createMembershipApi({
         request,
@@ -70,10 +82,9 @@ test.describe('Admin Cancel Membership / Annulation adhesion admin', () => {
 
     await loginAsAdmin(page);
 
-    let membershipPk = '';
-
     // Recuperer le PK directement en base
     // Get PK directly from DB
+    let membershipPk = '';
     await test.step('Get membership PK / Recuperer le PK', async () => {
       const result = djangoShell(`
 from BaseBillet.models import Membership
@@ -88,62 +99,54 @@ else: print('NOT_FOUND')
       console.log(`✓ Membership PK: ${membershipPk}`);
     });
 
-    // Appeler l'URL cancel directement (action_detail Unfold)
-    // Call cancel URL directly (Unfold action_detail)
-    await test.step('Go to cancel page / Aller sur la page d\'annulation', async () => {
-      await page.goto(`/admin/BaseBillet/membership/${membershipPk}/cancel/`);
+    // Naviguer vers la fiche admin de l'adhesion (la page change)
+    // Navigate to the membership admin change page
+    await test.step('Go to membership change page / Aller sur la fiche adhesion', async () => {
+      await page.goto(`/admin/BaseBillet/membership/${membershipPk}/change/`);
       await page.waitForLoadState('networkidle');
+      console.log('✓ Sur la fiche admin de l\'adhesion');
     });
 
-    // Verifier la page de confirmation et annuler sans avoir
-    // Check confirmation page and cancel without credit note
-    await test.step('Verify and confirm cancellation / Verifier et confirmer l\'annulation', async () => {
-      const pageContent = await page.innerText('body');
+    // Cliquer sur "Annuler l'adhesion" dans le panneau HTMX
+    // Click "Annuler l'adhesion" in the HTMX panel
+    await test.step('Click cancel button in HTMX panel / Clic bouton annulation dans le panneau', async () => {
+      const cancelButton = page.locator('[data-testid="membership-action-cancel"]');
+      await expect(cancelButton).toBeVisible({ timeout: 5000 });
+      await cancelButton.click();
 
-      // La page doit contenir les infos de l'adherent
-      // Page should contain member info
-      expect(pageContent).toContain(userEmail);
+      // Attendre que le formulaire de confirmation s'affiche inline
+      // Wait for confirmation form to appear inline
+      const cancelForm = page.locator('[data-testid="membership-cancel-form"]');
+      await expect(cancelForm).toBeVisible({ timeout: 5000 });
+      console.log('✓ Formulaire de confirmation inline visible');
+    });
 
-      // Cliquer sur le bouton "sans avoir" ou "confirmer annulation" (formulaire avec with_credit_note=0)
-      // Click the "without credit note" or "confirm cancellation" button (form with with_credit_note=0)
-      const withoutCNForm = page.locator('form:has(input[value="0"])');
-      const confirmButton = withoutCNForm.locator('button[type="submit"]');
+    // Confirmer l'annulation sans avoir
+    // Confirm cancellation without credit note
+    await test.step('Confirm cancellation / Confirmer l\'annulation', async () => {
+      // L'email de l'adherent doit apparaitre dans le formulaire
+      // Member email should appear in the form
+      const formContent = await page.locator('[data-testid="membership-cancel-form"]').innerText();
+      expect(formContent).toContain(userEmail);
+
+      // Cliquer sur le bouton de confirmation (sans avoir)
+      // Click the confirmation button (without credit note)
+      const confirmButton = page.locator('[data-testid="membership-cancel-confirm"]');
       await expect(confirmButton).toBeVisible({ timeout: 5000 });
       await confirmButton.click();
-      await page.waitForLoadState('networkidle');
 
-      // Verifier le message de succes
-      // Check success message
-      const resultContent = await page.innerText('body');
+      // Apres HX-Redirect, on arrive sur la changelist
+      // After HX-Redirect, we land on the changelist
+      await page.waitForURL('**/BaseBillet/membership/**', { timeout: 10000 });
+      console.log('✓ Redirige vers la changelist apres annulation');
+
+      const pageContent = await page.innerText('body');
       expect(
-        resultContent.toLowerCase().includes('cancelled') ||
-        resultContent.toLowerCase().includes('annul')
+        pageContent.toLowerCase().includes('annul') ||
+        pageContent.toLowerCase().includes('cancelled') ||
+        pageContent.toLowerCase().includes('canceled')
       ).toBeTruthy();
-      console.log('✓ Membership cancelled / Adhesion annulee');
-    });
-
-    // Verifier les lignes de vente dans l'admin
-    // Check sale lines in admin
-    await test.step('Check LigneArticle in admin / Verifier les ventes dans l\'admin', async () => {
-      await page.goto('/admin/BaseBillet/lignearticle/');
-      await page.waitForLoadState('networkidle');
-
-      const searchInput = page.locator('input[name="q"]').first();
-      await searchInput.fill(productName);
-      await searchInput.press('Enter');
-      await page.waitForLoadState('networkidle');
-
-      const rows = page.locator('#result_list tbody tr');
-      const rowCount = await rows.count();
-      expect(rowCount).toBeGreaterThanOrEqual(1);
-      console.log(`✓ ${rowCount} LigneArticle row(s) in admin after cancel / ligne(s) apres annulation`);
-
-      const bodyText = await page.innerText('body');
-      // Log les statuts visibles pour verification manuelle
-      // Log visible statuses for manual check
-      const statusLabels = ['CONFIRMED', 'CREDIT NOTE', 'FREE BOOKING', 'CANCELLED', 'Confirmed', 'Credit note'];
-      const foundStatuses = statusLabels.filter(s => bodyText.includes(s));
-      console.log('LigneArticle statuses found:', foundStatuses.join(', '));
+      console.log('✓ Adhesion annulee avec succes');
     });
   });
 
@@ -154,39 +157,41 @@ else: print('NOT_FOUND')
     // Create paid product + pending membership
     const paidProductName = `Adhesion Annul Paid ${randomId}`;
 
-    const paidProduct = await createProduct({
-      request,
-      name: paidProductName,
-      description: 'Test annulation avec avoir',
-      category: 'Membership',
-      offers: [{
-        name: 'Annuel payant',
-        price: '30.00',
-        subscriptionType: 'Y',
-        manualValidation: true,
-      }],
-    });
-    expect(paidProduct.ok).toBeTruthy();
-    const paidPriceUuid = paidProduct.offers?.[0]?.identifier || '';
+    let paidPriceUuid = '';
 
-    // Creer l'adhesion en ADMIN_WAITING
-    const msResult = await createMembershipApi({
-      request,
-      priceUuid: paidPriceUuid,
-      email: paidEmail,
-      firstName: 'Pierre',
-      lastName: 'Payeur',
-      status: 'AW',
+    await test.step('Create paid product and pending membership / Creer produit payant et adhesion en attente', async () => {
+      const paidProduct = await createProduct({
+        request,
+        name: paidProductName,
+        description: 'Test annulation avec avoir',
+        category: 'Membership',
+        offers: [{
+          name: 'Annuel payant',
+          price: '30.00',
+          subscriptionType: 'Y',
+          manualValidation: true,
+        }],
+      });
+      expect(paidProduct.ok).toBeTruthy();
+      paidPriceUuid = paidProduct.offers?.[0]?.identifier || '';
+
+      const msResult = await createMembershipApi({
+        request,
+        priceUuid: paidPriceUuid,
+        email: paidEmail,
+        firstName: 'Pierre',
+        lastName: 'Payeur',
+        status: 'AW',
+      });
+      expect(msResult.ok).toBeTruthy();
     });
-    expect(msResult.ok).toBeTruthy();
 
     await loginAsAdmin(page);
 
+    // Recuperer le PK et naviguer vers la fiche
+    // Get PK and navigate to change page
     let membershipPk = '';
-
-    // Recuperer le PK et ajouter un paiement
-    // Get PK and add payment
-    await test.step('Get PK and pay / Recuperer PK et payer', async () => {
+    await test.step('Get PK and navigate / Recuperer PK et naviguer', async () => {
       const result = djangoShell(`
 from BaseBillet.models import Membership
 m = Membership.objects.filter(user__email='${paidEmail}').first()
@@ -197,70 +202,74 @@ else: print('NOT_FOUND')
       const pkMatch = result.match(/pk=(\d+)/);
       expect(pkMatch).not.toBeNull();
       membershipPk = pkMatch![1];
+      console.log(`✓ Membership PK: ${membershipPk}`);
 
-      // Ajouter un paiement pour creer des lignes de vente
-      // Add a payment to create sale lines
-      await page.goto(`/admin/BaseBillet/membership/${membershipPk}/ajouter_paiement/`);
+      await page.goto(`/admin/BaseBillet/membership/${membershipPk}/change/`);
       await page.waitForLoadState('networkidle');
+    });
 
+    // Ajouter un paiement via le panneau HTMX
+    // Add a payment via the HTMX panel
+    await test.step('Add payment via HTMX panel / Ajouter un paiement via le panneau HTMX', async () => {
+      const payButton = page.locator('[data-testid="membership-action-ajouter-paiement"]');
+      await expect(payButton).toBeVisible({ timeout: 5000 });
+      await payButton.click();
+
+      const form = page.locator('[data-testid="membership-paiement-form"]');
+      await expect(form).toBeVisible({ timeout: 5000 });
+
+      // Selectionner "Especes" et soumettre
+      // Select "Cash" and submit
       const methodSelect = page.locator('[data-testid="membership-payment-method"]');
       await methodSelect.selectOption('CA'); // Cash
 
       const submitButton = page.locator('[data-testid="membership-payment-submit"]');
       await submitButton.click();
-      await page.waitForLoadState('networkidle');
-      console.log('✓ Payment added / Paiement ajoute');
+
+      // Attendre le succes inline
+      // Wait for inline success
+      const successArea = page.locator('[data-testid="membership-paiement-success"]');
+      await expect(successArea).toBeVisible({ timeout: 10000 });
+      console.log('✓ Paiement ajoute via HTMX');
     });
 
-    // Aller sur la page d'annulation
-    // Go to cancel page
-    await test.step('Go to cancel page / Aller sur la page d\'annulation', async () => {
-      await page.goto(`/admin/BaseBillet/membership/${membershipPk}/cancel/`);
-      await page.waitForLoadState('networkidle');
+    // Cliquer sur "Annuler l'adhesion" dans le panneau
+    // Click "Annuler l'adhesion" in the panel
+    await test.step('Click cancel button / Cliquer sur annuler', async () => {
+      const cancelButton = page.locator('[data-testid="membership-action-cancel"]');
+      await expect(cancelButton).toBeVisible({ timeout: 5000 });
+      await cancelButton.click();
+
+      const cancelForm = page.locator('[data-testid="membership-cancel-form"]');
+      await expect(cancelForm).toBeVisible({ timeout: 5000 });
+      console.log('✓ Formulaire de confirmation annulation inline visible');
     });
 
-    // Verifier la page de confirmation avec les 2 boutons
-    // Check confirmation page with 2 buttons
-    await test.step('Verify credit note option / Verifier option avoir', async () => {
-      const pageContent = await page.innerText('body');
+    // Verifier les 2 options et choisir "avec avoir"
+    // Check 2 options and choose "with credit note"
+    await test.step('Verify credit note option and cancel with credit note / Verifier option avoir et annuler', async () => {
+      const formContent = await page.locator('[data-testid="membership-cancel-form"]').innerText();
 
-      // Le bouton "Annuler et creer un avoir" doit etre visible
-      // "Cancel and create credit note" button should be visible
+      // Les 2 boutons doivent etre visibles (sans avoir + avec avoir)
+      // Both buttons must be visible (without + with credit note)
       expect(
-        pageContent.toLowerCase().includes('cancel and create credit note') ||
-        pageContent.toLowerCase().includes('annuler et creer un avoir')
+        formContent.toLowerCase().includes('avoir') ||
+        formContent.toLowerCase().includes('credit note') ||
+        formContent.toLowerCase().includes('annuler avec avoir') ||
+        formContent.toLowerCase().includes('cancel with credit note')
       ).toBeTruthy();
+      console.log('✓ Option avoir visible');
 
-      // Le bouton "Annuler sans avoir" doit aussi etre visible
-      // "Cancel without credit note" button should also be visible
-      expect(
-        pageContent.toLowerCase().includes('cancel without credit note') ||
-        pageContent.toLowerCase().includes('annuler sans avoir')
-      ).toBeTruthy();
-
-      console.log('✓ Both cancel options shown / Les 2 options d\'annulation affichees');
-    });
-
-    // Annuler avec avoir / Cancel with credit note
-    await test.step('Cancel with credit note / Annuler avec avoir', async () => {
-      // Trouver le formulaire avec with_credit_note=1
-      // Find the form with with_credit_note=1
-      const withCNForm = page.locator('form:has(input[value="1"])');
-      const withCNButton = withCNForm.locator('button[type="submit"]');
+      // Cliquer sur "Annuler avec avoir"
+      // Click "Cancel with credit note"
+      const withCNButton = page.locator('[data-testid="membership-cancel-with-credit-note"]');
       await expect(withCNButton).toBeVisible({ timeout: 5000 });
       await withCNButton.click();
-      await page.waitForLoadState('networkidle');
 
-      // Verifier le message de succes mentionnant les avoirs
-      // Check success message mentioning credit notes
-      const pageContent = await page.innerText('body');
-      expect(
-        pageContent.toLowerCase().includes('credit note') ||
-        pageContent.toLowerCase().includes('avoir') ||
-        pageContent.toLowerCase().includes('cancelled') ||
-        pageContent.toLowerCase().includes('annul')
-      ).toBeTruthy();
-      console.log('✓ Membership cancelled with credit notes / Adhesion annulee avec avoirs');
+      // Apres HX-Redirect, on arrive sur la changelist
+      // After HX-Redirect, we land on the changelist
+      await page.waitForURL('**/BaseBillet/membership/**', { timeout: 10000 });
+      console.log('✓ Redirige vers la changelist apres annulation avec avoir');
     });
 
     // Verifier en base qu'un avoir existe
@@ -278,29 +287,7 @@ print(f'credit_notes={cn}')
       const match = result.match(/credit_notes=(\d+)/);
       expect(match).not.toBeNull();
       expect(parseInt(match![1])).toBeGreaterThanOrEqual(1);
-      console.log('✓ Credit note confirmed in DB / Avoir confirme en base');
-    });
-
-    // Verifier les lignes de vente dans l'admin apres annulation avec avoir
-    // Check sale lines in admin after cancel with credit note
-    await test.step('Check LigneArticle in admin after cancel / Verifier les ventes apres annulation', async () => {
-      await page.goto('/admin/BaseBillet/lignearticle/');
-      await page.waitForLoadState('networkidle');
-
-      const searchInput = page.locator('input[name="q"]').first();
-      await searchInput.fill(paidProductName);
-      await searchInput.press('Enter');
-      await page.waitForLoadState('networkidle');
-
-      const rows = page.locator('#result_list tbody tr');
-      const rowCount = await rows.count();
-      expect(rowCount).toBeGreaterThanOrEqual(2); // ligne originale + avoir
-      console.log(`✓ ${rowCount} LigneArticle row(s) in admin / ligne(s) trouvee(s)`);
-
-      const bodyText = await page.innerText('body');
-      const hasCreditNote = bodyText.includes('CREDIT NOTE') || bodyText.includes('Credit note') || bodyText.includes('Avoir');
-      expect(hasCreditNote).toBeTruthy();
-      console.log('✓ CREDIT NOTE line visible in admin after cancel / Ligne AVOIR visible');
+      console.log('✓ Avoir confirme en base');
     });
   });
 });

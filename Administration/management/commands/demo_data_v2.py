@@ -1896,4 +1896,4 @@ class Command(BaseCommand):
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
 
         # Export du dump SQL pour --quick
-        self._dump_database()
+        # self._dump_database()

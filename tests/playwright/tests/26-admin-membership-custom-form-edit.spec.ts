@@ -291,8 +291,11 @@ print('OK')
             await expect(nomInput).toBeVisible({ timeout: 3000 });
             await nomInput.fill('Test Annulation');
 
-            // Cliquer sur Annuler / Click Cancel
-            const cancelButton = page.locator('button:has-text("Annuler"), button:has-text("Cancel")').first();
+            // Cliquer sur Annuler dans le formulaire d'édition (data-testid ciblé pour éviter
+            // de cliquer sur le bouton "Annuler l'adhésion" du panneau HTMX en tête de page)
+            // Click Cancel in the edit form (targeted data-testid to avoid clicking the
+            // "Annuler l'adhésion" button in the HTMX panel at the top of the page)
+            const cancelButton = page.locator('[data-testid="custom-form-cancel-btn"]');
             await cancelButton.click();
             await page.waitForTimeout(500);
 

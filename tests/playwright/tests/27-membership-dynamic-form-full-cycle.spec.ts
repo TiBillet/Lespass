@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { loginAsAdmin } from './utils/auth';
-import { fillStripeCard } from './utils/stripe';
+// fillStripeCard non utilisé — le tarif est gratuit (0€), pas de Stripe
+// fillStripeCard not used — the price is free (0€), no Stripe
 
 /**
  * TEST: Full E2E cycle — Membership with all dynamic form field types
@@ -301,27 +302,20 @@ test.describe('Full Membership Dynamic Form Cycle / Cycle complet formulaire dyn
       console.log('✓ All 6 dynamic fields filled / 6 champs dynamiques remplis');
     });
 
-    await test.step('Submit and pay via Stripe / Valider et payer', async () => {
+    await test.step('Submit and verify confirmation / Valider et vérifier la confirmation', async () => {
       const submitButton = page.locator('#membership-submit');
       await expect(submitButton).toBeEnabled();
       await submitButton.click();
 
-      // Attendre la redirection Stripe / Wait for Stripe redirect
-      console.log('Waiting for Stripe... / Attente Stripe...');
-      await page.waitForURL(/checkout.stripe.com/, { timeout: 30000 });
+      // Le tarif est gratuit (0€) : pas de redirection Stripe.
+      // Le serveur retourne free_confirmed.html dans l'offcanvas.
+      // The price is free (0€): no Stripe redirect.
+      // The server returns free_confirmed.html in the offcanvas.
+      console.log('Waiting for confirmation... / Attente confirmation...');
 
-      // Remplir la carte Stripe / Fill Stripe card
-      await fillStripeCard(page, USER_EMAIL);
-      await page.locator('button[type="submit"]').click();
-    });
-
-    await test.step('Verify success / Vérifier le succès', async () => {
-      // Attendre le retour sur le site / Wait for redirect back
-      await page.waitForURL(url => url.hostname.includes('tibillet.localhost'), { timeout: 30000 });
-
-      const successMessage = page.locator('text=/merci|confirmée|succès|success/i');
+      const successMessage = page.locator('text=/confirmée|confirmed|succès|success/i');
       await expect(successMessage).toBeVisible({ timeout: 15000 });
-      console.log('✓ Membership purchase successful / Achat adhésion réussi');
+      console.log('✓ Membership confirmed (free) / Adhésion confirmée (gratuite)');
     });
   });
 

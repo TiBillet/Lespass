@@ -1,0 +1,126 @@
+{% extends 'emails/base.html' %}
+{% load humanize static i18n %}
+
+{#
+  Email FALC : Confirmation de paiement d'une contribution Crowds
+  FALC email: Payment confirmation for a Crowds contribution
+
+  LOCALISATION : crowds/templates/crowds/email/contribution_paid_user.html
+
+  Message simple et clair pour confirmer le paiement.
+  Simple, clear message to confirm payment.
+
+  Variables attendues / Expected context variables:
+    - username          : nom ou email de l'utilisateur / user name or email
+    - title             : titre de l'email / email title
+    - sub_title         : sous-titre / subtitle
+    - objet             : objet affiché dans le header / header object text
+    - now               : date/heure actuelle / current datetime
+    - image_url         : logo du lieu (header) / place logo (header)
+    - main_text         : texte principal / main text
+    - main_text_2       : texte secondaire (optionnel) / secondary text (optional)
+    - table_info        : dict clé/valeur (détails du paiement) / key/value dict (payment details)
+    - button            : dict {url, text} pour le bouton CTA / CTA button dict
+    - button_color      : couleur du bouton / button color
+    - initiative_image_url : URL de l'image de l'initiative (optionnel) / initiative image URL (optional)
+    - initiative_name   : nom de l'initiative / initiative name
+    - end_text          : texte de fin / closing text
+    - signature         : signature / signature
+#}
+
+{% block content %}
+    <tr>
+        <td class="pt-28 td_content"
+            style="background:#fff; padding:44px 64px 57px; border:1px solid #dcdcd9; border-radius:8px;">
+            <table align="center" cellpadding="0" cellspacing="0" class="w-100p"
+                   style="max-width:472px; margin:0 auto;" width="472">
+
+                {# Sous-titre / Subtitle #}
+                <tr>
+                    <td>
+                        <table style="border-spacing: 0px;">
+                            <tr>
+                                <td valign="middle"><span
+                                        style="font-weight:bold;color:#636360;font:10px Arial-Bold, Helvetica-Bold, sans-serif;text-transform:uppercase;">{{ sub_title }}</span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                {# Titre principal / Main title #}
+                <tr>
+                    <td>
+                        <h1 style="font-weight:400;color:#1d1d1b;font:24px/32px Arial, Helvetica, sans-serif;margin: 30px 0 20px;">
+                            {{ title }}</h1>
+                    </td>
+                </tr>
+
+                {# Image de l'initiative (si disponible) / Initiative image (if available) #}
+                {% if initiative_image_url %}
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <img src="{{ initiative_image_url }}"
+                                 alt="{{ initiative_name }}"
+                                 width="472"
+                                 style="width:100%; max-width:472px; height:auto; border-radius:6px; display:block;"
+                            />
+                        </td>
+                    </tr>
+                {% endif %}
+
+                {# Texte principal / Main text #}
+                <tr>
+                    <td>
+                        <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;margin: 0 0 24px 0;">
+                            {% translate "Bonjour" %}{% if username %} {{ username }}{% endif %},
+                            <br/><br/>
+                            {{ main_text }}
+                            {% if main_text_2 %}
+                                <br/><br/>
+                                {{ main_text_2 }}
+                            {% endif %}
+                        </p>
+                    </td>
+                </tr>
+
+                {# Détails du paiement (tableau clé/valeur) / Payment details (key/value table) #}
+                {% for cle, valeur in table_info.items %}
+                    <tr>
+                        <td>
+                            <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;{% if forloop.last %}margin: 0 0 24px 0;{% endif %}">
+                                {{ cle }} : <span style="color: #1d1d1b; font-weight:bold;">{{ valeur }}</span>
+                            </p>
+                        </td>
+                    </tr>
+                {% endfor %}
+
+                {# Bouton CTA (lien vers la page de l'initiative) / CTA button (link to initiative page) #}
+                {% if button %}
+                    <tr>
+                        <td style="padding: 0 0 24px 0;">
+                            <table style="width:100%;border-spacing: 0px;padding: 0px;">
+                                <tr>
+                                    <td class="active-t btn" align="center"
+                                        style="background:{{ button_color }};font:13px/16px Arial, Helvetica, sans-serif;border-radius:3px;height:48px;">
+                                        <a style="color:#ffffff; text-decoration:none; display:block; padding:16px 10px;"
+                                           target="_blank"
+                                           href="{{ button.url }}">{{ button.text }}</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                {% endif %}
+
+                {# Signature / Closing #}
+                <tr>
+                    <td>
+                        <p style="font-weight:400;color:#70706d;font:14px/24px Arial, Helvetica-Light, sans-serif;padding-top:32px;">
+                            {{ end_text }},<br/>{{ signature }}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+{% endblock %}

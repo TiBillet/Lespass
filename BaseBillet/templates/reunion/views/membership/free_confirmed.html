@@ -1,0 +1,64 @@
+{% load i18n static %}
+
+<!-- Contenu de confirmation pour adhésion gratuite / confirmée sans paiement -->
+<div id="membership-pending-content" class="p-3">
+    <div class="d-flex flex-column gap-3">
+        <div class="alert alert-success mb-0" role="alert">
+            <h5 class="alert-heading mb-1">{% trans "Adhésion confirmée !" %}</h5>
+            <p class="mb-0">{% trans "Votre adhésion a bien été enregistrée." %}</p>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-subtitle text-muted mb-2">{% trans "Récapitulatif" %}</h6>
+                <ul class="list-unstyled mb-0">
+                    <li>
+                        <strong>{% trans "Produit" %}:</strong>
+                        {{ membership.price.product.name }} — {{ membership.price.name }}
+                    </li>
+                    <li>
+                        <strong>{% trans "Date" %}:</strong>
+                        {{ membership.date_added|date:'d/m/Y H:i' }}
+                    </li>
+                    {% if membership.deadline %}
+                        <li>
+                            <strong>{% trans "Valide jusqu'au" %}:</strong>
+                            {{ membership.deadline|date:'d/m/Y' }}
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+
+        {% if membership.user and not membership.user.email_valid %}
+            <div class="alert alert-warning mb-0" role="alert">
+                {% trans "Votre adresse email n'est pas encore validée. Pour être sûr de recevoir nos messages et reserver des évènements ou ateliers, validez-la maintenant. Pensez à regarder dans vos spam au cas ou !" %}
+            </div>
+        {% endif %}
+
+        <div class="d-flex justify-content-end gap-2">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">
+                {% trans "Fermer" %}
+            </button>
+            <a href="/memberships/" class="btn btn-primary">
+                {% trans "Voir toutes les adhésions" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
+    try { Spinner.hideSpinner && Spinner.hideSpinner(); } catch (e) {}
+
+    const content = document.getElementById('membership-pending-content');
+    const container = document.getElementById('offcanvas-membership');
+    if (content && container) {
+        container.innerHTML = '';
+        container.appendChild(content);
+        try {
+            const oc = bootstrap.Offcanvas.getOrCreateInstance('#subscribePanel');
+            oc && oc.show();
+        } catch (e) {}
+    }
+</script>
