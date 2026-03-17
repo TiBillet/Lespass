@@ -13,7 +13,7 @@ et porte un listener 'tarifSelection' (tarif.js) qu'on ne doit pas detruire.
 No id="messages" here: the element is in base.html and carries
 a 'tarifSelection' listener (tarif.js) that must not be destroyed.
 -->
-<div aria-live="polite">
+<div class="cf-wrapper" aria-live="polite">
 
   <!-- EN-TETE CARTE / CARD HEADER -->
   <div class="cf-card-header" style="background-color: var({{ background }});">
@@ -125,6 +125,16 @@ a 'tarifSelection' listener (tarif.js) that must not be destroyed.
       flex-direction: column;
       background-color: var(--noir03);
       color: var(--blanc01);
+    }
+
+    /* Wrapper enfant direct de #messages.
+       Reproduit le layout que l'ancien <div id="messages"> avait
+       directement (avant le passage a innerHTML).
+       / Direct child wrapper of #messages. Reproduces the layout
+       that the old <div id="messages"> had (before the innerHTML switch). */
+    .cf-wrapper {
+      display: flex;
+      flex-direction: column;
     }
 
     /* En-tete avec couleur de statut / Status-colored header */
@@ -275,7 +285,7 @@ a 'tarifSelection' listener (tarif.js) that must not be destroyed.
     }
 
     /* Bouton retour centre / Centered back button */
-    #messages > .bt-basic-container {
+    .cf-wrapper > .bt-basic-container {
       align-self: center;
     }
   </style>

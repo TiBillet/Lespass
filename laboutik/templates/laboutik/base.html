@@ -26,14 +26,90 @@
 	hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
 <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' style="background-color:#000000;">
 	{% block content %} {% endblock content %}
-	<!-- info: layer 1 -->
+	<!--
+	OVERLAY LAYERS — couches superposees pour messages et confirmations.
+	/ Overlay layers — stacked layers for messages and confirmations.
+
+	LOCALISATION : laboutik/templates/laboutik/base.html
+
+	#messages (layer 1) : check carte, types de paiement, adhesion, cloture.
+	#confirm  (layer 2) : confirmation NFC, lecture carte paiement.
+
+	Les partials sont injectes via innerHTML (pas outerHTML) pour preserver
+	les event listeners sur ces elements (ex: tarif.js attache 'tarifSelection'
+	sur #messages au DOMContentLoaded).
+	/ Partials are injected via innerHTML (not outerHTML) to preserve
+	event listeners on these elements (e.g. tarif.js attaches 'tarifSelection'
+	on #messages at DOMContentLoaded).
+
+	DEUX MECANISMES pour que innerHTML fonctionne comme outerHTML :
+
+	1. Listener global htmx:afterSwap (script ci-dessous) :
+	   hideAndEmptyElement() ajoute .hide sur #messages quand on ferme
+	   un overlay. Le listener retire .hide quand du contenu est injecte
+	   par HTMX (sinon l'overlay reste invisible).
+	   / hideAndEmptyElement() adds .hide when closing an overlay.
+	   The listener removes .hide when HTMX injects content
+	   (otherwise the overlay stays invisible).
+
+	2. #messages > :first-child { width: 100%; height: 100% } :
+	   Les partials injectes via innerHTML sont des enfants de #messages,
+	   pas l'element lui-meme. Sans 100% height, le centrage vertical casse.
+	   / Partials are children of #messages, not the element itself.
+	   Without 100% height, vertical centering breaks.
+	-->
 	<div id="messages"></div>
-	<!-- info: layer 2 -->
 	<div id="confirm"></div>
+	<style>
+		/* L'enfant direct de #messages doit remplir tout l'espace du parent
+		   pour que le flex layout fonctionne correctement.
+		   Les partials injectes via innerHTML ne sont plus l'element #messages
+		   lui-meme mais des enfants — ils ont besoin de width/height 100%.
+		   / The direct child of #messages must fill the parent's space
+		   so the flex layout works correctly. Partials injected via innerHTML
+		   are children, not the element itself — they need width/height 100%. */
+		#messages > :first-child {
+			width: 100%;
+			height: 100%;
+		}
+	</style>
 
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
 	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+	<script>
+		/**
+		 * Retire la classe .hide des overlays #messages et #confirm
+		 * quand HTMX y injecte du contenu (innerHTML swap).
+		 * / Removes the .hide class from #messages and #confirm overlays
+		 * when HTMX injects content (innerHTML swap).
+		 *
+		 * LOCALISATION : laboutik/templates/laboutik/base.html
+		 *
+		 * POURQUOI : hideAndEmptyElement() ajoute .hide (display:none) quand
+		 * on ferme un overlay. Avec outerHTML, l'element etait remplace
+		 * entierement (pas de .hide residuel). Avec innerHTML, l'element
+		 * garde ses classes — il faut retirer .hide manuellement.
+		 * / WHY: hideAndEmptyElement() adds .hide when closing an overlay.
+		 * With outerHTML, the element was fully replaced (no leftover .hide).
+		 * With innerHTML, the element keeps its classes — we must remove .hide.
+		 *
+		 * htmx:afterSwap est declenche sur l'element source (ex: #addition-form),
+		 * pas sur la cible (#messages). On ecoute donc sur document.body
+		 * et on verifie event.detail.target.
+		 * / htmx:afterSwap fires on the source element, not the target.
+		 * So we listen on document.body and check event.detail.target.
+		 */
+		document.addEventListener('htmx:afterSwap', function (event) {
+			const elementCible = event.detail.target
+			const cibleEstOverlay = (
+				elementCible.id === 'messages' || elementCible.id === 'confirm'
+			)
+			if (cibleEstOverlay) {
+				elementCible.classList.remove('hide')
+			}
+		})
+	</script>
 	{% block script %} {% endblock script %}
 	<div id="event-organizer" class="hide"></div>
 </body>
