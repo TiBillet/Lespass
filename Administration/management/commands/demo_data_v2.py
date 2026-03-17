@@ -3,6 +3,7 @@ import os
 import random
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
@@ -205,6 +206,7 @@ class Command(BaseCommand):
                "stripe_mode_test": True,
                "stripe_connect_account_test": os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT'),
                "stripe_payouts_enabled": True,
+               "module_caisse": True,
                "site_web": "https://tibillet.org",
                "legal_documents": "https://tibillet.org/cgucgv",
                "adresse": {
@@ -1187,6 +1189,12 @@ class Command(BaseCommand):
                     config.stripe_connect_account_test = fx.get('stripe_connect_account_test')
                     config.stripe_payouts_enabled = bool(fx.get('stripe_payouts_enabled'))
 
+                    # Modules activés (caisse, monnaie locale, etc.)
+                    if fx.get('module_caisse'):
+                        config.module_caisse = True
+                        # La caisse requiert la monnaie locale
+                        config.module_monnaie_locale = True
+
                     # Adresse principale liée à la config
                     if addr_obj:
                         config.postal_address = addr_obj
@@ -1894,6 +1902,18 @@ class Command(BaseCommand):
                         user.save(update_fields=['client_source'])
         except Exception as e:
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
+
+        # -----------------------------
+        # 4) Données POS de test (si laboutik est installé)
+        # -----------------------------
+        if 'laboutik' in settings.INSTALLED_APPS:
+            from django.core.management import call_command
+            for tenant in created_tenants:
+                with tenant_context(tenant):
+                    config = Configuration.get_solo()
+                    if config.module_caisse:
+                        self.stdout.write(f"Création des données POS pour {tenant.name}…")
+                        call_command('create_test_pos_data')
 
         # Export du dump SQL pour --quick
         # self._dump_database()

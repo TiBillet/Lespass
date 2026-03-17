@@ -35,9 +35,13 @@ class Command(BaseCommand):
     help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour le tenant courant."
 
     def handle(self, *args, **options):
-        with schema_context("lespass"):
-            tenant_name = connection.tenant.schema_name
-            self.stdout.write(f"Tenant : {tenant_name}")
+        # Utilise le schema du tenant courant (compatible avec demo_data_v2 qui appelle
+        # cette commande dans un tenant_context).
+        # / Uses the current tenant schema (compatible with demo_data_v2 which calls
+        # this command inside a tenant_context).
+        schema = connection.schema_name
+        with schema_context(schema):
+            self.stdout.write(f"Tenant : {schema}")
 
             # --- 5 categories de produits ---
             # update_or_create pour mettre a jour l'icone meme si la categorie existait avant.

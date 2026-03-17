@@ -5861,6 +5861,9 @@ MODULE_FIELDS = {
         "name": _("POS & restaurant"),
         "description": _("Point of sale, orders, and cash register"),
         "testid": "dashboard-card-caisse",
+        "link_url": "/laboutik/caisse/",
+        "link_label": _("Open POS"),
+        "link_icon": "fa-cash-register",
     },
 }
 
@@ -5882,6 +5885,9 @@ def _build_modules_context(configuration):
                 'staff_admin:configuration-module-modal',
                 args=[field_name],
             ),
+            "link_url": info.get("link_url"),
+            "link_label": info.get("link_label"),
+            "link_icon": info.get("link_icon"),
         })
     return modules
 
