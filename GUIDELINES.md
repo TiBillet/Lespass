@@ -241,6 +241,34 @@ docker exec lespass_django poetry run python manage.py verify_test_data --type r
 - Ne pas encoder de texte dans les icones; elles sont decoratives (`aria-hidden="true"`).
 - Utiliser les classes Bootstrap (`text-body`, `text-muted`, `bg-body-tertiary`, etc.) pour respecter clair/sombre.
 
+## Pieges multi-tenancy (django-tenants)
+
+### Erreur "relation does not exist" = mauvais schema
+
+Si une requete Django leve `ProgrammingError: relation "BaseBillet_xxx" does not exist`, c'est presque toujours parce que le code tourne sur le **schema public**. Les tables des TENANT_APPS (`BaseBillet`, `laboutik`, `crowds`, etc.) n'existent que dans les schemas tenant, pas dans `public`.
+
+**Diagnostic rapide :** ajouter `print(connection.schema_name)` avant la requete qui plante. Si ca affiche `"public"`, c'est confirme.
+
+**Causes frequentes :**
+- Management command lancee sans `tenant_context` / `schema_context`
+- `connection.schema_name` vaut `"public"` par defaut (hors middleware HTTP)
+- `call_command()` depuis un autre command : le schema courant n'est pas herite automatiquement si la commande appelée re-set le schema
+
+**Solution :** toujours verifier `connection.schema_name` en debut de commande. Si c'est `"public"` et que la commande a besoin de tables tenant, basculer explicitement :
+```python
+from django.db import connection
+from django_tenants.utils import schema_context
+from Customers.models import Client
+
+schema = connection.schema_name
+if schema == "public":
+    tenant = Client.objects.exclude(schema_name="public").first()
+    schema = tenant.schema_name
+
+with schema_context(schema):
+    # ... code qui touche des TENANT_APPS
+```
+
 ## Anti-patterns (a eviter)
 
 - **Reponses JSON pour piloter l'UI** — preferer HTML + `HX-Trigger` pour les toasts.

@@ -35,11 +35,23 @@ class Command(BaseCommand):
     help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour le tenant courant."
 
     def handle(self, *args, **options):
-        # Utilise le schema du tenant courant (compatible avec demo_data_v2 qui appelle
-        # cette commande dans un tenant_context).
-        # / Uses the current tenant schema (compatible with demo_data_v2 which calls
-        # this command inside a tenant_context).
+        # Si on est deja dans un tenant_context (schema != "public"), on l'utilise.
+        # Sinon (lancement standalone via docker exec), on prend le premier tenant non-public.
+        # ATTENTION : "relation does not exist" = on est sur le schema public,
+        # les tables TENANT_APPS (BaseBillet, laboutik…) n'y existent pas.
+        # / If already inside a tenant_context (schema != "public"), use it.
+        # Otherwise (standalone launch via docker exec), pick the first non-public tenant.
+        # WARNING: "relation does not exist" = running on the public schema,
+        # TENANT_APPS tables (BaseBillet, laboutik…) don't exist there.
         schema = connection.schema_name
+        if schema == "public":
+            first_tenant = Client.objects.exclude(schema_name="public").first()
+            if not first_tenant:
+                self.stderr.write(self.style.ERROR("Aucun tenant non-public trouve."))
+                return
+            schema = first_tenant.schema_name
+            self.stdout.write(f"Schema public detecte, bascule vers le tenant : {schema}")
+
         with schema_context(schema):
             self.stdout.write(f"Tenant : {schema}")
 
