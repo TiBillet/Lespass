@@ -23,6 +23,7 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 - **Phase 1 TERMINEE** : Product unifie (8 champs POS, CategorieProduct, POSProduct proxy, Price.asset FK) + 4 modeles laboutik + admin + donnees test
 - **Phase 2 TERMINEE** : Remplacement mocks (caisse DB, paiement especes/CB)
 - **Phase 3 etape 1 TERMINEE** : Paiement NFC cashless (_payer_par_nfc atomique)
+- **Phase 2.5 TERMINEE** : POS Adhesion (multi-tarif, prix libre, identification client NFC/email)
 - **Phase 3 etape 2 TERMINEE** : Recharges especes/CB + securite (wallet ephemere, validation PV, garde NFC recharges)
 - **Phase 4 TERMINEE** : Commandes restaurant (CommandeSauvegarde, tables)
 - **Phase 5 TERMINEE** : Cloture caisse (ClotureCaisse, rapport JSON, email/PDF)
@@ -1146,6 +1147,34 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 - **PriceSold + ProductSold** : LigneArticle pointe vers PriceSold (pas Price directement). LIRE ces modeles dans BaseBillet/models.py AVANT de coder.
 - **Tests** : `test_caisse_navigation.py` (6 tests) + `test_paiement_especes_cb.py` (8 tests) + Playwright `32-laboutik-caisse-db.spec.ts`
 - **Checklist** : CHANGELOG.md + "A TESTER et DOCUMENTER/" + i18n (makemessages/compilemessages)
+
+### Phase 2.5 — POS Adhesion (multi-tarif + prix libre) ✅ TERMINEE
+
+- `PointDeVente.comportement` += `ADHESION` ('A') — migration 0002
+- POS ADHESION inclut dynamiquement `Product(categorie_article=ADHESION, publish=True)` — pas de M2M
+- Multi-tarif : overlay JS selection de tarif (tarif.js) quand le produit a plusieurs Price ou free_price
+- Prix libre : input avec minimum, validation front (tarif.js) + back (serializer + vue)
+- Format formulaire : `repid-<product_uuid>--<price_uuid>` + `custom-<product_uuid>--<price_uuid>`
+- Identification client : scan NFC ou formulaire email/nom/prenom dans `hx_display_type_payment.html`
+- Membership creee pour CB/especes/cheque via `_creer_adhesions_depuis_panier()` + `get_or_create_user(email)`
+- `_creer_ou_renouveler_adhesion()` accepte `contribution_value`, `first_name`, `last_name` optionnels
+- Donnees test : 2 vrais produits adhesion (annuelle 3 tarifs dont prix libre, mensuelle 1 tarif)
+- `create_test_pos_data.py` : PV "Adhesions" type ADHESION, plus de produits adhesion dupliques
+
+**Fichiers modifies :**
+
+| Fichier | Changement |
+|---|---|
+| `laboutik/models.py` | +ADHESION dans comportement |
+| `laboutik/views.py` | `_construire_donnees_articles()` multi-tarif, `_extraire_articles_du_panier()` nouveau format, `_creer_ou_renouveler_adhesion()` params, `_creer_adhesions_depuis_panier()` nouveau, `moyens_paiement()` flag, `_payer_par_carte_ou_cheque()` + `_payer_en_especes()` adhesion |
+| `laboutik/serializers.py` | `extraire_articles_du_post()` format `repid-uuid--price_uuid` + `custom-*` |
+| `laboutik/static/js/articles.js` | `manageKey()` interception multi-tarif |
+| `laboutik/static/js/addition.js` | Nouveau format cle, custom amount, calculateTotal() |
+| `laboutik/static/js/tibilletUtils.js` | Route tarifSelection |
+| `laboutik/static/js/tarif.js` | Nouveau : overlay selection tarif + prix libre |
+| `laboutik/templates/cotton/articles.html` | data-attributes multi-tarif, styles overlay + adhesion |
+| `laboutik/templates/laboutik/partial/hx_display_type_payment.html` | Mode adhesion (NFC ou formulaire email) |
+| `laboutik/management/commands/create_test_pos_data.py` | Refonte donnees adhesion |
 
 ### Phase 3 — Integration fedow_core dans laboutik
 

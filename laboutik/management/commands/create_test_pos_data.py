@@ -112,20 +112,10 @@ class Command(BaseCommand):
                     "poid_liste": 5,
                 },
             )
-            categorie_adhesions, _ = CategorieProduct.objects.update_or_create(
-                name="Adhesions",
-                defaults={
-                    "icon": "fa-id-card",
-                    "couleur_texte": "#FFFFFF",
-                    "couleur_fond": "#6366F1",
-                    "poid_liste": 6,
-                },
-            )
-
             self.stdout.write(
                 f"  Categories : {categorie_bar}, {categorie_restauration}, "
                 f"{categorie_boissons_chaudes}, {categorie_snacks}, {categorie_vins}, "
-                f"{categorie_cashless}, {categorie_adhesions}"
+                f"{categorie_cashless}"
             )
 
             # --- Produits POS avec prix et icones ---
@@ -347,30 +337,6 @@ class Command(BaseCommand):
                     "icon_pos": "fa-clock",
                     "prix": Decimal("1.00"),
                 },
-                # --- Adhesions ---
-                # / Memberships
-                {
-                    "name": "Adhesion annuelle",
-                    "methode_caisse": Product.ADHESION_POS,
-                    "categorie_article": Product.ADHESION,
-                    "categorie_pos": categorie_adhesions,
-                    "couleur_fond_pos": "#6366F1",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-id-card",
-                    "prix": Decimal("15.00"),
-                    "subscription_type": Price.YEAR,
-                },
-                {
-                    "name": "Adhesion mensuelle",
-                    "methode_caisse": Product.ADHESION_POS,
-                    "categorie_article": Product.ADHESION,
-                    "categorie_pos": categorie_adhesions,
-                    "couleur_fond_pos": "#818CF8",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-id-card",
-                    "prix": Decimal("5.00"),
-                    "subscription_type": Price.MONTH,
-                },
             ]
 
             for product_data in products_data:
@@ -403,6 +369,67 @@ class Command(BaseCommand):
                         setattr(product, field_name, field_value)
                     product.save(update_fields=list(pos_fields_to_update.keys()))
                     self.stdout.write(f"  Produit mis a jour : {product.name}")
+
+            # --- Produits adhesion (vrais produits BaseBillet, pas de methode_caisse) ---
+            # Ces produits sont affiches automatiquement dans les PV de type ADHESION
+            # grace a leur categorie_article=ADHESION. Pas besoin de M2M.
+            # / Membership products (real BaseBillet products, no methode_caisse).
+            # These products are auto-displayed in ADHESION-typed POS
+            # via their categorie_article=ADHESION. No M2M needed.
+            adhesion_annuelle, created_aa = Product.objects.get_or_create(
+                name="Adhesion annuelle",
+                defaults={
+                    "categorie_article": Product.ADHESION,
+                    "publish": True,
+                },
+            )
+            if created_aa:
+                # 3 tarifs : plein tarif, reduit, prix libre
+                # / 3 rates: full price, reduced, open price
+                Price.objects.create(
+                    product=adhesion_annuelle,
+                    name="Plein tarif",
+                    prix=Decimal("15.00"),
+                    subscription_type=Price.YEAR,
+                    order=0,
+                )
+                Price.objects.create(
+                    product=adhesion_annuelle,
+                    name="Tarif reduit",
+                    prix=Decimal("8.00"),
+                    subscription_type=Price.YEAR,
+                    order=1,
+                )
+                Price.objects.create(
+                    product=adhesion_annuelle,
+                    name="Prix libre",
+                    prix=Decimal("5.00"),
+                    free_price=True,
+                    subscription_type=Price.YEAR,
+                    order=2,
+                )
+                self.stdout.write(f"  Adhesion creee : {adhesion_annuelle.name} (3 tarifs)")
+            else:
+                self.stdout.write(f"  Adhesion existante : {adhesion_annuelle.name}")
+
+            adhesion_mensuelle, created_am = Product.objects.get_or_create(
+                name="Adhesion mensuelle",
+                defaults={
+                    "categorie_article": Product.ADHESION,
+                    "publish": True,
+                },
+            )
+            if created_am:
+                Price.objects.create(
+                    product=adhesion_mensuelle,
+                    name="Tarif unique",
+                    prix=Decimal("5.00"),
+                    subscription_type=Price.MONTH,
+                    order=0,
+                )
+                self.stdout.write(f"  Adhesion creee : {adhesion_mensuelle.name} (1 tarif)")
+            else:
+                self.stdout.write(f"  Adhesion existante : {adhesion_mensuelle.name}")
 
             # --- 3 points de vente ---
             # update_or_create pour mettre a jour l'icone meme si le PDV existait avant.
@@ -467,6 +494,25 @@ class Command(BaseCommand):
                 },
             )
 
+            # PV Adhesion : affiche automatiquement les produits adhesion publies.
+            # Pas de M2M a configurer — le type ADHESION charge les produits dynamiquement.
+            # / Membership POS: auto-displays published membership products.
+            # No M2M needed — ADHESION type loads products dynamically.
+            pdv_adhesion, _ = PointDeVente.objects.update_or_create(
+                name="Adhesions",
+                defaults={
+                    "icon": "fa-id-card",
+                    "comportement": PointDeVente.ADHESION,
+                    "service_direct": True,
+                    "afficher_les_prix": True,
+                    "accepte_especes": True,
+                    "accepte_carte_bancaire": True,
+                    "accepte_cheque": False,
+                    "accepte_commandes": False,
+                    "poid_liste": 4,
+                },
+            )
+
             # Associe les produits aux points de vente
             # / Link products to points of sale
             all_pos_products = Product.objects.filter(methode_caisse__isnull=False)
@@ -477,7 +523,7 @@ class Command(BaseCommand):
                 categorie_pos__in=[categorie_restauration, categorie_boissons_chaudes]
             )
             cashless_products = all_pos_products.filter(
-                categorie_pos__in=[categorie_cashless, categorie_adhesions]
+                categorie_pos=categorie_cashless,
             )
 
             # Bar : boissons froides, vins, snacks
@@ -498,17 +544,18 @@ class Command(BaseCommand):
             pdv_terrasse.products.set(terrasse_products)
             pdv_terrasse.categories.set([categorie_bar, categorie_restauration, categorie_vins, categorie_snacks])
 
-            # Cashless : recharges + adhesions
-            # / Cashless: top-ups + memberships
+            # Cashless : recharges uniquement (les adhesions sont dans le PV Adhesion)
+            # / Cashless: top-ups only (memberships are in the Adhesion POS)
             pdv_cashless.products.set(cashless_products)
-            pdv_cashless.categories.set([categorie_cashless, categorie_adhesions])
+            pdv_cashless.categories.set([categorie_cashless])
 
             self.stdout.write(
                 f"  Points de vente : "
                 f"{pdv_bar} ({bar_products.count()} produits), "
                 f"{pdv_restaurant} ({restaurant_products.count()} produits), "
                 f"{pdv_terrasse} ({terrasse_products.count()} produits), "
-                f"{pdv_cashless} ({cashless_products.count()} produits)"
+                f"{pdv_cashless} ({cashless_products.count()} produits), "
+                f"{pdv_adhesion} (adhesions dynamiques)"
             )
 
             # --- Cartes primaires (uniquement en mode TEST) ---
@@ -554,7 +601,7 @@ class Command(BaseCommand):
                 carte=carte_cm,
                 defaults={"edit_mode": True},
             )
-            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse, pdv_cashless])
+            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse, pdv_cashless, pdv_adhesion])
             if created_cm:
                 self.stdout.write(f"  Carte primaire creee : {tag_id_cm} (tous les PV, edit_mode=True)")
             else:

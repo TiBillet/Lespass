@@ -45,15 +45,20 @@ class PointDeVente(models.Model):
     DIRECT = 'D'
     KIOSK = 'K'
     CASHLESS = 'C'
+    ADHESION = 'A'
     COMPORTEMENT_CHOICES = [
         (DIRECT, _('Direct')),
         (KIOSK, _('Kiosk')),
         (CASHLESS, _('Cashless')),
+        (ADHESION, _('Membership')),
     ]
     comportement = models.CharField(
         max_length=1, choices=COMPORTEMENT_CHOICES, default=DIRECT,
         verbose_name=_("Behavior"),
-        help_text=_("Operating mode: Direct (standard sale), Kiosk (self-service), Cashless (NFC only)."),
+        help_text=_(
+            "Operating mode: Direct (standard sale), Kiosk (self-service), "
+            "Cashless (NFC only), Membership (subscriptions and memberships)."
+        ),
     )
 
     # Options de fonctionnement

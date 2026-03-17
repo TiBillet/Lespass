@@ -7,8 +7,12 @@
 	<!-- TODO: supprimer dès le back l'article paiement fractionné -->
 	{% if article.id != uuidArticlePaiementFractionne %}
 	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
-		class="article-container cat-{{ article.categorie.id}}"
-		style="background-color:{{ article.categorie.couleur_backgr }};">
+		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
+		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
+		data-tarifs='{{ article.tarifs_json }}'
+		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}"
+		style="background-color:{{ article.categorie.couleur_backgr }};"
+		data-testid="article-{{ article.id }}">
 		<!-- image -->
 		{% if article.url_image %}
 		<div class="article-img-layer BF-ligne">
@@ -46,6 +50,7 @@
 	{% endfor %}
 </div>
 <script src="{% static 'js/articles.js' %}"></script>
+<script src="{% static 'js/tarif.js' %}"></script>
 
 <style>
 	/* Surcharge du flex de common_user_interface.html par CSS Grid auto-fill
@@ -171,6 +176,12 @@
 		height: 100%;
 	}
 
+	/* Articles adhesion : catégorie par défaut indigo si pas de categorie_pos
+	   / Membership articles: default indigo category if no categorie_pos */
+	.article-adhesion {
+		background-color: #6366F1;
+	}
+
 	.article-lock-layer {
 		position: absolute;
 		left: 0;
@@ -213,6 +224,183 @@
 		.article-icon {
 			flex-basis: 20%;
 		}
+	}
+
+	/* --- OVERLAY SÉLECTION DE TARIF --- */
+	/* / Rate selection overlay */
+	.tarif-overlay {
+		position: fixed;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		background-color: rgba(0, 0, 0, 0.85);
+		z-index: 1000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		animation: tarif-fade-in 200ms ease;
+	}
+
+	@keyframes tarif-fade-in {
+		from { opacity: 0; }
+	}
+
+	.tarif-overlay-content {
+		background-color: var(--gris00, #1a1a2e);
+		border-radius: 20px;
+		padding: 32px 24px;
+		width: 90%;
+		max-width: 480px;
+		max-height: 85vh;
+		overflow-y: auto;
+		text-align: center;
+		color: var(--blanc01, #fff);
+	}
+
+	.tarif-overlay-title {
+		font-size: 1.8rem;
+		font-weight: bold;
+		margin: 0 0 4px 0;
+		text-wrap: balance;
+	}
+
+	.tarif-overlay-subtitle {
+		font-size: 1.1rem;
+		opacity: 0.7;
+		margin-bottom: 24px;
+	}
+
+	.tarif-list {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+		margin-bottom: 24px;
+	}
+
+	.tarif-btn {
+		display: block;
+		width: 100%;
+		padding: 18px 20px;
+		border: none;
+		border-radius: 12px;
+		background-color: var(--bleu03, #0345ea);
+		color: #fff;
+		font-size: 1.2rem;
+		font-family: "Luciole-regular", sans-serif;
+		cursor: pointer;
+		text-align: center;
+		transition: transform 100ms ease, background-color 150ms ease;
+	}
+
+	.tarif-btn:active {
+		transform: scale(0.97);
+	}
+
+	.tarif-btn-label {
+		font-weight: bold;
+		font-size: 1.3rem;
+	}
+
+	.tarif-btn-price {
+		font-variant-numeric: tabular-nums;
+		font-size: 1.1rem;
+		margin-top: 4px;
+		opacity: 0.9;
+	}
+
+	.tarif-btn-sublabel {
+		font-size: 0.95rem;
+		opacity: 0.7;
+		margin-top: 2px;
+	}
+
+	/* Prix libre : input + bouton OK dans le bouton tarif */
+	/* / Free price: input + OK button inside the rate button */
+	.tarif-btn-free {
+		background-color: var(--bleu05, #012584);
+		padding: 18px 20px 14px;
+	}
+
+	.tarif-free-input-container {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		margin-top: 12px;
+	}
+
+	.tarif-free-input {
+		width: 120px;
+		height: 56px;
+		font-size: 1.5rem;
+		text-align: center;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-radius: 8px;
+		background-color: rgba(255, 255, 255, 0.1);
+		color: #fff;
+		font-variant-numeric: tabular-nums;
+		font-family: "Luciole-regular", sans-serif;
+	}
+
+	.tarif-free-input:focus {
+		outline: none;
+		border-color: var(--vert01, #00e676);
+	}
+
+	.tarif-free-input::placeholder {
+		color: rgba(255, 255, 255, 0.4);
+	}
+
+	.tarif-input-error {
+		border-color: var(--rouge01, #e53935) !important;
+	}
+
+	.tarif-free-currency {
+		font-size: 1.5rem;
+		font-weight: bold;
+	}
+
+	.tarif-free-validate {
+		height: 56px;
+		padding: 0 20px;
+		border: none;
+		border-radius: 8px;
+		background-color: var(--vert03, #339448);
+		color: #fff;
+		font-size: 1.2rem;
+		font-weight: bold;
+		font-family: "Luciole-regular", sans-serif;
+		cursor: pointer;
+		transition: transform 100ms ease;
+	}
+
+	.tarif-free-validate:active {
+		transform: scale(0.95);
+	}
+
+	.tarif-free-error {
+		color: var(--rouge01, #e53935);
+		font-size: 0.95rem;
+		margin-top: 6px;
+		min-height: 1.2em;
+	}
+
+	.tarif-btn-retour {
+		display: inline-block;
+		padding: 14px 32px;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		border-radius: 10px;
+		background-color: transparent;
+		color: #fff;
+		font-size: 1.1rem;
+		font-family: "Luciole-regular", sans-serif;
+		cursor: pointer;
+		transition: background-color 150ms ease;
+	}
+
+	.tarif-btn-retour:active {
+		background-color: rgba(255, 255, 255, 0.1);
 	}
 
 	/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels

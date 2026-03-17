@@ -82,6 +82,7 @@ function manageKey(event) {
 		const articlePrice = ele.dataset.price
 		const articleName = ele.dataset.name
 		const articleCurrency = ele.dataset.currency
+		const multiTarif = ele.dataset.multiTarif === 'true'
 
 		// Verrouille les articles des autres groupes
 		document.querySelectorAll('#products .article-container').forEach(item => {
@@ -94,6 +95,24 @@ function manageKey(event) {
 		// TODO : Une fois les articles d'autres groupes verrouillés, ils le restent même si
 		// on retire tous les articles du groupe actif. Ne devrait-on pas déverrouiller automatiquement
 		// quand le panier devient vide ? Actuellement seul le bouton RESET permet de déverrouiller.
+
+		// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la sélection de tarif
+		// au lieu d'ajouter directement au panier.
+		// / If the article has multiple rates or free price → open rate selection
+		// instead of adding directly to cart.
+		if (multiTarif) {
+			sendEvent('organizerMsg', '#event-organizer', {
+				src: { file: 'articles.js', method: 'manageKey' },
+				msg: 'tarifSelection',
+				data: {
+					uuid: articleUuid,
+					name: articleName,
+					tarifs: JSON.parse(ele.dataset.tarifs),
+					currency: articleCurrency,
+				}
+			})
+			return
+		}
 
 		addArticle(articleUuid, articlePrice, articleName, articleCurrency)
 	}

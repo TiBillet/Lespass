@@ -158,7 +158,8 @@ const switches = {
 	additionDisplayPaymentTypes: [{ name: 'additionDisplayPaymentTypes', selector: '#addition' }],
 	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
 	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }],
-	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }]
+	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }],
+	tarifSelection: [{ name: 'tarifSelection', selector: '#messages' }]
 }
 
 /**

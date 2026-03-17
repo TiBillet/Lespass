@@ -92,22 +92,63 @@ class PanierSerializer(serializers.Serializer):
         Extrait les articles depuis les clés POST "repid-<uuid>" → quantité.
         Extracts articles from POST keys "repid-<uuid>" → quantity.
 
-        Retourne une liste de dicts {'uuid': str, 'quantite': int}.
-        Returns a list of dicts {'uuid': str, 'quantite': int}.
+        LOCALISATION : laboutik/serializers.py
+
+        Supporte deux formats de clé :
+        - Ancien : "repid-<product_uuid>" → articles mono-tarif
+        - Nouveau : "repid-<product_uuid>--<price_uuid>" → articles multi-tarif
+        Supports two key formats:
+        - Old: "repid-<product_uuid>" → single-rate articles
+        - New: "repid-<product_uuid>--<price_uuid>" → multi-rate articles
+
+        Pour le prix libre, un champ "custom-<product_uuid>--<price_uuid>" contient
+        le montant en centimes. Sinon custom_amount_centimes est None.
+        For free price, a "custom-<product_uuid>--<price_uuid>" field contains
+        the amount in cents. Otherwise custom_amount_centimes is None.
+
+        Retourne une liste de dicts :
+        {'uuid': str, 'price_uuid': str|None, 'quantite': int, 'custom_amount_centimes': int|None}
         """
+        # Pré-charger les montants custom (prix libre)
+        # / Pre-load custom amounts (free price)
+        montants_custom = {}
+        for nom_champ, valeur in donnees_post.items():
+            if not nom_champ.startswith("custom-"):
+                continue
+            cle_custom = nom_champ[7:]  # après "custom-"
+            try:
+                montants_custom[cle_custom] = int(valeur)
+            except (ValueError, TypeError):
+                continue
+
         articles = []
         for nom_champ, valeur in donnees_post.items():
             if not nom_champ.startswith("repid-"):
                 continue
-            uuid_article = nom_champ[6:]  # len("repid-") == 6
+            reste = nom_champ[6:]  # après "repid-"
+
+            # Séparer product_uuid et price_uuid (séparateur '--')
+            # / Separate product_uuid and price_uuid ('--' separator)
+            if '--' in reste:
+                uuid_product, uuid_price = reste.split('--', 1)
+            else:
+                uuid_product = reste
+                uuid_price = None
+
             try:
                 quantite = int(valeur)
             except (ValueError, TypeError):
                 continue
             if quantite > 0:
+                # Chercher le montant custom associé (même clé que reste)
+                # / Look for associated custom amount (same key as reste)
+                custom_amount = montants_custom.get(reste, None)
+
                 articles.append({
-                    'uuid': uuid_article,
+                    'uuid': uuid_product,
+                    'price_uuid': uuid_price,
                     'quantite': quantite,
+                    'custom_amount_centimes': custom_amount,
                 })
         return articles
 

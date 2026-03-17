@@ -26,19 +26,30 @@
  * @returns {Number} Total en centimes
  */
 function calculateTotal() {
-	total = 0
-	// TODO : La variable 'total' n'est pas déclarée avec 'let' ou 'const'.
-	// Cela crée une variable globale implicite. Ne devrait-on pas utiliser 'let total = 0' ?
+	let total = 0
 	document.querySelectorAll('#addition-form input').forEach(input => {
-		if (input.name.includes('repid-')) {
-			const uuid = input.name.substring(6)
+		if (input.name.startsWith('repid-')) {
+			const lineId = input.name.substring(6) // uuid ou uuid--priceUuid
 			const number = parseInt(input.value)
-			// TODO : Que se passe-t-il si l'article n'existe plus dans le DOM (supprimé) ?
-			// document.querySelector retournera null et article.dataset.price plantera.
-			// Ne devrait-on pas vérifier si 'article' existe avant d'accéder à dataset ?
-			const article = document.querySelector(`#products div[data-uuid="${uuid}"]`)
-			const price = parseInt(article.dataset.price)
-			total = total + (number * price)
+
+			// Cherche le prix unitaire dans la ligne d'affichage du panier
+			// (data-unit-price est set par additionInsertArticle, gère le prix libre)
+			// / Gets unit price from cart display line
+			// (data-unit-price is set by additionInsertArticle, handles free price)
+			const additionLine = document.querySelector(`#addition-line-${lineId}`)
+			if (additionLine) {
+				const unitPrice = parseInt(additionLine.dataset.unitPrice)
+				total = total + (number * unitPrice)
+			} else {
+				// Fallback : lire depuis la tuile article (ancien format, uuid seul)
+				// / Fallback: read from article tile (old format, uuid only)
+				const productUuid = lineId.split('--')[0]
+				const article = document.querySelector(`#products div[data-uuid="${productUuid}"]`)
+				if (article) {
+					const price = parseInt(article.dataset.price)
+					total = total + (number * price)
+				}
+			}
 		}
 	})
 	return total
@@ -60,41 +71,68 @@ function calculateTotal() {
  */
 function additionInsertArticle({ detail }) {
 	const { uuid, price, quantity, name, currency } = detail
+	// priceUuid et customAmount sont optionnels (absents pour les articles mono-tarif)
+	// / priceUuid and customAmount are optional (absent for single-rate articles)
+	const priceUuid = detail.priceUuid || null
+	const customAmount = detail.customAmount || null
+
+	// Clé du formulaire : repid-<product_uuid>--<price_uuid> ou repid-<product_uuid>
+	// Le séparateur '--' permet de distinguer product et price UUID côté backend.
+	// / Form key: repid-<product_uuid>--<price_uuid> or repid-<product_uuid>
+	// The '--' separator lets the backend distinguish product and price UUIDs.
+	const inputKey = priceUuid ? `repid-${uuid}--${priceUuid}` : `repid-${uuid}`
+	// ID unique pour la ligne d'affichage (uuid seul si mono-tarif, uuid--priceUuid si multi)
+	// / Unique ID for display line
+	const lineId = priceUuid ? `${uuid}--${priceUuid}` : uuid
 
 	// Supprime le placeholder "Panier vide" si le panier etait vide
 	// / Removes "Empty cart" placeholder if cart was empty
 	const emptyPlaceholder = document.querySelector('#addition-empty')
 	if (emptyPlaceholder) { emptyPlaceholder.remove() }
 
-	const input = document.querySelector(`#addition-form [name="repid-${uuid}"]`)
-	
+	const input = document.querySelector(`#addition-form [name="${inputKey}"]`)
+
+	// Prix affiché : le customAmount (prix libre) ou le prix standard
+	// / Displayed price: customAmount (free price) or standard price
+	const prixAffiche = customAmount || price
+
 	if (input === null) {
 		// Nouvel article : création input + ligne d'affichage
-		document.querySelector('#addition-form').insertAdjacentHTML('beforeend', `
-			<input type="number" name="repid-${uuid}" value="1" />
+		const formEl = document.querySelector('#addition-form')
+		formEl.insertAdjacentHTML('beforeend', `
+			<input type="number" name="${inputKey}" value="1" />
 		`)
-		
+
+		// Si prix libre, ajouter un input caché pour le montant custom
+		// / If free price, add hidden input for custom amount
+		if (customAmount) {
+			const customKey = priceUuid ? `custom-${uuid}--${priceUuid}` : `custom-${uuid}`
+			formEl.insertAdjacentHTML('beforeend', `
+				<input type="hidden" name="${customKey}" value="${customAmount}" />
+			`)
+		}
+
 		const additionLine = `
-			<div id="addition-line-${uuid}" data-quantity="${quantity}" data-price="${uuid}" data-unit-price="${price}" class="addition-line-grid">
+			<div id="addition-line-${lineId}" data-quantity="${quantity}" data-price="${lineId}" data-unit-price="${prixAffiche}" class="addition-line-grid">
 				<div class="addition-col-bt">
-					<button type="button" class="addition-remove-btn" onclick="additionRemoveArticle('${uuid}');" title="Enlever un article" aria-label="Enlever ${name}">
+					<button type="button" class="addition-remove-btn" onclick="additionRemoveArticle('${lineId}');" title="Enlever un article" aria-label="Enlever ${name}">
 						<i class="fas fa-minus" aria-hidden="true"></i>
 					</button>
 				</div>
 				<div class="addition-col-info">
 					<div class="addition-col-name">${name}</div>
-					<div id="addition-quantity-${uuid}" class="addition-col-quantity-label">&times; ${quantity}</div>
+					<div id="addition-quantity-${lineId}" class="addition-col-quantity-label">&times; ${quantity}</div>
 				</div>
-				<div class="addition-col-price">${(price / 100).toFixed(2)}${currency}</div>
+				<div class="addition-col-price">${(prixAffiche / 100).toFixed(2)}${currency}</div>
 			</div>
 		`
 		document.querySelector('#addition-list').insertAdjacentHTML('beforeend', additionLine)
 	} else {
 		// Article existant : mise à jour quantité
 		input.value = Number(quantity)
-		document.querySelector(`#addition-quantity-${uuid}`).innerHTML = `&times; ${quantity}`
+		document.querySelector(`#addition-quantity-${lineId}`).innerHTML = `&times; ${quantity}`
 	}
-	
+
 	const totalAddition = calculateTotal()
 
 	// Met à jour le bouton VALIDER
@@ -117,24 +155,33 @@ function additionInsertArticle({ detail }) {
  * 
  * @param {String} uuid - UUID de l'article
  */
-function additionRemoveArticle(uuid) {
-	const eleQuantity = document.querySelector(`#addition-quantity-${uuid}`)
+function additionRemoveArticle(lineId) {
+	// lineId peut être "uuid" (mono-tarif) ou "uuid--priceUuid" (multi-tarif)
+	// / lineId can be "uuid" (single-rate) or "uuid--priceUuid" (multi-rate)
+	const productUuid = lineId.split('--')[0]
+
+	const eleQuantity = document.querySelector(`#addition-quantity-${lineId}`)
 	let quantity = Number(eleQuantity.textContent.replace('×', '').trim())
 	quantity--
 
 	eleQuantity.innerHTML = `&times; ${quantity}`
-	document.querySelector(`#addition-form [name="repid-${uuid}"]`).value = Number(quantity)
-	
+	document.querySelector(`#addition-form [name="repid-${lineId}"]`).value = Number(quantity)
+
 	if (quantity === 0) {
-		document.querySelector(`#addition-line-${uuid}`).remove()
-		document.querySelector(`#addition-form [name="repid-${uuid}"]`).remove()
+		document.querySelector(`#addition-line-${lineId}`).remove()
+		document.querySelector(`#addition-form [name="repid-${lineId}"]`).remove()
+		// Supprimer aussi l'input custom si présent (prix libre)
+		// / Also remove custom input if present (free price)
+		const customInput = document.querySelector(`#addition-form [name="custom-${lineId}"]`)
+		if (customInput) { customInput.remove() }
 	}
 
-	// Met à jour la tuile article
+	// Met à jour la tuile article (utilise le productUuid pour trouver la tuile)
+	// / Updates article tile (uses productUuid to find the tile)
 	sendEvent('organizerMsg', '#event-organizer', {
 		src: { file: 'addition.js', method: 'additionRemoveArticle' },
 		msg: 'additionRemoveArticle',
-		data: { uuid, quantity }
+		data: { uuid: productUuid, quantity }
 	})
 
 	const totalAddition = calculateTotal()
@@ -162,7 +209,10 @@ function additionRemoveArticle(uuid) {
 function additionReset() {
 	const allInputs = document.querySelectorAll('#addition-form input')
 	allInputs.forEach((input) => {
-		if (input.getAttribute('name').includes('repid-')) {
+		const inputName = input.getAttribute('name')
+		// Supprime les inputs repid-* et custom-* (prix libre)
+		// / Removes repid-* and custom-* (free price) inputs
+		if (inputName.startsWith('repid-') || inputName.startsWith('custom-')) {
 			input.remove()
 		}
 	})

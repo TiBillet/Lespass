@@ -31,6 +31,7 @@ from fedow_core.models import Asset
 from fedow_core.services import TransactionService, WalletService
 
 from AuthBillet.models import Wallet
+from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import (
     Configuration, LigneArticle, Membership, Price, PriceSold, Product,
     ProductSold, SaleOrigin, PaymentMethod,
@@ -151,11 +152,20 @@ def _construire_donnees_articles(point_de_vente_instance):
     Construit la liste de dicts articles au format attendu par les templates.
     Builds the list of article dicts in the format expected by templates.
 
+    LOCALISATION : laboutik/views.py
+
     Chaque produit doit avoir au moins un prix publié en euros (asset=null).
     Les produits sans prix sont ignorés.
     Each product must have at least one published EUR price (asset=null).
     Products without a price are skipped.
+
+    Pour les PV de type ADHESION, les produits adhesion publiés sont inclus
+    dynamiquement (pas besoin de les ajouter au M2M du PV).
+    For ADHESION-typed POS, published membership products are included
+    dynamically (no need to add them to the POS M2M).
     """
+    from itertools import chain
+
     # Prefetch filtré : seuls les prix publiés en euros, triés par ordre d'affichage.
     # Le .filter() dans la boucle utiliserait une nouvelle requête par produit (N+1).
     # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
@@ -165,13 +175,33 @@ def _construire_donnees_articles(point_de_vente_instance):
         queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by('order'),
         to_attr='prix_euros',
     )
-    produits = (
+
+    # Produits du M2M du PV (articles ajoutés manuellement par l'admin)
+    # Products from the POS M2M (manually added by admin)
+    produits_manuels = (
         point_de_vente_instance.products
         .filter(methode_caisse__isnull=False)
         .select_related('categorie_pos')
         .prefetch_related(prix_euros_prefetch)
-        .order_by('poids', 'name')
     )
+
+    # Pour les PV de type ADHESION : ajouter dynamiquement les produits adhesion publiés
+    # For ADHESION-typed POS: dynamically add published membership products
+    if point_de_vente_instance.comportement == PointDeVente.ADHESION:
+        produits_adhesion = (
+            Product.objects
+            .filter(categorie_article=Product.ADHESION, publish=True)
+            .select_related('categorie_pos')
+            .prefetch_related(prix_euros_prefetch)
+        )
+        # Fusionner sans doublons (par uuid). Les produits manuels sont prioritaires.
+        # Merge without duplicates (by uuid). Manual products take priority.
+        produits_par_uuid = {}
+        for p in chain(produits_adhesion, produits_manuels):
+            produits_par_uuid[str(p.uuid)] = p
+        produits = sorted(produits_par_uuid.values(), key=lambda p: (p.poids or 0, p.name))
+    else:
+        produits = produits_manuels.order_by('poids', 'name')
 
     articles = []
     for product in produits:
@@ -206,15 +236,38 @@ def _construire_donnees_articles(point_de_vente_instance):
             except Exception:
                 url_image = None
 
+        # Multi-tarif : le produit a plusieurs prix OU un prix libre.
+        # On inclut tous les tarifs dans les data pour le JS côté client.
+        # Multi-rate: product has multiple prices OR a free price.
+        # Include all rates in data for client-side JS.
+        est_adhesion = product.categorie_article == Product.ADHESION
+        a_prix_libre = any(p.free_price for p in product.prix_euros)
+        multi_tarif = len(product.prix_euros) > 1 or a_prix_libre
+
+        tarifs = []
+        if multi_tarif:
+            for p in product.prix_euros:
+                tarifs.append({
+                    "price_uuid": str(p.uuid),
+                    "name": p.name,
+                    "prix_centimes": int(round(p.prix * 100)),
+                    "free_price": p.free_price,
+                    "subscription_label": p.get_subscription_type_display() if hasattr(p, 'get_subscription_type_display') else "",
+                })
+
         article_dict = {
             "id": str(product.uuid),
             "name": product.name,
             "prix": prix_en_centimes,
             "categorie": categorie_dict,
             "bt_groupement": {
-                "groupe": product.groupe_pos or f"groupe_{product.methode_caisse or 'VT'}",
+                "groupe": product.groupe_pos or f"groupe_{product.methode_caisse or 'AD' if est_adhesion else product.methode_caisse or 'VT'}",
             },
             "url_image": url_image,
+            "est_adhesion": est_adhesion,
+            "multi_tarif": multi_tarif,
+            "tarifs": tarifs,
+            "tarifs_json": dumps(tarifs) if tarifs else "[]",
         }
         articles.append(article_dict)
 
@@ -960,14 +1013,23 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
 
     LOCALISATION : laboutik/views.py
 
-    Le formulaire d'addition envoie les quantités avec les clés "repid-<uuid>".
-    Pour chaque article, on charge le Product et son premier prix publié en euros.
-    The addition form sends quantities with "repid-<uuid>" keys.
-    For each article, we load the Product and its first published EUR price.
+    Le formulaire d'addition envoie les quantités avec les clés :
+    - "repid-<product_uuid>" (articles mono-tarif, ancien format)
+    - "repid-<product_uuid>--<price_uuid>" (articles multi-tarif)
+    - "custom-<product_uuid>--<price_uuid>" (montant prix libre en centimes)
+    The addition form sends quantities with keys:
+    - "repid-<product_uuid>" (single-rate articles, old format)
+    - "repid-<product_uuid>--<price_uuid>" (multi-rate articles)
+    - "custom-<product_uuid>--<price_uuid>" (free price amount in cents)
+
+    Pour les PV ADHESION, les produits adhesion publiés sont acceptés
+    même s'ils ne sont pas dans le M2M du PV.
+    For ADHESION POS, published membership products are accepted
+    even if they are not in the POS M2M.
 
     :param donnees_post: QueryDict ou dict des données POST
     :param point_de_vente: instance PointDeVente (pour filtrer les produits autorisés)
-    :return: liste de dicts {'product': Product, 'price': Price, 'quantite': int, 'prix_centimes': int}
+    :return: liste de dicts {'product', 'price', 'quantite', 'prix_centimes', 'custom_amount_centimes'}
     """
     articles_extraits = PanierSerializer.extraire_articles_du_post(donnees_post)
     if not articles_extraits:
@@ -987,10 +1049,23 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         .prefetch_related(prix_euros_prefetch)
     }
 
+    # Pour les PV ADHESION : ajouter les produits adhesion publiés (chargement dynamique)
+    # For ADHESION POS: add published membership products (dynamic loading)
+    if point_de_vente.comportement == PointDeVente.ADHESION:
+        produits_adhesion = (
+            Product.objects
+            .filter(categorie_article=Product.ADHESION, publish=True)
+            .prefetch_related(prix_euros_prefetch)
+        )
+        for p in produits_adhesion:
+            produits_du_pv.setdefault(str(p.uuid), p)
+
     articles_panier = []
     for article_data in articles_extraits:
         uuid_str = article_data['uuid']
         quantite = article_data['quantite']
+        price_uuid_str = article_data.get('price_uuid')
+        custom_amount_centimes = article_data.get('custom_amount_centimes')
 
         produit = produits_du_pv.get(uuid_str)
         if produit is None:
@@ -1001,14 +1076,46 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             logger.warning(f"Produit {produit.name} n'a pas de prix EUR publié")
             continue
 
-        prix_obj = produit.prix_euros[0]
-        prix_en_centimes = int(round(prix_obj.prix * 100))
+        # Si un price_uuid est fourni (multi-tarif), charger ce Prix spécifique
+        # If a price_uuid is provided (multi-rate), load that specific Price
+        if price_uuid_str:
+            prix_obj = None
+            for p in produit.prix_euros:
+                if str(p.uuid) == price_uuid_str:
+                    prix_obj = p
+                    break
+            if prix_obj is None:
+                logger.warning(f"Prix {price_uuid_str} non trouvé pour {produit.name}")
+                continue
+        else:
+            # Ancien format : premier prix EUR
+            # Old format: first EUR price
+            prix_obj = produit.prix_euros[0]
+
+        # Valider le prix libre (custom_amount_centimes)
+        # Validate free price (custom_amount_centimes)
+        if custom_amount_centimes is not None:
+            if not prix_obj.free_price:
+                logger.warning(f"Prix {prix_obj.name} n'est pas un prix libre")
+                custom_amount_centimes = None
+            else:
+                minimum_centimes = int(round(prix_obj.prix * 100))
+                if custom_amount_centimes < minimum_centimes:
+                    logger.warning(
+                        f"Montant libre {custom_amount_centimes} < minimum {minimum_centimes}"
+                    )
+                    custom_amount_centimes = minimum_centimes
+
+        # Le prix effectif : montant custom (prix libre) ou prix standard
+        # Effective price: custom amount (free price) or standard price
+        prix_en_centimes = custom_amount_centimes or int(round(prix_obj.prix * 100))
 
         articles_panier.append({
             'product': produit,
             'price': prix_obj,
             'quantite': quantite,
             'prix_centimes': prix_en_centimes,
+            'custom_amount_centimes': custom_amount_centimes,
         })
 
     return articles_panier
@@ -1131,33 +1238,38 @@ def _creer_lignes_articles(
     return lignes_creees
 
 
-def _creer_ou_renouveler_adhesion(user, product, price):
+def _creer_ou_renouveler_adhesion(user, product, price, contribution_value=None, first_name=None, last_name=None):
     """
     Crée ou renouvelle une adhésion (Membership) pour un utilisateur.
     Creates or renews a membership for a user.
 
     LOCALISATION : laboutik/views.py
 
-    Appelée dans le bloc atomic de _payer_par_nfc() pour les articles AD.
-    Called inside the atomic block of _payer_par_nfc() for AD articles.
+    Appelée dans le bloc atomic des fonctions de paiement pour les articles adhesion.
+    Called inside the atomic block of payment functions for membership articles.
 
-    - Si user est None (carte anonyme) → ne rien faire.
+    - Si user est None (carte anonyme, pas d'email) → ne rien faire.
     - Si Membership existante pour ce (user, price) → renouveler.
     - Sinon → créer une nouvelle Membership.
 
-    - If user is None (anonymous card) → do nothing.
+    - If user is None (anonymous card, no email) → do nothing.
     - If existing Membership for this (user, price) → renew.
     - Otherwise → create a new Membership.
 
     :param user: TibilletUser ou None
-    :param product: Product avec methode_caisse=AD
+    :param product: Product adhesion
     :param price: Price associé au product
+    :param contribution_value: Decimal montant payé (prix libre). Si None, utilise price.prix.
+    :param first_name: str prénom du membre (optionnel)
+    :param last_name: str nom du membre (optionnel)
     :return: Membership ou None
     """
     if user is None:
         return None
 
     from django.utils import timezone as tz
+
+    valeur_contribution = contribution_value if contribution_value is not None else price.prix
 
     # Chercher une Membership existante pour ce user + price
     # Find an existing Membership for this user + price
@@ -1173,10 +1285,15 @@ def _creer_ou_renouveler_adhesion(user, product, price):
         # Renew: update contribution date and recalculate deadline
         membership_existante.last_contribution = tz.now()
         membership_existante.status = Membership.LABOUTIK
-        membership_existante.contribution_value = price.prix
-        membership_existante.save(update_fields=[
-            'last_contribution', 'status', 'contribution_value',
-        ])
+        membership_existante.contribution_value = valeur_contribution
+        champs_a_mettre_a_jour = ['last_contribution', 'status', 'contribution_value']
+        if first_name:
+            membership_existante.first_name = first_name
+            champs_a_mettre_a_jour.append('first_name')
+        if last_name:
+            membership_existante.last_name = last_name
+            champs_a_mettre_a_jour.append('last_name')
+        membership_existante.save(update_fields=champs_a_mettre_a_jour)
         membership_existante.set_deadline()
         return membership_existante
 
@@ -1188,10 +1305,82 @@ def _creer_ou_renouveler_adhesion(user, product, price):
         status=Membership.LABOUTIK,
         last_contribution=tz.now(),
         first_contribution=tz.now(),
-        contribution_value=price.prix,
+        contribution_value=valeur_contribution,
+        first_name=first_name or "",
+        last_name=last_name or "",
     )
     nouvelle_adhesion.set_deadline()
     return nouvelle_adhesion
+
+
+def _creer_adhesions_depuis_panier(request, articles_panier):
+    """
+    Crée les Memberships pour les articles adhesion du panier (CB/espèces).
+    Creates Memberships for membership articles in the cart (card/cash).
+
+    LOCALISATION : laboutik/views.py
+
+    Identification du client par :
+    1. Scan NFC (tag_id dans le POST) → carte.user
+    2. Formulaire email/nom/prénom (email_adhesion dans le POST) → get_or_create_user
+
+    Si aucune identification, les adhesions ne sont PAS créées (seulement la LigneArticle).
+    If no identification, memberships are NOT created (only LigneArticle).
+
+    :param request: HttpRequest (pour lire le POST)
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    """
+    from decimal import Decimal
+
+    articles_adhesion = [
+        a for a in articles_panier
+        if a['product'].categorie_article == Product.ADHESION
+    ]
+    if not articles_adhesion:
+        return
+
+    user_adhesion = None
+
+    # Option 1 : identification par scan NFC
+    # / Option 1: identification by NFC scan
+    tag_id_client = request.POST.get("tag_id", "").upper().strip()
+    if tag_id_client:
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            user_adhesion = carte_client.user
+        except CarteCashless.DoesNotExist:
+            logger.warning(f"Carte NFC {tag_id_client} introuvable pour adhésion")
+
+    # Option 2 : identification par formulaire email/nom/prénom
+    # / Option 2: identification by email/name form
+    email_client = request.POST.get("email_adhesion", "").strip().lower()
+    if email_client and user_adhesion is None:
+        user_adhesion = get_or_create_user(email_client, send_mail=False)
+
+    if user_adhesion is None:
+        logger.info("Adhésion sans identification client — Membership non créée")
+        return
+
+    prenom = request.POST.get("prenom_adhesion", "").strip()
+    nom = request.POST.get("nom_adhesion", "").strip()
+
+    for article in articles_adhesion:
+        # Montant : prix libre (custom) ou prix standard
+        # / Amount: free price (custom) or standard price
+        custom_centimes = article.get('custom_amount_centimes')
+        if custom_centimes is not None:
+            contribution = Decimal(custom_centimes) / 100
+        else:
+            contribution = article['price'].prix
+
+        _creer_ou_renouveler_adhesion(
+            user=user_adhesion,
+            product=article['product'],
+            price=article['price'],
+            contribution_value=contribution,
+            first_name=prenom,
+            last_name=nom,
+        )
 
 
 def _executer_recharges(articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client):
@@ -1395,6 +1584,15 @@ class PaiementViewSet(viewsets.ViewSet):
         # If the cart contains top-ups, the template must request a client NFC scan
         panier_a_recharges = _panier_contient_recharges(articles_panier)
 
+        # Si le panier contient des adhésions, le template doit demander l'identification client
+        # (scan NFC ou formulaire email/nom/prénom)
+        # If the cart contains memberships, the template must request client identification
+        # (NFC scan or email/name form)
+        panier_a_adhesions = any(
+            a['product'].categorie_article == Product.ADHESION
+            for a in articles_panier
+        )
+
         # Mode gérant : activé si la carte primaire est en mode édition
         # Manager mode: enabled if primary card is in edit mode
         est_mode_gerant = False
@@ -1415,6 +1613,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "deposit_is_present": consigne_dans_panier,
             "comportement": point_de_vente.comportement,
             "panier_a_recharges": panier_a_recharges,
+            "panier_a_adhesions": panier_a_adhesions,
         }
         return render(request, "laboutik/partial/hx_display_type_payment.html", context)
 
@@ -1591,6 +1790,10 @@ class PaiementViewSet(viewsets.ViewSet):
             if articles_normaux:
                 _creer_lignes_articles(articles_normaux, moyen_paiement_code)
 
+            # Adhésions → créer les Memberships (si client identifié par NFC ou email)
+            # Memberships → create Membership records (if client identified by NFC or email)
+            _creer_adhesions_depuis_panier(request, articles_normaux)
+
             # Recharges → TransactionService + LigneArticle avec carte et asset
             # Top-ups → TransactionService + LigneArticle with card and asset
             if articles_recharge:
@@ -1670,6 +1873,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 # Normal articles (sales, memberships) → just LigneArticle
                 if articles_normaux:
                     _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+
+                # Adhésions → créer les Memberships (si client identifié par NFC ou email)
+                # Memberships → create Membership records (if client identified by NFC or email)
+                _creer_adhesions_depuis_panier(request, articles_normaux)
 
                 # Recharges → TransactionService + LigneArticle avec carte et asset
                 # Top-ups → TransactionService + LigneArticle with card and asset
