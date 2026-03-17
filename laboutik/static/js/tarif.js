@@ -83,8 +83,12 @@ function tarifSelection(event) {
 		}
 	}
 
-	// Injecte l'overlay dans #messages
-	// / Injects overlay into #messages
+	// Injecte l'overlay dans #messages et le rend visible.
+	// hideAndEmptyElement() met .hide sur #messages quand on ferme un overlay.
+	// Il faut retirer .hide quand on injecte du nouveau contenu.
+	// / Injects overlay into #messages and makes it visible.
+	// hideAndEmptyElement() sets .hide on #messages when closing an overlay.
+	// We must remove .hide when injecting new content.
 	const messagesEl = document.querySelector('#messages')
 	messagesEl.innerHTML = `
 		<div id="tarif-overlay" class="tarif-overlay" data-testid="tarif-overlay">
@@ -104,6 +108,7 @@ function tarifSelection(event) {
 			</div>
 		</div>
 	`
+	messagesEl.classList.remove('hide')
 }
 
 /**
@@ -216,10 +221,11 @@ function addArticleWithPrice(productUuid, priceUuid, prixCentimes, displayName, 
  * / Closes rate selection overlay
  */
 function tarifClose() {
-	const overlay = document.querySelector('#tarif-overlay')
-	if (overlay) {
-		overlay.remove()
-	}
+	// Retire l'overlay et cache #messages (meme logique que hideAndEmptyElement)
+	// / Removes overlay and hides #messages (same logic as hideAndEmptyElement)
+	const messagesEl = document.querySelector('#messages')
+	messagesEl.classList.add('hide')
+	messagesEl.innerHTML = ''
 }
 
 /**
