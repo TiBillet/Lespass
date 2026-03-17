@@ -17,7 +17,7 @@
                 <h1 class="display-1 mt-5 mb-3">{{ config.organisation }}</h1>
                 <p class="lead fs-4">{{ config.short_description | default:"" }}</p>
                 <p class="lead">{{ config.long_description | safe | default:"" }}</p>
-                <div class="row">
+                <div class="row" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
                     <div class="col-md mb-3">
                         <a class="btn btn-lg btn-primary d-block my-3"
                            href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">

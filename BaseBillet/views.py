@@ -176,6 +176,7 @@ def get_context(request):
         # "tenant": connection.tenant,
         "formbricks_api_host": formbricks_config.api_host,
         "mode_test": True if os.environ.get('TEST') == '1' else False,
+        "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
             {'name': 'event-list', 'url': '/event/',

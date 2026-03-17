@@ -33,7 +33,7 @@
                     <i class="bi bi-box-arrow-up-right"></i>
                 </a>
                 {% else %}
-                <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" class="fs-5"
+                <a href="/event/{{ event.slug }}/" hx-boost="true" hx-target="body" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}" class="fs-5"
                     {% if embed %}target="_blank" {% endif %}> <!-- Si c'est embed, on ouvre dans une page externe -->
                     {{ event.name }}
                 </a>

@@ -128,7 +128,8 @@
                     hx-get="{% url 'event-list' %}?tag={{ tag.slug }}{% if search %}&search={{ search|urlencode }}{% endif %}"
                     hx-target="body"
                     hx-swap="innerHTML"
-                    hx-push-url="true">
+                    hx-push-url="true"
+                    data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
                     {{ tag.name }}
                 </a>
             {% endfor %}

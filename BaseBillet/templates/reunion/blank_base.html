@@ -72,7 +72,7 @@
 
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="min-vh-100 d-flex flex-column">
 
 <div class="flex-fill d-flex flex-column">
     {% block main %}{% endblock main %}

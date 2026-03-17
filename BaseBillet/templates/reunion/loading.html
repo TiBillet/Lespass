@@ -1,33 +1,114 @@
-<!-- spinner -->
-<div id="tibillet-spinner" class="fixed-top bg-dark vw-100 vh-100">
-  <div class="d-flex justify-content-center align-items-center vw-100 vh-100">
-    <div
-      class="spinner-border text-info"
-      role="status"
-      style="
-        width: var(--tibillet-spinner-width);
-        height: var(--tibillet-spinner-height);
-        border-width: var(--tibillet-spinner-borderWidth);
-      "
-    ></div>
-  </div>
+{% load i18n %}
+<!-- Overlay de chargement — effet verre depoli (frosted glass)
+     / Loading overlay — frosted glass effect
+     Utilise data-loading-class pour ajouter .active (permet les transitions CSS).
+     Le delai est configurable via la variable {{ loading_delay }} de get_context().
+     Les liens de navigation declenchent ce spinner via data-loading-target="#tibillet-spinner". -->
+<div id="tibillet-spinner"
+     data-loading-class="active"
+     data-loading-delay="{{ loading_delay|default:'300' }}"
+     class="tibillet-overlay"
+     aria-hidden="true">
+    <div class="tibillet-overlay__spinner" role="status">
+      <span class="visually-hidden">{% translate "Chargement..." %}</span>
+    </div>
 </div>
 
-
 <style>
-  #tibillet-spinner {
-    display: none;
-    background-color: #cc33ff;
-    opacity: 0.4;
+  /* --- Overlay de navigation : verre depoli + fade-in doux ---
+     / --- Navigation overlay: frosted glass + smooth fade-in --- */
+  .tibillet-overlay {
+    position: fixed;
+    inset: 0;
     z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    /* Invisible par defaut, pas d'interaction possible
+       / Invisible by default, no interaction */
+    opacity: 0;
+    pointer-events: none;
+
+    /* Fond : voile sombre leger + flou gaussien sur le contenu en-dessous
+       / Background: light dark veil + gaussian blur on content underneath */
+    background: rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+
+    /* Transition de sortie — disparition douce quand la requete finit
+       / Exit transition — smooth disappear when request completes */
+    transition:
+      opacity 150ms ease-out,
+      backdrop-filter 150ms ease-out,
+      -webkit-backdrop-filter 150ms ease-out;
   }
+
+  /* Etat actif : l'extension loading-states ajoute la classe .active
+     Le data-loading-delay gere deja le debounce (pas de blink si requete rapide).
+     Une fois le delai ecoule, l'overlay doit apparaitre vite (80ms).
+     / Active state: loading-states extension adds .active class.
+     data-loading-delay handles the debounce (no blink on fast requests).
+     Once the delay expires, the overlay must appear quickly (80ms). */
+  .tibillet-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+
+    transition:
+      opacity 80ms ease-in,
+      backdrop-filter 80ms ease-in,
+      -webkit-backdrop-filter 80ms ease-in;
+  }
+
+  /* Spinner : cercle anime avec les couleurs du theme (kouler)
+     / Spinner: animated circle with theme colors (kouler) */
+  .tibillet-overlay__spinner {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+
+    /* Bordure bicolore : letsi (rose) et losean (bleu ocean)
+       / Two-tone border: letsi (pink) and losean (ocean blue) */
+    border: 3px solid var(--kouler-losean, #4296cc);
+    border-top-color: var(--kouler-letsi, #e93363);
+
+    animation: tibillet-spin 0.7s linear infinite;
+  }
+
+  @keyframes tibillet-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Respect du mode mouvement reduit — pas d'animation, juste l'overlay
+     / Respect reduced motion preference — no animation, just overlay */
+  @media (prefers-reduced-motion: reduce) {
+    .tibillet-overlay__spinner {
+      animation: none;
+      border-top-color: var(--kouler-losean, #4296cc);
+      opacity: 0.6;
+    }
+    .tibillet-overlay,
+    .tibillet-overlay.active {
+      transition: none;
+    }
+  }
+
+  /* Fallback pour les pages qui utilisent encore hx-indicator="#tibillet-spinner"
+     (account, register, tenant) — meme effet visuel via .htmx-request
+     / Fallback for pages still using hx-indicator — same visual via .htmx-request */
+  .htmx-request#tibillet-spinner,
   .htmx-request #tibillet-spinner {
-    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
-  .htmx-request#tibillet-spinner {
-    display: flex;
-  }
+
+  /* Regle globale pour l'extension loading-states
+     / Global rule for loading-states extension */
   [data-loading] {
-  display: none;
-}
+    display: none;
+  }
 </style>

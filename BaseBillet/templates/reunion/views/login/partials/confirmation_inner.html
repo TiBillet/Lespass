@@ -13,7 +13,7 @@
           </p>
 
           <div class="d-grid gap-2">
-            <a href="/" hx-get="/" hx-target="body" hx-push-url="true" class="btn btn-primary">
+            <a href="/" hx-get="/" hx-target="body" hx-push-url="true" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}" class="btn btn-primary">
               {% trans "Back to home" %}
             </a>
             <a href="/login/login_fullpage/" hx-get="/login/login_fullpage/" hx-target="#login-main" hx-push-url="true" class="btn btn-outline-secondary">

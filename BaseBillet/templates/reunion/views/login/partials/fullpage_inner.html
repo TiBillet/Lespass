@@ -40,7 +40,7 @@
       </div>
 
       <div class="text-center mt-4">
-        <a href="/" hx-get="/" hx-target="body" hx-push-url="true" class="text-decoration-none">
+        <a href="/" hx-get="/" hx-target="body" hx-push-url="true" data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}" class="text-decoration-none">
           &larr; {% trans "Back to home" %}
         </a>
       </div>

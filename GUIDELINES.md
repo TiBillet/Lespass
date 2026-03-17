@@ -68,6 +68,41 @@ Pas de `ModelSerializer` sauf dans `api_v2/` pour les endpoints JSON semantiques
 - **CSRF** : `hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'` sur le `<body>`.
 - **i18n** : `{% translate %}` / `gettext` pour tout texte visible.
 
+### Loading overlay (extension `loading-states`)
+
+L'extension HTMX `loading-states` gere l'overlay de chargement pendant les navigations.
+Active sur `<body>` via `hx-ext="loading-states"`.
+
+**Principe :** un overlay frosted glass (flou gaussien + voile sombre) apparait uniquement si la requete dure plus de `loading_delay` ms (defaut : 400ms). Les requetes rapides ne declenchent rien.
+
+- **Overlay** : `reunion/loading.html` — inclus dans `base.html` et `headless.html`
+- **Delai configurable** : variable `loading_delay` dans `get_context()` (views.py), injectee via `{{ loading_delay|default:'400' }}`
+- **Declenchement** : attribut `data-loading-target="#tibillet-spinner"` sur le conteneur parent des liens de navigation
+- **Scope** : ne jamais mettre `data-loading-target` sur un conteneur qui contient des formulaires (`hx-post`). Scoper au plus pres des liens de navigation.
+
+Attributs utilises :
+- `data-loading-class="active"` — sur le spinner, ajoute une classe CSS (permet les transitions)
+- `data-loading-delay="{{ loading_delay|default:'400' }}"` — debounce, pas de blink si requete rapide
+- `data-loading-target="#tibillet-spinner"` — sur les conteneurs de liens, pointe vers l'overlay
+- `data-loading-disable` — desactive un bouton pendant la requete (utile pour les formulaires)
+
+```html
+<!-- Conteneur de liens de navigation — scope du spinner -->
+<nav data-loading-target="#tibillet-spinner" data-loading-delay="{{ loading_delay|default:'400' }}">
+    <a href="/event/" hx-get="/event/" hx-target="body" hx-push-url="true">Agenda</a>
+</nav>
+
+<!-- NE PAS faire : data-loading-target sur un conteneur avec des formulaires -->
+<div data-loading-target="#tibillet-spinner">  <!-- MAUVAIS -->
+    <form hx-post="/save/">...</form>  <!-- Le spinner va se declencher ici aussi -->
+</div>
+```
+
+Regle CSS requise (deja dans `loading.html`) :
+```css
+[data-loading] { display: none; }
+```
+
 Pattern HTMX pour les toasts (reponses partielles) :
 ```python
 # Cote controleur : utiliser HX-Trigger + django.messages

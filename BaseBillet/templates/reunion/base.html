@@ -77,7 +77,7 @@
 
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="min-vh-100 d-flex flex-column">
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" class="min-vh-100 d-flex flex-column">
 
 {% if not embed %} <!-- Pas de navbar si embed -->
     {% include "reunion/partials/navbar.html" %}
