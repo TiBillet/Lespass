@@ -198,6 +198,12 @@ def get_sidebar_navigation(request):
                     "link": reverse_lazy("staff_admin:laboutik_cloturecaisse_changelist"),
                     "permission": admin_permission,
                 },
+                {
+                    "title": _("POS settings"),
+                    "icon": "settings",
+                    "link": reverse_lazy("staff_admin:laboutik_laboutikconfiguration_changelist"),
+                    "permission": admin_permission,
+                },
             ],
         })
 

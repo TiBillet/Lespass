@@ -10,12 +10,13 @@ from django.http import HttpRequest
 from django.shortcuts import redirect, get_object_or_404
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action
-from unfold.widgets import UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget
+from unfold.widgets import UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget, UnfoldAdminColorInputWidget
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
@@ -26,6 +27,148 @@ from BaseBillet.models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Palettes de couleurs prédéfinies pour les boutons POS
+# Pre-defined color palettes for POS product buttons
+# Format : (clé, libellé, couleur_texte_hex, couleur_fond_hex)
+# Format : (key, label, text_color_hex, background_color_hex)
+# ---------------------------------------------------------------------------
+
+PALETTE_POS = [
+    # Classiques N&B / Classic B&W
+    ("blanc_classique", _("Blanc classique"), "#000000", "#FFFFFF"),
+    ("nuit",            _("Nuit"),            "#FFFFFF", "#1F2937"),
+    # Material — fonds saturés, texte blanc / Material — saturated backgrounds, white text
+    ("marine",   _("Marine"),   "#FFFFFF", "#1E40AF"),
+    ("emeraude", _("Émeraude"), "#FFFFFF", "#059669"),
+    ("violet",   _("Violet"),   "#FFFFFF", "#7C3AED"),
+    ("corail",   _("Corail"),   "#FFFFFF", "#EF4444"),
+    ("ambre",    _("Ambre"),    "#FFFFFF", "#B45309"),
+    ("ardoise",  _("Ardoise"),  "#FFFFFF", "#475569"),
+    # Pastels — fonds doux, texte sombre contrasté / Pastels — soft backgrounds, contrasted dark text
+    ("lavande", _("Lavande"),  "#312E81", "#EDE9FE"),
+    ("menthe",  _("Menthe"),   "#064E3B", "#D1FAE5"),
+    ("peche",   _("Pêche"),    "#78350F", "#FEF3C7"),
+    ("rose",    _("Rose"),     "#881337", "#FFE4E6"),
+]
+
+# Dictionnaire pour lookup rapide clé → (couleur_texte, couleur_fond)
+# Quick lookup dict: key → (text_color, bg_color)
+PALETTE_POS_MAP = {
+    key: (text_hex, bg_hex)
+    for key, _label, text_hex, bg_hex in PALETTE_POS
+}
+
+# ---------------------------------------------------------------------------
+# Icônes Material Symbols pour les articles restaurant / bar
+# Material Symbols icons for restaurant / bar POS items
+# ---------------------------------------------------------------------------
+
+ICON_POS = [
+    # Boissons / Drinks
+    ("local_bar",          _("Bar")),
+    ("sports_bar",         _("Bière")),
+    ("wine_bar",           _("Vin")),
+    ("liquor",             _("Alcool / Spiritueux")),
+    ("local_cafe",         _("Café")),
+    ("coffee",             _("Café (alt)")),
+    ("emoji_food_beverage", _("Boisson chaude")),
+    ("local_drink",        _("Boisson froide")),
+    ("bubble_chart",       _("Soda / Bulles")),
+    # Nourriture / Food
+    ("restaurant",         _("Restaurant")),
+    ("lunch_dining",       _("Burger")),
+    ("local_pizza",        _("Pizza")),
+    ("ramen_dining",       _("Ramen / Soupe")),
+    ("set_meal",           _("Repas complet")),
+    ("rice_bowl",          _("Riz / Bowl")),
+    ("bakery_dining",      _("Boulangerie")),
+    ("fastfood",           _("Fast food")),
+    ("cake",               _("Gâteau / Dessert")),
+    ("icecream",           _("Glace")),
+    ("outdoor_grill",      _("Grill / BBQ")),
+    ("tapas",              _("Tapas / Apéro")),
+    ("brunch_dining",      _("Brunch")),
+    # Soirée / Ambiance
+    ("nightlife",          _("Soirée")),
+    ("music_note",         _("Musique")),
+    # Divers / Misc
+    ("sell",               _("Vente")),
+    ("receipt",            _("Ticket / Reçu")),
+    ("euro",               _("Euro")),
+]
+
+
+# ---------------------------------------------------------------------------
+# Widget visuel : sélecteur de palette de couleurs
+# Visual widget: color palette picker
+# ---------------------------------------------------------------------------
+
+class PalettePickerWidget(forms.Widget):
+    """Widget radio visuel qui affiche des swatches de couleur cliquables.
+    Visual radio widget displaying clickable color swatches.
+
+    Paramètres / Parameters:
+      texte_field : nom du champ HTML couleur texte à mettre à jour au clic
+                    name of the HTML text color field to update on click
+      fond_field  : nom du champ HTML couleur fond à mettre à jour au clic
+                    name of the HTML background color field to update on click
+
+    LOCALISATION : Administration/admin/products.py"""
+
+    def __init__(self, *args, texte_field="couleur_texte_pos", fond_field="couleur_fond_pos", **kwargs):
+        super().__init__(*args, **kwargs)
+        # Noms des champs couleur à piloter (différent selon le formulaire parent)
+        # Names of the color fields to drive (differ depending on the parent form)
+        self.texte_field = texte_field
+        self.fond_field = fond_field
+
+    def render(self, name, value, attrs=None, renderer=None):
+        # Valeur actuelle (peut être None ou une chaîne vide)
+        # Current value (can be None or empty string)
+        valeur_actuelle = value or ""
+
+        # Rendu via template dédié (résolu via APP_DIRS de Django)
+        # Render via dedicated template (resolved via Django's APP_DIRS)
+        return mark_safe(render_to_string(
+            "admin/widgets/palette_picker.html",
+            {
+                "widget_name": name,
+                "current_value": valeur_actuelle,
+                "palettes": PALETTE_POS,
+                "texte_field": self.texte_field,
+                "fond_field": self.fond_field,
+            },
+        ))
+
+
+# ---------------------------------------------------------------------------
+# Widget visuel : sélecteur d'icône Material Symbols
+# Visual widget: Material Symbols icon picker
+# ---------------------------------------------------------------------------
+
+class IconPickerWidget(forms.Widget):
+    """Widget radio visuel qui affiche une grille d'icônes cliquables.
+    Visual radio widget displaying a clickable icon grid.
+    LOCALISATION : Administration/admin/products.py"""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        # Valeur actuelle (peut être None ou une chaîne vide)
+        # Current value (can be None or empty string)
+        valeur_actuelle = value or ""
+
+        # Rendu via template dédié
+        # Render via dedicated template
+        return mark_safe(render_to_string(
+            "admin/widgets/icon_picker.html",
+            {
+                "widget_name": name,
+                "current_value": valeur_actuelle,
+                "icons": ICON_POS,
+            },
+        ))
 
 
 class PriceInlineChangeForm(ModelForm):
@@ -693,7 +836,8 @@ class MembershipProductAdmin(ProductAdmin):
 class POSProductForm(ProductAdminCustomForm):
     """Formulaire produit pour les articles de caisse.
     Product form for POS items.
-    Le champ categorie_article est cache (pas pertinent en caisse)."""
+    Le champ categorie_article est cache (pas pertinent en caisse).
+    LOCALISATION : Administration/admin/products.py"""
 
     class Meta(ProductAdminCustomForm.Meta):
         model = POSProduct
@@ -720,15 +864,107 @@ class POSProductForm(ProductAdminCustomForm):
         help_text=_("Payment/action method at the cash register."),
     )
 
+
+    # --- Champs d'affichage POS / POS display fields ---
+
+    # Palette de couleurs prédéfinie (champ formulaire uniquement, non sauvegardé directement)
+    # Pre-defined color palette (form-only field, not saved directly to the model)
+    palette_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune palette —"))] + [
+            (key, label) for key, label, _t, _b in PALETTE_POS
+        ],
+        required=False,
+        label=_("Color palette"),
+        help_text=_(
+            "Choisissez une combinaison de couleurs prête à l'emploi. "
+            "Elle remplacera les champs couleur ci-dessous. "
+            "/ Choose a ready-to-use color combination. It will override the color fields below."
+        ),
+        widget=PalettePickerWidget(),
+    )
+
+    # Couleur du texte avec sélecteur natif (override palette si renseigné manuellement)
+    # Text color with native picker (overrides palette if filled manually)
+    couleur_texte_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS text color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Couleur du fond avec sélecteur natif
+    # Background color with native picker
+    couleur_fond_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS background color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Icône avec sélecteur visuel Material Symbols
+    # Icon with visual Material Symbols picker
+    icon_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("POS icon"),
+        help_text=_("Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. / If a product image is set below, it will be displayed instead of this icon."),
+        widget=IconPickerWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        instance = kwargs.get('instance')
+
+        # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
+        # Pre-select the palette if the current colors match a preset
+        if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
+            for key, _label, text_hex, bg_hex in PALETTE_POS:
+                couleurs_correspondent = (
+                    instance.couleur_texte_pos.upper() == text_hex.upper()
+                    and instance.couleur_fond_pos.upper() == bg_hex.upper()
+                )
+                if couleurs_correspondent:
+                    self.fields['palette_pos'].initial = key
+                    break
+
+        # Help_text TVA dynamique : affiche le taux de la catégorie si disponible
+        # Dynamic VAT help_text: shows category rate if available
+        if instance and getattr(instance, 'categorie_pos', None) and getattr(instance.categorie_pos, 'tva', None):
+            taux = instance.categorie_pos.tva.tva_rate
+            self.fields['tva'].help_text = _(
+                f"Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
+                f"/ Same VAT as category ({taux}%) if left empty. Can be overridden here."
+            )
+        else:
+            self.fields['tva'].help_text = _(
+                "Même TVA que la catégorie si laissé vide. / Same VAT as category if left empty."
+            )
+
     def clean_categorie_article(self):
         """Pas de validation de categorie pour les produits POS.
         No category validation for POS products."""
         return self.cleaned_data.get('categorie_article', Product.NONE)
 
     def clean(self):
-        """Pas de validation de tarif obligatoire pour les produits POS.
-        No mandatory price validation for POS products."""
-        return super(ProductAdminCustomForm, self).clean()
+        """Applique la palette sélectionnée sur les champs couleur, puis valide.
+        Applies the selected palette to the color fields, then validates."""
+
+        # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire en caisse)
+        # Skip ProductAdminCustomForm validation (no mandatory price at POS)
+        cleaned = super(ProductAdminCustomForm, self).clean()
+
+        # Décodage de la palette : si une palette est choisie, elle écrase les couleurs
+        # Decode palette: if a palette is chosen, it overrides the color fields
+        palette_key = cleaned.get('palette_pos')
+        if palette_key and palette_key in PALETTE_POS_MAP:
+            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
+            cleaned['couleur_texte_pos'] = text_hex
+            cleaned['couleur_fond_pos'] = bg_hex
+
+        return cleaned
 
 
 @admin.register(POSProduct, site=staff_admin_site)
@@ -751,19 +987,20 @@ class POSProductAdmin(ProductAdmin):
         }),
         (_('POS display'), {
             'fields': (
+                'palette_pos',
                 'couleur_texte_pos',
                 'couleur_fond_pos',
                 'icon_pos',
-                'groupe_pos',
+                'img',
                 'poids',
             ),
         }),
-        (_('POS options'), {
-            'fields': (
-                'fractionne',
-                'besoin_tag_id',
-            ),
-        }),
+        # (_('POS options'), {
+        #     'fields': (
+        #         'fractionne',
+        #         'besoin_tag_id',
+        #     ),
+        # }),
         (_('Publication'), {
             'fields': (
                 'publish',
@@ -795,6 +1032,99 @@ class POSProductAdmin(ProductAdmin):
 # / POS product categories (drinks, food, etc.)
 # ---------------------------------------------------------------------------
 
+
+class CategorieProductForm(forms.ModelForm):
+    """Formulaire pour les catégories de produits POS.
+    Ajoute un sélecteur de palette et un sélecteur d'icône visuels,
+    identiques à ceux du formulaire POSProduct.
+    / Form for POS product categories.
+    Adds visual palette and icon pickers, identical to POSProductForm.
+    LOCALISATION : Administration/admin/products.py"""
+
+    class Meta:
+        model = CategorieProduct
+        fields = ('name', 'couleur_texte', 'couleur_fond', 'icon', 'poid_liste', 'tva', 'cashless')
+
+    # Palette de couleurs prédéfinie (form-only — pilote couleur_texte + couleur_fond)
+    # Pre-defined color palette (form-only — drives couleur_texte + couleur_fond)
+    palette = forms.ChoiceField(
+        choices=[("", _("— Aucune palette —"))] + [
+            (key, label) for key, label, _t, _b in PALETTE_POS
+        ],
+        required=False,
+        label=_("Color palette"),
+        help_text=_(
+            "Choisissez une combinaison prête à l'emploi. "
+            "Elle remplacera les champs couleur ci-dessous. "
+            "/ Choose a ready-to-use color combination. It will override the color fields below."
+        ),
+        # texte_field / fond_field correspondent aux noms de champs du modèle CategorieProduct
+        # texte_field / fond_field match the CategorieProduct model field names
+        widget=PalettePickerWidget(texte_field="couleur_texte", fond_field="couleur_fond"),
+    )
+
+    # Couleur du texte avec sélecteur natif
+    # Text color with native color picker
+    couleur_texte = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("Text color"),
+        help_text=_("Hexadecimal color for the button text (e.g. #FFFFFF)."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Couleur du fond avec sélecteur natif
+    # Background color with native color picker
+    couleur_fond = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("Background color"),
+        help_text=_("Hexadecimal color for the button background (e.g. #1E40AF)."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Icône avec sélecteur visuel Material Symbols
+    # Icon with visual Material Symbols picker
+    icon = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("Icon"),
+        help_text=_("Icône affichée sur le bouton de catégorie dans l'interface caisse. / Icon displayed on the category button in the POS interface."),
+        widget=IconPickerWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        instance = kwargs.get('instance')
+
+        # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
+        # Pre-select palette if the current colors match a preset
+        if instance and instance.couleur_texte and instance.couleur_fond:
+            for key, _label, text_hex, bg_hex in PALETTE_POS:
+                couleurs_correspondent = (
+                    instance.couleur_texte.upper() == text_hex.upper()
+                    and instance.couleur_fond.upper() == bg_hex.upper()
+                )
+                if couleurs_correspondent:
+                    self.fields['palette'].initial = key
+                    break
+
+    def clean(self):
+        """Applique la palette sélectionnée sur les champs couleur.
+        Applies the selected palette to the color fields."""
+        cleaned = super().clean()
+
+        # Si une palette est choisie, elle écrase les couleurs saisies manuellement
+        # If a palette is chosen, it overrides manually entered colors
+        palette_key = cleaned.get('palette')
+        if palette_key and palette_key in PALETTE_POS_MAP:
+            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
+            cleaned['couleur_texte'] = text_hex
+            cleaned['couleur_fond'] = bg_hex
+
+        return cleaned
+
+
 @admin.register(CategorieProduct, site=staff_admin_site)
 class CategorieProductAdmin(ModelAdmin):
     """Admin pour les categories de produits POS.
@@ -802,6 +1132,7 @@ class CategorieProductAdmin(ModelAdmin):
     LOCALISATION : Administration/admin/products.py"""
     compressed_fields = True
     warn_unsaved_form = True
+    form = CategorieProductForm
 
     list_display = ('name', 'icon', 'tva', 'poid_liste', 'cashless')
     search_fields = ['name']
@@ -811,12 +1142,17 @@ class CategorieProductAdmin(ModelAdmin):
         (None, {
             'fields': (
                 'name',
-                'icon',
-                'couleur_texte',
-                'couleur_fond',
                 'poid_liste',
                 'tva',
                 'cashless',
+            ),
+        }),
+        (_('Apparence / Appearance'), {
+            'fields': (
+                'palette',
+                'couleur_texte',
+                'couleur_fond',
+                'icon',
             ),
         }),
     )

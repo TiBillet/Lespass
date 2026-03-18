@@ -2,17 +2,50 @@ import logging
 
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
+from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from laboutik.models import (
+    LaboutikConfiguration,
     PointDeVente, CartePrimaire, CategorieTable, Table,
     CommandeSauvegarde, ArticleCommandeSauvegarde,
     ClotureCaisse,
 )
 
 logger = logging.getLogger(__name__)
+
+
+@admin.register(LaboutikConfiguration, site=staff_admin_site)
+class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+    """Admin singleton pour la configuration globale de l'interface caisse.
+    Singleton admin for the global POS interface configuration.
+    LOCALISATION : Administration/admin/laboutik.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    fieldsets = (
+        (_('Interface caisse / POS interface'), {
+            'fields': (
+                'taille_police_articles',
+            ),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        # Singleton : pas de creation manuelle — get_or_create suffit
+        # Singleton: no manual creation — get_or_create is enough
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
 @admin.register(PointDeVente, site=staff_admin_site)

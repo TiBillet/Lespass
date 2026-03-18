@@ -39,6 +39,7 @@ from BaseBillet.models import (
 from BaseBillet.permissions import HasLaBoutikAccess
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
+    LaboutikConfiguration,
     PointDeVente, CartePrimaire, Table,
     CommandeSauvegarde, ArticleCommandeSauvegarde,
     ClotureCaisse,
@@ -219,10 +220,18 @@ def _construire_donnees_articles(point_de_vente_instance):
         # Product POS category (or default category)
         categorie_pos = product.categorie_pos
         if categorie_pos is not None:
+            icone_cat_brute = categorie_pos.icon or ""
+            if icone_cat_brute.startswith("fa"):
+                icone_type_cat = "fa"
+            elif icone_cat_brute:
+                icone_type_cat = "ms"
+            else:
+                icone_type_cat = ""
             categorie_dict = {
                 "id": str(categorie_pos.uuid),
                 "name": categorie_pos.name,
-                "icon": categorie_pos.icon or "fa-angry",
+                "icon": icone_cat_brute,
+                "icone_type": icone_type_cat,
                 "couleur_backgr": categorie_pos.couleur_fond or "#17a2b8",
                 "couleur_texte": categorie_pos.couleur_texte,
             }
@@ -257,13 +266,44 @@ def _construire_donnees_articles(point_de_vente_instance):
                     "subscription_label": p.get_subscription_type_display() if hasattr(p, 'get_subscription_type_display') else "",
                 })
 
+        # Couleurs : override produit si défini, sinon catégorie
+        # Colors: product override if set, otherwise category
+        couleur_backgr = product.couleur_fond_pos or (categorie_pos.couleur_fond if categorie_pos else "#17a2b8")
+        couleur_texte_article = product.couleur_texte_pos or (categorie_pos.couleur_texte if categorie_pos else "#333333")
+
+        # Icône : override produit si défini, sinon icône de la catégorie, sinon rien
+        # Icon: product override if set, otherwise category icon, otherwise nothing
+        icone_brute = product.icon_pos or (categorie_pos.icon if categorie_pos else None) or ""
+
+        # Détection du système d'icône selon le nom stocké :
+        #   - FontAwesome : noms préfixés par "fa" (ex: "fa-coffee", "fas-X")
+        #   - Material Symbols : noms avec underscores, sans préfixe "fa" (ex: "local_bar")
+        # Icon system detection based on stored name:
+        #   - FontAwesome : names prefixed with "fa" (e.g. "fa-coffee", "fas-X")
+        #   - Material Symbols : underscore names, no "fa" prefix (e.g. "local_bar")
+        if icone_brute.startswith("fa"):
+            icone_article = icone_brute
+            icone_type = "fa"
+        elif icone_brute:
+            icone_article = icone_brute
+            icone_type = "ms"
+        else:
+            icone_article = ""
+            icone_type = ""
+
         article_dict = {
             "id": str(product.uuid),
             "name": product.name,
             "prix": prix_en_centimes,
             "categorie": categorie_dict,
+            "couleur_backgr": couleur_backgr,
+            "couleur_texte": couleur_texte_article,
+            "icone": icone_article,
+            "icone_type": icone_type,  # "fa" | "ms" | ""
             "bt_groupement": {
-                "groupe": product.groupe_pos or f"groupe_{product.methode_caisse or 'AD' if est_adhesion else product.methode_caisse or 'VT'}",
+                # Groupement automatique par méthode de caisse — plus de champ groupe_pos
+                # Automatic grouping by POS method — no more groupe_pos field
+                "groupe": f"groupe_{product.methode_caisse or ('AD' if est_adhesion else 'VT')}",
             },
             "url_image": url_image,
             "est_adhesion": est_adhesion,
@@ -285,10 +325,21 @@ def _construire_donnees_categories(point_de_vente_instance):
     categories_qs = point_de_vente_instance.categories.order_by('poid_liste', 'name')
     categories = []
     for categorie in categories_qs:
+        icone_cat = categorie.icon or ""
+        # Détection du système d'icône (même logique que pour les articles)
+        # Icon system detection (same logic as for articles)
+        if icone_cat.startswith("fa"):
+            icone_type_cat = "fa"
+        elif icone_cat:
+            icone_type_cat = "ms"
+        else:
+            icone_type_cat = "fa"
+            icone_cat = "fa-th"
         categories.append({
             "id": str(categorie.uuid),
             "name": categorie.name,
-            "icon": categorie.icon or "fa-th",
+            "icon": icone_cat,
+            "icone_type": icone_type_cat,
         })
     return categories
 
@@ -642,6 +693,10 @@ class CaisseViewSet(viewsets.ViewSet):
             "L": "--vert02",
         }
 
+        # Configuration globale de l'interface caisse (singleton, get_or_create)
+        # Global POS interface configuration (singleton, get_or_create)
+        laboutik_config = LaboutikConfiguration.get_solo()
+
         context = {
             "hostname_client": "",
             "state": state,
@@ -660,6 +715,7 @@ class CaisseViewSet(viewsets.ViewSet):
             # UUID of the "split payment" article — allows splitting a payment
             "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
             "id_table": id_table,
+            "laboutik_config": laboutik_config,
         }
         return render(request, template_name, context)
 

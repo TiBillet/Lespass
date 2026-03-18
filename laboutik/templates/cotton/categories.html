@@ -23,7 +23,11 @@
 
 	{% for cat in categories %}
 	<div class="BF-col category-item active" data-sel="cat-{{cat.id}}">
-		<i class="category-icon fas {{cat.icon}}"></i>
+		{% if cat.icone_type == "ms" %}
+		<span class="material-symbols-outlined category-icon">{{ cat.icon }}</span>
+		{% else %}
+		<i class="category-icon fas {{ cat.icon }}"></i>
+		{% endif %}
 		<div class="category-nom">{{ cat.name }}</div>
 		<div class="category-touch"></div>
 	</div>

@@ -9,10 +9,51 @@ import uuid as uuid_module
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from solo.models import SingletonModel
 
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import CategorieProduct, Price, Product
 from QrcodeCashless.models import CarteCashless
+
+
+# --- Configuration globale de l'interface caisse ---
+# / Global configuration for the POS interface
+
+class LaboutikConfiguration(SingletonModel):
+    """
+    Configuration globale de l'application caisse LaBoutik.
+    Il n'existe qu'une seule instance par tenant (SingletonModel).
+    / Global configuration for the LaBoutik POS application.
+    Only one instance exists per tenant (SingletonModel).
+
+    LOCALISATION : laboutik/models.py
+    """
+
+    # Taille de police pour les noms d'articles sur l'interface POS
+    # / Font size for article names on the POS interface
+    TAILLE_POLICE_CHOICES = [
+        (18, _("18")),
+        (20, _("20")),
+        (22, _("22")),
+        (24, _("24")),
+        (26, _("26")),
+        (28, _("28")),
+    ]
+    taille_police_articles = models.SmallIntegerField(
+        choices=TAILLE_POLICE_CHOICES,
+        default=14,
+        verbose_name=_("Article font size"),
+        help_text=_(
+            "Taille de la police des noms d'articles sur l'interface caisse. "
+            "/ Font size for article names on the POS interface."
+        ),
+    )
+
+    def __str__(self):
+        return "LaBoutik Configuration"
+
+    class Meta:
+        verbose_name = _("LaBoutik Configuration")
 
 
 # --- Point de vente ---

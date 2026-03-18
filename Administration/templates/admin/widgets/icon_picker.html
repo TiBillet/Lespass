@@ -1,0 +1,73 @@
+{% load i18n %}
+{# Sélecteur visuel d'icônes Material Symbols pour les boutons POS #}
+{# Visual Material Symbols icon picker for POS product buttons #}
+
+<div class="icon-picker-container flex flex-wrap gap-2 py-2">
+
+  {# Option "aucune icône" #}
+  {# "No icon" option #}
+  <label title="{% trans 'Aucune icône' %}" class="cursor-pointer">
+    <input
+      type="radio"
+      name="{{ widget_name }}"
+      value=""
+      {% if not current_value %}checked{% endif %}
+      class="sr-only icon-radio"
+    >
+    <span class="icon-swatch flex items-center justify-center w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 text-xs font-medium select-none">
+      ✕
+    </span>
+  </label>
+
+  {% for key, label in icons %}
+    <label title="{{ label }}" class="cursor-pointer">
+      <input
+        type="radio"
+        name="{{ widget_name }}"
+        value="{{ key }}"
+        {% if current_value == key %}checked{% endif %}
+        class="sr-only icon-radio"
+      >
+      <span class="icon-swatch flex items-center justify-center w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-700 border-2 select-none"
+            style="border-color: transparent;">
+        <span class="material-symbols-outlined text-gray-700 dark:text-gray-200" style="font-size: 26px;">{{ key }}</span>
+      </span>
+    </label>
+  {% endfor %}
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Met en évidence l'icône sélectionnée avec un contour bleu
+  // Highlights the selected icon with a blue outline
+  function mettreEnEvidenceIconeSelectionnee(container) {
+    container.querySelectorAll(".icon-radio").forEach(function (radio) {
+      var swatch = radio.closest("label").querySelector(".icon-swatch");
+      if (radio.checked) {
+        swatch.style.outline = "3px solid #3B82F6";
+        swatch.style.outlineOffset = "2px";
+        swatch.style.backgroundColor = "";  // Retire le fond par défaut
+      } else {
+        swatch.style.outline = "none";
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".icon-picker-container").forEach(function (container) {
+      // Highlight initial au chargement
+      // Initial highlight on page load
+      mettreEnEvidenceIconeSelectionnee(container);
+
+      // Mise à jour au changement de sélection
+      // Update on selection change
+      container.addEventListener("change", function () {
+        mettreEnEvidenceIconeSelectionnee(container);
+      });
+    });
+  });
+}());
+</script>

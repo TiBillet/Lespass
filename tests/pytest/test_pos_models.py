@@ -132,7 +132,6 @@ def test_product_champs_pos(tenant):
             couleur_fond_pos='#F59E0B',
             couleur_texte_pos='#000000',
             icon_pos='bi-cup',
-            groupe_pos='boissons',
             fractionne=False,
             besoin_tag_id=False,
         )
@@ -142,7 +141,6 @@ def test_product_champs_pos(tenant):
         assert product.couleur_fond_pos == '#F59E0B'
         assert product.couleur_texte_pos == '#000000'
         assert product.icon_pos == 'bi-cup'
-        assert product.groupe_pos == 'boissons'
         assert product.fractionne is False
         assert product.besoin_tag_id is False
 

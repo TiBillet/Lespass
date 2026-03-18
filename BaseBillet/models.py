@@ -1105,13 +1105,6 @@ class Product(models.Model):
         verbose_name=_("POS background color"),
         help_text=_("Hexadecimal color for the product button background (e.g. #3B82F6)."),
     )
-    # Groupement de boutons sur l'interface caisse
-    # / Button group name on the POS interface
-    groupe_pos = models.CharField(
-        max_length=50, blank=True, null=True,
-        verbose_name=_("POS button group"),
-        help_text=_("Group name to cluster buttons together on the POS interface."),
-    )
     # Paiement fractionne autorise pour cet article
     # / Whether split payment is allowed for this product
     fractionne = models.BooleanField(
@@ -2954,17 +2947,28 @@ class LigneArticle(models.Model):
         """
         Determine default VAT for this line from related Product TVA if available,
         otherwise fallback to global configuration, else 0.00.
+        Chaine de priorite / Priority chain:
+        1. TVA de la categorie POS (articles caisse)
+        2. TVA du produit (override explicite)
+        3. TVA globale de la Configuration
         """
-        # 1) Product TVA via PriceSold -> ProductSold -> Product
         try:
             if self.pricesold and self.pricesold.productsold and self.pricesold.productsold.product:
                 product = self.pricesold.productsold.product
+
+                # 1) TVA de la categorie POS (prioritaire pour les articles caisse)
+                # / POS category VAT (takes precedence for POS items)
+                if getattr(product, 'categorie_pos', None) and getattr(product.categorie_pos, 'tva', None):
+                    return Decimal(product.categorie_pos.tva.tva_rate)
+
+                # 2) TVA du produit (override possible pour billets/adhesions)
+                # / Product TVA (explicit override for tickets/memberships)
                 if getattr(product, 'tva', None):
                     return Decimal(product.tva.tva_rate)
         except Exception:
             pass
 
-        # 2) Fallback to Configuration default VAT
+        # 3) Fallback to Configuration default VAT
         try:
             return Decimal(Configuration.get_solo().vat_taxe)
         except Exception:
