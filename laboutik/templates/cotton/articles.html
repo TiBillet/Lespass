@@ -19,24 +19,51 @@
 			<img src="{{ article.url_image}}" class="article-image" loading="lazy" alt='' onerror="this.style.display='none'">
 		</div>
 		{% endif %}
-		<!-- name -->
-		<div class="article-name-layer"
-			style="color:{{article.categorie.couleur_texte}};text-shadow: 2px 2px 3px {{article.categorie.couleur_backgr}}">
-			{{article.name}}
+		<!-- corps de la tuile : icône catégorie + nom sur la même ligne, aligné à gauche
+		     L'icône est un sibling FLEX du span nom — pas à l'intérieur du -webkit-box
+		     (FA ::before ne se rend pas dans -webkit-box, mais fonctionne en sibling flex)
+		     / tile body: category icon + name on same row, left-aligned
+		     Icon is a flex sibling of the name span — NOT inside the -webkit-box
+		     (FA ::before breaks inside -webkit-box, works fine as flex sibling) -->
+		<div class="article-body-layer">
+			{% if article.categorie %}
+			<i class="fas {{ article.categorie.icon }} article-cat-icon"
+			   aria-hidden="true"
+			   style="color:{{article.categorie.couleur_texte}};"></i>
+			{% endif %}
+			<span class="article-name-text"
+			      style="color:{{article.categorie.couleur_texte}};text-shadow: 1px 1px 3px {{article.categorie.couleur_backgr}}">
+				{{article.name}}
+			</span>
 		</div>
-		<div class="article-footer-layer BF-ligne-g">
-			<!-- icon -->
-			<div class="article-icon" style="color:{{article.categorie.couleur_texte}};">
-				{% if article.categorie %}
-				<i class="fas {{ article.categorie.icon }}"></i>
-				{% endif %}
+		<!-- footer : pills + badge — PAS de width:100% ici (conflit avec left/right absolus)
+		     / footer: pills + badge — NO width:100% here (conflicts with absolute left/right) -->
+		<div class="article-footer-layer">
+			{% if article.multi_tarif %}
+			<!-- pills tarifs : un badge par tarif disponible / one badge per available rate -->
+			<div class="article-tarifs-pills">
+				{% for tarif in article.tarifs %}
+					{% if tarif.free_price %}
+					<span class="article-tarif-pill article-tarif-pill-libre"
+					      aria-label="prix libre">? {{ currency_data.symbol }}</span>
+					{% else %}
+					<span class="article-tarif-pill">
+						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}
+					</span>
+					{% endif %}
+				{% endfor %}
 			</div>
-			<!-- price -->
-			{% if pv.afficher_les_prix %}
-			<div class="article-prix BF-ligne-g" style="color:{{article.categorie.couleur_texte}};">
-				{{ article.prix|divide_by:100 }} {{ currency_data.symbol }}
+
+			{% elif pv.afficher_les_prix %}
+			<!-- prix unique en pill : même design que les multi-tarifs
+			     / single price as pill: same design as multi-rate pills -->
+			<div class="article-tarifs-pills">
+				<span class="article-tarif-pill">
+					{{ article.prix|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}
+				</span>
 			</div>
 			{% endif %}
+
 			<!-- quantity -->
 			<div class="article-quantity BF-ligne">
 				<span id="article-quantity-number-{{ article.id }}" class="badge">0</span>
@@ -85,20 +112,49 @@
 		transform: scale(0.95);
 	}
 
-	.article-name-layer {
+	/* Corps de la tuile : icône + nom sur la même ligne (flex row), aligné à gauche
+	   L'icône est un sibling flex du span nom — pas à l'intérieur du -webkit-box
+	   / Tile body: icon + name on same row (flex), left-aligned
+	   Icon is a flex sibling — NOT inside the -webkit-box */
+	.article-body-layer {
 		position: absolute;
-		left: 4px;
 		top: 6px;
-		font-weight: bold;
-		height: 78px;
-		width: calc(100% - 8px);
-		font-size: 18px;
-		margin: 0;
-		padding: 0;
+		left: 6px;
+		right: 6px;
+		/* Laisse la place au footer avec jusqu'à 2 lignes de pills
+		   2 lignes × (1.1rem ~18px + padding 4px×2) + gap 3px + bottom 6px ≈ 61px
+		   / Leaves room for footer with up to 2 rows of pills */
+		bottom: 62px;
+		display: flex;
+		flex-direction: row;
+		align-items: flex-start;
+		gap: 6px;
 		overflow: hidden;
-		text-align: center;
+	}
+
+	/* Icône catégorie
+	   / Category icon */
+	.article-cat-icon {
+		flex-shrink: 0;
+		font-size: 1.1rem;
+		opacity: 0.85;
+		margin-top: 2px;
+	}
+
+	/* Nom de l'article : clamp à 3 lignes, aligné à gauche, pas de centrage
+	   / Article name: 3-line clamp with ellipsis, left-aligned */
+	.article-name-text {
+		display: -webkit-box;
+		-webkit-line-clamp: 3;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+		font-weight: bold;
+		font-size: 1.2rem;
+		line-height: 1.3;
+		text-align: left;
 		color: var(--blanc01);
-		text-shadow: 2px 2px 3px var(--gris01);
+		text-shadow: 1px 1px 3px var(--gris01);
+		min-width: 0;
 	}
 
 	.article-img-layer {
@@ -116,36 +172,70 @@
 		opacity: 0.7;
 	}
 
-	.BF-ligne-g {
-		align-items: center;
-		display: flex;
-		flex-direction: row;
-		justify-content: flex-start;
-		width: 100%;
-	}
-
+	/* Footer : pills + badge quantité, en ligne
+	   Position absolute avec left+right — PAS de width:100% (écraserait right:5px)
+	   / Footer: pills + quantity badge, row layout
+	   Absolute with left+right — NO width:100% (would override right:5px) */
 	.article-footer-layer {
 		position: absolute;
-		left: 8px;
-		bottom: 8px;
+		left: 5px;
+		right: 5px;
+		bottom: 5px;
 		color: var(--blanc01);
-		text-shadow: 2px 2px 3px var(--gris01);
+		display: flex;
+		flex-direction: row;
+		align-items: center;
 	}
 
-	.article-icon {
-		flex-basis: 25%;
-	}
+	/* .article-prix supprimé — remplacé par .article-tarifs-pills + .article-tarif-pill
+	   / .article-prix removed — replaced by pills for both single and multi-rate */
 
-	.article-prix {
-		flex-basis: 45%;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
+	/* Conteneur des pills de tarifs : wrap sur 2 lignes max
+	   max-height = 2 lignes × (1.1rem + padding 8px + line-height) + gap ≈ 62px
+	   Au-delà de 2 lignes, les pills sont cachées — le caissier voit tout dans l'overlay au clic
+	   / Rate pills container: wrap up to 2 rows max
+	   Beyond 2 rows, pills are hidden — caissier sees all in overlay on click */
+	.article-tarifs-pills {
+		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 3px;
+		align-items: flex-start;
+		max-height: 62px;
 		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
+	/* Pill individuel pour chaque tarif (prix unique ET multi-tarif)
+	   box-shadow pour détacher le pill du fond, surtout sur tuiles claires.
+	   / Individual pill — box-shadow lifts pill off background, especially on light tiles */
+	.article-tarif-pill {
+		display: inline-block;
+		padding: 4px 10px;
+		border-radius: 9px;
+		background-color: rgba(0, 0, 0, 0.65);
+		color: #ffffff;
+		font-size: 1.1rem;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		white-space: nowrap;
+		line-height: 1.3;
+		text-shadow: none;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+	}
+
+	/* Pill prix libre : fond indigo plus opaque pour se distinguer des tarifs fixes
+	   / Free price pill: more opaque indigo to stand out from fixed rates */
+	.article-tarif-pill-libre {
+		background-color: rgba(99, 102, 241, 0.85);
+	}
+
+	/* Badge quantité en largeur fixe — ne vole plus l'espace aux pills
+	   / Fixed-width quantity badge — no longer stealing space from pills */
 	.article-quantity {
-		flex-basis: 25%;
+		width: 30px;
+		flex-shrink: 0;
+		text-align: right;
 	}
 
 	.badge {
@@ -195,6 +285,12 @@
 		display: none;
 	}
 
+	/* Mobile par défaut (< 599px)
+	   / Mobile default (< 599px) */
+	:root {
+		--bt-article-width: 130px;
+	}
+
 	/* pour une largeur supérieure ou égale à 599 pixels */
 	@media only screen and (width > 599px) {
 		:root {
@@ -206,23 +302,10 @@
 	@media only screen and (width > 1022px) {
 		:root {
 			--bt-article-width: 100px;
-			--bt-article-height: 100px;
-		}
-
-		.article-name-layer {
-			font-size: 16px;
-		}
-
-		.article-footer-layer {
-			font-size: 0.8rem;
 		}
 
 		.article-image {
 			width: 100px;
-		}
-
-		.article-icon {
-			flex-basis: 20%;
 		}
 	}
 
@@ -413,32 +496,6 @@
 	@media only screen and (width > 1278px) {
 		:root {
 			--bt-article-width: 160px;
-			--bt-article-height: 160px;
-		}
-
-		.article-name-layer {
-			font-size: 1.5rem;
-		}
-
-		.article-footer-layer {
-			width: 95%;
-			left: 4px;
-			font-size: 1.4rem;
-		}
-
-		.article-icon {
-			flex-basis: 20%;
-		}
-
-		.article-prix {
-			flex-basis: 55%;
-			white-space: nowrap;
-			overflow: hidden;
-			text-overflow: ellipsis;
-		}
-
-		.article-quantity {
-			flex-basis: 25%;
 		}
 	}
 </style>

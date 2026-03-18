@@ -1,0 +1,227 @@
+{% load static i18n %}
+<!--
+ECRAN CONFIRMATION ADHESION — resume identite + bouton CONFIRMER
+Affiche les infos du membre identifie et un bouton pour lancer le paiement.
+/ Membership confirmation screen — identity summary + CONFIRM button.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_adhesion_confirm.html
+
+FLUX :
+1. Le membre a ete identifie (NFC ou formulaire) dans identifier_membre
+2. Ce partial affiche le resume (email, nom, solde si NFC)
+3. CONFIRMER → injecte email/nom/prenom/tag_id dans le form et soumet vers payer
+-->
+
+<div class="BF-col" data-testid="adhesion-confirm" aria-live="polite">
+  <div class="adhesion-confirm-header adhesion-stagger" style="--ordre: 1">
+    <div class="adhesion-confirm-check" aria-hidden="true">
+      <i class="fas fa-check-circle"></i>
+    </div>
+    <h1 class="adhesion-confirm-title">{% translate "Membre identifie" %}</h1>
+  </div>
+
+  {# --- Carte resume membre --- #}
+  <div class="adhesion-confirm-card adhesion-stagger" style="--ordre: 2" data-testid="adhesion-confirm-user">
+    <div class="adhesion-confirm-email">
+      <i class="fas fa-envelope" aria-hidden="true"></i>
+      {{ user_email }}
+    </div>
+    <div class="adhesion-confirm-name">
+      {{ user_prenom }} {{ user_nom|upper }}
+    </div>
+    {% if tag_id %}
+    <div class="adhesion-confirm-solde" style="font-variant-numeric: tabular-nums;">
+      <i class="fas fa-wallet" aria-hidden="true"></i>
+      {% translate "Solde" %} : {{ user_solde|floatformat:2 }} €
+    </div>
+    {% endif %}
+  </div>
+
+  {# --- Boutons action --- #}
+  <div class="adhesion-confirm-actions adhesion-stagger" style="--ordre: 3">
+    <c-bt.return />
+
+    <div id="bt-confirmer-adhesion" class="bt-basic-container bt-basic-bg-success"
+      onclick="confirmerAdhesion()"
+      data-testid="adhesion-btn-confirmer"
+      role="button" tabindex="0"
+      aria-label="{% translate 'Confirmer le paiement' %}">
+      <div class="bt-basic-icon">
+        <i class="fas fa-check-circle" aria-hidden="true"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "CONFIRMER" %}</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Injecte les donnees d'identification dans le formulaire d'addition
+     * puis soumet le paiement.
+     * / Injects identification data into the addition form then submits payment.
+     *
+     * LOCALISATION : hx_adhesion_confirm.html (inline)
+     *
+     * COMMUNICATION :
+     * Emet : 'additionManageForm' → #event-organizer (updateInput, postUrl, submit)
+     */
+    function confirmerAdhesion() {
+      var form = document.querySelector('#addition-form');
+
+      // Injecter les champs d'identification dans le formulaire cache
+      // / Inject identification fields into the hidden form
+      function setHiddenInput(name, value) {
+        var input = form.querySelector('[name="' + name + '"]');
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          form.appendChild(input);
+        }
+        input.value = value;
+      }
+
+      setHiddenInput('email_adhesion', '{{ user_email|escapejs }}');
+      setHiddenInput('prenom_adhesion', '{{ user_prenom|escapejs }}');
+      setHiddenInput('nom_adhesion', '{{ user_nom|escapejs }}');
+      {% if tag_id %}
+      setHiddenInput('tag_id', '{{ tag_id|escapejs }}');
+      {% endif %}
+
+      // Soumettre le formulaire d'addition vers payer
+      // / Submit the addition form to payer
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_adhesion_confirm.html', method: 'confirmerAdhesion' },
+        msg: 'additionManageForm',
+        data: { actionType: 'postUrl', selector: null, value: '{% url "laboutik-paiement-payer" %}' }
+      });
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_adhesion_confirm.html', method: 'confirmerAdhesion' },
+        msg: 'additionManageForm',
+        data: { actionType: 'submit' }
+      });
+    }
+  </script>
+
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      color: var(--blanc01);
+      font-size: 1.5rem;
+      text-align: center;
+      background-color: var(--noir03, #1a1a2e);
+    }
+
+    /* --- Stagger animation d'entree --- */
+    /* / Staggered entry animation */
+    @keyframes adhesion-fade-up {
+      from {
+        transform: translateY(8px);
+        opacity: 0;
+      }
+    }
+
+    .adhesion-stagger {
+      animation: adhesion-fade-up 0.4s ease both;
+      animation-delay: calc(100ms * var(--ordre, 0));
+    }
+
+    .adhesion-confirm-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .adhesion-confirm-check {
+      font-size: 3rem;
+      color: var(--vert01, #00e676);
+      animation: adhesion-scale-in 0.3s ease-out 0.15s both;
+    }
+
+    @keyframes adhesion-scale-in {
+      0% { transform: scale(0); opacity: 0; }
+      70% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .adhesion-confirm-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      text-wrap: balance;
+    }
+
+    /* --- Carte resume (ombres, pas de bordure) --- */
+    /* / Summary card (shadows, no border) */
+    .adhesion-confirm-card {
+      width: 90%;
+      max-width: 380px;
+      margin: 0 auto 1.5rem;
+      padding: 20px 24px;
+      background-color: rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.06),
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 4px 12px rgba(0, 0, 0, 0.08),
+        0 8px 24px rgba(0, 0, 0, 0.06);
+      text-align: left;
+    }
+
+    .adhesion-confirm-email {
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .adhesion-confirm-name {
+      font-size: 1.3rem;
+      font-weight: bold;
+      margin-bottom: 8px;
+      margin-left: 28px;
+    }
+
+    .adhesion-confirm-solde {
+      font-size: 1rem;
+      opacity: 0.8;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* --- Actions : CONFIRMER plus proéminent --- */
+    /* / Actions: CONFIRM button more prominent */
+    .adhesion-confirm-actions {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-around;
+      align-items: center;
+      margin-top: 1rem;
+    }
+
+    #bt-confirmer-adhesion {
+      margin-left: 8px;
+      min-height: 70px;
+      min-width: 200px;
+      font-size: 1.2rem;
+    }
+
+    @media (max-width: 600px) {
+      .adhesion-confirm-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      #bt-confirmer-adhesion {
+        margin-left: 0;
+      }
+    }
+  </style>
+</div>

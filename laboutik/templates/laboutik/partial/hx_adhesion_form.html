@@ -1,0 +1,244 @@
+{% load static i18n %}
+<!--
+FORMULAIRE D'IDENTIFICATION MEMBRE — adhesion POS
+Email obligatoire, prenom et nom obligatoires.
+Soumission POST vers identifier_membre.
+/ Member identification form — POS membership.
+Email required, first name and last name required.
+POST submission to identifier_membre.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_adhesion_form.html
+
+FLUX :
+1. L'utilisateur arrive ici depuis hx_adhesion_choose_id.html (saisie manuelle)
+   ou depuis identifier_membre (carte anonyme)
+2. Remplir email + prenom + nom
+3. VALIDER → POST identifier_membre → hx_adhesion_confirm.html
+-->
+
+<div class="BF-col" data-testid="adhesion-form" aria-live="polite">
+  <h1 class="adhesion-form-title adhesion-form-stagger" style="--ordre: 1">{% translate "Identifier le membre" %}</h1>
+
+  <form class="adhesion-form-container adhesion-form-stagger" style="--ordre: 2"
+    hx-post="{% url 'laboutik-paiement-identifier_membre' %}"
+    hx-target="#messages" hx-swap="innerHTML"
+    data-testid="adhesion-form-fields">
+
+    {# --- Email --- #}
+    <div class="adhesion-field">
+      <input type="email" id="adhesion-email" name="email_adhesion"
+        placeholder=" "
+        required autofocus
+        class="adhesion-input"
+        inputmode="email"
+        autocomplete="email"
+        value="{{ email|default:'' }}"
+        aria-label="{% translate 'Email du membre' %}"
+        data-testid="adhesion-input-email" />
+      <label for="adhesion-email" class="adhesion-label">{% translate "Email" %} *</label>
+    </div>
+
+    {# --- Prenom + Nom --- #}
+    <div class="adhesion-form-row">
+      <div class="adhesion-field adhesion-field-half">
+        <input type="text" id="adhesion-prenom" name="prenom_adhesion"
+          placeholder=" "
+          required
+          class="adhesion-input"
+          autocomplete="given-name"
+          value="{{ prenom|default:'' }}"
+          aria-label="{% translate 'Prenom' %}"
+          data-testid="adhesion-input-prenom" />
+        <label for="adhesion-prenom" class="adhesion-label">{% translate "Prenom" %} *</label>
+      </div>
+      <div class="adhesion-field adhesion-field-half">
+        <input type="text" id="adhesion-nom" name="nom_adhesion"
+          placeholder=" "
+          required
+          class="adhesion-input"
+          autocomplete="family-name"
+          value="{{ nom|default:'' }}"
+          aria-label="{% translate 'Nom' %}"
+          data-testid="adhesion-input-nom" />
+        <label for="adhesion-nom" class="adhesion-label">{% translate "Nom" %} *</label>
+      </div>
+    </div>
+
+    {# --- Champs caches : tag_id (carte anonyme) + moyen de paiement --- #}
+    {% if tag_id %}
+    <input type="hidden" name="tag_id" value="{{ tag_id }}" />
+    {% endif %}
+    <input type="hidden" name="moyen_paiement" value="{{ moyen_paiement|default:'espece' }}" />
+
+    {# --- Erreur serveur (si retour avec erreur) --- #}
+    {% if erreur %}
+    <div class="adhesion-error" role="alert" data-testid="adhesion-form-error">
+      {{ erreur }}
+    </div>
+    {% endif %}
+
+    {# --- Bouton VALIDER --- #}
+    <button type="submit" class="adhesion-submit-btn" data-testid="adhesion-btn-valider">
+      <i class="fas fa-check" aria-hidden="true"></i>
+      {% translate "VALIDER" %}
+    </button>
+  </form>
+
+  {# --- Bouton retour --- #}
+  <c-bt.return />
+
+  <style>
+    #messages {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      color: var(--blanc01);
+      font-size: 1.5rem;
+      text-align: center;
+      background-color: var(--noir03, #1a1a2e);
+    }
+
+    /* --- Stagger animation d'entree --- */
+    /* / Staggered entry animation */
+    @keyframes adhesion-form-fade-up {
+      from {
+        transform: translateY(8px);
+        opacity: 0;
+      }
+    }
+
+    .adhesion-form-stagger {
+      animation: adhesion-form-fade-up 0.4s ease both;
+      animation-delay: calc(100ms * var(--ordre, 0));
+    }
+
+    .adhesion-form-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 1.5rem;
+      text-wrap: balance;
+    }
+
+    .adhesion-form-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 0 16px;
+      max-width: 420px;
+      margin: 0 auto 1rem;
+      width: 100%;
+    }
+
+    .adhesion-form-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* --- Champ avec label flottant --- */
+    /* / Floating label field */
+    .adhesion-field {
+      position: relative;
+      width: 100%;
+    }
+
+    .adhesion-field-half {
+      width: 50%;
+    }
+
+    .adhesion-input {
+      width: 100%;
+      height: 56px;
+      padding: 20px 14px 6px;
+      font-size: 1.1rem;
+      font-family: "Luciole-regular", sans-serif;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      transition: border-color 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .adhesion-input::placeholder {
+      color: transparent;
+    }
+
+    .adhesion-label {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      color: rgba(255, 255, 255, 0.5);
+      pointer-events: none;
+      transition: all 0.2s ease;
+      font-family: "Luciole-regular", sans-serif;
+    }
+
+    /* Label flottant : monte quand l'input a du contenu ou est focus */
+    /* / Floating label: moves up when input has content or is focused */
+    .adhesion-input:focus + .adhesion-label,
+    .adhesion-input:not(:placeholder-shown) + .adhesion-label {
+      top: 10px;
+      transform: translateY(0);
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .adhesion-input:focus {
+      outline: none;
+      border-color: var(--vert01, #00e676);
+    }
+
+    /* Validation visuelle */
+    /* / Visual validation */
+    .adhesion-input:invalid:not(:placeholder-shown):not(:focus) {
+      border-color: var(--rouge01, #ff5252);
+    }
+
+    .adhesion-input:valid:not(:placeholder-shown) {
+      border-color: var(--vert01, #00e676);
+    }
+
+    /* --- Bouton VALIDER --- */
+    .adhesion-submit-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 420px;
+      margin: 0.5rem auto 0;
+      padding: 0 24px;
+      height: 56px;
+      font-size: 1.3rem;
+      font-weight: bold;
+      font-family: "Luciole-regular", sans-serif;
+      color: var(--blanc01);
+      background-color: var(--vert03, #2e7d32);
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .adhesion-submit-btn:hover,
+    .adhesion-submit-btn:focus-visible {
+      background-color: var(--vert01, #00e676);
+      color: var(--noir01, #111);
+    }
+
+    .adhesion-submit-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* --- Erreur --- */
+    .adhesion-error {
+      color: var(--warning, #ff9800);
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</div>

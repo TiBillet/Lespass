@@ -268,6 +268,7 @@ def _construire_donnees_articles(point_de_vente_instance):
             "url_image": url_image,
             "est_adhesion": est_adhesion,
             "multi_tarif": multi_tarif,
+            "a_prix_libre": a_prix_libre,
             "tarifs": tarifs,
             "tarifs_json": dumps(tarifs) if tarifs else "[]",
         }
