@@ -69,6 +69,10 @@ from unfold.widgets import (
 
 from Administration.importers.ticket_exporter import TicketExportResource
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
+from Administration.importers.membership_importers import (
+    MembershipExportResource,
+    MembershipImportResource,
+)
 from Administration.utils import clean_html
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
 from ApiBillet.serializers import get_or_create_price_sold, dec_to_int
@@ -2002,13 +2006,10 @@ class PriceAdmin(ModelAdmin):
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     def response_change(self, request, obj):
-        # Après sauvegarde d'un tarif, rediriger vers la page du produit parent
-        # Ajouter un message de succès avant la redirection
+        # Après sauvegarde d'un tarif, rediriger vers la page du produit parent avec un message de succès
         # / After saving a price, redirect to the parent product page with a success message
-        from django.contrib import messages
-        from django.urls import reverse
         self.message_user(request, _('The price "%(name)s" was changed successfully.') % {'name': obj}, messages.SUCCESS)
-        product_url = reverse("admin:BaseBillet_product_change", args=[obj.product.pk])
+        product_url = reverse("staff_admin:BaseBillet_product_change", args=[obj.product.pk])
         return redirect(product_url)
 
     def has_delete_permission(self, request, obj=None):
@@ -2027,6 +2028,7 @@ class PriceAdmin(ModelAdmin):
 @admin.register(Paiement_stripe, site=staff_admin_site)
 class PaiementStripeAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
 
     list_display = (
         'user',
@@ -2063,7 +2065,7 @@ USER
 """
 
 
-class is_tenant_admin_filter(admin.SimpleListFilter):
+class IsTenantAdminFilter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
     title = _("Administrator")
@@ -2086,7 +2088,7 @@ class is_tenant_admin_filter(admin.SimpleListFilter):
             ).distinct()
 
 
-class can_init_paiement_filter(admin.SimpleListFilter):
+class CanInitPaiementFilter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
     # right admin sidebar just above the filter options.
     title = _("Can initiate payments")
@@ -2166,13 +2168,6 @@ class HumanUserAdmin(ModelAdmin):
 
     change_form_after_template = "admin/human_user/right_and_wallet_info.html"
 
-    # changeform_view sert à donner le pk de l'user pour le bouton htmx
-    def changeform_view(self, request: HttpRequest, object_id: Optional[str] = None, form_url: str = "",
-                        extra_context: Optional[Dict[str, bool]] = None) -> Any:
-        extra_context = extra_context or {}
-        extra_context['object_id'] = object_id
-        return super().changeform_view(request, object_id, form_url, extra_context)
-
     list_display = [
         'email',
         'first_name',
@@ -2205,8 +2200,8 @@ class HumanUserAdmin(ModelAdmin):
     list_filter = [
         "is_active",
         UserWithMembershipValid,
-        is_tenant_admin_filter,
-        can_init_paiement_filter,
+        IsTenantAdminFilter,
+        CanInitPaiementFilter,
         "email_valid",
     ]
 
@@ -2272,6 +2267,7 @@ class HumanUserAdmin(ModelAdmin):
 
     @action(
         description=_("Login as this user"),
+        url_path="login_as_user",
         permissions=["custom_actions_row"],
     )
     def login_as_user(self, request, object_id):
@@ -2292,11 +2288,6 @@ class HumanUserAdmin(ModelAdmin):
 
 
 ### ADHESION
-
-from Administration.importers.membership_importers import (
-    MembershipExportResource,
-    MembershipImportResource
-)
 
 
 # from Administration.importers.event_importers import PostalAddressForeignKeyWidget
@@ -3560,9 +3551,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     list_per_page = 20
 
     change_form_template = 'admin/event/change_form.html'
-
-    export_form_class = ExportForm
-    import_form_class = ImportForm
 
     inlines = [EventChildrenInline, ]
 
@@ -5700,6 +5688,8 @@ class ParticipationInline(TabularInline):
 
 @admin.register(Initiative, site=staff_admin_site)
 class InitiativeAdmin(ModelAdmin):
+    compressed_fields = True  # Default: False
+    warn_unsaved_form = True  # Default: False
     # form = InitiativeAdminForm
     list_display = (
         "name",

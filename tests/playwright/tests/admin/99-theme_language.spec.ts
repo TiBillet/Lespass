@@ -74,7 +74,7 @@ test.describe('Theme and Language Switch / Changement de Thème et Langue', () =
     // In many TiBillet setups, /my_account/ is accessible if TEST mode is on or after login.
     
     // Assuming we need to login
-    const { loginAsAdmin } = require('./utils/auth');
+    const { loginAsAdmin } = require('../utils/auth');
     await loginAsAdmin(page);
     
     await page.goto('/my_account/profile/'); // Corrected path from /my_account/preferences/
