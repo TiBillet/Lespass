@@ -15,7 +15,7 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 
 **Tests de validation par phase :** dans `memory/tests_validation.md` (fichier separe).
 
-**Resume executif — ou on en est (mise a jour 2026-03-16) :**
+**Resume executif — ou on en est (mise a jour 2026-03-18) :**
 - Branche : `integration_laboutik`
 - Front LaBoutik : 100% fait (templates, JS, cotton)
 - **Phase -1 TERMINEE** : Dashboard Groupware, 5 module_*, sidebar conditionnelle, proxy models
@@ -27,7 +27,8 @@ Lire d'abord cette section + la phase en cours (section 15). Le reste est de la 
 - **Phase 3 etape 2 TERMINEE** : Recharges especes/CB + securite (wallet ephemere, validation PV, garde NFC recharges)
 - **Phase 4 TERMINEE** : Commandes restaurant (CommandeSauvegarde, tables)
 - **Phase 5 TERMINEE** : Cloture caisse (ClotureCaisse, rapport JSON, email/PDF)
-- **→ Prochaine etape = Phase 3.3** (stress test + verify_transactions) ou ameliorations existant
+- **Ameliorations UX caisse TERMINEES (2026-03-18)** : voir section 15.X ci-dessous
+- **→ Prochaine etape = Phase 3.3** (stress test + verify_transactions) ou suite UX
 - Toutes les decisions architecturales sont prises (section 16), dont 16.9 : Product unifie (pas de ArticlePOS)
 - Prompts detailles avec tests par phase : `laboutik/doc/prompts/README.md`
 
@@ -1316,6 +1317,89 @@ les rem fixes (`1.2rem`, `1.1rem`) sont plus fiables.
 
 **⚠️ Verifier le champ `amount` de LigneArticle** — est-il en centimes ou euros ? LIRE le modele.
 **Tests** : 7 tests pytest + Playwright `35-laboutik-cloture.spec.ts`
+
+---
+
+### 15.X — Ameliorations UX caisse — TERMINEE (2026-03-18)
+
+Ameliorations de l'interface caisse apres les phases 1-5. Pas de nouveaux modeles.
+Seuls views.py, templates cotton et admin produits sont touches.
+/ POS interface improvements after phases 1-5. No new models.
+Only views.py, cotton templates and product admin are touched.
+
+**Ce qui a ete fait :**
+
+1. **Suppression de `groupe_pos`** (champ inutile)
+   - `BaseBillet/models.py` : champ `groupe_pos` retire du modele Product
+   - `BaseBillet/migrations/0205_remove_groupe_pos.py` : migration `RemoveField`
+   - `laboutik/views.py` : `bt_groupement` desormais base sur `methode_caisse` uniquement
+   - `tests/pytest/test_pos_models.py` : 2 assertions `groupe_pos` supprimees
+
+2. **LaboutikConfiguration** (singleton django-solo)
+   - `laboutik/models.py` : `LaboutikConfiguration(SingletonModel)` avec `taille_police_articles`
+   - `laboutik/migrations/0003_add_laboutik_configuration.py`
+   - `Administration/admin/laboutik.py` : `LaboutikConfigurationAdmin`
+   - `Administration/admin/dashboard.py` : lien sidebar "POS settings" dans section Caisse
+   - `laboutik/views.py` + `articles.html` : variable CSS `--article-font-size` injectee depuis config
+
+3. **Couleurs et icones resolues cote views.py**
+   - Priorite couleurs : `product.couleur_fond_pos` > `categorie_pos.couleur_fond` > fallback
+   - Priorite icone : `product.icon_pos` > `categorie_pos.icon` > vide
+   - Detection systeme d'icone : prefixe "fa" → FontAwesome, sinon → Material Symbols
+   - `article_dict` enrichi : `couleur_backgr`, `couleur_texte`, `icone`, `icone_type`
+   - `categorie_dict` enrichi : `icone_type` (pour badge haut-gauche et menu categorie)
+
+4. **Double systeme d'icones FA / Material Symbols**
+   - Historique : les donnees existantes utilisent FontAwesome 5 (ex: "fa-beer", "fa-coffee")
+   - Nouveaux choix admin : Material Symbols Outlined (ex: "local_bar", "sports_bar")
+   - Detection automatique par prefixe : `startswith("fa")` → FA, sinon → MS
+   - Template `articles.html` : `<i class="fas">` pour FA, `<span class="material-symbols-outlined">` pour MS
+   - Template `categories.html` : meme logique conditionnelle
+   - CDN Material Symbols deja charge dans `laboutik/templates/laboutik/base.html`
+
+5. **Tuile article redesignee**
+   - Badge icone categorie : `.article-cat-icon` (1.4rem, haut-gauche, opacite 0.75)
+   - Icone produit : `.article-visual-layer` (centree, `0.38 * --bt-article-width`)
+   - Nom article : `.article-name-layer` (bas de tuile, au-dessus du footer)
+   - Footer : prix en pill `.article-tarif-pill`, badge quantite
+
+6. **PalettePickerWidget et IconPickerWidget generiques**
+   - `PalettePickerWidget` : parametrable (`texte_field`, `fond_field`) pour POSProduct ET CategorieProduct
+   - `CategorieProductForm` : palette + couleurs + icone (meme UX que POSProductForm)
+   - JS dans `palette_picker.html` : lit `data-texte-field` / `data-fond-field` (plus de noms hardcodes)
+
+7. **categorie_pos obligatoire dans POSProductForm**
+   - `categorie_pos` : `required=True` dans le formulaire admin
+   - Help_text TVA dynamique : affiche le taux de la categorie si disponible
+
+**Fichiers modifies :**
+
+| Fichier | Changement |
+|---|---|
+| `BaseBillet/models.py` | Supprimer `groupe_pos` + `_compute_default_vat` TVA categorie en priorite |
+| `BaseBillet/migrations/0205_remove_groupe_pos.py` | RemoveField groupe_pos |
+| `laboutik/models.py` | Ajouter `LaboutikConfiguration(SingletonModel)` |
+| `laboutik/migrations/0003_add_laboutik_configuration.py` | CreateModel LaboutikConfiguration |
+| `laboutik/views.py` | Couleurs/icones resolues, icone_type, bt_groupement auto, LaboutikConfiguration context |
+| `laboutik/templates/cotton/articles.html` | Badge cat haut-gauche + icone produit centree + CSS variables |
+| `laboutik/templates/cotton/categories.html` | Support FA/MS sur les icones du menu |
+| `laboutik/templates/laboutik/base.html` | CDN Material Symbols (deja present) |
+| `Administration/admin/products.py` | PalettePickerWidget parametrable + CategorieProductForm + POSProductForm sans groupe_pos |
+| `Administration/admin/laboutik.py` | LaboutikConfigurationAdmin |
+| `Administration/admin/dashboard.py` | Lien POS settings dans sidebar |
+| `Administration/templates/admin/widgets/palette_picker.html` | data-texte-field/data-fond-field + JS generique |
+| `tests/pytest/test_pos_models.py` | Supprimer assertions groupe_pos |
+| `tests/pytest/test_pos_views_data.py` | **NOUVEAU** : 8 tests fonctions views (couleurs, icones, prix, groupement) |
+| `tests/playwright/tests/laboutik/45-laboutik-pos-tiles-visual.spec.ts` | **NOUVEAU** : 9 tests E2E (couleurs, icones, prix, menu, filtrage) |
+
+**Regles a retenir pour la suite :**
+- Les icones venant de l'admin utilisent Material Symbols (noms sans prefixe "fa")
+- Les icones dans `create_test_pos_data` utilisent FontAwesome (legacy, prefixe "fa")
+- Les deux systemes coexistent indefiniment (detection automatique par prefixe)
+- `groupe_pos` n'existe plus : utiliser `methode_caisse` pour les groupements de boutons
+- Toute nouvelle donnee POS doit avoir `categorie_pos` (obligatoire en admin)
+
+---
 
 ### Phase 6 — Migration des donnees
 
