@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n %}
 {% load laboutik_process %}
 
 <!-- les data articles sont prises dans le container #products -->
@@ -45,7 +46,7 @@
 				{% for tarif in article.tarifs %}
 					{% if tarif.free_price %}
 					<span class="article-tarif-pill article-tarif-pill-libre"
-					      aria-label="prix libre">? {{ currency_data.symbol }}</span>
+					      aria-label="{% translate 'prix libre' %}">? {{ currency_data.symbol }}</span>
 					{% else %}
 					<span class="article-tarif-pill">
 						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}

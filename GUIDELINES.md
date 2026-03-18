@@ -302,6 +302,90 @@ stripe listen --forward-to https://tibillet.localhost/api/webhook_stripe/ --skip
 
 **Ne jamais realiser d'operation git.** Pas de `git add`, `git commit`, `git push`, `git checkout`, `git branch`, etc. Le mainteneur s'en occupe.
 
+## laboutik — UI et Design de la Caisse POS
+
+### Police Luciole
+
+La police **Luciole** est utilisée dans tout laboutik (`font-family: "Luciole-regular"`).
+C'est une police conçue pour les personnes dyslexiques et malvoyantes — ne pas la remplacer par une autre.
+Elle doit être lisible à 1-2 mètres de distance sur un écran tactile, dans un environnement sombre (festival, bar).
+
+### Tuiles articles — Pièges CSS connus
+
+#### 1. Font Awesome `::before` dans un `-webkit-box` → caractère de remplacement affiché
+
+Un `<i class="fas fa-xxx">` placé à l'intérieur d'un conteneur `display: -webkit-box` ne rend pas son icône — le pseudo-élément `::before` de Font Awesome ne fonctionne pas dans ce contexte. On voit à la place le caractère Unicode de remplacement (ex: `☺`).
+
+**Solution :** mettre l'icône comme sibling flex à l'extérieur du `-webkit-box`, pas à l'intérieur.
+
+```html
+<!-- BON : icône sibling du span nom, les deux dans un flex container -->
+<div class="article-body-layer"> <!-- display: flex -->
+    <i class="fas fa-xxx article-cat-icon" aria-hidden="true"></i>  <!-- sibling -->
+    <span class="article-name-text">...</span>  <!-- -webkit-box ici -->
+</div>
+
+<!-- MAUVAIS : icône à l'intérieur du -webkit-box -->
+<div style="display: -webkit-box; -webkit-line-clamp: 3;">
+    <i class="fas fa-xxx"></i>  <!-- l'icône ne s'affichera pas -->
+    Nom de l'article
+</div>
+```
+
+#### 2. `width: 100%` + `position: absolute` avec `left` ET `right` → débordement
+
+Quand un élément est `position: absolute` avec `left: 5px; right: 5px`, ne pas lui ajouter `width: 100%`.
+En CSS, `width` prend la priorité sur `right` (en LTR) : `width: 100%` = largeur du parent entier, ce qui ignore `right: 5px` et fait déborder l'élément de 5px sur la droite. Le `overflow: hidden` du parent coupe alors les enfants au mauvais endroit.
+
+```css
+/* BON : left + right suffisent, pas besoin de width */
+.article-footer-layer {
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    bottom: 5px;
+    /* PAS de width: 100% ici */
+}
+
+/* MAUVAIS : width:100% écrase right:5px */
+.article-footer-layer {
+    position: absolute;
+    left: 5px;
+    right: 5px;
+    width: 100%;  /* déborde de 5px sur la droite */
+}
+```
+
+#### 3. `calc()` avec `--css-custom-property` ≠ taille réelle de la tuile
+
+Les tuiles utilisent `grid-template-columns: repeat(auto-fill, minmax(var(--bt-article-width), 1fr))`.
+La valeur `--bt-article-width` est la taille *minimum* — la taille réelle est plus grande (le `1fr` étire les tuiles pour remplir la grille).
+Utiliser `calc(var(--bt-article-width) * 0.18)` pour les polices donne donc des résultats imprévisibles.
+Préférer des valeurs `rem` fixes ajustées par media query.
+
+#### 4. Hauteur du footer avec pills wrappables
+
+Les pills de tarifs utilisent `flex-wrap: wrap` + `max-height` pour limiter à 2 lignes.
+La body-layer doit réserver un `bottom` correspondant à exactement 2 lignes de pills :
+
+```
+2 lignes × (font ~18px + padding 4px×2 + line-height 1.3) + 1 gap 3px + bottom 6px ≈ 62px
+```
+
+Si `bottom` est trop petit, le footer multi-lignes chevauche visuellement le titre.
+Si `max-height` est trop petit, la 2ème ligne de pills est coupée à moitié.
+
+### Lisibilité nocturne / accessibilité POS
+
+La caisse est utilisée le soir dans des environnements peu éclairés (festival, bar).
+Règles de lisibilité à respecter :
+
+- **Taille de police minimum** : `1.2rem` pour les noms d'articles, `1.1rem` pour les prix
+- **Contraste des pills** : fond `rgba(0,0,0,0.65)` sur tuile claire, texte `#ffffff` — ne pas descendre en dessous
+- **Pills prix libre** : fond indigo `rgba(99, 102, 241, 0.85)` pour se distinguer des tarifs fixes
+- **Ellipsis sur les noms longs** : `-webkit-line-clamp: 3` + `overflow: hidden` — ne jamais utiliser `max-height` seul (coupe les descendants des lettres p, g, y)
+- **`data-testid`** sur chaque tuile : `data-testid="article-{{ article.id }}"` pour les tests Playwright
+
 ## Check‑list avant merge
 
 - [ ] Toutes les interactions renvoient du HTML (partials) — pas de JSON UI.
