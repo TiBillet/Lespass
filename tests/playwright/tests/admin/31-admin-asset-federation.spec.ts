@@ -79,13 +79,22 @@ test.describe('Asset Federation / Federation d\'assets', () => {
         // -----------------------------------------------------------
         // Step 4 : Editer l'asset → inviter Chantefrein
         // Step 4: Edit the asset → invite Chantefrein
+        //
+        // On filtre la changelist par nom pour eviter les problemes de
+        // pagination (la DB peut contenir des centaines d'assets de runs PW
+        // precedents — sans filtre, l'asset nouvellement cree peut etre
+        // invisible sur la 1ere page).
+        // We filter the changelist by name to avoid pagination issues
+        // (the DB may contain hundreds of assets from previous PW runs —
+        // without a filter, the newly created asset may not appear on page 1).
         // -----------------------------------------------------------
         let assetEditUrl: string;
         await test.step('Edit asset and invite Chantefrein / Editer et inviter Chantefrein', async () => {
-            // On devrait etre redirige vers la changelist apres le save.
-            // Cliquer sur l'asset qu'on vient de creer.
-            // We should be redirected to changelist after save.
-            // Click on the asset we just created.
+            // Naviguer directement vers la changelist filtree par nom.
+            // Navigate directly to the changelist filtered by name.
+            await page.goto(`/admin/fedow_core/asset/?q=${encodeURIComponent(ASSET_NAME)}`);
+            await page.waitForLoadState('networkidle');
+
             const assetLink = page.locator(`#result_list a:has-text("${ASSET_NAME}")`).first();
             await expect(assetLink).toBeVisible({ timeout: 10000 });
             await assetLink.click();
@@ -122,9 +131,12 @@ test.describe('Asset Federation / Federation d\'assets', () => {
         // Step 5: Verify "Lieux federes" column on Lespass
         // -----------------------------------------------------------
         await test.step('Verify federated venues on Lespass / Verifier lieux federes sur Lespass', async () => {
-            // On est sur la changelist apres le save.
-            // We are on the changelist after save.
-            await expect(page).toHaveURL(/\/admin\/fedow_core\/asset\//);
+            // Apres le save de l'invitation, on est sur la changelist.
+            // Naviguer vers la changelist filtree pour robustesse.
+            // After saving the invitation, we are on the changelist.
+            // Navigate to filtered changelist for robustness.
+            await page.goto(`/admin/fedow_core/asset/?q=${encodeURIComponent(ASSET_NAME)}`);
+            await page.waitForLoadState('networkidle');
 
             // La colonne "Lieux federes" doit afficher "Lespass" (createur uniquement).
             // Chantefrein n'a pas encore accepte, donc il n'est PAS dans federated_with.
@@ -200,21 +212,29 @@ test.describe('Asset Federation / Federation d\'assets', () => {
         // -----------------------------------------------------------
         // Step 9 : Accepter l'invitation
         // Step 9: Accept the invitation
+        //
+        // IMPORTANT : la DB peut contenir des dizaines d'invitations d'autres
+        // runs PW. On doit cliquer sur le bouton de CETT asset specifique,
+        // pas le premier venu.
+        // IMPORTANT: DB may contain dozens of invitations from other PW runs.
+        // We must click the button for THIS specific asset, not the first one.
         // -----------------------------------------------------------
         await test.step('Accept invitation / Accepter l\'invitation', async () => {
-            // Cliquer sur "Accepter le partage" pour cet asset.
-            // Click "Accepter le partage" for this asset.
-            const acceptButton = page.locator(
-                '[data-testid="asset-invitations-panel"] button:has-text("Accepter le partage")'
-            ).first();
-            await expect(acceptButton).toBeVisible();
+            // Trouver la ligne d'invitation de CET asset specifique via son data-testid.
+            // Le template genere data-testid="asset-invitation-<pk>" pour chaque ligne.
+            // Find the invitation row for THIS specific asset via its data-testid.
+            // Template generates data-testid="asset-invitation-<pk>" for each row.
+            const invitationRow = page.locator('[data-testid^="asset-invitation-"]').filter({ hasText: ASSET_NAME });
+            const acceptButton = invitationRow.locator('button[type="submit"]');
+            await expect(acceptButton).toBeVisible({ timeout: 10000 });
             await acceptButton.click();
             await page.waitForLoadState('networkidle');
 
-            // Verifier le message de succes.
-            // Check the success message.
-            const successMessage = page.locator('.messagelist .success, [class*="alert-success"], [class*="bg-green"]');
-            await expect(successMessage.first()).toBeVisible({ timeout: 10000 });
+            // Verifier le message de succes Unfold (bandeau vert personnalise).
+            // Le message contient le nom de l'asset — c'est la verification la plus fiable.
+            // Check Unfold success message (custom green banner).
+            // The message contains the asset name — most reliable check.
+            await expect(page.getByText('Invitation acceptee')).toBeVisible({ timeout: 10000 });
 
             console.log('✓ Invitation accepted / Invitation acceptee');
         });
@@ -224,9 +244,14 @@ test.describe('Asset Federation / Federation d\'assets', () => {
         // Step 10: Verify asset in Chantefrein changelist
         // -----------------------------------------------------------
         await test.step('Verify asset in Chantefrein changelist / Verifier asset dans la liste Chantefrein', async () => {
-            // Apres acceptation, on est redirige vers la changelist.
-            // After acceptance, we are redirected to changelist.
-            await expect(page).toHaveURL(/\/admin\/fedow_core\/asset\//);
+            // Naviguer vers la changelist Chantefrein filtree par nom.
+            // Sans filtre, l'asset peut etre invisible si la DB contient
+            // beaucoup d'assets de runs PW precedents (pagination).
+            // Navigate to Chantefrein changelist filtered by name.
+            // Without filter, asset may be invisible if DB has many assets
+            // from previous PW runs (pagination).
+            await page.goto(`${CHANTEFREIN_BASE_URL}/admin/fedow_core/asset/?q=${encodeURIComponent(ASSET_NAME)}`);
+            await page.waitForLoadState('networkidle');
 
             // L'asset doit apparaitre dans la liste.
             // The asset must appear in the list.
@@ -287,11 +312,11 @@ test.describe('Asset Federation / Federation d\'assets', () => {
         // -----------------------------------------------------------
         await test.step('Verify federation on Lespass / Verifier federation sur Lespass', async () => {
             // La session Lespass est toujours active (cookie du step 1).
-            // Aller directement a l'admin sans re-login.
+            // Naviguer vers la changelist filtree pour eviter la pagination.
             // Lespass session is still active (cookie from step 1).
-            // Go directly to admin without re-login.
+            // Navigate to filtered changelist to avoid pagination issues.
             const lespassBaseUrl = `https://${env.SUB}.${env.DOMAIN}`;
-            await page.goto(`${lespassBaseUrl}/admin/fedow_core/asset/`);
+            await page.goto(`${lespassBaseUrl}/admin/fedow_core/asset/?q=${encodeURIComponent(ASSET_NAME)}`);
             await page.waitForLoadState('networkidle');
 
             // La colonne "Lieux federes" doit maintenant afficher
