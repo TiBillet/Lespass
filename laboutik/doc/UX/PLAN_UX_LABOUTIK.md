@@ -270,33 +270,89 @@ Deux endroits possibles :
 
 ---
 
-### Session 2 — Polish articles et panier
+### Session 2 — Polish articles et panier — TERMINEE
 
 **Modele recommande** : Sonnet
 **Fichiers concernes** : `cotton/articles.html`, `cotton/addition.html`, `palette.css`, `sizes.css`
-**Estimation** : ~40% du contexte 1M
+**Statut** : FAIT — refonte complete du composant article, multi-tarif, prix libre, lisibilite nocturne
 
-#### 2.1 Masquer le badge quantite "0"
+#### 2.0 Refonte structure HTML/CSS du composant article — FAIT
 
-Actuellement chaque article affiche un badge "0" en permanence → bruit visuel.
+La structure initiale avait plusieurs problemes :
+- Icone categorie en `position: absolute` top-left → conflit avec le flex du corps
+- Nom dans un `-webkit-box` inline incluant l'icone FA → l'icone s'affiche en `☺` (pseudo-element `::before` incompatible)
+- Footer avec classe `BF-ligne-g` (ajoute `width:100%`) + `position:absolute left+right` → conflit de largeur
+- `max-height` sur le conteneur du nom → hampes descendantes (g, p, y) coupees
 
-- Masquer le badge quand quantite = 0 (CSS `opacity: 0` ou `display: none`)
-- Afficher avec une micro-animation quand quantite >= 1 (transition opacity 200ms)
-- Le badge "0" doit reapparaitre quand on fait un RESET (evenement `articlesReset`)
-
-#### 2.2 Feedback tactile au clic
-
-Ajouter un retour visuel quand on tapote un article :
-
-```css
-.article-container:active {
-    transform: scale(0.95);
-    transition: transform 100ms ease;
-}
-.article-container {
-    transition: transform 100ms ease;
-}
+**Nouvelle structure :**
 ```
+.article-container
+├── .article-img-layer (si image)
+├── .article-body-layer (flex row, position:absolute)
+│   ├── .article-cat-icon (FA icon, flex-shrink:0 — HORS du -webkit-box)
+│   └── .article-name-text (-webkit-line-clamp:3, min-width:0)
+├── .article-footer-layer (position:absolute, left+right SANS width:100%)
+│   ├── .article-tarifs-pills (flex-wrap:wrap, max-height:62px)
+│   └── .article-quantity (badge)
+├── .article-touch
+└── .article-lock-layer
+```
+
+#### 2.1 Masquer le badge quantite "0" — FAIT
+
+Badge masque par defaut (`.badge` sans `.badge-visible` = pas de display).
+JS (`tarif.js:addArticleWithPrice` et `articles.js`) ajoute `.badge-visible` quand quantite >= 1.
+Le badge revient a zero visuellement au RESET (valeur reinjectee).
+
+#### 2.2 Feedback tactile au clic — FAIT (via .article-touch)
+
+La couche `.article-touch` absorbe le clic et declenche le feedback visuel via le JS existant.
+`transform: scale(0.95)` via `:active` sur `.article-container` — 100ms ease.
+
+#### 2.3 Couleurs des articles sans categorie — FAIT (donnees test)
+
+Regle dans `create_test_pos_data.py` : les articles recharge et adhesion ont des couleurs
+affectees via `couleur_fond_pos` et `couleur_texte_pos` sur le Product.
+
+#### 2.4 Panier vide — message d'accueil — FAIT
+
+Placeholder dans `cotton/addition.html` quand `#addition-list` est vide :
+icone panier + "Panier vide" avec opacity 0.5, masque au premier article ajoute.
+
+#### 2.5 Prix (pills) — lisibilite nocturne — FAIT
+
+Remplace le footer avec un seul prix par un systeme de pills :
+- **1 tarif** : 1 pill `<span class="article-tarif-pill">` avec le prix formate
+- **Multi-tarifs** : N pills (1 par Price du produit)
+- **Prix libre** : pill indigo `article-tarif-pill-libre` avec "? €" + `aria-label`
+- Font : `1.1rem`, `font-variant-numeric: tabular-nums`, `font-weight: 600`
+- Contraste : fond `rgba(0,0,0,0.65)` → texte blanc → ratio AA
+- `flex-wrap: wrap` + `max-height: 62px` → max 2 rangs, surplus masque (overflow:hidden)
+
+#### 2.6 Taille du texte — lisibilite nuit/petit ecran — FAIT
+
+Texte x2 par rapport a l'existant :
+- Nom article : `1.2rem bold` (avant : 0.7rem env.)
+- Prix : `1.1rem` (avant : 0.85rem)
+- L'icone categorie : `1.1rem`, flex-shrink:0, opacity 0.85
+- Breakpoints tuiles inchanges (130px→140px→100px→160px)
+
+**Note :** utiliser des rem fixes plutot que `calc(var(--bt-article-width) * N)` —
+`minmax(var(), 1fr)` rend la tuile plus large que la variable CSS, le calc donne
+une mauvaise taille de police.
+
+#### 2.7 i18n + data-testid + accessibilite — FAIT
+
+- `{% load i18n %}` ajoute dans `articles.html`
+- `aria-label="{% translate 'prix libre' %}"` sur le pill libre
+- `data-testid="article-{{ article.id }}"` sur chaque tuile
+- `aria-hidden="true"` sur `.article-cat-icon`
+
+#### 2.8 Multi-tarif et prix libre — FAIT (Phase 2.5)
+
+Voir la Phase 2.5 dans `PLAN_INTEGRATION.md` pour le detail complet du flow :
+overlay `tarif.js`, format formulaire `repid-uuid--price_uuid`, validation back,
+et le processus d'adhesion (identification NFC ou email).
 
 Tester sur ecran tactile (ou simulateur Chrome DevTools).
 
@@ -540,7 +596,7 @@ Verifier :
 | Session | Contenu | Modele | Statut |
 |---------|---------|--------|--------|
 | **1** | Filtre categorie + highlight + format total + masquer uuid | Sonnet | **TERMINEE** |
-| **2** | Articles (badge, feedback, couleurs, panier vide, prix) | Opus | **TERMINEE** |
+| **2** | Articles (badge, feedback, couleurs, panier vide, prix, multi-tarif, pills) | Opus | **TERMINEE** (refonte HTML/CSS + multi-tarif + prix libre) |
 | **3** | Paiement (couleurs boutons, confirmation, succes, retour carte) | Opus | **TERMINEE** (98 pytest, stack-ccc OK) |
 | **4** | Header, sidebar, footer, menu burger | Opus | **TERMINEE** (98 pytest, stack-ccc OK) |
 | **5** | Responsive tablette, zones tactiles | Opus | **TERMINEE** |

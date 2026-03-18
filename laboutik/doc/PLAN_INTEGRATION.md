@@ -1180,6 +1180,65 @@ C'est le socle de tout. Sans fedow_core, pas de paiement cashless.
 **Fichiers modifies :** BaseBillet/models.py (CategorieProduct, 8 champs POS sur Product, POSProduct proxy, Price.asset FK), laboutik/models.py (4 modeles)
 **Tests :** `tests/playwright/tests/29-admin-proxy-products.spec.ts` couvre les proxy admins
 
+**Bonus realises — Design CSS des tuiles articles :**
+
+Refonte complete du composant `laboutik/templates/cotton/articles.html` pour la lisibilite
+nocturne / ecran tactile. Toutes les corrections ont ete faites en lien avec le plan UX Session 2.
+
+**Structure HTML redessinee :**
+
+Avant : icone categorie en `position: absolute` (top-left), nom dans un `-webkit-box`,
+footer avec `BF-ligne-g` (qui ajoutait `width: 100%` incompatible avec `left+right` absolu).
+
+Apres :
+- `.article-body-layer` (flex row) contient l'icone ET le nom cote-a-cote (plus d'`absolute`)
+- `.article-cat-icon` (flex-shrink: 0) — icone FA a gauche du nom, non incluse dans `-webkit-box`
+  (sinon le pseudo-element `::before` de FA n'est pas rendu dans un conteneur `-webkit-box`)
+- `.article-name-text` (min-width: 0, `-webkit-line-clamp: 3`) — texte tronque avec `...`
+- `.article-footer-layer` (position: absolute, left+right sans `width:100%`) — footer propre
+- `.article-tarifs-pills` (`flex-wrap: wrap`, `max-height: 62px`, `overflow: hidden`) — max 2 rangs
+
+**Tailles de texte :**
+- Nom article : `1.2rem` (lisible sur 130-160px)
+- Prix pills : `1.1rem` avec `tabular-nums` et `font-weight: 600`
+- Badge quantite : masque tant qu'il est a zero (`badge-visible` ajoute par JS)
+
+**Breakpoints responsive (taille des tuiles) :**
+
+| Viewport | Taille tuile (`--bt-article-width`) |
+|---|---|
+| Default (<600px) | 130px |
+| >599px | 140px |
+| >1022px | 100px (ecran dense) |
+| >1278px | 160px (Sunmi D3mini) |
+
+**Note :** `minmax(var(--bt-article-width), 1fr)` fait que les tuiles sont souvent plus larges
+que la variable CSS. Ne pas utiliser `calc(var(--bt-article-width) * ...)` pour les polices —
+les rem fixes (`1.2rem`, `1.1rem`) sont plus fiables.
+
+**Pills multi-tarif :**
+- Chaque tarif = une `<span class="article-tarif-pill">` dans `.article-tarifs-pills`
+- Tarif prix libre = `<span class="article-tarif-pill article-tarif-pill-libre">? €</span>` (fond indigo)
+- `flex-wrap: wrap` permet jusqu'a 2 rangs avant que `max-height: 62px` coupe
+- `aria-label="{% translate 'prix libre' %}"` sur le pill libre (accessibilite)
+
+**Pieges CSS a ne pas reproduire :**
+1. `<i class="fas ...">` DANS un container `-webkit-box` → le pseudo-element `::before` de FA
+   ne s'affiche pas. Toujours mettre l'icone FA comme sibling HORS du span lineclamp.
+2. `position: absolute; left: 5px; right: 5px; width: 100%` → conflit. Avec left+right,
+   la largeur est implicite — ne pas ajouter `width: 100%` ni la classe `BF-ligne-g`.
+3. `max-height` sur `.article-name-text` → coupe les hampes descendantes (g, p, y...).
+   Utiliser uniquement `-webkit-line-clamp` pour le tronquage multi-lignes.
+4. `calc(var(--bt-article-width) * 0.18)` pour les polices → donne le CSS variable, pas la
+   taille rendue (1fr elargit la tuile au-dela de la variable). Utiliser des rem fixes.
+
+**Fichiers modifies :**
+
+| Fichier | Changement |
+|---|---|
+| `laboutik/templates/cotton/articles.html` | Refonte structure HTML + CSS : body-layer flex, icon+name inline, pills wrap, footer sans width:100% |
+| `GUIDELINES.md` | Section `## laboutik — UI et Design de la Caisse POS` avec les 4 pieges CSS et les regles de lisibilite nocturne |
+
 ### Phase 2 — laboutik : remplacement des mocks ← PROCHAINE
 
 12. `carte_primaire()` : CartePrimaire + CarteCashless — validation via `serializers.Serializer` (pas request.POST brut)
