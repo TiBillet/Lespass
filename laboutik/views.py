@@ -9,7 +9,6 @@
 # PaiementViewSet : paiements espèces/CB/NFC depuis la DB (Phase 2 + Phase 3).
 
 import logging
-import os
 from json import dumps
 
 from django.conf import settings
@@ -50,17 +49,12 @@ from laboutik.serializers import (
     CommandeSerializer, ArticleCommandeSerializer,
     ClotureSerializer, EnvoyerRapportSerializer,
 )
-from laboutik.utils import mockData
 from laboutik.utils import method as payment_method
 
 
 # --------------------------------------------------------------------------- #
 #  Constantes                                                                  #
 # --------------------------------------------------------------------------- #
-
-# Chemin vers la base de données JSON mock (utilisé par PaiementViewSet)
-# Path to the mock JSON database (used by PaiementViewSet)
-MOCK_DB_PATH = os.path.join(os.path.dirname(__file__), "utils", "mockDb.json")
 
 # Devise utilisée pour l'affichage des prix
 # Currency used for price display
@@ -447,27 +441,6 @@ def _panier_contient_recharges(articles_panier):
         if article['product'].methode_caisse in METHODES_RECHARGE:
             return True
     return False
-
-
-# --------------------------------------------------------------------------- #
-#  Fonctions utilitaires mock — utilisées uniquement par PaiementViewSet      #
-#  Mock utility functions — used only by PaiementViewSet                      #
-# --------------------------------------------------------------------------- #
-
-def _charger_mock_db():
-    """
-    Charge la base de données JSON mock (PaiementViewSet uniquement).
-    Loads the mock JSON database (PaiementViewSet only).
-    """
-    return mockData.mockDb(MOCK_DB_PATH)
-
-
-def _charger_points_de_vente():
-    """
-    Charge les points de vente mock (PaiementViewSet uniquement).
-    Loads mock points of sale (PaiementViewSet only).
-    """
-    return mockData.get_data_pvs()
 
 
 # --------------------------------------------------------------------------- #
