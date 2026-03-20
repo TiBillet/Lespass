@@ -63,6 +63,20 @@
 	<div id="messages"></div>
 	<div id="confirm"></div>
 	<style>
+		/* #messages et #confirm sont des overlays plein ecran qui recouvrent
+		   toute l'interface caisse (articles, panier, footer).
+		   z-index: 800 garantit qu'ils passent AU-DESSUS des icones de categorie
+		   (.article-cat-icon, z-index: 1) et de tous les autres elements.
+		   Ce z-index est centralise ICI et pas dans chaque partial
+		   pour eviter les oublis (bug : icones visibles sur l'overlay paiement).
+		   / #messages and #confirm are full-screen overlays covering the POS.
+		   z-index: 800 ensures they sit ABOVE category icons
+		   (.article-cat-icon, z-index: 1) and all other elements.
+		   Centralized HERE, not in each partial, to avoid omissions. */
+		#messages, #confirm {
+			z-index: 800;
+		}
+
 		/* L'enfant direct de #messages doit remplir tout l'espace du parent
 		   pour que le flex layout fonctionne correctement.
 		   Les partials injectes via innerHTML ne sont plus l'element #messages

@@ -21,6 +21,24 @@
  */
 
 /**
+ * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
+ * Utilisé pour tout texte dynamique injecté via innerHTML (noms de produits,
+ * noms de tarifs, symboles monétaires).
+ * / Escapes HTML special characters to prevent XSS injection.
+ *
+ * @param {String} texte - Texte brut à échapper
+ * @returns {String} Texte avec caractères HTML échappés
+ */
+function escapeHtml(texte) {
+	return String(texte)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;')
+}
+
+/**
  * Affiche l'overlay de sélection de tarif
  * / Shows rate selection overlay
  *
@@ -39,13 +57,31 @@ function tarifSelection(event) {
 		const tarif = tarifs[i]
 		const prixAffiche = (tarif.prix_centimes / 100).toFixed(2)
 
+		// Echapper tous les textes dynamiques pour éviter les injections XSS.
+		// Les UUID et nombres ne sont pas échappés (pas de risque HTML).
+		// / Escape all dynamic text to prevent XSS injection.
+		// UUIDs and numbers are not escaped (no HTML risk).
+		const nomTarifSafe = escapeHtml(tarif.name)
+		const currencySafe = escapeHtml(currency)
+		const prixAfficheSafe = escapeHtml(prixAffiche)
+		const nomCompletSafe = escapeHtml(`${name} (${tarif.name})`)
+
+		// Les données dynamiques sont stockées dans des attributs data-*.
+		// Le browser décode automatiquement les entités HTML dans les data-*,
+		// donc les apostrophes et caractères spéciaux sont gérés proprement.
+		// Pas de onclick inline → pas de risque d'injection JS via les noms.
+		// / Dynamic data is stored in data-* attributes.
+		// The browser automatically decodes HTML entities in data-*,
+		// so apostrophes and special characters are handled properly.
+		// No inline onclick → no JS injection risk via product names.
+
 		if (tarif.free_price) {
 			// Tarif prix libre : bouton qui ouvre l'input
 			// / Free price rate: button that opens input
 			boutonsHtml += `
 				<div class="tarif-btn tarif-btn-free" data-testid="tarif-btn-free-${tarif.price_uuid}">
-					<div class="tarif-btn-label">${tarif.name}</div>
-					<div class="tarif-btn-sublabel">min ${prixAffiche} ${currency}</div>
+					<div class="tarif-btn-label">${nomTarifSafe}</div>
+					<div class="tarif-btn-sublabel">min ${prixAfficheSafe} ${currencySafe}</div>
 					<div id="tarif-free-input-${tarif.price_uuid}" class="tarif-free-input-container">
 						<input type="number"
 							id="tarif-free-amount-${tarif.price_uuid}"
@@ -57,10 +93,14 @@ function tarifSelection(event) {
 							aria-label="Montant libre"
 							data-testid="tarif-free-input-${tarif.price_uuid}"
 						/>
-						<span class="tarif-free-currency" aria-hidden="true">${currency}</span>
+						<span class="tarif-free-currency" aria-hidden="true">${currencySafe}</span>
 						<button type="button"
 							class="tarif-free-validate"
-							onclick="tarifValidateFreePrix('${uuid}', '${tarif.price_uuid}', ${tarif.prix_centimes}, '${name} (${tarif.name})', '${currency}')"
+							data-product-uuid="${uuid}"
+							data-price-uuid="${tarif.price_uuid}"
+							data-prix-centimes="${tarif.prix_centimes}"
+							data-display-name="${nomCompletSafe}"
+							data-currency="${currencySafe}"
 							data-testid="tarif-free-validate-${tarif.price_uuid}"
 						>OK</button>
 					</div>
@@ -72,12 +112,16 @@ function tarifSelection(event) {
 			// / Fixed rate: direct click → add to cart
 			boutonsHtml += `
 				<button type="button"
-					class="tarif-btn"
-					onclick="tarifSelectFixed('${uuid}', '${tarif.price_uuid}', ${tarif.prix_centimes}, '${name} (${tarif.name})', '${currency}')"
+					class="tarif-btn tarif-btn-fixed"
+					data-product-uuid="${uuid}"
+					data-price-uuid="${tarif.price_uuid}"
+					data-prix-centimes="${tarif.prix_centimes}"
+					data-display-name="${nomCompletSafe}"
+					data-currency="${currencySafe}"
 					data-testid="tarif-btn-${tarif.price_uuid}"
 				>
-					<div class="tarif-btn-label">${tarif.name}</div>
-					<div class="tarif-btn-price">${prixAffiche} ${currency}</div>
+					<div class="tarif-btn-label">${nomTarifSafe}</div>
+					<div class="tarif-btn-price">${prixAfficheSafe} ${currencySafe}</div>
 				</button>
 			`
 		}
@@ -93,7 +137,7 @@ function tarifSelection(event) {
 	messagesEl.innerHTML = `
 		<div id="tarif-overlay" class="tarif-overlay" data-testid="tarif-overlay">
 			<div class="tarif-overlay-content">
-				<h2 class="tarif-overlay-title">${name}</h2>
+				<h2 class="tarif-overlay-title">${escapeHtml(name)}</h2>
 				<div class="tarif-overlay-subtitle">Choisir un tarif</div>
 				<div class="tarif-list">
 					${boutonsHtml}
@@ -108,6 +152,36 @@ function tarifSelection(event) {
 			</div>
 		</div>
 	`
+
+	// Attacher les handlers de clic via addEventListener (pas de onclick inline).
+	// Les valeurs sont lues depuis les data-* : le browser décode les entités
+	// automatiquement, donc "Bière d&#39;automne" → "Bière d'automne".
+	// / Attach click handlers via addEventListener (no inline onclick).
+	// Values are read from data-*: the browser decodes entities automatically,
+	// so "Bière d&#39;automne" → "Bière d'automne".
+	messagesEl.querySelectorAll('.tarif-btn-fixed').forEach(btn => {
+		btn.addEventListener('click', () => {
+			tarifSelectFixed(
+				btn.dataset.productUuid,
+				btn.dataset.priceUuid,
+				Number(btn.dataset.prixCentimes),
+				btn.dataset.displayName,
+				btn.dataset.currency
+			)
+		})
+	})
+	messagesEl.querySelectorAll('.tarif-free-validate').forEach(btn => {
+		btn.addEventListener('click', () => {
+			tarifValidateFreePrix(
+				btn.dataset.productUuid,
+				btn.dataset.priceUuid,
+				Number(btn.dataset.prixCentimes),
+				btn.dataset.displayName,
+				btn.dataset.currency
+			)
+		})
+	})
+
 	messagesEl.classList.remove('hide')
 }
 

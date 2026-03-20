@@ -1,0 +1,13 @@
+/stack-ccc On va lancer le nouveau chantier découpé par sessions.
+Va voir le @laboutik/doc/PLAN_LABOUTIK.md et son fichier d'index : @laboutik/doc/INDEX.md
+Ensuite, va lire et ecécute la tache décrite dans le fichier @laboutik/doc/SESSIONS/01_refactoring_securite_a11y.md
+Si tu as le moindre doute, pose moi des questions pour avancer petit à petit.
+Fabrique ensuite des tests python/django pour vérifier ce que tu as fabriqué.
+
+
+Va relire tout le code que tu as écrit sur cette sessions.
+Vérifie que tout soit en conformité avec le skill /stack-ccc
+Lance des vérification via /chrome
+Soit critique envers le travail, si tu vois des amélioration, note les et dis les moi.
+Vérifie que les test python/django couvrent bien ce nouveau code.
+Fabrique un test E2E pour vérifier les nouveautées.

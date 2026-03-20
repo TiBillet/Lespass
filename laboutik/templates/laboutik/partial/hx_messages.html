@@ -1,6 +1,6 @@
 {% load static i18n %}
 
-<div class="BF-col" style="background-color: var(--{{msg_type}});">
+<div class="BF-col" style="background-color: var(--{{msg_type}});" role="alert" aria-live="assertive">
 	<h1>{{ msg_content }}</h1>
 	<c-bt.return />
 

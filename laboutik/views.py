@@ -1131,18 +1131,24 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             prix_obj = produit.prix_euros[0]
 
         # Valider le prix libre (custom_amount_centimes)
+        # Sécurité : rejeter les montants invalides au lieu de corriger silencieusement.
+        # Un montant sous le minimum venant du front est soit un bug soit une tentative de fraude.
         # Validate free price (custom_amount_centimes)
+        # Security: reject invalid amounts instead of silently correcting.
+        # An amount below minimum from the frontend is either a bug or a fraud attempt.
         if custom_amount_centimes is not None:
             if not prix_obj.free_price:
                 logger.warning(f"Prix {prix_obj.name} n'est pas un prix libre")
                 custom_amount_centimes = None
             else:
-                minimum_centimes = int(round(prix_obj.prix * 100))
-                if custom_amount_centimes < minimum_centimes:
-                    logger.warning(
-                        f"Montant libre {custom_amount_centimes} < minimum {minimum_centimes}"
+                prix_minimum_centimes = int(round(prix_obj.prix * 100))
+                if custom_amount_centimes < prix_minimum_centimes:
+                    raise ValueError(
+                        _("Montant libre (%(montant)s€) inférieur au minimum (%(minimum)s€)") % {
+                            'montant': f"{custom_amount_centimes / 100:.2f}",
+                            'minimum': f"{prix_minimum_centimes / 100:.2f}",
+                        }
                     )
-                    custom_amount_centimes = minimum_centimes
 
         # Le prix effectif : montant custom (prix libre) ou prix standard
         # Effective price: custom amount (free price) or standard price
@@ -1639,7 +1645,15 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Extraire les articles du panier depuis le POST ---
         # --- Extract cart articles from POST ---
-        articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+        try:
+            articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+        except ValueError as e:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(e),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
 
         # --- Calculer le total en centimes puis convertir en euros ---
         # --- Calculate total in centimes then convert to euros ---
@@ -1772,7 +1786,15 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # --- Extraire les articles du panier depuis la DB ---
         # --- Extract cart articles from DB ---
-        articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+        try:
+            articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+        except ValueError as e:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(e),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
 
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
