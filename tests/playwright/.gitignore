@@ -6,6 +6,9 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Auth state (storageState — cookies de session, ne pas commiter)
+.auth/
+
 # Environment variables (local overrides)
 .env.local
 

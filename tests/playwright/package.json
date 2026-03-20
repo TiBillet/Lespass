@@ -13,6 +13,11 @@
     "test:console": "playwright test --reporter=list",
     "test:firefox:console": "playwright test --project=firefox --reporter=list",
     "test:chromium:console": "playwright test --project=chromium --reporter=list",
+    "test:laboutik": "playwright test --project=chromium --reporter=list tests/laboutik/",
+    "test:adhesions": "playwright test --project=chromium --reporter=list tests/adhesions/",
+    "test:admin": "playwright test --project=chromium --reporter=list tests/admin/",
+    "test:crowds": "playwright test --project=chromium --reporter=list tests/crowds/",
+    "test:evenements": "playwright test --project=chromium --reporter=list tests/evenements/",
     "report": "playwright show-report",
     "codegen": "playwright codegen"
   },

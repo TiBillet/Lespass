@@ -27,6 +27,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from '../utils/auth';
 import { execSync } from 'child_process';
 
 /**
@@ -52,21 +53,6 @@ function djangoShell(pythonCode: string): string {
   }
 }
 
-/**
- * Login admin via le formulaire Django admin (pas le magic link public).
- * Admin login via Django admin form (not the public magic link).
- */
-async function loginAdmin(page: any) {
-  await page.goto('https://lespass.tibillet.localhost/');
-  await page.goto('https://lespass.tibillet.localhost/adminstaff/login/?next=/adminstaff/');
-  const isLoginPage = await page.locator('input[name="username"]').isVisible({ timeout: 3000 }).catch(() => false);
-  if (isLoginPage) {
-    await page.fill('input[name="username"]', 'admin@admin.admin');
-    await page.fill('input[name="password"]', 'admin');
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/adminstaff/**', { timeout: 10000 });
-  }
-}
 
 test.describe('LaBoutik POS — Affichage visuel des tuiles / Article tiles visual display', () => {
 
@@ -108,7 +94,7 @@ else:
   test.beforeEach(async ({ page }) => {
     // Login admin requis pour acceder a la caisse
     // / Admin login required to access the POS
-    await loginAdmin(page);
+    await loginAsAdmin(page);
 
     // Navigation vers la caisse Bar
     // / Navigate to Bar POS

@@ -10,8 +10,170 @@ Si tu as le moindre doute, pose moi des questions pour avancer petit à petit.
 
 Va relire tout le code que tu as écrit sur cette sessions.
 Vérifie que tout soit en conformité avec le skill /stack-ccc
-Lance des vérification via /chrome
 Soit critique envers le travail, si tu vois des amélioration, note les et dis les moi.
 Indique moi comment tester moi même a la main les nouveautées.
 Vérifie que les test python/django couvrent bien ce nouveau code.
 Fabrique un test E2E pour vérifier les nouveautées.
+Lance des vérification via /chrome
+
+
+
+
+
+---
+Il faut qu'on travaille sur les tests, ils sont beaucoup trop lent.
+Sur un autre projet, j'ai une autre approche :
+
+# TEST SUR HYPOSTASIA
+
+● Voici les raisons pour lesquelles les tests sont rapides ici :
+
+  1. TestCase avec transactions, pas de vraie DB à chaque test
+
+  Les tests unitaires utilisent django.test.TestCase, qui wrappe chaque test dans une transaction SQL annulée à la fin (ROLLBACK). Aucun INSERT réel ne persiste — c'est quasi instantané.
+
+  34 tests en 17s → ~0.5s par test
+
+  Le gros du temps (≈12s) c'est la création de la base de test + les migrations au début. Les tests eux-mêmes tournent en ~5s.
+
+  2. Pas de serveur HTTP lancé pour les tests unitaires
+
+  TestCase utilise self.client — un client HTTP in-process qui appelle les vues Django directement sans passer par le réseau. Zéro latence TCP, zéro serveur.
+
+  3. Tests purs sans I/O externe
+
+  Les tests 27b par exemple :
+  - DiffInlineMotsTest / DiffParagraphesTest — fonctions pures Python, zéro DB
+  - ComparerActionTest — crée 2-3 objets en base (transaction rollback) + un appel HTTP in-process
+
+  Aucun test n'appelle une API externe, ne lit un fichier sur disque, ni n'attend un timeout.
+
+  4. La base E2E est bien pensée mais actuellement cassée
+
+  La classe PlaywrightLiveTestCase (front/tests/e2e/base.py) est bien architecturée :
+  - Un navigateur Chromium par classe (setUpClass), pas par test
+  - Un onglet par test (setUp/tearDown)
+  - Helpers réutilisables (naviguer_vers, se_connecter, attendre_htmx)
+
+  Mais ils sont bloqués par le conflit Playwright Sync API / boucle asyncio de Django+Daphne.
+
+  5. Pourquoi ton autre projet prend 30 minutes
+
+  Les causes classiques :
+
+  ┌──────────────────────────┬───────────────────────────────────────────────────┬─────────────────────────────────────────────┐
+  │         Symptôme         │                  Cause probable                   │                  Solution                   │
+  ├──────────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Tests lents en base      │ TransactionTestCase au lieu de TestCase           │ TestCase partout sauf besoin réel de commit │
+  ├──────────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Migrations longues       │ Beaucoup de migrations jouées à chaque run        │ --keepdb pour réutiliser la base de test    │
+  ├──────────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Appels réseau            │ Tests qui appellent des APIs ou services externes │ Mocker les I/O externes                     │
+  ├──────────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Fixtures lourdes         │ loaddata d'un gros JSON à chaque test             │ setUp minimal, créer juste ce qu'il faut    │
+  ├──────────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Playwright/Selenium lent │ Un navigateur par test                            │ Un navigateur par classe (setUpClass)       │
+  ├──────────────────────────┼───────────────────────────────────────────────────┼─────────────────────────────────────────────┤
+  │ Pas de parallélisme      │ manage.py test séquentiel                         │ --parallel pour utiliser plusieurs CPU      │
+  └──────────────────────────┴───────────────────────────────────────────────────┴─────────────────────────────────────────────┘
+
+  La règle d'or : chaque test ne doit créer que les données dont il a besoin, et la DB doit être une transaction jetable, pas un état persistant à nettoyer.
+
+
+# NOS TESTS :
+
+Les tests laboutik sont lents pour plusieurs raisons :
+1. Chaque test relance un cycle complet
+- Login admin (goto + fill email + submit + test-mode click) → ~2s par test
+- Reset des cartes NFC via API (création user jetable, assignation, suppression) → ~1-2s
+- Navigation vers le POS avec les bons query params
+
+2. 117 tests × isolation totale
+Chaque test est indépendant : il refait le login, le setup des cartes, la navigation. C'est fiable mais très lent.
+
+3. Playwright = vrai navigateur
+Chaque test lance Chromium, charge tous les CSS/JS, attend les animations, les requêtes HTMX, etc.
+
+
+Pistes pour accélérer :
+
+Regrouper les tests en séquences — Au lieu de 10 tests indépendants qui font chacun login + setup, un seul test.describe
+avec des test.step() qui enchaînent les actions dans la même session. On perd l'isolation mais on gagne 80% du temps de
+setup.
+
+Tests pytest pour la logique métier — Tout ce qui est calcul (total panier, fonds insuffisants, validation prix libre,
+ventilation TVA) peut être testé en Python pur via les ViewSets/services, sans navigateur. C'est ~100x plus rapide.
+
+Garder Playwright uniquement pour les flows visuels — Les interactions HTMX critiques (overlay paiement, lecture NFC,
+adhesion) qui testent que l'UI fonctionne vraiment. Le reste en pytest.
+
+storageState — Playwright permet de sauvegarder l'état d'auth et le réutiliser sans re-login. Un seul login en
+globalSetup, réutilisé par tous les tests.
+
+En résumé : le split idéal serait pytest pour la logique (rapide, ~50 tests en 10s) et Playwright regroupé pour les flows
+UI critiques (~10-15 scénarios au lieu de 117 tests atomiques).
+
+Tu en penses quoi ? esce que tu peux passer en mode plan pour gérer ça ?
+AUssi, pourquoi faire des tests sur tout les navigateur ? c'est peut être un peu long pour juste vérifier une feature que tu viens de coder, non ?
+
+
+# INSTRUCTIONS :
+
+Un gros sujet à ne pas oublier : On travaille dans une application multi-tenant. Il faut que tout soit testé dans le contexte d'un tenant.
+
+Lance un plan pour etudier toute l'architecture de test.
+Vas faire une lecture de tout les test python/django existant.
+Puis va faire une lecture de tout les test E2E existant.
+
+Réalise un gros fichier PLAN_TEST.md qui indique tout ce qui est testé et comment, avec quel fichier, quelle dépendance, etc. dans le dossier ./tests
+Il est possible que des README existent déja dans les osus dossier, tu peux les fusionner avec ce fichier.
+
+On travaillera ensuite sur ce fichier pour améliorer l'architecture des tests.
+
+Ça te parait cohérent comme travail ?
+'
+
+
+---
+● Le test 45-* utilise loginAdmin qui passe par /adminstaff/login/. Le test 44-* utilise probablement loginAs qui passe par le magic link. Le fait que la page DRF s'affiche
+  signifie que l'auth admin ne fonctionne pas bien dans ce contexte.
+
+  Important : Ce probleme n'est pas lie a l'extraction CSS. C'est un probleme pre-existant (la page DRF Browsable API s'affiche au lieu du template caisse).
+
+  Voici le bilan categorise :
+
+  ┌───────────────────────────────────┬─────────────────────────┬──────────────────────────────────────────────────────────┬─────────────────────────────────────────────────┐
+  │             Categorie             │         Fichier         │                          Cause                           │                  Lie au CSS ?                   │
+  ├───────────────────────────────────┼─────────────────────────┼──────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ Tests visuels tuiles (01-09)      │ 45-* (chromium +        │ La page DRF Browsable API s'affiche au lieu du template  │ Non — probleme d'auth/routing pre-existant      │
+  │                                   │ firefox)                │ caisse                                                   │                                                 │
+  ├───────────────────────────────────┼─────────────────────────┼──────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ Tests adhesion (chemins 1-5 +     │ 44-* (chromium +        │ Article "Adhesion POS" non trouve                        │ Non — meme probleme de page ou PV adhesion pas  │
+  │ retour)                           │ firefox)                │                                                          │ setup                                           │
+  ├───────────────────────────────────┼─────────────────────────┼──────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ Tests paiement NFC                │ 39-* (quelques echecs)  │ ProtectedError dans cleanup wallet ephemere              │ Non — probleme Django pre-existant              │
+  ├───────────────────────────────────┼─────────────────────────┼──────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ Tests 39-* especes/CB             │ ✅ passent              │ -                                                        │ -                                               │
+  ├───────────────────────────────────┼─────────────────────────┼──────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
+  │ Tests 41-* cloture                │ Partiellement           │ Certains retries                                         │ A verifier                                      │
+  └───────────────────────────────────┴─────────────────────────┴──────────────────────────────────────────────────────────┴─────────────────────────────────────────────────┘
+
+  Les tests qui exercent le CSS directement (interface caisse, paiement especes, paiement CB, overlays) passent. Les echecs sont lies a des problemes pre-existants (auth admin,
+  cleanup wallet, routing DRF).
+
+
+
+
+####
+
+
+/stack-ccc On va lancer le nouveau chantier découpé par sessions.
+Va voir le @PLAN/PLAN.md et le fichier d'index des phases : @PLAN/PHASES/INDEX.md
+Ensuite, passe en mode plan et va lire et exécute la tache décrite dans le fichier de la pahse 27b
+Si tu as le moindre doute, pose moi des questions pour avancer petit à petit. Il faut lancer cette nouvelle phase en toute sécurité.
+Fabrique ensuite des tests python/django pour vérifier ce que tu as fabriqué à chaque étape.
+Prend tout le temps qu'il te faut, itère bien sur chaque fichier pour t'assurer la conformité du skill.
+Hésite pas à prendre un regarde critique aussi de designer UX/UI expert.
+Si tu as le moindre doute, pose moi des questions pour avancer petit à petit.
+
+

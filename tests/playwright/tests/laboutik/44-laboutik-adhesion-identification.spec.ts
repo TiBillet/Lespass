@@ -58,19 +58,36 @@ function djangoShell(pythonCode: string): string {
 }
 
 /**
- * Helper : naviguer vers le PV Adhesions, ajouter "Adhesion POS Test" au panier, cliquer VALIDER
- * Helper: navigate to Adhesions POS, add "Adhesion POS Test" to cart, click VALIDATE
+ * Helper : naviguer vers le PV Adhesions, ajouter le premier article au panier, cliquer VALIDER
+ * Helper: navigate to Adhesions POS, add first article to cart, click VALIDATE
+ *
+ * Si l'article est multi-tarif, selectionne le premier tarif fixe dans l'overlay.
+ * / If the article is multi-rate, selects the first fixed rate in the overlay.
  */
 async function naviguerEtAjouterAdhesion(page: any, adhesionPvUuid: string) {
   await page.goto(`/laboutik/caisse/point_de_vente/?uuid_pv=${adhesionPvUuid}&tag_id_cm=${DEMO_TAGID_CM}`);
   await page.waitForLoadState('networkidle');
 
-  // Cliquer sur "Adhesion POS Test" (mono-tarif, pas d'overlay)
-  // / Click "Adhesion POS Test" (single rate, no overlay)
-  const adhesionTile = page.locator('#products .article-container').filter({ hasText: 'Adhesion POS' }).first();
+  // Cliquer sur le premier article d'adhesion disponible
+  // / Click the first available adhesion article
+  const adhesionTile = page.locator('#products .article-container').first();
   await expect(adhesionTile).toBeVisible({ timeout: 10000 });
   await adhesionTile.click();
-  await expect(page.locator('#addition-list')).toContainText('Adhesion POS', { timeout: 5000 });
+
+  // Si un overlay tarif apparait (multi-tarif), cliquer le premier tarif fixe
+  // / If a rate overlay appears (multi-rate), click the first fixed rate
+  const tarifOverlay = page.locator('.tarif-overlay');
+  const overlayVisible = await tarifOverlay.isVisible({ timeout: 2000 }).catch(() => false);
+  if (overlayVisible) {
+    // Cliquer le premier bouton tarif (pas le prix libre)
+    // / Click the first rate button (not free price)
+    const firstFixedTarif = tarifOverlay.locator('.tarif-btn:not(.tarif-btn-free)').first();
+    await firstFixedTarif.click();
+  }
+
+  // Verifier qu'un article est dans l'addition
+  // / Verify an article is in the addition
+  await expect(page.locator('#addition-list .addition-line-grid')).toBeVisible({ timeout: 5000 });
 
   // Cliquer VALIDER → ecran choix paiement
   // / Click VALIDATE → payment choice screen

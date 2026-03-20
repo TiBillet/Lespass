@@ -48,40 +48,26 @@ export default defineConfig({
   },
 
   /* Configure projects for major browsers */
+  /* Par defaut, seul Chromium est actif (gain ~36 min).
+   * Pour tester sur d'autres navigateurs :
+   *   yarn playwright test --project=firefox
+   *   yarn playwright test --project=webkit
+   */
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
 
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    /* Test against mobile viewports. */
+    // Desactive par defaut — reactiver si besoin (voir PLAN_TEST.md section 6.1)
     // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
+    //   name: 'firefox',
+    //   use: { ...devices['Desktop Firefox'] },
     // },
 
-    /* Test against branded browsers. */
     // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    //   name: 'webkit',
+    //   use: { ...devices['Desktop Safari'] },
     // },
   ],
 

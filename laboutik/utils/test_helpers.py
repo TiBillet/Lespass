@@ -70,15 +70,29 @@ def reset_carte(tag_id=None):
         logger.info(f"reset_carte : user {ancien_email} detache de {tag_id}")
 
     # 2. Supprimer le wallet ephemere (supprimer l'objet Wallet + les tokens)
+    #    Il faut d'abord supprimer les objets qui referencent ce wallet
+    #    (Transaction.sender/receiver et LigneArticle.wallet sont PROTECT).
     # / 2. Remove ephemeral wallet (delete the Wallet object + tokens)
+    #    Must first delete objects referencing this wallet
+    #    (Transaction.sender/receiver and LigneArticle.wallet are PROTECT).
     if hasattr(carte, 'wallet_ephemere') and carte.wallet_ephemere is not None:
         wallet_eph = carte.wallet_ephemere
         carte.wallet_ephemere = None
         carte.save()
 
+        # Supprimer les transactions liees au wallet ephemere (sender ou receiver)
+        # / Delete transactions linked to the ephemeral wallet (sender or receiver)
+        from fedow_core.models import Token, Transaction
+        nb_tx = Transaction.objects.filter(sender=wallet_eph).delete()[0]
+        nb_tx += Transaction.objects.filter(receiver=wallet_eph).delete()[0]
+
+        # Supprimer les lignes d'article liees au wallet ephemere
+        # / Delete article lines linked to the ephemeral wallet
+        from BaseBillet.models import LigneArticle
+        nb_lignes = LigneArticle.objects.filter(wallet=wallet_eph).delete()[0]
+
         # Supprimer les tokens du wallet ephemere
         # / Delete tokens from ephemeral wallet
-        from fedow_core.models import Token
         nb_tokens_supprimes = Token.objects.filter(wallet=wallet_eph).delete()[0]
 
         wallet_eph.delete()
