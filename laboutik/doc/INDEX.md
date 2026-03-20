@@ -1,0 +1,206 @@
+# LaBoutik — Index des tâches
+
+> Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
+> Les comptes-rendus de sessions sont dans [`PHASES/`](PHASES/).
+>
+> Dernière mise à jour : 2026-03-19
+
+---
+
+## Fait
+
+### Phase -1 — Dashboard Groupware ✅
+
+5 champs `module_*` sur Configuration, dashboard Unfold avec switches HTMX,
+sidebar conditionnelle (menus masqués si module inactif), proxy models Product
+(TicketProduct, MembershipProduct).
+
+### Phase 0 — fedow_core ✅
+
+App `fedow_core` dans SHARED_APPS. Modèles Asset (5 catégories), Token (centimes),
+Transaction (BigAutoField PK), Federation (M2M invitation/acceptation).
+Services : AssetService, WalletService, TransactionService. 8 tests pytest +
+test Playwright cross-tenant fédération.
+
+### Phase 1 — Modèles POS + Admin ✅
+
+Product unifié (8 champs POS, CategorieProduct, POSProduct proxy, Price.asset FK).
+4 modèles laboutik : PointDeVente, CartePrimaire, Table, CategorieTable.
+Admin Unfold complet. Management command `create_test_pos_data`.
+
+### Phase 2 — Caisse depuis DB ✅
+
+Remplacement des mocks par la vraie DB. Carte primaire → sélection PV → interface POS.
+Paiement espèces et CB avec création LigneArticle + PriceSold + ProductSold.
+
+### Phase 2.5 — POS Adhésion ✅
+
+Wizard d'identification (6 chemins : NFC user connu, NFC anonyme, email/nom via formulaire).
+Fusion wallet éphémère → user.wallet. Création/renouvellement Membership.
+Multi-tarif et prix libre.
+Test Playwright : `44-laboutik-adhesion-identification.spec.ts` (8 tests).
+
+### Phase 3.1 — Paiement NFC cashless ✅
+
+`_payer_par_nfc()` atomique via fedow_core. Débit Token + crédit wallet lieu +
+Transaction + LigneArticle dans le même `transaction.atomic()`.
+
+### Phase 3.2 — Recharges + sécurité ✅
+
+Recharges espèces/CB (RE/RC/TM). Wallet éphémère pour cartes anonymes.
+Garde NFC : les recharges ne peuvent pas être payées par NFC (3 couches de protection).
+
+### Phase 4 — Mode restaurant ✅
+
+CommandeSauvegarde + ArticleCommandeSauvegarde. Cycle de vie : OPEN → SERVED → PAID / CANCEL.
+Tables avec statut (Libre/Occupée/Servie). CommandeViewSet (5 actions).
+
+### Phase 5 — Clôture caisse ✅
+
+ClotureCaisse avec totaux par moyen de paiement (centimes). Rapport JSON détaillé.
+Export PDF (WeasyPrint), CSV, envoi email (Celery). Fermeture des tables et commandes.
+
+### UX — 5 sessions de polish ✅
+
+Filtre catégorie, feedback tactile, couleurs boutons paiement, écrans FALC
+(confirmation espèces, succès, retour carte), responsive Sunmi D3mini (1278×800).
+
+---
+
+## À faire (dans l'ordre)
+
+> **Principe de séquencement** : chaque phase produit des fondations réutilisées par les suivantes.
+> Le refactoring CSS/footer est un prérequis de la billetterie (qui utilise `<c-footer>`).
+> La billetterie inclut la refonte typage (qui simplifie tout le reste).
+> Le WebSocket est un prérequis de l'impression (Sunmi Inner).
+> Les rapports comptables et le menu ventes partagent le même `RapportComptableService`.
+
+### 1. Refactoring Frontend ← PROCHAIN
+
+Nettoyage fondation. Pas de changement de logique. Pas de risque pour les tests.
+
+- [ ] **Sécurité** : validation prix libre côté serveur + fix XSS `textContent` dans tarif.js
+- [ ] **Accessibilité** : `aria-live` sur `#messages` et `#addition-list`
+- [ ] **Extraction CSS** : 2171 lignes inline → fichiers `laboutik/static/css/` séparés
+- [ ] **Footer Cotton** : extraire `<c-footer>` des 3 views (common_user_interface, kiosk, tables)
+- [ ] **Run tests** : Playwright complet + pytest — valider que rien ne casse
+
+JS non touché (à discuter avec Nicolas). Backend non touché.
+
+### 2. Billetterie + Refonte typage
+
+Le typage est sur l'article (`methode_caisse`), pas sur le PV. Les articles billet
+(`methode_caisse='BI'`) coexistent dans la grille standard avec les autres articles.
+Tuile paysage (2 colonnes CSS Grid) + jauge event.
+
+**Refonte typage (incluse)** :
+- [ ] Migration : supprimer ADHESION/CASHLESS de `comportement` → garder DIRECT + KIOSK
+- [ ] PV existants `comportement='A'` → `'D'` + produits adhésion dans M2M products
+- [ ] Supprimer le code `if pv.comportement == ADHESION: charger dynamiquement...`
+- [ ] Adapter tests Playwright (44-adhesion, fixtures)
+
+**Flow identification unifié** (1 panier = 1 client) :
+- [ ] Remplacer le `elif` (recharge / adhesion / normal) par `panier_necessite_client`
+- [ ] Template `hx_identifier_client.html` (scan NFC OU email, adaptatif au contenu)
+- [ ] Template `hx_recapitulatif_client.html` (résumé ce qui sera fait par article)
+- [ ] Le même user sert pour recharge + adhésion + billet (pas de double identification)
+
+**Articles billet** :
+- [ ] `_construire_donnees_articles()` enrichi avec données event/jauge pour `methode_caisse='BI'`
+- [ ] Composant Cotton `<c-billet-tuile>` (paysage, `grid-column: span 2`, jauge)
+- [ ] Jauge places restantes (polling HTMX 30s → WebSocket plus tard)
+- [ ] `_creer_billets_depuis_panier()` : Reservation + Ticket + LigneArticle (atomique)
+- [ ] Vérification atomique jauge au paiement
+- [ ] Impression mock (console logger)
+- [ ] Tests pytest + Playwright
+
+### 3. WebSocket
+
+Push serveur → navigateur via HTMX 2 extension `ws`. Daphne ASGI.
+
+- [ ] Décommenter `'channels'` dans INSTALLED_APPS
+- [ ] Télécharger `ext/ws.js`, charger dans `base.html`
+- [ ] `LaboutikConsumer` + route `ws/laboutik/{pv_uuid}/`
+- [ ] Badge vert "Connecté" au chargement (test visuel)
+- [ ] `wsocket/broadcast.py` : helper broadcast HTML
+- [ ] Intégration billetterie : broadcast jauge après vente (remplace polling)
+- [ ] Tests
+- [ ] **Dev** : `manage.py runserver` (Daphne) — **pas** `runserver_plus`
+- [ ] **Prod** : `daphne TiBillet.asgi:application` derrière Nginx
+
+### 4. Impression
+
+Module modulaire Celery (fire-and-forget, retry exponentiel). Sunmi Cloud + Inner.
+
+- [ ] Modèle `Printer` (SC/SI) + FK sur PointDeVente et CategorieProduct
+- [ ] `LaboutikConfiguration` : `sunmi_app_id` + `sunmi_app_key` (Fernet)
+- [ ] `PrinterBackend` interface (Strategy) dans `laboutik/printing/`
+- [ ] `SunmiCloudBackend` (HTTPS HMAC) + `SunmiInnerBackend` (WebSocket)
+- [ ] `PrinterConsumer` WebSocket dédié (`ws/printer/{printer_uuid}/`)
+- [ ] Copie nettoyée `sunmi_cloud_printer.py` (ESC/POS)
+- [ ] Formatters : vente, billet, commande, clôture
+- [ ] Celery : `imprimer_async()` + `imprimer_commande()` (split par catégorie)
+- [ ] Admin Unfold `PrinterAdmin`
+- [ ] Remplacer le stub `imprimer_billet()` par le vrai dispatch
+- [ ] Tests
+
+### 5. Rapports Comptables
+
+Ticket Z enrichi — document comptable légal. Service de calcul partagé avec le Menu Ventes.
+
+- [ ] Modèle `RapportComptable` (numéro séquentiel par PV)
+- [ ] `laboutik/reports.py` : `RapportComptableService` (12 sections de calcul)
+- [ ] Admin Unfold section "Ventes" avec vue détail HTML
+- [ ] Export PDF (A4 formel), CSV, Excel (openpyxl)
+- [ ] Envoi automatique (Celery Beat : quotidien/hebdo/mensuel/annuel)
+- [ ] Config : `rapport_emails`, `rapport_periodicite`, `fond_de_caisse`
+- [ ] Tests
+
+### 6. Menu Ventes (caisse tactile)
+
+Menu "Ventes" dans le burger menu POS. Consomme le même `RapportComptableService`.
+
+- [ ] **Ticket X** : récap' en cours (3 sous-vues) — lecture seule, pas de clôture
+- [ ] **Liste des ventes** : historique scrollable, filtres, pagination HTMX
+- [ ] **Détail + correction** : corriger moyen paiement (ESP↔CB↔CHQ, pas NFC)
+- [ ] **Ré-impression ticket** : reconstruit → `imprimer_async.delay()`
+- [ ] **Fond de caisse** : saisie/modification montant initial
+- [ ] **Sortie de caisse** : retrait espèces, ventilation par coupure, justificatif
+- [ ] Modèles : `CorrectionPaiement` (audit), `SortieCaisse`
+- [ ] Navigation : sidebar desktop, onglets mobile
+- [ ] Tests
+
+### 7. Multi-Tarif UX
+
+Overlay non-bloquant avec quantités multiples. À discuter avec Nicolas (son code JS).
+
+- [ ] Overlay dans `#articles-zone` — panier reste visible
+- [ ] Clic tarif = incrément sans fermer
+- [ ] Prix libre : mémorisation du dernier montant
+- [ ] Badge quantité sur chaque bouton tarif
+
+### 8. Multi-Asset
+
+Paniers mixtes EUR + tokens. À détailler avec le mainteneur.
+
+- [ ] Regrouper articles par `Price.asset` dans `payer()`
+- [ ] Affichage multi-total (par asset) dans le panier
+- [ ] Session dédiée pour l'UX
+
+### 9. Stress test (Phase 3.3)
+
+- [ ] Management command `verify_transactions` (séquence, soldes, tenant)
+- [ ] Stress test : 4 tenants, 2000 tx concurrentes, 80 threads
+
+### 10. Migration données (Phase 6)
+
+- [ ] `import_fedow_data` (dry-run + commit)
+- [ ] `import_laboutik_data`
+- [ ] `verify_import`
+
+### 11. Consolidation (Phase 7)
+
+- [ ] `recalculate_hashes` → hash NOT NULL + UNIQUE
+- [ ] Supprimer `fedow_connect/fedow_api.py`, `fedow_connect.Asset`, `fedow_connect.FedowConfig`
+- [ ] Supprimer `fedow_public.AssetFedowPublic`
+- [ ] Run complet pytest + Playwright
