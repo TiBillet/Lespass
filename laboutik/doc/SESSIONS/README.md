@@ -1,0 +1,36 @@
+# Sessions de travail — Prompts pour agent Claude Code
+
+> Chaque fichier .md est un **prompt autonome** à donner à un agent Claude Code.
+> L'agent lit le fichier, code, et vérifie. Pas besoin de lire PLAN_LABOUTIK.md.
+>
+> **Ordre strict** : chaque session dépend de la précédente.
+> Ne pas lancer la session N+1 si la session N n'est pas validée (tests verts).
+
+## Ordre des sessions
+
+| # | Fichier | Phase | Prérequis |
+|---|---------|-------|-----------|
+| 01 | `01_refactoring_securite_a11y.md` | ① Refactoring | — |
+| 02 | `02_refactoring_extraction_css.md` | ① Refactoring | 01 |
+| 03 | `03_refactoring_footer_cotton.md` | ① Refactoring | 02 |
+| 04 | `04_billetterie_refonte_typage.md` | ② Billetterie | 03 |
+| 05 | `05_billetterie_flow_identification_unifie.md` | ② Billetterie | 04 |
+| 06 | `06_billetterie_tuiles_et_donnees.md` | ② Billetterie | 05 |
+| 07 | `07_billetterie_paiement_et_tests.md` | ② Billetterie | 06 |
+| 08 | `08_websocket_infrastructure.md` | ③ WebSocket | 07 |
+| 09 | `09_websocket_broadcast_jauge.md` | ③ WebSocket | 08 |
+| 10 | `10_impression_modeles_et_interface.md` | ④ Impression | 09 |
+| 11 | `11_impression_backends_et_celery.md` | ④ Impression | 10 |
+| 12 | `12_rapports_comptables_service.md` | ⑤ Rapports | 11 |
+| 13 | `13_rapports_comptables_admin_exports.md` | ⑤ Rapports | 12 |
+| 14 | `14_menu_ventes_ticket_x_liste.md` | ⑥ Menu Ventes | 13 |
+| 15 | `15_menu_ventes_corrections_fond_sortie.md` | ⑥ Menu Ventes | 14 |
+
+## Comment utiliser
+
+Donner le contenu du fichier .md comme prompt à un agent Claude Code.
+L'agent doit :
+1. Lire les fichiers source indiqués dans "CONTEXTE"
+2. Implémenter les tâches dans l'ordre
+3. Lancer les commandes de vérification
+4. Ne pas passer à la tâche suivante si un test échoue
