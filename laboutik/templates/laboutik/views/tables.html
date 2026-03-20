@@ -48,102 +48,14 @@
 
 {% block css %}
 <style>
-	main {
-		display: flex;
-		flex-direction: row;
-		justify-content: start;
-		align-items: start;
-		width: 100%;
-		height: var(--main-container-height);
-		margin: 0;
-		padding: 0;
-		overflow: hidden;
-	}
-
-	#categories {
-		width: var(--cat-width);
-		height: 100%;
-		background-color: var(--noir04);
-	}
-
-	#tables-container {
-		width: calc(100% - var(--cat-width));
-		height: 100%;
-		background-color: var(--bleu11);
-		display: flex;
-		justify-content: flex-start;
-		align-content: flex-start;
-		flex-wrap: wrap;
-		overflow-y: auto;
-		scrollbar-width: none
-	}
-
-
-	footer {
-		width: 100%;
-		height: var(--footer-container-height);
-		display: flex;
-		flex-direction: row;
-		background-color: var(--vert04);
-		font-size: 2rem
-	}
-
+	/* Surcharge footer : 2 boutons (50%) au lieu de 3 (33.3%)
+	   / Footer override: 2 buttons (50%) instead of 3 (33.3%) */
 	.footer-bt {
 		width: 50%;
-		height: 100%;
-		color: var(--blanc01);
-		cursor: pointer;
-		text-decoration: none;
-
-		i {
-			margin-right: 4px;
-			font-size: 1.5rem;
-		}
-	}
-
-	.footer-bt-text {
-		font-size: 1rem;
-		font-weight: bold;
-	}
-
-	.fond-normal {
-		background-color: var(--bleu02);
-	}
-
-	.fond-coul1 {
-		background-color: var(--rouge05);
-	}
-
-	.table-bouton {
-		width: var(--bt-table-width);
-		height: var(--bt-table-height);
-		border-radius: 15px;
-		margin: 8px;
-		font-family: 'Source Sans', sans-serif;
-		box-sizing: border-box;
-		background-color: var(--gris04);
 		text-decoration: none;
 	}
-
-	.table-nom {
-		width: 100%;
-		height: calc(100% - 24px);
-		border-radius: 15px 15px 0 0;
-		font-size: 1rem;
-		font-weight: bold;
-		color: var(--blanc01);
-		overflow: hidden;
-		padding: 2px;
-	}
-
-	.table-etat {
-		width: 100%;
-		height: 24px;
-		border-radius: 0 0 15px 15px;
-		font-size: 1rem;
-		padding-right: 8px;
-		justify-content: flex-end;
-		overflow: hidden;
+	.footer-bt i {
+		margin-right: 4px;
 	}
 </style>
 {% endblock css %}

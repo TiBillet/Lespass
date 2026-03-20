@@ -17,27 +17,6 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_read_nfc_adhesion.html
 		<input type="hidden" name="moyen_paiement" value="{{ method|default:'nfc' }}" />
 
 		<style>
-			#confirm {
-				position: absolute;
-				left: 0;
-				top: 0;
-				width: 100%;
-				height: 100%;
-				display: flex;
-				flex-direction: column;
-				justify-content: center;
-				align-items: center;
-				background-color: var(--noir01);
-				color: var(--blanc01);
-			}
-
-			#message-nfc {
-				flex-direction: row;
-				justify-content: center;
-				align-items: center;
-				font-weight: bold;
-				white-space: pre-line;
-				text-align: center;
-			}
+			#confirm { display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--noir01); }
 		</style>
 	</c-read-nfc>
