@@ -67,19 +67,19 @@ est préservé dans le composant Cotton.
 ### Tests E2E (CRITIQUES — le footer est dans CHAQUE flow)
 
 ```bash
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/ --reporter=list
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 Spécifiquement :
 ```bash
 # Le bouton VALIDER déclenche le paiement
-npx playwright test tests/laboutik/39-laboutik-pos-paiement.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_paiement.py -v -s
 
 # Le footer en mode adhésion
-npx playwright test tests/laboutik/44-laboutik-adhesion-identification.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_adhesion_nfc.py -v -s
 
 # Les data-testid du footer
-npx playwright test tests/laboutik/45-laboutik-pos-tiles-visual.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_tiles_visual.py -v -s
 ```
 
 ### Tests unitaires
@@ -95,5 +95,5 @@ docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
 - [ ] Plus de HTML footer dupliqué dans les 3 fichiers
 - [ ] `#bt-valider`, `#bt-reset`, `#bt-check-card` existent dans le DOM
 - [ ] Les `data-testid` sont identiques
-- [ ] TOUS les tests Playwright passent
+- [ ] TOUS les tests E2E passent
 - [ ] TOUS les tests pytest passent

@@ -196,7 +196,7 @@ def test_sortie_de_caisse_total_recalcule(tenant):
 docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
 docker exec lespass_django poetry run pytest tests/pytest/test_menu_ventes_actions.py -v
 docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/ --reporter=list
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès

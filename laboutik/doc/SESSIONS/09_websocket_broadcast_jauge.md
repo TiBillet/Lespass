@@ -84,7 +84,7 @@ en appel de méthode `jauge_update()` (le point `.` devient `_`).
 
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_billetterie_pos.py -v
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/ --reporter=list
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès

@@ -104,7 +104,7 @@ Utilise les fixtures existantes de `create_test_pos_data` (Tâche 6 de Session 0
 
 ## TÂCHE 6 — Tests E2E
 
-Crée `tests/playwright/tests/laboutik/46-laboutik-pos-billetterie.spec.ts` :
+Crée `tests/e2e/test_pos_billetterie.py` :
 
 Scénarios :
 1. Affichage tuile billet avec jauge dans la grille
@@ -120,10 +120,8 @@ Scénarios :
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_billetterie_pos.py -v
 docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
-
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright
-npx playwright test tests/laboutik/46-laboutik-pos-billetterie.spec.ts
-npx playwright test tests/laboutik/ --reporter=list
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_billetterie.py -v -s
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès
@@ -133,5 +131,5 @@ npx playwright test tests/laboutik/ --reporter=list
 - [ ] Jauge atomique : ValueError si event complet
 - [ ] Panier mixte (VT + BI + AD) fonctionne avec 1 seule identification
 - [ ] 7+ tests pytest verts
-- [ ] 7 scénarios Playwright verts
+- [ ] 7 scénarios E2E verts
 - [ ] TOUS les tests laboutik existants passent (pas de régression)

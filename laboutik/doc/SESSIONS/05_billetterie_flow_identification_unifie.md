@@ -173,16 +173,14 @@ docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
 ### Tests E2E
 
 ```bash
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright
-
 # Adhésion (le plus impacté)
-npx playwright test tests/laboutik/44-laboutik-adhesion-identification.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_adhesion_nfc.py -v -s
 
 # Paiement standard (ne doit pas régresser)
-npx playwright test tests/laboutik/39-laboutik-pos-paiement.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_paiement.py -v -s
 
-# Tous les tests
-npx playwright test tests/laboutik/ --reporter=list
+# Tous les tests E2E
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès
@@ -195,4 +193,4 @@ npx playwright test tests/laboutik/ --reporter=list
 - [ ] Panier AD seul → identification NFC ou email
 - [ ] Panier RE + AD → identification NFC (1 seul scan, sert pour les 2)
 - [ ] TOUS les tests pytest passent
-- [ ] TOUS les tests Playwright passent
+- [ ] TOUS les tests E2E passent

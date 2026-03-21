@@ -32,7 +32,7 @@ Lis ces fichiers pour comprendre ce qui utilise `comportement` :
 2. `laboutik/views.py` : cherche `comportement` — note chaque occurrence
 3. `laboutik/views.py` : cherche `if.*comportement.*ADHESION` — c'est ce qu'on supprime
 4. `laboutik/management/commands/create_test_pos_data.py` : le PV "Adhésions"
-5. `tests/playwright/tests/laboutik/44-laboutik-adhesion-identification.spec.ts` : les fixtures
+5. `tests/e2e/test_pos_adhesion_nfc.py` : les fixtures et scénarios adhésion
 
 ## TÂCHE 2 — Migration
 
@@ -119,13 +119,11 @@ docker exec lespass_django poetry run pytest tests/pytest/test_paiement_especes_
 ### Tests E2E
 
 ```bash
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright
-
 # LE test le plus impacté (adhésion)
-npx playwright test tests/laboutik/44-laboutik-adhesion-identification.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_adhesion_nfc.py -v -s
 
-# Tous les tests laboutik
-npx playwright test tests/laboutik/ --reporter=list
+# Tous les tests E2E
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès
@@ -136,4 +134,4 @@ npx playwright test tests/laboutik/ --reporter=list
 - [ ] Plus de code `if comportement == ADHESION` dans views.py
 - [ ] `create_test_pos_data` crée le PV adhésion avec comportement='D' + M2M products
 - [ ] TOUS les tests pytest passent
-- [ ] TOUS les tests Playwright passent (y compris 44-adhesion)
+- [ ] TOUS les tests E2E passent (y compris test_pos_adhesion_nfc)

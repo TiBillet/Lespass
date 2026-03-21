@@ -153,7 +153,7 @@ docker exec lespass_django poetry run python /DjangoFiles/manage.py runserver 0.
 
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/ --reporter=list
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès

@@ -91,16 +91,16 @@ Les nouveaux fichiers CSS doivent être collectés dans `www/static/css/`.
 ### Tests E2E (CRITIQUES — valident le rendu visuel)
 
 ```bash
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/ --reporter=list
+docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
-TOUS les tests Playwright doivent passer. Si un test échoue sur un sélecteur CSS
+TOUS les tests E2E doivent passer. Si un test échoue sur un sélecteur CSS
 (élément invisible, mauvaise couleur, etc.), c'est que l'extraction a cassé quelque chose.
 
 Spécifiquement :
 ```bash
-npx playwright test tests/laboutik/45-laboutik-pos-tiles-visual.spec.ts
-npx playwright test tests/laboutik/44-laboutik-adhesion-identification.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_tiles_visual.py -v -s
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_adhesion_nfc.py -v -s
 ```
 
 ### Tests unitaires (doivent toujours passer)
@@ -115,5 +115,5 @@ docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
 - [ ] Fichiers CSS créés dans `laboutik/static/css/`
 - [ ] `base.html` charge tous les fichiers CSS
 - [ ] `collectstatic` réussit
-- [ ] TOUS les tests Playwright passent (rendu identique)
+- [ ] TOUS les tests E2E passent (rendu identique)
 - [ ] TOUS les tests pytest passent

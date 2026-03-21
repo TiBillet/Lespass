@@ -108,17 +108,17 @@ cas existant — lis le test pour comprendre pourquoi.
 ### Tests E2E
 
 ```bash
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/45-laboutik-pos-tiles-visual.spec.ts
-cd /home/jonas/TiBillet/dev/Lespass/tests/playwright && npx playwright test tests/laboutik/44-laboutik-adhesion-identification.spec.ts
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_tiles_visual.py -v -s
+docker exec lespass_django poetry run pytest tests/e2e/test_pos_adhesion_nfc.py -v -s
 ```
 
-Le test 45 vérifie le rendu des tuiles (dont le multi-tarif modifié par le fix XSS).
-Le test 44 vérifie l'adhésion (qui utilise le prix libre).
+Le test `test_pos_tiles_visual` vérifie le rendu des tuiles (dont le multi-tarif modifié par le fix XSS).
+Le test `test_pos_adhesion_nfc` vérifie l'adhésion (qui utilise le prix libre).
 
 ### Critère de succès
 
 - [ ] Tous les tests pytest passent
-- [ ] Tous les tests Playwright passent
+- [ ] Tous les tests E2E passent
 - [ ] `aria-live="assertive"` est sur le conteneur de `hx_messages.html`
 - [ ] `aria-live="polite"` est sur `#addition-list` dans `addition.html`
 - [ ] L'overlay multi-tarif s'affiche sans HTML cassé après le fix textContent
