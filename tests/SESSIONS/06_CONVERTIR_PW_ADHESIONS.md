@@ -1,58 +1,55 @@
-# Session 06 — Convertir les tests Playwright TS → FastTenantTestCase (batch 2 : adhesions)
+# Session 06 — Convertir les tests Playwright TS adhesions → pytest Python
+
+## Statut : FAIT (2026-03-20) — 20 tests, 162 total
 
 ## Objectif
 
 Convertir les ~14 tests Playwright TS adhesions marques "FastTenantTestCase" dans PLAN_TEST.md.
 
-## Pre-requis
+## Resultat
 
-- Sessions 01-02 + 05 terminees (pattern admin valide)
+Au lieu de 14 fichiers (1:1), regroupement par theme : **9 fichiers, 20 tests**.
 
-## Prompt a envoyer
+| Fichier pytest | Tests | Source PW TS |
+|---|---|---|
+| `test_membership_products_create.py` | 5 | 03, 04, 05, 06, 08 |
+| `test_membership_manual_validation.py` | 1 | 07 |
+| `test_adhesions_obligatoires_m2m.py` | 1 | 37 |
+| `test_admin_membership_list_status.py` | 3 | 35 |
+| `test_sepa_duplicate_protection.py` | 3 | 36 |
+| `test_membership_account_states.py` | 2 | 21, 22 |
+| `test_admin_membership_paiement.py` | 2 | 33 |
+| `test_admin_membership_cancel.py` | 2 | 34 |
+| `test_admin_membership_custom_form.py` | 1 | 26 |
 
-```
-Convertis les tests Playwright TS adhesions en FastTenantTestCase Python.
+## Pattern utilise
 
-Contexte :
-- Pattern valide en sessions 02 et 05
-- Voir tests/PLAN_TEST.md section 4.1 pour la liste
+Fixtures pytest + DB dev + `schema_context` (identique sessions 03-05). Pas de FastTenantTestCase.
 
-Fichiers a convertir (ceux marques "FastTenantTestCase") :
-- 03-memberships.spec.ts
-- 04-membership-recurring.spec.ts
-- 05-membership-validation.spec.ts
-- 06-membership-amap.spec.ts
-- 07-fix-solidaire.spec.ts
-- 08-membership-ssa-with-forms.spec.ts
-- 21-membership-account-states.spec.ts
-- 22-membership-recurring-cancel.spec.ts
-- 26-admin-membership-custom-form-edit.spec.ts
-- 33-admin-ajouter-paiement.spec.ts
-- 34-admin-cancel-membership.spec.ts
-- 35-admin-membership-list-status.spec.ts
-- 36-sepa-duplicate-protection.spec.ts
-- 37-admin-adhesions-obligatoires-m2m.spec.ts
+- ORM dans `schema_context('lespass')` pour creer les donnees
+- `admin_client` / `api_client` (fixtures conftest.py) pour les requetes HTTP
+- UUID suffixes pour noms uniques (pas de collision entre runs)
 
-14 fichiers. Creer dans tests/pytest/.
-Ne PAS convertir les fichiers marques "PlaywrightLive" (11, 12, 13, 14, 15, 17, 20, 27, 42, 43).
-```
+## Pieges resolus
+
+- `PriceSold.qty_solded` (pas `qty_sold`)
+- `get_checkout_for_membership` attend un UUID dans l'URL (pas le PK int)
+- Le template account montre le bouton cancel quand `status='A'` (ONCE), pas AUTO
 
 ## Verification
 
 ```bash
-# Tous les tests passent
-docker exec lespass_django poetry run pytest tests/pytest/ -v --tb=short --reuse-db
+# Tous les tests passent (162)
+docker exec lespass_django poetry run pytest tests/pytest/ -v --tb=short
 
-# Compter le nombre total de tests (doit augmenter)
+# Comptage
 docker exec lespass_django poetry run pytest tests/pytest/ --co -q | tail -1
+# 162 tests collected
 ```
 
 ## Critere de succes
 
-- [ ] 14 fichiers Python crees
-- [ ] Tous passent
-- [ ] Pas de regression sur les tests existants
-
-## Duree estimee
-
-~1h30 (14 fichiers, certains avec de la logique metier complexe).
+- [x] 9 fichiers Python crees (regroupes par theme)
+- [x] 20 tests passent
+- [x] Pas de regression (162/162)
+- [x] Fixture `tenant` ajoutee dans conftest.py

@@ -8,18 +8,18 @@ Chaque fichier est une fiche de session autonome avec :
 
 ## Vue d'ensemble
 
-| # | Session | Phase | Duree | Depend de |
-|---|---------|-------|-------|-----------|
-| 01 | Installer pytest-django | B | ~15 min | — |
-| 02 | Prototype FastTenantTestCase | B | ~30 min | 01 |
-| 03 | Convertir 15 tests API v2 | D | ~45 min | 02 |
-| 04 | Prototype PlaywrightLive Python | C | ~45 min | 01-02 |
-| 05 | Convertir PW admin → Fast | D | ~1h | 02 |
-| 06 | Convertir PW adhesions → Fast | D | ~1h30 | 02 |
-| 07 | Convertir PW reste → Fast | D | ~45 min | 02 |
-| 08 | Convertir PW → PlaywrightLive | D | ~1h30 | 04 |
-| 09 | Convertir PW Stripe → PlaywrightLive | D | ~2h | 04 |
-| 10 | Nettoyage final | E | ~30 min | 01-09 |
+| # | Session | Phase | Duree | Depend de | Statut |
+|---|---------|-------|-------|-----------|--------|
+| 01 | Installer pytest-django | B | ~15 min | — | FAIT (2026-03-20) |
+| 02 | Prototype FastTenantTestCase | B | ~30 min | 01 | FAIT (2026-03-20) |
+| 03 | Convertir 15 tests API v2 | D | ~45 min | 02 | FAIT (2026-03-20) |
+| 04 | Prototype Playwright Python E2E | C | ~20 min | 01-02 | FAIT (2026-03-20) — serveur externe (pas LiveServer), fixtures pytest |
+| 05 | Convertir PW admin → Fast | D | ~1h | 02 | FAIT (2026-03-20) — 20 tests, 142 total |
+| 06 | Convertir PW adhesions → Fast | D | ~1h30 | 02 | FAIT (2026-03-20) — 20 tests, 162 total |
+| 07 | Convertir PW reste → Fast | D | ~45 min | 02 |  |
+| 08 | Convertir PW → PlaywrightLive | D | ~1h30 | 04 |  |
+| 09 | Convertir PW Stripe → PlaywrightLive | D | ~2h | 04 |  |
+| 10 | Nettoyage final | E | ~30 min | 01-09 |  |
 
 ## Temps total estime
 

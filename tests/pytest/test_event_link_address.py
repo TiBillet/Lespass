@@ -10,24 +10,15 @@ Lancement:
   poetry run pytest -q tests/pytest/test_event_link_address.py
 """
 import json
-import os
 
 import pytest
-import requests
 
 
 @pytest.mark.integration
-def test_link_address_to_event_then_retrieve():
-    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY")
-    if not api_key:
-        raise Exception("API key not set")
-
-    headers = {"Authorization": f"Api-Key {api_key}", "Content-Type": "application/json"}
-
+def test_link_address_to_event_then_retrieve(api_client, auth_headers):
     # 1) prendre n'importe quel event
-    lst = requests.get(f"{base_url}/api/v2/events/", headers={"Authorization": f"Api-Key {api_key}"}, timeout=10, verify=False)
-    assert lst.status_code == 200, lst.text[:300]
+    lst = api_client.get('/api/v2/events/', **auth_headers)
+    assert lst.status_code == 200, lst.content.decode()[:300]
     results = lst.json().get("results")
     assert results and isinstance(results, list)
     event_uuid = results[0].get("identifier")
@@ -44,12 +35,16 @@ def test_link_address_to_event_then_retrieve():
         "addressCountry": "FR",
         "geo": {"latitude": 48.8566, "longitude": 2.3522},
     }
-    link_url = f"{base_url}/api/v2/events/{event_uuid}/link-address/"
-    link_resp = requests.post(link_url, headers=headers, data=json.dumps(address_payload), timeout=10, verify=False)
-    assert link_resp.status_code in (200, 201), f"Link failed: {link_resp.status_code} {link_resp.text[:300]}"
+    link_resp = api_client.post(
+        f'/api/v2/events/{event_uuid}/link-address/',
+        data=json.dumps(address_payload),
+        content_type='application/json',
+        **auth_headers,
+    )
+    assert link_resp.status_code in (200, 201), f"Link failed: {link_resp.status_code} {link_resp.content.decode()[:300]}"
 
     # 3) retrieve et vérifie la location
-    det = requests.get(f"{base_url}/api/v2/events/{event_uuid}/", headers={"Authorization": f"Api-Key {api_key}"}, timeout=10, verify=False)
+    det = api_client.get(f'/api/v2/events/{event_uuid}/', **auth_headers)
     assert det.status_code == 200
     data = det.json()
     place = data.get("location") or {}

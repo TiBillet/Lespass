@@ -56,6 +56,17 @@ ipython = "^8.18.0"
 django-browser-reload = "^1.12.1"
 faker = "^23.2.1"
 pytest = "8.4.2"
+pytest-django = "^4.12.0"
+playwright = "^1.58.0"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "TiBillet.settings"
+addopts = ""
+markers = [
+    "integration: integration tests for API v2",
+    "e2e: end-to-end Playwright browser tests (require running server)",
+]
+filterwarnings = []
 
 [build-system]
 requires = ["poetry-core"]

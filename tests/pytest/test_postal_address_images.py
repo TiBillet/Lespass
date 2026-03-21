@@ -5,25 +5,24 @@ Envoie un POST multipart/form-data avec fichiers depuis tests/pytest/assets/
 Vérifie que les URLs d'images sont renvoyées dans la représentation schema.org/PostalAddress.
 """
 import os
+
 import pytest
-import requests
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 @pytest.mark.integration
-def test_postal_address_create_with_images():
-    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY")
-    if not api_key:
-        pytest.exit("API key not set")
-
-    headers = {"Authorization": f"Api-Key {api_key}"}
-
+def test_postal_address_create_with_images(api_client, auth_headers):
     # Assets
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     img_path = os.path.join(assets_dir, "event_main.jpg")
     sticker_path = os.path.join(assets_dir, "event_sticker.webp")
     if not (os.path.exists(img_path) and os.path.exists(sticker_path)):
         pytest.exit("Images de test manquantes dans tests/pytest/assets/")
+
+    with open(img_path, "rb") as f:
+        img_content = f.read()
+    with open(sticker_path, "rb") as f:
+        sticker_content = f.read()
 
     data = {
         "@type": "PostalAddress",
@@ -33,24 +32,12 @@ def test_postal_address_create_with_images():
         "addressRegion": "IC",
         "postalCode": "10101",
         "addressCountry": "FR",
+        "img": SimpleUploadedFile("event_main.jpg", img_content, content_type="image/jpeg"),
+        "sticker_img": SimpleUploadedFile("event_sticker.webp", sticker_content, content_type="image/webp"),
     }
+    resp = api_client.post('/api/v2/postal-addresses/', data=data, **auth_headers)
 
-    files = {
-        "img": (os.path.basename(img_path), open(img_path, "rb"), "image/jpeg"),
-        "sticker_img": (os.path.basename(sticker_path), open(sticker_path, "rb"), "image/jpeg"),
-    }
-
-    url = f"{base_url}/api/v2/postal-addresses/"
-    resp = requests.post(url, headers=headers, data=data, files=files, timeout=20, verify=False)
-
-    # Close files
-    for f in files.values():
-        try:
-            f[1].close()
-        except Exception:
-            pass
-
-    assert resp.status_code == 201, f"Create with images failed: {resp.status_code} {resp.text[:300]}"
+    assert resp.status_code == 201, f"Create with images failed: {resp.status_code} {resp.content.decode()[:300]}"
     body = resp.json()
     images = body.get("image") or []
     assert isinstance(images, list) and len(images) >= 1, f"image array expected, got {images}"

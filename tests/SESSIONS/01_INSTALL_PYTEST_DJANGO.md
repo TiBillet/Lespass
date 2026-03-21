@@ -49,11 +49,34 @@ docker exec lespass_django poetry run pytest tests/pytest/ -v --tb=short
 
 ## Critere de succes
 
-- [ ] `poetry show pytest-django` retourne une version
-- [ ] `pyproject.toml` contient `[tool.pytest.ini_options]` avec `DJANGO_SETTINGS_MODULE`
-- [ ] `pytest.ini` peut etre supprime (tout dans pyproject.toml)
-- [ ] Les 28 tests passent (meme nombre qu'avant)
-- [ ] Le 2e run est ~12s plus rapide (pas de CREATE DATABASE)
+- [x] `poetry show pytest-django` retourne une version (4.12.0)
+- [x] `pyproject.toml` contient `[tool.pytest.ini_options]` avec `DJANGO_SETTINGS_MODULE`
+- [x] `pytest.ini` supprime (tout dans pyproject.toml)
+- [x] Les 122 tests passent (2 runs successifs OK, ~10s chacun)
+- [ ] ~~Le 2e run est ~12s plus rapide (pas de CREATE DATABASE)~~ — N/A, voir ecarts
+
+## Realisation — 2026-03-20
+
+### Fichiers modifies
+
+| Fichier | Action |
+|---------|--------|
+| `pyproject.toml` | `pytest-django ^4.12.0` ajoute (poetry) + section `[tool.pytest.ini_options]` |
+| `pytest.ini` | Supprime (markers + filterwarnings migres dans pyproject.toml) |
+| `tests/pytest/conftest.py` | 2 fixtures ajoutees (voir ecarts) |
+
+### Ecarts par rapport au plan
+
+1. **`--reuse-db` retire** : cette option gere les test databases de pytest-django. Nos tests utilisent la base dev existante (django-tenants avec schemas), pas une `test_*` DB. `--reuse-db` n'a pas de sens ici. `addopts = ""` dans pyproject.toml.
+
+2. **`conftest.py` modifie** (le plan disait de ne pas y toucher) : pytest-django bloque l'acces DB par defaut (exige `@pytest.mark.django_db`). Incompatible avec les tests existants qui ont des fixtures `scope="module"` accedant a la DB. Deux fixtures ajoutees :
+   - `django_db_setup()` : no-op, empeche pytest-django de creer/gerer une test database
+   - `_enable_db_access_for_all(django_db_blocker)` : desactive le bloqueur DB au niveau session
+
+### Lecons apprises
+
+- pytest-django + django-tenants : on ne peut pas utiliser le workflow standard (test DB + --reuse-db). Les tests tournent sur la base dev avec les vrais schemas tenant.
+- Le db blocker de pytest-django bloque au niveau connexion, pas au niveau test. Les fixtures `scope="module"` qui accedent a la DB echouent si le blocker n'est pas desactive au niveau session.
 
 ## Duree estimee
 

@@ -49,16 +49,30 @@ docker exec lespass_django poetry run pytest tests/pytest/ -v --tb=short
 
 ## Critere de succes
 
-- [ ] `test_paiement_especes_cb.py` utilise `FastTenantTestCase` + `self.client`
-- [ ] Plus de `requests` HTTP dans ce fichier
-- [ ] Les N tests du fichier passent
-- [ ] 2 runs successifs passent (ROLLBACK OK)
-- [ ] Les 27 autres fichiers pytest ne sont pas casses
-- [ ] Temps du fichier < 5s (vs potentiellement 15-30s avant avec HTTP)
+- [x] `test_paiement_especes_cb.py` utilise `FastTenantTestCase` + `TenantClient`
+- [x] Plus de `requests` HTTP ni `APIClient` dans ce fichier
+- [x] 7/7 tests passent
+- [x] 2 runs successifs passent (rollback OK — pas de residus)
+- [x] 122/122 tests passent (pas de regression)
+- [x] Temps du fichier ~3.2s
 
 ## Duree estimee
 
 ~30 minutes (lecture + conversion + debug).
+
+## Resultat — FAIT (2026-03-20)
+
+**Pattern valide** : `FastTenantTestCase` fonctionne avec pytest-django.
+
+**Changements** :
+- 7 classes pytest → 1 classe `FastTenantTestCase` (schema `test_paiement`)
+- `APIClient` + `force_authenticate` + `schema_context` → `TenantClient` + `force_login`
+- `setUp()` cree donnees minimales (CategorieProduct, Product, Price, PointDeVente, TibilletUser)
+- Helper `_post_paiement()` factorise le POST commun
+
+**Piege decouvert** : `connection.set_tenant(self.tenant)` requis dans `setUp()` — le rollback de `TestCase._fixture_teardown` reinitialise le `search_path` PostgreSQL entre les tests.
+
+**Temps** : 3.2s pour 7 tests (schema cree au 1er run, reutilise ensuite).
 
 ## Risques
 

@@ -2,18 +2,12 @@ import os
 import subprocess
 import pytest
 
-try:
-    import urllib3
-except Exception:  # pragma: no cover - optional dependency for warnings
-    urllib3 = None
-
 
 def pytest_addoption(parser):
-    """Add CLI options to inject API key and base URL into the test session.
+    """Add CLI option to inject API key into the test session.
 
     Usage examples:
       poetry run pytest -qs tests/pytest --api-key <KEY>
-      poetry run pytest -qs tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
     """
     parser.addoption(
         "--api-key",
@@ -21,19 +15,13 @@ def pytest_addoption(parser):
         default=None,
         help="API key to use for Authorization header (sets env var API_KEY)",
     )
-    parser.addoption(
-        "--api-base-url",
-        action="store",
-        default=None,
-        help="Override base URL for API tests (sets env var API_BASE_URL)",
-    )
 
 
 @pytest.fixture(autouse=True, scope="session")
 def _inject_cli_env(request):
     """Autouse session fixture to export CLI options into environment vars.
 
-    Tests already read API_KEY and API_BASE_URL from the environment, so
+    Tests already read API_KEY from the environment, so
     this allows passing them via pytest CLI flags without editing tests.
     """
 
@@ -87,13 +75,77 @@ def _inject_cli_env(request):
 
     os.environ["API_KEY"] = api_key
 
-    # Silence HTTPS warnings in test environment (self-signed certs on localhost)
-    if urllib3 is not None:
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    base = request.config.getoption("--api-base-url")
-    if base:
-        os.environ["API_BASE_URL"] = base.rstrip("/")
+@pytest.fixture(scope="session")
+def api_client(_inject_cli_env):
+    """Client Django in-process — resout le tenant 'lespass' via HTTP_HOST.
+    / In-process Django test client — resolves 'lespass' tenant via HTTP_HOST.
+    """
+    from django.test import Client
+    return Client(HTTP_HOST='lespass.tibillet.localhost')
+
+
+@pytest.fixture(scope="session")
+def auth_headers(_inject_cli_env):
+    """En-tetes d'auth pour le test client Django (**auth_headers dans chaque appel).
+    / Auth headers for Django test client (**auth_headers in each call).
+    """
+    api_key = os.environ["API_KEY"]
+    return {"HTTP_AUTHORIZATION": f"Api-Key {api_key}"}
+
+
+@pytest.fixture(scope="session")
+def admin_user(_inject_cli_env):
+    """Utilisateur admin du tenant lespass (doit exister dans la DB dev).
+    / Admin user of the lespass tenant (must exist in dev DB)."""
+    from django_tenants.utils import schema_context
+    from AuthBillet.models import TibilletUser
+    from Customers.models import Client
+    tenant = Client.objects.get(schema_name='lespass')
+    with schema_context('lespass'):
+        email = os.environ.get('ADMIN_EMAIL', 'jturbeaux@pm.me')
+        user = TibilletUser.objects.get(email=email)
+        # S'assurer que l'utilisateur est admin du tenant
+        # / Ensure the user is admin of the tenant
+        user.client_admin.add(tenant)
+        return user
+
+
+@pytest.fixture(scope="session")
+def admin_client(admin_user):
+    """Client Django authentifie comme admin pour l'admin Django.
+    / Django client authenticated as admin for Django admin site."""
+    from django.test import Client as DjangoClient
+    client = DjangoClient(HTTP_HOST='lespass.tibillet.localhost')
+    client.force_login(admin_user)
+    return client
+
+
+@pytest.fixture(scope="session")
+def tenant():
+    """Le tenant 'lespass'. / The 'lespass' tenant."""
+    from Customers.models import Client
+    return Client.objects.get(schema_name='lespass')
+
+
+@pytest.fixture(scope="session")
+def django_db_setup():
+    """Pas de creation de test database — les tests utilisent la base dev existante.
+    / Skip test database creation — tests use the existing dev database (django-tenants).
+    """
+    pass
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _enable_db_access_for_all(django_db_blocker):
+    """Desactiver le bloqueur d'acces DB de pytest-django.
+    Les tests existants accedent a la base dev directement (django-tenants).
+    / Disable pytest-django's database blocker.
+    Existing tests access the dev database directly (django-tenants).
+    """
+    django_db_blocker.unblock()
+    yield
+    django_db_blocker.restore()
 
 
 def pytest_collection_modifyitems(config, items):

@@ -9,18 +9,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import requests
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 @pytest.mark.integration
-def test_event_create_with_images(tmp_path):
-    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY")
-    if not api_key:
-        raise Exception("API key not set")
-
-    headers = {"Authorization": f"Api-Key {api_key}"}
-
+def test_event_create_with_images(api_client, auth_headers):
     # Assets
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     img_path = os.path.join(assets_dir, "event_main.jpg")
@@ -30,29 +23,22 @@ def test_event_create_with_images(tmp_path):
 
     start = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
 
+    with open(img_path, "rb") as f:
+        img_content = f.read()
+    with open(sticker_path, "rb") as f:
+        sticker_content = f.read()
+
     data = {
         "@context": "https://schema.org",
         "@type": "MusicEvent",
         "name": f"API v2 — Event with images {uuid.uuid4()}",
         "startDate": start,
+        "img": SimpleUploadedFile("event_main.jpg", img_content, content_type="image/jpeg"),
+        "sticker_img": SimpleUploadedFile("event_sticker.webp", sticker_content, content_type="image/webp"),
     }
+    resp = api_client.post('/api/v2/events/', data=data, **auth_headers)
 
-    files = {
-        "img": (os.path.basename(img_path), open(img_path, "rb"), "image/jpeg"),
-        "sticker_img": (os.path.basename(sticker_path), open(sticker_path, "rb"), "image/jpeg"),
-    }
-
-    url = f"{base_url}/api/v2/events/"
-    resp = requests.post(url, headers=headers, data=data, files=files, timeout=20, verify=False)
-
-    # Close files
-    for f in files.values():
-        try:
-            f[1].close()
-        except Exception:
-            pass
-
-    assert resp.status_code == 201, f"Create with images failed: {resp.status_code} {resp.text[:300]}"
+    assert resp.status_code == 201, f"Create with images failed: {resp.status_code} {resp.content.decode()[:300]}"
     body = resp.json()
     images = body.get("image") or []
     # Doit contenir au moins 1 URL (celle de img)

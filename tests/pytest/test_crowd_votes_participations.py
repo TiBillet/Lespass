@@ -1,13 +1,11 @@
 """Read votes count and participations list via API v2 Crowds."""
-import os
-import uuid
 import json
+import uuid
 
 import pytest
-import requests
 
 
-def _ensure_initiative(base_url, api_key, request):
+def _ensure_initiative(api_client, auth_headers, request):
     cached_uuid = request.config.cache.get("api_v2_crowd_initiative_uuid", None)
     if cached_uuid:
         return cached_uuid
@@ -19,13 +17,13 @@ def _ensure_initiative(base_url, api_key, request):
         "disambiguatingDescription": "Test court",
         "currency": "EUR",
     }
-    headers = {
-        "Authorization": f"Api-Key {api_key}",
-        "Content-Type": "application/json",
-    }
-    create_url = f"{base_url}/api/v2/initiatives/"
-    resp = requests.post(create_url, headers=headers, data=json.dumps(payload), timeout=10, verify=False)
-    assert resp.status_code == 201, f"Create failed ({resp.status_code}): {resp.text[:500]}"
+    resp = api_client.post(
+        '/api/v2/initiatives/',
+        data=json.dumps(payload),
+        content_type='application/json',
+        **auth_headers,
+    )
+    assert resp.status_code == 201, f"Create failed ({resp.status_code}): {resp.content.decode()[:500]}"
     data = resp.json()
     identifier = data.get("identifier")
     assert identifier
@@ -34,36 +32,35 @@ def _ensure_initiative(base_url, api_key, request):
 
 
 @pytest.mark.integration
-def test_crowd_votes_and_participations(request):
-    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY")
-    if not api_key:
-        raise Exception("API key not set")
+def test_crowd_votes_and_participations(request, api_client, auth_headers):
+    initiative_uuid = _ensure_initiative(api_client, auth_headers, request)
 
-    initiative_uuid = _ensure_initiative(base_url, api_key, request)
-    headers = {"Authorization": f"Api-Key {api_key}", "Content-Type": "application/json"}
-
-    votes_url = f"{base_url}/api/v2/initiatives/{initiative_uuid}/votes/"
-    vote_post = requests.post(votes_url, headers=headers, timeout=10, verify=False)
-    assert vote_post.status_code == 201, f"Vote post failed ({vote_post.status_code}): {vote_post.text[:500]}"
+    votes_url = f'/api/v2/initiatives/{initiative_uuid}/votes/'
+    vote_post = api_client.post(votes_url, content_type='application/json', **auth_headers)
+    assert vote_post.status_code == 201, f"Vote post failed ({vote_post.status_code}): {vote_post.content.decode()[:500]}"
     vote_data = vote_post.json()
     assert isinstance(vote_data.get("count"), int)
 
-    votes_resp = requests.get(votes_url, headers={"Authorization": f"Api-Key {api_key}"}, timeout=10, verify=False)
-    assert votes_resp.status_code == 200, f"Votes failed ({votes_resp.status_code}): {votes_resp.text[:500]}"
+    votes_resp = api_client.get(votes_url, **auth_headers)
+    assert votes_resp.status_code == 200, f"Votes failed ({votes_resp.status_code}): {votes_resp.content.decode()[:500]}"
     votes_data = votes_resp.json()
     assert isinstance(votes_data.get("count"), int)
     assert votes_data.get("count") >= 1
 
-    parts_url = f"{base_url}/api/v2/initiatives/{initiative_uuid}/participations/"
+    parts_url = f'/api/v2/initiatives/{initiative_uuid}/participations/'
     part_payload = {"description": "Participation API v2", "amount": "45.00"}
-    part_post = requests.post(parts_url, headers=headers, data=json.dumps(part_payload), timeout=10, verify=False)
-    assert part_post.status_code == 201, f"Participation post failed ({part_post.status_code}): {part_post.text[:500]}"
+    part_post = api_client.post(
+        parts_url,
+        data=json.dumps(part_payload),
+        content_type='application/json',
+        **auth_headers,
+    )
+    assert part_post.status_code == 201, f"Participation post failed ({part_post.status_code}): {part_post.content.decode()[:500]}"
     part_data = part_post.json()
     assert part_data.get("description") == part_payload["description"]
 
-    parts_resp = requests.get(parts_url, headers={"Authorization": f"Api-Key {api_key}"}, timeout=10, verify=False)
-    assert parts_resp.status_code == 200, f"Participations failed ({parts_resp.status_code}): {parts_resp.text[:500]}"
+    parts_resp = api_client.get(parts_url, **auth_headers)
+    assert parts_resp.status_code == 200, f"Participations failed ({parts_resp.status_code}): {parts_resp.content.decode()[:500]}"
     parts_data = parts_resp.json()
     assert "results" in parts_data
     assert isinstance(parts_data["results"], list)

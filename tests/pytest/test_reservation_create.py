@@ -1,40 +1,18 @@
 """
 Integration test (pytest) - API v2 Reservation create + retrieve.
 
-This test creates:
-- an Event (schema.org/Event)
-- a Product with a free Offer linked to the Event
-- a Reservation (schema.org/Reservation)
-Then it retrieves the Reservation by UUID.
-
-Prerequisites:
-- API_KEY with permission "event", "product", "reservation"
-- API_BASE_URL reachable (default https://lespass.tibillet.localhost)
-
 Run:
   poetry run pytest -q tests/pytest/test_reservation_create.py
 """
 import json
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import requests
 
 
 @pytest.mark.integration
-def test_reservation_create_and_retrieve():
-    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY")
-    if not api_key:
-        raise Exception("API key not set")
-
-    headers = {
-        "Authorization": f"Api-Key {api_key}",
-        "Content-Type": "application/json",
-    }
-
+def test_reservation_create_and_retrieve(api_client, auth_headers):
     # Create Event (unique name + startDate)
     start = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
     event_payload = {
@@ -43,14 +21,13 @@ def test_reservation_create_and_retrieve():
         "name": f"API v2 Reservation Event {uuid.uuid4()}",
         "startDate": start,
     }
-    event_resp = requests.post(
-        f"{base_url}/api/v2/events/",
-        headers=headers,
+    event_resp = api_client.post(
+        '/api/v2/events/',
         data=json.dumps(event_payload),
-        timeout=10,
-        verify=False,
+        content_type='application/json',
+        **auth_headers,
     )
-    assert event_resp.status_code == 201, f"Event create failed: {event_resp.status_code} {event_resp.text[:300]}"
+    assert event_resp.status_code == 201, f"Event create failed: {event_resp.status_code} {event_resp.content.decode()[:300]}"
     event_data = event_resp.json()
     event_uuid = event_data.get("identifier")
     assert event_uuid, f"Event identifier missing: {event_data}"
@@ -72,14 +49,13 @@ def test_reservation_create_and_retrieve():
             }
         ],
     }
-    product_resp = requests.post(
-        f"{base_url}/api/v2/products/",
-        headers=headers,
+    product_resp = api_client.post(
+        '/api/v2/products/',
         data=json.dumps(product_payload),
-        timeout=10,
-        verify=False,
+        content_type='application/json',
+        **auth_headers,
     )
-    assert product_resp.status_code == 201, f"Product create failed: {product_resp.status_code} {product_resp.text[:300]}"
+    assert product_resp.status_code == 201, f"Product create failed: {product_resp.status_code} {product_resp.content.decode()[:300]}"
     product_data = product_resp.json()
     offers = product_data.get("offers") or []
     price_uuid = offers[0].get("identifier") if offers else None
@@ -102,14 +78,13 @@ def test_reservation_create_and_retrieve():
             {"@type": "PropertyValue", "name": "confirmed", "value": True}
         ],
     }
-    res_resp = requests.post(
-        f"{base_url}/api/v2/reservations/",
-        headers=headers,
+    res_resp = api_client.post(
+        '/api/v2/reservations/',
         data=json.dumps(reservation_payload),
-        timeout=10,
-        verify=False,
+        content_type='application/json',
+        **auth_headers,
     )
-    assert res_resp.status_code == 201, f"Reservation create failed: {res_resp.status_code} {res_resp.text[:300]}"
+    assert res_resp.status_code == 201, f"Reservation create failed: {res_resp.status_code} {res_resp.content.decode()[:300]}"
     res_data = res_resp.json()
     reservation_uuid = res_data.get("identifier")
     assert reservation_uuid, f"Reservation identifier missing: {res_data}"
@@ -117,13 +92,8 @@ def test_reservation_create_and_retrieve():
     assert res_data.get("reservationStatus", "").endswith("ReservationConfirmed")
 
     # Retrieve Reservation
-    det_resp = requests.get(
-        f"{base_url}/api/v2/reservations/{reservation_uuid}/",
-        headers=headers,
-        timeout=10,
-        verify=False,
-    )
-    assert det_resp.status_code == 200, f"Reservation retrieve failed: {det_resp.status_code} {det_resp.text[:300]}"
+    det_resp = api_client.get(f'/api/v2/reservations/{reservation_uuid}/', **auth_headers)
+    assert det_resp.status_code == 200, f"Reservation retrieve failed: {det_resp.status_code} {det_resp.content.decode()[:300]}"
     det_data = det_resp.json()
     assert det_data.get("identifier") == reservation_uuid
     assert det_data.get("reservationFor", {}).get("identifier") == event_uuid

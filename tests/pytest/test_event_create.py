@@ -7,34 +7,19 @@ puis le récupère par son UUID via l'endpoint retrieve.
 Prérequis:
 - Données de démo chargées (facultatif pour ce test)
 - Clé API (ExternalApiKey) avec droit "event"
-- Service accessible via API_BASE_URL (ex: https://lespass.tibillet.localhost)
 
 Lancez avec Poetry:
   poetry run pytest -q tests/pytest/test_event_create.py
 """
-import os
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import requests
 
 
 @pytest.mark.integration
-def test_event_create_and_retrieve(request):
-    base_url = os.getenv("API_BASE_URL", "https://lespass.tibillet.localhost").rstrip("/")
-    api_key = os.getenv("API_KEY")
-    print(api_key)
-
-    if not api_key:
-        raise Exception("API key not set")
-
-    headers = {
-        "Authorization": f"Api-Key {api_key}",
-        "Content-Type": "application/json",
-    }
-
+def test_event_create_and_retrieve(request, api_client, auth_headers):
     # startDate dans ~2 jours pour éviter conflits de validation éventuels
     start = (datetime.now(timezone.utc) + timedelta(days=2)).isoformat()
 
@@ -47,9 +32,13 @@ def test_event_create_and_retrieve(request):
     }
 
     # Create
-    create_url = f"{base_url}/api/v2/events/"
-    resp = requests.post(create_url, headers=headers, data=json.dumps(payload), timeout=10, verify=False)
-    assert resp.status_code == 201, f"Create failed ({resp.status_code}): {resp.text[:500]}"
+    resp = api_client.post(
+        '/api/v2/events/',
+        data=json.dumps(payload),
+        content_type='application/json',
+        **auth_headers,
+    )
+    assert resp.status_code == 201, f"Create failed ({resp.status_code}): {resp.content.decode()[:500]}"
 
     data = resp.json()
     assert data.get("@type") == "MusicEvent"
@@ -69,9 +58,8 @@ def test_event_create_and_retrieve(request):
     cache.set("api_v2_event_uuids_all", existing)
 
     # Retrieve (sanity check)
-    detail_url = f"{base_url}/api/v2/events/{identifier}/"
-    get_resp = requests.get(detail_url, headers={"Authorization": f"Api-Key {api_key}"}, timeout=10, verify=False)
-    assert get_resp.status_code == 200, f"Retrieve failed ({get_resp.status_code}): {get_resp.text[:500]}"
+    get_resp = api_client.get(f'/api/v2/events/{identifier}/', **auth_headers)
+    assert get_resp.status_code == 200, f"Retrieve failed ({get_resp.status_code}): {get_resp.content.decode()[:500]}"
     detail = get_resp.json()
     assert detail.get("identifier") == identifier
     assert detail.get("name") == payload["name"]
