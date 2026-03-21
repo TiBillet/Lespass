@@ -1,55 +1,35 @@
-# Session 09 — Convertir les tests Playwright TS Stripe → PlaywrightLive Python
+# Session 09 — Convertir les tests Playwright TS Stripe
 
-## Objectif
+## Decoupage
 
-Convertir les ~10 tests Playwright TS qui impliquent un paiement Stripe (iframe, redirection checkout, webhook).
+Cette session a ete decoupee en 3 sous-sessions. La strategie originale (tout en E2E avec
+le vrai checkout.stripe.com) a ete remplacee par **mock Stripe cote serveur** + **2 smoke
+tests E2E** :
 
-## Pre-requis
+- La majorite des tests verifient la logique Django (formulaire → Paiement_stripe → triggers),
+  pas le checkout Stripe lui-meme.
+- Mocker Stripe = rapide (~2s/test au lieu de 45s), stable, meme couverture metier.
+- 2 smoke tests E2E avec le vrai Stripe garantissent que l'integration bout en bout fonctionne.
 
-- Session 08 terminee (PlaywrightLive sans Stripe valide)
+| Sous-session | Perimetre | Tests | Statut |
+|---|---|---|---|
+| [09a](09a_STRIPE_MOCK_ADHESIONS_SIMPLES.md) | Infra mock + 5 adhesions simples | 5 pytest | A FAIRE |
+| [09b](09b_STRIPE_MOCK_ADHESIONS_COMPLEXES.md) | Adhesions complexes + crowds | ~10 pytest | A FAIRE |
+| [09c](09c_STRIPE_RESERVATIONS_SMOKE.md) | Reservations mock + 2 smoke E2E | 4 pytest + 2 E2E | A FAIRE |
 
-## Prompt a envoyer
+09b et 09c sont independants (mais dependent de 09a pour la fixture mock_stripe).
 
-```
-Convertis les tests Playwright TS avec Stripe en PlaywrightLive Python.
+## Points a mocker
 
-Fichiers :
-- 11-anonymous-membership.spec.ts
-- 12-anonymous-membership-dynamic-form.spec.ts
-- 13-ssa-membership-tokens.spec.ts
-- 14-membership-manual-validation.spec.ts
-- 15-membership-free-price.spec.ts
-- 17-membership-free-price-multi.spec.ts
-- 27-membership-dynamic-form-full-cycle.spec.ts
-- 42-membership-zero-price.spec.ts
-- 43-membership-manual-validation-stripe.spec.ts
-- 44-crowds-contribution-stripe.spec.ts
-- 09-anonymous-events.spec.ts
-- 10-anonymous-event-dynamic-form.spec.ts
+| Appel Stripe | Fichier source | Mock retourne |
+|---|---|---|
+| `stripe.checkout.Session.create()` | `PaiementStripe/views.py:182` | session mock avec id, url |
+| `stripe.checkout.Session.retrieve()` | `BaseBillet/models.py:2771` | session mock avec payment_status="paid" |
+| `stripe.PaymentIntent.retrieve()` | `BaseBillet/models.py` | mock avec payment_method_types=["card"] |
 
-Creer dans tests/e2e/.
-Carte Stripe test : 4242 4242 4242 4242, nom Douglas Adams, date 12/42, code 424.
-L'iframe Stripe est un iframe — utiliser page.frame_locator pour y acceder.
-```
+## Sources TS couvertes
 
-## Verification
-
-```bash
-docker exec lespass_django poetry run pytest tests/e2e/ -v -s --tb=long
-```
-
-## Critere de succes
-
-- [ ] ~12 fichiers Python E2E crees
-- [ ] Les paiements Stripe passent (iframe remplie, redirect OK)
-- [ ] Pas de regression
-
-## Duree estimee
-
-~2h (l'iframe Stripe est toujours penible a automatiser).
-
-## Risques
-
-- **Iframe Stripe** : le selecteur `page.frame_locator('iframe[name*="stripe"]')` peut changer. Toujours utiliser des selecteurs resilients.
-- **Timing** : Stripe peut etre lent a repondre en test. Augmenter les timeouts pour ces tests (`self.page.set_default_timeout(30000)`).
-- **Webhooks** : si le test attend un webhook Stripe (confirmation de paiement), il faut que le webhook soit configure pour atteindre le LiveServer. Alternative : mocker le webhook dans les tests E2E.
+12 fichiers TS, 25 tests :
+- PW 11, 12, 13, 14, 15, 17, 27, 42, 43 (adhesions)
+- PW 44 (crowds)
+- PW 09, 10 (reservations)

@@ -17,7 +17,6 @@ import sys
 # / Django code is in /DjangoFiles inside the container.
 sys.path.insert(0, '/DjangoFiles')
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
 
 import django
 

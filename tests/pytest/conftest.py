@@ -148,6 +148,51 @@ def _enable_db_access_for_all(django_db_blocker):
     django_db_blocker.restore()
 
 
+@pytest.fixture
+def mock_stripe():
+    """Patche les appels Stripe pour eviter le reseau.
+    Retourne un namespace avec les mocks pour inspection.
+    / Patches Stripe API calls to avoid network.
+    Returns a namespace with mocks for inspection.
+
+    Usage :
+        def test_something(mock_stripe, ...):
+            # mock_stripe.session contient le mock Session
+            # mock_stripe.session.id == "cs_test_mock_session"
+    """
+    from unittest.mock import patch, MagicMock
+    from types import SimpleNamespace
+
+    fake_session = MagicMock()
+    fake_session.id = "cs_test_mock_session"
+    fake_session.url = "https://checkout.stripe.com/c/pay/fake_session"
+    fake_session.payment_intent = "pi_test_mock_intent"
+    fake_session.payment_status = "paid"
+    fake_session.mode = "payment"
+    fake_session.metadata = {}
+    fake_session.subscription = None
+    fake_session.status = "complete"
+
+    fake_pi = MagicMock()
+    fake_pi.payment_method_types = ["card"]
+    fake_pi.payment_method_options = {}
+
+    with (
+        patch("stripe.checkout.Session.create", return_value=fake_session) as mock_create,
+        patch("stripe.checkout.Session.retrieve", return_value=fake_session) as mock_retrieve,
+        patch("stripe.PaymentIntent.retrieve", return_value=fake_pi) as mock_pi,
+        patch("stripe.Subscription.retrieve", return_value=MagicMock(id="sub_test_mock")) as mock_sub,
+        patch("stripe.Subscription.modify", return_value=MagicMock()) as mock_sub_mod,
+    ):
+        yield SimpleNamespace(
+            session=fake_session,
+            pi=fake_pi,
+            mock_create=mock_create,
+            mock_retrieve=mock_retrieve,
+            mock_pi=mock_pi,
+        )
+
+
 def pytest_collection_modifyitems(config, items):
     """
     Reorder tests to ensure the following sequence for API v2 Event flow:

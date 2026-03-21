@@ -12,7 +12,6 @@ import os
 import sys
 
 sys.path.insert(0, '/DjangoFiles')
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
 
 import django
 

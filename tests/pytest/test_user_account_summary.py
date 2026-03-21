@@ -20,7 +20,6 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, '/DjangoFiles')
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
 
 import django
 

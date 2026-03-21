@@ -15,7 +15,6 @@ import sys
 # Add this path so Python can find the TiBillet.settings module.
 sys.path.insert(0, '/DjangoFiles')
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')
 
 import django
 

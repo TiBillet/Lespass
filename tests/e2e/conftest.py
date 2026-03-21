@@ -487,3 +487,63 @@ def pos_page(browser, login_as_admin, django_shell):
         return page
 
     return _open_pos
+
+
+# --- Fixture Stripe E2E / Stripe E2E fixture ---
+
+
+@pytest.fixture(scope="session")
+def fill_stripe_card():
+    """Factory : remplit le formulaire Stripe checkout (vrai checkout.stripe.com).
+    / Factory: fills the Stripe checkout form (real checkout.stripe.com).
+
+    Converti depuis tests/playwright/tests/utils/stripe.ts.
+    Carte test : 4242 4242 4242 4242, 12/42, 424, Douglas Adams.
+    """
+
+    def _fill(page, email):
+        # Remplir l'email si visible / Fill email if visible
+        email_input = page.locator('input#email, input[name="email"]').first
+        if email_input.is_visible(timeout=3_000):
+            email_input.fill(email)
+
+        # Stratégie 1 : sélecteurs par rôle (Stripe Checkout récent)
+        # / Strategy 1: role-based selectors (recent Stripe Checkout)
+        card_number = page.get_by_role("textbox", name=re.compile(r"card number", re.I)).first
+        try:
+            card_number.wait_for(state="visible", timeout=5_000)
+            card_number.fill("4242424242424242")
+            page.get_by_role("textbox", name=re.compile(r"expiration", re.I)).first.fill("12/42")
+            page.get_by_role("textbox", name=re.compile(r"cvc", re.I)).first.fill("424")
+            cardholder = page.get_by_role("textbox", name=re.compile(r"cardholder name", re.I)).first
+            if cardholder.is_visible(timeout=2_000):
+                cardholder.fill("Douglas Adams")
+            return
+        except Exception:
+            pass
+
+        # Stratégie 2 : sélecteurs par ID (Stripe Checkout classique)
+        # / Strategy 2: ID-based selectors (classic Stripe Checkout)
+        card_by_id = page.locator("input#cardNumber").first
+        if card_by_id.is_visible(timeout=3_000):
+            card_by_id.fill("4242424242424242")
+            page.locator("input#cardExpiry").fill("12/42")
+            page.locator("input#cardCvc").fill("424")
+            billing_name = page.locator("input#billingName").first
+            if billing_name.is_visible(timeout=2_000):
+                billing_name.fill("Douglas Adams")
+            return
+
+        # Stratégie 3 : sélecteurs par attribut (fallback)
+        # / Strategy 3: attribute-based selectors (fallback)
+        fallback = page.locator('input[name="cardnumber"], input[placeholder*="1234"]').first
+        if fallback.is_visible(timeout=3_000):
+            fallback.fill("4242424242424242")
+            exp = page.locator('input[name="exp-date"], input[placeholder*="MM"]').first
+            if exp.is_visible():
+                exp.fill("12/42")
+            cvc = page.locator('input[name="cvc"], input[placeholder*="CVC"]').first
+            if cvc.is_visible():
+                cvc.fill("424")
+
+    return _fill
