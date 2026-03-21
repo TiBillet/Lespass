@@ -16,7 +16,4 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_read_nfc_adhesion.html
 		{# --- Champ cache pour propager le moyen de paiement --- #}
 		<input type="hidden" name="moyen_paiement" value="{{ method|default:'nfc' }}" />
 
-		<style>
-			#confirm { display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: var(--noir01); }
-		</style>
 	</c-read-nfc>

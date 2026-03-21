@@ -9,8 +9,6 @@ Prérequis / Prerequisites:
 - Carte primaire tag_id_cm=A49E8E2A existante
 """
 
-import re
-
 import pytest
 from playwright.sync_api import expect
 
@@ -98,11 +96,11 @@ class TestPOSTilesVisual:
         """
         pos_page(page, "Bar")
         biere_tile = page.locator(
-            "#products .article-container"
-        ).filter(has_text=re.compile(r"^Biere$")).first
+            '#products .article-container[data-name="Biere"]'
+        ).first
 
         if not biere_tile.is_visible(timeout=5_000):
-            pytest.skip('Tuile "Biere" introuvable — données absentes')
+            pytest.fail('Tuile "Biere" introuvable — create_test_pos_data devrait la créer')
 
         style_attr = biere_tile.get_attribute("style")
         assert style_attr, "Tuile Biere n'a pas de style"
@@ -123,11 +121,11 @@ class TestPOSTilesVisual:
         """
         pos_page(page, "Bar")
         coca_tile = page.locator(
-            "#products .article-container"
-        ).filter(has_text=re.compile(r"^Coca$")).first
+            '#products .article-container[data-name="Coca"]'
+        ).first
 
         if not coca_tile.is_visible(timeout=5_000):
-            pytest.skip('Tuile "Coca" introuvable — données absentes')
+            pytest.fail('Tuile "Coca" introuvable — create_test_pos_data devrait la créer')
 
         style_attr = coca_tile.get_attribute("style")
         assert style_attr, "Tuile Coca n'a pas de style"

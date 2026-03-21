@@ -11,7 +11,7 @@
 | # | Fichier | Phase | Prérequis | Statut |
 |---|---------|-------|-----------|--------|
 | 01 | `01_refactoring_securite_a11y.md` | ① Refactoring | — | ✅ FAIT |
-| 02 | `02_refactoring_extraction_css.md` | ① Refactoring | 01 | ⚠️ ~85% (14 partials overlay encore inline) |
+| 02 | `02_refactoring_extraction_css.md` | ① Refactoring | 01 | ✅ FAIT |
 | 03 | `03_refactoring_footer_cotton.md` | ① Refactoring | 02 | ❌ À FAIRE |
 | 04 | `04_billetterie_refonte_typage.md` | ② Billetterie | 03 | ❌ À FAIRE |
 | 05 | `05_billetterie_flow_identification_unifie.md` | ② Billetterie | 04 | ❌ À FAIRE |

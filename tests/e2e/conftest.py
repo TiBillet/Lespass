@@ -442,8 +442,31 @@ def setup_test_data():
     return _run
 
 
+@pytest.fixture(scope="session")
+def ensure_pos_data():
+    """S'assure que les données POS de test existent (catégories, produits, PV).
+    Exécuté une seule fois par session de test.
+    / Ensures test POS data exists (categories, products, POS).
+    Run once per test session.
+    """
+    result = _run_command(
+        cmd_docker=[
+            "docker", "exec", "-e", "TEST=1",
+            "lespass_django", "poetry", "run", "python",
+            "manage.py", "create_test_pos_data",
+        ],
+        cmd_local=["python", "manage.py", "create_test_pos_data"],
+        timeout=60,
+    )
+    if result.returncode != 0:
+        pytest.fail(
+            f"create_test_pos_data a échoué (rc={result.returncode}): "
+            f"{result.stderr or result.stdout}"
+        )
+
+
 @pytest.fixture(scope="function")
-def pos_page(browser, login_as_admin, django_shell):
+def pos_page(browser, login_as_admin, django_shell, ensure_pos_data):
     """Factory : ouvre la caisse POS pour un point de vente donné.
     / Factory: opens the POS for a given point of sale.
 

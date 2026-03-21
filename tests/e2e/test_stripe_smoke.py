@@ -3,11 +3,26 @@ Tests E2E smoke : vrai aller-retour Stripe checkout.
 / E2E smoke tests: real Stripe checkout round-trip.
 
 Ces tests font le vrai paiement via checkout.stripe.com.
-Timeout etendu (120s) car Stripe peut etre lent.
+Timeouts genereux (90-120s par etape) car Stripe peut etre lent.
 Carte test : 4242 4242 4242 4242, 12/42, 424.
 / These tests make real payments via checkout.stripe.com.
-Extended timeout (120s) because Stripe can be slow.
+Generous timeouts (90-120s per step) because Stripe can be slow.
 Test card: 4242 4242 4242 4242, 12/42, 424.
+
+IMPORTANT : ces tests sont marques xfail(strict=False) car :
+- Le formulaire adhesion utilise HTMX (HX-Redirect) — Playwright ne detecte
+  pas toujours la navigation declenchee par window.location depuis un XHR.
+- La page Stripe maintient des connexions persistantes (analytics, SSE)
+  qui empechent networkidle de se resoudre.
+Ces tests PASSENT quand les conditions reseau sont bonnes et ne bloquent
+pas le build quand Stripe est lent ou que HTMX timing diverge.
+/ IMPORTANT: these tests are marked xfail(strict=False) because:
+- The membership form uses HTMX (HX-Redirect) — Playwright doesn't always
+  detect navigation triggered by window.location from an XHR.
+- Stripe's page maintains persistent connections (analytics, SSE)
+  preventing networkidle from resolving.
+These tests PASS when network conditions are good and don't block
+the build when Stripe is slow or HTMX timing diverges.
 """
 
 import random
@@ -29,8 +44,8 @@ class TestStripeSmokeCheckout:
     """Smoke tests Stripe : vrai checkout / Real Stripe checkout smoke tests."""
 
     @pytest.mark.xfail(
-        reason="Smoke test Stripe : depend du reseau externe + HTMX HX-Redirect timing. "
-               "La logique Django est couverte par les tests mock (test_stripe_membership_simple.py).",
+        reason="HTMX HX-Redirect : Playwright ne detecte pas toujours la navigation "
+               "declenchee par window.location depuis un XHR HTMX.",
         strict=False,
     )
     def test_smoke_membership_stripe_checkout(
@@ -39,7 +54,7 @@ class TestStripeSmokeCheckout:
         """1 adhesion payante → vrai checkout.stripe.com → retour → confirmation.
         / 1 paid membership → real checkout.stripe.com → return → confirmation.
         """
-        page.set_default_timeout(60_000)
+        page.set_default_timeout(120_000)
 
         rid = _random_id()
         user_email = f"test+smoke{rid}@pm.me"
@@ -76,30 +91,34 @@ class TestStripeSmokeCheckout:
         page.locator("#membership-submit").click()
 
         # 5. Attendre la redirection Stripe / Wait for Stripe redirect
-        page.wait_for_url(re.compile(r"checkout\.stripe\.com"), timeout=40_000)
+        page.wait_for_url(re.compile(r"checkout\.stripe\.com"), timeout=90_000)
 
         # 6. Remplir la carte Stripe / Fill Stripe card
-        page.wait_for_load_state("networkidle")
+        # domcontentloaded au lieu de networkidle : Stripe maintient des connexions
+        # persistantes (analytics, SSE) qui empechent networkidle de resoudre.
+        # / domcontentloaded instead of networkidle: Stripe keeps persistent
+        # connections (analytics, SSE) that prevent networkidle from resolving.
+        page.wait_for_load_state("domcontentloaded")
         fill_stripe_card(page, user_email)
 
         # 7. Cliquer payer / Click pay
         submit_btn = page.locator('button[type="submit"]').first
-        expect(submit_btn).to_be_enabled(timeout=20_000)
+        expect(submit_btn).to_be_enabled(timeout=30_000)
         submit_btn.click()
 
         # 8. Attendre le retour / Wait for return
         page.wait_for_url(
             lambda url: "tibillet.localhost" in url.host,
-            timeout=60_000,
+            timeout=120_000,
         )
 
         # 9. Vérifier la page de confirmation / Verify confirmation page
         success_msg = page.locator("text=/merci|confirmée|succès|success/i")
-        expect(success_msg).to_be_visible(timeout=15_000)
+        expect(success_msg).to_be_visible(timeout=30_000)
 
     @pytest.mark.xfail(
-        reason="Smoke test Stripe : depend du reseau externe + bs-counter timing. "
-               "La logique Django est couverte par les tests mock (test_stripe_reservation.py).",
+        reason="Stripe checkout timing : connexions persistantes Stripe (SSE/analytics) "
+               "et bs-counter timing peuvent faire echouer le test.",
         strict=False,
     )
     def test_smoke_booking_stripe_checkout(
@@ -110,7 +129,7 @@ class TestStripeSmokeCheckout:
         """
         from datetime import datetime, timedelta, timezone as tz
 
-        page.set_default_timeout(60_000)
+        page.set_default_timeout(120_000)
 
         rid = _random_id()
         user_email = f"test+smokebook{rid}@pm.me"
@@ -164,19 +183,20 @@ class TestStripeSmokeCheckout:
         submit_btn.click()
 
         # 6. Attendre Stripe / Wait for Stripe
-        page.wait_for_url(re.compile(r"checkout\.stripe\.com"), timeout=40_000)
+        page.wait_for_url(re.compile(r"checkout\.stripe\.com"), timeout=90_000)
 
         # 7. Remplir carte + payer / Fill card + pay
-        page.wait_for_load_state("networkidle")
+        # domcontentloaded : voir commentaire test_smoke_membership ci-dessus
+        page.wait_for_load_state("domcontentloaded")
         fill_stripe_card(page, user_email)
         pay_btn = page.locator('button[type="submit"]').first
-        expect(pay_btn).to_be_enabled(timeout=20_000)
+        expect(pay_btn).to_be_enabled(timeout=30_000)
         pay_btn.click()
 
         # 8. Attendre le retour / Wait for return
         page.wait_for_url(
             lambda url: "tibillet.localhost" in url.host,
-            timeout=60_000,
+            timeout=120_000,
         )
 
         # 9. Vérifier / Verify
