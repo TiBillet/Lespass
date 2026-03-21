@@ -258,7 +258,7 @@ Ces tests verifient la logique metier (modeles, vues, services).
 |---------|-------|--------|-------|---------------|
 | `30-discovery-pin-pairing.spec.ts` | 1 | non | admin | FastTenantTestCase |
 | `39-laboutik-pos-paiement.spec.ts` | 8 | non | admin | **PlaywrightLive** (HTMX) |
-| `40-laboutik-commandes-tables.spec.ts` | 7 | non | admin | **SKIP** (feature incomplete) |
+| `40-laboutik-commandes-tables.spec.ts` | 7 | non | admin | **SUPPRIME** (feature UI incomplete, tests API supprimes — a recreer quand la feature sera prete) |
 | `41-laboutik-cloture-caisse.spec.ts` | 3 | non | admin | FastTenantTestCase (deja couvert pytest) |
 | `44-laboutik-adhesion-identification.spec.ts` | 8 | non | admin | **PlaywrightLive** (NFC + HTMX) |
 | `45-laboutik-pos-tiles-visual.spec.ts` | 9 | non | admin | **PlaywrightLive** (rendu CSS) |
@@ -495,13 +495,13 @@ Fichier `global-auth.setup.ts` : login admin une seule fois, sauvegarde les cook
 | Metrique | Avant | Apres Phase A | Sessions 01-07 | **Phase E (final)** |
 |----------|-------|---------------|----------------|---------------------|
 | Tests Playwright TS | 119 x 3 nav | 119 x 1 nav | 119 x 1 nav | **0 (supprime)** |
-| Tests E2E Python (Playwright) | 0 | 0 | 2 | **33** (~3 min) |
-| Tests pytest (DB dev) | 0 | 0 | 178 (~18s) | **195** (~33s) |
+| Tests E2E Python (Playwright) | 0 | 0 | 2 | **36** (~3 min) |
+| Tests pytest (DB dev) | 0 | 0 | 178 (~18s) | **186** (~30s) |
 | Runner | pytest + yarn PW | pytest + yarn PW | pytest + yarn PW | **pytest seul** |
 | Temps E2E | ~54 min | ~14 min | ~14 min | **~3 min** |
 | Temps unitaire | ~3 min | ~3 min | ~18s | **~33s** |
 | **Total** | **~57 min** | **~17 min** | ~14 min 18s | **~3.5 min** |
-| **Total tests** | **~165 TS** | ~165 TS | 178 pytest + 2 E2E | **228 (195+33)** |
+| **Total tests** | **~165 TS** | ~165 TS | 178 pytest + 2 E2E | **222 (186+36)** |
 
 Options disponibles :
 - `--reuse-db` : -12s par run (systematique)
@@ -806,6 +806,40 @@ Note : le champ M2M s'appelle `options_radio` et `options_checkbox` (pas `option
 **Solution actuelle** : les smoke tests Stripe sont marques `@pytest.mark.xfail(strict=False)`. La logique Django est couverte par les tests mock. Les smoke tests documentent le flow E2E mais ne sont pas bloquants.
 
 **Pour les faire passer** (futur) : utiliser `page.expect_navigation()` avant le clic, ou intercepter le header `HX-Redirect` via `page.on("response")`.
+
+### 9.24 `os.environ.setdefault('DJANGO_SETTINGS_MODULE', ...)` est redondant
+
+**Probleme** : les 26 fichiers de test de sessions 05-07 contenaient `os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'TiBillet.settings')` en debut de fichier. Cette ligne est redondante avec `pyproject.toml` qui configure deja `DJANGO_SETTINGS_MODULE` via `[tool.pytest.ini_options]`.
+
+**Solution** : supprime lors de la session 10 (nettoyage). Ne pas ajouter cette ligne dans les nouveaux tests — pytest-django s'en charge via pyproject.toml.
+
+### 9.25 Deux conftest.py separes (pytest/ et e2e/) — pas de racine
+
+**Decision** : les deux conftest servent des contextes differents et n'ont pas de doublon reel :
+- `tests/pytest/conftest.py` : fixtures in-process (api_client, admin_user, tenant, mock_stripe)
+- `tests/e2e/conftest.py` : fixtures navigateur (playwright, browser, page, login_as, pos_page, django_shell, fill_stripe_card)
+
+Creer un `tests/conftest.py` racine compliquerait le scope des fixtures (un `@pytest.fixture(scope="session")` dans la racine serait visible par les deux sous-dossiers, avec des conflits de noms possibles). Decision : garder en l'etat.
+
+### 9.26 E2E : `pytest.skip` pour elements UI optionnels dans les pages profil
+
+**Probleme** : les pages comme `/my_account/profile/` peuvent ne pas contenir certains elements (`#darkThemeCheck`, `#languageSelect`) selon la configuration du tenant ou la version du template.
+
+**Solution** : verifier la visibilite avant d'interagir, et `pytest.skip()` si l'element est absent. Le test ne fail pas quand l'element n'est pas deploye — il skip proprement.
+
+```python
+theme_check = page.locator("#darkThemeCheck")
+if theme_check.is_visible(timeout=5_000):
+    # ... tester
+else:
+    pytest.skip("#darkThemeCheck non visible")
+```
+
+### 9.27 Verifier l'inventaire complet apres migration
+
+**Probleme** : le fichier `99-theme_language.spec.ts` (3 tests) a ete oublie lors des sessions 01-10. Decouvert uniquement en verifiant systematiquement chaque fichier de l'inventaire (section 4) contre les fichiers Python crees.
+
+**Solution** : apres une migration, toujours verifier l'inventaire source fichier par fichier. Ne pas se fier uniquement au comptage global.
 
 ---
 

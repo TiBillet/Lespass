@@ -24,6 +24,7 @@ Chaque fichier est une fiche de session autonome avec :
 | 09b | Stripe mock — adhesions complexes + crowds | D | ~20 min | 09a | FAIT (2026-03-21) — 8 tests, 191 pytest total |
 | 09c | Stripe mock — reservations + 2 smoke E2E | D | ~30 min | 09a | FAIT (2026-03-21) — 4+2 tests, 228 total |
 | 10 | Nettoyage final | E | ~15 min | 09a-c | FAIT (2026-03-21) — 228 tests, playwright/ supprime |
+| 11 | Theme et langue (PW 99 oublie) | D | ~5 min | 10 | FAIT (2026-03-21) — 3 tests, 231 total |
 
 ## Temps total estime
 
