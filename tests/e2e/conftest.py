@@ -568,5 +568,31 @@ def fill_stripe_card():
             cvc = page.locator('input[name="cvc"], input[placeholder*="CVC"]').first
             if cvc.is_visible():
                 cvc.fill("424")
+            return
+
+        # Stratégie 4 : iframes (Stripe Elements embedded)
+        # Stripe peut utiliser des iframes pour les champs de carte.
+        # Converti depuis tests/playwright/tests/utils/stripe.ts (stratégie 4).
+        # / Strategy 4: iframes (Stripe Elements embedded)
+        # Stripe may use iframes for card fields.
+        # Converted from tests/playwright/tests/utils/stripe.ts (strategy 4).
+        for frame in page.frames:
+            if frame == page.main_frame:
+                continue
+            number_input = frame.locator(
+                'input[name="cardnumber"], input[placeholder*="1234"]'
+            ).first
+            if number_input.count() > 0:
+                number_input.fill("4242424242424242")
+                exp_input = frame.locator(
+                    'input[name="exp-date"], input[placeholder*="MM"]'
+                ).first
+                if exp_input.count() > 0:
+                    exp_input.fill("12/42")
+                cvc_input = frame.locator(
+                    'input[name="cvc"], input[placeholder*="CVC"]'
+                ).first
+                if cvc_input.count() > 0:
+                    cvc_input.fill("424")
 
     return _fill
