@@ -219,11 +219,11 @@ docker exec lespass_django poetry run pytest tests/pytest/test_admin_*.py -v
 - Switch langue fr/en
 - Sync preferences (profil admin)
 
-### Stripe (17 pytest mock + 2 E2E xfail)
+### Stripe (17 pytest mock + 2 E2E)
 - Adhesions : anonyme, SSA tokens, validation manuelle, prix libre, multi-tarifs, zero prix, formulaire dynamique
 - Reservations : gratuit, payant, options, formulaires dynamiques
 - Crowds : contribution direct_debit
-- 2 smoke tests E2E (xfail — timing HTMX/Stripe instable)
+- 2 smoke tests E2E : vrai checkout Stripe (carte 4242, retour confirmation)
 
 ### Divers
 - Validation numerique overflow (max_digits=6)
@@ -295,7 +295,7 @@ tests/
 │   ├── test_pos_adhesion_nfc.py       # POS adhesion 6 chemins NFC
 │   ├── test_pos_tiles_visual.py       # POS tuiles visuelles
 │   ├── test_asset_federation.py       # Federation cross-tenant
-│   ├── test_stripe_smoke.py           # Smoke tests Stripe (xfail)
+│   ├── test_stripe_smoke.py           # Smoke tests Stripe (vrai checkout)
 │   └── test_theme_language.py         # Theme et langue
 └── SESSIONS/                  # Fiches des 11 sessions de migration
     ├── PLAN_TEST.md           # Strategie de tests detaillee
@@ -397,11 +397,11 @@ paiement.update_checkout_status()  # mock retrieve retourne paid
 **9.7 — Dual-mode container/host dans conftest.py.**
 Les tests E2E tournent dans le container ou `docker` n'existe pas. Detection automatique via `shutil.which("docker") is None`. Les commandes sont adaptees (docker exec vs direct).
 
-**9.8 — Template membership : modal vs standalone.**
-`/memberships/` rend un modal Bootstrap sans data-testid. `/memberships/<uuid>/` rend le formulaire standalone avec tous les data-testid. Naviguer directement vers l'URL avec UUID.
+**9.8 — Template membership : partiel sans HTMX.**
+`/memberships/<uuid>/` rend `form.html` — un template PARTIEL sans `{% extends %}`, sans `<html>`, sans HTMX. Le formulaire se soumet en GET natif au lieu d'un POST HTMX. Pour tester le flow complet (soumission → Stripe), naviguer vers `/memberships/` (page liste avec base template + HTMX), trouver le produit, et cliquer Subscribe pour charger le formulaire dans l'offcanvas. Pour tester les validations client-side uniquement, `/memberships/<uuid>/` est acceptable car les scripts inline et la validation HTML5 fonctionnent sans HTMX.
 
-**9.9 — Skip conditionnel pour donnees POS optionnelles.**
-Utiliser `pytest.skip()` quand les donnees de test (ex: tuile "Biere") n'existent pas en base.
+**9.9 — Fixture `ensure_pos_data` pour donnees POS garanties.**
+La fixture session-scoped `ensure_pos_data` (conftest.py) lance `create_test_pos_data` une fois par session. Les tests POS qui utilisent `pos_page` en dependent automatiquement. Utiliser `pytest.fail()` (pas `pytest.skip()`) quand un produit cree par la fixture est introuvable — un skip masque le vrai probleme. Utiliser `data-name="Biere"` (attribut) au lieu de `has_text=re.compile(r"^Biere$")` — le regex sans `re.MULTILINE` ne matche pas quand la tuile contient aussi le prix et le badge quantite.
 
 **9.10 — `select_for_update` dans django_shell.**
 `WalletService.crediter()` utilise `select_for_update()`. Wrapper dans `with db_transaction.atomic():` en code multi-ligne (`\n`), pas en one-liner (`;`).
@@ -422,7 +422,13 @@ Toujours filtrer par nom (`?q=...`) pour eviter qu'un asset soit invisible a cau
 Parametre optionnel pour executer du code sur un autre tenant : `django_shell("...", schema="chantefrein")`.
 
 **9.23 — HTMX `HX-Redirect` et Playwright.**
-Les formulaires HTMX retournent un header `HX-Redirect`. Playwright ne detecte pas toujours la navigation asynchrone. Les smoke tests Stripe sont marques `xfail`.
+Les formulaires HTMX retournent un header `HX-Redirect` et HTMX fait `window.location.href = url`. Playwright detecte cette navigation si HTMX est charge sur la page. Le piege : certains templates sont des PARTIELS sans base template (cf. 9.8) — sans HTMX, la soumission se fait en GET natif. Solution : toujours passer par la page parente (liste, event) qui charge le formulaire via HTMX dans un offcanvas/panel.
+
+**9.28 — `networkidle` ne resout jamais sur les pages Stripe.**
+Stripe Checkout maintient des connexions persistantes (analytics, SSE). Utiliser `domcontentloaded` (pas `networkidle`) apres `wait_for_url("checkout.stripe.com")`. `networkidle` est OK pour les pages TiBillet internes.
+
+**9.29 — `wait_for_url` callback recoit une string (pas un objet URL).**
+En Playwright Python, le callback de `page.wait_for_url(lambda url: ...)` recoit une string. Utiliser `"tibillet.localhost" in url` (pas `url.host` ni `url.hostname`). En Playwright JS, le callback recoit un objet URL avec `.hostname`.
 
 **9.24 — `DJANGO_SETTINGS_MODULE` est redondant.**
 Deja configure dans `pyproject.toml`. Ne pas ajouter `os.environ.setdefault(...)` dans les nouveaux tests.
