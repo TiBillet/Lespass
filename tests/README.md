@@ -276,8 +276,10 @@ tests/
 │   ├── test_asset_federation.py       # Federation cross-tenant
 │   ├── test_stripe_smoke.py           # Smoke tests Stripe (xfail)
 │   └── test_theme_language.py         # Theme et langue
-├── PLAN_TEST.md               # Strategie de tests + 27 pieges documentes
 └── SESSIONS/                  # Fiches des 11 sessions de migration
+    ├── PLAN_TEST.md           # Strategie de tests detaillee
+    ├── README.md              # Vue d'ensemble des sessions
+    └── 01_..11_*.md           # Fiches individuelles
 ```
 
 ---
@@ -292,7 +294,126 @@ tests/
 | Temps pytest | ~30s |
 | Temps E2E | ~3 min |
 | **Temps total** | **~3.5 min** |
-| Pieges documentes | 27 (voir PLAN_TEST.md section 9) |
+
+---
+
+## Pieges documentes
+
+**A lire AVANT d'ecrire un nouveau test.** 27 lecons apprises pendant la migration.
+
+### Django multi-tenant
+
+**9.1 — `schema_context` vs `tenant_context` (FakeTenant).**
+`schema_context('lespass')` met un `FakeTenant` sur `connection.tenant`. Les modeles qui appellent `connection.tenant.get_primary_domain()` ou `.uuid` crashent. Utiliser `tenant_context(tenant)` pour `Event.objects.create()` et tout appel qui accede a `connection.tenant`.
+
+```python
+# ❌ Crash sur Event.save()
+with schema_context('lespass'):
+    Event.objects.create(name='Test', ...)
+
+# ✅ OK
+tenant = Client.objects.get(schema_name='lespass')
+with tenant_context(tenant):
+    Event.objects.create(name='Test', ...)
+```
+
+**9.5 — Routes publiques et `HTTP_HOST`.**
+Les routes `/api/discovery/` sont dans `urls_public.py`. Utiliser `HTTP_HOST='tibillet.localhost'` (schema public), pas `lespass.tibillet.localhost` (tenant).
+
+### Modeles et signaux
+
+**9.2 — `ProductSold` n'a pas de champ `name`.**
+Creation minimale : `ProductSold.objects.create(product=product)`. Idem pour `PriceSold`.
+
+**9.3 — Signal `send_membership_product_to_fedow` cree des tarifs auto.**
+Apres `Product.objects.create(categorie_article=ADHESION)`, le signal peut creer un "Tarif gratuit" supplementaire. Utiliser `assert count >= 3` (pas `== 3`), ou filtrer par nom.
+
+**9.6 — Duplication produit et signaux.**
+`_duplicate_product()` declenche les signaux → le duplicata peut avoir plus de tarifs. Verifier par nom, pas par comptage exact.
+
+**9.20 — `Membership.custom_form` (pas `custom_field`).**
+Les reponses aux champs dynamiques sont dans `custom_form` (JSONField). Toujours verifier le nom exact : `[f.name for f in Model._meta.get_fields()]`.
+
+**9.22 — Options reservation = UUID (pas noms en clair).**
+Le champ `options` dans `ReservationValidator` attend des UUID `OptionGenerale`. Le champ M2M s'appelle `options_radio` et `options_checkbox` (pas `option_generale_*`).
+
+### Serializers et vues
+
+**9.4 — `admin_clean_html(None)` crashe.**
+Toujours envoyer `long_description=''` (pas `None`) dans les POST vers `simple_create_event`.
+
+**9.16 — `newsletter` boolean dans MembershipValidator.**
+Envoyer `"false"` (pas `""`) dans les donnees POST. Le formulaire HTML envoie `""` pour une checkbox non cochee, mais le serializer attend un boolean.
+
+**9.17 — Header `Referer` requis par MembershipMVT.create().**
+En cas d'erreur, la vue fait `request.headers['Referer']`. Ajouter `HTTP_REFERER="https://..."` au POST du test client Django.
+
+**9.21 — `sale_origin="LP"` (LESPASS) pour les crowds.**
+Les contributions crowds creent des LigneArticle avec `sale_origin="LP"`, pas `"LS"`.
+
+### Mock Stripe
+
+**9.18 — `tenant_context` requis pour `get_checkout_stripe()`.**
+Cette methode accede a `connection.tenant.uuid` pour les metadata Stripe. Meme piege que 9.1.
+
+**9.19 — Flow de test mock Stripe en 3 etapes.**
+```python
+# 1. POST formulaire → Paiement_stripe.PENDING + Session.create (mock)
+resp = api_client.post("/memberships/", data=post_data, HTTP_REFERER="...")
+
+# 2. Verifier que Session.create a ete appele
+assert mock_stripe.mock_create.called
+
+# 3. Simuler retour Stripe
+paiement = Paiement_stripe.objects.filter(
+    checkout_session_id_stripe="cs_test_mock_session"
+).first()
+paiement.update_checkout_status()  # mock retrieve retourne paid
+```
+
+### E2E Playwright
+
+**9.7 — Dual-mode container/host dans conftest.py.**
+Les tests E2E tournent dans le container ou `docker` n'existe pas. Detection automatique via `shutil.which("docker") is None`. Les commandes sont adaptees (docker exec vs direct).
+
+**9.8 — Template membership : modal vs standalone.**
+`/memberships/` rend un modal Bootstrap sans data-testid. `/memberships/<uuid>/` rend le formulaire standalone avec tous les data-testid. Naviguer directement vers l'URL avec UUID.
+
+**9.9 — Skip conditionnel pour donnees POS optionnelles.**
+Utiliser `pytest.skip()` quand les donnees de test (ex: tuile "Biere") n'existent pas en base.
+
+**9.10 — `select_for_update` dans django_shell.**
+`WalletService.crediter()` utilise `select_for_update()`. Wrapper dans `with db_transaction.atomic():` en code multi-ligne (`\n`), pas en one-liner (`;`).
+
+**9.11 — Ordre des tests NFC adhesion.**
+Chemin 2 (carte anonyme) doit passer AVANT chemin 4 (qui associe un user a la carte). Les noms de tests controlent l'ordre.
+
+**9.12 — `scope="module"` pour setups lourds.**
+Le setup NFC (asset + wallet + credit) prend ~2s. `scope="module"` evite de le repeter a chaque test.
+
+**9.13 — Login cross-tenant : URLs absolues.**
+`login_as_admin(page)` resout vers `base_url` (Lespass). Pour Chantefrein, reproduire le flow avec des URLs absolues. Les cookies sont per-subdomain.
+
+**9.14 — Pagination changelist admin.**
+Toujours filtrer par nom (`?q=...`) pour eviter qu'un asset soit invisible a cause de la pagination.
+
+**9.15 — `django_shell` parametre `schema`.**
+Parametre optionnel pour executer du code sur un autre tenant : `django_shell("...", schema="chantefrein")`.
+
+**9.23 — HTMX `HX-Redirect` et Playwright.**
+Les formulaires HTMX retournent un header `HX-Redirect`. Playwright ne detecte pas toujours la navigation asynchrone. Les smoke tests Stripe sont marques `xfail`.
+
+**9.24 — `DJANGO_SETTINGS_MODULE` est redondant.**
+Deja configure dans `pyproject.toml`. Ne pas ajouter `os.environ.setdefault(...)` dans les nouveaux tests.
+
+**9.25 — Deux conftest.py separes, pas de racine.**
+`tests/pytest/conftest.py` (fixtures DB) et `tests/e2e/conftest.py` (fixtures navigateur) sont independants. Ne pas creer de conftest racine.
+
+**9.26 — `pytest.skip` pour elements UI optionnels.**
+Verifier la visibilite avant d'interagir avec des elements qui peuvent ne pas exister selon la config du tenant.
+
+**9.27 — Verifier l'inventaire complet apres migration.**
+Toujours comparer fichier par fichier, pas seulement par comptage global.
 
 ---
 
