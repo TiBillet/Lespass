@@ -19,7 +19,28 @@ docker exec lespass_django poetry run pytest tests/ --last-failed
 
 # S'arreter au premier echec
 docker exec lespass_django poetry run pytest tests/ --stepwise
+
+# --- Couverture de code (pytest-cov) ---
+# Rapport couverture sur les tests DB-only (pas les E2E — serveur separe)
+docker exec lespass_django poetry run pytest tests/pytest/ \
+  --cov=BaseBillet --cov=laboutik --cov=crowds --cov=fedow_core \
+  --cov=PaiementStripe --cov=AuthBillet --cov=Administration \
+  --cov=ApiBillet --cov=api_v2 \
+  --cov-report=term-missing -q
+
+# Rapport HTML (ouvre htmlcov/index.html dans le navigateur)
+docker exec lespass_django poetry run pytest tests/pytest/ \
+  --cov=BaseBillet --cov=laboutik --cov=crowds --cov=fedow_core \
+  --cov=PaiementStripe --cov=AuthBillet --cov=Administration \
+  --cov=ApiBillet --cov=api_v2 \
+  --cov-report=html -q
 ```
+
+> **Note couverture** : coverage ne mesure que les tests pytest (DB-only).
+> Les tests E2E pilotent un navigateur vers un serveur Django separe — le code
+> s'execute dans un autre processus, invisible pour coverage.
+> Couverture actuelle : **44% global**, avec les modeles metier a 70-97%
+> et les taches Celery / vues legacy a 11-25%.
 
 ## Deux suites complementaires
 
