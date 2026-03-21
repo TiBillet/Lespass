@@ -379,6 +379,46 @@ class PlaywrightTenantLiveTestCase(TenantTestCase, LiveServerTestCase):
 - Le test verifie de la validation cote client (JavaScript)
 - Le test implique du cross-tenant (2 sous-domaines)
 
+### 5.4 Pourquoi deux suites de tests separees ?
+
+Les **178 tests pytest** (DB-only) et les **tests E2E Playwright Python** couvrent
+des couches differentes. Ni l'une ni l'autre ne peut remplacer l'autre.
+
+**Tests pytest (DB-only, ~18s)** — ce qu'ils testent :
+- Logique metier Python : modeles, serializers, vues, services
+- API REST : requetes/reponses via `self.client` Django (in-process, pas de reseau)
+- Validations serveur : permissions, contraintes, calculs
+- Acces ORM direct pour assertions fines
+
+**Tests E2E Playwright (navigateur live, ~57s)** — ce qu'ils testent :
+- Validation HTML5 native (`setCustomValidity`, `validity.valid`) → moteur navigateur
+- Web components custom (`bs-counter` avec `dispatchEvent`) → JS du DOM
+- Librairies JS tierces (SweetAlert2 popups, Tom Select) → code tiers non testable sans navigateur
+- HTMX lifecycle (`hx-post`, `hx-target`, `htmx:configRequest`) → JS qui fait les swaps
+- CSS inline et rendu visuel (`background-color` sur tuiles POS) → rendu Chromium
+- JS vanilla (filtrage categorie via `display:none`, `validateForm()`) → DOM manipulation
+- Navigation cross-subdomain + cookies per-domain → pile reseau navigateur
+
+**Pourquoi pas un LiveServer ephemere pour les E2E ?**
+
+Django fournit `LiveServerTestCase` qui lance un serveur temporaire avec une DB de test.
+Mais **django-tenants** a besoin de schemas PostgreSQL separes par tenant, avec des
+migrations specifiques. Bootstrapper un tenant ephemere (create schema + migrate + seed)
+dans un `setUpClass` est un chantier lourd et fragile.
+
+Le choix actuel : les E2E tournent contre la **base dev existante** (les tenants sont
+deja la) et un **serveur Django deja lance** (via Traefik). C'est pragmatique et fiable.
+Le compromis : les E2E ne sont pas isoles (pas de ROLLBACK automatique). Pour eviter
+les conflits, les tests utilisent des noms uniques (suffixe `random_id`).
+
+**Resume :**
+
+| Question | Reponse |
+|----------|---------|
+| "Ca teste du Python ?" | → pytest DB-only (rapide, isole, ROLLBACK) |
+| "Ca teste du JS/CSS/navigateur ?" | → E2E Playwright (navigateur reel requis) |
+| "Ca teste les deux ?" | → pytest pour la logique serveur, E2E pour le rendu |
+
 ---
 
 ## 6. Gains immediats (Phase A — sans refonte)
@@ -452,20 +492,237 @@ Fichier `global-auth.setup.ts` : login admin une seule fois, sauvegarde les cook
 
 ## 8. Metriques de reference
 
-| Metrique | Avant | Apres Phase A | Apres Phase E |
-|----------|-------|---------------|---------------|
-| Tests Playwright TS | 119 x 3 nav | 119 x 1 nav | 0 |
-| Tests Playwright Python (pytest) | 0 | 0 | ~20 |
-| Tests FastTenantTestCase (pytest) | ~130 | ~130 | ~250 |
-| Runner | pytest + yarn PW | pytest + yarn PW | **pytest seul** |
-| Temps E2E | ~54 min | ~14 min | ~5 min |
-| Temps unitaire | ~3 min | ~3 min | ~30s |
-| **Total** | **~57 min** | **~17 min** | **~5.5 min** |
+| Metrique | Avant | Apres Phase A | Actuel (sessions 01-07) | Apres Phase E |
+|----------|-------|---------------|------------------------|---------------|
+| Tests Playwright TS | 119 x 3 nav | 119 x 1 nav | 119 x 1 nav | 0 |
+| Tests Playwright Python (pytest) | 0 | 0 | 0 | ~20 |
+| Tests pytest (DB dev) | 0 | 0 | **178** (~18s) | ~250 |
+| Runner | pytest + yarn PW | pytest + yarn PW | pytest + yarn PW | **pytest seul** |
+| Temps E2E | ~54 min | ~14 min | ~14 min | ~5 min |
+| Temps unitaire | ~3 min | ~3 min | **~18s** | ~30s |
+| **Total** | **~57 min** | **~17 min** | **~14 min 18s** | **~5.5 min** |
 
 Options supplementaires apres Phase E :
 - `--reuse-db` : -12s par run (systematique)
 - `--last-failed` : relance uniquement les echecs (cycle dev)
 - `pytest-xdist` : parallelisme si valide avec django-tenants
+
+---
+
+## 9. Pieges documentes (sessions 01-07)
+
+Lecons apprises pendant la migration. A consulter **avant** d'ecrire de nouveaux tests.
+
+### 9.1 `schema_context` vs `tenant_context` (FakeTenant)
+
+**Probleme** : `schema_context('lespass')` bascule le schema PostgreSQL mais met un `FakeTenant` sur `connection.tenant`. Certains modeles (notamment `Event.save()`) appellent `connection.tenant.get_primary_domain()` → crash `AttributeError: 'FakeTenant' object has no attribute 'get_primary_domain'`.
+
+**Solution** : utiliser `tenant_context(tenant)` au lieu de `schema_context('lespass')` dans les tests qui creent des objets via ORM dont le `save()` accede a `connection.tenant`. En pratique :
+- `Event.objects.create()` → **toujours `tenant_context`**
+- `Product.objects.create()`, `Price.objects.create()` → `schema_context` suffit
+
+```python
+# ❌ Crash sur Event.save()
+with schema_context('lespass'):
+    Event.objects.create(name='Test', ...)
+
+# ✅ OK
+from Customers.models import Client
+tenant = Client.objects.get(schema_name='lespass')
+with tenant_context(tenant):
+    Event.objects.create(name='Test', ...)
+```
+
+La fixture `tenant` du conftest retourne directement l'objet `Client`.
+
+### 9.2 `ProductSold` n'a pas de champ `name`
+
+**Probleme** : `ProductSold(name='...', categorie_article='...')` → `TypeError: unexpected keyword arguments`.
+
+**Raison** : `ProductSold` n'a que `product` (FK), `categorie_article` (auto-fill depuis `product` dans `save()`), et `event` (FK optionnelle). Le `__str__` utilise `self.product.name`.
+
+**Solution** : creation minimale.
+
+```python
+# ❌
+ProductSold.objects.create(product=product, name=product.name, categorie_article=product.categorie_article)
+
+# ✅
+ProductSold.objects.create(product=product)
+```
+
+Idem pour `PriceSold` : pas de champ `name`, juste `productsold`, `price`, `prix`.
+
+### 9.3 Signal `send_membership_product_to_fedow` cree des tarifs auto
+
+**Probleme** : apres `Product.objects.create(categorie_article=FREERES)`, le signal cree un "Tarif gratuit" supplementaire. Le comptage `product.prices.count()` retourne N+1.
+
+**Solution** : utiliser des assertions relatives (`>= 3`) plutot qu'absolues (`== 3`), ou filtrer par nom pour verifier les tarifs manuels.
+
+```python
+# ❌ Fragile — le signal peut ajouter un tarif
+assert product.prices.count() == 3
+
+# ✅ Robuste
+assert product.prices.count() >= 3
+for pname in ['Tarif A', 'Tarif B', 'Tarif C']:
+    assert product.prices.filter(name=pname).exists()
+```
+
+### 9.4 `admin_clean_html(None)` crashe (nh3)
+
+**Probleme** : `EventQuickCreateSerializer.validate()` appelle `admin_clean_html(ld)` ou `ld` peut etre `None`. `nh3.clean(None)` → `TypeError: 'None' is not an instance of 'str'`.
+
+**Solution** : dans les tests, toujours envoyer `long_description=''` (chaine vide) dans les POST vers `simple_create_event`.
+
+```python
+# ❌ Crash dans le serializer
+admin_client.post('/event/simple_create_event/', {'name': 'Test', 'datetime_start': dt})
+
+# ✅ OK
+admin_client.post('/event/simple_create_event/', {'name': 'Test', 'datetime_start': dt, 'long_description': ''})
+```
+
+> Note : c'est aussi un bug potentiel du serializer (devrait gerer `None`). A corriger dans le code source si souhaite.
+
+### 9.5 Routes publiques (`urls_public.py`) et `HTTP_HOST`
+
+**Probleme** : les routes `/api/discovery/` sont dans `urls_public.py` (schema public). Un `DjangoClient()` sans `HTTP_HOST` ou avec `HTTP_HOST='lespass.tibillet.localhost'` resout vers le tenant → 404.
+
+**Solution** : utiliser `HTTP_HOST='tibillet.localhost'` (le domaine du schema public).
+
+```python
+# ❌ 404 — le tenant n'a pas cette route
+client = DjangoClient()
+client.post('/api/discovery/claim/', ...)
+
+# ❌ 404 — route de tenant, pas de public
+client = DjangoClient(HTTP_HOST='lespass.tibillet.localhost')
+
+# ✅ OK — resout vers PUBLIC_SCHEMA_URLCONF
+client = DjangoClient(HTTP_HOST='tibillet.localhost')
+```
+
+Pour trouver le domaine public :
+```python
+from Customers.models import Client, Domain
+public = Client.objects.get(schema_name='public')
+Domain.objects.filter(tenant=public)  # → tibillet.localhost
+```
+
+### 9.6 Duplication de produit et signal sur le duplicata
+
+**Probleme** : `_duplicate_product()` fait `nouveau_produit.save()` ce qui declenche les signaux (cf. 9.3). Le duplicata peut avoir plus de tarifs que l'original si le signal en cree un.
+
+**Solution** : verifier la presence des tarifs attendus par nom, pas par comptage exact.
+
+### 9.7 E2E : dual-mode container/host dans conftest.py
+
+**Probleme** : les tests E2E sont lances via `docker exec lespass_django poetry run pytest tests/e2e/`. Le code tourne donc **dans le container** ou le binaire `docker` n'existe pas. Les fixtures qui appellent `docker exec` (api_key, django_shell, setup_test_data) echouent avec `FileNotFoundError`.
+
+**Solution** : detection automatique via `shutil.which("docker") is None`. Si on est dans le container, les commandes sont executees directement (`python manage.py ...`). Sinon, via `docker exec`.
+
+```python
+INSIDE_CONTAINER = shutil.which("docker") is None
+
+def _run_command(cmd_docker, cmd_local, timeout=30):
+    cmd = cmd_local if INSIDE_CONTAINER else cmd_docker
+    env = {**os.environ, "TEST": "1", "PYTHONPATH": "/DjangoFiles"} if INSIDE_CONTAINER else None
+    cwd = "/DjangoFiles" if INSIDE_CONTAINER else None
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd)
+```
+
+Meme pattern pour les appels API HTTP (`requests`) : depuis le container, on passe par le Docker gateway (Traefik) avec un header `Host` explicite.
+
+### 9.8 E2E : template membership — modal vs standalone
+
+**Probleme** : la page `/memberships/` rend une liste avec des boutons Bootstrap modal (`data-bs-toggle="modal"`). Le template modal (`modal_form.html`) n'a **pas de data-testid** et utilise `novalidate` + `validateForm()`.
+
+Le template standalone (`reunion/views/membership/form.html`) a **tous les data-testid** (`#membership-form`, `#membership-email`, `#confirm-email`, `#membership-submit`, `[data-bl-error]`, `[data-ms-error]`).
+
+**Solution** : naviguer directement vers `/memberships/<product_uuid>/` pour acceder au formulaire standalone avec les data-testid.
+
+### 9.9 E2E : skip conditionnel pour donnees POS optionnelles
+
+**Probleme** : les tests de couleur de tuiles POS (test_06 Biere, test_07 Coca) cherchent des produits specifiques crees par `manage.py create_test_pos_data`. Si cette commande n'a pas ete lancee, les tuiles n'existent pas.
+
+**Solution** : `pytest.skip()` au lieu d'un echec. Le test verifie d'abord si la tuile est visible, sinon il skip. Ce n'est pas un echec — c'est un pre-requis de donnees manquant.
+
+```python
+if not biere_tile.is_visible(timeout=5_000):
+    pytest.skip('Tuile "Biere" introuvable — donnees absentes')
+```
+
+### 9.10 E2E : `select_for_update` dans django_shell nécessite `transaction.atomic()`
+
+**Probleme** : `WalletService.crediter()` utilise `Token.objects.select_for_update()` en interne. Quand on l'appelle via `django_shell` (management command `shell -c "..."`), il n'y a pas de transaction ouverte → crash `TransactionManagementError: select_for_update cannot be used outside of a transaction`.
+
+**Solution** : wrapper l'appel dans `with db_transaction.atomic():`. Mais `with` est un bloc compose — impossible de l'ecrire sur une seule ligne avec des `;`. Utiliser du code **multi-ligne** (avec `\n`) au lieu de one-liners avec `;` :
+
+```python
+# ❌ Crash — select_for_update hors transaction
+django_shell(
+    "from fedow_core.services import WalletService; "
+    "WalletService.crediter(wallet=w, asset=a, montant_en_centimes=5000)"
+)
+
+# ✅ OK — with block en multi-ligne
+django_shell(
+    "from fedow_core.services import WalletService\n"
+    "from django.db import transaction as db_transaction\n"
+    "with db_transaction.atomic():\n"
+    "    WalletService.crediter(wallet=w, asset=a, montant_en_centimes=5000)\n"
+    "print('OK')"
+)
+```
+
+Le multi-ligne fonctionne car `django_shell` passe le code via `subprocess.run([..., "-c", code])` en liste (pas de shell quoting).
+
+### 9.11 E2E : ordre des tests NFC adhesion (chemin 2 avant chemin 4)
+
+**Probleme** : les tests d'adhesion NFC modifient l'etat des cartes client en base. Le chemin 4 (espece → carte anonyme → formulaire → payer) associe un user a CLIENT1. Si chemin 4 passe avant chemin 2 (cashless → carte anonyme → formulaire), CLIENT1 n'est plus anonyme → chemin 2 echoue (confirmation directe au lieu du formulaire).
+
+**Solution** : dans le fichier de test, l'ordre de declaration des methodes dans la classe `TestPOSAdhesionIdentification` respecte l'ordre d'execution pytest (alphabetique par defaut dans une classe). Les tests sont nommes pour que chemin 2 passe avant chemin 4. La fixture `adhesion_cards_setup` (scope=module) reset les cartes une seule fois en debut de module et en teardown.
+
+### 9.12 E2E : fixture scope=module vs scope=function pour les setups lourds NFC
+
+**Probleme** : le setup NFC (asset TLF + wallet + credit) prend ~2s via `django_shell`. Avec `scope="function"`, il serait execute 6 fois (une par test NFC) → +12s inutiles.
+
+**Solution** : utiliser `scope="module"` pour les fixtures de setup lourd (`nfc_setup`, `adhesion_cards_setup`). Le setup est execute une seule fois par module. Les tests qui consomment du solde (paiements NFC successifs) appellent `_credit_client1()` au debut pour recharger.
+
+### 9.13 E2E cross-tenant : login manuel + URLs absolues
+
+**Probleme** : la fixture `login_as_admin(page)` fait `page.goto("/")` qui resout vers le `base_url` du context Playwright (Lespass). Pour un 2e tenant (Chantefrein), le login echoue car on reste sur Lespass.
+
+**Solution** : reproduire le flow login manuellement avec des URLs absolues :
+
+```python
+CHANTEFREIN_BASE = "https://chantefrein.tibillet.localhost"
+page.goto(f"{CHANTEFREIN_BASE}/")
+# ... clic login, fill email, submit, TEST MODE
+```
+
+Les cookies de session sont per-subdomain → la session Lespass reste active quand on navigue sur Chantefrein. Au retour sur Lespass, pas besoin de re-login.
+
+### 9.14 E2E cross-tenant : pagination changelist admin
+
+**Probleme** : la DB peut contenir des centaines d'assets de runs E2E precedents. L'asset fraichement cree peut etre invisible sur la 1ere page de la changelist admin (pagination).
+
+**Solution** : toujours filtrer par nom dans l'URL → `?q={quote(asset_name)}`. Ne jamais chercher un asset dans la changelist sans filtre.
+
+### 9.15 E2E : `django_shell` parametre `schema` pour multi-tenant
+
+**Probleme** : la fixture `django_shell` etait ciblee sur le tenant `lespass` uniquement. Pour un test cross-tenant, on a besoin d'executer du code sur `chantefrein` (ex: activer `module_monnaie_locale`).
+
+**Solution** : parametre optionnel `schema` (defaut "lespass") :
+
+```python
+# Sur lespass (defaut)
+django_shell("print('hello')")
+
+# Sur chantefrein
+django_shell("print('hello')", schema="chantefrein")
+```
 
 ---
 

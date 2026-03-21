@@ -1,61 +1,28 @@
-# Session 08 — Convertir les tests Playwright TS → PlaywrightLive Python (batch 1)
+# Session 08 — Convertir PW TS → Playwright Python (E2E live)
 
-## Objectif
+## Decoupage
 
-Convertir les ~20 tests Playwright TS marques "PlaywrightLive" en Python. Ce sont les tests qui necessitent un vrai navigateur (Stripe, HTMX, validation JS, cross-tenant).
+Cette session a ete decoupee en 3 sous-sessions car la charge etait trop lourde
+pour une seule passe (~8 fichiers TS, complexite variable).
 
-## Pre-requis
+| Sous-session | Perimetre | Statut |
+|---|---|---|
+| [08a](08a_PW_LIVE_BATCH_LEGER.md) | Validations JS, crowds, CSS POS (4 fichiers, 12 tests) | FAIT (2026-03-21) |
+| [08b](08b_PW_LIVE_POS_PAIEMENT.md) | POS paiement + adhesion NFC (2 fichiers, ~16 tests) | A FAIRE |
+| [08c](08c_PW_LIVE_CROSS_TENANT.md) | Federation cross-tenant (1 fichier, 1 test complexe) | A FAIRE |
 
-- Session 04 terminee (PlaywrightTenantLiveTestCase valide)
-- Playwright Python installe et Chromium fonctionne dans le conteneur
+08b et 08c sont independants l'un de l'autre (mais dependent de 08a pour les fixtures).
 
-## Prompt a envoyer
+## Pourquoi E2E live ?
 
-```
-Convertis les tests Playwright TS marques "PlaywrightLive" en Python.
+Ces tests necessitent un **vrai navigateur Chromium** car ils verifient :
+- Validation HTML5 native (`setCustomValidity`, `validity.valid`)
+- Web components custom (`bs-counter` avec `dispatchEvent`)
+- Librairies JS tierces (SweetAlert2 popups)
+- HTMX swaps et lifecycle (hx-post, hx-target, configRequest events)
+- CSS inline et rendu visuel (`background-color` sur tuiles POS)
+- JS vanilla (filtrage categorie via `display:none`)
+- Navigation cross-subdomain + cookies per-domain
 
-Contexte :
-- PlaywrightTenantLiveTestCase est valide (session 04)
-- Classe de base dans tests/e2e/base.py
-- Voir tests/PLAN_TEST.md sections 4.1 a 4.5 — tous les fichiers marques "PlaywrightLive"
-
-Fichiers (par priorite) :
-
-Batch 1 — sans Stripe (~10 fichiers) :
-- 20-membership-validations.spec.ts (validation JS)
-- 18-reservation-validations.spec.ts (validation JS)
-- 23-crowds-participation.spec.ts (popup UI)
-- 39-laboutik-pos-paiement.spec.ts (HTMX)
-- 44-laboutik-adhesion-identification.spec.ts (NFC + HTMX)
-- 45-laboutik-pos-tiles-visual.spec.ts (rendu CSS)
-- 01-login.spec.ts (deja fait en session 04 — verifier)
-- 31-admin-asset-federation.spec.ts (cross-tenant)
-
-Creer dans tests/e2e/.
-Chaque test herite de PlaywrightTenantLiveTestCase.
-Utiliser self.page pour les interactions Playwright.
-```
-
-## Note
-
-Les tests **avec Stripe** (11, 12, 13, 14, 15, 17, 27, 42, 43, 44-crowds) seront convertis en session 09. Ils necessitent plus de travail (iframe Stripe, redirections, webhooks).
-
-## Verification
-
-```bash
-# Chaque fichier E2E passe
-docker exec lespass_django poetry run pytest tests/e2e/ -v -s --tb=long
-
-# Tous les tests (pytest + e2e) passent
-docker exec lespass_django poetry run pytest tests/ -v --tb=short --reuse-db
-```
-
-## Critere de succes
-
-- [ ] ~8 fichiers Python E2E crees
-- [ ] Chacun passe avec un navigateur headless
-- [ ] Pas de regression sur les tests pytest
-
-## Duree estimee
-
-~1h30 (conversion + debug d'interactions navigateur).
+Les 178 tests pytest (sessions 01-07) couvrent la logique Python/Django.
+Les tests E2E couvrent le comportement navigateur. Les deux sont complementaires.

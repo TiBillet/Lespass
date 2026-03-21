@@ -16,8 +16,10 @@ Chaque fichier est une fiche de session autonome avec :
 | 04 | Prototype Playwright Python E2E | C | ~20 min | 01-02 | FAIT (2026-03-20) — serveur externe (pas LiveServer), fixtures pytest |
 | 05 | Convertir PW admin → Fast | D | ~1h | 02 | FAIT (2026-03-20) — 20 tests, 142 total |
 | 06 | Convertir PW adhesions → Fast | D | ~1h30 | 02 | FAIT (2026-03-20) — 20 tests, 162 total |
-| 07 | Convertir PW reste → Fast | D | ~45 min | 02 |  |
-| 08 | Convertir PW → PlaywrightLive | D | ~1h30 | 04 |  |
+| 07 | Convertir PW reste → Fast | D | ~45 min | 02 | FAIT (2026-03-21) — 16 tests, 178 total |
+| 08a | PW Live — batch leger (validations, crowds, CSS) | D | ~30 min | 04 | FAIT (2026-03-21) — 12 tests, 14 E2E total |
+| 08b | PW Live — POS paiement + adhesion NFC | D | ~30 min | 08a | FAIT (2026-03-21) — 16 tests, 30 E2E total |
+| 08c | PW Live — federation cross-tenant | D | ~15 min | 08a | FAIT (2026-03-21) — 1 test, 31 E2E total |
 | 09 | Convertir PW Stripe → PlaywrightLive | D | ~2h | 04 |  |
 | 10 | Nettoyage final | E | ~30 min | 01-09 |  |
 
@@ -40,8 +42,10 @@ Chaque fichier est une fiche de session autonome avec :
 ```
 01 ──→ 02 ──→ 03 (API v2)
               ├──→ 05 → 06 → 07 (FastTenantTestCase)
-              └──→ 04 → 08 → 09 (PlaywrightLive)
-                                  └──→ 10 (nettoyage)
+              └──→ 04 → 08a → 08b (POS)
+                         └──→ 08c (cross-tenant)
+                         └──→ 09 (Stripe)
+                                    └──→ 10 (nettoyage)
 ```
 
 Les branches 03, 05-07 et 04/08-09 sont **independantes** apres session 02. On peut les faire dans n'importe quel ordre. La seule contrainte : 04 avant 08-09.
