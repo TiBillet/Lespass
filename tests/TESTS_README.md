@@ -1,5 +1,26 @@
 # Tests — Lespass (TiBillet)
 
+## Prerequis : installer Playwright (E2E uniquement)
+
+Les tests E2E utilisent Playwright Python avec Chromium headless.
+Les navigateurs ne sont pas inclus dans l'image Docker — il faut les installer
+une fois apres chaque rebuild du container :
+
+```bash
+# Installer Chromium pour Playwright dans le container
+docker exec lespass_django poetry run playwright install chromium
+```
+
+Si l'installation echoue avec des erreurs de dependances systeme :
+
+```bash
+# Installer les dependances systeme manquantes puis Chromium
+docker exec lespass_django poetry run playwright install --with-deps chromium
+```
+
+> **Note** : cette etape n'est necessaire que pour les tests E2E (`tests/e2e/`).
+> Les tests pytest DB-only (`tests/pytest/`) n'ont pas besoin de Playwright.
+
 ## Lancer les tests
 
 ```bash
