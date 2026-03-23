@@ -39,18 +39,19 @@ Interface full-screen pensee pour tablettes et ecrans tactiles, avec lecture NFC
 
 ### Types de points de vente
 
-Le champ `PointDeVente.comportement` determine le mode de fonctionnement :
+Le champ `PointDeVente.comportement` determine le mode d'interface (pas le contenu) :
 
 | Type | Code | Comportement |
 |------|------|-------------|
-| **Direct** | `D` | Vente au comptoir classique (bar, restauration) |
-| **Kiosk** | `K` | Libre-service (placeholder) |
-| **Cashless** | `C` | Recharges NFC uniquement |
-| **Adhesion** | `A` | Adhesions/abonnements — charge dynamiquement les produits `Product(categorie_article=ADHESION)` |
+| **Direct** | `D` | Vente au comptoir classique (grille + panier + footer) |
+| **Avance** | `V` | Mode commande restaurant (tables, preparations) — reserve, pas code |
 
-Le type **Adhesion** est special : il n'a pas besoin de produits dans son M2M `products`.
-Il charge automatiquement tous les produits adhesion publies du tenant.
-L'admin peut aussi ajouter des produits manuellement au M2M (ils apparaitront en plus).
+Le **quoi** (ventes, adhesions, billets, recharges) est determine par les articles
+dans le M2M `products` du PV. Un PV peut contenir tous les types d'articles.
+
+> **Historique** : les anciens types ADHESION ('A'), CASHLESS ('C') et KIOSK ('K')
+> ont ete supprimes. La logique est pilotee par l'article (`methode_caisse`), pas le PV.
+> KIOSK sera une app Django separee dans le futur.
 
 ---
 

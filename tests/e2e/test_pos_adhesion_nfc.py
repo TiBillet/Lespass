@@ -6,7 +6,7 @@ Conversion de tests/playwright/tests/laboutik/44-laboutik-adhesion-identificatio
 
 Prérequis / Prerequisites:
 - docker exec lespass_django poetry run python manage.py create_test_pos_data
-- PV Adhesions (comportement='A') existant
+- PV Adhesions (comportement='D', produits adhesion dans M2M) existant
 - Cartes 52BE6543 (anonyme), D74B1B5D (jetable), A49E8E2A (primaire)
 - DEMO=1 dans l'environnement (boutons simulation NFC)
 """
@@ -84,7 +84,7 @@ def _naviguer_et_ajouter_adhesion(page, pos_page):
     """Ouvre le PV Adhesions, clic premier article, gère overlay tarif, clic VALIDER.
     / Opens Adhesions POS, clicks first article, handles rate overlay, clicks VALIDATE.
     """
-    pos_page(page, comportement="A")
+    pos_page(page, "Adhesions")
 
     # Cliquer le premier article d'adhésion / Click first adhesion article
     adhesion_tile = page.locator("#products .article-container").first

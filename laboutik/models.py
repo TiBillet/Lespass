@@ -61,9 +61,11 @@ class LaboutikConfiguration(SingletonModel):
 
 class PointDeVente(models.Model):
     """
-    Un point de vente physique ou virtuel (bar, restaurant, kiosque, etc.).
+    Un point de vente physique ou virtuel (bar, restaurant, etc.).
     Chaque point de vente a ses propres produits et categories.
-    / A physical or virtual point of sale (bar, restaurant, kiosk, etc.).
+    Le contenu est determine par le M2M products, pas par le comportement.
+    / A physical or virtual point of sale (bar, restaurant, etc.).
+    Content is determined by the M2M products, not by comportement.
 
     LOCALISATION : laboutik/models.py
     """
@@ -81,24 +83,22 @@ class PointDeVente(models.Model):
         help_text=_("Icon name (e.g. Bootstrap Icons class)."),
     )
 
-    # Comportement du point de vente
-    # / Point of sale behavior mode
+    # Comportement du point de vente (mode d'interface, pas type de contenu)
+    # Le contenu est determine par les articles dans le M2M products.
+    # / Point of sale behavior mode (interface mode, not content type)
+    # Content is determined by articles in the M2M products.
     DIRECT = 'D'
-    KIOSK = 'K'
-    CASHLESS = 'C'
-    ADHESION = 'A'
+    AVANCE = 'V'
     COMPORTEMENT_CHOICES = [
         (DIRECT, _('Direct')),
-        (KIOSK, _('Kiosk')),
-        (CASHLESS, _('Cashless')),
-        (ADHESION, _('Membership')),
+        (AVANCE, _('Advanced')),
     ]
     comportement = models.CharField(
         max_length=1, choices=COMPORTEMENT_CHOICES, default=DIRECT,
         verbose_name=_("Behavior"),
         help_text=_(
-            "Operating mode: Direct (standard sale), Kiosk (self-service), "
-            "Cashless (NFC only), Membership (subscriptions and memberships)."
+            "Operating mode: Direct (standard counter sale) "
+            "or Advanced (restaurant order mode)."
         ),
     )
 

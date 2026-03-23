@@ -150,9 +150,9 @@ FLUX :
     data-testid="paiement-btn-cheque" />
   {% endif %}
 
-  <!-- "OFFRIR" en mode gerant uniquement mais pas pour le point de ventes "CASHLESS" -->
-  <!-- "GIFT" manager mode only, not for "CASHLESS" POS -->
-  {% if mode_gerant and comportement != 'C' %}
+  <!-- "OFFRIR" en mode gerant uniquement -->
+  <!-- "GIFT" manager mode only -->
+  {% if mode_gerant %}
   <c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" bg="--warning00" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')"

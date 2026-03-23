@@ -179,8 +179,8 @@ PointDeVente
 ├── icon (CharField, nullable)
 ├── comportement (CharField choices)
 │   D = Direct (interface POS standard : grille + panier + footer)
-│   K = Kiosk (libre-service, template différent)
-│   ⚠️ A (Adhesion) et C (Cashless) supprimés par la refonte typage (section 15)
+│   V = Avancé / Advanced (mode commande restaurant — réservé, pas codé)
+│   ⚠️ A (Adhesion), C (Cashless) et K (Kiosk) supprimés par la refonte typage (section 15)
 │   Le contenu du PV est déterminé par les articles (M2M products), pas le comportement.
 ├── service_direct (BooleanField, default=True)
 ├── afficher_les_prix (BooleanField, default=True)
@@ -1630,7 +1630,7 @@ pilotées par l'**article** (`Product.methode_caisse` et `categorie_article`) :
 | Séparation vente/adhésion en NFC | `categorie_article == ADHESION` par article | ✅ |
 
 Le `comportement` du PV ne fait que 2 choses concrètes :
-1. **KIOSK** → template différent (légitime, c'est un mode d'interface)
+1. **KIOSK** → template différent (sera une app Django séparée — supprimé de laboutik)
 2. **ADHESION** → charge dynamiquement les Products adhésion (devrait être géré par le M2M)
 
 **Problème** : on ne peut pas créer un PV "Accueil" qui vend des goodies (VT) + recharges (RE)
@@ -1643,8 +1643,8 @@ Le `comportement` du PV ne fait que 2 choses concrètes :
 ```
 comportement :
   D = Direct (interface POS standard : grille + panier + footer)
-  K = Kiosk (libre-service, pas de panier)
-  (ADHESION et BILLETTERIE supprimés comme types de PV)
+  V = Avancé / Advanced (mode commande restaurant — réservé, pas codé tout de suite)
+  (ADHESION, CASHLESS et KIOSK supprimés — KIOSK sera une app Django séparée)
 ```
 
 Le **quoi** (ventes, adhésions, billets, recharges) est déterminé par les articles
@@ -1731,10 +1731,12 @@ Le bouton "Saisir email/nom" n'apparaît que si le panier n'a PAS de recharges
 
 #### Ce qui change
 
-##### 1. Suppression de `ADHESION` et `BILLETTERIE` comme comportement
+##### 1. Suppression de `ADHESION`, `CASHLESS` et `KIOSK` comme comportement
 
-Migration : supprimer les choix `'A'` et `'T'` de `COMPORTEMENT_CHOICES`.
-Les PV existants avec `comportement='A'` passent à `'D'` (Direct).
+Migration : supprimer les choix `'A'`, `'C'` et `'K'` de `COMPORTEMENT_CHOICES`.
+Les PV existants avec `comportement` autre que `'D'` passent à `'D'` (Direct).
+Ajout de `AVANCE = 'V'` (mode commande restaurant — réservé, pas codé tout de suite).
+KIOSK sera une app Django séparée dans le futur.
 
 ##### 2. Les produits adhésion rejoignent le M2M standard
 
@@ -1783,17 +1785,20 @@ Choix moyen → payer()
 **L'identification est mutualisée** : si le client est identifié par NFC pour l'adhésion,
 le même user sert pour les billets. Pas besoin de demander 2 fois.
 
-##### 6. `CASHLESS` comme comportement → aussi supprimé
+##### 6. `CASHLESS` et `KIOSK` comme comportement → aussi supprimés
 
 Le mode "cashless uniquement" est géré par les flags du PV :
 `accepte_especes=False, accepte_carte_bancaire=False, accepte_cheque=False`.
 Pas besoin d'un comportement dédié.
 
+KIOSK sera une app Django séparée dans le futur (pas dans laboutik).
+Le template `kiosk.html` (stub vide) et le code conditionnel dans views.py sont supprimés.
+
 **Comportements restants** :
 ```python
 COMPORTEMENT_CHOICES = [
-    (DIRECT, _('Direct')),   # Interface POS standard
-    (KIOSK, _('Kiosk')),     # Libre-service (template différent)
+    (DIRECT, _('Direct')),     # Interface POS standard (service direct)
+    (AVANCE, _('Advanced')),   # Mode commande restaurant (réservé, pas codé)
 ]
 ```
 
@@ -2705,7 +2710,7 @@ Affiché après le choix du moyen de paiement (avant de déclencher le paiement 
 
 | Fichier | Action | Contenu |
 |---------|--------|---------|
-| `laboutik/models.py` | Modifier | Migration refonte typage (suppr. ADHESION/CASHLESS, garder DIRECT/KIOSK) |
+| `laboutik/models.py` | Modifier | Migration refonte typage (suppr. ADHESION/CASHLESS/KIOSK, garder DIRECT + AVANCE 'V') |
 | `laboutik/views.py` | Modifier | dispatch `point_de_vente()`, `_construire_donnees_evenements()`, `jauge_event()`, `grille_billetterie()`, `_creer_billets_depuis_panier()`, `imprimer_billet()` stub, modif `payer()` |
 | `laboutik/templates/cotton/billet_tuile.html` | Créer | Composant Cotton tuile tarif |
 | `laboutik/templates/cotton/billet_sidebar_item.html` | Créer | Composant Cotton item sidebar |

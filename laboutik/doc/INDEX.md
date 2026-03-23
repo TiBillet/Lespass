@@ -82,7 +82,7 @@ Nettoyage fondation. Pas de changement de logique. Pas de risque pour les tests.
 - [ ] **Sécurité** : validation prix libre côté serveur + fix XSS `textContent` dans tarif.js
 - [ ] **Accessibilité** : `aria-live` sur `#messages` et `#addition-list`
 - [ ] **Extraction CSS** : 2171 lignes inline → fichiers `laboutik/static/css/` séparés
-- [ ] **Footer Cotton** : extraire `<c-footer>` des 3 views (common_user_interface, kiosk, tables)
+- [x] **Footer Cotton** : extraire `<c-footer>` de common_user_interface (fait — tables et kiosk inchangés)
 - [ ] **Run tests** : Playwright complet + pytest — valider que rien ne casse
 
 JS non touché (à discuter avec Nicolas). Backend non touché.
@@ -94,9 +94,10 @@ Le typage est sur l'article (`methode_caisse`), pas sur le PV. Les articles bill
 Tuile paysage (2 colonnes CSS Grid) + jauge event.
 
 **Refonte typage (incluse)** :
-- [ ] Migration : supprimer ADHESION/CASHLESS de `comportement` → garder DIRECT + KIOSK
-- [ ] PV existants `comportement='A'` → `'D'` + produits adhésion dans M2M products
-- [ ] Supprimer le code `if pv.comportement == ADHESION: charger dynamiquement...`
+- [ ] Migration : supprimer ADHESION/CASHLESS/KIOSK de `comportement` → garder DIRECT + AVANCE ('V')
+- [ ] PV existants `comportement` != 'D' → `'D'` + produits adhésion dans M2M products
+- [ ] Supprimer le code `if pv.comportement == ADHESION` et `== KIOSK` dans views.py
+- [ ] Supprimer template `kiosk.html` (stub vide — KIOSK sera une app séparée)
 - [ ] Adapter tests Playwright (44-adhesion, fixtures)
 
 **Flow identification unifié** (1 panier = 1 client) :

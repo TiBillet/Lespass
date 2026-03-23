@@ -471,7 +471,7 @@ def pos_page(browser, login_as_admin, django_shell, ensure_pos_data):
     / Factory: opens the POS for a given point of sale.
 
     Usage : pos = pos_page(page, "Bar")
-    Usage : pos = pos_page(page, comportement="A")  # PV Adhesions
+    Usage : pos = pos_page(page, "Adhesions")
     Retourne la page Playwright prête sur la caisse.
     """
     demo_tag_id = os.environ.get("DEMO_TAGID_CM", "A49E8E2A")

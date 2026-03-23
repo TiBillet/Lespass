@@ -20,9 +20,13 @@ le type d'article dans le panier, pas le type du PV.
 
 ### Décision
 
-`comportement` ne garde que DIRECT ('D') et KIOSK ('K').
-ADHESION ('A') et CASHLESS ('C') sont supprimés.
+`comportement` ne garde que DIRECT ('D') et AVANCE ('V').
+ADHESION ('A'), CASHLESS ('C') et KIOSK ('K') sont tous supprimés.
 Les produits adhésion rejoignent le M2M `products` du PV.
+
+- **DIRECT** ('D') : vente standard au comptoir (service direct)
+- **AVANCE** ('V') : mode commande restaurant (tables, préparations) — réservé, pas codé tout de suite
+- **KIOSK** : sera une app Django séparée dans le futur (pas dans laboutik)
 
 ## TÂCHE 1 — Lire le code existant
 
@@ -38,14 +42,14 @@ Lis ces fichiers pour comprendre ce qui utilise `comportement` :
 
 Crée `laboutik/migrations/0003_refonte_typage.py` :
 
-1. **Data migration** : tous les PV avec `comportement='A'` ou `'C'` passent à `'D'`
+1. **Data migration** : tous les PV avec `comportement='A'`, `'C'` ou `'K'` passent à `'D'`
    ```python
    def forwards(apps, schema_editor):
        PointDeVente = apps.get_model('laboutik', 'PointDeVente')
-       PointDeVente.objects.filter(comportement__in=['A', 'C']).update(comportement='D')
+       PointDeVente.objects.filter(comportement__in=['A', 'C', 'K']).update(comportement='D')
    ```
 
-2. **AlterField** : réduire les choix à `[('D', 'Direct'), ('K', 'Kiosk')]`
+2. **AlterField** : réduire les choix à `[('D', 'Direct'), ('V', 'Advanced')]`
 
 3. Applique la migration :
    ```bash
@@ -61,12 +65,20 @@ Crée `laboutik/migrations/0003_refonte_typage.py` :
 2. Dans `_extraire_articles_du_panier()` (~ligne 1088-1100) : même chose,
    supprimer le bloc conditionnel ADHESION.
 
-3. Supprimer les constantes `ADHESION = 'A'` et `CASHLESS = 'C'` du modèle
-   (ne pas casser le code qui référence `PointDeVente.DIRECT` ou `PointDeVente.KIOSK`).
+3. Supprimer les constantes `ADHESION = 'A'`, `CASHLESS = 'C'` et `KIOSK = 'K'` du modèle.
+   Ajouter `AVANCE = 'V'`. Seules constantes restantes : `DIRECT` et `AVANCE`.
 
-4. Vérifier qu'aucun autre fichier ne référence les anciens types :
+4. Supprimer le code KIOSK dans views.py : le `if pv.comportement == PointDeVente.KIOSK:`
+   qui sélectionne le template `kiosk.html` (~ligne 615-618).
+
+5. Supprimer le template `laboutik/templates/laboutik/views/kiosk.html` (stub vide).
+
+6. Supprimer la référence `comportement != 'C'` dans `hx_display_type_payment.html` (~ligne 155).
+
+7. Vérifier qu'aucun autre fichier ne référence les anciens types :
    ```bash
-   grep -rn "ADHESION\|CASHLESS\|comportement.*'A'\|comportement.*'C'" laboutik/ --include="*.py"
+   grep -rn "ADHESION\|CASHLESS\|KIOSK\|comportement.*'A'\|comportement.*'C'\|comportement.*'K'" laboutik/ --include="*.py"
+   grep -rn "KIOSK\|kiosk" laboutik/templates/ --include="*.html"
    ```
 
 ## TÂCHE 4 — Adapter create_test_pos_data
@@ -130,8 +142,10 @@ docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 
 - [ ] Migration 0003 appliquée sans erreur
 - [ ] `manage.py check` : 0 issues
-- [ ] Plus de `comportement='A'` ni `'C'` dans la DB
-- [ ] Plus de code `if comportement == ADHESION` dans views.py
+- [ ] Plus de `comportement='A'`, `'C'` ni `'K'` dans la DB
+- [ ] Plus de code `if comportement == ADHESION` ni `== KIOSK` dans views.py
+- [ ] Template `kiosk.html` supprimé
+- [ ] Constante `AVANCE = 'V'` ajoutée au modèle
 - [ ] `create_test_pos_data` crée le PV adhésion avec comportement='D' + M2M products
 - [ ] TOUS les tests pytest passent
 - [ ] TOUS les tests E2E passent (y compris test_pos_adhesion_nfc)

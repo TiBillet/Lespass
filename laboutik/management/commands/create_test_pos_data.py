@@ -431,11 +431,13 @@ class Command(BaseCommand):
                 },
             )
 
+            # PV Cashless : mode cashless-only via les flags (pas de comportement dedie)
+            # / Cashless POS: cashless-only mode via flags (no dedicated comportement)
             pdv_cashless, _ = PointDeVente.objects.update_or_create(
                 name="Cashless",
                 defaults={
                     "icon": "fa-wallet",
-                    "comportement": PointDeVente.CASHLESS,
+                    "comportement": PointDeVente.DIRECT,
                     "service_direct": True,
                     "afficher_les_prix": True,
                     "accepte_especes": False,
@@ -446,15 +448,13 @@ class Command(BaseCommand):
                 },
             )
 
-            # PV Adhesion : affiche automatiquement les produits adhesion publies.
-            # Pas de M2M a configurer — le type ADHESION charge les produits dynamiquement.
-            # / Membership POS: auto-displays published membership products.
-            # No M2M needed — ADHESION type loads products dynamically.
+            # PV Adhesion : les produits adhesion sont dans le M2M products (comme les autres).
+            # / Membership POS: membership products are in the M2M products (like everything else).
             pdv_adhesion, _ = PointDeVente.objects.update_or_create(
                 name="Adhesions",
                 defaults={
                     "icon": "fa-id-card",
-                    "comportement": PointDeVente.ADHESION,
+                    "comportement": PointDeVente.DIRECT,
                     "service_direct": True,
                     "afficher_les_prix": True,
                     "accepte_especes": True,
@@ -464,6 +464,12 @@ class Command(BaseCommand):
                     "poid_liste": 4,
                 },
             )
+            # Ajouter les produits adhesion publies au M2M du PV
+            # / Add published membership products to the POS M2M
+            produits_adhesion = Product.objects.filter(
+                categorie_article=Product.ADHESION, publish=True
+            )
+            pdv_adhesion.products.add(*produits_adhesion)
 
             # Associe les produits aux points de vente
             # / Link products to points of sale
@@ -507,7 +513,7 @@ class Command(BaseCommand):
                 f"{pdv_restaurant} ({restaurant_products.count()} produits), "
                 f"{pdv_terrasse} ({terrasse_products.count()} produits), "
                 f"{pdv_cashless} ({cashless_products.count()} produits), "
-                f"{pdv_adhesion} (adhesions dynamiques)"
+                f"{pdv_adhesion} ({pdv_adhesion.products.count()} produits)"
             )
 
             # --- Cartes primaires (uniquement en mode TEST) ---

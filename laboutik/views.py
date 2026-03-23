@@ -156,13 +156,7 @@ def _construire_donnees_articles(point_de_vente_instance):
     Each product must have at least one published EUR price (asset=null).
     Products without a price are skipped.
 
-    Pour les PV de type ADHESION, les produits adhesion publiés sont inclus
-    dynamiquement (pas besoin de les ajouter au M2M du PV).
-    For ADHESION-typed POS, published membership products are included
-    dynamically (no need to add them to the POS M2M).
     """
-    from itertools import chain
-
     # Prefetch filtré : seuls les prix publiés en euros, triés par ordre d'affichage.
     # Le .filter() dans la boucle utiliserait une nouvelle requête par produit (N+1).
     # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
@@ -173,32 +167,17 @@ def _construire_donnees_articles(point_de_vente_instance):
         to_attr='prix_euros',
     )
 
-    # Produits du M2M du PV (articles ajoutés manuellement par l'admin)
-    # Products from the POS M2M (manually added by admin)
-    produits_manuels = (
+    # Produits du M2M du PV : articles POS (methode_caisse) OU adhesions (categorie_article)
+    # Les adhesions n'ont pas forcement de methode_caisse, elles sont identifiees par categorie_article.
+    # / POS M2M products: POS articles (methode_caisse) OR memberships (categorie_article)
+    # Memberships don't necessarily have methode_caisse, identified by categorie_article.
+    produits = (
         point_de_vente_instance.products
-        .filter(methode_caisse__isnull=False)
+        .filter(Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION))
         .select_related('categorie_pos')
         .prefetch_related(prix_euros_prefetch)
+        .order_by('poids', 'name')
     )
-
-    # Pour les PV de type ADHESION : ajouter dynamiquement les produits adhesion publiés
-    # For ADHESION-typed POS: dynamically add published membership products
-    if point_de_vente_instance.comportement == PointDeVente.ADHESION:
-        produits_adhesion = (
-            Product.objects
-            .filter(categorie_article=Product.ADHESION, publish=True)
-            .select_related('categorie_pos')
-            .prefetch_related(prix_euros_prefetch)
-        )
-        # Fusionner sans doublons (par uuid). Les produits manuels sont prioritaires.
-        # Merge without duplicates (by uuid). Manual products take priority.
-        produits_par_uuid = {}
-        for p in chain(produits_adhesion, produits_manuels):
-            produits_par_uuid[str(p.uuid)] = p
-        produits = sorted(produits_par_uuid.values(), key=lambda p: (p.poids or 0, p.name))
-    else:
-        produits = produits_manuels.order_by('poids', 'name')
 
     articles = []
     for product in produits:
@@ -611,11 +590,6 @@ class CaisseViewSet(viewsets.ViewSet):
                 nom_table = str(id_table)
             titre_page = _("Commande table ") + nom_table
             template_name = "laboutik/views/common_user_interface.html"
-
-        # Mode kiosk (borne libre-service) → template spécifique
-        # Kiosk mode (self-service terminal) → specific template
-        if pv.comportement == PointDeVente.KIOSK:
-            template_name = "laboutik/views/kiosk.html"
 
         # --- Construire le dict PV au format attendu par les templates ---
         # --- Build POS dict in the format expected by templates ---
@@ -1054,11 +1028,6 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
     - "repid-<product_uuid>--<price_uuid>" (multi-rate articles)
     - "custom-<product_uuid>--<price_uuid>" (free price amount in cents)
 
-    Pour les PV ADHESION, les produits adhesion publiés sont acceptés
-    même s'ils ne sont pas dans le M2M du PV.
-    For ADHESION POS, published membership products are accepted
-    even if they are not in the POS M2M.
-
     :param donnees_post: QueryDict ou dict des données POST
     :param point_de_vente: instance PointDeVente (pour filtrer les produits autorisés)
     :return: liste de dicts {'product', 'price', 'quantite', 'prix_centimes', 'custom_amount_centimes'}
@@ -1084,19 +1053,6 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         .filter(Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION))
         .prefetch_related(prix_euros_prefetch)
     }
-
-    # Pour les PV ADHESION : ajouter aussi les produits adhesion publiés du tenant (dynamique)
-    # Meme s'ils ne sont pas dans le M2M du PV.
-    # For ADHESION POS: also add published membership products from the tenant (dynamic).
-    # Even if they are not in the POS M2M.
-    if point_de_vente.comportement == PointDeVente.ADHESION:
-        produits_adhesion = (
-            Product.objects
-            .filter(categorie_article=Product.ADHESION, publish=True)
-            .prefetch_related(prix_euros_prefetch)
-        )
-        for p in produits_adhesion:
-            produits_du_pv.setdefault(str(p.uuid), p)
 
     articles_panier = []
     for article_data in articles_extraits:
