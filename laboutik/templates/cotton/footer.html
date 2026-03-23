@@ -1,0 +1,100 @@
+{% load static i18n %}
+<!--
+COMPOSANT FOOTER — Barre d'actions fixe en bas de l'interface caisse
+/ Footer component — Fixed action bar at the bottom of the POS interface
+
+LOCALISATION : laboutik/templates/cotton/footer.html
+
+Contient 3 boutons :
+1. RESET : Annule la commande en cours (événement resetArticles)
+2. CHECK CARTE : Vérifie le solde NFC/cashless (HTMX GET)
+3. VALIDER : Confirme la vente et affiche les moyens de paiement
+
+/ Contains 3 buttons:
+1. RESET: Cancel the current order (resetArticles event)
+2. CHECK CARD: Check NFC/cashless balance (HTMX GET)
+3. VALIDATE: Confirm the sale and display payment methods
+
+Les événements click sont attachés par la vue parente (common_user_interface.html).
+/ Click events are attached by the parent view (common_user_interface.html).
+-->
+<footer>
+	<!--
+	BOUTON RESET - ANNULER LA COMMANDE
+	Action : Réinitialise toute la commande en cours
+	- Vide la liste d'addition
+	- Remet les quantités d'articles à zéro
+	- Déverrouille les groupes d'articles
+	- Réinitialise le total à zéro
+	Déclencheur : Clic sur #bt-reset
+	Événement émis : 'resetArticles' → eventsOrganizer → additionReset + articlesReset
+	-->
+	<div id="bt-reset" class="BF-ligne footer-bt fond-retour test-reset" data-testid="footer-reset">
+		<i class="fas fa-trash md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "RESET" %}</div>
+		</div>
+	</div>
+	<!--
+	BOUTON CHECK CARTE — VERIFIER LE SOLDE NFC/CASHLESS
+	/ Check card button — verify NFC/cashless balance
+
+	Utilise HTMX pour charger la vue de verification de carte.
+	Endpoint : laboutik-paiement-verifier_carte
+	Cible : Injecte le contenu dans #messages (innerHTML, pas outerHTML).
+	/ Uses HTMX to load the card check view.
+	Target: injects content into #messages (innerHTML, not outerHTML).
+
+	IMPORTANT — innerHTML et non outerHTML :
+	L'element #messages porte un listener 'tarifSelection' (tarif.js ligne 230)
+	attache au DOMContentLoaded. Si on utilise outerHTML, l'element DOM est
+	remplace par un nouveau et le listener est perdu.
+	Consequence : apres un check carte, les articles multi-tarif ne repondent plus.
+	Avec innerHTML, l'element #messages d'origine est conserve avec ses listeners.
+	/ IMPORTANT — innerHTML not outerHTML:
+	The #messages element carries a 'tarifSelection' listener (tarif.js line 230)
+	attached on DOMContentLoaded. outerHTML replaces the DOM element and loses
+	the listener. With innerHTML, the original #messages element is preserved.
+	-->
+	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" data-testid="footer-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
+		hx-target="#messages" hx-swap="innerHTML">
+		<i class="fas fa-money-check-alt md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "CHECK" %}</div>
+			<div>{% translate "CARTE" %}</div>
+		</div>
+	</div>
+
+	<!--
+	BOUTON VALIDER - CONFIRMER LA VENTE
+	Action : Affiche les options de paiement pour finaliser la vente
+
+	FLUX COMPLET DU CLIC SUR VALIDER :
+	----------------------------
+	1. common_user_interface.html:displayPaymentTypes() est appelée
+	2. Envoie événement 'additionDisplayPaymentTypes' → #event-organizer
+	3. tibilletUtils.js:eventsOrganizer() reçoit l'événement
+	4. Route vers addition.js:additionDisplayPaymentTypes()
+	5. Vérifie s'il y a des articles dans l'addition (compte les inputs repid-*)
+	   - Si aucun article : affiche #message-no-article (voir partial/no_articles.html)
+	   - Si articles présents : déclenche le formulaire HTMX
+	6. Le formulaire #addition-form a déjà hx-post (défini dans addition.html)
+	7. Déclenche le formulaire → POST vers /laboutik/paiement/moyens_paiement/
+	8. Le serveur répond avec partial/hx_display_type_payment.html
+	9. Affiche les boutons de paiement : CASHLESS, ESPÈCE, CB, CHÈQUE, OFFRIR
+
+	Le total affiché est mis à jour en temps réel via l'événement 'updateBtValider'
+	déclenché lors de chaque modification de l'addition (additionTotalChange)
+	-->
+	<div id="bt-valider" class="BF-ligne footer-bt fond-ok" data-testid="footer-valider">
+		<i class="fas fa-check-circle md4px"></i>
+		<div class="BF-col-deb footer-bt-text mg4px">
+			<div>{% translate "VALIDER" %}</div>
+			<div class="BF-ligne">
+				<!-- Affichage du total en temps réel (mis à jour par updateBtValider) -->
+				<div id="bt-valider-total" class="md4px">0.00</div>
+				<div> {{ currency_data.symbol }}</div>
+			</div>
+		</div>
+	</div>
+</footer>

@@ -1,0 +1,869 @@
+/* ============================================================
+   OVERLAY.CSS — Styles pour les couches superposees #messages et #confirm
+   / Styles for overlay layers #messages and #confirm
+
+   LOCALISATION : laboutik/static/css/overlay.css
+
+   #messages (layer 1) : check carte, types de paiement, adhesion, cloture.
+   #confirm  (layer 2) : confirmation NFC, lecture carte paiement.
+   ============================================================ */
+
+/* --- Positionnement noyau des overlays --- */
+/* / Core overlay positioning */
+#messages, #confirm {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 800;
+	color: var(--blanc01);
+	font-size: 1.5rem;
+	text-align: center;
+}
+
+/* Overlay vide = invisible. Quand HTMX injecte du contenu,
+   :empty ne matche plus → l'overlay apparait.
+   IMPORTANT : <div id="messages"></div> doit rester sur une seule ligne
+   (pas d'espace/saut de ligne entre les balises) sinon :empty ne matche plus.
+   / Empty overlay = invisible. When HTMX injects content,
+   :empty no longer matches → overlay appears.
+   IMPORTANT: keep the div on a single line with no whitespace. */
+#messages:empty, #confirm:empty {
+	display: none;
+}
+
+/* L'enfant direct de #messages doit remplir tout l'espace du parent
+   pour que le flex layout fonctionne correctement.
+   Les partials injectes via innerHTML ne sont plus l'element #messages
+   lui-meme mais des enfants — ils ont besoin de width/height 100%.
+   / The direct child of #messages must fill the parent's space
+   so the flex layout works correctly. Partials injected via innerHTML
+   are children, not the element itself — they need width/height 100%. */
+#messages > :first-child {
+	width: 100%;
+	height: 100%;
+}
+
+
+/* ============================================================
+   ANIMATIONS COMMUNES
+   / Common animations
+   ============================================================ */
+
+/* Animation fade-up commune aux overlays adhesion
+   (remplace choose-id-fade-up, adhesion-fade-up, adhesion-form-fade-up)
+   / Common fade-up animation for membership overlays
+   (replaces choose-id-fade-up, adhesion-fade-up, adhesion-form-fade-up) */
+@keyframes overlay-fade-up {
+	from {
+		transform: translateY(8px);
+		opacity: 0;
+	}
+}
+
+/* Icone succes — scale-in (hx_return_payment_success)
+   / Success icon — scale-in */
+@keyframes scale-in {
+	from { transform: scale(0); opacity: 0; }
+	to { transform: scale(1); opacity: 1; }
+}
+
+/* Check adhesion — scale-in avec overshoot (hx_adhesion_confirm)
+   / Membership check — scale-in with overshoot */
+@keyframes adhesion-scale-in {
+	0% { transform: scale(0); opacity: 0; }
+	70% { transform: scale(1.15); }
+	100% { transform: scale(1); opacity: 1; }
+}
+
+
+/* ============================================================
+   #message-no-article (partial/no_articles.html)
+   ============================================================ */
+#message-no-article {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 999;
+	background-color: var(--bleu09);
+	color: var(--blanc01);
+	font-size: 1.5rem;
+	text-align: center;
+}
+
+
+/* ============================================================
+   #message-nfc (hx_read_nfc + hx_read_nfc_adhesion)
+   ============================================================ */
+#message-nfc {
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	font-weight: bold;
+	white-space: pre-line;
+	text-align: center;
+}
+
+
+/* ============================================================
+   hx_display_type_payment.html — choix du moyen de paiement
+   / Payment method selection
+   ============================================================ */
+.message-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+}
+
+.paiement-bt-total {
+	font-size: 1.5rem;
+}
+
+
+/* ============================================================
+   hx_funds_insufficient.html — fonds insuffisants
+   / Insufficient funds
+   ============================================================ */
+.fi-title1 {
+	font-size: 2.5rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+.fi-msg1 {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+
+/* ============================================================
+   hx_check_card.html — attente lecture carte
+   / Card check waiting screen
+   ============================================================ */
+.check-carte-container {
+	width: 100%;
+	height: 100%;
+	color: var(--white);
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+}
+
+
+/* ============================================================
+   hx_confirm_payment.html — confirmation de paiement
+   / Payment confirmation
+   ============================================================ */
+#confirm-action-container {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-around;
+	align-items: center;
+	margin-top: 2rem;
+}
+
+.confirm-total {
+	margin-bottom: 1rem;
+}
+
+.info-sum-given {
+	font-size: 1.5rem;
+	font-weight: bold;
+}
+
+.confirm-input-wrapper {
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 1rem;
+}
+
+.addition-fractionnee-input {
+	height: 80px;
+	width: 200px;
+	max-width: 60%;
+	font-size: 2rem;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+}
+
+.confirm-currency {
+	font-size: 2rem;
+	font-weight: bold;
+}
+
+#bt-valider-layer2 {
+	margin-left: 8px;
+}
+
+#given-sum-msg-erreur {
+	margin-top: 4px;
+	width: 100%;
+	height: 24px;
+	color: var(--warning);
+}
+
+/* Sur mobile : boutons empiles verticalement / Mobile: stack buttons vertically */
+@media (max-width: 600px) {
+	#confirm-action-container {
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	#bt-valider-layer2 {
+		margin-left: 0;
+	}
+}
+
+
+/* ============================================================
+   Styles partages paiement (hx_return_payment_success + hx_cloture_rapport)
+   / Shared payment styles
+   ============================================================ */
+.payment-title1 {
+	font-size: 2.5rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+.payment-detail {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-align: center;
+	margin-top: 0.5rem;
+}
+
+.payment-msg1 {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+.payment-msg2 {
+	font-size: 1.2rem;
+	text-align: center;
+}
+
+.payment-msg-discret {
+	font-size: 1.2rem;
+	text-align: center;
+	opacity: 0.85;
+	margin-top: 0.5rem;
+}
+
+
+/* ============================================================
+   hx_return_payment_success.html — succes de paiement
+   / Payment success
+   ============================================================ */
+.success-icon {
+	font-size: 4rem;
+	animation: scale-in 300ms ease both;
+}
+
+/* Zone monnaie a rendre — fond rouge + bordure doree pour attirer l'attention
+   / Change to give back — red background + gold border to draw attention */
+.give-back-box {
+	font-size: 2.5rem;
+	font-weight: bold;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+	padding: 1rem 2rem;
+	margin-top: 0.5rem;
+	background-color: var(--rouge07);
+	border: 3px solid var(--warning00);
+	border-radius: 12px;
+}
+
+.give-back-box i {
+	margin-right: 0.5rem;
+}
+
+
+/* ============================================================
+   hx_cloture_rapport.html — rapport de cloture
+   / Closure report
+   ============================================================ */
+.cloture-section {
+	margin: 1rem 0;
+}
+
+.btn-export {
+	display: inline-block;
+	padding: 0.5rem 1.2rem;
+	background-color: rgba(255,255,255,0.2);
+	color: var(--blanc01, #fff);
+	border: 1px solid rgba(255,255,255,0.5);
+	border-radius: 6px;
+	font-size: 1.1rem;
+	text-decoration: none;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.btn-export:hover {
+	background-color: rgba(255,255,255,0.35);
+}
+
+
+/* ============================================================
+   hx_adhesion_choose_id.html — choix du mode d'identification
+   / Identification method selection
+   ============================================================ */
+.choose-id-stagger {
+	animation: overlay-fade-up 0.4s ease both;
+	animation-delay: calc(80ms * var(--ordre, 0));
+}
+
+.choose-id-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+	margin-bottom: 1.5rem;
+	text-wrap: balance;
+}
+
+/* Boutons avec box-shadow au lieu de border (regle UI)
+   / Buttons with box-shadow instead of border (UI rule) */
+.choose-id-btn {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	width: 90%;
+	max-width: 400px;
+	margin: 0 auto;
+	padding: 16px 24px;
+	min-height: 56px;
+	background-color: rgba(255, 255, 255, 0.1);
+	border: none;
+	border-radius: 16px;
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.15),
+		0 1px 2px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px 0 rgba(0, 0, 0, 0.06);
+	color: var(--blanc01);
+	font-size: 1.2rem;
+	font-family: "Luciole-regular", sans-serif;
+	cursor: pointer;
+	transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.choose-id-btn:hover,
+.choose-id-btn:focus-visible {
+	background-color: rgba(255, 255, 255, 0.18);
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.3),
+		0 1px 2px -1px rgba(0, 0, 0, 0.12),
+		0 2px 6px 0 rgba(0, 0, 0, 0.08);
+}
+
+.choose-id-btn:active {
+	transform: scale(0.98);
+}
+
+.choose-id-icon {
+	font-size: 1.5rem;
+	opacity: 0.85;
+}
+
+.choose-id-separator {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 60%;
+	max-width: 300px;
+	margin: 1rem auto;
+	opacity: 0.5;
+}
+
+.choose-id-separator-line {
+	flex: 1;
+	height: 1px;
+	background-color: var(--blanc01);
+}
+
+.choose-id-separator-text {
+	font-size: 1rem;
+}
+
+
+/* ============================================================
+   hx_adhesion_confirm.html — confirmation adhesion
+   / Membership confirmation
+   ============================================================ */
+.adhesion-stagger {
+	animation: overlay-fade-up 0.4s ease both;
+	animation-delay: calc(100ms * var(--ordre, 0));
+}
+
+.adhesion-confirm-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 1.5rem;
+}
+
+.adhesion-confirm-check {
+	font-size: 3rem;
+	color: var(--vert01, #00e676);
+	animation: adhesion-scale-in 0.3s ease-out 0.15s both;
+}
+
+.adhesion-confirm-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-wrap: balance;
+}
+
+/* Carte resume (ombres, pas de bordure) / Summary card (shadows, no border) */
+.adhesion-confirm-card {
+	width: 90%;
+	max-width: 380px;
+	margin: 0 auto 1.5rem;
+	padding: 20px 24px;
+	background-color: rgba(255, 255, 255, 0.06);
+	border-radius: 16px;
+	box-shadow:
+		0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 1px 3px rgba(0, 0, 0, 0.12),
+		0 4px 12px rgba(0, 0, 0, 0.08),
+		0 8px 24px rgba(0, 0, 0, 0.06);
+	text-align: left;
+}
+
+.adhesion-confirm-email {
+	font-size: 1.1rem;
+	margin-bottom: 4px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.adhesion-confirm-name {
+	font-size: 1.3rem;
+	font-weight: bold;
+	margin-bottom: 8px;
+	margin-left: 28px;
+}
+
+.adhesion-confirm-solde {
+	font-size: 1rem;
+	opacity: 0.8;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Actions : CONFIRMER plus proéminent / Actions: CONFIRM button more prominent */
+.adhesion-confirm-actions {
+	display: flex;
+	flex-direction: row;
+	justify-content: space-around;
+	align-items: center;
+	margin-top: 1rem;
+}
+
+#bt-confirmer-adhesion {
+	margin-left: 8px;
+	min-height: 70px;
+	min-width: 200px;
+	font-size: 1.2rem;
+}
+
+@media (max-width: 600px) {
+	.adhesion-confirm-actions {
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	#bt-confirmer-adhesion {
+		margin-left: 0;
+	}
+}
+
+
+/* ============================================================
+   hx_adhesion_form.html — formulaire d'identification membre
+   / Member identification form
+   ============================================================ */
+.adhesion-form-stagger {
+	animation: overlay-fade-up 0.4s ease both;
+	animation-delay: calc(100ms * var(--ordre, 0));
+}
+
+.adhesion-form-title {
+	font-size: 1.5rem;
+	font-weight: bold;
+	margin-bottom: 1.5rem;
+	text-wrap: balance;
+}
+
+.adhesion-form-container {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 0 16px;
+	max-width: 420px;
+	margin: 0 auto 1rem;
+	width: 100%;
+}
+
+.adhesion-form-row {
+	display: flex;
+	gap: 8px;
+}
+
+/* Champ avec label flottant / Floating label field */
+.adhesion-field {
+	position: relative;
+	width: 100%;
+}
+
+.adhesion-field-half {
+	width: 50%;
+}
+
+.adhesion-input {
+	width: 100%;
+	height: 56px;
+	padding: 20px 14px 6px;
+	font-size: 1.1rem;
+	font-family: "Luciole-regular", sans-serif;
+	border: 2px solid rgba(255, 255, 255, 0.25);
+	border-radius: 12px;
+	background-color: rgba(255, 255, 255, 0.08);
+	color: #fff;
+	transition: border-color 0.2s ease;
+	box-sizing: border-box;
+}
+
+.adhesion-input::placeholder {
+	color: transparent;
+}
+
+.adhesion-label {
+	position: absolute;
+	left: 14px;
+	top: 50%;
+	transform: translateY(-50%);
+	font-size: 1rem;
+	color: rgba(255, 255, 255, 0.5);
+	pointer-events: none;
+	transition: all 0.2s ease;
+	font-family: "Luciole-regular", sans-serif;
+}
+
+/* Label flottant : monte quand l'input a du contenu ou est focus
+   / Floating label: moves up when input has content or is focused */
+.adhesion-input:focus + .adhesion-label,
+.adhesion-input:not(:placeholder-shown) + .adhesion-label {
+	top: 10px;
+	transform: translateY(0);
+	font-size: 0.75rem;
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.adhesion-input:focus {
+	outline: none;
+	border-color: var(--vert01, #00e676);
+}
+
+/* Validation visuelle / Visual validation */
+.adhesion-input:invalid:not(:placeholder-shown):not(:focus) {
+	border-color: var(--rouge01, #ff5252);
+}
+
+.adhesion-input:valid:not(:placeholder-shown) {
+	border-color: var(--vert01, #00e676);
+}
+
+/* Bouton VALIDER adhesion / Membership VALIDATE button */
+.adhesion-submit-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 100%;
+	max-width: 420px;
+	margin: 0.5rem auto 0;
+	padding: 0 24px;
+	height: 56px;
+	font-size: 1.3rem;
+	font-weight: bold;
+	font-family: "Luciole-regular", sans-serif;
+	color: var(--blanc01);
+	background-color: var(--vert03, #2e7d32);
+	border: none;
+	border-radius: 14px;
+	cursor: pointer;
+	transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.adhesion-submit-btn:hover,
+.adhesion-submit-btn:focus-visible {
+	background-color: var(--vert01, #00e676);
+	color: var(--noir01, #111);
+}
+
+.adhesion-submit-btn:active {
+	transform: scale(0.98);
+}
+
+.adhesion-error {
+	color: var(--warning, #ff9800);
+	font-size: 1rem;
+	margin-bottom: 0.5rem;
+}
+
+
+/* ============================================================
+   hx_card_feedback.html — retour carte NFC
+   / NFC card feedback
+   ============================================================ */
+
+/* Wrapper enfant direct de #messages.
+   Reproduit le layout que l'ancien <div id="messages"> avait
+   directement (avant le passage a innerHTML).
+   / Direct child wrapper of #messages. Reproduces the layout
+   that the old <div id="messages"> had (before the innerHTML switch). */
+.cf-wrapper {
+	display: flex;
+	flex-direction: column;
+}
+
+/* En-tete avec couleur de statut / Status-colored header */
+.cf-card-header {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 20px 16px 16px;
+	flex-shrink: 0;
+}
+
+.cf-card-type {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 1.4rem;
+	font-weight: 700;
+}
+
+.cf-card-type-icon {
+	font-size: 1.6rem;
+}
+
+.cf-card-place {
+	font-size: 0.85rem;
+	opacity: 0.75;
+	margin-top: 2px;
+}
+
+/* Zone scrollable / Scrollable area */
+.cf-content {
+	flex: 1;
+	overflow-y: auto;
+	scrollbar-width: none;
+	padding: 0 16px 16px;
+}
+
+/* Solde total / Total balance */
+.cf-total {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 16px 12px;
+	margin: 12px 0;
+	border-radius: 12px;
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+.cf-total-label {
+	font-size: 1.1rem;
+	font-weight: 600;
+}
+
+.cf-total-value {
+	font-size: 1.8rem;
+	font-weight: 800;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Ligne token / Token row */
+.cf-token-row {
+	display: grid;
+	grid-template-columns: 40px 1fr auto;
+	align-items: center;
+	min-height: 48px;
+	padding: 8px 12px;
+	margin: 4px 0;
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cf-token-empty {
+	opacity: 0.5;
+}
+
+.cf-token-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background-color: rgba(255, 255, 255, 0.1);
+	font-size: 0.9rem;
+}
+
+.cf-token-name {
+	font-size: 0.95rem;
+	font-weight: 500;
+}
+
+.cf-token-place {
+	font-size: 0.75rem;
+	color: var(--gris07);
+}
+
+.cf-token-value {
+	font-size: 1.2rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+/* Titre de section / Section title */
+.cf-section-title {
+	font-size: 0.85rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--gris07);
+	padding: 16px 12px 6px;
+	border-top: 1px solid rgba(255, 255, 255, 0.08);
+	margin-top: 8px;
+}
+
+/* Ligne adhesion / Membership row */
+.cf-adhesion-row {
+	display: grid;
+	grid-template-columns: 40px 1fr;
+	align-items: center;
+	min-height: 48px;
+	padding: 8px 12px;
+	margin: 4px 0;
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.04);
+}
+
+.cf-adhesion-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--vert02);
+	font-size: 1.1rem;
+}
+
+.cf-adhesion-name {
+	font-size: 0.95rem;
+	font-weight: 600;
+}
+
+.cf-adhesion-deadline {
+	font-size: 0.8rem;
+	color: var(--gris07);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Bouton retour centre / Centered back button */
+.cf-wrapper > .bt-basic-container {
+	align-self: center;
+}
+
+
+/* ============================================================
+   COULEURS DE FOND DES OVERLAYS (regles :has())
+   Chaque partial injecte dans #messages (innerHTML) ou #confirm (outerHTML)
+   a un data-testid ou une classe unique. On cible le conteneur parent
+   via :has() pour appliquer la couleur de fond sans <style> inline.
+   Un seul partial visible a la fois → pas de conflit.
+   / Overlay background colors (:has() rules)
+   Each partial injected into #messages (innerHTML) or #confirm (outerHTML)
+   has a unique data-testid or class. We target the parent container
+   via :has() to apply background without inline <style>.
+   Only one partial visible at a time → no conflict.
+   ============================================================ */
+
+/* hx_display_type_payment.html — choix du moyen de paiement */
+#messages:has([data-testid="paiement-moyens"]) {
+	background-color: var(--bleu09);
+}
+
+/* hx_adhesion_choose_id.html — choix du mode d'identification */
+#messages:has([data-testid="adhesion-choose-id"]) {
+	background-color: var(--bleu09);
+}
+
+/* hx_adhesion_form.html — formulaire d'identification membre */
+#messages:has([data-testid="adhesion-form"]) {
+	background-color: var(--noir03, #1a1a2e);
+}
+
+/* hx_adhesion_confirm.html — confirmation adhesion */
+#messages:has([data-testid="adhesion-confirm"]) {
+	background-color: var(--noir03, #1a1a2e);
+}
+
+/* hx_card_feedback.html — retour carte NFC */
+#messages:has(.cf-wrapper) {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--noir03);
+}
+
+/* hx_check_card.html — attente lecture carte (Cotton nfc-container dans #messages) */
+#messages:has(.nfc-container) {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	background-color: var(--noir01);
+}
+
+/* hx_return_payment_success.html — succes de paiement */
+#messages:has([data-testid="paiement-succes"]) {
+	background-color: var(--success);
+}
+
+/* hx_funds_insufficient.html — fonds insuffisants */
+#messages:has([data-testid="paiement-nfc-insuffisant"]) {
+	background-color: var(--rouge07);
+}
+
+/* hx_cloture_rapport.html — rapport de cloture */
+#messages:has([data-testid="cloture-rapport"]) {
+	background-color: var(--info, #17a2b8);
+}
+
+/* hx_confirm_payment.html — confirmation de paiement (outerHTML → data-testid sur #confirm) */
+#confirm[data-testid="paiement-confirmation"] {
+	background-color: var(--bleu09);
+}
+
+/* hx_read_nfc.html + hx_read_nfc_adhesion.html — attente NFC paiement/adhesion */
+#confirm:has(.nfc-container) {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	background-color: var(--noir01);
+}

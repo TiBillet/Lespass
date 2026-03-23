@@ -1,0 +1,118 @@
+/* ============================================================
+   COMPONENTS.CSS — Petits composants Cotton reutilisables
+   / Small reusable Cotton components
+
+   LOCALISATION : laboutik/static/css/components.css
+   SOURCES : cotton/read_nfc.html, cotton/spinner.html, cotton/status_wallets.html
+   ============================================================ */
+
+
+/* --- read_nfc.html — conteneur de lecture NFC --- */
+/* / NFC read container */
+
+.nfc-container {
+	display: grid;
+	width: 100%;
+	height: 100%;
+}
+
+.nfc-container-slot,
+.spinner {
+	grid-area: 1 / 1;
+}
+
+.nfc-container-slot {
+	position: relative;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	color: var(--blanc01);
+}
+
+.nfc-reader-simu-bt {
+	width: 200px;
+	height: 70px;
+	background-color: var(--bleu04);
+	color: var(--blanc01);
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	font-size: 1.5rem;
+	margin-bottom: 2rem;
+	border-radius: 8px;
+	font-weight: bold;
+	white-space: pre-line;
+	text-align: center;
+	cursor: pointer;
+}
+
+
+/* --- spinner.html — indicateur de chargement rotatif --- */
+/* / Rotating loading spinner */
+
+.spinner-container {
+	position: absolute;
+	left: 0;
+	right: 0;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+}
+
+.spinner {
+	border: 16px solid var(--noir04);
+	border-top: 16px solid var(--vert01);
+	border-radius: 50%;
+	width: var(--spinner-width);
+	height: var(--spinner-width);
+	animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+	0% {
+		transform: rotate(0deg);
+	}
+
+	100% {
+		transform: rotate(360deg);
+	}
+}
+
+
+/* --- status_wallets.html — affichage des soldes --- */
+/* / Wallet balances display */
+
+.status-wallets {
+	width: 100%;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
+	align-items: center;
+	font-size: 1.5rem;
+	font-weight: bold;
+	text-align: center;
+	margin: 6px 0;
+}
+
+.status-wallets-list {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: start;
+	margin-left: 6px;
+}
+
+.status-wallets-name {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: end;
+	margin-right: 6px;
+}

@@ -1,0 +1,253 @@
+/* ============================================================
+   VIEWS.CSS — Layout commun des vues POS
+   / Common POS view layouts
+
+   LOCALISATION : laboutik/static/css/views.css
+   SOURCES : views/common_user_interface.html, views/tables.html,
+             views/login_hardware.html, views/ask_primary_card.html
+   ============================================================ */
+
+
+/* ============================================================
+   Layout principal — main + products-container + products
+   (common_user_interface.html + tables.html)
+   ============================================================ */
+
+main {
+	display: flex;
+	flex-direction: row;
+	justify-content: start;
+	align-items: start;
+	width: 100%;
+	height: var(--main-container-height);
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+}
+
+/* Conteneur des produits — toute la largeur sauf la colonne categories
+   / Products container — full width minus categories column */
+#products-container {
+	width: calc(100% - var(--cat-width));
+	height: 100%;
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-start;
+	align-items: center;
+}
+
+/* Grille des articles — fond bleu fonce pour contraste avec les tuiles colorees
+   / Articles grid — dark blue background for contrast with colored tiles */
+#products {
+	width: 100%;
+	height: 100%;
+	background-color: var(--bleu11);
+	display: flex;
+	justify-content: flex-start;
+	align-content: flex-start;
+	flex-wrap: wrap;
+	overflow-y: auto;
+	scrollbar-width: none  /* Cache la scrollbar sur Firefox */
+}
+
+
+/* ============================================================
+   Footer — barre d'actions fixe en bas
+   / Fixed action bar at bottom
+   ============================================================ */
+
+footer {
+	width: 100%;
+	height: var(--footer-container-height);
+	display: flex;
+	flex-direction: row;
+	background-color: var(--vert04);
+	font-size: 2rem
+}
+
+/* Boutons du footer — chaque bouton occupe 1/3 de la largeur par defaut
+   (surcharge a 50% pour les tables via #tables-container ~ footer)
+   / Footer buttons — each button takes 1/3 width by default
+   (overridden to 50% for tables via #tables-container ~ footer) */
+.footer-bt {
+	width: 33.3333333%;
+	height: 100%;
+	color: var(--blanc01);
+	cursor: pointer;
+	gap: 6px;
+
+	i {
+		margin-right: 0;
+		font-size: 1.5rem;
+	}
+}
+
+.footer-bt-text {
+	font-size: 1rem;
+	font-weight: bold;
+	text-align: center;
+}
+
+/* Couleurs des boutons / Button colors */
+.fond-retour {
+	background-color: var(--rouge03);
+}
+
+.fond-normal {
+	background-color: var(--bleu02);
+}
+
+.fond-ok {
+	background-color: var(--vert03);
+}
+
+/* Chiffres à largeur fixe pour éviter le décalage du total
+   / Fixed-width digits to prevent total shifting */
+#bt-valider-total {
+	font-variant-numeric: tabular-nums;
+}
+
+
+/* ============================================================
+   Media queries — layout responsif
+   / Responsive layout media queries
+   ============================================================ */
+
+/* ECRAN LARGE (> 1022px) : articles 71% + addition 29%
+   / Large screen: articles 71% + addition 29% */
+@media only screen and (width > 1022px) {
+	#products {
+		width: 71%;
+	}
+}
+
+/* Mobile : footer texte plus petit pour gagner de la place
+   / Mobile: smaller footer text to save space */
+@media only screen and (max-width: 599px) {
+	footer {
+		font-size: 1.4rem;
+	}
+}
+
+/* TRES GRAND ECRAN (> 1199px) : footer plus grand
+   / Very large screen: larger footer */
+@media only screen and (width > 1199px) {
+	:root {
+		--footer-container-height: 120px;
+	}
+}
+
+
+/* ============================================================
+   tables.html — conteneur de tables + styles specifiques
+   / Tables container + specific styles
+   ============================================================ */
+
+#tables-container {
+	width: calc(100% - var(--cat-width));
+	height: 100%;
+	background-color: var(--bleu11);
+	display: flex;
+	justify-content: flex-start;
+	align-content: flex-start;
+	flex-wrap: wrap;
+	overflow-y: auto;
+	scrollbar-width: none
+}
+
+.fond-coul1 {
+	background-color: var(--rouge05);
+}
+
+/* Surcharge footer tables : 2 boutons (50%) au lieu de 3 (33.3%)
+   #tables-container est enfant de <main>, <footer> est frere de <main>
+   → on cible main:has(#tables-container) pour ne matcher que la vue tables
+   / Tables footer override: 2 buttons (50%) instead of 3 (33.3%)
+   #tables-container is a child of <main>, <footer> is a sibling of <main>
+   → we target main:has(#tables-container) to only match the tables view */
+main:has(#tables-container) ~ footer .footer-bt {
+	width: 50%;
+	text-decoration: none;
+}
+main:has(#tables-container) ~ footer .footer-bt i {
+	margin-right: 4px;
+}
+
+.table-bouton {
+	width: var(--bt-table-width);
+	height: var(--bt-table-height);
+	border-radius: 15px;
+	margin: 8px;
+	font-family: 'Source Sans', sans-serif;
+	box-sizing: border-box;
+	background-color: var(--gris04);
+	text-decoration: none;
+}
+
+.table-nom {
+	width: 100%;
+	height: calc(100% - 24px);
+	border-radius: 15px 15px 0 0;
+	font-size: 1rem;
+	font-weight: bold;
+	color: var(--blanc01);
+	overflow: hidden;
+	padding: 2px;
+}
+
+.table-etat {
+	width: 100%;
+	height: 24px;
+	border-radius: 0 0 15px 15px;
+	font-size: 1rem;
+	padding-right: 8px;
+	justify-content: flex-end;
+	overflow: hidden;
+}
+
+
+/* ============================================================
+   login_hardware.html — ecran d'appairage
+   / Hardware pairing screen
+   ============================================================ */
+
+#new-pair,
+#hardware-error-container {
+	font-size: 1rem;
+	background-color: var(--bleu03);
+	color: var(--blanc01);
+}
+
+.hardware-error {
+	white-space: pre-line;
+	text-align: center;
+}
+
+.new-pair-bt {
+	width: 300px;
+	height: 80px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	font-size: 1.3rem;
+	margin: 0;
+	padding: 0;
+	cursor: pointer;
+	color: var(--noir01);
+}
+
+
+/* ============================================================
+   ask_primary_card.html — attente carte primaire
+   / Primary card waiting screen
+   ============================================================ */
+
+.message-nfc {
+	min-height: 1.5rem;
+	margin-bottom: 0.7rem;
+	font-weight: bold;
+	white-space: pre-line;
+	text-align: center;
+	color: var(--yellow00);
+}

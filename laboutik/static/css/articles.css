@@ -1,0 +1,431 @@
+/* ============================================================
+   ARTICLES.CSS — Grille des articles/produits POS
+   / Product articles grid for POS
+
+   LOCALISATION : laboutik/static/css/articles.css
+   SOURCE : cotton/articles.html
+   ============================================================ */
+
+/* Surcharge du flex de common_user_interface.html par CSS Grid auto-fill
+   Les articles remplissent automatiquement la largeur disponible.
+   / Override flex from common_user_interface.html with CSS Grid auto-fill
+   Articles automatically fill the available width. */
+#products {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(var(--bt-article-width), 1fr));
+	gap: 8px;
+	padding: 8px;
+	align-content: start;
+}
+
+.article-container {
+	position: relative;
+	width: auto;
+	height: 0;
+	padding-bottom: 100%;  /* ratio 1:1 — aspect-ratio ne fonctionne pas en grid avec children absolute */
+	box-sizing: border-box;
+	overflow: hidden;
+	margin: 0;
+	font-family: "Luciole-regular";
+	border-radius: 15px;
+	transition: transform 100ms ease-in-out;
+	/* Couleur par défaut pour articles sans catégorie (surchargé par l'inline style quand catégorie présente)
+	   / Default color for uncategorized articles (overridden by inline style when category exists) */
+	background-color: var(--gris01);
+}
+
+.article-container:active {
+	transform: scale(0.95);
+}
+
+/* Icône catégorie — petit badge haut-gauche sur la tuile
+   / Category icon — small badge top-left on the tile */
+.article-cat-icon {
+	position: absolute;
+	top: 5px;
+	left: 6px;
+	font-size: 1.4rem;
+	opacity: 0.75;
+	line-height: 1;
+	user-select: none;
+	pointer-events: none;
+	z-index: 1;
+}
+
+/* Zone visuelle produit : centrée, occupe l'espace entre le haut et le nom
+   / Product visual zone: centered, fills space between top and name */
+.article-visual-layer {
+	position: absolute;
+	top: 4px;
+	left: 4px;
+	right: 4px;
+	bottom: 46px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+
+/* Icône produit — grande, centrée dans la tuile
+   / Product icon — large, centered in tile */
+.article-visual-icon {
+	font-size: calc(var(--bt-article-width) * 0.38);
+	opacity: 0.88;
+	user-select: none;
+	line-height: 1;
+}
+
+/* Image produit : contenue dans la zone visuelle, centrée
+   / Product image: contained within visual zone, centered */
+.article-visual-img {
+	max-width: 82%;
+	max-height: 82%;
+	object-fit: contain;
+	border-radius: 6px;
+	opacity: 0.88;
+}
+
+/* Nom de l'article : juste au-dessus du footer
+   / Article name: just above the footer */
+.article-name-layer {
+	position: absolute;
+	left: 4px;
+	right: 4px;
+	bottom: 26px;
+	display: flex;
+	align-items: flex-end;
+}
+
+/* Texte du nom : clamp 2 lignes, aligné à gauche
+   / Name text: 2-line clamp, left-aligned */
+.article-name-text {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	font-weight: bold;
+	font-size: var(--article-font-size, 14px);
+	line-height: 1.2;
+	text-align: left;
+	min-width: 0;
+	width: 100%;
+}
+
+/* Footer : pills + badge quantité, en ligne
+   Position absolute avec left+right — PAS de width:100% (écraserait right:5px)
+   / Footer: pills + quantity badge, row layout
+   Absolute with left+right — NO width:100% (would override right:5px) */
+.article-footer-layer {
+	position: absolute;
+	left: 5px;
+	right: 5px;
+	bottom: 5px;
+	color: var(--blanc01);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+
+/* Conteneur des pills de tarifs : une seule ligne, overflow caché
+   Le caissier voit tout dans l'overlay au clic (tarif.js)
+   / Rate pills container: single row, overflow hidden
+   Caissier sees all rates in the overlay on click (tarif.js) */
+.article-tarifs-pills {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 3px;
+	align-items: center;
+	overflow: hidden;
+}
+
+/* Pill individuel pour chaque tarif (prix unique ET multi-tarif)
+   box-shadow pour détacher le pill du fond, surtout sur tuiles claires.
+   / Individual pill — box-shadow lifts pill off background, especially on light tiles */
+.article-tarif-pill {
+	display: inline-block;
+	padding: 2px 6px;
+	border-radius: 9px;
+	background-color: rgba(0, 0, 0, 0.55);
+	color: #ffffff;
+	font-size: 0.95rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	white-space: nowrap;
+	line-height: 1.4;
+	text-shadow: none;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+	flex-shrink: 0;
+}
+
+/* Pill prix libre : fond indigo plus opaque pour se distinguer des tarifs fixes
+   / Free price pill: more opaque indigo to stand out from fixed rates */
+.article-tarif-pill-libre {
+	background-color: rgba(99, 102, 241, 0.85);
+}
+
+/* Badge quantité en largeur fixe — ne vole plus l'espace aux pills
+   / Fixed-width quantity badge — no longer stealing space from pills */
+.article-quantity {
+	width: 28px;
+	flex-shrink: 0;
+	text-align: right;
+}
+
+.badge {
+	color: #212529;
+	background-color: #f8f9fa;
+	display: inline-block;
+	padding: .25em .4em;
+	font-weight: bold;
+	line-height: 1;
+	text-align: center;
+	white-space: nowrap;
+	vertical-align: baseline;
+	border-radius: .25rem;
+	font-variant-numeric: tabular-nums;
+	opacity: 0;
+	transition: opacity 200ms ease-in-out, color .15s ease-in-out, background-color .15s ease-in-out;
+}
+
+.badge-visible {
+	opacity: 1;
+}
+
+.article-touch {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+}
+
+/* Articles adhesion : catégorie par défaut indigo si pas de categorie_pos
+   / Membership articles: default indigo category if no categorie_pos */
+.article-adhesion {
+	background-color: #6366F1;
+}
+
+.article-lock-layer {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	border-radius: 15px;
+	background-color: #2a2828;
+	opacity: 0.5;
+	cursor: default;
+	display: none;
+}
+
+/* Mobile par défaut (< 599px)
+   / Mobile default (< 599px) */
+:root {
+	--bt-article-width: 130px;
+}
+
+/* pour une largeur supérieure ou égale à 599 pixels */
+@media only screen and (width > 599px) {
+	:root {
+		--bt-article-width: 140px;
+	}
+}
+
+/* pour une largeur supérieure ou égale à 1022 pixels */
+@media only screen and (width > 1022px) {
+	:root {
+		--bt-article-width: 100px;
+	}
+}
+
+/* --- OVERLAY SÉLECTION DE TARIF --- */
+/* / Rate selection overlay */
+.tarif-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0, 0, 0, 0.85);
+	z-index: 1000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	animation: tarif-fade-in 200ms ease;
+}
+
+@keyframes tarif-fade-in {
+	from { opacity: 0; }
+}
+
+.tarif-overlay-content {
+	background-color: var(--gris00, #1a1a2e);
+	border-radius: 20px;
+	padding: 32px 24px;
+	width: 90%;
+	max-width: 480px;
+	max-height: 85vh;
+	overflow-y: auto;
+	text-align: center;
+	color: var(--blanc01, #fff);
+}
+
+.tarif-overlay-title {
+	font-size: 1.8rem;
+	font-weight: bold;
+	margin: 0 0 4px 0;
+	text-wrap: balance;
+}
+
+.tarif-overlay-subtitle {
+	font-size: 1.1rem;
+	opacity: 0.7;
+	margin-bottom: 24px;
+}
+
+.tarif-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 24px;
+}
+
+.tarif-btn {
+	display: block;
+	width: 100%;
+	padding: 18px 20px;
+	border: none;
+	border-radius: 12px;
+	background-color: var(--bleu03, #0345ea);
+	color: #fff;
+	font-size: 1.2rem;
+	font-family: "Luciole-regular", sans-serif;
+	cursor: pointer;
+	text-align: center;
+	transition: transform 100ms ease, background-color 150ms ease;
+}
+
+.tarif-btn:active {
+	transform: scale(0.97);
+}
+
+.tarif-btn-label {
+	font-weight: bold;
+	font-size: 1.3rem;
+}
+
+.tarif-btn-price {
+	font-variant-numeric: tabular-nums;
+	font-size: 1.1rem;
+	margin-top: 4px;
+	opacity: 0.9;
+}
+
+.tarif-btn-sublabel {
+	font-size: 0.95rem;
+	opacity: 0.7;
+	margin-top: 2px;
+}
+
+/* Prix libre : input + bouton OK dans le bouton tarif */
+/* / Free price: input + OK button inside the rate button */
+.tarif-btn-free {
+	background-color: var(--bleu05, #012584);
+	padding: 18px 20px 14px;
+}
+
+.tarif-free-input-container {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.tarif-free-input {
+	width: 120px;
+	height: 56px;
+	font-size: 1.5rem;
+	text-align: center;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-radius: 8px;
+	background-color: rgba(255, 255, 255, 0.1);
+	color: #fff;
+	font-variant-numeric: tabular-nums;
+	font-family: "Luciole-regular", sans-serif;
+}
+
+.tarif-free-input:focus {
+	outline: none;
+	border-color: var(--vert01, #00e676);
+}
+
+.tarif-free-input::placeholder {
+	color: rgba(255, 255, 255, 0.4);
+}
+
+.tarif-input-error {
+	border-color: var(--rouge01, #e53935) !important;
+}
+
+.tarif-free-currency {
+	font-size: 1.5rem;
+	font-weight: bold;
+}
+
+.tarif-free-validate {
+	height: 56px;
+	padding: 0 20px;
+	border: none;
+	border-radius: 8px;
+	background-color: var(--vert03, #339448);
+	color: #fff;
+	font-size: 1.2rem;
+	font-weight: bold;
+	font-family: "Luciole-regular", sans-serif;
+	cursor: pointer;
+	transition: transform 100ms ease;
+}
+
+.tarif-free-validate:active {
+	transform: scale(0.95);
+}
+
+.tarif-free-error {
+	color: var(--rouge01, #e53935);
+	font-size: 0.95rem;
+	margin-top: 6px;
+	min-height: 1.2em;
+}
+
+.tarif-btn-retour {
+	display: inline-block;
+	padding: 14px 32px;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-radius: 10px;
+	background-color: transparent;
+	color: #fff;
+	font-size: 1.1rem;
+	font-family: "Luciole-regular", sans-serif;
+	cursor: pointer;
+	transition: background-color 150ms ease;
+}
+
+.tarif-btn-retour:active {
+	background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels
+   FIX : width/height sur :root supprimés — ils contraignaient <html> à 160px
+   au lieu de 100%, ce qui casse le layout sur Android WebView (Sunmi).
+   On ne garde que les variables CSS custom.
+   / FIX: removed width/height on :root — they constrained <html> to 160px
+   instead of 100%, breaking layout on Android WebView (Sunmi).
+   Only CSS custom properties are kept. */
+@media only screen and (width > 1278px) {
+	:root {
+		--bt-article-width: 160px;
+	}
+}
