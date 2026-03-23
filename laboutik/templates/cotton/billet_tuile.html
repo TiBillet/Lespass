@@ -1,0 +1,112 @@
+{% load i18n %}
+{% load laboutik_process %}
+<!--
+TUILE BILLET PAYSAGE — article billetterie dans la grille POS
+/ Landscape ticket tile — ticketing article in the POS grid
+
+LOCALISATION : laboutik/templates/cotton/billet_tuile.html
+
+Inclus depuis cotton/articles.html via include quand article.methode_caisse == 'BI'.
+Le contexte parent fournit : article (dict), currency_data, pv.
+
+La tuile occupe 2 colonnes dans le grid parent (#products).
+Elle affiche le nom de l'event, la date, une jauge de remplissage, et le prix.
+
+IMPORTANT : les data-* doivent être identiques aux tuiles standard
+pour que articles.js (manageKey/addArticle) fonctionne sans modification JS.
+La classe .article-touch couvre toute la tuile pour capter les clics.
+-->
+<div class="article-container billet-tuile cat-{{ article.categorie.id }}{% if article.event.complet %} billet-tuile-complet{% endif %}"
+     data-uuid="{{ article.id }}"
+     data-name="{{ article.name }}"
+     data-price="{{ article.prix }}"
+     data-currency="{{ currency_data.symbol }}"
+     data-group="{{ article.bt_groupement.groupe }}"
+     data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
+     data-est-adhesion="false"
+     data-tarifs='{{ article.tarifs_json }}'
+     data-testid="billetterie-tuile-{{ article.id }}"
+     style="background-color:{{ article.couleur_backgr }}; color:{{ article.couleur_texte }};">
+
+	<!-- Zone gauche : icône ou image du produit
+	     / Left zone: product icon or image -->
+	<div class="billet-tuile-visual">
+		{% if article.url_image %}
+		<img class="billet-visual-img"
+		     src="{{ article.url_image }}"
+		     loading="lazy"
+		     alt=""
+		     onerror="this.style.display='none'">
+		{% elif article.icone_type == "fa" %}
+		<i class="fas {{ article.icone }} billet-visual-icon"
+		   aria-hidden="true"
+		   style="color:{{ article.couleur_texte }};"></i>
+		{% elif article.icone_type == "ms" %}
+		<span class="material-symbols-outlined billet-visual-icon"
+		      aria-hidden="true"
+		      style="color:{{ article.couleur_texte }};">{{ article.icone }}</span>
+		{% else %}
+		<i class="fas fa-ticket-alt billet-visual-icon"
+		   aria-hidden="true"
+		   style="color:{{ article.couleur_texte }};"></i>
+		{% endif %}
+	</div>
+
+	<!-- Zone droite : infos event + jauge + prix
+	     / Right zone: event info + gauge + price -->
+	<div class="billet-tuile-info">
+		<span class="billet-tuile-event-name">{{ article.event.name }}</span>
+		<span class="billet-tuile-event-date">{{ article.event.datetime|date:"D d M — H:i" }}</span>
+		<span class="billet-tuile-tarif-name">{{ article.name }}</span>
+
+		<!-- Jauge statique — sera remplacée par WebSocket en Phase 4
+		     / Static gauge — will be replaced by WebSocket in Phase 4 -->
+		{% if article.event.jauge_max %}
+		<div class="billet-jauge-bar" aria-hidden="true">
+			<div class="billet-jauge-fill{% if article.event.pourcentage > 80 and not article.event.complet %} billet-jauge-fill-warning{% endif %}{% if article.event.complet %} billet-jauge-fill-full{% endif %}"
+			     style="width:{{ article.event.pourcentage }}%;"></div>
+		</div>
+		{% if article.event.complet %}
+		<span class="billet-jauge-complet">{% translate "COMPLET" %}</span>
+		{% else %}
+		<span class="billet-jauge-text">{{ article.event.places_vendues }}/{{ article.event.jauge_max }}</span>
+		{% endif %}
+		<p class="visually-hidden">
+			{% blocktranslate with vendues=article.event.places_vendues max=article.event.jauge_max %}
+				{{ vendues }} places vendues sur {{ max }}
+			{% endblocktranslate %}
+		</p>
+		{% endif %}
+
+		<!-- Prix pill + badge quantité
+		     / Price pill + quantity badge -->
+		<div class="billet-tuile-footer">
+			{% if article.multi_tarif %}
+			{% for tarif in article.tarifs %}
+				{% if tarif.free_price %}
+				<span class="billet-tuile-prix article-tarif-pill-libre"
+				      aria-label="{% translate 'prix libre' %}">? {{ currency_data.symbol }}</span>
+				{% else %}
+				<span class="billet-tuile-prix">
+					{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}
+				</span>
+				{% endif %}
+			{% endfor %}
+			{% elif pv.afficher_les_prix %}
+			<span class="billet-tuile-prix">
+				{{ article.prix|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}
+			</span>
+			{% endif %}
+		</div>
+	</div>
+
+	<!-- Badge quantité — coin haut-droit (même ID que les tuiles standard pour articles.js)
+	     / Quantity badge — top-right corner (same ID as standard tiles for articles.js) -->
+	<div class="billet-tuile-quantity">
+		<span id="article-quantity-number-{{ article.id }}" class="badge">0</span>
+	</div>
+
+	<!-- Zone tactile — couvre toute la tuile pour capter les clics (articles.js:manageKey)
+	     / Touch zone — covers the entire tile to capture clicks (articles.js:manageKey) -->
+	<div class="article-touch"></div>
+</div>

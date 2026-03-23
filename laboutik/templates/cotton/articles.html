@@ -7,6 +7,14 @@
 	{% for article in pv.articles %}
 	<!-- TODO: supprimer dès le back l'article paiement fractionné -->
 	{% if article.id != uuidArticlePaiementFractionne %}
+
+	{% if article.methode_caisse == 'BI' and article.event %}
+	{# Tuile billet paysage — 2 colonnes, affiche event + jauge #}
+	{# / Landscape ticket tile — 2 columns, shows event + gauge #}
+	{% include "cotton/billet_tuile.html" %}
+	{% else %}
+	{# Tuile standard carrée — articles VT, RE, AD, etc. #}
+	{# / Standard square tile — VT, RE, AD articles, etc. #}
 	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
 		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
 		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
@@ -93,7 +101,8 @@
 		<!-- pour remonter au parent plus facilement -->
 		<div class="article-touch"></div>
 	</div>
-	{% endif %}
+	{% endif %}{# fin if methode_caisse BI / else standard #}
+	{% endif %}{# fin if uuidArticlePaiementFractionne #}
 	{% endfor %}
 </div>
 <script src="{% static 'js/articles.js' %}"></script>

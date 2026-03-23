@@ -2,35 +2,59 @@
 
 <nav id="categories">
 	<div id="bt-show-addition" class="BF-col category-item">
-		<i class="category-icon fas fa-list"></i>
+		<i class="category-icon fas fa-list" aria-hidden="true"></i>
 		<div class="category-nom">{% translate "Note" %}</div>
 		<!-- pour remonter au parent plus facilement -->
 		<div class="category-touch"></div>
 	</div>
 
 	<div id="bt-hide-addition" class="BF-col category-item">
-		<i class="category-icon fas fa-undo"></i>
+		<i class="category-icon fas fa-undo" aria-hidden="true"></i>
 		<div class="category-nom">{% translate "Retour" %}</div>
 		<!-- pour remonter au parent plus facilement -->
 		<div class="category-touch"></div>
 	</div>
 
 	<div id="category-all" class="BF-col category-item category-item-active">
-		<i class="category-icon fas fa-th"></i>
+		<i class="category-icon fas fa-th" aria-hidden="true"></i>
 		<div class="category-nom">{% translate "Tous" %}</div>
 		<div class="category-touch"></div>
 	</div>
 
 	{% for cat in categories %}
+	{% if cat.is_event %}
+	{# Pseudo-catégorie event — date + mini-jauge pour le filtre billetterie #}
+	{# / Event pseudo-category — date + mini-gauge for ticketing filter #}
+	<div class="BF-col category-item active category-event" data-sel="cat-{{cat.id}}"
+	     data-testid="billetterie-sidebar-event-{{ cat.id }}">
+		<i class="category-icon fas fa-calendar-alt" aria-hidden="true"></i>
+		<div class="category-nom">{{ cat.name }}</div>
+		<div class="category-event-date">{{ cat.date|date:"D d/m" }}</div>
+		{% if cat.jauge_max %}
+		<div class="category-event-jauge" aria-hidden="true">
+			<div class="category-event-jauge-fill{% if cat.complet %} category-event-jauge-complet{% endif %}"
+			     style="width:{{ cat.pourcentage }}%;"></div>
+		</div>
+		<div class="category-event-places{% if cat.complet %} category-event-complet{% endif %}"
+		     aria-label="{% if cat.complet %}{% translate 'Complet' %}{% else %}{{ cat.places_vendues }} {% translate 'sur' %} {{ cat.jauge_max }}{% endif %}">
+			{% if cat.complet %}{% translate "COMPLET" %}{% else %}{{ cat.places_vendues }}/{{ cat.jauge_max }}{% endif %}
+		</div>
+		{% endif %}
+		<div class="category-touch"></div>
+	</div>
+	{% else %}
+	{# Catégorie standard — inchangée #}
+	{# / Standard category — unchanged #}
 	<div class="BF-col category-item active" data-sel="cat-{{cat.id}}">
 		{% if cat.icone_type == "ms" %}
-		<span class="material-symbols-outlined category-icon">{{ cat.icon }}</span>
+		<span class="material-symbols-outlined category-icon" aria-hidden="true">{{ cat.icon }}</span>
 		{% else %}
-		<i class="category-icon fas {{ cat.icon }}"></i>
+		<i class="category-icon fas {{ cat.icon }}" aria-hidden="true"></i>
 		{% endif %}
 		<div class="category-nom">{{ cat.name }}</div>
 		<div class="category-touch"></div>
 	</div>
+	{% endif %}
 	{% endfor %}
 </nav>
 

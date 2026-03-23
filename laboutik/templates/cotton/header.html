@@ -47,9 +47,12 @@
 	<!-- sub menu points de vente -->
 	<div class="sub-menu-pvs sub-menu hide">
 		{% for pv in card.pvs_list %}
-		<a class="menu-burger-item menu-burger-item-content" href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
+		<a class="menu-burger-item menu-burger-item-content"
+			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
+			hx-get="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
+			hx-target="body" hx-swap="innerHTML" hx-push-url="true"
 			style="text-decoration: none;">
-			<i class="menu-burger-item-content fas {{ pv.icon }}"></i>
+			<i class="menu-burger-item-content fas {{ pv.icon }}" aria-hidden="true"></i>
 			<div class="menu-burger-item-content">{{ pv.name }}</div>
 		</a>
 		{% endfor %}

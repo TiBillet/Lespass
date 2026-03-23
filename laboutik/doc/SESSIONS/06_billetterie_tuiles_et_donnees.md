@@ -1,142 +1,116 @@
-# Session 06 — Tuiles billet dans la grille + données event
+# Session 06 — Tuiles billet dans la grille + données event + types PV
 
 ## CONTEXTE
 
 Tu travailles sur `laboutik/` (POS Django + HTMX + Cotton).
 Lis `GUIDELINES.md` et `CLAUDE.md`. Code FALC. **Ne fais aucune opération git.**
 
-Les articles billet (`Product.methode_caisse='BI'`, constante `Product.BILLET_POS`)
-doivent s'afficher dans la grille standard avec un composant Cotton paysage
-qui occupe 2 colonnes et affiche l'événement + jauge.
+Le PV de type `BILLETTERIE` ('T') construit ses articles depuis les événements futurs.
+Pas de double typage : le Product n'a pas besoin de `methode_caisse='BI'` pour apparaître.
+C'est le **type du PV** qui détermine le chargement automatique.
 
-## TÂCHE 1 — Lire les modèles
+Les events apparaissent comme **pseudo-catégories** dans la sidebar `<c-categories>` existante.
+Filtre CSS côté client (instantané, `cat-{event_uuid}`), pas de round-trip HTMX.
 
-1. Lis `BaseBillet/models.py` : trouve le modèle `Event`.
-   Note les champs `products` (M2M), `jauge_max`, `published`, `archived`, `datetime`.
-   Trouve la méthode `valid_tickets_count()` et `complet()`.
+## CE QUI A ÉTÉ FAIT
 
-2. Lis `BaseBillet/models.py` : trouve `Product.BILLET_POS = 'BI'` et le champ `methode_caisse`.
+### Types PV restaurés (migration 0005)
 
-3. Lis `laboutik/views.py` : trouve `_construire_donnees_articles()` pour comprendre
-   comment les articles sont construits pour le template.
+- `ADHESION = 'A'`, `CASHLESS = 'C'`, `BILLETTERIE = 'T'` ajoutés à `COMPORTEMENT_CHOICES`
+- `KIOSK` reste supprimé (app séparée dans le futur)
+- Le type du PV détermine le chargement automatique, le M2M est toujours chargé en plus
+- Fixture `create_test_pos_data` mise à jour : Cashless→CASHLESS, Adhesions→ADHESION, Accueil Festival→BILLETTERIE
 
-## TÂCHE 2 — Enrichir `_construire_donnees_articles()` pour les articles BI
+### Composant Cotton `billet_tuile.html` + CSS
 
-Dans `laboutik/views.py`, dans la boucle qui construit `article_dict` pour chaque produit :
+- `laboutik/templates/cotton/billet_tuile.html` : layout paysage, data-* compatibles articles.js
+- `laboutik/static/css/billet_tuile.css` : grid-column span 2, jauge statique, responsive
+- Intégré dans `cotton/articles.html` via `{% include %}` conditionnel
+- Chargé dans `base.html`
 
-```python
-from BaseBillet.models import Event
+### Données de test
 
-# Après la construction du article_dict standard...
-if product.methode_caisse == Product.BILLET_POS:
-    event = Event.objects.filter(
-        products=product, published=True, archived=False,
-    ).order_by('datetime').first()
-    if event:
-        places_vendues = event.valid_tickets_count()
-        article_dict['event'] = {
-            'uuid': str(event.uuid),
-            'name': event.name,
-            'datetime': event.datetime,
-            'jauge_max': event.jauge_max,
-            'places_vendues': places_vendues,
-            'places_restantes': max(0, event.jauge_max - places_vendues) if event.jauge_max else None,
-            'pourcentage': int(round(places_vendues / event.jauge_max * 100)) if event.jauge_max else 0,
-            'complet': event.complet() if hasattr(event, 'complet') else False,
-        }
-```
+- Catégorie "Billetterie", 2 Products BI, 2 Events futurs (demain + après-demain, jauge 50)
+- PV "Accueil Festival" (type BILLETTERIE) : 2 billets + Bière + Eau
+- Billets ajoutés au PV "Mix"
 
-**Attention aux N+1** : si le PV a beaucoup d'articles BI, chaque appel
-`Event.objects.filter(products=product)` fait une requête. Optimiser avec un
-`prefetch_related` si nécessaire.
+### Enrichissement `_construire_donnees_articles()`
 
-## TÂCHE 3 — Composant Cotton `<c-billet-tuile>`
+- Pré-chargement Events en 1 requête (anti N+1)
+- `methode_caisse` ajouté à tous les article_dict
+- Articles BI enrichis avec dict `event` (uuid, name, datetime, jauge, pourcentage, complet)
+- Jauge statique (WebSocket en phase 4)
 
-Crée `laboutik/templates/cotton/billet_tuile.html`.
+## CE QUI RESTE À FAIRE (cette session)
 
-Structure HTML paysage (flex-direction: row) :
-- Zone gauche : image ou icône (120×120px)
-- Zone droite : nom tarif, nom event, jauge (barre de progression), prix
-- Badge quantité (coin haut-droit, masqué si 0)
-- `data-uuid`, `data-price-uuid`, `data-event-uuid`
-- `data-testid="billetterie-tuile-{price_uuid}"`
-- `data-multi-tarif` selon le nombre de Price du produit
+### TÂCHE A — Charger depuis events quand PV est BILLETTERIE
 
-Crée `laboutik/static/css/billet_tuile.css` pour le style (pas inline).
-La tuile fait `grid-column: span 2` dans le grid parent.
+Dans `_construire_donnees_articles()`, quand `point_de_vente_instance.comportement == BILLETTERIE` :
+- Charger les events futurs publiés ( dont ceux en cours, - 1 jour ) : `Event.objects.filter(published=True, archived=False, datetime__gte=now - 1 jour)`
+- Pour chaque event, pour chaque Price publiée de chaque Product lié → 1 article_dict
+- 1 tuile = 1 Price (pas 1 Product). Un produit avec 3 tarifs → 3 tuiles
+- Chaque tuile porte `cat-{event_uuid}` pour le filtre sidebar
+- Les articles du M2M `products` sont chargés en plus (comme avant)
+- Supprimer le filtre `methode_caisse='BI'` — c'est le type du PV qui décide
 
-## TÂCHE 4 — Intégrer dans `cotton/articles.html`
+#### Jauges — 3 niveaux dans les modèles
 
-Lis `laboutik/templates/cotton/articles.html`. Dans la boucle des articles,
-ajoute une condition pour les articles BI :
+| Niveau | Champ | Modèle | Signification |
+|--------|-------|--------|---------------|
+| Event | `jauge_max` | Event | Capacité totale (toutes catégories confondues) |
+| Product | `max_per_user` | Product | Limite par utilisateur (pas une jauge globale) |
+| Price | `stock` | Price | Capacité par tarif par event (`out_of_stock(event)`) |
 
-```html
-{% for article in articles %}
-  {% if article.methode_caisse == 'BI' and article.event %}
-    <c-billet-tuile
-      product_uuid="{{ article.id }}"
-      event_uuid="{{ article.event.uuid }}"
-      nom_event="{{ article.event.name }}"
-      prix_centimes="{{ article.prix }}"
-      ... />
-  {% else %}
-    {# tuile standard existante (inchangée) #}
-    <div class="article-container" ...>
-  {% endif %}
-{% endfor %}
-```
+Exemple : Concert 500 places, Plein tarif stock=200, Réduit stock=100, VIP stock=50 → 150 non attribuées.
 
-## TÂCHE 5 — Action `jauge_event()` dans CaisseViewSet
+#### UX jauge sur la tuile : afficher la jauge la plus restrictive
 
-Crée une action GET qui retourne le partial de jauge pour polling HTMX 30s :
+- Si `Price.stock` est défini → jauge du tarif sur la tuile (ex: "12/50 VIP")
+- Sinon → jauge de l'event sur la tuile (ex: "42/500")
+- La jauge event est **toujours visible dans la sidebar** (pseudo-catégorie) — c'est la jauge globale
+- Pas d'empilement de 3 jauges sur une tuile — illisible sur écran tactile festival
+- `Price.out_of_stock(event)` détermine si la tuile est grisée (complet pour ce tarif)
+- `Event.complet()` détermine si toutes les tuiles de l'event sont grisées
 
-```python
-@action(detail=False, methods=['GET'], url_path='jauge_event')
-def jauge_event(self, request):
-    event_uuid = request.GET.get('event_uuid')
-    event = Event.objects.get(uuid=event_uuid)
-    places_vendues = event.valid_tickets_count()
-    context = { ... }
-    return render(request, "laboutik/partial/hx_jauge_event.html", context)
-```
+### TÂCHE B — Events comme pseudo-catégories dans `_construire_donnees_categories()`
 
-Crée `laboutik/templates/laboutik/partial/hx_jauge_event.html` :
-- Barre de progression (width = pourcentage%)
-- Texte "X/Y" ou "COMPLET"
-- `hx-get` avec `hx-trigger="every 30s"` pour le polling
+Quand le PV est `BILLETTERIE`, enrichir la liste des catégories avec les events futurs :
+- Chaque event → un dict catégorie avec `is_event: True`, `date`, `jauge_max`, `places_vendues`, `pourcentage`
+- UUID de l'event comme `id` de la pseudo-catégorie
+- La jauge event dans la sidebar = jauge globale (Event.jauge_max)
+- Les catégories classiques (Bar, etc.) restent si le PV a des articles M2M classiques
 
-## TÂCHE 6 — Adapter `create_test_pos_data`
+### TÂCHE C — Rendu event dans `cotton/categories.html`
 
-Ajoute des Products billet de test :
-1. Crée un `Event` futur (date = demain)
-2. Crée un Product avec `methode_caisse='BI'` et `categorie_article='B'` (BILLET)
-3. Ajoute une Price (ex: 15€)
-4. Lie le Product à l'Event via `event.products.add(product)`
-5. Ajoute le Product au M2M d'un PV existant (ex: créer un PV "Accueil Festival")
+Ajouter `{% if cat.is_event %}` pour afficher :
+- Date de l'event (format court)
+- Mini-jauge (barre + texte X/Y ou COMPLET)
+- `data-testid="billetterie-sidebar-event-{uuid}"`
+
+### TÂCHE D — Adapter `cotton/articles.html` et `billet_tuile.html`
+
+- La condition `article.methode_caisse == 'BI'` doit être remplacée par `article.is_billet` ou `article.event`
+- Le composant `billet_tuile.html` reçoit les données event depuis le dict article
 
 ## VÉRIFICATION
 
-### Tests unitaires
-
 ```bash
-docker exec lespass_django poetry run python manage.py create_test_pos_data
-docker exec lespass_django poetry run pytest tests/pytest/test_pos_views_data.py -v
-docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
-```
-
-### Tests E2E
-
-```bash
-docker exec lespass_django poetry run pytest tests/e2e/test_pos_tiles_visual.py -v -s
-docker exec lespass_django poetry run pytest tests/e2e/ -v -s
+docker exec lespass_django poetry run python manage.py tenant_command create_test_pos_data --schema=lespass
+docker exec lespass_django poetry run pytest tests/pytest/ -q
 ```
 
 ### Vérification manuelle
 
-Ouvrir un PV avec des articles billet :
-- [ ] Tuiles BI en paysage (2 colonnes) visibles dans la grille
-- [ ] Jauge affiche le bon nombre de places
-- [ ] Clic sur une tuile BI → article ajouté au panier
-- [ ] Catégorie "Billetterie" dans la sidebar filtre correctement
-- [ ] Tuiles VT standard coexistent avec tuiles BI dans la même grille
-- [ ] Polling jauge : la jauge se rafraîchit toutes les 30s
+Ouvrir le PV "Accueil Festival" (type BILLETTERIE) :
+- [ ] Tuiles billet en paysage (2 colonnes) avec jauge et date
+- [ ] Tuiles standard (Bière, Eau) en carré
+- [ ] Sidebar : catégories classiques + events avec date et mini-jauge
+- [ ] Filtre par event dans la sidebar → seules les tuiles de cet event
+- [ ] Clic tuile billet → article ajouté au panier
+- [ ] PV "Bar" (type DIRECT) → inchangé, pas de tuiles billet
+
+### Ce qu'on ne touche PAS
+
+- `panier_necessite_client` / `panier_a_billets` → session 07
+- `moyens_paiement()` → session 07
+- JS existant (`articles.js`, `tarif.js`, `addition.js`)

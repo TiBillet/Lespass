@@ -14,6 +14,7 @@
 	<link rel="stylesheet" href="{% static 'css/header.css' %}" />
 	<link rel="stylesheet" href="{% static 'css/categories.css' %}" />
 	<link rel="stylesheet" href="{% static 'css/articles.css' %}" />
+	<link rel="stylesheet" href="{% static 'css/billet_tuile.css' %}" />
 	<link rel="stylesheet" href="{% static 'css/addition.css' %}" />
 	<!-- Material Symbols Outlined — icônes de l'interface caisse / POS interface icons -->
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" />
@@ -33,8 +34,38 @@
 
 <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()"
 	hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
-<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' style="background-color:#000000;">
+<body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" style="background-color:#000000;">
 	{% block content %} {% endblock content %}
+
+	<!-- SPINNER DE CHARGEMENT — extension loading-states officielle.
+	     data-loading="flex" : l'extension montre l'element en display:flex pendant la requete.
+	     data-loading-delay="400" : pas de blink si la requete est rapide (< 400ms).
+	     [data-loading] { display:none } cache l'overlay par defaut (regle CSS ci-dessous).
+	     Le spinner est global (pas de data-loading-states scope) : il se declenche sur
+	     TOUTE requete HTMX de la page.
+	     / LOADING SPINNER — official loading-states extension.
+	     data-loading="flex": extension shows element as display:flex during request.
+	     data-loading-delay="400": no blink on fast requests (< 400ms).
+	     [data-loading] { display:none } hides overlay by default (CSS rule below).
+	     Global spinner (no scope): triggers on ANY HTMX request on the page. -->
+	<div id="laboutik-spinner"
+	     data-loading="flex"
+	     data-loading-delay="400"
+	     aria-hidden="true"
+	     style="position:fixed;inset:0;z-index:9999;justify-content:center;align-items:center;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+		<div role="status"
+		     style="width:3rem;height:3rem;border-radius:50%;border:3px solid rgba(255,255,255,0.2);border-top-color:var(--vert01,#00e676);animation:laboutik-spin 0.7s linear infinite;">
+			<span class="visually-hidden">{% load i18n %}{% translate "Chargement..." %}</span>
+		</div>
+	</div>
+	<style>
+		[data-loading] { display: none; }
+		@keyframes laboutik-spin { to { transform: rotate(360deg); } }
+		@media (prefers-reduced-motion: reduce) {
+			#laboutik-spinner > div { animation: none; opacity: 0.6; }
+		}
+	</style>
+
 	<!--
 	OVERLAY LAYERS — couches superposees pour messages et confirmations.
 	/ Overlay layers — stacked layers for messages and confirmations.
@@ -71,6 +102,9 @@
 	<div id="confirm"></div>
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
+	<!-- Extension loading-states — spinner avec delai configurable (pas de blink si requete rapide)
+	     / loading-states extension — spinner with configurable delay (no blink on fast requests) -->
+	<script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
 	<script>
 		/**

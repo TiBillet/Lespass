@@ -1,0 +1,240 @@
+/* ============================================================
+   BILLET_TUILE.CSS — Tuile paysage billetterie POS
+   / Landscape ticket tile for POS ticketing
+
+   LOCALISATION : laboutik/static/css/billet_tuile.css
+   SOURCE : cotton/billet_tuile.html
+
+   Les tuiles billet occupent 2 colonnes dans le grid parent (#products).
+   Layout horizontal : zone icone/image a gauche, infos event a droite.
+   / Ticket tiles span 2 columns in the parent grid (#products).
+   Horizontal layout: icon/image zone on the left, event info on the right.
+   ============================================================ */
+
+/* Override de .article-container pour les tuiles billet.
+   .article-container a height:0 + padding-bottom:100% (ratio 1:1 carre).
+   .billet-tuile.article-container a une specificite plus haute → annule le carre.
+   PAS de !important sur display — sinon le filtre JS (display:none) ne marche plus.
+   / Override .article-container for ticket tiles.
+   Higher specificity cancels the 1:1 square ratio.
+   NO !important on display — JS filter (display:none) must still work. */
+.billet-tuile.article-container {
+	grid-column: span 2;
+	display: flex;
+	flex-direction: row;
+	align-items: stretch;
+	height: auto;
+	padding-bottom: 0;
+	min-height: 160px;
+	overflow: hidden;
+	cursor: pointer;
+}
+
+.billet-tuile.article-container:active {
+	transform: scale(0.97);
+}
+
+/* Zone gauche : icone ou image du produit
+   / Left zone: product icon or image */
+.billet-tuile-visual {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 120px;
+	min-width: 120px;
+	padding: 12px;
+	opacity: 0.85;
+}
+
+.billet-tuile-visual .billet-visual-icon {
+	font-size: 3rem;
+	line-height: 1;
+}
+
+.billet-tuile-visual .billet-visual-img {
+	max-width: 96px;
+	max-height: 96px;
+	object-fit: contain;
+	border-radius: 6px;
+}
+
+/* Zone droite : infos event + jauge + prix
+   / Right zone: event info + gauge + price */
+.billet-tuile-info {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 4px;
+	padding: 12px 12px 12px 0;
+	min-width: 0;
+}
+
+.billet-tuile-event-name {
+	font-size: 1.3rem;
+	font-weight: bold;
+	line-height: 1.3;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	flex-shrink: 0;
+	min-height: 1.3em;
+}
+
+.billet-tuile-event-date {
+	font-size: 0.8rem;
+	opacity: 0.65;
+	line-height: 1.2;
+	flex-shrink: 0;
+}
+
+.billet-tuile-tarif-name {
+	font-size: 1rem;
+	font-weight: 600;
+	opacity: 0.9;
+	line-height: 1.2;
+	flex-shrink: 0;
+}
+
+/* Barre de jauge — progression du remplissage
+   / Gauge bar — fill progress */
+.billet-jauge-bar {
+	width: 100%;
+	height: 6px;
+	border-radius: 3px;
+	background-color: rgba(255, 255, 255, 0.2);
+	overflow: hidden;
+	margin-top: 4px;
+	flex-shrink: 0;
+}
+
+.billet-jauge-fill {
+	height: 100%;
+	border-radius: 3px;
+	background-color: rgba(255, 255, 255, 0.75);
+	transition: width 300ms ease;
+}
+
+.billet-jauge-fill-warning {
+	background-color: #F59E0B;
+}
+
+.billet-jauge-fill-full {
+	background-color: #EF4444;
+}
+
+.billet-jauge-text {
+	font-size: 0.8rem;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.7;
+	line-height: 1.3;
+	flex-shrink: 0;
+}
+
+/* Footer : prix pill — en ligne
+   / Footer: price pill — row layout */
+.billet-tuile-footer {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	margin-top: 4px;
+	flex-shrink: 0;
+}
+
+.billet-tuile-prix {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 9px;
+	background-color: rgba(0, 0, 0, 0.55);
+	color: #ffffff;
+	font-size: 1rem;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	white-space: nowrap;
+	line-height: 1.4;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+/* Badge quantite — coin haut-droit
+   / Quantity badge — top-right corner */
+.billet-tuile-quantity {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+}
+
+/* Tuile COMPLET : opacite reduite, curseur non-cliquable
+   / FULL tile: reduced opacity, non-clickable cursor */
+.billet-tuile-complet {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+.billet-jauge-complet {
+	color: #EF4444;
+	font-weight: bold;
+	font-size: 0.9rem;
+}
+
+/* --- RESPONSIVE MOBILE (< 599px) ---
+   Les tuiles billet passent en portrait (span 1) sur petit ecran.
+   L'icone passe en haut, le texte en dessous. Plus lisible.
+   / Ticket tiles switch to portrait (span 1) on small screens.
+   Icon on top, text below. More readable. */
+@media only screen and (max-width: 599px) {
+	.billet-tuile.article-container {
+		grid-column: span 1;
+		flex-direction: column;
+		min-height: 180px;
+	}
+
+	.billet-tuile-visual {
+		width: 100%;
+		min-width: auto;
+		height: 50px;
+		padding: 8px;
+	}
+
+	.billet-tuile-visual .billet-visual-icon {
+		font-size: 2rem;
+	}
+
+	.billet-tuile-info {
+		padding: 6px 10px 10px;
+	}
+
+	.billet-tuile-event-name {
+		font-size: 1.1rem;
+	}
+}
+
+/* --- RESPONSIVE TABLETTE (600-1022px) ---
+   Tuiles billet en paysage mais zone icone reduite.
+   / Ticket tiles landscape but smaller icon zone. */
+@media only screen and (min-width: 600px) and (max-width: 1022px) {
+	.billet-tuile-visual {
+		width: 90px;
+		min-width: 90px;
+	}
+
+	.billet-tuile-visual .billet-visual-icon {
+		font-size: 2.2rem;
+	}
+}
+
+/* visually-hidden — manquant dans le CSS laboutik (pas de Bootstrap).
+   Cache visuellement mais reste lisible par les lecteurs d'ecran.
+   / visually-hidden — missing from laboutik CSS (no Bootstrap).
+   Visually hidden but still readable by screen readers. */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}

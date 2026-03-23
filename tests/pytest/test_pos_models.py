@@ -483,11 +483,11 @@ def test_create_test_pos_data_command(tenant):
         assert pdv_bar.categories.filter(pk=cat_bar.pk).exists(), "PdV 'Bar' doit avoir la categorie Bar"
         assert pdv_resto.products.count() > 0, "PdV 'Restaurant' doit avoir des produits"
 
-        # --- PV Adhesion (type DIRECT, produits adhesion dans le M2M) ---
-        # / Membership POS (DIRECT type, membership products in M2M)
+        # --- PV Adhesion (type ADHESION, charge auto les produits adhesion) ---
+        # / Membership POS (ADHESION type, auto-loads membership products)
         pdv_adhesion = PointDeVente.objects.filter(name='Adhesions').first()
         assert pdv_adhesion is not None, "PdV 'Adhesions' doit exister"
-        assert pdv_adhesion.comportement == PointDeVente.DIRECT, "PdV 'Adhesions' doit etre de type DIRECT"
+        assert pdv_adhesion.comportement == PointDeVente.ADHESION, "PdV 'Adhesions' doit etre de type ADHESION"
         assert pdv_adhesion.accepte_especes is True, "PdV 'Adhesions' doit accepter les especes"
         assert pdv_adhesion.accepte_carte_bancaire is True, "PdV 'Adhesions' doit accepter la CB"
         # Le PV Adhesion a les produits adhesion dans son M2M (meme nombre que les produits adhesion publies)

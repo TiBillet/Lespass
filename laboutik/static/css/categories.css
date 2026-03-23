@@ -10,6 +10,31 @@
 	width: var(--cat-width);
 	height: 100%;
 	background-color: var(--noir04);
+	overflow-y: auto;
+	overflow-x: hidden;
+
+	/* Scrollbar fine et discrete — coherente avec le theme sombre POS
+	   / Thin discreet scrollbar — consistent with dark POS theme */
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+/* Webkit scrollbar (Chrome, Edge, Safari) */
+#categories::-webkit-scrollbar {
+	width: 4px;
+}
+
+#categories::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+#categories::-webkit-scrollbar-thumb {
+	background-color: rgba(255, 255, 255, 0.15);
+	border-radius: 2px;
+}
+
+#categories::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(255, 255, 255, 0.3);
 }
 
 .category-item {
@@ -89,6 +114,61 @@
 	.category-item {
 		height: 52px;
 	}
+}
+
+/* --- PSEUDO-CATÉGORIES EVENT (PV BILLETTERIE) ---
+   Les events apparaissent dans la sidebar avec date + mini-jauge.
+   Le data-sel="cat-{event_uuid}" permet le filtre JS existant.
+   / Event pseudo-categories (BILLETTERIE POS)
+   Events appear in the sidebar with date + mini-gauge.
+   data-sel="cat-{event_uuid}" enables the existing JS filter. */
+
+.category-event {
+	height: auto;
+	min-height: 66px;
+	padding: 6px 4px;
+}
+
+.category-event-date {
+	font-size: 0.7rem;
+	opacity: 0.6;
+	line-height: 1.2;
+	margin-top: 1px;
+}
+
+/* Mini-jauge dans la sidebar — barre fine sous le nom de l'event
+   / Mini-gauge in sidebar — thin bar under event name */
+.category-event-jauge {
+	width: 80%;
+	height: 3px;
+	border-radius: 2px;
+	background-color: rgba(255, 255, 255, 0.15);
+	margin: 3px auto 1px;
+	overflow: hidden;
+}
+
+.category-event-jauge-fill {
+	height: 100%;
+	border-radius: 2px;
+	background-color: var(--vert01, #00e676);
+	transition: width 300ms ease;
+}
+
+.category-event-jauge-complet {
+	background-color: var(--rouge01, #e53935);
+}
+
+.category-event-places {
+	font-size: 0.65rem;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.7;
+	line-height: 1;
+}
+
+.category-event-complet {
+	color: var(--rouge01, #e53935);
+	font-weight: bold;
+	opacity: 1;
 }
 
 /* sunmi d3mini -- pour une largeur supérieure ou égale à 1278 pixels */

@@ -65,11 +65,20 @@ Export PDF (WeasyPrint), CSV, envoi email (Celery). Fermeture des tables et comm
 Filtre catégorie, feedback tactile, couleurs boutons paiement, écrans FALC
 (confirmation espèces, succès, retour carte), responsive Sunmi D3mini (1278×800).
 
-### Refonte typage ✅
+### Refonte typage ✅ → Types PV restaurés (session 06)
 
-Suppression `ADHESION`, `CASHLESS`, `KIOSK` de `comportement`. Migration vers `DIRECT` + `AVANCE`.
-Produits adhésion dans M2M standard. Suppression `kiosk.html` et code conditionnel.
-Tests Playwright adaptés (Session 04).
+Session 04 : suppression `KIOSK` de `comportement`, suppression `kiosk.html` et code conditionnel.
+Session 06 : restauration des types PV `ADHESION` ('A'), `CASHLESS` ('C'), ajout `BILLETTERIE` ('T').
+
+Le type du PV détermine le **chargement automatique** des articles :
+- `DIRECT` ('D') : articles du M2M uniquement (bar, restaurant, etc.)
+- `ADHESION` ('A') : charge auto tous les produits adhésion
+- `CASHLESS` ('C') : charge auto toutes les recharges
+- `BILLETTERIE` ('T') : construit les articles depuis les événements futurs
+- `AVANCE` ('V') : mode commande restaurant (réservé, pas codé)
+
+Les articles du M2M `products` sont **toujours chargés en plus** du chargement automatique.
+Pas de double typage : l'article n'a pas besoin de `methode_caisse` pour apparaître — c'est le type du PV qui décide.
 
 ---
 
@@ -113,18 +122,23 @@ Session 05.
 
 ### 3. Billetterie
 
-Les articles billet (`methode_caisse='BI'`) coexistent dans la grille standard.
-Tuile paysage (2 colonnes CSS Grid) + jauge event.
-Intégration dans le flow identification unifié (session 07 : `panier_a_billets`).
+Le PV de type `BILLETTERIE` ('T') construit ses articles depuis les événements futurs.
+Pas de double typage : pas de `methode_caisse='BI'`, c'est le type du PV qui décide.
+1 tuile paysage = 1 Price d'un event. Jauge statique (WebSocket en phase 4).
+Les events apparaissent comme pseudo-catégories dans la sidebar existante `<c-categories>`.
 Sessions 06 + 07.
 
-- [ ] `_construire_donnees_articles()` enrichi avec données event/jauge pour `methode_caisse='BI'`
-- [ ] Composant Cotton `<c-billet-tuile>` (paysage, `grid-column: span 2`, jauge)
-- [ ] Jauge places restantes (polling HTMX 30s → WebSocket plus tard)
-- [ ] Ajout `panier_a_billets` dans `panier_necessite_client` + adaptation `hx_identifier_client.html`
-- [ ] `_creer_billets_depuis_panier()` : Reservation + Ticket + LigneArticle (atomique)
-- [ ] Vérification atomique jauge au paiement
-- [ ] Impression mock (console logger)
+- [x] Types PV restaurés : `ADHESION`, `CASHLESS`, `BILLETTERIE` (migration 0005)
+- [x] Composant Cotton `billet_tuile.html` (paysage, `grid-column: span 2`, jauge statique)
+- [x] CSS `billet_tuile.css`
+- [x] Données de test : 2 Events + 2 Products BI + PV "Accueil Festival" (type BILLETTERIE)
+- [ ] `_construire_donnees_articles()` : charger depuis events quand PV est BILLETTERIE (plus de methode_caisse)
+- [ ] `_construire_donnees_categories()` : events comme pseudo-catégories (date + mini-jauge) si PV BILLETTERIE
+- [ ] `cotton/categories.html` : rendu event (date + jauge) si `is_event`
+- [ ] Ajout `panier_a_billets` dans `panier_necessite_client` + adaptation `hx_identifier_client.html` (session 07)
+- [ ] `_creer_billets_depuis_panier()` : Reservation + Ticket + LigneArticle (atomique) (session 07)
+- [ ] Vérification atomique jauge au paiement (session 07)
+- [ ] Impression mock (console logger) (session 07)
 - [ ] Tests pytest + Playwright
 
 ### 4. WebSocket
@@ -136,7 +150,8 @@ Push serveur → navigateur via HTMX 2 extension `ws`. Daphne ASGI.
 - [ ] `LaboutikConsumer` + route `ws/laboutik/{pv_uuid}/`
 - [ ] Badge vert "Connecté" au chargement (test visuel)
 - [ ] `wsocket/broadcast.py` : helper broadcast HTML
-- [ ] Intégration billetterie : broadcast jauge après vente (remplace polling)
+- [ ] Brancher le push WebSocket sur la jauge statique des tuiles billet (remplace le calcul au chargement — voir `cotton/billet_tuile.html` et `_construire_donnees_articles()`)
+- [ ] Intégration billetterie : broadcast jauge après vente
 - [ ] Tests
 - [ ] **Dev** : `manage.py runserver` (Daphne) — **pas** `runserver_plus`
 - [ ] **Prod** : `daphne TiBillet.asgi:application` derrière Nginx

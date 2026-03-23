@@ -9,6 +9,7 @@
 # PaiementViewSet : paiements espèces/CB/NFC depuis la DB (Phase 2 + Phase 3).
 
 import logging
+from datetime import timedelta
 from json import dumps
 
 from django.conf import settings
@@ -31,8 +32,10 @@ from fedow_core.services import TransactionService, WalletService
 
 from AuthBillet.models import Wallet
 from AuthBillet.utils import get_or_create_user
+from django.utils import timezone as dj_timezone
+
 from BaseBillet.models import (
-    Configuration, LigneArticle, Membership, Price, PriceSold, Product,
+    Configuration, Event, LigneArticle, Membership, Price, PriceSold, Product,
     ProductSold, SaleOrigin, PaymentMethod,
 )
 from BaseBillet.permissions import HasLaBoutikAccess
@@ -171,7 +174,7 @@ def _construire_donnees_articles(point_de_vente_instance):
     # Les adhesions n'ont pas forcement de methode_caisse, elles sont identifiees par categorie_article.
     # / POS M2M products: POS articles (methode_caisse) OR memberships (categorie_article)
     # Memberships don't necessarily have methode_caisse, identified by categorie_article.
-    produits = (
+    produits = list(
         point_de_vente_instance.products
         .filter(Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION))
         .select_related('categorie_pos')
@@ -179,6 +182,7 @@ def _construire_donnees_articles(point_de_vente_instance):
         .order_by('poids', 'name')
     )
 
+    now = dj_timezone.now()
     articles = []
     for product in produits:
         # Premier prix publié en euros (déjà filtré par le Prefetch)
@@ -284,8 +288,178 @@ def _construire_donnees_articles(point_de_vente_instance):
             "a_prix_libre": a_prix_libre,
             "tarifs": tarifs,
             "tarifs_json": dumps(tarifs) if tarifs else "[]",
+            "methode_caisse": product.methode_caisse or "",
         }
+
         articles.append(article_dict)
+
+    # --- PV BILLETTERIE : construire les articles depuis les événements futurs ---
+    # Chaque event → chaque Product lié → chaque Price publiée EUR = 1 tuile.
+    # Jauge sur la tuile : Price.stock si défini, sinon Event.jauge_max.
+    # Les articles du M2M (ci-dessus) sont déjà dans la liste.
+    # / BILLETTERIE POS: build articles from future events.
+    # Each event → each linked Product → each published EUR Price = 1 tile.
+    # Gauge on tile: Price.stock if set, otherwise Event.jauge_max.
+    # M2M articles (above) are already in the list.
+    est_pv_billetterie = (
+        point_de_vente_instance.comportement == PointDeVente.BILLETTERIE
+    )
+    if est_pv_billetterie:
+        from BaseBillet.models import Ticket  # Import ici pour eviter circulaire / Import here to avoid circular
+
+        events_futurs = (
+            Event.objects
+            .filter(
+                published=True,
+                archived=False,
+                datetime__gte=now - timedelta(days=1),
+            )
+            .prefetch_related('products__prices')
+            .order_by('datetime')
+        )
+
+        # Palette de couleurs pour distinguer les events visuellement
+        # Chaque event reçoit une couleur de fond unique.
+        # / Color palette to visually distinguish events.
+        # Each event gets a unique background color.
+        couleurs_events = [
+            '#7C3AED',  # violet
+            '#2563EB',  # bleu
+            '#059669',  # vert emeraude
+            '#D97706',  # ambre
+            '#DC2626',  # rouge
+            '#7C3AED',  # violet (cycle)
+            '#0891B2',  # cyan
+            '#BE185D',  # rose
+        ]
+
+        for index_event, event in enumerate(events_futurs):
+            places_vendues_event = event.valid_tickets_count()
+            jauge_max_event = event.jauge_max or 0
+            est_complet_event = event.complet()
+            pourcentage_event = (
+                int(round(places_vendues_event / jauge_max_event * 100))
+                if jauge_max_event else 0
+            )
+
+            # Couleur de fond par event (palette cyclique)
+            # / Background color per event (cyclic palette)
+            couleur_fond_event = couleurs_events[index_event % len(couleurs_events)]
+
+            # Produits publiés de cet event avec au moins un prix EUR
+            # / Published products of this event with at least one EUR price
+            produits_event = event.products.filter(publish=True)
+            if not produits_event.exists():
+                continue
+
+            for product in produits_event:
+                # Couleurs : couleur event par défaut, override par le produit si défini
+                # / Colors: event color by default, product override if set
+                categorie_pos = product.categorie_pos
+                couleur_fond = product.couleur_fond_pos or couleur_fond_event
+                couleur_texte = (
+                    product.couleur_texte_pos
+                    or (categorie_pos.couleur_texte if categorie_pos else None)
+                    or '#ffffff'
+                )
+                icone_brute = (
+                    product.icon_pos
+                    or (categorie_pos.icon if categorie_pos else None)
+                    or 'fa-ticket-alt'
+                )
+                if icone_brute.startswith("fa"):
+                    icone_type = "fa"
+                elif icone_brute:
+                    icone_type = "ms"
+                else:
+                    icone_type = "fa"
+                    icone_brute = "fa-ticket-alt"
+
+                # Image du produit
+                # / Product image
+                url_image = None
+                if product.img:
+                    try:
+                        url_image = product.img.med.url
+                    except Exception:
+                        url_image = None
+
+                # Pour chaque Price publiée en EUR (asset=null) → 1 tuile
+                # / For each published EUR Price (asset=null) → 1 tile
+                prix_euros = product.prices.filter(
+                    publish=True, asset__isnull=True
+                ).order_by('order')
+
+                for price in prix_euros:
+                    prix_en_centimes = int(round(price.prix * 100))
+
+                    # Jauge : Price.stock si défini, sinon Event.jauge_max
+                    # / Gauge: Price.stock if set, otherwise Event.jauge_max
+                    if price.stock is not None and price.stock > 0:
+                        # Jauge par tarif — compter les tickets vendus pour cette Price
+                        # / Per-rate gauge — count tickets sold for this Price
+                        places_vendues_price = Ticket.objects.filter(
+                            reservation__event__pk=event.pk,
+                            pricesold__price__pk=price.pk,
+                            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+                        ).count()
+                        jauge_max_tuile = price.stock
+                        places_vendues_tuile = places_vendues_price
+                        est_complet_tuile = price.out_of_stock(event)
+                    else:
+                        # Jauge globale de l'event
+                        # / Global event gauge
+                        jauge_max_tuile = jauge_max_event
+                        places_vendues_tuile = places_vendues_event
+                        est_complet_tuile = est_complet_event
+
+                    pourcentage_tuile = (
+                        int(round(places_vendues_tuile / jauge_max_tuile * 100))
+                        if jauge_max_tuile else 0
+                    )
+
+                    article_billet = {
+                        # ID unique par Price (pas par Product) pour eviter les doublons
+                        # dans le panier quand un Product a plusieurs tarifs.
+                        # / Unique ID per Price (not Product) to avoid cart duplicates
+                        # when a Product has multiple rates.
+                        "id": str(price.uuid),
+                        "name": price.name or product.name,
+                        "prix": prix_en_centimes,
+                        # La catégorie utilise l'UUID de l'event pour le filtre sidebar
+                        # / Category uses event UUID for sidebar filter
+                        "categorie": {
+                            "id": str(event.uuid),
+                            "name": event.name,
+                            "icon": "fa-calendar-alt",
+                            "icone_type": "fa",
+                            "couleur_backgr": couleur_fond,
+                            "couleur_texte": couleur_texte,
+                        },
+                        "couleur_backgr": couleur_fond,
+                        "couleur_texte": couleur_texte,
+                        "icone": icone_brute,
+                        "icone_type": icone_type,
+                        "bt_groupement": {"groupe": "groupe_BI"},
+                        "url_image": url_image,
+                        "est_adhesion": False,
+                        "multi_tarif": False,
+                        "a_prix_libre": price.free_price,
+                        "tarifs": [],
+                        "tarifs_json": "[]",
+                        "methode_caisse": "BI",
+                        "event": {
+                            "uuid": str(event.uuid),
+                            "name": event.name,
+                            "datetime": event.datetime,
+                            "jauge_max": jauge_max_tuile,
+                            "places_vendues": places_vendues_tuile,
+                            "places_restantes": max(0, jauge_max_tuile - places_vendues_tuile) if jauge_max_tuile else None,
+                            "pourcentage": pourcentage_tuile,
+                            "complet": est_complet_tuile,
+                        },
+                    }
+                    articles.append(article_billet)
 
     return articles
 
@@ -293,8 +467,16 @@ def _construire_donnees_articles(point_de_vente_instance):
 def _construire_donnees_categories(point_de_vente_instance):
     """
     Construit la liste de dicts catégories au format attendu par les templates.
-    Builds the list of category dicts in the format expected by templates.
+    Pour un PV BILLETTERIE, ajoute les events futurs comme pseudo-catégories
+    avec date et mini-jauge (filtre CSS cat-{event_uuid}).
+    / Builds the list of category dicts in the format expected by templates.
+    For a BILLETTERIE POS, adds future events as pseudo-categories
+    with date and mini-gauge (CSS filter cat-{event_uuid}).
+
+    LOCALISATION : laboutik/views.py
     """
+    # Catégories classiques du M2M (Bar, etc.) — toujours chargées
+    # / Classic M2M categories (Bar, etc.) — always loaded
     categories_qs = point_de_vente_instance.categories.order_by('poid_liste', 'name')
     categories = []
     for categorie in categories_qs:
@@ -314,6 +496,47 @@ def _construire_donnees_categories(point_de_vente_instance):
             "icon": icone_cat,
             "icone_type": icone_type_cat,
         })
+
+    # PV BILLETTERIE : ajouter les events futurs comme pseudo-catégories
+    # La jauge event dans la sidebar = jauge globale (toutes catégories confondues)
+    # / BILLETTERIE POS: add future events as pseudo-categories
+    # Event gauge in sidebar = global gauge (all rates combined)
+    est_pv_billetterie = (
+        point_de_vente_instance.comportement == PointDeVente.BILLETTERIE
+    )
+    if est_pv_billetterie:
+        now = dj_timezone.now()
+        events_futurs = Event.objects.filter(
+            published=True,
+            archived=False,
+            datetime__gte=now - timedelta(days=1),
+        ).order_by('datetime')
+
+        for event in events_futurs:
+            # Ignorer les events sans produit publié
+            # / Skip events without published products
+            if not event.products.filter(publish=True).exists():
+                continue
+
+            places_vendues = event.valid_tickets_count()
+            jauge_max = event.jauge_max or 0
+            pourcentage = (
+                int(round(places_vendues / jauge_max * 100))
+                if jauge_max else 0
+            )
+            categories.append({
+                "id": str(event.uuid),
+                "name": event.name,
+                "icon": "fa-calendar-alt",
+                "icone_type": "fa",
+                "is_event": True,
+                "date": event.datetime,
+                "jauge_max": jauge_max,
+                "places_vendues": places_vendues,
+                "pourcentage": pourcentage,
+                "complet": event.complet(),
+            })
+
     return categories
 
 

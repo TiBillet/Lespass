@@ -178,10 +178,12 @@ PointDeVente
 ├── name (CharField unique)
 ├── icon (CharField, nullable)
 ├── comportement (CharField choices)
-│   D = Direct (interface POS standard : grille + panier + footer)
+│   D = Direct (M2M products uniquement : bar, restaurant, etc.)
+│   A = Adhésion (charge auto tous les produits adhésion + M2M)
+│   C = Cashless (charge auto toutes les recharges + M2M)
+│   T = Billetterie (construit les articles depuis les événements futurs + M2M)
 │   V = Avancé / Advanced (mode commande restaurant — réservé, pas codé)
-│   ⚠️ A (Adhesion), C (Cashless) et K (Kiosk) supprimés par la refonte typage (section 15)
-│   Le contenu du PV est déterminé par les articles (M2M products), pas le comportement.
+│   Le type du PV détermine le chargement automatique. Le M2M products est toujours chargé en plus.
 ├── service_direct (BooleanField, default=True)
 ├── afficher_les_prix (BooleanField, default=True)
 ├── accepte_especes (BooleanField, default=True)
@@ -1826,34 +1828,41 @@ au lieu de l'ajouter. On la fait DANS le sprint Billetterie, pas en phase sépar
 
 ### Phase BILLETTERIE — Articles billet dans la grille POS
 
-#### Vision (mise à jour post-refonte)
+#### Vision (mise à jour session 06)
 
-Plus de PV spécial ni de template séparé. Les articles billet (`methode_caisse='BI'`) sont
-des articles comme les autres, rendus avec un composant Cotton spécifique (`<c-billet-tuile>`)
-qui occupe 2 colonnes et affiche l'événement + jauge.
+Le PV de type `BILLETTERIE` ('T') construit ses articles depuis les **événements futurs**.
+Pas de double typage des articles : le Product n'a pas besoin de `methode_caisse='BI'` pour
+apparaître — c'est le type du PV qui détermine le chargement automatique.
 
-Un PV "Accueil Festival" peut contenir des goodies, des recharges, des adhésions ET des billets.
+Le composant Cotton `<c-billet-tuile>` rend les articles en paysage (2 colonnes, jauge, date).
+Les articles du M2M `products` sont chargés en plus (goodies, boissons, etc.).
 La sidebar catégories filtre normalement. Le panier accepte tout.
 
-La seule différence : les articles BI déclenchent un formulaire email optionnel avant paiement
+La seule différence : les articles billet déclenchent un formulaire email optionnel avant paiement
 (comme les adhésions déclenchent le wizard d'identification).
 
-#### Ce qui ne change pas par rapport au plan précédent
+#### Principe : le type du PV détermine le chargement, pas un flag sur l'article
 
-- `Product.BILLET_POS = 'BI'` existe déjà
-- On réutilise les Products existants (`categorie_article=BILLET` + `methode_caisse='BI'`)
-- `_construire_donnees_evenements()` reste la même logique (événements futurs, jauge)
+Même logique que les adhésions : le PV `ADHESION` charge tous les `categorie_article=ADHESION`.
+Le PV `BILLETTERIE` construit les articles depuis `Event.objects.filter(published=True, datetime__gte=now)`.
+Le PV `CASHLESS` charge toutes les recharges. Le PV `DIRECT` charge uniquement le M2M.
+
+Pas de `methode_caisse='BI'` nécessaire — les Products existants (`categorie_article=BILLET`)
+sont automatiquement disponibles quand ils sont liés à un Event futur publié.
+
+#### Ce qui reste identique
+
 - `_creer_billets_depuis_panier()` reste identique
 - Vérification atomique de la jauge au paiement
 - Impression mockée (console logger)
 - Tous les moyens de paiement disponibles (y compris NFC)
 
-#### Ce qui change
+#### Ce qui change (vs. ancien plan)
 
-1. **Pas de template `billetterie.html`** — les tuiles BI sont dans `common_user_interface.html`
-2. **Pas de sidebar événements** — la sidebar catégories filtre vers une catégorie "Billetterie"
+1. **PV type `BILLETTERIE` ('T')** au lieu de `methode_caisse='BI'` sur chaque article
+2. **Pas de template `billetterie.html`** — tuiles BI dans `common_user_interface.html`
 3. **Le composant `<c-billet-tuile>`** est rendu dans le même grid que les tuiles standard
-4. **`_construire_donnees_articles()`** gère les articles BI en construisant les données event/jauge
+4. **`_construire_donnees_articles()`** détecte le type du PV pour charger depuis les events
 5. **La grille CSS** utilise `grid-column: span 2` pour les tuiles BI (paysage)
 
 #### Rendu mixte dans la grille
@@ -1949,30 +1958,19 @@ Fichiers supprimés :
 #### Principe : Products existants, pas de nouveaux modèles
 
 **On réutilise les Products existants de billetterie** (`categorie_article=BILLET` ou `FREERES`).
-Pour qu'un produit billet apparaisse dans le POS, il suffit de lui ajouter `methode_caisse='BI'`
-via l'admin. Pas de création de nouveaux Products spécifiques POS.
-
-Les champs `categorie_article` et `methode_caisse` sont orthogonaux :
-- `categorie_article` = type de produit (BILLET, ADHESION, etc.)
-- `methode_caisse` = méthode de vente en caisse (VT, BI, AD, etc.) — `null` = pas en caisse
-
-Un Product avec `categorie_article='B'` (BILLET) ET `methode_caisse='BI'` (BILLET_POS) est
-un billet vendable en ligne ET en caisse. Pas de duplication.
+Pas de double typage : pas besoin de `methode_caisse='BI'` pour apparaître dans le POS.
+C'est le type du PV (`BILLETTERIE`) qui détermine le chargement depuis les events.
 
 #### Backend — ce qui doit être ajouté
 
-**1. Pas de migration comportement — la refonte typage supprime les types de PV**
+**1. Type PV `BILLETTERIE` ('T')** — migration 0005 (fait)
 
-`BILLET_POS = 'BI'` existe déjà sur `Product.methode_caisse`. Pas de migration nécessaire.
-Les Products existants (`categorie_article=BILLET`) reçoivent `methode_caisse='BI'` via
-l'admin ou le management command `create_test_pos_data`, puis sont ajoutés au M2M `products`
-du PV concerné.
-
-**Pas de `comportement='T'`** — le PV reste `DIRECT`. Le rendu est piloté par `methode_caisse`.
+Le PV de type `BILLETTERIE` construit ses articles depuis les événements futurs.
+Les articles du M2M `products` sont chargés en plus.
 
 **2. `laboutik/views.py` — `_construire_donnees_articles()` enrichi**
 
-Pour chaque article avec `methode_caisse='BI'`, enrichir le dict avec les données event :
+Quand le PV est de type `BILLETTERIE`, charger les articles depuis les events futurs :
 
 **4. `_construire_donnees_evenements(pv)` — nouveau helper dans views.py**
 
@@ -2211,53 +2209,62 @@ Les tuiles sont des composants Cotton réutilisables. Les jauges sont des partia
 ##### Layout général (dans `common_user_interface.html` — pas de template séparé)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  HEADER (c-header — identique aux autres vues)                  │
-├──────────────────┬──────────────────────────────┬───────────────┤
-│  SIDEBAR EVENTS  │  GRILLE TARIFS (2 colonnes)  │   ADDITION    │
-│  (filtre HTMX)   │                              │   (panier)    │
-│                  │  ┌──────────┐ ┌──────────┐   │               │
-│  [Tous]          │  │ Concert  │ │ Concert  │   │               │
-│  ──────          │  │ Plein    │ │ Réduit   │   │               │
-│  [Concert Rock]  │  │ tarif    │ │ tarif    │   │               │
-│  15 avr.         │  │ ████░░ 8 │ │ ████░░ 8 │   │               │
-│  ████████░ 8/10  │  │ 15,00 € │ │  8,00 €  │   │               │
-│                  │  └──────────┘ └──────────┘   │               │
-│  [Soirée Elec.]  │  ┌──────────┐ ┌──────────┐   │               │
-│  22 avr.         │  │ Soirée   │ │ Soirée   │   │               │
-│  ████░░░░ 4/10   │  │ Entrée   │ │ VIP      │   │               │
-│                  │  │ ████░░ 4 │ │ ████░░ 4 │   │               │
-│                  │  │ 10,00 € │ │ 25,00 €  │   │               │
-│                  │  └──────────┘ └──────────┘   │               │
-├──────────────────┴──────────────────────────────┴───────────────┤
-│  FOOTER (c-footer — identique : RESET / CHECK CARTE / VALIDER)  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  HEADER (c-header — identique aux autres vues)                       │
+├──────────────┬───────────────────────────────────────┬───────────────┤
+│  SIDEBAR     │  GRILLE (CSS Grid auto-fill)           │  ADDITION     │
+│  (c-categor.)│                                        │  (panier)     │
+│              │  ┌────┐ ┌────┐                         │               │
+│  [Tous]      │  │Bière│ │Eau │ ← carrées (M2M)       │               │
+│  [Bar]       │  └────┘ └────┘                         │               │
+│  ──────      │  ┌────────────────────────────────────┐│               │
+│  Concert Rock│  │ 🎫 Concert Rock — 15 avr.          ││               │
+│  15 avr.     │  │    ████████░░ 8/50 — 15,00€        │← 2 colonnes   │
+│  ████░░ 8/50 │  │    (Plein tarif)                   ││               │
+│              │  └────────────────────────────────────┘│               │
+│  Soirée Elec.│  ┌────────────────────────────────────┐│               │
+│  22 avr.     │  │ 🎫 Concert Rock — 15 avr.          ││               │
+│  ████░░ 4/50 │  │    ████████░░ 8/50 — 8,00€         │← 2 colonnes   │
+│              │  │    (Tarif réduit)                   ││               │
+│              │  └────────────────────────────────────┘│               │
+│              │  ┌────────────────────────────────────┐│               │
+│              │  │ 🎫 Soirée Electro — 22 avr.        ││               │
+│              │  │    ████░░░░░░ 4/50 — 10,00€         │← 2 colonnes   │
+│              │  └────────────────────────────────────┘│               │
+├──────────────┴────────────────────────────────────────┴───────────────┤
+│  FOOTER (c-footer — identique : RESET / CHECK CARTE / VALIDER)       │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-**Responsive** :
-- Desktop (> 1022px) : sidebar events + grille 2 colonnes + addition
-- Tablette (599-1022px) : sidebar events + grille 2 colonnes (pas d'addition séparée)
-- Mobile (< 599px) : grille **1 colonne** pleine largeur + sidebar masquée
+**Décision sidebar (session 06)** : les events sont des **pseudo-catégories** dans `<c-categories>`
+existant. Pas de sidebar dédiée, pas de template séparé, pas d'action HTMX supplémentaire.
+Le filtre CSS existant (`cat-{uuid}`) fonctionne tel quel : chaque tuile billet porte `cat-{event_uuid}`.
+Les catégories classiques (Bar, etc.) coexistent naturellement avec les events.
+Le caissier peut filtrer "Bar" (articles classiques) ou "Concert Rock" (billets de cet event).
 
-##### Architecture des templates
+Les events apparaissent dans la sidebar avec date + mini-jauge, distingués visuellement par un
+flag `is_event: True` dans le dict catégorie.
+
+**Responsive** :
+- Desktop (> 1022px) : sidebar catégories/events + grille + addition
+- Tablette (599-1022px) : sidebar + grille (pas d'addition séparée)
+- Mobile (< 599px) : grille pleine largeur + sidebar masquée
+
+##### Architecture des templates (mise à jour session 06)
 
 ```
 laboutik/templates/
 ├── cotton/
-│   ├── billet_tuile.html          ← NOUVEAU : composant Cotton d'une tuile tarif
-│   └── billet_sidebar_item.html   ← NOUVEAU : composant Cotton d'un item sidebar event
+│   ├── billet_tuile.html          ← FAIT : composant Cotton tuile paysage (include)
+│   ├── articles.html              ← MODIFIÉ : condition methode_caisse BI → billet_tuile
+│   └── categories.html            ← À MODIFIER : ajouter rendu event (date + jauge) si is_event
 ├── laboutik/
-│   ├── views/
-│   │   └── billetterie.html       ← NOUVEAU : layout principal (grille + sidebar + addition)
 │   └── partial/
-│       ├── hx_jauge_event.html           ← NOUVEAU : jauge HTMX (polling 30s → WebSocket plus tard)
-│       ├── hx_billetterie_grille.html    ← NOUVEAU : grille de tuiles (rechargée par filtre sidebar)
-│       └── hx_billetterie_email_form.html ← NOUVEAU : formulaire email optionnel avant paiement
+│       └── hx_billetterie_email_form.html ← À CRÉER (session 07) : formulaire email avant paiement
 ```
 
-**Pourquoi Cotton pour les tuiles** : la tuile est réutilisée dans la grille et potentiellement
-dans d'autres contextes (résumé de panier, récapitulatif avant paiement). Un composant Cotton
-isole le HTML/CSS et permet de passer les données via attributs.
+Pas de `billetterie.html`, pas de `billet_sidebar_item.html`, pas de `hx_billetterie_grille.html`.
+L'interface est `common_user_interface.html` avec les mêmes composants Cotton.
 
 ##### Composant Cotton : tuile tarif (`cotton/billet_tuile.html`)
 
@@ -2388,136 +2395,29 @@ Si event_uuid=<uuid> → affiche uniquement les tuiles de cet événement.
 </div>
 ```
 
-##### Sidebar événements — filtre HTMX (pas JS)
+##### Sidebar : events comme pseudo-catégories (décision session 06, option B)
 
-Chaque bouton de la sidebar fait un `hx-get` qui recharge la grille côté serveur.
-Zéro JS pour le filtrage.
+Les events sont des **pseudo-catégories** dans `<c-categories>` existant. Pas de sidebar dédiée,
+pas de template séparé, pas d'action HTMX supplémentaire.
 
-```html
-<!--
-SIDEBAR ÉVÉNEMENTS — filtre HTMX les tuiles par événement
-/ Events sidebar — HTMX-filters tiles by event
+**Pourquoi** : le filtre CSS existant (`cat-{uuid}`) fonctionne déjà. Chaque tuile billet porte
+`cat-{event_uuid}`. Le JS categories.js masque/affiche les tuiles. Le filtre est instantané
+(CSS côté client, pas de round-trip serveur). Les catégories classiques (Bar, etc.) et les events
+coexistent naturellement — le caissier peut filtrer "Bar" ou "Concert Rock".
 
-LOCALISATION : laboutik/templates/cotton/billet_tuile.html (composant Cotton dans la grille standard)
-(ou composant Cotton si réutilisable)
+**Implémentation** :
+1. `_construire_donnees_categories()` : quand le PV est `BILLETTERIE`, ajouter les events futurs
+   comme pseudo-catégories avec `is_event: True`, `date`, `jauge_max`, `places_vendues`, `pourcentage`
+2. `cotton/categories.html` : `{% if cat.is_event %}` → afficher date + mini-jauge en plus du nom
+3. Chaque tuile billet porte `cat-{event_uuid}` pour le filtre CSS
 
-FLUX :
-Clic → hx-get grille_billetterie?event_uuid=... → recharge #billetterie-grid
-/ Click → hx-get grille_billetterie?event_uuid=... → reloads #billetterie-grid
--->
-<nav id="billetterie-sidebar"
-     aria-label="{% translate 'Filtrer par événement' %}"
-     data-testid="billetterie-sidebar">
+Pas de `grille_billetterie` action, pas de `hx_billetterie_grille.html`, pas de `billet_sidebar_item.html`.
 
-  {# Bouton "Tous" — recharge la grille complète #}
-  <button class="billet-sidebar-item billet-sidebar-active"
-          hx-get="{% url 'laboutik-caisse-grille_billetterie' %}?event_uuid=all"
-          hx-target="#billetterie-grid"
-          hx-swap="innerHTML"
-          data-event-uuid="all"
-          data-testid="billetterie-sidebar-tous">
-    <span class="billet-sidebar-nom">{% translate "Tous" %}</span>
-  </button>
+##### Jauge statique (décision session 06)
 
-  {# Un bouton par événement avec mini-jauge #}
-  {% for event in evenements %}
-  <button class="billet-sidebar-item"
-          hx-get="{% url 'laboutik-caisse-grille_billetterie' %}?event_uuid={{ event.uuid }}"
-          hx-target="#billetterie-grid"
-          hx-swap="innerHTML"
-          data-event-uuid="{{ event.uuid }}"
-          data-testid="billetterie-sidebar-event-{{ event.uuid }}">
-
-    <span class="billet-sidebar-nom">{{ event.name }}</span>
-    <span class="billet-sidebar-date">{{ event.datetime|date:"d/m" }}</span>
-
-    {% if event.jauge_max %}
-    <div class="billet-sidebar-jauge" aria-hidden="true">
-      <div class="billet-sidebar-jauge-bar"
-           style="width: {{ event.pourcentage_remplissage }}%;">
-      </div>
-    </div>
-    <span class="billet-sidebar-places{% if event.complet %} billet-sidebar-complet{% endif %}"
-          aria-label="{{ event.places_restantes }} {% translate 'places restantes' %}">
-      {% if event.complet %}{% translate "COMPLET" %}{% else %}{{ event.places_restantes }}/{{ event.jauge_max }}{% endif %}
-    </span>
-    {% endif %}
-
-  </button>
-  {% endfor %}
-
-</nav>
-```
-
-**Action ViewSet associée** :
-
-```python
-# CaisseViewSet
-@action(detail=False, methods=['GET'], url_path='grille_billetterie')
-def grille_billetterie(self, request):
-    """
-    Retourne le partial HTML de la grille de tuiles, filtré par événement.
-    / Returns the tiles grid HTML partial, filtered by event.
-
-    Appelé par les boutons sidebar HTMX.
-    """
-    event_uuid = request.GET.get('event_uuid', 'all')
-    pv_uuid = request.GET.get('pv_uuid')
-    pv = PointDeVente.objects.get(uuid=pv_uuid)
-    evenements = _construire_donnees_evenements(pv)
-    if event_uuid != 'all':
-        evenements = [e for e in evenements if e['uuid'] == event_uuid]
-    return render(request, "laboutik/partial/hx_billetterie_grille.html", {
-        "evenements": evenements,
-        "currency_data": CURRENCY_DATA,
-    })
-```
-
-##### Partial jauge (`hx_jauge_event.html`)
-
-Pas de template filter custom (`divide_by`, `mul`). Toutes les valeurs sont calculées
-côté Python dans `_construire_donnees_evenements()` et passées dans le contexte :
-- `event.pourcentage_remplissage` (int 0-100)
-- `event.places_restantes` (int ou None)
-- `event.complet` (bool)
-
-```html
-<!--
-JAUGE PLACES RESTANTES — partial HTMX
-/ Remaining places gauge — HTMX partial
-
-LOCALISATION : laboutik/templates/laboutik/partial/hx_jauge_event.html
-
-Phase 1 : polling HTMX toutes les 30s (hx-trigger="every 30s")
-Phase WebSocket : sera déclenché par signal post-vente (hx-trigger remplacé par ws)
--->
-<div class="billet-tuile-jauge-wrapper"
-     hx-get="{% url 'laboutik-caisse-jauge_event' %}?event_uuid={{ event.uuid }}"
-     hx-trigger="every 30s"
-     hx-swap="outerHTML"
-     aria-live="polite"
-     data-testid="billet-jauge-{{ event.uuid }}">
-
-  {% if event.jauge_max %}
-  <div class="billet-jauge-bar-container" aria-hidden="true">
-    <div class="billet-jauge-bar{% if event.complet %} billet-jauge-bar-complet{% endif %}"
-         style="width: {{ event.pourcentage_remplissage }}%;"></div>
-  </div>
-  <span class="billet-jauge-label{% if event.complet %} billet-jauge-label-complet{% endif %}"
-        aria-label="{{ event.places_restantes }} {% translate 'places restantes' %}">
-    {% if event.complet %}
-    {% translate "COMPLET" %}
-    {% elif event.places_restantes <= 5 %}
-    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-    {{ event.places_restantes }} {% translate "restantes" %}
-    {% else %}
-    {{ event.places_restantes }}/{{ event.jauge_max }}
-    {% endif %}
-  </span>
-  {% endif %}
-
-</div>
-```
+Pas de polling HTMX 30s. La jauge est calculée au chargement (`_construire_donnees_articles()`).
+Sera remplacée par WebSocket push en Phase 4 (voir INDEX.md).
+Pas de `hx_jauge_event.html`.
 
 ##### Formulaire email (`hx_billetterie_email_form.html`)
 

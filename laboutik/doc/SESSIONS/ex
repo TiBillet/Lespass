@@ -177,3 +177,32 @@ Hésite pas à prendre un regarde critique aussi de designer UX/UI expert.
 Si tu as le moindre doute, pose moi des questions pour avancer petit à petit.
 
 
+####
+
+  On travaille sur le projet Lespass (POS Django + HTMX).
+  Lis les fichiers suivants dans cet ordre :
+
+  1. CLAUDE.md (racine) — règles du projet
+  2. GUIDELINES.md — conventions de code
+  3. laboutik/doc/INDEX.md — état d'avancement global
+  4. laboutik/doc/SESSIONS/06_billetterie_tuiles_et_donnees.md — la tâche à réaliser
+  5. laboutik/doc/PLAN_LABOUTIK.md lignes 1809-2090 — le plan détaillé pour la billetterie
+  6. tests/TESTS_README.md section "Pieges documentes" (9.30-9.35) — pièges récents
+
+  Contexte session précédente (05, terminée) :
+  - Le flow d'identification client unifié est en place (panier_necessite_client)
+  - Le verrouillage JS par groupe a été supprimé → paniers mixtes autorisés
+  - identifier_client() reconstruit le panier depuis les repid-* du POST
+  - Le formulaire email soumet via #addition-form (pas de hx-post séparé)
+  - PV "Mix" créé dans create_test_pos_data (VT + RE + AD)
+  - 28 pytest + 17 E2E passent
+  - ICON_POS dans Administration/admin/products.py : 98 icônes FA5 + IconPickerWidget
+  - NE PAS toucher panier_necessite_client ni panier_a_billets (session 07)
+
+  Pièges critiques à garder en tête :
+  - CarteCashless est SHARED_APPS → pas de FastTenantTestCase pour les tests NFC
+  - create_test_pos_data prend le premier tenant alphabétique → forcer --schema=lespass
+  - Le NFC reader soumet #addition-form, pas les hidden fields du partial
+  - {% translate %} peut changer le texte → tester avec "in contenu or" sur les variantes
+
+  Charge le skill /stack-ccc puis lance le plan pour la session 06.

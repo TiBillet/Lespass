@@ -335,3 +335,10 @@ docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 - [x] TOUS les tests pytest passent (28/28)
 - [x] TOUS les tests E2E passent (8/8 + 8/8 régression)
 - [x] Test E2E panier mixte sur PV "Mix" (VT + RE + AD → NFC → espèces → 3 LigneArticle vérifiées en DB)
+
+### Note pour la session 06
+
+Les acquis de la session 05 sont stables : 28 pytest + 17 E2E passent, le code est
+documenté, les pièges sont dans `tests/TESTS_README.md` (9.30 à 9.35).
+Le flag `panier_necessite_client` devra intégrer `panier_a_billets` en session 07
+(pas en 06 — la 06 ne touche que l'affichage des tuiles billet dans la grille).

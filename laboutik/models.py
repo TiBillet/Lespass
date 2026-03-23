@@ -61,11 +61,12 @@ class LaboutikConfiguration(SingletonModel):
 
 class PointDeVente(models.Model):
     """
-    Un point de vente physique ou virtuel (bar, restaurant, etc.).
-    Chaque point de vente a ses propres produits et categories.
-    Le contenu est determine par le M2M products, pas par le comportement.
-    / A physical or virtual point of sale (bar, restaurant, etc.).
-    Content is determined by the M2M products, not by comportement.
+    Un point de vente physique ou virtuel (bar, restaurant, billetterie, etc.).
+    Le type du PV (comportement) determine le chargement automatique des articles.
+    Les articles du M2M products sont toujours charges en plus.
+    / A physical or virtual point of sale (bar, restaurant, ticketing, etc.).
+    The POS type (comportement) determines automatic article loading.
+    M2M products are always loaded in addition.
 
     LOCALISATION : laboutik/models.py
     """
@@ -83,22 +84,40 @@ class PointDeVente(models.Model):
         help_text=_("Icon name (e.g. Bootstrap Icons class)."),
     )
 
-    # Comportement du point de vente (mode d'interface, pas type de contenu)
-    # Le contenu est determine par les articles dans le M2M products.
-    # / Point of sale behavior mode (interface mode, not content type)
-    # Content is determined by articles in the M2M products.
+    # Type du point de vente — determine le chargement automatique des articles.
+    # DIRECT : articles du M2M products uniquement (bar, restaurant, etc.)
+    # ADHESION : charge automatiquement tous les Product(categorie_article=ADHESION)
+    # CASHLESS : charge automatiquement toutes les recharges
+    # BILLETTERIE : construit les articles depuis les evenements futurs
+    # AVANCE : mode commande restaurant (reserve, pas code)
+    # Les articles du M2M products sont toujours charges EN PLUS du chargement automatique.
+    # / POS type — determines automatic article loading.
+    # DIRECT: M2M products only (bar, restaurant, etc.)
+    # ADHESION: auto-loads all Product(categorie_article=ADHESION)
+    # CASHLESS: auto-loads all top-up products
+    # BILLETTERIE: builds articles from future events
+    # AVANCE: restaurant order mode (reserved, not coded)
+    # M2M products are always loaded IN ADDITION to automatic loading.
     DIRECT = 'D'
+    ADHESION = 'A'
+    CASHLESS = 'C'
+    BILLETTERIE = 'T'
     AVANCE = 'V'
     COMPORTEMENT_CHOICES = [
         (DIRECT, _('Direct')),
+        (ADHESION, _('Memberships')),
+        (CASHLESS, _('Cashless')),
+        (BILLETTERIE, _('Ticketing')),
         (AVANCE, _('Advanced')),
     ]
     comportement = models.CharField(
         max_length=1, choices=COMPORTEMENT_CHOICES, default=DIRECT,
-        verbose_name=_("Behavior"),
+        verbose_name=_("POS type"),
         help_text=_(
-            "Operating mode: Direct (standard counter sale) "
-            "or Advanced (restaurant order mode)."
+            "Determines how articles are loaded. "
+            "Direct: M2M only. Memberships: auto-loads membership products. "
+            "Cashless: auto-loads top-ups. Ticketing: builds from future events. "
+            "Advanced: restaurant order mode."
         ),
     )
 
