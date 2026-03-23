@@ -17,17 +17,15 @@ Usage :
     docker exec lespass_django poetry run python manage.py create_test_pos_data
 """
 import uuid as uuid_module
-from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import schema_context, tenant_context
+from django_tenants.utils import schema_context
 
-from BaseBillet.models import CategorieProduct, Event, Product, Price
+from BaseBillet.models import CategorieProduct, Product, Price
 from Customers.models import Client
 from laboutik.models import CartePrimaire, PointDeVente
 from QrcodeCashless.models import CarteCashless, Detail
@@ -528,8 +526,15 @@ class Command(BaseCommand):
             pdv_mix.products.set(produits_mix)
             pdv_mix.categories.set([categorie_bar, categorie_cashless])
 
-            # --- Billetterie : categorie, produits billet, events, PV "Accueil Festival" ---
-            # / Ticketing: category, ticket products, events, "Festival Reception" POS
+            # --- PV Billetterie (type BILLETTERIE) ---
+            # Le PV de type BILLETTERIE construit ses articles depuis les events futurs.
+            # Pas besoin de creer des Products billet ici — les events de demo_data_v2
+            # fournissent les articles automatiquement.
+            # Les articles M2M (Biere, Eau) sont charges en plus.
+            # / BILLETTERIE POS builds articles from future events.
+            # No need to create ticket Products here — demo_data_v2 events
+            # provide articles automatically.
+            # M2M articles (Beer, Water) are loaded in addition.
             categorie_billetterie, _ = CategorieProduct.objects.update_or_create(
                 name="Billetterie",
                 defaults={
@@ -539,170 +544,7 @@ class Command(BaseCommand):
                     "poid_liste": 6,
                 },
             )
-            self.stdout.write(f"  Categorie billetterie : {categorie_billetterie}")
 
-            # 2 produits billet (categorie_article=BILLET + methode_caisse=BILLET_POS)
-            # / 2 ticket products (categorie_article=BILLET + methode_caisse=BILLET_POS)
-            produit_concert, created_concert = Product.objects.get_or_create(
-                name="Concert Rock",
-                defaults={
-                    "categorie_article": Product.BILLET,
-                    "methode_caisse": Product.BILLET_POS,
-                    "categorie_pos": categorie_billetterie,
-                    "couleur_fond_pos": "#7C3AED",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-guitar",
-                    "publish": True,
-                },
-            )
-            if created_concert:
-                Price.objects.create(
-                    product=produit_concert,
-                    name="Tarif Concert Rock",
-                    prix=Decimal("15.00"),
-                )
-                self.stdout.write(f"  Produit billet cree : {produit_concert.name} (15.00 EUR)")
-            else:
-                # Met a jour les champs POS si le produit existe deja
-                # / Update POS fields if product already exists
-                produit_concert.categorie_article = Product.BILLET
-                produit_concert.methode_caisse = Product.BILLET_POS
-                produit_concert.categorie_pos = categorie_billetterie
-                produit_concert.couleur_fond_pos = "#7C3AED"
-                produit_concert.couleur_texte_pos = "#FFFFFF"
-                produit_concert.icon_pos = "fa-guitar"
-                produit_concert.publish = True
-                produit_concert.save(update_fields=[
-                    "categorie_article", "methode_caisse", "categorie_pos",
-                    "couleur_fond_pos", "couleur_texte_pos", "icon_pos", "publish",
-                ])
-                self.stdout.write(f"  Produit billet mis a jour : {produit_concert.name}")
-
-            # 2e tarif avec stock limité — get_or_create pour ne pas dupliquer entre les runs
-            # / 2nd rate with limited stock — get_or_create to avoid duplicates between runs
-            tarif_reduit_concert, created_tr = Price.objects.get_or_create(
-                product=produit_concert,
-                name="Tarif Reduit Concert",
-                defaults={
-                    "prix": Decimal("8.00"),
-                    "stock": 20,
-                },
-            )
-            if created_tr:
-                self.stdout.write(f"  Tarif reduit cree : {tarif_reduit_concert.name} (8.00 EUR, stock=20)")
-
-            produit_electro, created_electro = Product.objects.get_or_create(
-                name="Soiree Electro",
-                defaults={
-                    "categorie_article": Product.BILLET,
-                    "methode_caisse": Product.BILLET_POS,
-                    "categorie_pos": categorie_billetterie,
-                    "couleur_fond_pos": "#2563EB",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-headphones",
-                    "publish": True,
-                },
-            )
-            if created_electro:
-                Price.objects.create(
-                    product=produit_electro,
-                    name="Tarif Soiree Electro",
-                    prix=Decimal("10.00"),
-                )
-                self.stdout.write(f"  Produit billet cree : {produit_electro.name} (10.00 EUR)")
-            else:
-                produit_electro.categorie_article = Product.BILLET
-                produit_electro.methode_caisse = Product.BILLET_POS
-                produit_electro.categorie_pos = categorie_billetterie
-                produit_electro.couleur_fond_pos = "#2563EB"
-                produit_electro.couleur_texte_pos = "#FFFFFF"
-                produit_electro.icon_pos = "fa-headphones"
-                produit_electro.publish = True
-                produit_electro.save(update_fields=[
-                    "categorie_article", "methode_caisse", "categorie_pos",
-                    "couleur_fond_pos", "couleur_texte_pos", "icon_pos", "publish",
-                ])
-                self.stdout.write(f"  Produit billet mis a jour : {produit_electro.name}")
-
-            # 2 events futurs lies aux produits billet
-            # Event.save() appelle connection.tenant.get_primary_domain() pour full_url.
-            # Avec tenant_command/schema_context (FakeTenant), ca leve AttributeError.
-            # On set connection.tenant au vrai Client le temps de la creation.
-            # / 2 future events linked to ticket products
-            # Event.save() calls connection.tenant.get_primary_domain() for full_url.
-            # With tenant_command/schema_context (FakeTenant), this raises AttributeError.
-            # We set connection.tenant to the real Client during creation.
-            now = timezone.now()
-
-            # Sauvegarder le tenant actuel (peut etre FakeTenant) et le remplacer
-            # temporairement par le vrai Client pour que Event.save() fonctionne.
-            # Event.save() appelle connection.tenant.get_primary_domain() — FakeTenant n'a pas ca.
-            # / Save the current tenant (may be FakeTenant) and temporarily replace
-            # it with the real Client so Event.save() works.
-            # Event.save() calls connection.tenant.get_primary_domain() — FakeTenant doesn't have it.
-            ancien_tenant = getattr(connection, 'tenant', None)
-            real_client = Client.objects.filter(schema_name=schema).first()
-            if real_client:
-                connection.tenant = real_client
-
-            try:
-                event_concert, created_ev_concert = Event.objects.get_or_create(
-                    name="Concert Rock Test",
-                    defaults={
-                        "datetime": now + timedelta(days=1),
-                        "jauge_max": 50,
-                        "published": True,
-                        "archived": False,
-                    },
-                )
-                if not created_ev_concert:
-                    # Met a jour la date pour que l'event reste dans le futur entre les runs
-                    # / Update the date so the event stays in the future between runs
-                    event_concert.datetime = now + timedelta(days=1)
-                    event_concert.published = True
-                    event_concert.archived = False
-                    event_concert.save(update_fields=["datetime", "published", "archived"])
-                event_concert.products.add(produit_concert)
-
-                event_electro, created_ev_electro = Event.objects.get_or_create(
-                    name="Soiree Electro Test",
-                    defaults={
-                        "datetime": now + timedelta(days=2),
-                        "jauge_max": 50,
-                        "published": True,
-                        "archived": False,
-                    },
-                )
-                if not created_ev_electro:
-                    event_electro.datetime = now + timedelta(days=2)
-                    event_electro.published = True
-                    event_electro.archived = False
-                    event_electro.save(update_fields=["datetime", "published", "archived"])
-                event_electro.products.add(produit_electro)
-                events_crees = True
-                self.stdout.write(
-                    f"  Events : {event_concert.name} (demain), "
-                    f"{event_electro.name} (apres-demain)"
-                )
-            except Exception as e:
-                # Peut echouer si le schema n'a pas la table Event (ex: test sur mauvais schema)
-                # ou si FakeTenant n'a pas get_primary_domain. On log et on continue.
-                # / May fail if the schema doesn't have the Event table (e.g. test on wrong schema)
-                # or if FakeTenant doesn't have get_primary_domain. Log and continue.
-                events_crees = False
-                self.stdout.write(
-                    self.style.WARNING(f"  Events non crees (schema={schema}) : {e}")
-                )
-            finally:
-                # Restaurer le tenant original
-                # / Restore the original tenant
-                if ancien_tenant is not None:
-                    connection.tenant = ancien_tenant
-
-            # PV Billetterie : construit les articles depuis les evenements futurs (type BILLETTERIE)
-            # Les articles du M2M (Biere, Eau) sont charges en plus.
-            # / Ticketing POS: builds articles from future events (BILLETTERIE type)
-            # M2M articles (Beer, Water) are loaded in addition.
             produit_eau = Product.objects.filter(name="Eau", methode_caisse=Product.VENTE).first()
             pdv_festival, _ = PointDeVente.objects.update_or_create(
                 name="Accueil Festival",
@@ -718,19 +560,14 @@ class Command(BaseCommand):
                     "poid_liste": 6,
                 },
             )
-            produits_festival = [p for p in [produit_concert, produit_electro, produit_biere, produit_eau] if p]
+            # Articles M2M : boissons classiques disponibles en plus des billets
+            # / M2M articles: classic drinks available in addition to tickets
+            produits_festival = [p for p in [produit_biere, produit_eau] if p]
             pdv_festival.products.set(produits_festival)
             pdv_festival.categories.set([categorie_billetterie, categorie_bar])
 
-            # Ajouter les billets au PV Mix (.add, pas .set — on garde les produits existants)
-            # / Add tickets to Mix POS (.add, not .set — keep existing products)
-            if events_crees:
-                pdv_mix.products.add(produit_concert, produit_electro)
-                pdv_mix.categories.add(categorie_billetterie)
-
             self.stdout.write(
-                f"  PV Accueil Festival : {pdv_festival.products.count()} produits, "
-                f"PV Mix : {pdv_mix.products.count()} produits"
+                f"  PV Accueil Festival (BILLETTERIE) : {pdv_festival.products.count()} articles M2M"
             )
 
             # Associe les produits aux points de vente
