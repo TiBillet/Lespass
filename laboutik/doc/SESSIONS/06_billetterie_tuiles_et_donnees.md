@@ -41,56 +41,42 @@ Filtre CSS côté client (instantané, `cat-{event_uuid}`), pas de round-trip HT
 - Articles BI enrichis avec dict `event` (uuid, name, datetime, jauge, pourcentage, complet)
 - Jauge statique (WebSocket en phase 4)
 
-## CE QUI RESTE À FAIRE (cette session)
+## TÂCHES COMPLÉTÉES
 
-### TÂCHE A — Charger depuis events quand PV est BILLETTERIE
+### TÂCHE A — Charger depuis events quand PV est BILLETTERIE ✅
 
-Dans `_construire_donnees_articles()`, quand `point_de_vente_instance.comportement == BILLETTERIE` :
-- Charger les events futurs publiés ( dont ceux en cours, - 1 jour ) : `Event.objects.filter(published=True, archived=False, datetime__gte=now - 1 jour)`
-- Pour chaque event, pour chaque Price publiée de chaque Product lié → 1 article_dict
-- 1 tuile = 1 Price (pas 1 Product). Un produit avec 3 tarifs → 3 tuiles
-- Chaque tuile porte `cat-{event_uuid}` pour le filtre sidebar
-- Les articles du M2M `products` sont chargés en plus (comme avant)
-- Supprimer le filtre `methode_caisse='BI'` — c'est le type du PV qui décide
+- `_construire_donnees_articles()` : quand PV BILLETTERIE, charge events futurs (datetime >= now - 1j)
+- 1 tuile = 1 Price. ID unique par Price (pas Product) pour éviter doublons panier
+- Jauge : Price.stock si défini, sinon Event.jauge_max
+- Couleurs par event (palette cyclique 8 couleurs)
+- Events sans produit publiés filtrés
+- Articles M2M chargés en plus
 
-#### Jauges — 3 niveaux dans les modèles
+### TÂCHE B — Events comme pseudo-catégories ✅
 
-| Niveau | Champ | Modèle | Signification |
-|--------|-------|--------|---------------|
-| Event | `jauge_max` | Event | Capacité totale (toutes catégories confondues) |
-| Product | `max_per_user` | Product | Limite par utilisateur (pas une jauge globale) |
-| Price | `stock` | Price | Capacité par tarif par event (`out_of_stock(event)`) |
+- `_construire_donnees_categories()` : events futurs ajoutés avec `is_event: True`, date, jauge
+- UUID event = id pseudo-catégorie → filtre CSS `cat-{event_uuid}` fonctionne
 
-Exemple : Concert 500 places, Plein tarif stock=200, Réduit stock=100, VIP stock=50 → 150 non attribuées.
+### TÂCHE C — Rendu event dans `cotton/categories.html` ✅
 
-#### UX jauge sur la tuile : afficher la jauge la plus restrictive
+- `{% if cat.is_event %}` : date + mini-jauge + `data-testid`
+- CSS : `.category-event` avec date, jauge, places
+- Sidebar scrollable (scrollbar fine 4px)
+- `aria-hidden` sur toutes les icônes, `aria-label` sur la jauge
 
-- Si `Price.stock` est défini → jauge du tarif sur la tuile (ex: "12/50 VIP")
-- Sinon → jauge de l'event sur la tuile (ex: "42/500")
-- La jauge event est **toujours visible dans la sidebar** (pseudo-catégorie) — c'est la jauge globale
-- Pas d'empilement de 3 jauges sur une tuile — illisible sur écran tactile festival
-- `Price.out_of_stock(event)` détermine si la tuile est grisée (complet pour ce tarif)
-- `Event.complet()` détermine si toutes les tuiles de l'event sont grisées
+### TÂCHE D — Adapter templates ✅
 
-### TÂCHE B — Events comme pseudo-catégories dans `_construire_donnees_categories()`
+- `billet_tuile.html` : classe `article-container` ajoutée (clic fonctionne)
+- CSS responsive : portrait (span 1) < 599px, icône réduite 600-1022px
+- `visually-hidden` ajouté au CSS laboutik
 
-Quand le PV est `BILLETTERIE`, enrichir la liste des catégories avec les events futurs :
-- Chaque event → un dict catégorie avec `is_event: True`, `date`, `jauge_max`, `places_vendues`, `pourcentage`
-- UUID de l'event comme `id` de la pseudo-catégorie
-- La jauge event dans la sidebar = jauge globale (Event.jauge_max)
-- Les catégories classiques (Bar, etc.) restent si le PV a des articles M2M classiques
+### Polish ✅
 
-### TÂCHE C — Rendu event dans `cotton/categories.html`
-
-Ajouter `{% if cat.is_event %}` pour afficher :
-- Date de l'event (format court)
-- Mini-jauge (barre + texte X/Y ou COMPLET)
-- `data-testid="billetterie-sidebar-event-{uuid}"`
-
-### TÂCHE D — Adapter `cotton/articles.html` et `billet_tuile.html`
-
-- La condition `article.methode_caisse == 'BI'` doit être remplacée par `article.is_billet` ou `article.event`
-- Le composant `billet_tuile.html` reçoit les données event depuis le dict article
+- Spinner loading-states (extension HTMX officielle, délai 400ms)
+- Navigation PV burger menu convertie en hx-get (anti-blink)
+- `aria-hidden` sur icônes pré-existantes (categories.html, header.html)
+- Products billet retirés de create_test_pos_data (plus nécessaires)
+- 55 tests pytest passent (0 erreur)
 
 ## VÉRIFICATION
 

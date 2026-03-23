@@ -15,7 +15,7 @@
 | 03 | `03_refactoring_footer_cotton.md` | ① Refactoring | 02 | ❌ À FAIRE |
 | 04 | `04_billetterie_refonte_typage.md` | ② Billetterie | 03 | ✅ FAIT (session 04 + types PV restaurés en session 06) |
 | 05 | `05_billetterie_flow_identification_unifie.md` | ② Billetterie | 04 | ✅ FAIT |
-| 06 | `06_billetterie_tuiles_et_donnees.md` | ② Billetterie | 05 | ⏳ EN COURS |
+| 06 | `06_billetterie_tuiles_et_donnees.md` | ② Billetterie | 05 | ✅ FAIT |
 | 07 | `07_billetterie_paiement_et_tests.md` | ② Billetterie | 06 | ❌ À FAIRE |
 | 08 | `08_websocket_infrastructure.md` | ③ WebSocket | 07 | ❌ À FAIRE |
 | 09 | `09_websocket_broadcast_jauge.md` | ③ WebSocket | 08 | ❌ À FAIRE |

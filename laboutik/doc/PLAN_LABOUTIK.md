@@ -1961,130 +1961,31 @@ Fichiers supprimés :
 Pas de double typage : pas besoin de `methode_caisse='BI'` pour apparaître dans le POS.
 C'est le type du PV (`BILLETTERIE`) qui détermine le chargement depuis les events.
 
-#### Backend — ce qui doit être ajouté
+#### Backend — implémenté (session 06)
 
-**1. Type PV `BILLETTERIE` ('T')** — migration 0005 (fait)
+**1. Type PV `BILLETTERIE` ('T')** — migration 0005
 
-Le PV de type `BILLETTERIE` construit ses articles depuis les événements futurs.
-Les articles du M2M `products` sont chargés en plus.
+**2. `_construire_donnees_articles()`** — quand le PV est BILLETTERIE :
+- Charge les events futurs publiés (datetime >= now - 1 jour)
+- Pour chaque event → chaque Product publié → chaque Price EUR → 1 article_dict
+- ID unique par Price (pas Product) pour éviter les doublons dans le panier
+- Jauge sur la tuile : Price.stock si défini, sinon Event.jauge_max
+- Couleurs par event (palette cyclique 8 couleurs)
+- Events sans produit publiés filtrés
+- Les articles M2M du PV (Bière, Eau...) sont chargés en plus
 
-**2. `laboutik/views.py` — `_construire_donnees_articles()` enrichi**
+**3. `_construire_donnees_categories()`** — events comme pseudo-catégories :
+- Chaque event → dict avec `is_event: True`, date, jauge globale
+- UUID de l'event = `id` de la pseudo-catégorie → filtre CSS `cat-{event_uuid}`
+- Le JS existant (`articlesDisplayCategory`) fonctionne sans modification
 
-Quand le PV est de type `BILLETTERIE`, charger les articles depuis les events futurs :
-
-**4. `_construire_donnees_evenements(pv)` — nouveau helper dans views.py**
-
-```python
-def _construire_donnees_evenements(pv):
-    """
-    Construit la liste des événements futurs actifs avec leurs tarifs pour le POS Billetterie.
-    / Builds the list of active future events with their rates for the Ticketing POS.
-
-    LOCALISATION : laboutik/views.py
-
-    Chaque événement contient :
-    - uuid, name, datetime
-    - jauge_max, places_vendues, places_restantes, complet (bool)
-    - pourcentage_remplissage (int 0-100, calculé ici — pas de template filter custom)
-    - tarifs : liste de dicts (1 dict = 1 Price)
-
-    RÈGLE : 1 tuile = 1 Price (pas 1 Product).
-    Un produit avec 3 tarifs → 3 tuiles.
-    / RULE: 1 tile = 1 Price (not 1 Product).
-    A product with 3 rates → 3 tiles.
-    """
-    from django.utils import timezone
-    from BaseBillet.models import Event, Ticket
-
-    now = timezone.now()
-
-    # Récupère les événements futurs publiés, non archivés
-    # / Gets published, non-archived future events
-    events_futurs = Event.objects.filter(
-        published=True,
-        archived=False,
-        datetime__gte=now,
-    ).prefetch_related('products__prices').order_by('datetime')
-
-    evenements = []
-    for event in events_futurs:
-        # Utilise la méthode existante du modèle Event
-        # / Uses the existing Event model method
-        places_vendues = event.valid_tickets_count()
-
-        places_restantes = None
-        pourcentage_remplissage = 0
-        est_complet = False
-        if event.jauge_max:
-            places_restantes = max(0, event.jauge_max - places_vendues)
-            est_complet = places_restantes == 0
-            # Calculé côté Python — pas de template filter custom
-            # / Computed server-side — no custom template filter
-            pourcentage_remplissage = int(round(places_vendues / event.jauge_max * 100))
-
-        # Construit les tuiles (1 par Price du produit)
-        # / Builds tiles (1 per Price of the product)
-        tuiles = []
-        for product in event.products.filter(
-            methode_caisse=Product.BILLET_POS,
-            publish=True,
-        ):
-            couleur_fond = (
-                product.couleur_fond_pos
-                or (product.categorie_pos.couleur_fond if product.categorie_pos else None)
-                or '#1a2a3a'
-            )
-            couleur_texte = (
-                product.couleur_texte_pos
-                or (product.categorie_pos.couleur_texte if product.categorie_pos else None)
-                or '#ffffff'
-            )
-            icone = product.icon_pos or (product.categorie_pos.icon if product.categorie_pos else '') or 'fa-ticket-alt'
-            icone_type = 'fa' if icone.startswith('fa') else 'ms'
-
-            for price in product.prices.filter(publish=True):
-                prix_centimes = int(round(price.prix * 100))
-                tuiles.append({
-                    'product_uuid': str(product.uuid),
-                    'price_uuid': str(price.uuid),
-                    'nom_tarif': price.name,
-                    'nom_event': event.name,
-                    'prix_centimes': prix_centimes,
-                    'prix_affichage': f"{prix_centimes / 100:.2f}",
-                    'free_price': price.free_price,
-                    'asset_uuid': str(price.asset.uuid) if price.asset else None,
-                    'url_image': product.img.url if product.img else None,
-                    'couleur_backgr': couleur_fond,
-                    'couleur_texte': couleur_texte,
-                    'icone': icone,
-                    'icone_type': icone_type,
-                    'event_uuid': str(event.uuid),
-                    'disabled': est_complet,
-                })
-
-        if not tuiles:
-            continue  # Pas de tarifs pour cet événement → ignorer
-
-        evenements.append({
-            'uuid': str(event.uuid),
-            'name': event.name,
-            'datetime': event.datetime,
-            'jauge_max': event.jauge_max,
-            'places_vendues': places_vendues,
-            'places_restantes': places_restantes,
-            'pourcentage_remplissage': pourcentage_remplissage,
-            'complet': est_complet,
-            'tuiles': tuiles,
-        })
-
-    return evenements
-```
+**4. Pas de `_construire_donnees_evenements()` séparé** — la logique est intégrée
+directement dans `_construire_donnees_articles()` pour simplifier.
 
 **5. Moyens de paiement — TOUS disponibles (y compris NFC)**
 
-Contrairement à l'adhésion, **le NFC est un moyen valide** pour acheter des billets.
-Cas d'usage : acheter un billet avec des tokens temps (`Price.asset=TIM`).
-Pas de masquage de moyens de paiement spécifique à la billetterie.
+Le NFC est un moyen valide pour acheter des billets (monnaie temps, locale, etc.).
+Pas de masquage spécifique à la billetterie.
 
 **6. `PaiementViewSet.payer()` — intercept BILLETTERIE avant les partials espèces**
 

@@ -130,11 +130,20 @@ Sessions 06 + 07.
 
 - [x] Types PV restaurés : `ADHESION`, `CASHLESS`, `BILLETTERIE` (migration 0005)
 - [x] Composant Cotton `billet_tuile.html` (paysage, `grid-column: span 2`, jauge statique)
-- [x] CSS `billet_tuile.css`
-- [x] Données de test : 2 Events + 2 Products BI + PV "Accueil Festival" (type BILLETTERIE)
-- [ ] `_construire_donnees_articles()` : charger depuis events quand PV est BILLETTERIE (plus de methode_caisse)
-- [ ] `_construire_donnees_categories()` : events comme pseudo-catégories (date + mini-jauge) si PV BILLETTERIE
-- [ ] `cotton/categories.html` : rendu event (date + jauge) si `is_event`
+- [x] CSS `billet_tuile.css` + responsive mobile (portrait span 1 < 599px)
+- [x] PV "Accueil Festival" (type BILLETTERIE) + articles M2M (Bière, Eau)
+- [x] `_construire_donnees_articles()` : charge depuis events futurs quand PV BILLETTERIE (1 tuile = 1 Price)
+- [x] `_construire_donnees_categories()` : events comme pseudo-catégories (date + mini-jauge)
+- [x] `cotton/categories.html` : rendu event (date + jauge) si `is_event` + sidebar scrollable
+- [x] Filtre sidebar par event (CSS JS existant, pas de modif JS)
+- [x] Clic tuile → panier (classe `article-container` + ID unique par Price)
+- [x] Jauge : Price.stock si défini, sinon Event.jauge_max
+- [x] Couleurs par event (palette cyclique 8 couleurs)
+- [x] Events sans produit filtrés de la grille et de la sidebar
+- [x] Spinner loading-states (extension HTMX officielle, délai 400ms)
+- [x] Navigation PV burger menu en hx-get (anti-blink)
+- [x] Audit a11y : aria-hidden sur icônes, visually-hidden, aria-label jauge sidebar
+- [x] 55 tests pytest passent (0 erreur)
 - [ ] Ajout `panier_a_billets` dans `panier_necessite_client` + adaptation `hx_identifier_client.html` (session 07)
 - [ ] `_creer_billets_depuis_panier()` : Reservation + Ticket + LigneArticle (atomique) (session 07)
 - [ ] Vérification atomique jauge au paiement (session 07)
