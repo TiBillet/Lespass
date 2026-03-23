@@ -40,18 +40,33 @@ PALETTE_POS = [
     # Classiques N&B / Classic B&W
     ("blanc_classique", _("Blanc classique"), "#000000", "#FFFFFF"),
     ("nuit",            _("Nuit"),            "#FFFFFF", "#1F2937"),
-    # Material — fonds saturés, texte blanc / Material — saturated backgrounds, white text
-    ("marine",   _("Marine"),   "#FFFFFF", "#1E40AF"),
-    ("emeraude", _("Émeraude"), "#FFFFFF", "#059669"),
-    ("violet",   _("Violet"),   "#FFFFFF", "#7C3AED"),
-    ("corail",   _("Corail"),   "#FFFFFF", "#EF4444"),
-    ("ambre",    _("Ambre"),    "#FFFFFF", "#B45309"),
-    ("ardoise",  _("Ardoise"),  "#FFFFFF", "#475569"),
-    # Pastels — fonds doux, texte sombre contrasté / Pastels — soft backgrounds, contrasted dark text
-    ("lavande", _("Lavande"),  "#312E81", "#EDE9FE"),
-    ("menthe",  _("Menthe"),   "#064E3B", "#D1FAE5"),
-    ("peche",   _("Pêche"),    "#78350F", "#FEF3C7"),
-    ("rose",    _("Rose"),     "#881337", "#FFE4E6"),
+    # Material — fonds satures, texte blanc (contraste > 4.5:1)
+    # / Material — saturated backgrounds, white text (contrast > 4.5:1)
+    ("marine",    _("Marine"),    "#FFFFFF", "#1E40AF"),
+    ("emeraude",  _("Emeraude"),  "#FFFFFF", "#059669"),
+    ("violet",    _("Violet"),    "#FFFFFF", "#7C3AED"),
+    ("corail",    _("Corail"),    "#FFFFFF", "#EF4444"),
+    ("ambre",     _("Ambre"),     "#FFFFFF", "#B45309"),
+    ("ardoise",   _("Ardoise"),   "#FFFFFF", "#475569"),
+    # Nouvelles — fonds satures, fort contraste
+    # / New — saturated backgrounds, high contrast
+    ("foret",     _("Foret"),     "#FFFFFF", "#166534"),  # Vert profond / Deep green
+    ("bordeaux",  _("Bordeaux"),  "#FFFFFF", "#881337"),  # Rouge vin / Wine red
+    ("indigo",    _("Indigo"),    "#FFFFFF", "#3730A3"),  # Bleu-violet / Blue-violet
+    ("ocean",     _("Ocean"),     "#FFFFFF", "#0E7490"),  # Cyan fonce / Dark cyan
+    ("brique",    _("Brique"),    "#FFFFFF", "#9A3412"),  # Orange brique / Brick orange
+    ("prune",     _("Prune"),     "#FFFFFF", "#6B21A8"),  # Violet fonce / Dark purple
+    ("charbon",   _("Charbon"),   "#F59E0B", "#18181B"),  # Ambre sur noir / Amber on black
+    ("neon",      _("Neon"),      "#10B981", "#0F172A"),  # Vert neon sur nuit / Neon green on dark
+    # Pastels — fonds doux, texte sombre contraste (contraste > 7:1)
+    # / Pastels — soft backgrounds, contrasted dark text (contrast > 7:1)
+    ("lavande",   _("Lavande"),   "#312E81", "#EDE9FE"),
+    ("menthe",    _("Menthe"),    "#064E3B", "#D1FAE5"),
+    ("peche",     _("Peche"),     "#78350F", "#FEF3C7"),
+    ("rose",      _("Rose"),      "#881337", "#FFE4E6"),
+    # Nouveaux pastels / New pastels
+    ("ciel",      _("Ciel"),      "#1E3A5F", "#DBEAFE"),  # Bleu ciel / Sky blue
+    ("sable",     _("Sable"),     "#451A03", "#FEF9C3"),  # Jaune sable / Sand yellow
 ]
 
 # Dictionnaire pour lookup rapide clé → (couleur_texte, couleur_fond)
@@ -62,42 +77,118 @@ PALETTE_POS_MAP = {
 }
 
 # ---------------------------------------------------------------------------
-# Icônes Material Symbols pour les articles restaurant / bar
-# Material Symbols icons for restaurant / bar POS items
+# Icones FontAwesome 5 Free (solid) pour les articles POS
+# FontAwesome 5 Free (solid) icons for POS items
+# Licence : CC BY 4.0 (icones) + SIL OFL 1.1 (polices) + MIT (code)
+# Liste complete : https://fontawesome.com/v5/search?m=free&s=solid
 # ---------------------------------------------------------------------------
 
 ICON_POS = [
     # Boissons / Drinks
-    ("local_bar",          _("Bar")),
-    ("sports_bar",         _("Bière")),
-    ("wine_bar",           _("Vin")),
-    ("liquor",             _("Alcool / Spiritueux")),
-    ("local_cafe",         _("Café")),
-    ("coffee",             _("Café (alt)")),
-    ("emoji_food_beverage", _("Boisson chaude")),
-    ("local_drink",        _("Boisson froide")),
-    ("bubble_chart",       _("Soda / Bulles")),
+    ("fa-beer",              _("Biere")),
+    ("fa-wine-glass-alt",    _("Vin rouge / rose")),
+    ("fa-wine-glass",        _("Vin blanc")),
+    ("fa-wine-bottle",       _("Bouteille vin")),
+    ("fa-cocktail",          _("Cocktail / bar")),
+    ("fa-glass-whiskey",     _("Spiritueux / soda")),
+    ("fa-glass-cheers",      _("Champagne / fete")),
+    ("fa-glass-martini-alt", _("Martini / apero")),
+    ("fa-coffee",            _("Cafe")),
+    ("fa-mug-hot",           _("The / boisson chaude")),
+    ("fa-tint",              _("Eau")),
+    ("fa-lemon",             _("Jus / limonade")),
+    ("fa-blender",           _("Smoothie / milkshake")),
+    ("fa-flask",             _("Biere artisanale")),
+    ("fa-prescription-bottle", _("Shot / fiole")),
+    ("fa-water",             _("Eau minerale / source")),
     # Nourriture / Food
-    ("restaurant",         _("Restaurant")),
-    ("lunch_dining",       _("Burger")),
-    ("local_pizza",        _("Pizza")),
-    ("ramen_dining",       _("Ramen / Soupe")),
-    ("set_meal",           _("Repas complet")),
-    ("rice_bowl",          _("Riz / Bowl")),
-    ("bakery_dining",      _("Boulangerie")),
-    ("fastfood",           _("Fast food")),
-    ("cake",               _("Gâteau / Dessert")),
-    ("icecream",           _("Glace")),
-    ("outdoor_grill",      _("Grill / BBQ")),
-    ("tapas",              _("Tapas / Apéro")),
-    ("brunch_dining",      _("Brunch")),
-    # Soirée / Ambiance
-    ("nightlife",          _("Soirée")),
-    ("music_note",         _("Musique")),
-    # Divers / Misc
-    ("sell",               _("Vente")),
-    ("receipt",            _("Ticket / Reçu")),
-    ("euro",               _("Euro")),
+    ("fa-utensils",          _("Restaurant / plat")),
+    ("fa-pizza-slice",       _("Pizza")),
+    ("fa-hamburger",         _("Burger")),
+    ("fa-hotdog",            _("Hot-dog / foodtruck")),
+    ("fa-bread-slice",       _("Sandwich / boulangerie")),
+    ("fa-cheese",            _("Fromage / plateau")),
+    ("fa-egg",               _("Brunch / petit-dej")),
+    ("fa-apple-alt",         _("Fruit / bio")),
+    ("fa-leaf",              _("Salade / vegetal")),
+    ("fa-seedling",          _("Bio / vegan")),
+    ("fa-cookie",            _("Dessert / gouter")),
+    ("fa-cookie-bite",       _("Snack")),
+    ("fa-ice-cream",         _("Glace")),
+    ("fa-drumstick-bite",    _("Grill / BBQ")),
+    ("fa-fish",              _("Poisson / fruits de mer")),
+    ("fa-carrot",            _("Legume / veggie")),
+    ("fa-pepper-hot",        _("Epice / piment")),
+    ("fa-candy-cane",        _("Confiserie / sucre")),
+    ("fa-stroopwafel",       _("Gaufre / crepe")),
+    ("fa-bacon",             _("Charcuterie / bacon")),
+    ("fa-birthday-cake",     _("Gateau d'anniversaire")),
+    # Cashless / Monnaie
+    ("fa-coins",             _("Recharge euros")),
+    ("fa-wallet",            _("Wallet / solde")),
+    ("fa-money-bill-wave",   _("Especes")),
+    ("fa-credit-card",       _("Carte bancaire")),
+    ("fa-money-check",       _("Cheque")),
+    ("fa-euro-sign",         _("Euro")),
+    ("fa-dollar-sign",       _("Dollar")),
+    ("fa-pound-sign",        _("Livre sterling")),
+    ("fa-ruble-sign",        _("Rouble")),
+    ("fa-lira-sign",         _("Lire / livre turque")),
+    ("fa-rupee-sign",        _("Roupie")),
+    ("fa-yen-sign",          _("Yen / yuan")),
+    ("fa-shekel-sign",       _("Shekel")),
+    ("fa-won-sign",          _("Won")),
+    ("fa-gift",              _("Recharge cadeau")),
+    ("fa-gem",               _("Jeton premium")),
+    ("fa-clock",             _("Recharge temps")),
+    # Adhesion / Abonnement
+    ("fa-id-card",           _("Adhesion / membre")),
+    ("fa-user-plus",         _("Nouvel adherent")),
+    ("fa-users",             _("Communaute / asso")),
+    ("fa-handshake",         _("Partenariat / cooperative")),
+    ("fa-heart",             _("Don / soutien")),
+    ("fa-star",              _("Premium / fidelite")),
+    # Spectacle / Festival
+    ("fa-ticket-alt",        _("Billetterie")),
+    ("fa-music",             _("Concert / musique")),
+    ("fa-guitar",            _("Live / scene")),
+    ("fa-microphone-alt",    _("Spectacle / conference")),
+    ("fa-theater-masks",     _("Theatre")),
+    ("fa-campground",        _("Festival / camping")),
+    ("fa-bus",               _("Navette / transport")),
+    ("fa-tshirt",            _("T-shirt / vetement")),
+    ("fa-hat-wizard",        _("Chapeau / coiffe")),
+    ("fa-socks",             _("Chaussettes / accessoire")),
+    ("fa-shopping-bag",      _("Sac / tote bag")),
+    ("fa-book",              _("Livre / fanzine")),
+    ("fa-compact-disc",      _("CD / vinyle")),
+    ("fa-palette",           _("Art / serigraphie")),
+    ("fa-pen-fancy",         _("Stylo / papeterie")),
+    ("fa-box-open",          _("Coffret / lot")),
+    ("fa-tag",               _("Article / divers")),
+    # Lieux / Points de vente
+    ("fa-umbrella-beach",    _("Terrasse / plage")),
+    ("fa-store",             _("Boutique / stand")),
+    ("fa-store-alt",         _("Echoppe / marche")),
+    ("fa-door-open",         _("Entree / accueil")),
+    ("fa-map-marker-alt",    _("Lieu / emplacement")),
+    ("fa-home",              _("Maison / local")),
+    ("fa-warehouse",         _("Hangar / entrepot")),
+    ("fa-truck",             _("Foodtruck / camion")),
+    ("fa-shuttle-van",       _("Navette / van")),
+    ("fa-caravan",           _("Caravane / roulotte")),
+    ("fa-tree",              _("Jardin / exterieur")),
+    ("fa-fire",              _("Feu / barbecue")),
+    ("fa-sun",               _("Plein air / ete")),
+    # Actions / Danger
+    ("fa-exclamation-triangle", _("Danger / attention")),
+    ("fa-trash-alt",         _("Vider / supprimer")),
+    ("fa-undo-alt",          _("Annuler / remboursement")),
+    ("fa-exchange-alt",      _("Consigne / echange")),
+    ("fa-recycle",           _("Consigne retour")),
+    ("fa-ban",               _("Bloquer / desactiver")),
+    ("fa-lock",              _("Verrouille")),
+    ("fa-check-circle",      _("Valide / succes")),
 ]
 
 

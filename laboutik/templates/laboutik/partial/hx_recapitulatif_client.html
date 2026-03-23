@@ -1,0 +1,203 @@
+{% load static i18n %}
+<!--
+ECRAN RECAPITULATIF CLIENT — resume identite + boutons de paiement
+Affiche les infos du client identifie, un resume adaptatif selon le contenu
+du panier (recharge, adhesion, ou les deux), et les boutons de paiement.
+/ Client recap screen — identity summary + payment buttons.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_recapitulatif_client.html
+
+FLUX :
+1. Le client a ete identifie (NFC ou formulaire) dans identifier_client
+2. Ce partial affiche le resume (email, nom, solde si NFC)
+3. Texte adaptatif : "Recharge → carte de {client}" / "Adhesion → rattachee a {client}"
+4. Boutons de paiement : clic → payerAvecClient(moyen) → injecte dans #addition-form → payer()
+-->
+
+<div class="BF-col" data-testid="client-recapitulatif" aria-live="polite">
+
+  {# --- En-tete : client identifie --- #}
+  <div class="adhesion-confirm-header adhesion-stagger" style="--ordre: 1">
+    <div class="adhesion-confirm-check" aria-hidden="true">
+      <i class="fas fa-check-circle"></i>
+    </div>
+    <h1 class="adhesion-confirm-title">{% translate "Client identifie" %}</h1>
+  </div>
+
+  {# --- Carte resume client --- #}
+  <div class="adhesion-confirm-card adhesion-stagger" style="--ordre: 2" data-testid="client-recapitulatif-user">
+    <div class="adhesion-confirm-email">
+      <i class="fas fa-envelope" aria-hidden="true"></i>
+      {{ user_email }}
+    </div>
+    <div class="adhesion-confirm-name">
+      {{ user_prenom }} {{ user_nom|upper }}
+    </div>
+    {% if tag_id %}
+    <div class="adhesion-confirm-solde" style="font-variant-numeric: tabular-nums;">
+      <i class="fas fa-wallet" aria-hidden="true"></i>
+      {% translate "Solde" %} : {{ user_solde|floatformat:2 }} €
+    </div>
+    {% endif %}
+  </div>
+
+  {# --- Recapitulatif des articles du panier --- #}
+  {# Chaque article affiche un texte adaptatif selon son type (VT, RE, AD). #}
+  {# / Cart articles recap. Each article shows adaptive text per type. #}
+  {% if articles_pour_recapitulatif %}
+  <div class="recapitulatif-articles adhesion-stagger" style="--ordre: 2"
+    data-testid="client-recapitulatif-articles">
+
+    {% for article in articles_pour_recapitulatif %}
+    <div class="recapitulatif-article-ligne">
+      <span class="recapitulatif-article-desc">{{ article.description }}</span>
+      <span class="recapitulatif-article-prix" style="font-variant-numeric: tabular-nums;">
+        {{ article.prix_total_euros|floatformat:2 }} €
+      </span>
+    </div>
+    {% endfor %}
+
+    <div class="recapitulatif-total-ligne">
+      <span class="recapitulatif-total-label">{% translate "TOTAL" %}</span>
+      <span class="recapitulatif-total-prix" style="font-variant-numeric: tabular-nums;">
+        {{ total_en_euros|floatformat:2 }} €
+      </span>
+    </div>
+  </div>
+  {% endif %}
+
+  {# --- Boutons de paiement --- #}
+  {# Chaque bouton appelle payerAvecClient(moyen) qui injecte les donnees client #}
+  {# dans #addition-form puis soumet vers payer(). #}
+  {# / Each button calls payerAvecClient(method) which injects client data #}
+  {# into #addition-form then submits to payer(). #}
+  <div class="adhesion-confirm-actions adhesion-stagger" style="--ordre: 3">
+    <c-bt.return />
+
+    {% if 'nfc' in moyens_paiement %}
+    <div class="bt-basic-container" style="background: var(--bleu03);"
+      onclick="payerAvecClient('nfc')"
+      data-testid="client-btn-cashless"
+      role="button" tabindex="0"
+      aria-label="{% translate 'Payer en cashless' %}">
+      <div class="bt-basic-icon">
+        <i class="fas fa-address-card" aria-hidden="true"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "CASHLESS" %}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'espece' in moyens_paiement %}
+    <div class="bt-basic-container" style="background: var(--warning00);"
+      onclick="payerAvecClient('espece')"
+      data-testid="client-btn-especes"
+      role="button" tabindex="0"
+      aria-label="{% translate 'Payer en especes' %}">
+      <div class="bt-basic-icon">
+        <i class="fas fa-coins" aria-hidden="true"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "ESPECE" %}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'carte_bancaire' in moyens_paiement %}
+    <div class="bt-basic-container" style="background: var(--bleu05);"
+      onclick="payerAvecClient('carte_bancaire')"
+      data-testid="client-btn-cb"
+      role="button" tabindex="0"
+      aria-label="{% translate 'Payer par carte bancaire' %}">
+      <div class="bt-basic-icon">
+        <i class="fas fa-credit-card" aria-hidden="true"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "CB" %}</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if 'CH' in moyens_paiement %}
+    <div class="bt-basic-container" style="background: var(--gris02);"
+      onclick="payerAvecClient('CH')"
+      data-testid="client-btn-cheque"
+      role="button" tabindex="0"
+      aria-label="{% translate 'Payer par cheque' %}">
+      <div class="bt-basic-icon">
+        <i class="fas fa-money-check" aria-hidden="true"></i>
+      </div>
+      <div class="bt-basic-text">
+        <div>{% translate "CHEQUE" %}</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    /**
+     * Injecte les donnees d'identification client dans le formulaire d'addition
+     * puis soumet le paiement avec le moyen choisi.
+     * / Injects client identification data into the addition form
+     * then submits payment with the chosen method.
+     *
+     * LOCALISATION : hx_recapitulatif_client.html (inline)
+     *
+     * Pattern identique a l'ancien confirmerAdhesion() de hx_adhesion_confirm.html.
+     * La seule difference : le moyen de paiement est passe en parametre
+     * (au lieu d'etre pre-choisi avant l'identification).
+     *
+     * COMMUNICATION :
+     * Emet : 'additionManageForm' → #event-organizer (updateInput, postUrl, submit)
+     */
+    function payerAvecClient(moyenPaiement) {
+      var form = document.querySelector('#addition-form');
+
+      // Injecter les champs d'identification dans le formulaire cache
+      // / Inject identification fields into the hidden form
+      function setHiddenInput(name, value) {
+        var input = form.querySelector('[name="' + name + '"]');
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          form.appendChild(input);
+        }
+        input.value = value;
+      }
+
+      setHiddenInput('email_adhesion', '{{ user_email|escapejs }}');
+      setHiddenInput('prenom_adhesion', '{{ user_prenom|escapejs }}');
+      setHiddenInput('nom_adhesion', '{{ user_nom|escapejs }}');
+      {% if tag_id %}
+      setHiddenInput('tag_id', '{{ tag_id|escapejs }}');
+      {% endif %}
+
+      // Definir le moyen de paiement choisi
+      // / Set the chosen payment method
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_recapitulatif_client.html', method: 'payerAvecClient' },
+        msg: 'additionManageForm',
+        data: { actionType: 'updateInput', selector: '#addition-moyen-paiement', value: moyenPaiement }
+      });
+
+      // Definir l'URL de soumission vers payer()
+      // / Set the submission URL to payer()
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_recapitulatif_client.html', method: 'payerAvecClient' },
+        msg: 'additionManageForm',
+        data: { actionType: 'postUrl', selector: null, value: '{% url "laboutik-paiement-payer" %}' }
+      });
+
+      // Soumettre le formulaire
+      // / Submit the form
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_recapitulatif_client.html', method: 'payerAvecClient' },
+        msg: 'additionManageForm',
+        data: { actionType: 'submit' }
+      });
+    }
+  </script>
+
+</div>

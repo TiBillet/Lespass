@@ -489,6 +489,48 @@
 
 
 /* ============================================================
+   hx_recapitulatif_client.html — recapitulatif articles
+   / Client recap — articles list
+   ============================================================ */
+.recapitulatif-articles {
+	width: 100%;
+	max-width: 420px;
+	margin: 0.5rem auto;
+	padding: 0 0.5rem;
+}
+
+.recapitulatif-article-ligne {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 0.3rem 0;
+	font-size: 0.95rem;
+	opacity: 0.9;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.recapitulatif-article-desc {
+	flex: 1;
+	margin-right: 1rem;
+}
+
+.recapitulatif-article-prix {
+	white-space: nowrap;
+	font-weight: 500;
+}
+
+.recapitulatif-total-ligne {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	padding: 0.5rem 0 0.3rem;
+	margin-top: 0.3rem;
+	border-top: 2px solid rgba(255, 255, 255, 0.2);
+	font-size: 1.1rem;
+	font-weight: 700;
+}
+
+/* ============================================================
    hx_adhesion_form.html — formulaire d'identification membre
    / Member identification form
    ============================================================ */
@@ -808,18 +850,13 @@
 	background-color: var(--bleu09);
 }
 
-/* hx_adhesion_choose_id.html — choix du mode d'identification */
-#messages:has([data-testid="adhesion-choose-id"]) {
-	background-color: var(--bleu09);
-}
-
-/* hx_adhesion_form.html — formulaire d'identification membre */
-#messages:has([data-testid="adhesion-form"]) {
+/* hx_formulaire_identification_client.html — formulaire d'identification client */
+#messages:has([data-testid="client-form"]) {
 	background-color: var(--noir03, #1a1a2e);
 }
 
-/* hx_adhesion_confirm.html — confirmation adhesion */
-#messages:has([data-testid="adhesion-confirm"]) {
+/* hx_recapitulatif_client.html — recapitulatif client + boutons paiement */
+#messages:has([data-testid="client-recapitulatif"]) {
 	background-color: var(--noir03, #1a1a2e);
 }
 
@@ -859,7 +896,7 @@
 	background-color: var(--bleu09);
 }
 
-/* hx_read_nfc.html + hx_read_nfc_adhesion.html — attente NFC paiement/adhesion */
+/* hx_read_nfc.html + hx_lire_nfc_client.html — attente NFC paiement/identification */
 #confirm:has(.nfc-container) {
 	display: flex;
 	flex-direction: column;

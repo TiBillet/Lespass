@@ -1,0 +1,52 @@
+{% load static i18n %}
+<!--
+ATTENTE LECTURE NFC — identification client
+Affiche l'ecran d'attente NFC. Apres scan, le JS soumet vers identifier_client.
+/ NFC read waiting screen — client identification.
+Displays the NFC wait screen. After scan, JS submits to identifier_client.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_lire_nfc_client.html
+
+FLUX :
+1. L'utilisateur clique "Scanner une carte TiBillet" dans hx_display_type_payment.html
+2. Ce partial affiche le spinner NFC
+3. Le JS au chargement injecte les flags du panier dans #addition-form
+   (le NFC reader soumet #addition-form, pas les champs dans ce partial)
+4. Scan NFC → JS met tag_id dans #addition-form → POST identifier_client
+-->
+
+<div id="confirm">
+	<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-identifier_client' %}">
+		<h1>{% translate "Attente lecture carte" %}</h1>
+		<p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la carte du client sur le lecteur" %}</p>
+	</c-read-nfc>
+
+	<script>
+		/**
+		 * Injecte les flags du panier dans #addition-form au chargement.
+		 * Le NFC reader soumet #addition-form (pas les champs dans ce partial).
+		 * Les flags doivent etre dans le formulaire pour que identifier_client() les lise.
+		 * / Injects cart flags into #addition-form on load.
+		 * The NFC reader submits #addition-form (not fields in this partial).
+		 * Flags must be in the form for identifier_client() to read them.
+		 *
+		 * LOCALISATION : hx_lire_nfc_client.html (inline)
+		 */
+		(function() {
+			var form = document.querySelector('#addition-form');
+			function setHiddenInput(name, value) {
+				var input = form.querySelector('[name="' + name + '"]');
+				if (!input) {
+					input = document.createElement('input');
+					input.type = 'hidden';
+					input.name = name;
+					form.appendChild(input);
+				}
+				input.value = value;
+			}
+			setHiddenInput('panier_a_recharges', '{{ panier_a_recharges|escapejs }}');
+			setHiddenInput('panier_a_adhesions', '{{ panier_a_adhesions|escapejs }}');
+			setHiddenInput('moyens_paiement', '{{ moyens_paiement_csv|escapejs }}');
+		})();
+	</script>
+</div>

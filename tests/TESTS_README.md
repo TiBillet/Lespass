@@ -195,17 +195,25 @@ docker exec lespass_django poetry run pytest tests/pytest/test_admin_*.py -v
 - Formulaires dynamiques (shortText, multiSelect, etc.)
 - Stripe mock : gratuit, payant, options, formulaires dynamiques
 
-### LaBoutik / POS (50+ tests pytest + 17 E2E)
+### LaBoutik / POS (60+ tests pytest + 17 E2E)
 - Modeles : CategorieProduct, Product POS, POSProduct proxy, Price.asset, PointDeVente, CartePrimaire, Table
 - Navigation : tag NFC, carte primaire valide/inconnue/non-primaire, auth 403
 - Vues donnees : produits charges depuis la DB
 - Paiements especes + CB (2 consecutifs, fix HTMX reset)
 - Paiements NFC cashless (solde suffisant, carte inconnue, solde insuffisant, reset NFC→cash, NFC→NFC, multi-articles + solde exact)
-- Adhesion NFC (6 chemins identification : espece/CB/cashless × email/NFC × user connu/anonyme + 2 boutons retour)
+- **Identification client unifiee** (session 05) :
+  - Flag `panier_necessite_client` (5 tests logique pure : VT seul, RE, AD, mixte, email masque)
+  - `moyens_paiement()` : ecran identification adaptatif (7 tests HTTP : VT normal, RE NFC-only, AD NFC+email, mixte, titres)
+  - `identifier_client()` : NFC carte connue/anonyme/inconnue, email valide/invalide, recapitulatif articles (9 tests HTTP)
+  - Paniers mixtes : AD+VT cashless, VT+RE especes, VT+RE+AD CB, VT+RE cashless rejete (4 tests HTTP)
+  - Verification LigneArticle en DB : payment_method, sale_origin, amount, qty, status, carte, email, membership (3 tests HTTP)
+  - E2E 8 chemins identification : email→especes, email→CB, NFC user→especes, NFC user→cashless, NFC anonyme→form, NFC anonyme→especes, retour identification, retour formulaire
+  - E2E verification LigneArticle : email correct, payment_method (CA/CC), sale_origin=LB, status=V, carte=None (3 tests enrichis)
+- Adhesion NFC (6 chemins identification : NFC/email × user connu/anonyme + 2 boutons retour)
 - Cloture caisse (totaux, transactions, tables liberees, rapport JSON, filtre datetime, double cloture, annulation commandes)
 - Export (PDF, CSV, endpoint 200/404, envoi email avec pieces jointes)
 - Securite : aria-live, XSS echappement, validation prix libre min
-- Tuiles visuelles : background-color, badges categorie, footer prix, icones menu, couleurs specifiques, data-testid/data-group, filtre categorie
+- Tuiles visuelles : background-color, badges categorie, footer prix, icones menu, couleurs specifiques, data-testid, filtre categorie
 
 ### Fedow (15 tests pytest + 1 E2E)
 - Assets : creation, categories (TLF, TNF, FED, TIM, FID)
@@ -330,9 +338,9 @@ tests/
 
 | Metrique | Valeur |
 |----------|--------|
-| Tests pytest (DB-only) | 186 |
+| Tests pytest (DB-only) | 214 |
 | Tests E2E (navigateur) | 36 |
-| **Total** | **222** |
+| **Total** | **250** |
 | Temps pytest | ~30s |
 | Temps E2E | ~3 min |
 | **Temps total** | **~3.5 min** |
@@ -462,6 +470,43 @@ Verifier la visibilite avant d'interagir avec des elements qui peuvent ne pas ex
 
 **9.27 — Verifier l'inventaire complet apres migration.**
 Toujours comparer fichier par fichier, pas seulement par comptage global.
+
+### Flow identification client unifie (session 05)
+
+**9.30 — `CarteCashless` est en SHARED_APPS : pas de FastTenantTestCase.**
+`CarteCashless` vit dans le schema `public`. En `FastTenantTestCase` (schema isole),
+`CarteCashless.objects.get_or_create(tag_id=...)` echoue car la table n'existe pas
+dans le schema de test. Utiliser `schema_context('lespass')` + `APIClient` pour les
+tests qui touchent aux cartes NFC.
+
+**9.31 — `tag_id` et `number` sur CarteCashless : max 8 caracteres.**
+Les champs `tag_id` et `number` ont `max_length=8`. Utiliser des codes courts
+(ex: `IDNFC001`) et pas de noms longs (`IDENT001N` → trop long pour `number`).
+
+**9.32 — `create_test_pos_data` prend le premier tenant, pas forcement `lespass`.**
+La commande fait `Client.objects.exclude(schema_name="public").first()`.
+Si la DB contient des tenants "waiting" (UUID), ils passent avant `lespass`
+alphabetiquement. Forcer le schema avec `--schema=lespass` :
+```bash
+docker exec lespass_django poetry run python manage.py tenant_command create_test_pos_data --schema=lespass
+```
+
+**9.33 — Le NFC reader soumet `#addition-form`, pas les hidden fields du partial.**
+Le composant `<c-read-nfc>` appelle `sendEvent('additionManageForm', ... submit)`.
+Ca soumet `#addition-form` — pas les `<input hidden>` dans le slot du composant.
+Pour propager des flags via le flow NFC, il faut les injecter dans `#addition-form`
+avec du JS au chargement du partial (pas en hidden fields dans le slot).
+
+**9.34 — `{% translate %}` peut changer le texte attendu dans les assertions.**
+`{% translate "Adhesion" %}` peut rendre "Membership" selon la langue active.
+Tester avec `assert 'Adhesion' in contenu or 'Membership' in contenu`.
+
+**9.35 — Le formulaire email ne fait plus de `hx-post` separe.**
+Le bouton VALIDER dans `hx_formulaire_identification_client.html` appelle
+`soumettreIdentificationEmail()` (JS inline) qui injecte les champs dans
+`#addition-form` puis soumet. Les `repid-*` arrivent dans le POST car ils
+sont deja dans `#addition-form`. Si on recree un `<form hx-post>` separe,
+les articles du panier seront perdus.
 
 ---
 

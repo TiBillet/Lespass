@@ -257,21 +257,25 @@ class ClotureSerializer(serializers.Serializer):
 #  Phase 5 serializer — Closure report export                                  #
 # --------------------------------------------------------------------------- #
 
-class AdhesionIdentificationSerializer(serializers.Serializer):
+class ClientIdentificationSerializer(serializers.Serializer):
     """
-    Valide le formulaire d'identification pour une adhésion POS.
-    Validates the identification form for a POS membership.
+    Valide le formulaire d'identification client POS (adhesion, recharge, ou mixte).
+    Validates the POS client identification form (membership, top-up, or mixed).
 
     LOCALISATION : laboutik/serializers.py
 
-    Utilisé par PaiementViewSet.identifier_membre() quand le formulaire est soumis
+    Utilise par PaiementViewSet.identifier_client() quand le formulaire est soumis
     (pas pour le scan NFC — dans ce cas, l'identification vient de la carte).
-    Used by PaiementViewSet.identifier_membre() when the form is submitted
+    Used by PaiementViewSet.identifier_client() when the form is submitted
     (not for NFC scan — in that case, identification comes from the card).
+
+    Les noms de champs (email_adhesion, prenom_adhesion, nom_adhesion) sont conserves
+    pour compatibilite avec payer() qui les lit depuis le POST.
+    Field names are kept for backwards compatibility with payer() which reads them from POST.
     """
     email_adhesion = serializers.EmailField(
         error_messages={
-            'required': _("L'email est obligatoire pour une adhésion"),
+            'required': _("L'email est obligatoire"),
             'invalid': _("Email invalide"),
         },
     )
@@ -292,10 +296,6 @@ class AdhesionIdentificationSerializer(serializers.Serializer):
         },
     )
     tag_id = serializers.CharField(
-        required=False,
-        allow_blank=True,
-    )
-    moyen_paiement = serializers.CharField(
         required=False,
         allow_blank=True,
     )

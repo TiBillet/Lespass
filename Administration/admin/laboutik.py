@@ -1,10 +1,12 @@
 import logging
 
+from django import forms
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
 
+from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from laboutik.models import (
@@ -48,11 +50,29 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
 
+class PointDeVenteForm(forms.ModelForm):
+    """Formulaire pour les points de vente avec selecteur visuel d'icones.
+    Form for points of sale with visual icon picker.
+    LOCALISATION : Administration/admin/laboutik.py"""
+
+    icon = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("Icon"),
+        widget=IconPickerWidget(),
+    )
+
+    class Meta:
+        model = PointDeVente
+        fields = '__all__'
+
+
 @admin.register(PointDeVente, site=staff_admin_site)
 class PointDeVenteAdmin(ModelAdmin):
     """Admin pour les points de vente.
     Admin for points of sale.
     LOCALISATION : Administration/admin/laboutik.py"""
+    form = PointDeVenteForm
     compressed_fields = True
     warn_unsaved_form = True
 

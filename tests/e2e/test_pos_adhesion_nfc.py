@@ -1,10 +1,11 @@
 """
-Tests E2E : flow adhésion POS avec identification obligatoire (6 chemins + 2 retour).
-/ E2E tests: POS membership flow with mandatory identification (6 paths + 2 back).
+Tests E2E : flow identification client unifie (adhesion + recharge + mixte).
+/ E2E tests: unified client identification flow (membership + top-up + mixed).
 
-Conversion de tests/playwright/tests/laboutik/44-laboutik-adhesion-identification.spec.ts
+Nouveau flow (Session 05) :
+VALIDER → ecran identification (NFC / email) → recapitulatif → bouton paiement → succes
 
-Prérequis / Prerequisites:
+Prerequis / Prerequisites:
 - docker exec lespass_django poetry run python manage.py create_test_pos_data
 - PV Adhesions (comportement='D', produits adhesion dans M2M) existant
 - Cartes 52BE6543 (anonyme), D74B1B5D (jetable), A49E8E2A (primaire)
@@ -81,12 +82,14 @@ def adhesion_cards_setup(django_shell):
 
 
 def _naviguer_et_ajouter_adhesion(page, pos_page):
-    """Ouvre le PV Adhesions, clic premier article, gère overlay tarif, clic VALIDER.
+    """Ouvre le PV Adhesions, clic premier article, gere overlay tarif, clic VALIDER.
+    Apres VALIDER, l'ecran d'identification client s'affiche (pas de choix paiement).
     / Opens Adhesions POS, clicks first article, handles rate overlay, clicks VALIDATE.
+    After VALIDATE, the client identification screen shows (no payment choice).
     """
     pos_page(page, "Adhesions")
 
-    # Cliquer le premier article d'adhésion / Click first adhesion article
+    # Cliquer le premier article d'adhesion / Click first adhesion article
     adhesion_tile = page.locator("#products .article-container").first
     expect(adhesion_tile).to_be_visible(timeout=10_000)
     adhesion_tile.click()
@@ -97,242 +100,297 @@ def _naviguer_et_ajouter_adhesion(page, pos_page):
         first_fixed = tarif_overlay.locator(".tarif-btn:not(.tarif-btn-free)").first
         first_fixed.click()
 
-    # Vérifier qu'un article est dans l'addition / Verify article in addition
+    # Verifier qu'un article est dans l'addition / Verify article in addition
     expect(page.locator("#addition-list .addition-line-grid")).to_be_visible(timeout=5_000)
 
-    # Cliquer VALIDER → écran choix paiement / Click VALIDATE → payment choice screen
+    # Cliquer VALIDER → ecran identification client (nouveau flow)
+    # / Click VALIDATE → client identification screen (new flow)
     page.locator("#bt-valider").click()
     expect(page.locator('[data-testid="paiement-moyens"]')).to_be_visible(timeout=10_000)
 
 
 # ===========================================================================
-# Tests adhésion identification / Membership identification tests
+# Tests identification client unifiee / Unified client identification tests
 # ===========================================================================
 
 
-class TestPOSAdhesionIdentification:
-    """Flow adhésion avec identification obligatoire (6 chemins).
-    / Membership flow with mandatory identification (6 paths).
+class TestPOSClientIdentification:
+    """Flow identification client unifie (6 chemins + 2 retour).
+    Nouveau flow : VALIDER → identification → recapitulatif → paiement.
+    / Unified client identification flow (6 paths + 2 back).
+    New flow: VALIDATE → identification → recap → payment.
     """
 
-    # --- Chemin 5 : ESPECE → "Saisir email" → formulaire → confirmation → PAYER ---
+    # --- Chemin 5 : "Saisir email" → formulaire → recapitulatif → ESPECE ---
 
-    def test_chemin_5_espece_saisir_email(
+    def test_chemin_5_saisir_email_puis_espece(
         self, page, pos_page, django_shell, adhesion_cards_setup
     ):
-        """Chemin 5 : espèce → saisir email → confirmation → paiement.
-        / Path 5: cash → enter email → confirmation → payment.
+        """Chemin 5 : saisir email → recapitulatif → paiement especes.
+        / Path 5: enter email → recap → cash payment.
         """
         suffix = adhesion_cards_setup
         test_email = f"adh5-{suffix}@example.com"
 
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # ESPECE → écran identification
-        page.locator('[data-testid="adhesion-btn-especes"]').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).to_be_visible(timeout=10_000)
-
-        # "Saisir email" → formulaire
-        page.locator('[data-testid="adhesion-choose-email"]').click()
-        expect(page.locator('[data-testid="adhesion-form"]')).to_be_visible(timeout=10_000)
+        # "Saisir email" (pas de choix paiement avant — nouveau flow)
+        page.locator('[data-testid="client-choose-email"]').click()
+        expect(page.locator('[data-testid="client-form"]')).to_be_visible(timeout=10_000)
 
         # Remplir et valider
-        page.locator('[data-testid="adhesion-input-email"]').fill(test_email)
-        page.locator('[data-testid="adhesion-input-prenom"]').fill("PrenomCinq")
-        page.locator('[data-testid="adhesion-input-nom"]').fill("NomCinq")
-        page.locator('[data-testid="adhesion-btn-valider"]').click()
+        page.locator('[data-testid="client-input-email"]').fill(test_email)
+        page.locator('[data-testid="client-input-prenom"]').fill("PrenomCinq")
+        page.locator('[data-testid="client-input-nom"]').fill("NomCinq")
+        page.locator('[data-testid="client-btn-valider"]').click()
 
-        # Confirmation
-        expect(page.locator('[data-testid="adhesion-confirm"]')).to_be_visible(timeout=10_000)
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text(test_email)
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text("NOMCINQ")
+        # Recapitulatif client
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text(test_email)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text("NOMCINQ")
 
-        # Confirmer le paiement
-        page.locator('[data-testid="adhesion-btn-confirmer"]').click()
+        # Payer en especes (bouton dans le recapitulatif)
+        page.locator('[data-testid="client-btn-especes"]').click()
         expect(page.locator('[data-testid="paiement-succes"]')).to_be_visible(timeout=15_000)
 
-        # Vérification DB / DB verification
-        result = django_shell(
+        # Verification DB : Membership creee
+        # / DB verification: Membership created
+        result_membership = django_shell(
             f"from BaseBillet.models import Membership; "
             f"from AuthBillet.models import TibilletUser; "
             f"user = TibilletUser.objects.filter(email='{test_email}').first(); "
             f"m = Membership.objects.filter(user=user).order_by('-date_added').first() if user else None; "
             f"print(f'OK status={{m.status}}') if m else print('NO_MEMBERSHIP')"
         )
-        assert "OK" in result, f"Membership non trouvée: {result}"
+        assert "OK" in result_membership, f"Membership non trouvee: {result_membership}"
 
-    # --- Chemin 5bis : CB → "Saisir email" ---
+        # Verification DB : LigneArticle creee avec les bons champs
+        # / DB verification: LigneArticle created with correct fields
+        result_ligne = django_shell(
+            f"from BaseBillet.models import LigneArticle, SaleOrigin; "
+            f"ligne = LigneArticle.objects.filter("
+            f"  sale_origin=SaleOrigin.LABOUTIK"
+            f").order_by('-datetime').first(); "
+            f"print("
+            f"  f'LIGNE email={{ligne.membership.user.email if ligne.membership else None}} '"
+            f"  f'method={{ligne.payment_method}} origin={{ligne.sale_origin}} '"
+            f"  f'amount={{ligne.amount}} qty={{int(ligne.qty)}} '"
+            f"  f'status={{ligne.status}} carte={{ligne.carte}}'"
+            f") if ligne else print('NO_LIGNE')"
+        )
+        assert 'NO_LIGNE' not in result_ligne, f"LigneArticle introuvable: {result_ligne}"
+        assert f'email={test_email}' in result_ligne, f"Email incorrect: {result_ligne}"
+        assert 'method=CA' in result_ligne, f"Payment method pas CA (especes): {result_ligne}"
+        assert 'origin=LB' in result_ligne, f"Sale origin pas LB (laboutik): {result_ligne}"
+        assert 'status=V' in result_ligne, f"Status pas V (valid): {result_ligne}"
+        assert 'carte=None' in result_ligne, f"Carte devrait etre None (paiement especes): {result_ligne}"
 
-    def test_chemin_5bis_cb_saisir_email(
-        self, page, pos_page, adhesion_cards_setup
+    # --- Chemin 5bis : "Saisir email" → recapitulatif → CB ---
+
+    def test_chemin_5bis_saisir_email_puis_cb(
+        self, page, pos_page, django_shell, adhesion_cards_setup
     ):
-        """Chemin 5bis : CB → saisir email → confirmation → paiement.
-        / Path 5bis: card → enter email → confirmation → payment.
+        """Chemin 5bis : saisir email → recapitulatif → paiement CB.
+        Verifie LigneArticle : payment_method=CC, sale_origin=LB, email correct.
+        / Path 5bis: enter email → recap → card payment.
+        Verifies LigneArticle: payment_method=CC, sale_origin=LB, correct email.
         """
         suffix = adhesion_cards_setup
         test_email = f"adh5cb-{suffix}@example.com"
 
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # CB → identification
-        page.locator('[data-testid="adhesion-btn-cb"]').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).to_be_visible(timeout=10_000)
-
         # "Saisir email"
-        page.locator('[data-testid="adhesion-choose-email"]').click()
-        expect(page.locator('[data-testid="adhesion-form"]')).to_be_visible(timeout=10_000)
+        page.locator('[data-testid="client-choose-email"]').click()
+        expect(page.locator('[data-testid="client-form"]')).to_be_visible(timeout=10_000)
 
         # Remplir et valider
-        page.locator('[data-testid="adhesion-input-email"]').fill(test_email)
-        page.locator('[data-testid="adhesion-input-prenom"]').fill("PrenomCB")
-        page.locator('[data-testid="adhesion-input-nom"]').fill("NomCB")
-        page.locator('[data-testid="adhesion-btn-valider"]').click()
+        page.locator('[data-testid="client-input-email"]').fill(test_email)
+        page.locator('[data-testid="client-input-prenom"]').fill("PrenomCB")
+        page.locator('[data-testid="client-input-nom"]').fill("NomCB")
+        page.locator('[data-testid="client-btn-valider"]').click()
 
-        # Confirmation → paiement
-        expect(page.locator('[data-testid="adhesion-confirm"]')).to_be_visible(timeout=10_000)
-        page.locator('[data-testid="adhesion-btn-confirmer"]').click()
+        # Recapitulatif → paiement CB
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        page.locator('[data-testid="client-btn-cb"]').click()
         expect(page.locator('[data-testid="paiement-succes"]')).to_be_visible(timeout=15_000)
 
-    # --- Chemin 3 : ESPECE → "Scanner carte" NFC → carte avec user → confirmation ---
+        # Verification DB : LigneArticle avec payment_method=CC (CB)
+        # / DB verification: LigneArticle with payment_method=CC (card)
+        result_ligne = django_shell(
+            f"from BaseBillet.models import LigneArticle, SaleOrigin; "
+            f"ligne = LigneArticle.objects.filter("
+            f"  sale_origin=SaleOrigin.LABOUTIK"
+            f").order_by('-datetime').first(); "
+            f"print("
+            f"  f'LIGNE email={{ligne.membership.user.email if ligne.membership else None}} '"
+            f"  f'method={{ligne.payment_method}} origin={{ligne.sale_origin}} '"
+            f"  f'amount={{ligne.amount}} qty={{int(ligne.qty)}} '"
+            f"  f'status={{ligne.status}} carte={{ligne.carte}}'"
+            f") if ligne else print('NO_LIGNE')"
+        )
+        assert 'NO_LIGNE' not in result_ligne, f"LigneArticle introuvable: {result_ligne}"
+        assert f'email={test_email}' in result_ligne, f"Email incorrect: {result_ligne}"
+        assert 'method=CC' in result_ligne, f"Payment method pas CC (CB): {result_ligne}"
+        assert 'origin=LB' in result_ligne, f"Sale origin pas LB: {result_ligne}"
 
-    def test_chemin_3_espece_scanner_carte_user_connu(
-        self, page, pos_page, adhesion_cards_setup
+    # --- Chemin 3 : "Scanner carte" NFC → carte avec user → recapitulatif → ESPECE ---
+
+    def test_chemin_3_scanner_carte_user_connu_puis_espece(
+        self, page, pos_page, django_shell, adhesion_cards_setup
     ):
-        """Chemin 3 : espèce → scanner carte (user connu CLIENT3) → confirmation → paiement.
-        / Path 3: cash → scan card (known user CLIENT3) → confirmation → payment.
+        """Chemin 3 : scanner carte (user connu CLIENT3) → recapitulatif → especes.
+        Verifie LigneArticle : email du user de la carte, payment_method=CA, carte=None (especes).
+        / Path 3: scan card (known user CLIENT3) → recap → cash.
+        Verifies LigneArticle: card user email, payment_method=CA, carte=None (cash).
         """
         _naviguer_et_ajouter_adhesion(page, pos_page)
-
-        # ESPECE → identification
-        page.locator('[data-testid="adhesion-btn-especes"]').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).to_be_visible(timeout=10_000)
 
         # "Scanner carte" → NFC
-        page.locator('[data-testid="adhesion-choose-nfc"]').click()
+        page.locator('[data-testid="client-choose-nfc"]').click()
         expect(page.locator(".nfc-reader-simu-bt").first).to_be_visible(timeout=10_000)
 
-        # Cliquer CLIENT3 (avec user assigné)
+        # Cliquer CLIENT3 (avec user assigne)
         page.locator(f'.nfc-reader-simu-bt[tag-id="{DEMO_TAGID_CLIENT3}"]').click()
 
-        # → confirmation directe (carte avec user)
-        expect(page.locator('[data-testid="adhesion-confirm"]')).to_be_visible(timeout=10_000)
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text("carte3-jetable")
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text("TESTNFC")
+        # → recapitulatif direct (carte avec user)
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text("carte3-jetable")
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text("TESTNFC")
 
-        # Confirmer le paiement
-        page.locator('[data-testid="adhesion-btn-confirmer"]').click()
+        # Payer en especes
+        page.locator('[data-testid="client-btn-especes"]').click()
         expect(page.locator('[data-testid="paiement-succes"]')).to_be_visible(timeout=15_000)
 
-    # --- Chemin 1 : CASHLESS → NFC carte avec user → confirmation ---
+        # Verification DB : LigneArticle avec les bons champs
+        # Le user vient du scan NFC (carte3-jetable), paiement en especes
+        # / DB verification: LigneArticle with correct fields
+        # User comes from NFC scan (carte3-jetable), cash payment
+        suffix = adhesion_cards_setup
+        result_ligne = django_shell(
+            f"from BaseBillet.models import LigneArticle, SaleOrigin; "
+            f"ligne = LigneArticle.objects.filter("
+            f"  sale_origin=SaleOrigin.LABOUTIK"
+            f").order_by('-datetime').first(); "
+            f"user_email = ligne.membership.user.email if ligne.membership else 'no_membership'; "
+            f"print("
+            f"  f'LIGNE email={{user_email}} '"
+            f"  f'method={{ligne.payment_method}} origin={{ligne.sale_origin}} '"
+            f"  f'amount={{ligne.amount}} qty={{int(ligne.qty)}} '"
+            f"  f'status={{ligne.status}} carte={{ligne.carte_id}}'"
+            f") if ligne else print('NO_LIGNE')"
+        )
+        assert 'NO_LIGNE' not in result_ligne, f"LigneArticle introuvable: {result_ligne}"
+        assert 'carte3-jetable' in result_ligne, f"Email user incorrect: {result_ligne}"
+        assert 'method=CA' in result_ligne, f"Payment method pas CA (especes): {result_ligne}"
+        assert 'origin=LB' in result_ligne, f"Sale origin pas LB: {result_ligne}"
+        assert 'status=V' in result_ligne, f"Status pas V: {result_ligne}"
 
-    def test_chemin_1_cashless_nfc_carte_avec_user(
+    # --- Chemin 1 : "Scanner carte" NFC → carte avec user → recapitulatif → CASHLESS ---
+
+    def test_chemin_1_scanner_carte_user_connu_puis_cashless(
         self, page, pos_page, adhesion_cards_setup
     ):
-        """Chemin 1 : cashless → NFC carte avec user (CLIENT3) → confirmation directe.
-        / Path 1: cashless → NFC card with user (CLIENT3) → direct confirmation.
+        """Chemin 1 : scanner carte NFC (CLIENT3) → recapitulatif → cashless.
+        / Path 1: scan NFC card (CLIENT3) → recap → cashless.
         """
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # CASHLESS → NFC directement (pas d'écran choix identification)
-        page.locator('[data-testid="adhesion-btn-nfc"]').click()
+        # "Scanner carte" → NFC
+        page.locator('[data-testid="client-choose-nfc"]').click()
 
         # Cliquer CLIENT3 (avec user)
         expect(page.locator(".nfc-reader-simu-bt").first).to_be_visible(timeout=10_000)
         page.locator(f'.nfc-reader-simu-bt[tag-id="{DEMO_TAGID_CLIENT3}"]').click()
 
-        # → confirmation directe
-        expect(page.locator('[data-testid="adhesion-confirm"]')).to_be_visible(timeout=10_000)
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text("carte3-jetable")
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text("TESTNFC")
+        # → recapitulatif direct
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text("carte3-jetable")
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text("TESTNFC")
 
-    # --- Chemin 2 : CASHLESS → NFC carte anonyme → formulaire → confirmation ---
-    # (AVANT chemin 4 — chemin 4 associe un user à CLIENT1)
+    # --- Chemin 2 : "Scanner carte" → NFC carte anonyme → formulaire → recapitulatif ---
+    # (AVANT chemin 4 — chemin 4 associe un user a CLIENT1)
 
-    def test_chemin_2_cashless_nfc_carte_anonyme(
+    def test_chemin_2_scanner_carte_anonyme_puis_formulaire(
         self, page, pos_page, adhesion_cards_setup
     ):
-        """Chemin 2 : cashless → NFC carte anonyme (CLIENT1) → formulaire → confirmation.
-        / Path 2: cashless → NFC anonymous card (CLIENT1) → form → confirmation.
+        """Chemin 2 : scanner carte anonyme (CLIENT1) → formulaire → recapitulatif.
+        / Path 2: scan anonymous card (CLIENT1) → form → recap.
         """
         suffix = adhesion_cards_setup
         test_email = f"adh2-{suffix}@example.com"
 
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # CASHLESS → NFC
-        page.locator('[data-testid="adhesion-btn-nfc"]').click()
+        # "Scanner carte" → NFC
+        page.locator('[data-testid="client-choose-nfc"]').click()
 
         # Cliquer CLIENT1 (anonyme)
         expect(page.locator(".nfc-reader-simu-bt").first).to_be_visible(timeout=10_000)
         page.locator(f'.nfc-reader-simu-bt[tag-id="{DEMO_TAGID_CLIENT1}"]').click()
 
-        # → carte anonyme → formulaire avec tag_id caché
-        expect(page.locator('[data-testid="adhesion-form"]')).to_be_visible(timeout=10_000)
+        # → carte anonyme → formulaire avec tag_id cache
+        expect(page.locator('[data-testid="client-form"]')).to_be_visible(timeout=10_000)
 
-        # Remplir et valider → confirmation
-        page.locator('[data-testid="adhesion-input-email"]').fill(test_email)
-        page.locator('[data-testid="adhesion-input-prenom"]').fill("PrenomDeux")
-        page.locator('[data-testid="adhesion-input-nom"]').fill("NomDeux")
-        page.locator('[data-testid="adhesion-btn-valider"]').click()
+        # Remplir et valider → recapitulatif
+        page.locator('[data-testid="client-input-email"]').fill(test_email)
+        page.locator('[data-testid="client-input-prenom"]').fill("PrenomDeux")
+        page.locator('[data-testid="client-input-nom"]').fill("NomDeux")
+        page.locator('[data-testid="client-btn-valider"]').click()
 
-        expect(page.locator('[data-testid="adhesion-confirm"]')).to_be_visible(timeout=10_000)
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text(test_email)
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text(test_email)
 
-    # --- Chemin 4 : ESPECE → "Scanner carte" NFC → carte anonyme → formulaire → PAYER ---
-    # (APRÈS chemin 2 — chemin 4 associe un user à CLIENT1)
+    # --- Chemin 4 : "Scanner carte" → NFC carte anonyme → formulaire → recapitulatif → ESPECE ---
+    # (APRES chemin 2 — chemin 4 associe un user a CLIENT1)
 
-    def test_chemin_4_espece_scanner_carte_anonyme(
+    def test_chemin_4_scanner_carte_anonyme_formulaire_puis_espece(
         self, page, pos_page, adhesion_cards_setup
     ):
-        """Chemin 4 : espèce → scanner carte (anonyme CLIENT1) → formulaire → confirmation → paiement.
-        / Path 4: cash → scan card (anonymous CLIENT1) → form → confirmation → payment.
+        """Chemin 4 : scanner carte (anonyme CLIENT1) → formulaire → recapitulatif → especes.
+        / Path 4: scan card (anonymous CLIENT1) → form → recap → cash.
         """
         suffix = adhesion_cards_setup
         test_email = f"adh4-{suffix}@example.com"
 
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # ESPECE → identification → scanner carte
-        page.locator('[data-testid="adhesion-btn-especes"]').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).to_be_visible(timeout=10_000)
-        page.locator('[data-testid="adhesion-choose-nfc"]').click()
+        # "Scanner carte" → NFC
+        page.locator('[data-testid="client-choose-nfc"]').click()
 
         # Cliquer CLIENT1 (anonyme)
         expect(page.locator(".nfc-reader-simu-bt").first).to_be_visible(timeout=10_000)
         page.locator(f'.nfc-reader-simu-bt[tag-id="{DEMO_TAGID_CLIENT1}"]').click()
 
         # → carte sans user → formulaire
-        expect(page.locator('[data-testid="adhesion-form"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-form"]')).to_be_visible(timeout=10_000)
 
         # Remplir et valider
-        page.locator('[data-testid="adhesion-input-email"]').fill(test_email)
-        page.locator('[data-testid="adhesion-input-prenom"]').fill("PrenomQuatre")
-        page.locator('[data-testid="adhesion-input-nom"]').fill("NomQuatre")
-        page.locator('[data-testid="adhesion-btn-valider"]').click()
+        page.locator('[data-testid="client-input-email"]').fill(test_email)
+        page.locator('[data-testid="client-input-prenom"]').fill("PrenomQuatre")
+        page.locator('[data-testid="client-input-nom"]').fill("NomQuatre")
+        page.locator('[data-testid="client-btn-valider"]').click()
 
-        # Confirmation → paiement
-        expect(page.locator('[data-testid="adhesion-confirm"]')).to_be_visible(timeout=10_000)
-        expect(page.locator('[data-testid="adhesion-confirm-user"]')).to_contain_text(test_email)
-        page.locator('[data-testid="adhesion-btn-confirmer"]').click()
+        # Recapitulatif → paiement
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text(test_email)
+        page.locator('[data-testid="client-btn-especes"]').click()
         expect(page.locator('[data-testid="paiement-succes"]')).to_be_visible(timeout=15_000)
 
-    # --- Bouton RETOUR depuis écran identification ---
+    # --- Bouton RETOUR depuis ecran identification ---
 
     def test_bouton_retour_ecran_identification(
         self, page, pos_page, adhesion_cards_setup
     ):
-        """Bouton retour fonctionne depuis l'écran identification.
+        """Bouton retour fonctionne depuis l'ecran identification.
         / Back button works from identification screen.
         """
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # ESPECE → identification
-        page.locator('[data-testid="adhesion-btn-especes"]').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).to_be_visible(timeout=10_000)
-
-        # RETOUR → l'écran disparaît
-        page.locator('[data-testid="adhesion-choose-id"] #bt-retour-layer1').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).not_to_be_visible(timeout=5_000)
+        # L'ecran identification est integre dans paiement-moyens
+        # Le bouton retour dans paiement-moyens ramene a l'addition
+        page.locator('[data-testid="paiement-moyens"] #bt-retour-layer1').click()
+        expect(page.locator('[data-testid="paiement-moyens"]')).not_to_be_visible(timeout=5_000)
 
     # --- Bouton RETOUR depuis formulaire email ---
 
@@ -344,12 +402,146 @@ class TestPOSAdhesionIdentification:
         """
         _naviguer_et_ajouter_adhesion(page, pos_page)
 
-        # ESPECE → identification → saisir email
-        page.locator('[data-testid="adhesion-btn-especes"]').click()
-        expect(page.locator('[data-testid="adhesion-choose-id"]')).to_be_visible(timeout=10_000)
-        page.locator('[data-testid="adhesion-choose-email"]').click()
-        expect(page.locator('[data-testid="adhesion-form"]')).to_be_visible(timeout=10_000)
+        # "Saisir email"
+        page.locator('[data-testid="client-choose-email"]').click()
+        expect(page.locator('[data-testid="client-form"]')).to_be_visible(timeout=10_000)
 
-        # RETOUR → le formulaire disparaît
-        page.locator('[data-testid="adhesion-form"] #bt-retour-layer1').click()
-        expect(page.locator('[data-testid="adhesion-form"]')).not_to_be_visible(timeout=5_000)
+        # RETOUR → le formulaire disparait
+        page.locator('[data-testid="client-form"] #bt-retour-layer1').click()
+        expect(page.locator('[data-testid="client-form"]')).not_to_be_visible(timeout=5_000)
+
+
+# ===========================================================================
+# Test panier mixte sur PV "Mix" (VT + RE + AD)
+# / Mixed cart test on "Mix" POS (VT + RE + AD)
+# ===========================================================================
+
+
+class TestPOSPanierMixte:
+    """Panier mixte sur PV "Mix" : Biere (VT) + Recharge 10€ (RE) + Adhesion (AD).
+    Le verrouillage par groupe a ete supprime (session 05) → les 3 types
+    peuvent etre ajoutes au meme panier.
+    / Mixed cart on "Mix" POS: Beer (VT) + Recharge 10€ (RE) + Membership (AD).
+    Group-based locking was removed (session 05) → all 3 types
+    can be added to the same cart.
+    """
+
+    def test_panier_mixte_vt_re_ad_nfc_puis_especes(
+        self, page, pos_page, django_shell, adhesion_cards_setup
+    ):
+        """Panier VT + RE + AD → identification NFC → recapitulatif 3 articles → especes.
+        Verifie en DB : 3 LigneArticle (VT + RE + AD) avec les bons champs.
+        / Cart VT + RE + AD → NFC identification → 3-article recap → cash.
+        DB check: 3 LigneArticle (VT + RE + AD) with correct fields.
+        """
+        suffix = adhesion_cards_setup
+
+        # Ouvrir le PV Mix
+        # / Open Mix POS
+        pos_page(page, "Mix")
+
+        # --- Ajouter Biere (VT) ---
+        biere_tile = page.locator('#products .article-container[data-name="Biere"]')
+        expect(biere_tile).to_be_visible(timeout=10_000)
+        biere_tile.click()
+        expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=5_000)
+
+        # --- Ajouter Recharge 10€ (RE) ---
+        recharge_tile = page.locator('#products .article-container').filter(has_text="Recharge")
+        expect(recharge_tile.first).to_be_visible(timeout=5_000)
+        recharge_tile.first.click()
+        expect(page.locator("#addition-list")).to_contain_text("Recharge", timeout=5_000)
+
+        # --- Ajouter Adhesion (AD) ---
+        adhesion_tile = page.locator('#products .article-container').filter(has_text="Adhesion")
+        expect(adhesion_tile.first).to_be_visible(timeout=5_000)
+        adhesion_tile.first.click()
+
+        # Si overlay tarif pour l'adhesion → cliquer premier tarif fixe
+        # / If rate overlay for membership → click first fixed rate
+        tarif_overlay = page.locator(".tarif-overlay")
+        if tarif_overlay.is_visible(timeout=2_000):
+            first_fixed = tarif_overlay.locator(".tarif-btn:not(.tarif-btn-free)").first
+            first_fixed.click()
+
+        expect(page.locator("#addition-list")).to_contain_text("Adhesion", timeout=5_000)
+
+        # --- VALIDER → ecran identification ---
+        page.locator("#bt-valider").click()
+        expect(page.locator('[data-testid="paiement-moyens"]')).to_be_visible(timeout=10_000)
+
+        # NFC seulement (recharge dans le panier → pas d'email)
+        expect(page.locator('[data-testid="client-choose-nfc"]')).to_be_visible(timeout=5_000)
+        assert not page.locator('[data-testid="client-choose-email"]').is_visible()
+
+        # --- Scanner carte CLIENT3 (avec user) ---
+        page.locator('[data-testid="client-choose-nfc"]').click()
+        expect(page.locator(".nfc-reader-simu-bt").first).to_be_visible(timeout=10_000)
+        page.locator(f'.nfc-reader-simu-bt[tag-id="{DEMO_TAGID_CLIENT3}"]').click()
+
+        # --- Recapitulatif avec les 3 articles ---
+        expect(page.locator('[data-testid="client-recapitulatif"]')).to_be_visible(timeout=10_000)
+        expect(page.locator('[data-testid="client-recapitulatif-user"]')).to_contain_text("carte3-jetable")
+
+        # Le recapitulatif doit afficher les articles
+        recapitulatif_articles = page.locator('[data-testid="client-recapitulatif-articles"]')
+        expect(recapitulatif_articles).to_be_visible(timeout=5_000)
+
+        # --- Payer en especes ---
+        page.locator('[data-testid="client-btn-especes"]').click()
+        expect(page.locator('[data-testid="paiement-succes"]')).to_be_visible(timeout=15_000)
+
+        # --- Verification DB : 3 LigneArticle creees ---
+        # On interroge la DB pour chaque article individuellement (pas de boucle for en one-liner).
+        # / DB check: 3 LigneArticle created — query each article individually.
+
+        # 1. Biere (VT) — especes, pas de membership
+        result_biere = django_shell(
+            "from BaseBillet.models import LigneArticle, SaleOrigin\n"
+            "ligne = LigneArticle.objects.filter("
+            "sale_origin=SaleOrigin.LABOUTIK, "
+            "pricesold__productsold__product__name='Biere'"
+            ").order_by('-datetime').first()\n"
+            "print(f'method={ligne.payment_method} origin={ligne.sale_origin} "
+            "amount={ligne.amount} qty={int(ligne.qty)} status={ligne.status} "
+            "carte={ligne.carte_id}') if ligne else print('NOT_FOUND')"
+        )
+        assert 'NOT_FOUND' not in result_biere, f"LigneArticle Biere introuvable: {result_biere}"
+        assert 'method=CA' in result_biere, f"Biere: payment method pas CA: {result_biere}"
+        assert 'origin=LB' in result_biere, f"Biere: origin pas LB: {result_biere}"
+        assert 'status=V' in result_biere, f"Biere: status pas V: {result_biere}"
+        assert 'amount=500' in result_biere, f"Biere: amount pas 500: {result_biere}"
+
+        # 2. Recharge 10€ (RE) — especes
+        result_recharge = django_shell(
+            "from BaseBillet.models import LigneArticle, SaleOrigin\n"
+            "ligne = LigneArticle.objects.filter("
+            "sale_origin=SaleOrigin.LABOUTIK, "
+            "pricesold__productsold__product__name__startswith='Recharge'"
+            ").order_by('-datetime').first()\n"
+            "print(f'method={ligne.payment_method} origin={ligne.sale_origin} "
+            "amount={ligne.amount} qty={int(ligne.qty)} status={ligne.status} "
+            "carte={ligne.carte_id}') if ligne else print('NOT_FOUND')"
+        )
+        assert 'NOT_FOUND' not in result_recharge, f"LigneArticle Recharge introuvable: {result_recharge}"
+        assert 'method=CA' in result_recharge, f"Recharge: payment method pas CA: {result_recharge}"
+        assert 'origin=LB' in result_recharge, f"Recharge: origin pas LB: {result_recharge}"
+        assert 'amount=1000' in result_recharge, f"Recharge: amount pas 1000: {result_recharge}"
+
+        # 3. Adhesion (AD) — especes + membership liee avec email du user de la carte
+        result_adhesion = django_shell(
+            "from BaseBillet.models import LigneArticle, SaleOrigin\n"
+            "ligne = LigneArticle.objects.filter("
+            "sale_origin=SaleOrigin.LABOUTIK, "
+            "pricesold__productsold__product__name__startswith='Adhesion'"
+            ").order_by('-datetime').first()\n"
+            "email = ligne.membership.user.email if ligne and ligne.membership else 'no_membership'\n"
+            "print(f'method={ligne.payment_method} origin={ligne.sale_origin} "
+            "amount={ligne.amount} qty={int(ligne.qty)} status={ligne.status} "
+            "email={email}') if ligne else print('NOT_FOUND')"
+        )
+        assert 'NOT_FOUND' not in result_adhesion, f"LigneArticle Adhesion introuvable: {result_adhesion}"
+        assert 'method=CA' in result_adhesion, f"Adhesion: payment method pas CA: {result_adhesion}"
+        assert 'origin=LB' in result_adhesion, f"Adhesion: origin pas LB: {result_adhesion}"
+        assert 'status=V' in result_adhesion, f"Adhesion: status pas V: {result_adhesion}"
+        assert 'carte3-jetable' in result_adhesion, f"Adhesion: email user incorrect: {result_adhesion}"

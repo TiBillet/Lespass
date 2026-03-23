@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans [`PHASES/`](PHASES/).
 >
-> Dernière mise à jour : 2026-03-19
+> Dernière mise à jour : 2026-03-23
 
 ---
 
@@ -65,13 +65,19 @@ Export PDF (WeasyPrint), CSV, envoi email (Celery). Fermeture des tables et comm
 Filtre catégorie, feedback tactile, couleurs boutons paiement, écrans FALC
 (confirmation espèces, succès, retour carte), responsive Sunmi D3mini (1278×800).
 
+### Refonte typage ✅
+
+Suppression `ADHESION`, `CASHLESS`, `KIOSK` de `comportement`. Migration vers `DIRECT` + `AVANCE`.
+Produits adhésion dans M2M standard. Suppression `kiosk.html` et code conditionnel.
+Tests Playwright adaptés (Session 04).
+
 ---
 
 ## À faire (dans l'ordre)
 
 > **Principe de séquencement** : chaque phase produit des fondations réutilisées par les suivantes.
 > Le refactoring CSS/footer est un prérequis de la billetterie (qui utilise `<c-footer>`).
-> La billetterie inclut la refonte typage (qui simplifie tout le reste).
+> Le flow identification unifié est un prérequis de la billetterie (les billets utilisent le même flow).
 > Le WebSocket est un prérequis de l'impression (Sunmi Inner).
 > Les rapports comptables et le menu ventes partagent le même `RapportComptableService`.
 
@@ -87,35 +93,41 @@ Nettoyage fondation. Pas de changement de logique. Pas de risque pour les tests.
 
 JS non touché (à discuter avec Nicolas). Backend non touché.
 
-### 2. Billetterie + Refonte typage
+### 2. Flow identification unifié (1 panier = 1 client) ← EN COURS
 
-Le typage est sur l'article (`methode_caisse`), pas sur le PV. Les articles billet
-(`methode_caisse='BI'`) coexistent dans la grille standard avec les autres articles.
+Remplace le `elif` mutuellement exclusif (recharge / adhesion / normal) par un flow unifié.
+L'identification se fait AVANT le choix de paiement (plus logique UX).
+Session 05.
+
+- [x] Flag `panier_necessite_client` dans `moyens_paiement()` (recharges + adhésions)
+- [x] Écran identification intégré dans `hx_display_type_payment.html` (NFC + email adaptatif)
+- [x] Template `hx_recapitulatif_client.html` (récap article par article + total + boutons paiement)
+- [x] `elif` supprimé de `hx_display_type_payment.html`
+- [x] `identifier_client()` reconstruit le panier + texte adaptatif par type d'article
+- [x] Formulaire email soumet via `#addition-form` (les `repid-*` sont propagés)
+- [x] Verrouillage JS par groupe supprimé (paniers mixtes VT+RE+AD autorisés)
+- [x] PV "Mix" dans `create_test_pos_data` (Biere + Recharge 10€ + Adhesion Test Mix)
+- [x] 28 tests pytest + 8 tests E2E adhesion + 8 E2E paiement = 0 échec
+- [x] Vérification LigneArticle en DB (email, carte, payment_method, amount, qty)
+- [x] Test E2E panier mixte sur PV "Mix" (VT+RE+AD → NFC → espèces → 3 LigneArticle vérifiées)
+
+### 3. Billetterie
+
+Les articles billet (`methode_caisse='BI'`) coexistent dans la grille standard.
 Tuile paysage (2 colonnes CSS Grid) + jauge event.
+Intégration dans le flow identification unifié (session 07 : `panier_a_billets`).
+Sessions 06 + 07.
 
-**Refonte typage (incluse)** :
-- [ ] Migration : supprimer ADHESION/CASHLESS/KIOSK de `comportement` → garder DIRECT + AVANCE ('V')
-- [ ] PV existants `comportement` != 'D' → `'D'` + produits adhésion dans M2M products
-- [ ] Supprimer le code `if pv.comportement == ADHESION` et `== KIOSK` dans views.py
-- [ ] Supprimer template `kiosk.html` (stub vide — KIOSK sera une app séparée)
-- [ ] Adapter tests Playwright (44-adhesion, fixtures)
-
-**Flow identification unifié** (1 panier = 1 client) :
-- [ ] Remplacer le `elif` (recharge / adhesion / normal) par `panier_necessite_client`
-- [ ] Template `hx_identifier_client.html` (scan NFC OU email, adaptatif au contenu)
-- [ ] Template `hx_recapitulatif_client.html` (résumé ce qui sera fait par article)
-- [ ] Le même user sert pour recharge + adhésion + billet (pas de double identification)
-
-**Articles billet** :
 - [ ] `_construire_donnees_articles()` enrichi avec données event/jauge pour `methode_caisse='BI'`
 - [ ] Composant Cotton `<c-billet-tuile>` (paysage, `grid-column: span 2`, jauge)
 - [ ] Jauge places restantes (polling HTMX 30s → WebSocket plus tard)
+- [ ] Ajout `panier_a_billets` dans `panier_necessite_client` + adaptation `hx_identifier_client.html`
 - [ ] `_creer_billets_depuis_panier()` : Reservation + Ticket + LigneArticle (atomique)
 - [ ] Vérification atomique jauge au paiement
 - [ ] Impression mock (console logger)
 - [ ] Tests pytest + Playwright
 
-### 3. WebSocket
+### 4. WebSocket
 
 Push serveur → navigateur via HTMX 2 extension `ws`. Daphne ASGI.
 
@@ -129,7 +141,7 @@ Push serveur → navigateur via HTMX 2 extension `ws`. Daphne ASGI.
 - [ ] **Dev** : `manage.py runserver` (Daphne) — **pas** `runserver_plus`
 - [ ] **Prod** : `daphne TiBillet.asgi:application` derrière Nginx
 
-### 4. Impression
+### 5. Impression
 
 Module modulaire Celery (fire-and-forget, retry exponentiel). Sunmi Cloud + Inner.
 
@@ -145,7 +157,7 @@ Module modulaire Celery (fire-and-forget, retry exponentiel). Sunmi Cloud + Inne
 - [ ] Remplacer le stub `imprimer_billet()` par le vrai dispatch
 - [ ] Tests
 
-### 5. Rapports Comptables
+### 6. Rapports Comptables
 
 Ticket Z enrichi — document comptable légal. Service de calcul partagé avec le Menu Ventes.
 
@@ -157,7 +169,7 @@ Ticket Z enrichi — document comptable légal. Service de calcul partagé avec 
 - [ ] Config : `rapport_emails`, `rapport_periodicite`, `fond_de_caisse`
 - [ ] Tests
 
-### 6. Menu Ventes (caisse tactile)
+### 7. Menu Ventes (caisse tactile)
 
 Menu "Ventes" dans le burger menu POS. Consomme le même `RapportComptableService`.
 
@@ -171,7 +183,7 @@ Menu "Ventes" dans le burger menu POS. Consomme le même `RapportComptableServic
 - [ ] Navigation : sidebar desktop, onglets mobile
 - [ ] Tests
 
-### 7. Multi-Tarif UX
+### 8. Multi-Tarif UX
 
 Overlay non-bloquant avec quantités multiples. À discuter avec Nicolas (son code JS).
 
@@ -180,7 +192,7 @@ Overlay non-bloquant avec quantités multiples. À discuter avec Nicolas (son co
 - [ ] Prix libre : mémorisation du dernier montant
 - [ ] Badge quantité sur chaque bouton tarif
 
-### 8. Multi-Asset
+### 9. Multi-Asset
 
 Paniers mixtes EUR + tokens. À détailler avec le mainteneur.
 
@@ -188,18 +200,18 @@ Paniers mixtes EUR + tokens. À détailler avec le mainteneur.
 - [ ] Affichage multi-total (par asset) dans le panier
 - [ ] Session dédiée pour l'UX
 
-### 9. Stress test (Phase 3.3)
+### 10. Stress test (Phase 3.3)
 
 - [ ] Management command `verify_transactions` (séquence, soldes, tenant)
 - [ ] Stress test : 4 tenants, 2000 tx concurrentes, 80 threads
 
-### 10. Migration données (Phase 6)
+### 11. Migration données (Phase 6)
 
 - [ ] `import_fedow_data` (dry-run + commit)
 - [ ] `import_laboutik_data`
 - [ ] `verify_import`
 
-### 11. Consolidation (Phase 7)
+### 12. Consolidation (Phase 7)
 
 - [ ] `recalculate_hashes` → hash NOT NULL + UNIQUE
 - [ ] Supprimer `fedow_connect/fedow_api.py`, `fedow_connect.Asset`, `fedow_connect.FedowConfig`

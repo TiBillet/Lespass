@@ -471,6 +471,57 @@ class Command(BaseCommand):
             )
             pdv_adhesion.products.add(*produits_adhesion)
 
+            # PV Mix : article classique (Biere) + recharge (Recharge 10€) + 1 adhesion dediee.
+            # Sert a tester les paniers mixtes (VT + RE + AD dans le meme panier).
+            # On cree UN produit adhesion dedie "Adhesion Test Mix" pour ne pas
+            # ratisser les centaines d'adhesions du tenant.
+            # / Mix POS: classic article (Beer) + top-up (Recharge 10€) + 1 dedicated membership.
+            # Used to test mixed carts (VT + RE + AD in the same cart).
+            # We create ONE dedicated membership product "Adhesion Test Mix" to avoid
+            # pulling in hundreds of tenant memberships.
+            produit_adhesion_mix, created_adh_mix = Product.objects.get_or_create(
+                name="Adhesion Test Mix",
+                defaults={
+                    "categorie_article": Product.ADHESION,
+                    "publish": True,
+                    "couleur_fond_pos": "#6366F1",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-id-card",
+                },
+            )
+            if created_adh_mix:
+                Price.objects.create(
+                    product=produit_adhesion_mix,
+                    name="Annuelle Test",
+                    prix=Decimal("20.00"),
+                    subscription_type=Price.YEAR,
+                )
+                self.stdout.write(f"  Produit adhesion Mix cree : {produit_adhesion_mix.name}")
+
+            pdv_mix, _ = PointDeVente.objects.update_or_create(
+                name="Mix",
+                defaults={
+                    "icon": "fa-blender",
+                    "comportement": PointDeVente.DIRECT,
+                    "service_direct": True,
+                    "afficher_les_prix": True,
+                    "accepte_especes": True,
+                    "accepte_carte_bancaire": True,
+                    "accepte_cheque": False,
+                    "accepte_commandes": False,
+                    "poid_liste": 5,
+                },
+            )
+            # Produits du PV Mix : Biere (VT) + Recharge 10€ (RE) + Adhesion Test Mix (AD)
+            # .set() remplace tout le M2M — pas d'accumulation entre les runs.
+            # / Mix POS products: Beer (VT) + Recharge 10€ (RE) + Adhesion Test Mix (AD)
+            # .set() replaces the whole M2M — no accumulation between runs.
+            produit_biere = Product.objects.filter(name="Biere", methode_caisse=Product.VENTE).first()
+            produit_recharge_10 = Product.objects.filter(name="Recharge 10€", methode_caisse=Product.RECHARGE_EUROS).first()
+            produits_mix = [p for p in [produit_biere, produit_recharge_10, produit_adhesion_mix] if p]
+            pdv_mix.products.set(produits_mix)
+            pdv_mix.categories.set([categorie_bar, categorie_cashless])
+
             # Associe les produits aux points de vente
             # / Link products to points of sale
             all_pos_products = Product.objects.filter(methode_caisse__isnull=False)
@@ -513,7 +564,8 @@ class Command(BaseCommand):
                 f"{pdv_restaurant} ({restaurant_products.count()} produits), "
                 f"{pdv_terrasse} ({terrasse_products.count()} produits), "
                 f"{pdv_cashless} ({cashless_products.count()} produits), "
-                f"{pdv_adhesion} ({pdv_adhesion.products.count()} produits)"
+                f"{pdv_adhesion} ({pdv_adhesion.products.count()} produits), "
+                f"{pdv_mix} ({pdv_mix.products.count()} produits)"
             )
 
             # --- Cartes primaires (uniquement en mode TEST) ---
@@ -559,7 +611,7 @@ class Command(BaseCommand):
                 carte=carte_cm,
                 defaults={"edit_mode": True},
             )
-            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse, pdv_cashless, pdv_adhesion])
+            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse, pdv_cashless, pdv_adhesion, pdv_mix])
             if created_cm:
                 self.stdout.write(f"  Carte primaire creee : {tag_id_cm} (tous les PV, edit_mode=True)")
             else:

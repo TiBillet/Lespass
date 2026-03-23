@@ -1667,7 +1667,7 @@ panier_necessite_client = (
 )
 ```
 
-**Flow simplifié** :
+**Flow simplifié** (IMPLÉMENTÉ — session 05) :
 ```
 SI panier_necessite_client = False :
   → flow normal (choix moyen → payer → succès)
@@ -1675,8 +1675,8 @@ SI panier_necessite_client = False :
 SI panier_necessite_client = True :
   → écran identification : "SCANNER CARTE NFC" ou "SAISIR EMAIL/NOM"
   → client identifié
-  → écran récapitulatif (montre ce qui sera fait pour chaque article)
-  → choix moyen de paiement
+  → écran récapitulatif (article par article + total + boutons paiement)
+  → clic bouton paiement (ESPÈCE / CB / CHÈQUE / CASHLESS)
   → paiement atomique
 ```
 
@@ -1765,16 +1765,15 @@ Un seul panier peut contenir : T-shirt (VT) + Recharge 10€ (RE) + Adhésion (A
 
 ```
 Panier mixte → clic VALIDER → moyens_paiement()
-  → détecte panier_a_adhesions (articles AD)
-  → détecte panier_a_billets (articles BI)
-  → affiche moyens de paiement (tous disponibles sauf NFC si recharges)
+  → détecte panier_necessite_client (recharges, adhésions, billets)
   ↓
-Choix moyen → payer()
-  ↓
-  SI panier_a_adhesions OU panier_a_billets :
-    → écran identification (1 seul wizard, partagé)
-    → NFC ou formulaire email/nom
-    → l'identité sert pour l'adhésion ET le billet
+  SI panier_necessite_client = True :
+    → écran identification : "SCANNER CARTE NFC" ou "SAISIR EMAIL/NOM"
+    → client identifié
+    → écran récapitulatif (montre ce qui sera fait pour chaque article)
+    → choix moyen de paiement (espèces, CB, chèque — PAS NFC si recharges)
+  SINON :
+    → choix moyen de paiement directement (flow normal)
   ↓
   Paiement atomique :
     articles VT/RE/RC/TM/CR/VC → _creer_ligne_article()
@@ -1782,8 +1781,9 @@ Choix moyen → payer()
     articles BI → _creer_billets_depuis_panier() + Reservation + Ticket + LigneArticle
 ```
 
-**L'identification est mutualisée** : si le client est identifié par NFC pour l'adhésion,
-le même user sert pour les billets. Pas besoin de demander 2 fois.
+**L'identification est AVANT le choix de paiement** : plus logique UX — on sait d'abord
+pour qui on paie, puis on choisit comment. L'identification est mutualisée : si le client
+est identifié par NFC pour l'adhésion, le même user sert pour les billets et recharges.
 
 ##### 6. `CASHLESS` et `KIOSK` comme comportement → aussi supprimés
 

@@ -1,0 +1,160 @@
+{% load static i18n %}
+<!--
+FORMULAIRE D'IDENTIFICATION CLIENT — POS
+Email obligatoire, prenom et nom obligatoires.
+Le bouton VALIDER injecte les champs dans #addition-form puis soumet.
+Cela garantit que les repid-* (articles du panier) sont envoyes avec.
+/ Client identification form — POS.
+Email required, first name and last name required.
+VALIDER button injects fields into #addition-form then submits.
+This ensures repid-* (cart articles) are sent along.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html
+
+FLUX :
+1. L'utilisateur arrive ici depuis hx_display_type_payment.html (saisie manuelle)
+   ou depuis identifier_client (carte anonyme → formulaire pre-rempli)
+2. Remplir email + prenom + nom
+3. VALIDER → JS injecte dans #addition-form → POST identifier_client
+4. identifier_client() recoit email + prenom + nom + repid-* + uuid_pv
+-->
+
+<div class="BF-col" data-testid="client-form" aria-live="polite">
+  <h1 class="adhesion-form-title adhesion-form-stagger" style="--ordre: 1">{% translate "Identifier le client" %}</h1>
+
+  {# --- Formulaire local (pas HTMX — la soumission passe par #addition-form) --- #}
+  <div class="adhesion-form-container adhesion-form-stagger" style="--ordre: 2"
+    data-testid="client-form-fields">
+
+    {# --- Email --- #}
+    <div class="adhesion-field">
+      <input type="email" id="client-email"
+        placeholder=" "
+        autofocus
+        class="adhesion-input"
+        inputmode="email"
+        autocomplete="email"
+        value="{{ email|default:'' }}"
+        aria-label="{% translate 'Email du client' %}"
+        data-testid="client-input-email" />
+      <label for="client-email" class="adhesion-label">{% translate "Email" %} *</label>
+    </div>
+
+    {# --- Prenom + Nom --- #}
+    <div class="adhesion-form-row">
+      <div class="adhesion-field adhesion-field-half">
+        <input type="text" id="client-prenom"
+          placeholder=" "
+          class="adhesion-input"
+          autocomplete="given-name"
+          value="{{ prenom|default:'' }}"
+          aria-label="{% translate 'Prenom' %}"
+          data-testid="client-input-prenom" />
+        <label for="client-prenom" class="adhesion-label">{% translate "Prenom" %} *</label>
+      </div>
+      <div class="adhesion-field adhesion-field-half">
+        <input type="text" id="client-nom"
+          placeholder=" "
+          class="adhesion-input"
+          autocomplete="family-name"
+          value="{{ nom|default:'' }}"
+          aria-label="{% translate 'Nom' %}"
+          data-testid="client-input-nom" />
+        <label for="client-nom" class="adhesion-label">{% translate "Nom" %} *</label>
+      </div>
+    </div>
+
+    {# --- Erreur serveur (si retour avec erreur) --- #}
+    {% if erreur %}
+    <div class="adhesion-error" role="alert" data-testid="client-form-error">
+      {{ erreur }}
+    </div>
+    {% endif %}
+
+    {# --- Bouton VALIDER --- #}
+    <button type="button" class="adhesion-submit-btn" data-testid="client-btn-valider"
+      onclick="soumettreIdentificationEmail()">
+      <i class="fas fa-check" aria-hidden="true"></i>
+      {% translate "VALIDER" %}
+    </button>
+  </div>
+
+  {# --- Bouton retour --- #}
+  <c-bt.return />
+
+  <script>
+    /**
+     * Valide les champs du formulaire, les injecte dans #addition-form,
+     * puis soumet vers identifier_client.
+     * Meme pattern que payerAvecClient() et l'ancien confirmerAdhesion().
+     * Le #addition-form contient deja les repid-* (articles du panier).
+     * / Validates form fields, injects them into #addition-form,
+     * then submits to identifier_client.
+     * Same pattern as payerAvecClient() and the old confirmerAdhesion().
+     * #addition-form already contains repid-* (cart articles).
+     *
+     * LOCALISATION : hx_formulaire_identification_client.html (inline)
+     *
+     * COMMUNICATION :
+     * Emet : 'additionManageForm' → #event-organizer (updateInput, postUrl, submit)
+     */
+    function soumettreIdentificationEmail() {
+      // Lire les champs du formulaire local
+      // / Read local form fields
+      var email = document.querySelector('#client-email').value.trim();
+      var prenom = document.querySelector('#client-prenom').value.trim();
+      var nom = document.querySelector('#client-nom').value.trim();
+
+      // Validation minimale cote client (le serveur valide aussi via le serializer)
+      // / Minimal client-side validation (server also validates via serializer)
+      if (!email || !prenom || !nom) {
+        return;
+      }
+
+      var form = document.querySelector('#addition-form');
+
+      // Injecter les champs d'identification dans #addition-form
+      // / Inject identification fields into #addition-form
+      function setHiddenInput(name, value) {
+        var input = form.querySelector('[name="' + name + '"]');
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          form.appendChild(input);
+        }
+        input.value = value;
+      }
+
+      setHiddenInput('email_adhesion', email);
+      setHiddenInput('prenom_adhesion', prenom);
+      setHiddenInput('nom_adhesion', nom);
+      {% if tag_id %}
+      setHiddenInput('tag_id', '{{ tag_id|escapejs }}');
+      {% endif %}
+
+      // Les flags du panier sont deja dans #addition-form
+      // (injectes par hx_lire_nfc_client.html au chargement)
+      // Mais si on arrive ici directement (pas via NFC), il faut les injecter aussi.
+      // / Cart flags are already in #addition-form (injected by hx_lire_nfc_client.html).
+      // But if we arrive here directly (not via NFC), we need to inject them too.
+      setHiddenInput('panier_a_recharges', '{{ panier_a_recharges|escapejs }}');
+      setHiddenInput('panier_a_adhesions', '{{ panier_a_adhesions|escapejs }}');
+      setHiddenInput('moyens_paiement', '{{ moyens_paiement_csv|escapejs }}');
+
+      // Soumettre #addition-form vers identifier_client
+      // / Submit #addition-form to identifier_client
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_formulaire_identification_client.html', method: 'soumettreIdentificationEmail' },
+        msg: 'additionManageForm',
+        data: { actionType: 'postUrl', selector: null, value: '{% url "laboutik-paiement-identifier_client" %}' }
+      });
+      sendEvent('organizerMsg', '#event-organizer', {
+        src: { file: 'hx_formulaire_identification_client.html', method: 'soumettreIdentificationEmail' },
+        msg: 'additionManageForm',
+        data: { actionType: 'submit' }
+      });
+    }
+  </script>
+
+</div>

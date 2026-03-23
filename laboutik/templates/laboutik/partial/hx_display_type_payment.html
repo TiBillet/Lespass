@@ -1,25 +1,29 @@
 {% load static i18n %}
 {% load laboutik_process %}
 <!--
-ECRAN CHOIX DU MOYEN DE PAIEMENT
-Affiche les boutons de paiement disponibles selon le contexte :
-consigne, recharge NFC ou vente normale.
-Chaque bouton a une couleur distincte pour identification rapide (FALC).
-/ Payment method selection screen — colored buttons for quick identification.
+ECRAN CHOIX DU MOYEN DE PAIEMENT / IDENTIFICATION CLIENT
+Affiche les boutons de paiement ou l'ecran d'identification selon le contexte :
+consigne, identification client (recharge/adhesion), ou vente normale.
+/ Payment method selection / client identification screen.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_display_type_payment.html
 
 FLUX :
 1. L'utilisateur clique VALIDER dans l'addition
-2. Le serveur renvoie ce partial avec les moyens de paiement disponibles
-3. Clic sur un bouton → hx_confirm_payment.html ou lecture NFC
+2. Le serveur renvoie ce partial via moyens_paiement()
+3. Si panier_necessite_client : ecran identification (NFC / email)
+4. Sinon : boutons de paiement directs
 -->
 
 <div class="BF-col" data-testid="paiement-moyens" aria-live="polite">
-  <!-- consignes / deposit refund -->
+
+  {# ================================================================== #}
+  {# --- MODE CONSIGNE : remboursement (inchange) ---                   #}
+  {# --- DEPOSIT MODE: refund (unchanged) ---                           #}
+  {# ================================================================== #}
   {% if deposit_is_present %}
-   <h1 class="message-title">{% translate "Rembourser la consigne par :" %}</h1>
-  <!-- cashless -->
+  <h1 class="message-title">{% translate "Rembourser la consigne par :" %}</h1>
+
   {% if 'nfc' in moyens_paiement %}
   <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" bg="--bleu03" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
     hx-trigger="click" hx-swap="outerHTML"
@@ -31,90 +35,73 @@ FLUX :
     onclick="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece'); askAdditionManageForm('postUrl',null,'{% url 'laboutik-paiement-payer' %}'); askAdditionManageForm('submit')"
     data-testid="deposit-btn-especes" />
 
-  {% else %}
-  <!-- pas de consignes / no deposit -->
+  {# ================================================================== #}
+  {# --- MODE CLIENT REQUIS : identification AVANT paiement ---         #}
+  {# Le panier contient des recharges et/ou des adhesions.              #}
+  {# On identifie le client d'abord, puis on choisit le moyen.         #}
+  {# --- CLIENT REQUIRED MODE: identification BEFORE payment ---        #}
+  {# ================================================================== #}
+  {% elif panier_necessite_client %}
 
-  {% if panier_a_recharges %}
-  {# --- MODE RECHARGE : scan NFC client obligatoire avant paiement --- #}
-  {# --- TOP-UP MODE: client NFC scan required before payment --- #}
-  <h1 class="message-title">{% translate "Posez la carte du client sur le lecteur" %}</h1>
-  <div class="recharge-total" style="font-size: 2rem; font-weight: bold; font-variant-numeric: tabular-nums; margin-bottom: 0.5rem;">
-    {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  {# --- Titre adaptatif selon le contenu du panier --- #}
+  {% if panier_a_recharges and panier_a_adhesions %}
+  <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
+    {% translate "Recharge + Adhesion" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </h1>
+  {% elif panier_a_recharges %}
+  <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
+    {% translate "Recharge" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </h1>
+  {% else %}
+  <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
+    {% translate "Adhesion" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </h1>
+  {% endif %}
+
+  {# --- Texte explicatif --- #}
+  <p class="choose-id-stagger" style="--ordre: 1; opacity: 0.8; font-size: 1rem; margin: 0 0 0.5rem;">
+    {% if panier_a_recharges %}{% translate "Carte NFC du client requise pour la recharge" %}{% endif %}
+    {% if panier_a_recharges and panier_a_adhesions %}<br/>{% endif %}
+    {% if panier_a_adhesions %}{% translate "Identification requise pour l'adhesion" %}{% endif %}
+  </p>
+
+  {# --- Option 1 : Scanner une carte TiBillet (toujours disponible) --- #}
+  <div class="choose-id-btn choose-id-stagger" style="--ordre: 2"
+    hx-get="{% url 'laboutik-paiement-lire_nfc_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&moyens_paiement={{ moyens_paiement_csv }}"
+    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
+    data-testid="client-choose-nfc"
+    role="button" tabindex="0"
+    aria-label="{% translate 'Scanner une carte TiBillet' %}">
+    <i class="fas fa-id-card choose-id-icon" aria-hidden="true"></i>
+    <span>{% translate "Scanner une carte TiBillet" %}</span>
   </div>
 
-  {% if 'espece' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins"
-    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
-    hx-trigger="click" hx-swap="outerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')"
-    data-testid="recharge-btn-especes" />
-  {% endif %}
+  {# --- Option 2 : Saisir email / nom (masque si recharges car carte physique requise) --- #}
+  {% if not panier_a_recharges %}
+  <div class="choose-id-separator choose-id-stagger" style="--ordre: 3" aria-hidden="true">
+    <span class="choose-id-separator-line"></span>
+    <span class="choose-id-separator-text">{% translate "ou" %}</span>
+    <span class="choose-id-separator-line"></span>
+  </div>
 
-  {% if 'carte_bancaire' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" bg="--bleu05"
-    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
-    hx-trigger="click" hx-swap="outerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')"
-    data-testid="recharge-btn-cb" />
-  {% endif %}
-
-  {% if 'CH' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" bg="--gris02"
-    hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
-    hx-trigger="click" hx-swap="outerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')"
-    data-testid="recharge-btn-cheque" />
-  {% endif %}
-
-  {% elif panier_a_adhesions %}
-  {# --- MODE ADHÉSION : choix du moyen de paiement puis identification séparée --- #}
-  {# --- MEMBERSHIP MODE: payment method choice then separate identification --- #}
-  <h1 class="message-title">{% translate "Adhesion" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}</h1>
-
-  {# --- CASHLESS : scan NFC direct (la carte identifie le membre) --- #}
-  {# Meme pattern que le CASHLESS normal : hx-target="#confirm" hx-swap="outerHTML" #}
-  {# / Same pattern as normal CASHLESS: hx-target="#confirm" hx-swap="outerHTML" #}
-  {% if 'nfc' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" bg="--bleu03"
-    hx-get="{% url 'laboutik-paiement-lire_nfc_adhesion' %}?method=nfc"
-    hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')"
-    data-testid="adhesion-btn-nfc" />
-  {% endif %}
-
-  {# --- ESPECE : ecran d'identification d'abord --- #}
-  {% if 'espece' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "ESPECE" %}' icon="fa-coins"
-    hx-get="{% url 'laboutik-paiement-adhesion_choisir_identification' %}?method=espece"
+  <div class="choose-id-btn choose-id-stagger" style="--ordre: 4"
+    hx-get="{% url 'laboutik-paiement-formulaire_identification_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&moyens_paiement={{ moyens_paiement_csv }}"
     hx-target="#messages" hx-trigger="click" hx-swap="innerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')"
-    data-testid="adhesion-btn-especes" />
+    data-testid="client-choose-email"
+    role="button" tabindex="0"
+    aria-label="{% translate 'Saisir email / nom' %}">
+    <i class="fas fa-envelope choose-id-icon" aria-hidden="true"></i>
+    <span>{% translate "Saisir email / nom" %}</span>
+  </div>
   {% endif %}
 
-  {# --- CB : ecran d'identification d'abord --- #}
-  {% if 'carte_bancaire' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" bg="--bleu05"
-    hx-get="{% url 'laboutik-paiement-adhesion_choisir_identification' %}?method=carte_bancaire"
-    hx-target="#messages" hx-trigger="click" hx-swap="innerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')"
-    data-testid="adhesion-btn-cb" />
-  {% endif %}
-
-  {# --- CHEQUE : ecran d'identification d'abord --- #}
-  {% if 'CH' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "CHEQUE" %}' icon="fa-money-check" bg="--gris02"
-    hx-get="{% url 'laboutik-paiement-adhesion_choisir_identification' %}?method=CH"
-    hx-target="#messages" hx-trigger="click" hx-swap="innerHTML"
-    hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')"
-    data-testid="adhesion-btn-cheque" />
-  {% endif %}
-
+  {# ================================================================== #}
+  {# --- MODE NORMAL (pas de recharges, pas d'adhesions) ---            #}
+  {# --- NORMAL MODE (no top-ups, no memberships) ---                   #}
+  {# ================================================================== #}
   {% else %}
-  {# --- MODE NORMAL (pas de recharges, pas d'adhésions) --- #}
-  {# --- NORMAL MODE (no top-ups, no memberships) --- #}
   <h1 class="message-title">{% translate "Types de paiement" %}</h1>
 
-  <!-- cashless -->
   {% if 'nfc' in moyens_paiement %}
   <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" bg="--bleu03" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
     hx-trigger="click" hx-swap="outerHTML"
@@ -122,7 +109,6 @@ FLUX :
     data-testid="paiement-btn-cashless" />
   {% endif %}
 
-  <!-- espece, pas une consigne / cash, no deposit -->
   {% if 'espece' in moyens_paiement %}
   <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total }}"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
@@ -130,11 +116,6 @@ FLUX :
     data-testid="paiement-btn-especes" />
   {% endif %}
 
-  <!-- TODO: espece, une consigne: espece a rendre, depositIsPresent -->
-  {% if 'espece' in moyens_paiement %}
-  {% endif %}
-
-  <!-- carte bancaire / credit card -->
   {% if 'carte_bancaire' in moyens_paiement %}
   <c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" bg="--bleu05" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
@@ -142,7 +123,6 @@ FLUX :
     data-testid="paiement-btn-cb" />
   {% endif %}
 
-  <!-- cheque / check -->
   {% if 'CH' in moyens_paiement %}
   <c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" bg="--gris02" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
@@ -150,8 +130,6 @@ FLUX :
     data-testid="paiement-btn-cheque" />
   {% endif %}
 
-  <!-- "OFFRIR" en mode gerant uniquement -->
-  <!-- "GIFT" manager mode only -->
   {% if mode_gerant %}
   <c-bt.paiement name='{% translate "OFFRIR" %}' icon="fa-gift" bg="--warning00" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=gift"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
@@ -160,15 +138,12 @@ FLUX :
     data-testid="paiement-btn-offrir" />
   {% endif %}
 
-  {% endif %}{# fin panier_a_recharges / end top-up check #}
+  {% endif %}{# fin deposit / panier_necessite_client / normal #}
 
-  <!-- pas de moyens de paiement / no payment methods -->
-  {% if moyens_paiement|length == 0%}
+  {% if moyens_paiement|length == 0 %}
   <h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
   {% endif %}
 
-  {% endif %}
-  <!-- bouton retour / back button -->
   <c-bt.return />
 
 </div>

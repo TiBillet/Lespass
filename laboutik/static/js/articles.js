@@ -1,22 +1,24 @@
 /**
  * ARTICLES.JS - GESTION DE LA GRILLE D'ARTICLES
  * / Article grid management
- * 
+ *
  * LOCALISATION : laboutik/static/js/articles.js
- * 
- * Gère l'affichage et la sélection des articles :
- * - Détection des clics sur les articles
- * - Incrémentation des quantités
- * - Gestion des groupes (verrouillage/déverrouillage)
- * 
+ *
+ * Gere l'affichage et la selection des articles :
+ * - Detection des clics sur les articles
+ * - Incrementation des quantites
+ * - Filtrage par categorie
+ *
  * COMMUNICATION :
- * Émet : 'articlesAdd' (vers #addition via tibilletUtils.js)
- * Reçoit : 'articlesRemove', 'articlesReset', 'articlesDisplayCategory'
- * 
- * GESTION DES GROUPES :
- * Les articles ont un data-group. Quand on sélectionne un article,
- * tous les articles des AUTRES groupes sont verrouillés (article-lock-layer).
- * Cela empêche de mélanger certains types d'articles dans une commande.
+ * Emet : 'articlesAdd' (vers #addition via tibilletUtils.js)
+ * Recoit : 'articlesRemove', 'articlesReset', 'articlesDisplayCategory'
+ *
+ * NOTE : le verrouillage par groupe (data-group) a ete supprime.
+ * Les paniers mixtes (VT + RE + AD) sont desormais autorises
+ * grace au flow d'identification client unifie (session 05).
+ * / NOTE: group-based locking (data-group) has been removed.
+ * Mixed carts (VT + RE + AD) are now allowed
+ * thanks to the unified client identification flow (session 05).
  */
 
 /**
@@ -55,48 +57,30 @@ function addArticle(uuid, price, name, currency) {
 }
 
 /**
- * Gère la sélection d'un article (clic)
+ * Gere la selection d'un article (clic)
  * / Manages article selection (click)
- * 
- * Écouteur principal attaché à #products (délégation d'événements).
- * Déclenché à chaque clic sur une tuile article.
- * 
+ *
+ * Ecouteur principal attache a #products (delegation d'evenements).
+ * Declenche a chaque clic sur une tuile article.
+ *
  * Actions :
- * 1. Récupère les données de l'article (uuid, group, price, name, currency)
- * 2. Si l'article a un groupe : verrouille les articles des autres groupes
- *    - Ajoute data-disable="true"
- *    - Affiche article-lock-layer (overlay gris)
- * 3. Appelle addArticle() pour incrémenter et émettre l'événement
- * 
- * @param {Object} event - Événement clic
+ * 1. Recupere les donnees de l'article (uuid, price, name, currency)
+ * 2. Si multi-tarif → ouvre la selection de tarif
+ * 3. Sinon → appelle addArticle() pour incrementer et emettre l'evenement
+ *
+ * @param {Object} event - Evenement clic
  */
 function manageKey(event) {
 	const ele = event.target.parentNode
-	// TODO : Que se passe-t-il si on clique sur un élément très profond (ex: icône dans l'icône) ?
-	// event.target.parentNode pourrait ne pas être l'article-container mais un élément intermédiaire.
-	// Ne devrait-on pas remonter récursivement jusqu'à trouver .article-container ou null ?
-	
-	if (ele.classList.contains('article-container') && ele.getAttribute('data-disable') === null) {
+
+	if (ele.classList.contains('article-container')) {
 		const articleUuid = ele.dataset.uuid
-		const articleGroup = ele.dataset.group
 		const articlePrice = ele.dataset.price
 		const articleName = ele.dataset.name
 		const articleCurrency = ele.dataset.currency
 		const multiTarif = ele.dataset.multiTarif === 'true'
 
-		// Verrouille les articles des autres groupes
-		document.querySelectorAll('#products .article-container').forEach(item => {
-			const itemGroup = item.dataset.group
-			if (itemGroup !== articleGroup) {
-				item.querySelector('.article-lock-layer').style.display = "block"
-				item.setAttribute('data-disable', 'true')
-			}
-		})
-		// TODO : Une fois les articles d'autres groupes verrouillés, ils le restent même si
-		// on retire tous les articles du groupe actif. Ne devrait-on pas déverrouiller automatiquement
-		// quand le panier devient vide ? Actuellement seul le bouton RESET permet de déverrouiller.
-
-		// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la sélection de tarif
+		// Si l'article a plusieurs tarifs ou un prix libre → ouvrir la selection de tarif
 		// au lieu d'ajouter directement au panier.
 		// / If the article has multiple rates or free price → open rate selection
 		// instead of adding directly to cart.
@@ -149,15 +133,14 @@ function articlesRemove(event) {
 }
 
 /**
- * Réinitialise l'affichage de tous les articles (Handler)
+ * Reinitialise l'affichage de tous les articles (Handler)
  * / Resets all articles display
- * 
- * Reçoit 'articlesReset' depuis common_user_interface.html (bouton RESET).
- * Réinitialise complètement l'affichage des articles :
- * - Remet toutes les quantités à 0
- * - Supprime data-disable sur tous les articles
- * - Cache article-lock-layer (déverrouille)
- * 
+ *
+ * Recoit 'articlesReset' depuis common_user_interface.html (bouton RESET).
+ * Reinitialise completement l'affichage des articles :
+ * - Remet toutes les quantites a 0
+ * - Cache les badges de quantite
+ *
  * Flux : clic RESET → 'resetArticles' → tibilletUtils.js → 'articlesReset' → CETTE FONCTION
  */
 function articlesReset() {
@@ -170,8 +153,6 @@ function articlesReset() {
 			// Cache le badge (quantite remise a zero)
 			// / Hides badge (quantity reset to zero)
 			eleQuantity.classList.remove('badge-visible')
-			article.removeAttribute('data-disable')
-			article.querySelector('.article-lock-layer').style.display = "none"
 		})
 
 	} catch (error) {
