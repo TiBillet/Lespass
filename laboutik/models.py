@@ -14,6 +14,7 @@ from solo.models import SingletonModel
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import CategorieProduct, Price, Product
 from QrcodeCashless.models import CarteCashless
+from fedow_connect.utils import fernet_encrypt, fernet_decrypt
 
 
 # --- Configuration globale de l'interface caisse ---
@@ -49,11 +50,167 @@ class LaboutikConfiguration(SingletonModel):
         ),
     )
 
+    # Identifiants Sunmi Cloud (chiffres avec Fernet)
+    # Le champ stocke la valeur chiffree. Utiliser les methodes get/set pour lire/ecrire.
+    # / Sunmi Cloud credentials (Fernet-encrypted)
+    # The field stores the encrypted value. Use get/set methods to read/write.
+    sunmi_app_id = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name=_("Sunmi App ID (encrypted)"),
+        help_text=_(
+            "Identifiant de l'application Sunmi Cloud (stocke chiffre). "
+            "/ Sunmi Cloud application ID (stored encrypted)."
+        ),
+    )
+    sunmi_app_key = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name=_("Sunmi App Key (encrypted)"),
+        help_text=_(
+            "Cle de l'application Sunmi Cloud (stockee chiffree). "
+            "/ Sunmi Cloud application key (stored encrypted)."
+        ),
+    )
+
+    def get_sunmi_app_id(self):
+        """Dechiffre et retourne le Sunmi App ID, ou None si vide.
+        / Decrypts and returns the Sunmi App ID, or None if empty."""
+        if not self.sunmi_app_id:
+            return None
+        return fernet_decrypt(self.sunmi_app_id)
+
+    def set_sunmi_app_id(self, value):
+        """Chiffre et stocke le Sunmi App ID.
+        / Encrypts and stores the Sunmi App ID."""
+        if not value:
+            self.sunmi_app_id = None
+        else:
+            self.sunmi_app_id = fernet_encrypt(value)
+
+    def get_sunmi_app_key(self):
+        """Dechiffre et retourne la Sunmi App Key, ou None si vide.
+        / Decrypts and returns the Sunmi App Key, or None if empty."""
+        if not self.sunmi_app_key:
+            return None
+        return fernet_decrypt(self.sunmi_app_key)
+
+    def set_sunmi_app_key(self, value):
+        """Chiffre et stocke la Sunmi App Key.
+        / Encrypts and stores the Sunmi App Key."""
+        if not value:
+            self.sunmi_app_key = None
+        else:
+            self.sunmi_app_key = fernet_encrypt(value)
+
     def __str__(self):
         return "LaBoutik Configuration"
 
     class Meta:
         verbose_name = _("LaBoutik Configuration")
+
+
+# --- Imprimante ---
+# / Printer
+
+class Printer(models.Model):
+    """
+    Imprimante thermique pour tickets de vente ou commandes cuisine.
+    Trois types : Sunmi Cloud (SC, via HTTPS), Sunmi Inner (SI, via WebSocket),
+    Sunmi LAN (LN, via HTTP direct sur le reseau local).
+    / Thermal printer for sale tickets or kitchen order tickets.
+    Three types: Sunmi Cloud (SC, via HTTPS), Sunmi Inner (SI, via WebSocket),
+    Sunmi LAN (LN, via direct HTTP on local network).
+
+    LOCALISATION : laboutik/models.py
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False, unique=True, db_index=True,
+    )
+    name = models.CharField(
+        max_length=100,
+        verbose_name=_("Name"),
+        help_text=_("Printer name (e.g. Kitchen, Bar, Main)."),
+    )
+
+    # Type d'imprimante
+    # SC = Sunmi Cloud (HTTPS HMAC, imprimante distante via le cloud Sunmi)
+    # SI = Sunmi Inner (WebSocket, imprimante integree dans la tablette Sunmi)
+    # LN = Sunmi LAN (HTTP direct sur le reseau local, sans authentification)
+    # MK = Mock (affichage ASCII dans la console Celery, pour le dev/test)
+    # / Printer type
+    # SC = Sunmi Cloud (HTTPS HMAC, remote printer via Sunmi cloud)
+    # SI = Sunmi Inner (WebSocket, built-in printer on Sunmi tablet)
+    # LN = Sunmi LAN (direct HTTP on local network, no authentication)
+    # MK = Mock (ASCII pretty-print in Celery console, for dev/test)
+    SUNMI_CLOUD = 'SC'
+    SUNMI_INNER = 'SI'
+    SUNMI_LAN = 'LN'
+    MOCK = 'MK'
+    PRINTER_TYPE_CHOICES = [
+        (SUNMI_CLOUD, _('Sunmi Cloud')),
+        (SUNMI_INNER, _('Sunmi Inner')),
+        (SUNMI_LAN, _('Sunmi LAN')),
+        (MOCK, _('Mock (console)')),
+    ]
+    printer_type = models.CharField(
+        max_length=2, choices=PRINTER_TYPE_CHOICES, default=SUNMI_CLOUD,
+        verbose_name=_("Printer type"),
+        help_text=_(
+            "Sunmi Cloud: remote printer via HTTPS. "
+            "Sunmi Inner: built-in printer on Sunmi tablet via WebSocket. "
+            "Sunmi LAN: direct printing on local network (same subnet)."
+        ),
+    )
+
+    # Nombre de dots par ligne — depend du modele d'imprimante.
+    # NT31x (80mm kitchen cloud) = 576 dots
+    # NT21x (58mm cloud) = 384 dots
+    # 57mm = 240 dots
+    # / Dots per line — depends on the printer model.
+    dots_per_line = models.SmallIntegerField(
+        default=576,
+        verbose_name=_("Dots per line"),
+        help_text=_(
+            "Number of dots per line. "
+            "576 for 80mm NT31x (kitchen cloud), "
+            "384 for 58mm NT21x, "
+            "240 for 57mm."
+        ),
+    )
+
+    # Numero de serie Sunmi (pour Sunmi Cloud uniquement)
+    # / Sunmi serial number (Sunmi Cloud only)
+    sunmi_serial_number = models.CharField(
+        max_length=100, blank=True, null=True,
+        verbose_name=_("Sunmi serial number"),
+        help_text=_("Serial number (SN) of the Sunmi Cloud printer. Not needed for Sunmi Inner."),
+    )
+
+    # Adresse IP pour l'impression en reseau local (mode LAN uniquement).
+    # L'imprimante et le serveur doivent etre sur le meme sous-reseau.
+    # / IP address for local network printing (LAN mode only).
+    # The printer and server must be on the same subnet.
+    ip_address = models.GenericIPAddressField(
+        blank=True, null=True,
+        verbose_name=_("IP address"),
+        help_text=_(
+            "IP address for LAN printing (same subnet). "
+            "Not needed for Cloud or Inner."
+        ),
+    )
+
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active"),
+        help_text=_("Uncheck to disable printing on this printer."),
+    )
+
+    def __str__(self):
+        return f"{self.name} ({self.get_printer_type_display()})"
+
+    class Meta:
+        ordering = ('name',)
+        verbose_name = _('Printer')
+        verbose_name_plural = _('Printers')
 
 
 # --- Point de vente ---
@@ -163,6 +320,16 @@ class PointDeVente(models.Model):
         default=False,
         verbose_name=_("Hidden"),
         help_text=_("Hide this point of sale from the selection screen."),
+    )
+
+    # Imprimante pour les tickets de vente de ce point de vente
+    # / Printer for sale tickets at this point of sale
+    printer = models.ForeignKey(
+        Printer, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='points_de_vente',
+        verbose_name=_("Ticket printer"),
+        help_text=_("Printer used for sale tickets at this point of sale."),
     )
 
     # Produits et categories disponibles a ce point de vente

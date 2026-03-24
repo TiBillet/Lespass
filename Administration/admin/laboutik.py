@@ -1,3 +1,9 @@
+"""
+Administration des modeles LaBoutik (caisse, points de vente, imprimantes, tables, commandes).
+/ Admin for LaBoutik models (POS, points of sale, printers, tables, orders).
+
+LOCALISATION : Administration/admin/laboutik.py
+"""
 import logging
 
 from django import forms
@@ -11,6 +17,7 @@ from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from laboutik.models import (
     LaboutikConfiguration,
+    Printer,
     PointDeVente, CartePrimaire, CategorieTable, Table,
     CommandeSauvegarde, ArticleCommandeSauvegarde,
     ClotureCaisse,
@@ -31,6 +38,16 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         (_('Interface caisse / POS interface'), {
             'fields': (
                 'taille_police_articles',
+            ),
+        }),
+        (_('Sunmi Cloud'), {
+            'fields': (
+                'sunmi_app_id',
+                'sunmi_app_key',
+            ),
+            'description': _(
+                "Identifiants Sunmi Cloud (stockes chiffres). "
+                "/ Sunmi Cloud credentials (stored encrypted)."
             ),
         }),
     )
@@ -100,12 +117,66 @@ class PointDeVenteAdmin(ModelAdmin):
                 'accepte_carte_bancaire',
                 'accepte_cheque',
                 'accepte_commandes',
+                'printer',
             ),
         }),
         (_('Products & categories'), {
             'fields': (
                 'products',
                 'categories',
+            ),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+@admin.register(Printer, site=staff_admin_site)
+class PrinterAdmin(ModelAdmin):
+    """Admin pour les imprimantes thermiques (Sunmi Cloud / Inner / LAN).
+    Admin for thermal printers (Sunmi Cloud / Inner / LAN).
+    LOCALISATION : Administration/admin/laboutik.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ('name', 'printer_type', 'dots_per_line', 'sunmi_serial_number', 'active')
+    list_filter = ['printer_type', 'active']
+    search_fields = ['name', 'sunmi_serial_number']
+    ordering = ('name',)
+
+    fieldsets = (
+        (_('General'), {
+            'fields': (
+                'name',
+                'printer_type',
+                'dots_per_line',
+                'active',
+            ),
+        }),
+        (_('Sunmi Cloud'), {
+            'fields': (
+                'sunmi_serial_number',
+            ),
+            'description': _(
+                "Serial number required for Sunmi Cloud printers only."
+            ),
+        }),
+        (_('Sunmi LAN'), {
+            'fields': (
+                'ip_address',
+            ),
+            'description': _(
+                "IP address required for LAN printers only (same subnet)."
             ),
         }),
     )

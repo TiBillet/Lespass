@@ -53,10 +53,10 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **5** | Clôture caisse (ClotureCaisse, rapport JSON, email/PDF) | ✅ TERMINÉE |
 | **UX** | 5 sessions de polish interface caisse (Sessions 1-5) | ✅ TERMINÉE |
 | **① Refactoring Frontend** | Extraction CSS, footer Cotton `<c-footer>`, fix sécurité (XSS + prix libre), a11y | ⏳ **PROCHAIN** |
-| **② Billetterie + Refonte typage** | Typage par article (pas PV), flow identification unifié, tuiles BI dans la grille, jauge, panier mixte | ⏳ Après ① |
-| **③ WebSocket** | Push serveur HTMX 2 ws, Daphne, badge test, broadcast jauge | ⏳ Après ② |
-| **④ Impression** | Module Celery : Sunmi Cloud (HTTPS) + Sunmi Inner (WS D3mini/V2S) | ⏳ Après ③ |
-| **⑤ Rapports Comptables** | Ticket Z enrichi, `RapportComptableService`, admin Unfold, PDF/CSV/Excel, envoi auto | ⏳ Après ④ |
+| **② Billetterie + Refonte typage** | Typage par article (pas PV), flow identification unifié, tuiles BI dans la grille, jauge, panier mixte | ✅ FAIT |
+| **③ WebSocket** | Push serveur HTMX 2 ws, Daphne, badge test, broadcast jauge | ✅ FAIT |
+| **④ Impression** | 4 backends (Cloud/LAN/Inner/Mock), ESC/POS builder, formatters, Celery async, bouton Imprimer, auto-print billets, MockBackend decode ESC/POS | ✅ FAIT |
+| **⑤ Rapports Comptables** | Ticket Z enrichi, `RapportComptableService`, mentions légales ticket, admin Unfold, PDF/CSV/Excel, envoi auto | ⏳ **PROCHAIN** |
 | **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ⏳ Après ⑤ |
 | **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑥ |
 | **⑧ Multi-Asset** | Paniers mixtes EUR + tokens (à détailler avec le mainteneur) | ⏳ À DÉTAILLER |

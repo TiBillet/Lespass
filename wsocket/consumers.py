@@ -135,3 +135,104 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
         / Receives a notification from the Redis group and pushes it to the browser.
         """
         await self.send(text_data=event["html"])
+
+
+class PrinterConsumer(AsyncWebsocketConsumer):
+    """
+    Consumer WebSocket dedie aux imprimantes Sunmi Inner.
+    L'app Android de la tablette Sunmi se connecte a ce consumer
+    et recoit des commandes JSON pour imprimer.
+    / Dedicated WebSocket consumer for Sunmi Inner printers.
+    The Sunmi tablet's Android app connects to this consumer
+    and receives JSON commands to print.
+
+    LOCALISATION : wsocket/consumers.py
+
+    FLUX :
+    1. L'app Android ouvre ws/printer/{printer_uuid}/
+    2. Le consumer rejoint le group Redis `printer-{printer_uuid}`
+    3. Le SunmiInnerBackend envoie des commandes via channel_layer.group_send
+    4. Le consumer transmet les commandes JSON a l'app Android
+    5. L'app Android interprete les commandes et imprime
+
+    FORMAT DES COMMANDES :
+    {"action": "print", "commands": [
+        {"type": "text", "value": "...", "bold": true, "size": 2, "align": "center"},
+        {"type": "qrcode", "value": "https://...", "size": 5},
+        {"type": "cut"}
+    ]}
+    """
+
+    async def connect(self):
+        """
+        Connexion : verifie l'authentification puis rejoint le group Redis.
+        Les appareils POS sont loggues via session admin Django.
+        AuthMiddlewareStack (dans asgi.py) resout la session et place
+        l'utilisateur dans scope["user"]. On refuse la connexion si
+        l'utilisateur n'est pas authentifie ou si le tenant n'est pas resolu.
+        / Connection: checks authentication then joins the Redis group.
+        POS devices are logged in via Django admin session.
+        AuthMiddlewareStack resolves the session and places
+        the user in scope["user"]. We reject if user is not authenticated
+        or tenant is not resolved.
+        """
+        # Verifier que le tenant est resolu (WebSocketTenantMiddleware)
+        # / Check that the tenant is resolved
+        tenant = self.scope.get("tenant")
+        if not tenant:
+            logger.warning("[WS] Printer connexion refusee : pas de tenant")
+            await self.close()
+            return
+
+        # Verifier que l'utilisateur est authentifie (session admin)
+        # / Check that the user is authenticated (admin session)
+        user = self.scope.get("user")
+        if not user or not user.is_authenticated:
+            logger.warning(
+                f"[WS] Printer connexion refusee : utilisateur non authentifie "
+                f"(tenant={tenant.schema_name})"
+            )
+            await self.close()
+            return
+
+        self.printer_uuid = self.scope["url_route"]["kwargs"]["printer_uuid"]
+        self.group_name = f"printer-{self.printer_uuid}"
+
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+        logger.info(
+            f"[WS] Imprimante connectee : {self.printer_uuid} "
+            f"(user={user.email}, tenant={tenant.schema_name})"
+        )
+
+    async def disconnect(self, close_code):
+        """
+        Deconnexion : quitte le group Redis si la connexion avait ete acceptee.
+        / Disconnection: leaves the Redis group if connection was accepted.
+        """
+        # Si la connexion a ete refusee dans connect(), group_name n'existe pas
+        # / If connection was rejected in connect(), group_name doesn't exist
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+            logger.info(f"[WS] Imprimante deconnectee : {self.printer_uuid}")
+
+    async def receive(self, text_data):
+        """
+        Reception de messages de l'app Android (pas utilise pour l'instant).
+        / Receives messages from the Android app (not used for now).
+        """
+        pass
+
+    async def print_ticket(self, event):
+        """
+        Recoit une commande d'impression depuis le channel layer Redis
+        et la transmet a l'app Android.
+        Le type "print.ticket" dans group_send devient la methode "print_ticket"
+        (Channels convertit les points en underscores).
+        / Receives a print command from the Redis channel layer
+        and forwards it to the Android app.
+        """
+        await self.send(text_data=json.dumps({
+            "action": "print",
+            "commands": event["commands"],
+        }))

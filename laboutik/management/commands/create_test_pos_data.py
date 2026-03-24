@@ -27,7 +27,7 @@ from django_tenants.utils import schema_context
 
 from BaseBillet.models import CategorieProduct, Product, Price
 from Customers.models import Client
-from laboutik.models import CartePrimaire, PointDeVente
+from laboutik.models import CartePrimaire, PointDeVente, Printer
 from QrcodeCashless.models import CarteCashless, Detail
 
 
@@ -383,7 +383,26 @@ class Command(BaseCommand):
             ).count()
             self.stdout.write(f"  Adhesions existantes : {nb_adhesions} produit(s) publies")
 
-            # --- 3 points de vente ---
+            # --- Imprimante Mock (dev/test) ---
+            # Affiche les tickets en ASCII dans la console Celery.
+            # Assignee a tous les PV pour tester l'impression sans materiel.
+            # / Mock printer (dev/test)
+            # Displays tickets as ASCII art in the Celery console.
+            # Assigned to all POS to test printing without hardware.
+            imprimante_mock, created_mock = Printer.objects.update_or_create(
+                name="Console (mock)",
+                defaults={
+                    "printer_type": Printer.MOCK,
+                    "dots_per_line": 576,
+                    "active": True,
+                },
+            )
+            if created_mock:
+                self.stdout.write(f"  Imprimante mock creee : {imprimante_mock.name}")
+            else:
+                self.stdout.write(f"  Imprimante mock existante : {imprimante_mock.name}")
+
+            # --- Points de vente ---
             # update_or_create pour mettre a jour l'icone meme si le PDV existait avant.
             # get_or_create n'applique les defaults qu'a la creation.
             # / update_or_create to also update the icon on already-existing POS.
@@ -400,6 +419,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 0,
+                    "printer": imprimante_mock,
                 },
             )
             pdv_restaurant, _ = PointDeVente.objects.update_or_create(
@@ -414,6 +434,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": True,
                     "poid_liste": 1,
+                    "printer": imprimante_mock,
                 },
             )
             pdv_terrasse, _ = PointDeVente.objects.update_or_create(
@@ -428,6 +449,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": True,
                     "poid_liste": 2,
+                    "printer": imprimante_mock,
                 },
             )
 
@@ -447,6 +469,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 3,
+                    "printer": imprimante_mock,
                 },
             )
 
@@ -466,6 +489,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 4,
+                    "printer": imprimante_mock,
                 },
             )
             # Ajouter les produits adhesion publies au M2M du PV
@@ -514,6 +538,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 5,
+                    "printer": imprimante_mock,
                 },
             )
             # Produits du PV Mix : Biere (VT) + Recharge 10€ (RE) + Adhesion Test Mix (AD)
@@ -558,6 +583,7 @@ class Command(BaseCommand):
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 6,
+                    "printer": imprimante_mock,
                 },
             )
             # Articles M2M : boissons classiques disponibles en plus des billets

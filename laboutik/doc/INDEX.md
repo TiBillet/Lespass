@@ -155,43 +155,44 @@ Sessions 06 + 07.
 - [x] 12 tests pytest (8 unitaires + 4 HTTP) + 5 tests E2E Playwright (session 07)
 - [x] 218 tests pytest + 5 E2E billetterie (0 régression)
 
-### 4. WebSocket
+### 4. WebSocket ✅
 
 Push serveur → navigateur via HTMX 2 extension `ws`. Daphne ASGI.
+Sessions 08-09. Infrastructure complète, broadcast jauge billetterie, 8 tests pytest.
 
-- [ ] Décommenter `'channels'` dans INSTALLED_APPS
-- [ ] Télécharger `ext/ws.js`, charger dans `base.html`
-- [ ] `LaboutikConsumer` + route `ws/laboutik/{pv_uuid}/`
-- [ ] Badge vert "Connecté" au chargement (test visuel)
-- [ ] `wsocket/broadcast.py` : helper broadcast HTML
-- [ ] Brancher le push WebSocket sur la jauge statique des tuiles billet (remplace le calcul au chargement — voir `cotton/billet_tuile.html` et `_construire_donnees_articles()`)
-- [ ] Intégration billetterie : broadcast jauge après vente
-- [ ] Tests
-- [ ] **Dev** : `manage.py runserver` (Daphne) — **pas** `runserver_plus`
-- [ ] **Prod** : `daphne TiBillet.asgi:application` derrière Nginx
+### 5. Impression ✅
 
-### 5. Impression
+Module modulaire Celery (fire-and-forget, retry exponentiel). 4 backends.
+Sessions 10-11-12 (bouton).
 
-Module modulaire Celery (fire-and-forget, retry exponentiel). Sunmi Cloud + Inner.
+- [x] Modèle `Printer` (SC/SI/LN/MK) + FK sur PointDeVente et CategorieProduct
+- [x] `LaboutikConfiguration` : `sunmi_app_id` + `sunmi_app_key` (Fernet)
+- [x] `PrinterBackend` interface (Strategy) dans `laboutik/printing/`
+- [x] `SunmiCloudBackend` (HTTPS HMAC) + `SunmiLanBackend` (HTTP direct) + `SunmiInnerBackend` (WebSocket)
+- [x] `MockBackend` : décode les vrais bytes ESC/POS en ASCII dans la console Celery
+- [x] `PrinterConsumer` WebSocket dédié (`ws/printer/{printer_uuid}/`)
+- [x] Copie nettoyée `sunmi_cloud_printer.py` (ESC/POS, sans numpy/PIL)
+- [x] `escpos_builder.py` : construction ESC/POS factorisée (UTF-8 ON, QR code agrandi)
+- [x] Formatters : vente, billet (QR signé RSA), commande, clôture
+- [x] Celery : `imprimer_async()` + `imprimer_commande()` (split par catégorie)
+- [x] Admin Unfold `PrinterAdmin` + entrée sidebar "Caisse LaBoutik"
+- [x] Remplacer le stub `imprimer_billet()` par le vrai dispatch Celery
+- [x] Bouton "Imprimer" sur l'écran de succès (HTMX POST)
+- [x] Auto-print billets pour PV BILLETTERIE
+- [x] `uuid_transaction` sur LigneArticle (regroupement pour ré-impression)
+- [x] Endpoint `imprimer_ticket` (PaiementViewSet action)
+- [x] Imprimante mock "Console (mock)" dans les données de test
+- [x] 18 tests pytest impression + 5 tests bouton = 0 régression (252 tests total)
 
-- [ ] Modèle `Printer` (SC/SI) + FK sur PointDeVente et CategorieProduct
-- [ ] `LaboutikConfiguration` : `sunmi_app_id` + `sunmi_app_key` (Fernet)
-- [ ] `PrinterBackend` interface (Strategy) dans `laboutik/printing/`
-- [ ] `SunmiCloudBackend` (HTTPS HMAC) + `SunmiInnerBackend` (WebSocket)
-- [ ] `PrinterConsumer` WebSocket dédié (`ws/printer/{printer_uuid}/`)
-- [ ] Copie nettoyée `sunmi_cloud_printer.py` (ESC/POS)
-- [ ] Formatters : vente, billet, commande, clôture
-- [ ] Celery : `imprimer_async()` + `imprimer_commande()` (split par catégorie)
-- [ ] Admin Unfold `PrinterAdmin`
-- [ ] Remplacer le stub `imprimer_billet()` par le vrai dispatch
-- [ ] Tests
-
-### 6. Rapports Comptables
+### 6. Rapports Comptables ← PROCHAIN
 
 Ticket Z enrichi — document comptable légal. Service de calcul partagé avec le Menu Ventes.
+Sessions 12 (rapports) + 13.
 
 - [ ] Modèle `RapportComptable` (numéro séquentiel par PV)
 - [ ] `laboutik/reports.py` : `RapportComptableService` (12 sections de calcul)
+- [ ] **Mentions légales ticket de vente** : enrichir `formatter_ticket_vente` avec raison sociale, adresse, SIRET, n° TVA, ventilation TVA par taux, total HT/TVA/TTC, n° ticket séquentiel, `pied_ticket` custom (conformité note de frais)
+- [ ] Champ `pied_ticket` sur `LaboutikConfiguration` (texte libre pied de ticket)
 - [ ] Admin Unfold section "Ventes" avec vue détail HTML
 - [ ] Export PDF (A4 formel), CSV, Excel (openpyxl)
 - [ ] Envoi automatique (Celery Beat : quotidien/hebdo/mensuel/annuel)
@@ -201,6 +202,7 @@ Ticket Z enrichi — document comptable légal. Service de calcul partagé avec 
 ### 7. Menu Ventes (caisse tactile)
 
 Menu "Ventes" dans le burger menu POS. Consomme le même `RapportComptableService`.
+Sessions 14 + 15.
 
 - [ ] **Ticket X** : récap' en cours (3 sous-vues) — lecture seule, pas de clôture
 - [ ] **Liste des ventes** : historique scrollable, filtres, pagination HTMX

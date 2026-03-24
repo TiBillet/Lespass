@@ -199,6 +199,12 @@ def get_sidebar_navigation(request):
                     "permission": admin_permission,
                 },
                 {
+                    "title": _("Printers"),
+                    "icon": "print",
+                    "link": reverse_lazy("staff_admin:laboutik_printer_changelist"),
+                    "permission": admin_permission,
+                },
+                {
                     "title": _("POS settings"),
                     "icon": "settings",
                     "link": reverse_lazy("staff_admin:laboutik_laboutikconfiguration_changelist"),

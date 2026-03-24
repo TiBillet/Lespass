@@ -4,6 +4,14 @@
 #
 # Pattern : crowds/tasks.py (schema_context multi-tenant)
 # Pattern: crowds/tasks.py (multi-tenant schema_context)
+#
+# Import des taches d'impression pour que Celery autodiscover les trouve.
+# Les taches sont definies dans laboutik/printing/tasks.py mais Celery
+# ne scanne que laboutik/tasks.py (pas les sous-modules).
+# / Import printing tasks so Celery autodiscover finds them.
+# Tasks are defined in laboutik/printing/tasks.py but Celery
+# only scans laboutik/tasks.py (not submodules).
+from laboutik.printing.tasks import imprimer_async, imprimer_commande  # noqa: F401
 
 import logging
 import os

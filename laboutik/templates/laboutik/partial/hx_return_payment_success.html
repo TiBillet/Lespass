@@ -64,7 +64,23 @@ FLUX :
 
   {% endif %}
 
-  <!--TODO: imprimer ticket / print receipt -->
+  <!-- Bouton imprimer le ticket de vente / Print receipt button -->
+  {% if uuid_transaction and uuid_pv %}
+  <div class="bt-basic-container" style="background-color: #2563EB; margin-top: 1rem;"
+       data-testid="btn-imprimer-ticket"
+       hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
+       hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv }}"}'
+       hx-target="#print-feedback"
+       hx-swap="innerHTML">
+    <div class="bt-basic-icon">
+      <i class="fas fa-print" aria-hidden="true"></i>
+    </div>
+    <div class="bt-basic-text">
+      <div>{% translate "Imprimer" %}</div>
+    </div>
+  </div>
+  <div id="print-feedback" aria-live="polite"></div>
+  {% endif %}
 
   <c-bt.return selector="#messages" layer="1" action="manageReset()" />
 

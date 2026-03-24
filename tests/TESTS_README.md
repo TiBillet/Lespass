@@ -751,6 +751,57 @@ La relation M2M est `Event.products` (Event → Product), pas `Product.events`.
 Le filtre correct : `Price.objects.filter(product__in=event.products.all())`.
 Sinon : `Cannot query "Event": Must be "Product" instance.`
 
+### Pieges impression (sessions 10-11-12)
+
+**9.50 — Celery autodiscover ne scanne pas les sous-modules.**
+`laboutik/printing/tasks.py` n'est PAS decouvert par `app.autodiscover_tasks()`.
+Celery ne scanne que `<app>/tasks.py`, pas `<app>/sous_module/tasks.py`.
+Solution : importer les taches dans `laboutik/tasks.py` :
+```python
+from laboutik.printing.tasks import imprimer_async, imprimer_commande  # noqa: F401
+```
+Symptome : `Received unregistered task of type 'laboutik.printing.tasks.imprimer_async'`
+dans les logs Celery. Le message est ignore et l'impression ne se fait pas.
+
+**9.51 — `point_de_vente` n'est pas dans le scope des sous-fonctions de paiement.**
+`_payer_par_carte_ou_cheque()` et `_payer_en_especes()` recoivent `donnees_paiement`
+mais PAS `point_de_vente` en parametre. Pour acceder au PV (et a son imprimante),
+il faut le recuperer depuis `donnees_paiement["uuid_pv"]` :
+```python
+uuid_pv = donnees_paiement.get("uuid_pv", "")
+point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+```
+Symptome : `NameError: name 'point_de_vente' is not defined` dans les vues de paiement.
+
+**9.52 — Le SunmiCloudPrinter exige app_id/app_key/printer_sn dans __init__.**
+Pour utiliser `SunmiCloudPrinter` comme builder ESC/POS pur (sans envoyer),
+il faut passer des valeurs bidon :
+```python
+builder = SunmiCloudPrinter(
+    dots_per_line=576,
+    app_id="builder_only",
+    app_key="builder_only",
+    printer_sn="builder_only",
+)
+```
+C'est accepte car on n'appelle pas `httpPost()` — on recupere juste `.orderData`.
+
+**9.53 — Tests impression : fixtures avec `schema_context` + cleanup obligatoire.**
+Les modeles `Printer`, `PointDeVente` sont dans TENANT_APPS. Les fixtures doivent :
+1. Creer dans `schema_context('lespass')`
+2. Yield l'objet
+3. Supprimer dans `schema_context('lespass')` en teardown
+Sinon : `ProgrammingError: relation "laboutik_printer" does not exist`
+
+**9.54 — `imprimer_async.delay()` ne peut pas etre mocke via `laboutik.printing.tasks.imprimer`.**
+Le mock doit cibler `laboutik.printing.imprimer` (le module `__init__.py`),
+pas `laboutik.printing.tasks.imprimer` (l'import local dans la tache).
+Symptome : `AttributeError: module does not have the attribute 'imprimer'`
+
+**9.55 — Restart Celery obligatoire apres ajout de nouvelles taches.**
+Celery charge les taches au demarrage. Si on ajoute `laboutik/printing/tasks.py`
+sans restart, le worker ignore les messages. `docker restart lespass_celery` suffit.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

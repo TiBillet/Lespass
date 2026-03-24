@@ -86,7 +86,85 @@ def generer_rapport_complet(self):
     }
 ```
 
-## TÂCHE 3 — Tests
+## TÂCHE 3 — Mentions légales sur le ticket de vente
+
+Le `formatter_ticket_vente()` actuel (session 11) n'affiche que le nom du PV,
+l'email opérateur, les articles, le total et "Merci". Il manque les mentions
+obligatoires pour qu'un ticket serve de justificatif / note de frais.
+
+### Enrichir `ticket_data` avec les infos légales
+
+Le dict `ticket_data` reçoit un nouveau champ `legal` :
+
+```python
+"legal": {
+    "business_name": str,      # Configuration.organisation
+    "address": str,            # adress + postal_code + city
+    "siret": str,              # Configuration.siren (ou SIRET si 14 chars)
+    "tva_number": str,         # Configuration.tva_number (ou "TVA non applicable, art. 293 B du CGI")
+    "receipt_number": str,     # Numéro séquentiel (compteur par PV)
+    "terminal_id": str,        # Nom du PV
+},
+"tva_breakdown": [             # Ventilation TVA par taux
+    {"rate": "20.00", "ht": 1000, "tva": 200, "ttc": 1200},
+    {"rate": "5.50", "ht": 500, "tva": 28, "ttc": 528},
+],
+"total_ht": int,               # Total HT en centimes
+"total_tva": int,              # Total TVA en centimes
+```
+
+### Modifier `formatter_ticket_vente()` dans `laboutik/printing/formatters.py`
+
+- Ajouter les infos légales depuis `Configuration.get_solo()`
+- Calculer la ventilation TVA depuis les `LigneArticle` (réutiliser
+  `RapportComptableService.calculer_tva()` de la tâche 2)
+- Ajouter le prix unitaire par article (pas juste le total ligne)
+- Numéro de ticket séquentiel (compteur auto-incrémenté par PV sur `LaboutikConfiguration`
+  ou via le `RapportComptable.numero_sequentiel`)
+
+### Modifier `escpos_builder.py`
+
+Ajouter le rendu des nouvelles sections :
+- En-tête : raison sociale (gras centré), adresse, SIRET, n° TVA
+- Articles : nom + qty + prix unitaire + total ligne
+- Pied : ventilation TVA par taux, total HT / TVA / TTC
+- Numéro de ticket + `pied_ticket` custom
+
+### Modifier `mock.py` (décodeur ESC/POS)
+
+Le mock décode déjà les bytes ESC/POS — il affichera automatiquement les
+nouvelles sections sans modification. Vérifier visuellement dans la console Celery.
+
+### Champ `pied_ticket` sur `LaboutikConfiguration`
+
+```python
+pied_ticket = models.TextField(
+    blank=True, default='',
+    verbose_name=_("Receipt footer text"),
+    help_text=_("Custom text printed at the bottom of every receipt."),
+)
+```
+
+Migration. Ajouter dans `LaboutikConfigurationAdmin.fieldsets`.
+
+### Mentions légales — conformité droit français
+
+Pour qu'un ticket serve de note de frais valide :
+1. Raison sociale — `Configuration.organisation`
+2. Adresse — `Configuration.adress` + `postal_code` + `city`
+3. SIRET — `Configuration.siren` (vérifier si 9 ou 14 chars)
+4. N° TVA intracommunautaire — `Configuration.tva_number`
+5. Date/heure — déjà présent
+6. N° ticket séquentiel — compteur par PV
+7. Articles + qty + prix unitaire — enrichir le formatter
+8. Ventilation TVA par taux — depuis `RapportComptableService`
+9. Total HT / TVA / TTC — calculé
+10. Mode de paiement — déjà présent
+
+Cas associations : si `Configuration.tva_number` est vide,
+afficher "TVA non applicable, art. 293 B du CGI".
+
+## TÂCHE 4 — Tests
 
 Crée `tests/pytest/test_rapport_comptable.py`.
 
@@ -116,5 +194,8 @@ docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
 - [ ] `generer_rapport_complet()` retourne un dict avec 12 clés
 - [ ] TVA calculée correctement (HT = TTC / (1 + taux/100))
 - [ ] Habitus sans N+1 (annotate, pas de boucle par carte)
-- [ ] 6+ tests pytest verts
+- [ ] Ticket de vente avec mentions légales (raison sociale, SIRET, TVA, n° séquentiel)
+- [ ] Champ `pied_ticket` sur LaboutikConfiguration
+- [ ] Ticket mock dans la console Celery affiche les mentions légales
+- [ ] 8+ tests pytest verts
 - [ ] Tous les tests existants passent

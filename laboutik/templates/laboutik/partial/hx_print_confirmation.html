@@ -1,0 +1,13 @@
+{% load i18n %}
+<!--
+CONFIRMATION D'IMPRESSION
+Petit message de feedback apres clic sur "Imprimer".
+/ Print confirmation feedback after clicking "Print".
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_print_confirmation.html
+-->
+<div class="payment-msg-discret" style="color: #16A34A; margin-top: 0.5rem;"
+     data-testid="print-confirmation">
+  <i class="fas fa-check" aria-hidden="true"></i>
+  {% translate "Impression lancée" %}
+</div>

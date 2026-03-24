@@ -925,6 +925,22 @@ class CategorieProduct(models.Model):
         help_text=_("Check if this category is for cashless token items."),
     )
 
+    # Imprimante pour les tickets de commande de cette categorie (cuisine, bar, etc.)
+    # FK vers laboutik.Printer — meme schema tenant, pas de probleme cross-app.
+    # / Printer for order tickets of this category (kitchen, bar, etc.)
+    # FK to laboutik.Printer — same tenant schema, no cross-app issue.
+    printer = models.ForeignKey(
+        'laboutik.Printer', on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='categories_produit',
+        verbose_name=_("Order printer"),
+        help_text=_(
+            "Printer for order tickets (kitchen, bar). "
+            "When an order contains products from this category, "
+            "the ticket is sent to this printer."
+        ),
+    )
+
     def __str__(self):
         return self.name
 
@@ -2925,6 +2941,18 @@ class LigneArticle(models.Model):
     sended_to_laboutik = models.BooleanField(default=False, verbose_name=_("Sended to LaBoutik"))
 
     metadata = models.JSONField(blank=True, null=True)
+
+    # Identifiant de transaction — regroupe les lignes d'un meme paiement.
+    # Toutes les LigneArticle creees dans un meme paiement partagent ce UUID.
+    # Permet de reconstruire un ticket pour re-impression.
+    # / Transaction ID — groups lines from the same payment.
+    # All LigneArticle created in one payment share this UUID.
+    # Allows reconstructing a ticket for reprinting.
+    uuid_transaction = models.UUIDField(
+        blank=True, null=True, db_index=True,
+        verbose_name=_("Transaction ID"),
+        help_text=_("Groups all lines from the same payment for reprinting."),
+    )
 
     # Avoir : lien vers la ligne originale / Credit note: link to original line
     credit_note_for = models.ForeignKey(

@@ -9,6 +9,7 @@
 # PaiementViewSet : paiements espèces/CB/NFC depuis la DB (Phase 2 + Phase 3).
 
 import logging
+import uuid as uuid_module
 from datetime import timedelta
 from json import dumps
 
@@ -1441,6 +1442,7 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
 def _creer_lignes_articles(
     articles_panier, code_methode_paiement,
     asset_uuid=None, carte=None, wallet=None,
+    uuid_transaction=None,
 ):
     """
     Crée ProductSold, PriceSold et LigneArticle pour chaque article du panier.
@@ -1494,6 +1496,7 @@ def _creer_lignes_articles(
             sale_origin=SaleOrigin.LABOUTIK,
             payment_method=methode_db,
             status=LigneArticle.VALID,
+            uuid_transaction=uuid_transaction,
             # Champs NFC (optionnels, None pour espèces/CB)
             # NFC fields (optional, None for cash/CC)
             asset=asset_uuid,
@@ -1684,16 +1687,39 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     return memberships_creees
 
 
-def imprimer_billet(ticket, event):
+def imprimer_billet(ticket, reservation, event, pv):
     """
-    Stub d'impression de billet. Sera remplace par l'impression reelle
-    (WebSocket + imprimante thermique) en phase Impression.
-    / Ticket print stub. Will be replaced by real printing
-    (WebSocket + thermal printer) in the Printing phase.
+    Lance l'impression asynchrone d'un billet via Celery.
+    Si le point de vente n'a pas d'imprimante configuree, on log sans erreur.
+    / Launches asynchronous ticket printing via Celery.
+    If the point of sale has no configured printer, logs without error.
 
     LOCALISATION : laboutik/views.py
+
+    :param ticket: BaseBillet.Ticket
+    :param reservation: BaseBillet.Reservation
+    :param event: BaseBillet.Event
+    :param pv: laboutik.PointDeVente (pour recuperer l'imprimante)
     """
-    logger.info(f"[IMPRESSION STUB] Billet {ticket.uuid} — {event.name}")
+    # Verifier que le PV a une imprimante configuree
+    # / Check that the POS has a configured printer
+    if not pv or not pv.printer or not pv.printer.active:
+        logger.info(
+            f"[PRINT] Pas d'imprimante active pour le PV "
+            f"'{pv.name if pv else 'None'}' — billet {ticket.uuid} non imprime"
+        )
+        return
+
+    from laboutik.printing.formatters import formatter_ticket_billet
+    from laboutik.printing.tasks import imprimer_async
+
+    ticket_data = formatter_ticket_billet(ticket, reservation, event)
+
+    imprimer_async.delay(
+        str(pv.printer.pk),
+        ticket_data,
+        connection.schema_name,
+    )
 
 
 def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None):
@@ -1715,11 +1741,11 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     4. Pour chaque event : verrouille (select_for_update), verifie la jauge
     5. Cree Reservation + ProductSold + PriceSold + Ticket(status=NOT_SCANNED)
     6. Rattache la LigneArticle a la Reservation
-    7. Appelle imprimer_billet() (stub)
+    7. Appelle imprimer_billet() → Celery async (si imprimante configuree)
 
     DEPENDENCIES :
     - _creer_lignes_articles() doit etre appelee AVANT (pour les LigneArticle)
-    - imprimer_billet() : stub, sera remplace par l'impression reelle
+    - imprimer_billet() : lance impression async via Celery si PV a une imprimante
 
     :param request: HttpRequest (pour lire le POST : tag_id, email, moyen_paiement)
     :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
@@ -1738,6 +1764,16 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
 
     if not articles_billet:
         return []
+
+    # --- Recuperer le point de vente pour l'impression ---
+    # / Get the point of sale for printing
+    pv = None
+    uuid_pv = request.POST.get("uuid_pv", "")
+    if uuid_pv:
+        try:
+            pv = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            pass
 
     # --- Identifier le client ---
     # / Identify the client
@@ -1875,7 +1911,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
                     sale_origin=SaleOrigin.LABOUTIK,
                     payment_method=methode_db,
                 )
-                imprimer_billet(ticket, event_locked)
+                imprimer_billet(ticket, reservation, event_locked, pv)
 
             # Rattacher la LigneArticle a la reservation
             # / Link the LigneArticle to the reservation
@@ -2351,6 +2387,15 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
 
+        # Recuperer le PV depuis les donnees de paiement (pour l'impression)
+        # / Get the POS from payment data (for printing)
+        uuid_pv = donnees_paiement.get("uuid_pv", "")
+        point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+
+        # Identifiant unique de ce paiement — regroupe toutes les LigneArticle
+        # / Unique ID for this payment — groups all LigneArticle records
+        uuid_transaction = uuid_module.uuid4()
+
         # Séparer articles normaux et recharges
         # Separate normal articles and top-ups
         articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
@@ -2362,7 +2407,10 @@ class PaiementViewSet(viewsets.ViewSet):
             # Normal articles (sales, memberships) → LigneArticle
             lignes_normales = []
             if articles_normaux:
-                lignes_normales = _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+                lignes_normales = _creer_lignes_articles(
+                    articles_normaux, moyen_paiement_code,
+                    uuid_transaction=uuid_transaction,
+                )
 
             # Adhesions → creer les Memberships et les rattacher aux LigneArticle
             # Memberships → create Membership records and link them to LigneArticle
@@ -2396,6 +2444,20 @@ class PaiementViewSet(viewsets.ViewSet):
         if reservations_billets:
             _envoyer_billets_par_email(reservations_billets)
 
+        # Impression automatique des billets pour le PV BILLETTERIE
+        # / Auto-print tickets for ticketing POS
+        if (reservations_billets
+                and point_de_vente.comportement == PointDeVente.BILLETTERIE
+                and point_de_vente.printer
+                and point_de_vente.printer.active):
+            from BaseBillet.models import Ticket
+            for reservation in reservations_billets:
+                tickets_reservation = Ticket.objects.filter(
+                    reservation=reservation,
+                ).select_related('pricesold', 'reservation__event')
+                for ticket_obj in tickets_reservation:
+                    imprimer_billet(ticket_obj, reservation, reservation.event, point_de_vente)
+
         context = {
             "currency_data": CURRENCY_DATA,
             "payment": donnees_paiement,
@@ -2405,6 +2467,8 @@ class PaiementViewSet(viewsets.ViewSet):
             "total": total_en_euros,
             "state": state,
             "original_payment": transaction_precedente,
+            "uuid_transaction": str(uuid_transaction),
+            "uuid_pv": str(point_de_vente.uuid),
         }
         return render(request, "laboutik/partial/hx_return_payment_success.html", context)
 
@@ -2434,6 +2498,11 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         somme_donnee_en_centimes = donnees_paiement["given_sum"]
 
+        # Recuperer le PV depuis les donnees de paiement (pour l'impression)
+        # / Get the POS from payment data (for printing)
+        uuid_pv = donnees_paiement.get("uuid_pv", "")
+        point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+
         # La somme est suffisante si :
         # - le caissier n'a rien saisi (= paiement exact, pas de monnaie à rendre)
         # - ou la somme donnée couvre le total
@@ -2448,6 +2517,10 @@ class PaiementViewSet(viewsets.ViewSet):
         if somme_est_suffisante:
             ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
 
+            # Identifiant unique de ce paiement
+            # / Unique ID for this payment
+            uuid_transaction = uuid_module.uuid4()
+
             # Séparer articles normaux et recharges
             # Separate normal articles and top-ups
             articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
@@ -2461,7 +2534,10 @@ class PaiementViewSet(viewsets.ViewSet):
                 # Normal articles (sales, memberships) → LigneArticle
                 lignes_normales = []
                 if articles_normaux:
-                    lignes_normales = _creer_lignes_articles(articles_normaux, moyen_paiement_code)
+                    lignes_normales = _creer_lignes_articles(
+                        articles_normaux, moyen_paiement_code,
+                        uuid_transaction=uuid_transaction,
+                    )
 
                 # Adhesions → creer les Memberships et les rattacher aux LigneArticle
                 # Memberships → create Membership records and link them to LigneArticle
@@ -2493,6 +2569,19 @@ class PaiementViewSet(viewsets.ViewSet):
             if reservations_billets:
                 _envoyer_billets_par_email(reservations_billets)
 
+            # Impression automatique des billets pour le PV BILLETTERIE
+            # / Auto-print tickets for ticketing POS
+            if (reservations_billets
+                    and point_de_vente.comportement == PointDeVente.BILLETTERIE
+                    and point_de_vente.printer
+                    and point_de_vente.printer.active):
+                for reservation in reservations_billets:
+                    tickets_reservation = Ticket.objects.filter(
+                        reservation=reservation,
+                    ).select_related('pricesold', 'reservation__event')
+                    for ticket_obj in tickets_reservation:
+                        imprimer_billet(ticket_obj, reservation, reservation.event, point_de_vente)
+
             # Calculer la monnaie à rendre (en euros)
             # Calculate change to give back (in euros)
             donnees_paiement["give_back"] = 0
@@ -2508,6 +2597,8 @@ class PaiementViewSet(viewsets.ViewSet):
                 "total": total_en_euros,
                 "state": state,
                 "original_payment": transaction_precedente,
+                "uuid_transaction": str(uuid_transaction),
+                "uuid_pv": str(point_de_vente.uuid),
             }
             return render(request, "laboutik/partial/hx_return_payment_success.html", context)
 
@@ -2641,6 +2732,10 @@ class PaiementViewSet(viewsets.ViewSet):
         ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
         tenant_courant = connection.tenant
 
+        # Identifiant unique de ce paiement
+        # / Unique ID for this payment
+        uuid_transaction = uuid_module.uuid4()
+
         try:
             with db_transaction.atomic():
                 # a) Ventes (VT) — client → lieu
@@ -2660,6 +2755,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         asset_uuid=asset_tlf.uuid,
                         carte=carte_client,
                         wallet=wallet_client,
+                        uuid_transaction=uuid_transaction,
                     )
 
                 # b) Adhésions (AD) — débit tokens TLF + création Membership
@@ -2679,6 +2775,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         asset_uuid=asset_tlf.uuid,
                         carte=carte_client,
                         wallet=wallet_client,
+                        uuid_transaction=uuid_transaction,
                     )
 
                 # Creer/renouveler les adhesions et rattacher aux LigneArticle
@@ -2744,6 +2841,8 @@ class PaiementViewSet(viewsets.ViewSet):
             # Données spécifiques NFC / NFC-specific data
             "nouveau_solde": nouveau_solde_euros,
             "card_name": carte_client.tag_id,
+            "uuid_transaction": str(uuid_transaction),
+            "uuid_pv": str(point_de_vente.uuid),
         }
         return render(request, "laboutik/partial/hx_return_payment_success.html", context)
 
@@ -3108,6 +3207,98 @@ class PaiementViewSet(viewsets.ViewSet):
             "state": state,
         }
         return render(request, "laboutik/partial/hx_card_feedback.html", context)
+
+    # ------------------------------------------------------------------ #
+    #  Impression ticket de vente (bouton sur l'ecran de succes)           #
+    #  Sale receipt printing (button on the success screen)                #
+    # ------------------------------------------------------------------ #
+
+    @action(detail=False, methods=["post"], url_path="imprimer_ticket", url_name="imprimer_ticket")
+    def imprimer_ticket(self, request):
+        """
+        POST /laboutik/paiement/imprimer_ticket/
+        Imprime (ou re-imprime) un ticket de vente a partir du uuid_transaction.
+        Toutes les LigneArticle partageant ce uuid_transaction sont regroupees
+        sur un seul ticket.
+        / Prints (or reprints) a sale ticket from the uuid_transaction.
+        All LigneArticle sharing this uuid_transaction are grouped on one ticket.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Recoit uuid_transaction et uuid_pv en POST
+        2. Recupere le PV et son imprimante
+        3. Recupere les LigneArticle de la transaction
+        4. Formate le ticket via formatter_ticket_vente
+        5. Lance l'impression async via Celery
+        6. Retourne un partial HTML de confirmation
+        """
+        uuid_transaction_str = request.POST.get("uuid_transaction")
+        uuid_pv = request.POST.get("uuid_pv")
+
+        if not uuid_transaction_str or not uuid_pv:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Donnees manquantes pour l'impression"),
+                "selector_bt_retour": "#print-feedback",
+            })
+
+        # Recuperer le PV et son imprimante
+        # / Get the POS and its printer
+        try:
+            point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#print-feedback",
+            })
+
+        if not point_de_vente.printer or not point_de_vente.printer.active:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune imprimante configuree pour ce point de vente"),
+                "selector_bt_retour": "#print-feedback",
+            })
+
+        # Recuperer les lignes de cette transaction
+        # / Get the lines for this transaction
+        lignes_du_paiement = LigneArticle.objects.filter(
+            uuid_transaction=uuid_transaction_str,
+        ).select_related('pricesold__productsold')
+
+        if not lignes_du_paiement.exists():
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune ligne trouvee pour cette transaction"),
+                "selector_bt_retour": "#print-feedback",
+            })
+
+        # Construire le ticket et lancer l'impression async
+        # / Build the ticket and launch async printing
+        from laboutik.printing.formatters import formatter_ticket_vente
+        from laboutik.printing.tasks import imprimer_async
+
+        # Operateur = user connecte (admin session)
+        # / Operator = logged-in user (admin session)
+        operateur = request.user if request.user.is_authenticated else None
+
+        # Moyen de paiement = celui de la premiere ligne
+        # / Payment method = from the first line
+        premiere_ligne = lignes_du_paiement.first()
+        moyen_paiement = premiere_ligne.payment_method if premiere_ligne else ""
+
+        ticket_data = formatter_ticket_vente(
+            lignes_du_paiement, point_de_vente, operateur, moyen_paiement,
+        )
+
+        imprimer_async.delay(
+            str(point_de_vente.printer.pk),
+            ticket_data,
+            connection.schema_name,
+        )
+
+        return render(request, "laboutik/partial/hx_print_confirmation.html")
 
 
 # --------------------------------------------------------------------------- #

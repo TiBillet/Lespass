@@ -1,3 +1,15 @@
+	/using-superpowers va checker une derniere fois tout le code écrit dans cette session et vérifie la conformité /stack-ccc
+	  Une fois terminé, mets à jour les fichier @laboutik/doc/PLAN_LABOUTIK.md @laboutik/doc/INDEX.md @laboutik/doc/SESSIONS/README.md
+	  Ajoute aussi dans @tests/TESTS_README.md les pièges eventuels que tu as rencontré
+	Soit critique envers le travail, si tu vois des amélioration, note les et dis les moi.
+	Indique moi comment tester moi même a la main les nouveautées.
+	Vérifie que les test python/django couvrent bien ce nouveau code, et que les ancien fonctionnent toujours.
+	Fabrique un test E2E pour vérifier les nouveautées si ça n'est pas déja fait. Lance tout les tests E2E ancien pour ne pas avoir de régréssion
+	Lance des vérification via /chrome
+
+
+
+
 /stack-ccc On va lancer le nouveau chantier découpé par sessions.
 Va voir le @laboutik/doc/PLAN_LABOUTIK.md et son fichier d'index : @laboutik/doc/INDEX.md
 Ensuite, passe en mode plan et va lire et exécute la tache décrite dans le fichier @laboutik/doc/SESSIONS/02_refactoring_extraction_css.md
@@ -8,13 +20,6 @@ Hésite pas à prendre un regarde critique aussi de designer UX/UI expert.
 Si tu as le moindre doute, pose moi des questions pour avancer petit à petit.
 
 
-Va relire tout le code que tu as écrit sur cette sessions.
-Vérifie que tout soit en conformité avec le skill /stack-ccc
-Soit critique envers le travail, si tu vois des amélioration, note les et dis les moi.
-Indique moi comment tester moi même a la main les nouveautées.
-Vérifie que les test python/django couvrent bien ce nouveau code.
-Fabrique un test E2E pour vérifier les nouveautées.
-Lance des vérification via /chrome
 
 
 

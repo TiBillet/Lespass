@@ -4,8 +4,9 @@ Routes WebSocket pour LaBoutik
 
 LOCALISATION : wsocket/routing.py
 
-Une seule route : ws/laboutik/{pv_uuid}/
-Le pv_uuid est l'UUID du PointDeVente (format UUID standard avec tirets).
+Deux routes :
+- ws/laboutik/{pv_uuid}/ — interface caisse (navigateur HTMX)
+- ws/printer/{printer_uuid}/ — imprimante Sunmi Inner (app Android)
 """
 from django.urls import re_path
 
@@ -15,5 +16,9 @@ websocket_urlpatterns = [
     re_path(
         r"ws/laboutik/(?P<pv_uuid>[0-9a-f-]+)/$",
         consumers.LaboutikConsumer.as_asgi(),
+    ),
+    re_path(
+        r"ws/printer/(?P<printer_uuid>[0-9a-f-]+)/$",
+        consumers.PrinterConsumer.as_asgi(),
     ),
 ]
