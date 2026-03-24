@@ -1893,29 +1893,12 @@ sont automatiquement disponibles quand ils sont liés à un Event futur publié.
 Quand le caissier clique sur la catégorie "Billetterie", seules les tuiles BI s'affichent
 (filtre CSS hide/show existant via `cat-{uuid}`). Les tuiles passent en grid 2 colonnes max.
 
-#### Données d'un article BI dans `_construire_donnees_articles()`
+#### Données d'un article billet — implémenté (session 06)
 
-Pour chaque Product avec `methode_caisse='BI'`, on enrichit le dict avec les données event :
-
-```python
-if product.methode_caisse == Product.BILLET_POS:
-    # Trouver l'événement lié à ce produit (Event.products M2M)
-    event = Event.objects.filter(
-        products=product, published=True, archived=False,
-        datetime__gte=now,
-    ).first()
-    if event:
-        article_dict['event'] = {
-            'uuid': str(event.uuid),
-            'name': event.name,
-            'datetime': event.datetime,
-            'jauge_max': event.jauge_max,
-            'places_vendues': event.valid_tickets_count(),
-            'places_restantes': max(0, event.jauge_max - event.valid_tickets_count()) if event.jauge_max else None,
-            'pourcentage': int(round(event.valid_tickets_count() / event.jauge_max * 100)) if event.jauge_max else 0,
-            'complet': event.complet(),
-        }
-```
+> **OBSOLÈTE** : le code ci-dessous utilisait `methode_caisse='BI'`. La version implémentée
+> boucle sur les events futurs quand le PV est de type `BILLETTERIE` ('T').
+> Voir `laboutik/views.py` : `_construire_donnees_articles()`, bloc `if est_pv_billetterie`.
+> 1 tuile = 1 Price. ID = Price UUID. Jauge = Price.stock si défini, sinon Event.jauge_max.
 
 Le template `articles.html` (ou un nouveau Cotton `billet_tuile.html` inclus conditionnellement)
 teste `article.event` pour décider du rendu.
@@ -2523,34 +2506,30 @@ Affiché après le choix du moyen de paiement (avant de déclencher le paiement 
 | `tests/pytest/test_billetterie_pos.py` | Créer | Tests : `_construire_donnees_evenements()`, `_creer_billets_depuis_panier()`, jauge atomique |
 | `tests/playwright/tests/laboutik/46-laboutik-pos-billetterie.spec.ts` | Créer | Tests E2E : 7+ scénarios |
 
-#### Ordre d'implémentation recommandé
+#### Ordre d'implémentation (mis à jour session 06)
 
-1. **Refonte typage** : migration ADHESION/CASHLESS → DIRECT, produits adhésion en M2M, flow identification unifié
-2. **`_construire_donnees_articles()` enrichi** : données event/jauge pour les articles `methode_caisse='BI'`
-3. **Template `billetterie.html`** + composant Cotton `billet_tuile.html`
-4. **Partial `hx_billetterie_grille.html`** + action `grille_billetterie()` (filtre sidebar HTMX)
-5. **Partial `hx_jauge_event.html`** + action `jauge_event()` (polling 30s)
-6. **`payer()`** modifié : intercept → `hx_billetterie_email_form.html` avant payer
-7. **Partial `hx_billetterie_email_form.html`**
-8. **`_creer_billets_depuis_panier()`** + vérification atomique jauge + `imprimer_billet()` stub
-9. **Tests pytest** : construction événements, création billets, jauge atomique
-10. **Tests Playwright** : 7+ scénarios
+1. ✅ **Types PV restaurés** : ADHESION, CASHLESS, BILLETTERIE (migration 0005)
+2. ✅ **Tuiles billet** : composant Cotton, CSS responsive, couleurs par event
+3. ✅ **Sidebar events** : pseudo-catégories dans `<c-categories>`, filtre CSS
+4. ✅ **Chargement depuis events** : `_construire_donnees_articles()` pour PV BILLETTERIE
+5. ⏳ **Paiement billet** (session 07) : `panier_a_billets`, `_creer_billets_depuis_panier()`, jauge atomique
+6. ⏳ **Tests** (session 07) : pytest + E2E
 
 #### Flux de vente complet
 
 ```
-1. Scan carte primaire → point_de_vente (PV DIRECT avec articles BI dans le M2M)
-2. Interface common_user_interface.html chargée (grille standard)
-   - Sidebar catégories : filtre "Billetterie" montre les tuiles BI (paysage, 2 colonnes)
-   - Les tuiles BI coexistent avec les autres articles dans la grille CSS Grid
-   - Jauge polling HTMX 30s sur chaque tuile BI
+1. Scan carte primaire → point_de_vente (PV type BILLETTERIE)
+2. Interface common_user_interface.html chargée
+   - Sidebar : catégories classiques (Bar) + events comme pseudo-catégories (date + jauge)
+   - Grille : articles M2M (Bière, Eau) en carrés + tuiles billet en paysage (2 col desktop, 1 col mobile)
+   - 1 tuile = 1 Price, ID = Price UUID. Jauge statique (WebSocket phase 4)
 
-3. Clic tuile → articles.js:addArticle() → addition (panier)
+3. Clic tuile → articles.js:addArticle(price_uuid, prix, nom, €) → addition (panier)
    (même système que le POS standard — articles.js réutilisé tel quel)
 
 4. Clic VALIDER → moyens_paiement()
+   → panier_a_billets détecté → identification client (email optionnel)
    → affiche tous les moyens de paiement (CASHLESS + ESPÈCE + CB + CHÈQUE)
-   → NFC autorisé : permet d'acheter avec des tokens (monnaie temps, locale, etc.)
 
 5. Clic moyen de paiement → payer() détecte mode BILLETTERIE
    → render hx_billetterie_email_form.html

@@ -31,7 +31,7 @@ for event in events_modifies:
     }
     broadcast_html(
         group_name=f"laboutik-pv-{pv_uuid}",
-        template_name="laboutik/partial/hx_jauge_event.html",
+        template_name="laboutik/partial/hx_jauge_billet.html",  # À CRÉER dans cette session
         context={"event": event_data},
         message_type="jauge.update",  # → handler jauge_update() dans le consumer
     )
@@ -41,7 +41,8 @@ Note : il faut passer le `pv_uuid` à cette fonction. Adapter la signature si n�
 
 ## TÂCHE 2 — Adapter le partial jauge pour le swap OOB
 
-Lis `laboutik/templates/laboutik/partial/hx_jauge_event.html` (Session 06).
+**Note** : le template `hx_jauge_event.html` n'existe pas encore (la jauge est statique depuis session 06).
+Créer `laboutik/templates/laboutik/partial/hx_jauge_billet.html` pour le swap OOB WebSocket.
 
 Le partial doit avoir un `id` pour que HTMX puisse le swapper via WebSocket :
 

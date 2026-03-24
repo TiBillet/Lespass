@@ -27,9 +27,22 @@ la vérification atomique de la jauge, et écrire tous les tests.
 
 Dans `laboutik/views.py`, `moyens_paiement()` :
 
+**ATTENTION** : les articles billet dans le panier ont `methode_caisse='BI'` dans le dict
+(mis par `_construire_donnees_articles()`) mais l'ID est le **Price UUID** (pas le Product UUID).
+La détection doit se faire sur le dict article reconstruit depuis les `repid-*` du POST,
+pas sur `product.methode_caisse` (le Product n'a pas forcément `methode_caisse='BI'` — c'est
+le type du PV BILLETTERIE qui détermine le chargement, pas un flag sur l'article).
+
+Option la plus fiable : vérifier si l'UUID du `repid-*` correspond à une Price liée à un
+Product qui est lié à un Event futur publié.
+
 ```python
+# Detecter les articles billet dans le panier
+# Un article billet a un repid-{price_uuid} où la Price est liée à un Product
+# qui est lié à un Event futur publié.
+# / Detect ticket articles in the cart
 panier_a_billets = any(
-    a['product'].methode_caisse == Product.BILLET_POS
+    a.get('est_billet', False)
     for a in articles_panier
 )
 
@@ -48,11 +61,21 @@ pour afficher "Billet → envoyé par email (optionnel)" si `panier_a_billets`.
 Crée cette fonction dans `laboutik/views.py`.
 Appelée par `_payer_par_carte_ou_cheque()` et `_payer_en_especes()` après les adhésions.
 
+**IMPORTANT** : l'article billet dans le panier a `id = str(price.uuid)` (Price UUID, pas Product UUID).
+Les `repid-{uuid}` dans le POST contiennent donc le Price UUID.
+Pour retrouver le Product et l'Event :
+```python
+price = Price.objects.select_related('product').get(uuid=price_uuid)
+product = price.product
+event = Event.objects.filter(products=product, published=True, datetime__gte=now).first()
+```
+
 Logique (dans `db_transaction.atomic()`) :
-1. Filtrer les articles BI du panier
-2. Pour chaque article BI, trouver l'Event lié
-3. **VÉRIFICATION ATOMIQUE JAUGE** : compter les Ticket(status__in=['K','S']) pour cet event.
-   Si places_vendues + qty > jauge_max → lever ValueError
+1. Filtrer les articles billet du panier (ceux qui ont `est_billet=True`)
+2. Pour chaque article billet, retrouver Price → Product → Event
+3. **VÉRIFICATION ATOMIQUE JAUGE** : `select_for_update()` sur l'Event, compter les
+   Ticket(status__in=['K','S']). Si places_vendues + qty > jauge_max → lever ValueError.
+   Si `Price.stock` défini, vérifier aussi `Price.out_of_stock(event)`.
 4. Créer Reservation(user_commande=user_client, event=event, to_mail=bool(email))
 5. Pour chaque unité (qty) : ProductSold → PriceSold → Ticket(status='K') → LigneArticle
 
@@ -64,7 +87,7 @@ Dans `_payer_par_carte_ou_cheque()` et `_payer_en_especes()`, après l'appel
 à `_creer_adhesions_depuis_panier()` :
 
 ```python
-articles_billet = [a for a in articles_panier if a['product'].methode_caisse == Product.BILLET_POS]
+articles_billet = [a for a in articles_panier if a.get('est_billet', False)]
 if articles_billet:
     user_client = ...  # extraire du POST (tag_id → carte.user, ou email → get_or_create)
     email_client = request.POST.get("email_adhesion", "")
@@ -78,8 +101,8 @@ Le user_client peut venir de l'identification faite pour l'adhésion (même flow
 Crée `tests/pytest/test_billetterie_pos.py` :
 
 ```python
-def test_construire_donnees_articles_avec_billet(tenant):
-    """Un Product BI avec Event → article_dict contient 'event' avec jauge."""
+def test_construire_donnees_articles_pv_billetterie(tenant):
+    """PV BILLETTERIE avec Event futur → article_dict contient 'event' avec jauge."""
 
 def test_creer_billet_espece_sans_email(tenant):
     """Paiement espèces → Reservation + Ticket créés, to_mail=False."""
@@ -100,7 +123,10 @@ def test_ticket_status_not_scanned(tenant):
     """Le Ticket créé a status='K' (NOT_SCANNED)."""
 ```
 
-Utilise les fixtures existantes de `create_test_pos_data` (Tâche 6 de Session 06).
+**IMPORTANT** : `create_test_pos_data` ne crée plus d'Events ni de Products billet.
+Le PV BILLETTERIE charge les events existants de demo_data_v2.
+Les tests doivent créer leurs propres Events + Products billet dans les fixtures
+(avec `schema_context` ou `FastTenantTestCase`).
 
 ## TÂCHE 6 — Tests E2E
 
