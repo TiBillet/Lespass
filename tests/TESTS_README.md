@@ -320,6 +320,7 @@ tests/
 │   ├── test_stripe_*.py       # Stripe mock (adhesions, reservations, crowds)
 │   ├── test_fedow_core.py     # Fedow (assets, tokens, transactions, federation)
 │   ├── test_crowd_*.py        # Crowds API v2
+│   ├── test_websocket_jauge.py  # WebSocket : consumer, ping/pong, broadcast jauge
 │   └── ...
 ├── e2e/                       # 36 tests navigateur (~3 min)
 │   ├── conftest.py            # Fixtures : playwright, browser, page, login_as, pos_page, django_shell, fill_stripe_card
@@ -345,18 +346,163 @@ tests/
 
 | Metrique | Valeur |
 |----------|--------|
-| Tests pytest (DB-only) | 226 |
+| Tests pytest (DB-only) | 234 |
 | Tests E2E (navigateur) | 41 |
-| **Total** | **267** |
-| Temps pytest | ~60s |
+| **Total** | **275** |
+| Temps pytest | ~70s |
 | Temps E2E | ~4 min |
 | **Temps total** | **~5 min** |
 
 ---
 
+## Tests WebSocket (Django Channels)
+
+### Dependance
+
+Les tests async du consumer necessitent `pytest-asyncio` (groupe dev) :
+```bash
+docker exec lespass_django poetry add --group dev pytest-asyncio
+```
+
+### 3 approches selon ce qu'on teste
+
+| Je teste... | Outil | Exemple |
+|-------------|-------|---------|
+| **Le consumer** (connexion, ping/pong, groups) | `channels.testing.WebsocketCommunicator` + `@pytest.mark.asyncio` | `test_consumer_ping_pong` |
+| **Le calcul de broadcast** (jauges par Price/Event) | `unittest.mock.patch("wsocket.broadcast.broadcast_html")` | `test_broadcast_jauge_calcule_par_price` |
+| **Le signal** (Ticket.post_save → on_commit → broadcast) | `unittest.mock.patch("BaseBillet.signals._safe_broadcast_jauge")` | `test_signal_ticket_declenche_broadcast` |
+
+### Tests du consumer (WebsocketCommunicator)
+
+Le `WebsocketCommunicator` simule une connexion WebSocket sans navigateur ni Redis.
+Il faut fournir le scope manuellement (url_route, tenant) :
+
+```python
+import pytest
+from unittest.mock import MagicMock
+from channels.testing import WebsocketCommunicator
+from wsocket.consumers import LaboutikConsumer
+
+@pytest.mark.asyncio
+async def test_consumer_ping_pong():
+    mock_tenant = MagicMock()
+    mock_tenant.schema_name = "lespass"
+
+    communicator = WebsocketCommunicator(
+        LaboutikConsumer.as_asgi(),
+        "/ws/laboutik/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/",
+    )
+    communicator.scope["url_route"] = {
+        "kwargs": {"pv_uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}
+    }
+    communicator.scope["tenant"] = mock_tenant
+
+    connected, _ = await communicator.connect()
+    assert connected
+
+    await communicator.send_json_to({"type": "ping", "client_ts": 1700000000000})
+    response = await communicator.receive_json_from(timeout=2)
+    assert response["type"] == "pong"
+    assert response["client_ts"] == 1700000000000
+
+    await communicator.disconnect()
+```
+
+Points importants :
+- `@pytest.mark.asyncio` obligatoire (pas dans une classe `TestCase`)
+- `communicator.scope["url_route"]` doit etre fourni manuellement (le URLRouter n'est pas utilise)
+- `communicator.scope["tenant"]` : mock suffit, pas besoin d'un vrai Client en DB
+- `receive_nothing(timeout=0.5)` pour verifier qu'aucun message n'est envoye
+- Toujours appeler `await communicator.disconnect()` en fin de test
+
+### Tests du broadcast (mock broadcast_html)
+
+On mocke `broadcast_html` pour intercepter le contexte sans envoyer a Redis :
+
+```python
+from unittest.mock import patch
+from wsocket.broadcast import broadcast_jauge_event
+
+def test_broadcast_jauge(event_fixture):
+    with patch("wsocket.broadcast.broadcast_html") as mock:
+        broadcast_jauge_event(event)
+
+    context = mock.call_args.kwargs["context"]
+    assert context["event"]["places_vendues"] == 2
+    assert len(context["tuiles"]) == 2  # 1 par Price
+```
+
+Cela teste la logique de calcul (jauge par Price vs par Event) sans infrastructure WebSocket.
+
+### Tests du signal (mock _safe_broadcast_jauge)
+
+Le signal `post_save` Ticket utilise `transaction.on_commit()`. Dans notre setup de test
+(pas de rollback — `django_db_setup = pass`), `on_commit` fire automatiquement apres le save.
+On mocke `_safe_broadcast_jauge` pour verifier l'appel sans toucher a Redis :
+
+```python
+from unittest.mock import patch
+
+def test_signal_ticket(event_fixture):
+    with patch("BaseBillet.signals._safe_broadcast_jauge") as mock:
+        Ticket.objects.create(reservation=reservation, ...)
+
+    mock.assert_called_once_with(event.pk)
+```
+
+### Tests E2E (a venir)
+
+Le test E2E de la jauge temps reel necessite 2 contextes Playwright :
+1. Page 1 : vendre un billet
+2. Page 2 : verifier que la jauge se met a jour sans refresh
+
+```python
+def test_jauge_temps_reel(pos_page, browser):
+    context2 = browser.new_context()
+    page2 = context2.new_page()
+    page2.goto(URL_PV_BILLETTERIE)
+
+    # Vendre un billet dans pos_page...
+    # Verifier dans page2 :
+    expect(
+        page2.locator('[id="billet-jauge-..."] .billet-jauge-text')
+    ).to_have_text("10/50", timeout=5000)
+
+    context2.close()
+```
+
+Piege : l'ID contient `__` (double underscore). Utiliser `[id="..."]` au lieu de `#...`
+car `#id__with__underscores` est invalide en CSS.
+
+### Ce qui est teste actuellement (session 08-09)
+
+| Test | Fichier | Ce qu'il verifie |
+|------|---------|-----------------|
+| `test_consumer_connexion_et_groups` | `test_websocket_jauge.py` | Consumer accepte la connexion WebSocket |
+| `test_consumer_ping_pong` | `test_websocket_jauge.py` | Ping → pong avec client_ts + server_ts |
+| `test_consumer_ignore_messages_non_ping` | `test_websocket_jauge.py` | Messages inconnus/invalides ignores silencieusement |
+| `test_broadcast_jauge_calcule_par_price` | `test_websocket_jauge.py` | Price.stock=10 → jauge 2/10 ; Price sans stock → jauge globale 2/50 |
+| `test_broadcast_jauge_complet_par_price` | `test_websocket_jauge.py` | Price complet (12/10) meme si Event pas complet (12/50) |
+| `test_broadcast_resilient_si_redis_down` | `test_websocket_jauge.py` | Redis down → warning log, pas de crash |
+| `test_signal_ticket_declenche_broadcast` | `test_websocket_jauge.py` | Ticket.save() → on_commit → _safe_broadcast_jauge(event.pk) |
+| `test_signal_ticket_sans_reservation_ne_crashe_pas` | `test_websocket_jauge.py` | Ticket orphelin → pas de broadcast, pas de crash |
+
+### Ce qui n'est PAS teste (a faire en E2E)
+
+| Scenario | Pourquoi pas encore |
+|----------|-------------------|
+| Jauge temps reel entre 2 onglets | Necessite Playwright multi-contexte + serveur Daphne actif |
+| Indicateur vert/rouge au chargement | Test visuel (E2E) |
+| Ping latence au clic sur l'icone | Test visuel (E2E) |
+| OOB swap HTMX (remplacement DOM) | Le DOM n'est pas accessible en pytest DB-only |
+| Reconnexion auto apres coupure | L'extension HTMX ws gere ca — tester manuellement |
+| Broadcast cross-PV (meme event, 2 PV differents) | Necessite 2 PV BILLETTERIE dans les fixtures E2E |
+
+---
+
 ## Pieges documentes
 
-**A lire AVANT d'ecrire un nouveau test.** 34 lecons apprises pendant la migration et les sessions suivantes.
+**A lire AVANT d'ecrire un nouveau test.** 41 lecons apprises pendant la migration et les sessions suivantes.
 
 ### Django multi-tenant
 
@@ -560,6 +706,50 @@ Appeler `_envoyer_billets_par_email()` explicitement APRES le bloc atomic.
 L'ancienne version ne regardait que `membership.user.email` et
 `paiement_stripe.user.email`. Les billets POS passent par
 `reservation.user_commande.email`. Ajouter cette branche.
+
+### WebSocket et Django Channels
+
+**9.43 — `pytest-asyncio` obligatoire pour les tests consumer.**
+Les tests `WebsocketCommunicator` sont des coroutines (`async def`). `pytest` ne les
+execute pas sans `pytest-asyncio`. Installer : `poetry add --group dev pytest-asyncio`.
+Decorer chaque test async avec `@pytest.mark.asyncio`. Ne pas mixer avec `unittest.TestCase`.
+
+**9.44 — `WebsocketCommunicator` ne passe pas par le URLRouter.**
+Le `scope["url_route"]` doit etre fourni manuellement dans le test. Le consumer
+ne trouvera pas `self.scope["url_route"]["kwargs"]["pv_uuid"]` sans ca.
+```python
+communicator.scope["url_route"] = {"kwargs": {"pv_uuid": "aaaa-bbbb-..."}}
+communicator.scope["tenant"] = mock_tenant  # MagicMock suffit
+```
+
+**9.45 — `on_commit` et les tests : pas de rollback = fire automatique.**
+Notre setup de test (`django_db_setup = pass`, pas de `TransactionTestCase`) n'utilise
+pas de transaction wrapper. `transaction.on_commit()` fire immediatement apres le `save()`.
+Pas besoin de mocker `on_commit` — mocker directement `_safe_broadcast_jauge` suffit.
+Attention : si le setup change pour utiliser des transactions, `on_commit` ne firera plus
+et il faudra le mocker avec `side_effect=lambda fn: fn()`.
+
+**9.46 — `broadcast_html` ne doit PAS etre appele dans un `atomic()`.**
+Le signal `post_save` Ticket utilise `on_commit()` pour differer le broadcast.
+Si on cree un Ticket a l'interieur d'un `db_transaction.atomic()`, le broadcast
+ne partira qu'au commit de la transaction englobante. C'est voulu : si rollback,
+pas de broadcast avec des donnees incoherentes.
+
+**9.47 — ID HTML avec `__` (double underscore) invalide en selecteur CSS `#`.**
+Les tuiles billet ont des IDs composites `billet-jauge-{event_uuid}__{price_uuid}`.
+Le selecteur `#billet-jauge-xxx__yyy` est invalide en CSS (les `__` ne sont pas
+escapes). Utiliser l'attribut : `[id="billet-jauge-xxx__yyy"]` ou
+`page.locator(f'[id="billet-jauge-{event_uuid}__{price_uuid}"]')` en Playwright.
+
+**9.48 — `hx-swap-oob` avec selecteur de classe (pas d'ID).**
+HTMX 2 supporte `hx-swap-oob="innerHTML:.ma-classe"` pour cibler par classe CSS.
+Utilise pour la sidebar jauge (`.sidebar-jauge-event-{uuid}`) car il n'y a qu'un
+element par event. Pour les tuiles, on utilise des IDs uniques (1 par Price).
+
+**9.49 — `Price.objects.filter(product__events=event)` ne marche pas.**
+La relation M2M est `Event.products` (Event → Product), pas `Product.events`.
+Le filtre correct : `Price.objects.filter(product__in=event.products.all())`.
+Sinon : `Cannot query "Event": Must be "Product" instance.`
 
 ---
 
