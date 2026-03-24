@@ -217,8 +217,6 @@ COMMUNICATION :
         return;
       }
 
-      ping_timestamp_envoi = Date.now();
-
       // Envoyer le ping au consumer via l'API HTMX ws
       // sendImmediately() envoie sans passer par la queue
       // / Send ping to consumer via the HTMX ws API
