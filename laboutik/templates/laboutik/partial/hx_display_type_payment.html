@@ -3,7 +3,7 @@
 <!--
 ECRAN CHOIX DU MOYEN DE PAIEMENT / IDENTIFICATION CLIENT
 Affiche les boutons de paiement ou l'ecran d'identification selon le contexte :
-consigne, identification client (recharge/adhesion), ou vente normale.
+consigne, identification client (recharge/adhesion/billetterie), ou vente normale.
 / Payment method selection / client identification screen.
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_display_type_payment.html
@@ -44,17 +44,30 @@ FLUX :
   {% elif panier_necessite_client %}
 
   {# --- Titre adaptatif selon le contenu du panier --- #}
+  {# Les combinaisons possibles : recharge, adhesion, billetterie, et leurs mix #}
   {% if panier_a_recharges and panier_a_adhesions %}
   <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
     {% translate "Recharge + Adhesion" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </h1>
+  {% elif panier_a_recharges and panier_a_billets %}
+  <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
+    {% translate "Recharge + Billetterie" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
   </h1>
   {% elif panier_a_recharges %}
   <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
     {% translate "Recharge" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
   </h1>
-  {% else %}
+  {% elif panier_a_adhesions and panier_a_billets %}
+  <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
+    {% translate "Adhesion + Billetterie" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </h1>
+  {% elif panier_a_adhesions %}
   <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
     {% translate "Adhesion" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
+  </h1>
+  {% elif panier_a_billets %}
+  <h1 class="choose-id-title choose-id-stagger" style="--ordre: 1">
+    {% translate "Billetterie" %} — {{ total|floatformat:2 }} {{ currency_data.symbol }}
   </h1>
   {% endif %}
 
@@ -63,11 +76,14 @@ FLUX :
     {% if panier_a_recharges %}{% translate "Carte NFC du client requise pour la recharge" %}{% endif %}
     {% if panier_a_recharges and panier_a_adhesions %}<br/>{% endif %}
     {% if panier_a_adhesions %}{% translate "Identification requise pour l'adhesion" %}{% endif %}
+    {% if panier_a_billets and panier_a_adhesions %}<br/>{% endif %}
+    {% if panier_a_billets and panier_a_recharges and not panier_a_adhesions %}<br/>{% endif %}
+    {% if panier_a_billets %}{% translate "Identification pour le billet (email optionnel)" %}{% endif %}
   </p>
 
   {# --- Option 1 : Scanner une carte TiBillet (toujours disponible) --- #}
   <div class="choose-id-btn choose-id-stagger" style="--ordre: 2"
-    hx-get="{% url 'laboutik-paiement-lire_nfc_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&moyens_paiement={{ moyens_paiement_csv }}"
+    hx-get="{% url 'laboutik-paiement-lire_nfc_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&panier_a_billets={{ panier_a_billets }}&moyens_paiement={{ moyens_paiement_csv }}"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     data-testid="client-choose-nfc"
     role="button" tabindex="0"
@@ -85,7 +101,7 @@ FLUX :
   </div>
 
   <div class="choose-id-btn choose-id-stagger" style="--ordre: 4"
-    hx-get="{% url 'laboutik-paiement-formulaire_identification_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&moyens_paiement={{ moyens_paiement_csv }}"
+    hx-get="{% url 'laboutik-paiement-formulaire_identification_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&panier_a_billets={{ panier_a_billets }}&moyens_paiement={{ moyens_paiement_csv }}"
     hx-target="#messages" hx-trigger="click" hx-swap="innerHTML"
     data-testid="client-choose-email"
     role="button" tabindex="0"

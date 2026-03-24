@@ -458,3 +458,68 @@ def create_lignearticle_if_membership_created_on_admin(sender, instance: Members
     if membership.deadline:
         webhook_membership.delay(membership.pk)
 
+
+# --- BROADCAST JAUGE BILLETTERIE VIA WEBSOCKET ---
+# / Ticket gauge WebSocket broadcast
+
+def _safe_broadcast_jauge(event_pk):
+    """
+    Recharge l'event depuis la DB et broadcast la jauge a toutes les caisses.
+    Separe du signal pour eviter les problemes de closure avec l'ORM.
+    / Reloads the event from DB and broadcasts the gauge to all POS terminals.
+    Separated from the signal to avoid ORM closure issues.
+
+    LOCALISATION : BaseBillet/signals.py
+
+    Appele par transaction.on_commit() — s'execute APRES le commit.
+    L'objet Event en memoire peut etre stale, on recharge depuis la DB.
+    Le try/except evite de casser si le channel layer (Redis) est down.
+    """
+    from BaseBillet.models import Event
+
+    try:
+        from wsocket.broadcast import broadcast_jauge_event
+        event = Event.objects.get(pk=event_pk)
+        broadcast_jauge_event(event)
+    except Event.DoesNotExist:
+        pass
+    except Exception as e:
+        logger.warning(f"[WS] Erreur broadcast jauge event {event_pk}: {e}")
+
+
+@receiver(post_save, sender=Ticket)
+def broadcast_jauge_apres_ticket_save(sender, instance, **kwargs):
+    """
+    Apres chaque sauvegarde d'un Ticket, broadcaster la jauge de l'event.
+    Couvre toutes les sources : POS, vente en ligne, admin, remboursement.
+    / After each Ticket save, broadcast the event gauge.
+    Covers all sources: POS, online sale, admin, refund.
+
+    LOCALISATION : BaseBillet/signals.py
+
+    Utilise on_commit() pour ne broadcaster qu'apres le commit de la transaction.
+    Si la transaction rollback, le broadcast n'est jamais envoye.
+
+    FLUX :
+    1. Ticket.save() declenche post_save
+    2. On recupere l'event via ticket.reservation.event
+    3. on_commit() differe _safe_broadcast_jauge(event.pk)
+    4. Apres commit : recharge l'event, recalcule la jauge, broadcast
+    """
+    from django.db import transaction
+
+    ticket = instance
+    reservation = ticket.reservation
+    if not reservation or not reservation.event_id:
+        return
+
+    event_pk = reservation.event_id
+
+    # Differer le broadcast jusqu'au commit de la transaction
+    # Si la transaction rollback, le broadcast n'est jamais envoye
+    # / Defer broadcast until transaction commit
+    # If the transaction rolls back, the broadcast is never sent
+    transaction.on_commit(
+        lambda: _safe_broadcast_jauge(event_pk)
+    )
+

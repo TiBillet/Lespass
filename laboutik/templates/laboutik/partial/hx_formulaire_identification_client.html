@@ -140,6 +140,7 @@ FLUX :
       // But if we arrive here directly (not via NFC), we need to inject them too.
       setHiddenInput('panier_a_recharges', '{{ panier_a_recharges|escapejs }}');
       setHiddenInput('panier_a_adhesions', '{{ panier_a_adhesions|escapejs }}');
+      setHiddenInput('panier_a_billets', '{{ panier_a_billets|escapejs }}');
       setHiddenInput('moyens_paiement', '{{ moyens_paiement_csv|escapejs }}');
 
       // Soumettre #addition-form vers identifier_client

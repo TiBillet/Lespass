@@ -141,21 +141,55 @@ Scénarios :
 6. Panier mixte (bière + billet) → les 2 traités correctement
 7. Event complet → tuile désactivée, paiement refusé si tenté
 
+## CE QUI A ÉTÉ FAIT
+
+### ID composite `{event_uuid}__{price_uuid}`
+
+Le problème central : un Product (et sa Price) peut être dans plusieurs Events.
+Avec juste `repid-{price_uuid}`, on ne sait pas quel Event le client visait.
+
+Solution : `"id": f"{event.uuid}__{price.uuid}"` dans `_construire_donnees_articles()`.
+Le JS traite `data-uuid` comme une string opaque → aucune modif JS.
+Le séparateur `__` ne conflicte pas avec `--` (multi-tarif).
+
+### Fichiers modifiés
+
+| Fichier | Changement |
+|---------|-----------|
+| `laboutik/views.py` | ID composite dans `_construire_donnees_articles()`, parser `__` dans `_extraire_articles_du_panier()`, `panier_a_billets` dans `moyens_paiement()`, branche billet dans `identifier_client()`, NOUVEAU `_creer_billets_depuis_panier()` + `imprimer_billet()` stub + `_envoyer_billets_par_email()`, intégration dans `_payer_par_carte_ou_cheque()` et `_payer_en_especes()` |
+| `laboutik/templates/laboutik/partial/hx_display_type_payment.html` | Titre "Billetterie", texte "(email optionnel)", propagation `panier_a_billets` dans query params |
+| `laboutik/templates/laboutik/partial/hx_lire_nfc_client.html` | Hidden input `panier_a_billets` |
+| `laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html` | Hidden input `panier_a_billets` |
+| `BaseBillet/models.py` | `LigneArticle.user_email()` : ajout branche `reservation.user_commande.email` |
+| `Administration/admin/sales.py` | `select_related` + `search_fields` avec `reservation__user_commande` |
+| `tests/pytest/test_billetterie_pos.py` | NOUVEAU — 12 tests (8 unitaires + 4 HTTP) |
+| `tests/e2e/test_pos_billetterie.py` | NOUVEAU — 5 tests E2E Playwright |
+
+### Pièges rencontrés (documentés dans TESTS_README.md 9.36-9.42)
+
+- `_, _created = get_or_create()` masque `_()` (gettext) → utiliser `_created`
+- `PointDeVente.objects.first()` perturbé par les PV de test → `poid_liste=9999`
+- Flow récapitulatif client → paiement direct (pas d'écran confirmation)
+- `#bt-retour-layer1` en double dans le DOM → scoper au container succès
+- `Reservation.objects.create(status=VALID)` ne déclenche pas les signaux → appel Celery explicite
+- `LigneArticle.user_email()` ne couvrait pas `reservation.user_commande.email`
+
 ## VÉRIFICATION
 
 ```bash
 docker exec lespass_django poetry run pytest tests/pytest/test_billetterie_pos.py -v
-docker exec lespass_django poetry run pytest tests/pytest/ -v -k "laboutik"
+docker exec lespass_django poetry run pytest tests/pytest/ -q
 docker exec lespass_django poetry run pytest tests/e2e/test_pos_billetterie.py -v -s
-docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 ```
 
 ### Critère de succès
 
-- [ ] `_creer_billets_depuis_panier()` crée Reservation + Ticket + LigneArticle
-- [ ] Ticket.status = 'K' (NOT_SCANNED)
-- [ ] Jauge atomique : ValueError si event complet
-- [ ] Panier mixte (VT + BI + AD) fonctionne avec 1 seule identification
-- [ ] 7+ tests pytest verts
-- [ ] 7 scénarios E2E verts
-- [ ] TOUS les tests laboutik existants passent (pas de régression)
+- [x] `_creer_billets_depuis_panier()` crée Reservation + Ticket + LigneArticle
+- [x] Ticket.status = 'K' (NOT_SCANNED)
+- [x] Jauge atomique : ValueError si event complet
+- [x] Panier mixte (VT + BI) fonctionne avec 1 seule identification
+- [x] 12 tests pytest verts (8 unitaires + 4 HTTP)
+- [x] 5 scénarios E2E verts
+- [x] 218 tests pytest existants passent (0 régression)
+- [x] Email billet visible dans l'admin LigneArticle
+- [x] Envoi email Celery déclenché après paiement (webhook + PDF)

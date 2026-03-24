@@ -105,6 +105,9 @@
 	<!-- Extension loading-states — spinner avec delai configurable (pas de blink si requete rapide)
 	     / loading-states extension — spinner with configurable delay (no blink on fast requests) -->
 	<script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
+	<!-- Extension WebSocket HTMX — push serveur vers navigateur (jauges, notifications)
+	     / HTMX WebSocket extension — server push to browser (gauges, notifications) -->
+	<script src="{% static 'js/ext/ws.js' %}"></script>
 	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
 	<script>
 		/**

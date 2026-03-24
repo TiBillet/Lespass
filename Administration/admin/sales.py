@@ -79,7 +79,8 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
         'sale_origin',
     ]
     search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name',
-                     'paiement_stripe__user__email', 'membership__user__email')
+                     'paiement_stripe__user__email', 'membership__user__email',
+                     'reservation__user_commande__email')
     ordering = ('-datetime',)
 
     resource_classes = [LigneArticleExportResource]
@@ -94,6 +95,8 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
                                        'paiement_stripe__user',
                                        'membership',
                                        'membership__user',
+                                       'reservation',
+                                       'reservation__user_commande',
                                        )
 
     @display(description=_("Value"))

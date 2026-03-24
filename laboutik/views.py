@@ -419,11 +419,13 @@ def _construire_donnees_articles(point_de_vente_instance):
                     )
 
                     article_billet = {
-                        # ID unique par Price (pas par Product) pour eviter les doublons
-                        # dans le panier quand un Product a plusieurs tarifs.
-                        # / Unique ID per Price (not Product) to avoid cart duplicates
-                        # when a Product has multiple rates.
-                        "id": str(price.uuid),
+                        # ID composite event__price : identifie sans ambiguïté
+                        # quel tarif (Price) de quel événement (Event) le client a choisi.
+                        # Le séparateur '__' ne conflicte pas avec '--' (multi-tarif).
+                        # Le JS traite data-uuid comme une string opaque.
+                        # / Composite event__price ID: unambiguously identifies
+                        # which rate (Price) of which event (Event) the client chose.
+                        "id": f"{event.uuid}__{price.uuid}",
                         "name": price.name or product.name,
                         "prix": prix_en_centimes,
                         # La catégorie utilise l'UUID de l'event pour le filtre sidebar
@@ -1284,7 +1286,47 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         price_uuid_str = article_data.get('price_uuid')
         custom_amount_centimes = article_data.get('custom_amount_centimes')
 
-        produit = produits_du_pv.get(uuid_str)
+        # --- Articles BILLETTERIE : ID composite "{event_uuid}__{price_uuid}" ---
+        # Le JS envoie repid-{event_uuid}__{price_uuid} pour les tuiles billet.
+        # On sépare event UUID et price UUID, puis on charge le Product via la Price.
+        # / BILLETTERIE articles: composite ID "{event_uuid}__{price_uuid}".
+        # The JS sends repid-{event_uuid}__{price_uuid} for ticket tiles.
+        # We split event UUID and price UUID, then load the Product via the Price.
+        produit = None
+        event_billet = None
+        est_billet = False
+
+        if '__' in uuid_str and point_de_vente.comportement == PointDeVente.BILLETTERIE:
+            event_uuid_str, price_uuid_str_billet = uuid_str.split('__', 1)
+            try:
+                prix_billet = Price.objects.select_related('product').get(
+                    uuid=price_uuid_str_billet,
+                    publish=True,
+                    asset__isnull=True,
+                )
+            except Price.DoesNotExist:
+                logger.warning(
+                    f"Price {price_uuid_str_billet} introuvable "
+                    f"(billet PV {point_de_vente.name})"
+                )
+                continue
+            produit = prix_billet.product
+            price_uuid_str = str(prix_billet.uuid)
+            est_billet = True
+            # Retrouver l'event depuis l'UUID composite
+            # / Find the event from the composite UUID
+            event_billet = Event.objects.filter(uuid=event_uuid_str).first()
+            # Prefetch les prix EUR du produit (necessaire pour la validation)
+            # / Prefetch product's EUR prices (needed for validation)
+            produit.prix_euros = list(
+                produit.prices.filter(publish=True, asset__isnull=True).order_by('order')
+            )
+
+        # --- Articles POS classiques : chercher par Product UUID ---
+        # / Standard POS articles: look up by Product UUID
+        if produit is None:
+            produit = produits_du_pv.get(uuid_str)
+
         if produit is None:
             logger.warning(f"Produit {uuid_str} non trouvé dans le PV {point_de_vente.name}")
             continue
@@ -1339,6 +1381,8 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             'quantite': quantite,
             'prix_centimes': prix_en_centimes,
             'custom_amount_centimes': custom_amount_centimes,
+            'est_billet': est_billet,
+            'event': event_billet,
         })
 
     return articles_panier
@@ -1640,6 +1684,238 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     return memberships_creees
 
 
+def imprimer_billet(ticket, event):
+    """
+    Stub d'impression de billet. Sera remplace par l'impression reelle
+    (WebSocket + imprimante thermique) en phase Impression.
+    / Ticket print stub. Will be replaced by real printing
+    (WebSocket + thermal printer) in the Printing phase.
+
+    LOCALISATION : laboutik/views.py
+    """
+    logger.info(f"[IMPRESSION STUB] Billet {ticket.uuid} — {event.name}")
+
+
+def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None):
+    """
+    Cree les Reservation + Ticket pour les articles billet du panier.
+    Rattache chaque Reservation a sa LigneArticle correspondante (FK reservation).
+    / Creates Reservation + Ticket for ticket articles in the cart.
+    Links each Reservation to its corresponding LigneArticle (FK reservation).
+
+    LOCALISATION : laboutik/views.py
+
+    DOIT etre appelee a l'interieur d'un bloc transaction.atomic().
+    / MUST be called inside a transaction.atomic() block.
+
+    FLUX :
+    1. Filtre les articles avec est_billet=True
+    2. Identifie le client (NFC tag_id OU email)
+    3. Groupe les articles par event (1 Reservation par event)
+    4. Pour chaque event : verrouille (select_for_update), verifie la jauge
+    5. Cree Reservation + ProductSold + PriceSold + Ticket(status=NOT_SCANNED)
+    6. Rattache la LigneArticle a la Reservation
+    7. Appelle imprimer_billet() (stub)
+
+    DEPENDENCIES :
+    - _creer_lignes_articles() doit etre appelee AVANT (pour les LigneArticle)
+    - imprimer_billet() : stub, sera remplace par l'impression reelle
+
+    :param request: HttpRequest (pour lire le POST : tag_id, email, moyen_paiement)
+    :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
+    :param lignes_articles: liste de LigneArticle creees par _creer_lignes_articles()
+    :return: liste de Reservation creees
+    :raises ValueError: si client non identifie ou jauge pleine
+    """
+    from BaseBillet.models import Reservation, Ticket
+
+    # Filtrer les articles billet du panier
+    # / Filter ticket articles from the cart
+    articles_billet = []
+    for article in articles_panier:
+        if article.get('est_billet', False):
+            articles_billet.append(article)
+
+    if not articles_billet:
+        return []
+
+    # --- Identifier le client ---
+    # / Identify the client
+    user_billet = None
+
+    tag_id_client = request.POST.get("tag_id", "").upper().strip()
+    if tag_id_client:
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+            user_billet = carte_client.user
+        except CarteCashless.DoesNotExist:
+            logger.warning(f"Carte NFC {tag_id_client} introuvable pour billetterie")
+
+    email_client = request.POST.get("email_adhesion", "").strip().lower()
+    if email_client and user_billet is None:
+        user_billet = get_or_create_user(email_client, send_mail=False)
+
+    if user_billet is None:
+        raise ValueError(_("Identification du client obligatoire pour les billets"))
+
+    prenom = request.POST.get("prenom_adhesion", "").strip()
+    nom = request.POST.get("nom_adhesion", "").strip()
+
+    # Le code du moyen de paiement pour les tickets
+    # / Payment method code for tickets
+    moyen_paiement_code = request.POST.get("moyen_paiement", "")
+    methode_db = MAPPING_CODES_PAIEMENT.get(moyen_paiement_code, PaymentMethod.UNKNOWN)
+
+    # --- Grouper les articles par event (1 Reservation par event) ---
+    # / Group articles by event (1 Reservation per event)
+    articles_par_event = {}
+    for article in articles_billet:
+        event = article.get('event')
+        if event is None:
+            logger.warning(f"Article billet sans event : {article['price'].name}")
+            continue
+        event_uuid = str(event.uuid)
+        if event_uuid not in articles_par_event:
+            articles_par_event[event_uuid] = {
+                'event': event,
+                'articles': [],
+            }
+        articles_par_event[event_uuid]['articles'].append(article)
+
+    # --- Construire un index LigneArticle par product_uuid pour le rattachement ---
+    # / Build a LigneArticle index by product_uuid for linking
+    lignes_par_product = {}
+    if lignes_articles:
+        for ligne in lignes_articles:
+            product_uuid = str(ligne.pricesold.productsold.product.uuid)
+            lignes_par_product[product_uuid] = ligne
+
+    reservations_creees = []
+
+    for event_uuid, groupe in articles_par_event.items():
+        event = groupe['event']
+        articles_event = groupe['articles']
+
+        # --- Verification atomique de la jauge ---
+        # Verrouiller l'event pour eviter les race conditions sur la jauge.
+        # / Lock the event to prevent race conditions on the gauge.
+        event_locked = Event.objects.select_for_update().get(pk=event.pk)
+
+        places_vendues = event_locked.valid_tickets_count()
+        jauge_max = event_locked.jauge_max or 0
+
+        # Nombre total de billets demandes pour cet event
+        # / Total number of tickets requested for this event
+        total_billets_demandes = 0
+        for article_event in articles_event:
+            total_billets_demandes += article_event['quantite']
+
+        # Verifier la jauge globale de l'event
+        # / Check the event's global gauge
+        if jauge_max > 0 and places_vendues + total_billets_demandes > jauge_max:
+            raise ValueError(
+                _("Evenement %(event)s complet") % {'event': event.name}
+            )
+
+        # Verifier la jauge par tarif (Price.stock) si definie
+        # / Check per-rate gauge (Price.stock) if defined
+        for article in articles_event:
+            price = article['price']
+            quantite = article['quantite']
+            if price.stock is not None and price.stock > 0:
+                places_vendues_prix = Ticket.objects.filter(
+                    reservation__event__pk=event.pk,
+                    pricesold__price__pk=price.pk,
+                    status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+                ).count()
+                if places_vendues_prix + quantite > price.stock:
+                    raise ValueError(
+                        _("Plus de places pour le tarif %(tarif)s") % {'tarif': price.name}
+                    )
+
+        # --- Creer la Reservation ---
+        # / Create the Reservation
+        reservation = Reservation.objects.create(
+            user_commande=user_billet,
+            event=event_locked,
+            status=Reservation.VALID,
+            to_mail=bool(email_client),
+        )
+        reservations_creees.append(reservation)
+
+        # --- Creer les Tickets (1 par unite de quantite) ---
+        # / Create Tickets (1 per unit of quantity)
+        for article in articles_event:
+            product = article['product']
+            price = article['price']
+            quantite = article['quantite']
+
+            # ProductSold avec event renseigne (contrairement aux ventes classiques)
+            # / ProductSold with event set (unlike standard sales)
+            product_sold, _created = ProductSold.objects.get_or_create(
+                product=product,
+                event=event_locked,
+                defaults={'categorie_article': product.categorie_article},
+            )
+
+            # PriceSold
+            price_sold, _created = PriceSold.objects.get_or_create(
+                productsold=product_sold,
+                price=price,
+                defaults={'prix': price.prix},
+            )
+
+            for _i in range(quantite):
+                ticket = Ticket.objects.create(
+                    reservation=reservation,
+                    pricesold=price_sold,
+                    status=Ticket.NOT_SCANNED,
+                    first_name=prenom or user_billet.first_name or "",
+                    last_name=nom or user_billet.last_name or "",
+                    sale_origin=SaleOrigin.LABOUTIK,
+                    payment_method=methode_db,
+                )
+                imprimer_billet(ticket, event_locked)
+
+            # Rattacher la LigneArticle a la reservation
+            # / Link the LigneArticle to the reservation
+            product_uuid = str(product.uuid)
+            ligne_correspondante = lignes_par_product.get(product_uuid)
+            if ligne_correspondante:
+                ligne_correspondante.reservation = reservation
+                ligne_correspondante.save(update_fields=['reservation'])
+
+    return reservations_creees
+
+
+def _envoyer_billets_par_email(reservations):
+    """
+    Declenche l'envoi des billets par email via Celery pour chaque reservation
+    qui a to_mail=True. DOIT etre appelee APRES le bloc transaction.atomic()
+    pour eviter d'envoyer un email si le paiement est rollback.
+    / Triggers ticket email sending via Celery for each reservation
+    with to_mail=True. MUST be called AFTER the transaction.atomic() block
+    to avoid sending an email if the payment is rolled back.
+
+    LOCALISATION : laboutik/views.py
+
+    :param reservations: liste de Reservation creees par _creer_billets_depuis_panier()
+    """
+    from BaseBillet.tasks import ticket_celery_mailer, webhook_reservation
+
+    for reservation in reservations:
+        # Webhook externe (notification a des systemes tiers)
+        # / External webhook (notification to third-party systems)
+        webhook_reservation.delay(str(reservation.pk))
+
+        # Envoi email avec PDF billets (si email fourni)
+        # Celery genere les PDF et envoie le mail.
+        # / Email sending with PDF tickets (if email provided)
+        # Celery generates PDFs and sends the email.
+        if reservation.to_mail and reservation.user_commande.email:
+            ticket_celery_mailer.delay(str(reservation.pk))
+
+
 def _executer_recharges(articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client):
     """
     Exécute les recharges (RE/RC/TM) contenues dans le panier.
@@ -1858,11 +2134,21 @@ class PaiementViewSet(viewsets.ViewSet):
             for a in articles_panier
         )
 
-        # Le panier necessite un client si il contient des recharges ou des adhesions.
+        # Si le panier contient des billets, on demande aussi l'identification
+        # (pour Reservation.user_commande). L'email est optionnel (to_mail).
+        # / If the cart contains tickets, we also request identification
+        # (for Reservation.user_commande). Email is optional (to_mail).
+        panier_a_billets = False
+        for article_panier in articles_panier:
+            if article_panier.get('est_billet', False):
+                panier_a_billets = True
+                break
+
+        # Le panier necessite un client si il contient des recharges, adhesions ou billets.
         # Dans ce cas, on demande une identification AVANT le choix du moyen de paiement.
-        # / Cart requires a client if it contains top-ups or memberships.
+        # / Cart requires a client if it contains top-ups, memberships or tickets.
         # In that case, we ask for identification BEFORE payment method choice.
-        panier_necessite_client = panier_a_recharges or panier_a_adhesions
+        panier_necessite_client = panier_a_recharges or panier_a_adhesions or panier_a_billets
 
         # Liste des moyens de paiement en CSV pour propagation via templates HTMX
         # / Payment methods as CSV for propagation through HTMX templates
@@ -1890,6 +2176,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "comportement": point_de_vente.comportement,
             "panier_a_recharges": panier_a_recharges,
             "panier_a_adhesions": panier_a_adhesions,
+            "panier_a_billets": panier_a_billets,
             "panier_necessite_client": panier_necessite_client,
         }
         return render(request, "laboutik/partial/hx_display_type_payment.html", context)
@@ -2068,6 +2355,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # Separate normal articles and top-ups
         articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
         articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
+        reservations_billets = []
 
         with db_transaction.atomic():
             # Articles normaux (ventes, adhesions) → LigneArticle
@@ -2079,6 +2367,12 @@ class PaiementViewSet(viewsets.ViewSet):
             # Adhesions → creer les Memberships et les rattacher aux LigneArticle
             # Memberships → create Membership records and link them to LigneArticle
             _creer_adhesions_depuis_panier(request, articles_normaux, lignes_articles=lignes_normales)
+
+            # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
+            # Tickets → create Reservation + Tickets and link them to LigneArticle
+            reservations_billets = _creer_billets_depuis_panier(
+                request, articles_normaux, lignes_articles=lignes_normales,
+            )
 
             # Recharges → TransactionService + LigneArticle avec carte et asset
             # Top-ups → TransactionService + LigneArticle with card and asset
@@ -2094,6 +2388,13 @@ class PaiementViewSet(viewsets.ViewSet):
                     code_methode_paiement=moyen_paiement_code,
                     ip_client=ip_client,
                 )
+
+        # Apres le bloc atomic : envoyer les billets par email via Celery.
+        # Ne pas appeler dans le bloc atomic (si rollback, le mail partirait quand meme).
+        # / After the atomic block: send tickets by email via Celery.
+        # Do not call inside the atomic block (if rollback, email would still be sent).
+        if reservations_billets:
+            _envoyer_billets_par_email(reservations_billets)
 
         context = {
             "currency_data": CURRENCY_DATA,
@@ -2151,6 +2452,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # Separate normal articles and top-ups
             articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
             articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
+            reservations_billets = []
 
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
@@ -2164,6 +2466,12 @@ class PaiementViewSet(viewsets.ViewSet):
                 # Adhesions → creer les Memberships et les rattacher aux LigneArticle
                 # Memberships → create Membership records and link them to LigneArticle
                 _creer_adhesions_depuis_panier(request, articles_normaux, lignes_articles=lignes_normales)
+
+                # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
+                # Tickets → create Reservation + Tickets and link them to LigneArticle
+                reservations_billets = _creer_billets_depuis_panier(
+                    request, articles_normaux, lignes_articles=lignes_normales,
+                )
 
                 # Recharges → TransactionService + LigneArticle avec carte et asset
                 # Top-ups → TransactionService + LigneArticle with card and asset
@@ -2179,6 +2487,11 @@ class PaiementViewSet(viewsets.ViewSet):
                         code_methode_paiement=moyen_paiement_code,
                         ip_client=ip_client,
                     )
+
+            # Apres le bloc atomic : envoyer les billets par email via Celery
+            # / After the atomic block: send tickets by email via Celery
+            if reservations_billets:
+                _envoyer_billets_par_email(reservations_billets)
 
             # Calculer la monnaie à rendre (en euros)
             # Calculate change to give back (in euros)
@@ -2454,10 +2767,12 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         panier_a_recharges = request.GET.get("panier_a_recharges", "")
         panier_a_adhesions = request.GET.get("panier_a_adhesions", "")
+        panier_a_billets = request.GET.get("panier_a_billets", "")
         moyens_paiement_csv = request.GET.get("moyens_paiement", "")
         context = {
             "panier_a_recharges": panier_a_recharges,
             "panier_a_adhesions": panier_a_adhesions,
+            "panier_a_billets": panier_a_billets,
             "moyens_paiement_csv": moyens_paiement_csv,
         }
         return render(request, "laboutik/partial/hx_lire_nfc_client.html", context)
@@ -2476,10 +2791,12 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         panier_a_recharges = request.GET.get("panier_a_recharges", "")
         panier_a_adhesions = request.GET.get("panier_a_adhesions", "")
+        panier_a_billets = request.GET.get("panier_a_billets", "")
         moyens_paiement_csv = request.GET.get("moyens_paiement", "")
         context = {
             "panier_a_recharges": panier_a_recharges,
             "panier_a_adhesions": panier_a_adhesions,
+            "panier_a_billets": panier_a_billets,
             "moyens_paiement_csv": moyens_paiement_csv,
         }
         return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
@@ -2518,6 +2835,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Cart flags propagated from previous templates (hidden fields)
         panier_a_recharges = request.POST.get("panier_a_recharges", "") == "True"
         panier_a_adhesions = request.POST.get("panier_a_adhesions", "") == "True"
+        panier_a_billets = request.POST.get("panier_a_billets", "") == "True"
         moyens_paiement_csv = request.POST.get("moyens_paiement", "")
         moyens_paiement = [m.strip() for m in moyens_paiement_csv.split(",") if m.strip()]
 
@@ -2575,6 +2893,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     "erreur": premiere_erreur,
                     "panier_a_recharges": panier_a_recharges,
                     "panier_a_adhesions": panier_a_adhesions,
+                    "panier_a_billets": panier_a_billets,
                     "moyens_paiement_csv": moyens_paiement_csv,
                 }
                 return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
@@ -2630,6 +2949,12 @@ class PaiementViewSet(viewsets.ViewSet):
                         'prenom': user_prenom,
                         'nom': user_nom.upper(),
                     }
+                elif article.get('est_billet', False):
+                    event_name = article['event'].name if article.get('event') else "?"
+                    description = _("Billet %(nom)s — %(event)s") % {
+                        'nom': article['price'].name,
+                        'event': event_name,
+                    }
                 else:
                     description = f"{produit.name} × {quantite}"
 
@@ -2647,6 +2972,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "moyens_paiement": moyens_paiement,
                 "panier_a_recharges": panier_a_recharges,
                 "panier_a_adhesions": panier_a_adhesions,
+                "panier_a_billets": panier_a_billets,
                 "articles_pour_recapitulatif": articles_pour_recapitulatif,
                 "total_en_euros": total_en_euros,
             }
@@ -2659,6 +2985,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "tag_id": tag_id,
                 "panier_a_recharges": panier_a_recharges,
                 "panier_a_adhesions": panier_a_adhesions,
+                "panier_a_billets": panier_a_billets,
                 "moyens_paiement_csv": moyens_paiement_csv,
             }
             return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
@@ -2668,6 +2995,7 @@ class PaiementViewSet(viewsets.ViewSet):
         context = {
             "panier_a_recharges": panier_a_recharges,
             "panier_a_adhesions": panier_a_adhesions,
+            "panier_a_billets": panier_a_billets,
             "moyens_paiement_csv": moyens_paiement_csv,
         }
         return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)

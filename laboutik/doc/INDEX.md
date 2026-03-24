@@ -136,19 +136,24 @@ Sessions 06 + 07.
 - [x] `_construire_donnees_categories()` : events comme pseudo-catégories (date + mini-jauge)
 - [x] `cotton/categories.html` : rendu event (date + jauge) si `is_event` + sidebar scrollable
 - [x] Filtre sidebar par event (CSS JS existant, pas de modif JS)
-- [x] Clic tuile → panier (classe `article-container` + ID unique par Price)
+- [x] Clic tuile → panier (classe `article-container` + ID composite `{event_uuid}__{price_uuid}`)
 - [x] Jauge : Price.stock si défini, sinon Event.jauge_max
 - [x] Couleurs par event (palette cyclique 8 couleurs)
 - [x] Events sans produit filtrés de la grille et de la sidebar
 - [x] Spinner loading-states (extension HTMX officielle, délai 400ms)
 - [x] Navigation PV burger menu en hx-get (anti-blink)
 - [x] Audit a11y : aria-hidden sur icônes, visually-hidden, aria-label jauge sidebar
-- [x] 55 tests pytest passent (0 erreur)
-- [ ] Ajout `panier_a_billets` dans `panier_necessite_client` + adaptation `hx_identifier_client.html` (session 07)
-- [ ] `_creer_billets_depuis_panier()` : Reservation + Ticket + LigneArticle (atomique) (session 07)
-- [ ] Vérification atomique jauge au paiement (session 07)
-- [ ] Impression mock (console logger) (session 07)
-- [ ] Tests pytest + Playwright
+- [x] `panier_a_billets` dans `panier_necessite_client` → écran identification "Billetterie" (session 07)
+- [x] `_extraire_articles_du_panier()` : parser ID composite `__` pour BILLETTERIE (session 07)
+- [x] `_creer_billets_depuis_panier()` : Reservation(VALID) + Ticket(NOT_SCANNED) + LigneArticle (atomique) (session 07)
+- [x] Vérification atomique jauge (`select_for_update`) au paiement (session 07)
+- [x] `imprimer_billet()` stub console logger (session 07)
+- [x] `_envoyer_billets_par_email()` : webhook + email Celery avec PDF billets (session 07)
+- [x] `LigneArticle.user_email()` : ajout branche `reservation.user_commande.email` (session 07)
+- [x] `identifier_client()` récapitulatif : description "Billet {tarif} — {event}" (session 07)
+- [x] Propagation `panier_a_billets` dans tous les templates HTMX (session 07)
+- [x] 12 tests pytest (8 unitaires + 4 HTTP) + 5 tests E2E Playwright (session 07)
+- [x] 218 tests pytest + 5 E2E billetterie (0 régression)
 
 ### 4. WebSocket
 

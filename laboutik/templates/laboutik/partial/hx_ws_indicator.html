@@ -1,0 +1,232 @@
+{% load i18n %}
+<!--
+INDICATEUR WEBSOCKET — CSS + JS pour l'icone reseau dans le header
+/ WebSocket indicator — CSS + JS for the network icon in the header
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_ws_indicator.html
+
+Ce partial est inclus dans common_user_interface.html.
+Il fournit :
+- Le CSS de l'icone (vert/rouge, animation ping)
+- Le JS qui ecoute les evenements HTMX WebSocket (wsOpen, wsClose)
+- La fonction wsPing() declenchee au clic sur l'icone
+
+FLUX DU PING :
+1. Clic sur #ws-indicator → wsPing()
+2. wsPing() appelle publicInterface.send() (API HTMX ws extension)
+3. Envoie {"type": "ping", "client_ts": Date.now()}
+4. LaboutikConsumer.receive() repond {"type": "pong", "client_ts": ...}
+5. htmx:wsBeforeMessage intercepte le pong (JSON, pas du HTML)
+6. JS calcule (now - client_ts) et affiche le delai
+
+COMMUNICATION :
+- Ecoute : htmx:wsOpen, htmx:wsClose, htmx:wsError, htmx:wsBeforeMessage
+- Envoie : JSON via publicInterface.send() (wrapper HTMX ws)
+-->
+
+<style>
+  /* Indicateur reseau dans le header — petit bouton cliquable
+     / Network indicator in header — small clickable button */
+  .ws-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 0 10px;
+    height: 100%;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    transition: color 0.3s ease;
+    user-select: none;
+  }
+
+  .ws-indicator i {
+    font-size: 0.9rem;
+  }
+
+  /* Vert = connecte / Green = connected */
+  .ws-connected {
+    color: #198754;
+  }
+
+  /* Rouge = deconnecte / Red = disconnected */
+  .ws-disconnected {
+    color: #dc3545;
+  }
+
+  /* Animation flash au ping (retour du pong)
+     / Flash animation on ping (pong response) */
+  @keyframes ws-ping-flash {
+    0%   { color: #fff; }
+    100% { color: #198754; }
+  }
+  .ws-ping-flash {
+    animation: ws-ping-flash 0.4s ease-out;
+  }
+
+  /* Label de latence a droite de l'icone
+     / Latency label to the right of the icon */
+  .ws-indicator-label {
+    font-family: monospace;
+    font-size: 0.7rem;
+    min-width: 0;
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  /**
+   * Gestion de l'indicateur de connexion WebSocket
+   * / WebSocket connection indicator management
+   *
+   * LOCALISATION : laboutik/templates/laboutik/partial/hx_ws_indicator.html
+   *
+   * Ce script ecoute les evenements HTMX WebSocket pour mettre a jour
+   * la couleur de l'icone, et gere le ping/pong au clic.
+   *
+   * L'extension HTMX ws expose un publicInterface avec send() et
+   * sendImmediately(), mais PAS le socket brut. Pour recevoir le pong,
+   * on ecoute htmx:wsBeforeMessage qui est declenche pour tout message
+   * entrant (y compris le JSON du pong).
+   *
+   * DEPENDENCIES :
+   * - HTMX ws extension (emet htmx:wsOpen, htmx:wsClose, htmx:wsBeforeMessage)
+   * - LaboutikConsumer.receive() (repond aux pings)
+   * - cotton/header.html (contient #ws-indicator)
+   */
+
+  (function () {
+    // Reference au publicInterface de la WebSocket HTMX
+    // Expose send() et sendImmediately() (pas le socket brut)
+    // / Reference to the HTMX WebSocket publicInterface
+    // Exposes send() and sendImmediately() (not the raw socket)
+    var wsPublicInterface = null;
+
+    // Quand la connexion WebSocket s'ouvre → icone verte
+    // / When WebSocket connection opens → green icon
+    document.body.addEventListener("htmx:wsOpen", function (event) {
+      var indicateur = document.getElementById("ws-indicator");
+      if (indicateur) {
+        indicateur.classList.remove("ws-disconnected");
+        indicateur.classList.add("ws-connected");
+      }
+
+      // Stocker la reference au publicInterface pour envoyer des pings
+      // / Store the publicInterface reference for sending pings
+      if (event.detail && event.detail.socketWrapper) {
+        wsPublicInterface = event.detail.socketWrapper;
+      }
+    });
+
+    // Quand la connexion WebSocket se ferme → icone rouge
+    // / When WebSocket connection closes → red icon
+    document.body.addEventListener("htmx:wsClose", function () {
+      var indicateur = document.getElementById("ws-indicator");
+      if (indicateur) {
+        indicateur.classList.remove("ws-connected");
+        indicateur.classList.add("ws-disconnected");
+      }
+      var label = document.getElementById("ws-indicator-label");
+      if (label) {
+        label.textContent = "";
+      }
+      wsPublicInterface = null;
+    });
+
+    // Quand une erreur WebSocket survient → icone rouge
+    // / When a WebSocket error occurs → red icon
+    document.body.addEventListener("htmx:wsError", function () {
+      var indicateur = document.getElementById("ws-indicator");
+      if (indicateur) {
+        indicateur.classList.remove("ws-connected");
+        indicateur.classList.add("ws-disconnected");
+      }
+      wsPublicInterface = null;
+    });
+
+    // Intercepter les messages entrants pour detecter le pong
+    // htmx:wsBeforeMessage est declenche AVANT le traitement HTML
+    // Si le message est un pong JSON, on le traite et on bloque le swap HTML
+    // / Intercept incoming messages to detect pong
+    // htmx:wsBeforeMessage fires BEFORE HTML processing
+    // If the message is a pong JSON, we handle it and block the HTML swap
+    document.body.addEventListener("htmx:wsBeforeMessage", function (event) {
+      var message_brut = event.detail.message;
+
+      // Verifier si c'est un message JSON de type pong
+      // / Check if it's a JSON pong message
+      if (!message_brut || message_brut.charAt(0) !== "{") {
+        return;
+      }
+
+      try {
+        var data = JSON.parse(message_brut);
+      } catch (e) {
+        return;
+      }
+
+      if (data.type !== "pong") {
+        return;
+      }
+
+      // Empecher HTMX de traiter ce message comme du HTML
+      // / Prevent HTMX from processing this message as HTML
+      event.preventDefault();
+
+      // Calculer la latence aller-retour
+      // / Calculate round-trip latency
+      var latence_ms = Date.now() - data.client_ts;
+
+      // Afficher la latence dans le label
+      // / Display latency in the label
+      var label = document.getElementById("ws-indicator-label");
+      if (label) {
+        label.textContent = latence_ms + "ms";
+      }
+
+      // Animation flash sur l'icone
+      // / Flash animation on the icon
+      var indicateur = document.getElementById("ws-indicator");
+      if (indicateur) {
+        indicateur.classList.remove("ws-ping-flash");
+        // Force reflow pour relancer l'animation
+        // / Force reflow to restart animation
+        void indicateur.offsetWidth;
+        indicateur.classList.add("ws-ping-flash");
+      }
+    });
+
+    /**
+     * Envoie un ping au serveur via le publicInterface HTMX ws.
+     * / Sends a ping to the server via the HTMX ws publicInterface.
+     *
+     * LOCALISATION : laboutik/templates/laboutik/partial/hx_ws_indicator.html
+     *
+     * FLUX :
+     * 1. Verifie que le publicInterface est disponible
+     * 2. Envoie {"type": "ping", "client_ts": Date.now()} via sendImmediately()
+     * 3. Le handler htmx:wsBeforeMessage (ci-dessus) recevra le pong
+     */
+    window.wsPing = function () {
+      if (!wsPublicInterface) {
+        var label = document.getElementById("ws-indicator-label");
+        if (label) {
+          label.textContent = "N/A";
+        }
+        return;
+      }
+
+      ping_timestamp_envoi = Date.now();
+
+      // Envoyer le ping au consumer via l'API HTMX ws
+      // sendImmediately() envoie sans passer par la queue
+      // / Send ping to consumer via the HTMX ws API
+      // sendImmediately() sends without going through the queue
+      wsPublicInterface.sendImmediately(JSON.stringify({
+        type: "ping",
+        client_ts: ping_timestamp_envoi,
+      }));
+    };
+  })();
+</script>

@@ -1,0 +1,3 @@
+- La modal JS qui apparait lors d'un multi prix sur laboutik doit être clicable plusieurs fois.
+- checker tout le lancement avec supervisor
+- checker Traefik en mode widlcard pour la prod

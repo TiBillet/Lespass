@@ -3026,10 +3026,19 @@ class LigneArticle(models.Model):
         return f"{self.uuid}"
 
     def user_email(self):
+        # Adhesion : l'email est sur le user de la Membership
+        # / Membership: email is on the Membership's user
         if self.membership:
             if self.membership.user:
                 return self.membership.user.email
-        elif self.paiement_stripe:
+        # Billet POS : l'email est sur le user_commande de la Reservation
+        # / POS ticket: email is on the Reservation's user_commande
+        if self.reservation:
+            if self.reservation.user_commande:
+                return self.reservation.user_commande.email
+        # Paiement Stripe (Lespass online) : l'email est sur le user du Paiement_stripe
+        # / Stripe payment (Lespass online): email is on the Paiement_stripe's user
+        if self.paiement_stripe:
             if self.paiement_stripe.user:
                 return self.paiement_stripe.user.email
         return None

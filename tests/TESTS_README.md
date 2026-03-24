@@ -214,6 +214,13 @@ docker exec lespass_django poetry run pytest tests/pytest/test_admin_*.py -v
 - Export (PDF, CSV, endpoint 200/404, envoi email avec pieces jointes)
 - Securite : aria-live, XSS echappement, validation prix libre min
 - Tuiles visuelles : background-color, badges categorie, footer prix, icones menu, couleurs specifiques, data-testid, filtre categorie
+- **Billetterie POS** (session 07) :
+  - Extraction articles billet : ID composite `event__price`, article standard dans PV BILLETTERIE (2 tests unitaires)
+  - Creation Reservation + Ticket : especes sans email (to_mail=False), avec email (to_mail=True), status NOT_SCANNED (6 tests unitaires)
+  - Jauge atomique : event complet → ValueError + rollback, Price.stock epuise → ValueError (2 tests unitaires)
+  - Panier mixte : biere + billet → 2 LigneArticle + 1 Ticket (1 test unitaire)
+  - Flow HTTP complet : moyens_paiement → identification "Billetterie" → recap "Billet" → payer especes → Reservation(V) + Ticket(K) en DB (4 tests HTTP)
+  - E2E 5 scenarios : tuiles visibles avec jauge, clic → panier, VALIDER → identification, email → especes → Ticket(K) en DB, panier mixte biere+billet
 
 ### Fedow (15 tests pytest + 1 E2E)
 - Assets : creation, categories (TLF, TNF, FED, TIM, FID)
@@ -338,18 +345,18 @@ tests/
 
 | Metrique | Valeur |
 |----------|--------|
-| Tests pytest (DB-only) | 214 |
-| Tests E2E (navigateur) | 36 |
-| **Total** | **250** |
-| Temps pytest | ~30s |
-| Temps E2E | ~3 min |
-| **Temps total** | **~3.5 min** |
+| Tests pytest (DB-only) | 226 |
+| Tests E2E (navigateur) | 41 |
+| **Total** | **267** |
+| Temps pytest | ~60s |
+| Temps E2E | ~4 min |
+| **Temps total** | **~5 min** |
 
 ---
 
 ## Pieges documentes
 
-**A lire AVANT d'ecrire un nouveau test.** 27 lecons apprises pendant la migration.
+**A lire AVANT d'ecrire un nouveau test.** 34 lecons apprises pendant la migration et les sessions suivantes.
 
 ### Django multi-tenant
 
@@ -507,6 +514,52 @@ Le bouton VALIDER dans `hx_formulaire_identification_client.html` appelle
 `#addition-form` puis soumet. Les `repid-*` arrivent dans le POST car ils
 sont deja dans `#addition-form`. Si on recree un `<form hx-post>` separe,
 les articles du panier seront perdus.
+
+### Billetterie POS (session 07)
+
+**9.36 — `_, _created = get_or_create()` masque `_()` (gettext).**
+Dans une fonction qui utilise `_("texte")` pour les traductions, ne jamais
+ecrire `product_sold, _ = ProductSold.objects.get_or_create(...)`.
+Python traite `_` comme variable locale dans toute la fonction → `_("texte")`
+leve `UnboundLocalError`. Utiliser `_created` comme nom de variable.
+Meme piege avec `for _ in range()` → utiliser `for _i in range()`.
+
+**9.37 — `PointDeVente.objects.first()` depend de `poid_liste`.**
+Les fixtures d'autres tests utilisent `PointDeVente.objects.first()` pour
+trouver le premier PV (ex: "Bar"). Si un PV de test a un `poid_liste` bas
+(ou un nom alphabetiquement premier), il sera retourne a la place.
+Toujours mettre `poid_liste=9999` sur les PV de test pour qu'ils soient en
+fin de liste (`ordering = ('poid_liste', 'name')`).
+
+**9.38 — Le flow paiement via recapitulatif client n'a PAS d'ecran de confirmation.**
+`payerAvecClient('espece')` dans `hx_recapitulatif_client.html` soumet
+directement `#addition-form` vers `payer()`. Il n'y a PAS d'ecran
+`paiement-confirmation` intermediaire (contrairement au flow VT normal).
+En E2E : apres clic `[data-testid="client-btn-especes"]`, attendre
+directement `[data-testid="paiement-succes"]`.
+
+**9.39 — `#bt-retour-layer1` existe en double dans le DOM.**
+Deux elements ont l'ID `bt-retour-layer1` : un dans `#message-no-article`
+et un dans `[data-testid="paiement-succes"]`. Toujours scoper :
+`page.locator('[data-testid="paiement-succes"] #bt-retour-layer1')`.
+
+**9.40 — Playwright `install-deps` necessite root dans Docker.**
+`playwright install --with-deps chromium` echoue car `su` n'a pas de mot de passe.
+Utiliser `-u root` avec le chemin complet du virtualenv :
+```bash
+docker exec -u root lespass_django /home/tibillet/.cache/pypoetry/virtualenvs/lespass-LcPHtxiF-py3.11/bin/playwright install-deps chromium
+docker exec lespass_django poetry run playwright install chromium
+```
+
+**9.41 — `Reservation.objects.create(status=VALID)` ne declenche PAS les signaux.**
+La machine a etat `pre_save_signal_status` ignore les `_state.adding=True`.
+Creer directement en VALID saute `reservation_paid()` (webhook + email).
+Appeler `_envoyer_billets_par_email()` explicitement APRES le bloc atomic.
+
+**9.42 — `LigneArticle.user_email()` ne couvrait pas les billets POS.**
+L'ancienne version ne regardait que `membership.user.email` et
+`paiement_stripe.user.email`. Les billets POS passent par
+`reservation.user_commande.email`. Ajouter cette branche.
 
 ---
 

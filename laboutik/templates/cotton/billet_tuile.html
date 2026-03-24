@@ -59,9 +59,14 @@ La classe .article-touch couvre toute la tuile pour capter les clics.
 		<span class="billet-tuile-event-date">{{ article.event.datetime|date:"D d M — H:i" }}</span>
 		<span class="billet-tuile-tarif-name">{{ article.name }}</span>
 
-		<!-- Jauge statique — sera remplacée par WebSocket en Phase 4
-		     / Static gauge — will be replaced by WebSocket in Phase 4 -->
+		<!-- Jauge billet — mise a jour en temps reel via WebSocket (OOB swap par ID)
+		     L'ID utilise event_uuid + price_uuid pour cibler chaque tuile individuellement.
+		     Chaque tuile a sa propre jauge_max (Price.stock ou Event.jauge_max).
+		     / Ticket gauge — real-time update via WebSocket (OOB swap by ID)
+		     The ID uses event_uuid + price_uuid to target each tile individually.
+		     Each tile has its own jauge_max (Price.stock or Event.jauge_max). -->
 		{% if article.event.jauge_max %}
+		<div id="billet-jauge-{{ article.id }}">
 		<div class="billet-jauge-bar" aria-hidden="true">
 			<div class="billet-jauge-fill{% if article.event.pourcentage > 80 and not article.event.complet %} billet-jauge-fill-warning{% endif %}{% if article.event.complet %} billet-jauge-fill-full{% endif %}"
 			     style="width:{{ article.event.pourcentage }}%;"></div>
@@ -76,6 +81,7 @@ La classe .article-touch couvre toute la tuile pour capter les clics.
 				{{ vendues }} places vendues sur {{ max }}
 			{% endblocktranslate %}
 		</p>
+		</div>
 		{% endif %}
 
 		<!-- Prix pill + badge quantité

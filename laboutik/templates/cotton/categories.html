@@ -31,6 +31,7 @@
 		<div class="category-nom">{{ cat.name }}</div>
 		<div class="category-event-date">{{ cat.date|date:"D d/m" }}</div>
 		{% if cat.jauge_max %}
+		<div class="sidebar-jauge-event-{{ cat.id }}">
 		<div class="category-event-jauge" aria-hidden="true">
 			<div class="category-event-jauge-fill{% if cat.complet %} category-event-jauge-complet{% endif %}"
 			     style="width:{{ cat.pourcentage }}%;"></div>
@@ -38,6 +39,7 @@
 		<div class="category-event-places{% if cat.complet %} category-event-complet{% endif %}"
 		     aria-label="{% if cat.complet %}{% translate 'Complet' %}{% else %}{{ cat.places_vendues }} {% translate 'sur' %} {{ cat.jauge_max }}{% endif %}">
 			{% if cat.complet %}{% translate "COMPLET" %}{% else %}{{ cat.places_vendues }}/{{ cat.jauge_max }}{% endif %}
+		</div>
 		</div>
 		{% endif %}
 		<div class="category-touch"></div>

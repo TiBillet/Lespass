@@ -6,6 +6,34 @@
 		onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}'">
 		<img class="pointer" alt="TiBillet" src="{% static 'images/icon-complet-blanc.svg' %}" />
 	</div>
+	<!--
+	INDICATEUR CONNEXION WEBSOCKET — toujours visible dans le header
+	/ WebSocket connection indicator — always visible in header
+
+	LOCALISATION : cotton/header.html
+
+	Vert = connecte, rouge = deconnecte.
+	Clic = envoie un ping WebSocket et affiche la latence aller-retour.
+	Le JS est dans laboutik/templates/laboutik/partial/hx_ws_indicator.html
+	(charge dans common_user_interface.html via include).
+
+	FLUX :
+	1. htmx:wsOpen → icone passe en vert
+	2. htmx:wsClose/htmx:wsError → icone passe en rouge
+	3. Clic → envoie JSON {"type":"ping","client_ts":...} via WebSocket
+	4. Consumer repond {"type":"pong","client_ts":...}
+	5. JS calcule (now - client_ts) et affiche le delai
+	-->
+	<div id="ws-indicator"
+		 class="ws-indicator ws-disconnected"
+		 data-testid="ws-indicator"
+		 role="status"
+		 aria-label="{% translate 'Etat de la connexion' %}"
+		 onclick="wsPing()"
+		 title="{% translate 'Cliquer pour tester la latence' %}">
+		<i class="fas fa-signal" aria-hidden="true"></i>
+		<span id="ws-indicator-label" class="ws-indicator-label"></span>
+	</div>
 	<div class="header-status">
 		<div id="header-status-info1"></div>
 		<div id="header-status-info2"></div>

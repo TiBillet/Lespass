@@ -58,7 +58,18 @@ Contient : Logo TiBillet, titre du point de vente, menu burger (navigation)
 -->
 <c-header :title="title" />
 
-<!-- 
+<!--
+CONNEXION WEBSOCKET — push serveur vers navigateur
+/ WebSocket connection — server push to browser
+
+Active l'extension HTMX ws sur ce conteneur uniquement (pas sur tout le <body>).
+Le consumer LaboutikConsumer envoie le badge "Connecte" a l'ouverture,
+puis pousse les mises a jour de jauge et les notifications.
+La div #ws-status recoit le badge via OOB swap.
+-->
+<div hx-ext="ws" ws-connect="/ws/laboutik/{{ pv.id }}/" style="display: contents;">
+
+<!--
 ZONE PRINCIPALE - CONTENU DE L'APPLICATION
 Structure en 3 colonnes sur desktop :
 - Colonne 1 (gauche) : Catégories de produits
@@ -231,6 +242,12 @@ Affiché lorsque l'utilisateur clique sur VALIDER sans avoir ajouté d'articles.
 Contient un message d'erreur et un bouton de retour pour fermer l'overlay.
 -->
 {% include "laboutik/partial/no_articles.html" %}
+
+<!-- Indicateur WebSocket (CSS + JS) — charge en fin de page pour que le DOM soit pret
+     / WebSocket indicator (CSS + JS) — loaded at end of page so DOM is ready -->
+{% include "laboutik/partial/hx_ws_indicator.html" %}
+
+</div>{# Fin du conteneur WebSocket hx-ext="ws" / End of WebSocket container #}
 
 {% endblock content %}
 
