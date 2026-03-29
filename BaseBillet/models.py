@@ -1684,6 +1684,11 @@ class Event(models.Model):
         cache.delete(f'event_get_sticker_img_{self.pk}')
         cache.delete(f'event_get_social_card_{self.pk}')
 
+        # Supprime le cache de la page principale des events de ce tenant
+        # La clé est construite avec l'uuid du tenant (voir EventMVT.federated_events_filter)
+        # / Delete the main event list cache for this tenant
+        cache.delete(f'event_list_{connection.tenant.uuid}')
+
     # def get_absolute_url(self):
     #     return reverse("event-detail", args=[self.slug])
 

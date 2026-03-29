@@ -234,21 +234,21 @@
 
             {% endfor %}
 
-        </div> <!-- Fin grille -->
-
-        <!-- BOUTON CHARGER PLUS -->
-        {% if paginated_info.has_next %}
-            <div id="paginator">
-                <div class="text-center py-5">
-                    <button class="bouton-charger-plus"
-                            hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
-                            hx-target="#paginator"
-                            hx-swap="outerHTML">
-                        {% translate 'CHARGER PLUS' %}
-                    </button>
+            <!-- BOUTON CHARGER PLUS (à l'intérieur de la grille pour que les nouvelles cartes col-* s'insèrent correctement) -->
+            {% if paginated_info.has_next %}
+                <div class="col-12" id="paginator">
+                    <div class="text-center py-5">
+                        <button class="bouton-charger-plus"
+                                hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                                hx-target="#paginator"
+                                hx-swap="outerHTML">
+                            {% translate 'CHARGER PLUS' %}
+                        </button>
+                    </div>
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
+
+        </div> <!-- Fin grille -->
 
     </div>
 </section>

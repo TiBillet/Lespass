@@ -1698,9 +1698,25 @@ class EventMVT(viewsets.ViewSet):
         return None
 
     def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
+        # Cache simple : on cache uniquement la page principale (sans filtres, page 1)
+        # Les requêtes avec filtres (tags, recherche, thématique) ne sont pas cachées
+        # car elles sont rares et rapides à exécuter
+        # Clé = uuid du tenant. Invalidé dans Event.save()
+        # / Simple cache: only cache the main page (no filters, page 1)
+        # / Filtered requests are not cached (rare and fast)
+        # / Key = tenant uuid. Invalidated in Event.save()
+        page_sans_filtres = (page == 1 and not tags and not search and not thematique)
+        cache_key = None
+        if page_sans_filtres:
+            cache_key = f'event_list_{connection.tenant.uuid}'
+            cached = cache.get(cache_key)
+            if cached:
+                return cached
+
         dated_events = {}
         all_dates_set = set()       # Toutes les dates disponibles (avant pagination)
         all_tags_by_slug = {}       # slug -> Tag object (dédupliqué par slug entre tenants)
+        all_thematiques_by_slug = {}  # slug -> Tag object (thématiques des events visibles)
         paginated_info = {
             'page': page,
             'has_next': False,
@@ -1780,9 +1796,14 @@ class EventMVT(viewsets.ViewSet):
                 for tag in Tag.objects.filter(pk__in=tag_pks):
                     if tag.slug not in all_tags_by_slug:
                         all_tags_by_slug[tag.slug] = tag
+                thematique_pks = set(events.order_by().values_list('thematique__pk', flat=True))
+                thematique_pks.discard(None)
+                for th in Tag.objects.filter(pk__in=thematique_pks):
+                    if th.slug not in all_thematiques_by_slug:
+                        all_thematiques_by_slug[th.slug] = th
 
-                # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
-                paginator = Paginator(events.order_by('datetime').distinct(), 50)
+                # Pagination : 100 évènements par page par tenant
+                paginator = Paginator(events.order_by('datetime').distinct(), 100)
                 paginated_events = paginator.get_page(page)
                 paginated_info['page'] = page
                 paginated_info['has_next'] = paginated_events.has_next()
@@ -1810,8 +1831,19 @@ class EventMVT(viewsets.ViewSet):
         # / All tags sorted by name (for filter dropdown)
         sorted_all_tags = sorted(all_tags_by_slug.values(), key=lambda t: t.name.lower())
 
-        # Retourn les évènements classés par date et les infos de pagination
-        return sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags
+        # Toutes les thématiques triées par nom (pour le dropdown filtre)
+        # / All thematiques sorted by name (for filter dropdown)
+        sorted_all_thematiques = sorted(all_thematiques_by_slug.values(), key=lambda t: t.name.lower())
+
+        result = (sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags, sorted_all_thematiques)
+
+        # On met en cache seulement la page principale (sans filtres)
+        # Durée : 1 heure. Invalidé dans Event.save()
+        # / Only cache the main page (no filters). Duration: 1 hour.
+        if cache_key:
+            cache.set(cache_key, result, 3600)
+
+        return result
 
     @action(detail=False, methods=['POST', 'GET'])
     def partial_list(self, request):
@@ -1831,7 +1863,7 @@ class EventMVT(viewsets.ViewSet):
 
         thematique_slug = request.GET.get('thematique')
         ctx = {}  # le dict de context pour template
-        ctx['dated_events'], ctx['paginated_info'], _dates, _tags = self.federated_events_filter(
+        ctx['dated_events'], ctx['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
 
@@ -1866,13 +1898,12 @@ class EventMVT(viewsets.ViewSet):
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
-        context['all_thematiques'] = Tag.objects.filter(events_thematique__isnull=False).distinct()
         context['active_thematique'] = thematique_slug
         context['active_date'] = date_filter
 
         # federated_events_filter retourne aussi TOUTES les dates et tags (avant pagination)
         # / federated_events_filter also returns ALL dates and tags (before pagination)
-        context['dated_events'], context['paginated_info'], all_dates_list, all_tags_tuples = self.federated_events_filter(
+        context['dated_events'], context['paginated_info'], all_dates_list, all_tags_list, all_thematiques_list = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
 
@@ -1882,7 +1913,11 @@ class EventMVT(viewsets.ViewSet):
 
         # Tous les tags des events visibles (publiés, futurs) pour le dropdown filtre
         # / All tags from visible events (published, future) for filter dropdown
-        context['all_tags'] = all_tags_tuples
+        context['all_tags'] = all_tags_list
+
+        # Toutes les thématiques des events visibles
+        # / All thematiques from visible events
+        context['all_thematiques'] = all_thematiques_list
 
         # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
         # / Date filter: keep only the selected date for card display
@@ -1910,7 +1945,7 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def embed(self, request):
         template_context = get_context(request)
-        template_context['dated_events'], template_context['paginated_info'], _dates, _tags = self.federated_events_filter()
+        template_context['dated_events'], template_context['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter()
         template_context['embed'] = True
         response = render(
             request, "reunion/views/event/list.html",
