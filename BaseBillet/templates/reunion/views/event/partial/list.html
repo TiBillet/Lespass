@@ -92,13 +92,15 @@
 
 {% if paginated_info.has_next %}
     {#TODO : Le paginator ne classe pas. Dans le cas d'un calendrier partagé, les dates ne sont pas cohérentes. #}
-    <p class="py-3 mb-5 text-center" id="paginator">
-        <a class="btn btn-outline-primary d-block d-sm-inline"
-           hx-boost="true" hx-post="/event/partial_list/?page={{ paginated_info.page | add:1 }}"
-           hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML">
-            {% translate "Load more events" %}
-        </a>
-    </p>
+    <div id="paginator">
+        <p class="py-3 mb-5 text-center">
+            <a class="btn btn-outline-primary d-block d-sm-inline"
+               hx-boost="true" hx-post="/event/partial_list/?page={{ paginated_info.page | add:1 }}"
+               hx-include="#search_form" hx-target="#paginator" hx-swap="outerHTML">
+                {% translate "Load more events" %}
+            </a>
+        </p>
+    </div>
 {% else %}
     <div class="mb-5"></div>
 {% endif %}

@@ -40,16 +40,12 @@
                 <ul class="dropdown-menu bordure-epaisse ombre-dure-petite">
                     <li><a class="dropdown-item police-mono" href="{% url 'event-list' %}">{% translate 'Toutes les dates' %}</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    {% for date_key, events in all_dates.items %}
-                        {% if events %}
-                            {% with first_event=events.0 %}
-                                <li>
-                                    <a class="dropdown-item police-mono" href="?date={{ date_key|date:'Y-m-d' }}">
-                                        {{ first_event.datetime|date:"l d F" }}
-                                    </a>
-                                </li>
-                            {% endwith %}
-                        {% endif %}
+                    {% for date_key in all_dates %}
+                        <li>
+                            <a class="dropdown-item police-mono" href="?date={{ date_key|date:'Y-m-d' }}">
+                                {{ date_key|date:"l d F" }}
+                            </a>
+                        </li>
                     {% endfor %}
                 </ul>
             </div>
@@ -242,13 +238,15 @@
 
         <!-- BOUTON CHARGER PLUS -->
         {% if paginated_info.has_next %}
-            <div class="text-center py-5">
-                <button class="bouton-charger-plus"
-                        hx-get="?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
-                        hx-target="#event_list"
-                        hx-swap="beforeend">
-                    {% translate 'CHARGER PLUS' %}
-                </button>
+            <div id="paginator">
+                <div class="text-center py-5">
+                    <button class="bouton-charger-plus"
+                            hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                            hx-target="#paginator"
+                            hx-swap="outerHTML">
+                        {% translate 'CHARGER PLUS' %}
+                    </button>
+                </div>
             </div>
         {% endif %}
 

@@ -1699,6 +1699,8 @@ class EventMVT(viewsets.ViewSet):
 
     def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
         dated_events = {}
+        all_dates_set = set()       # Toutes les dates disponibles (avant pagination)
+        all_tags_by_slug = {}       # slug -> Tag object (dédupliqué par slug entre tenants)
         paginated_info = {
             'page': page,
             'has_next': False,
@@ -1769,6 +1771,16 @@ class EventMVT(viewsets.ViewSet):
                 if thematique:
                     events = events.filter(thematique__slug=thematique)
 
+                # Collecte de TOUTES les dates et tags avant pagination
+                # Requêtes légères : dates() et values_list() évitent les subqueries lourdes
+                # / Collect ALL dates and tags before pagination (lightweight queries)
+                all_dates_set.update(events.dates('datetime', 'day'))
+                tag_pks = set(events.order_by().values_list('tag__pk', flat=True))
+                tag_pks.discard(None)
+                for tag in Tag.objects.filter(pk__in=tag_pks):
+                    if tag.slug not in all_tags_by_slug:
+                        all_tags_by_slug[tag.slug] = tag
+
                 # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
                 paginator = Paginator(events.order_by('datetime').distinct(), 50)
                 paginated_events = paginator.get_page(page)
@@ -1790,8 +1802,16 @@ class EventMVT(viewsets.ViewSet):
             k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
         }
 
+        # Toutes les dates triées (pour le dropdown filtre)
+        # / All dates sorted (for filter dropdown)
+        sorted_all_dates = sorted(all_dates_set)
+
+        # Tous les tags triés par nom (pour le dropdown filtre)
+        # / All tags sorted by name (for filter dropdown)
+        sorted_all_tags = sorted(all_tags_by_slug.values(), key=lambda t: t.name.lower())
+
         # Retourn les évènements classés par date et les infos de pagination
-        return sorted_dict_by_date, paginated_info
+        return sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags
 
     @action(detail=False, methods=['POST', 'GET'])
     def partial_list(self, request):
@@ -1805,19 +1825,23 @@ class EventMVT(viewsets.ViewSet):
             search = str(search)
 
         tags = request.GET.getlist('tag')
-        page = request.GET.get('page', 1)
+        page = int(request.GET.get('page', 1))
 
         logger.info(f"request.GET : {request.GET}")
 
         thematique_slug = request.GET.get('thematique')
         ctx = {}  # le dict de context pour template
-        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(
+        ctx['dated_events'], ctx['paginated_info'], _dates, _tags = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
 
         # Résolution du template avec fallback vers reunion
+        # Si page > 1, on utilise le template append (sans header RSS)
         config = Configuration.get_solo()
-        template_path = get_skin_template(config, "views/event/partial/list.html")
+        if page > 1:
+            template_path = get_skin_template(config, "views/event/partial/list_append.html")
+        else:
+            template_path = get_skin_template(config, "views/event/partial/list.html")
 
         return render(request, template_path, context=ctx)
 
@@ -1839,22 +1863,26 @@ class EventMVT(viewsets.ViewSet):
 
         # Données pour les filtres (tags, thématiques, recherche)
         # / Data for filter UI (tags, thematiques, search)
-        context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
         context['all_thematiques'] = Tag.objects.filter(events_thematique__isnull=False).distinct()
         context['active_thematique'] = thematique_slug
         context['active_date'] = date_filter
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(
+
+        # federated_events_filter retourne aussi TOUTES les dates et tags (avant pagination)
+        # / federated_events_filter also returns ALL dates and tags (before pagination)
+        context['dated_events'], context['paginated_info'], all_dates_list, all_tags_tuples = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
 
-        # Le dropdown des dates doit toujours montrer toutes les dates disponibles
-        # On copie le dict AVANT filtrage, sinon la référence pointe vers le même objet
-        # / The date dropdown must always show all available dates
-        # / Copy the dict BEFORE filtering, otherwise reference points to same object
-        context['all_dates'] = dict(context['dated_events'])
+        # Toutes les dates disponibles pour le dropdown filtre (pas limité à la pagination)
+        # / All available dates for filter dropdown (not limited to pagination)
+        context['all_dates'] = all_dates_list
+
+        # Tous les tags des events visibles (publiés, futurs) pour le dropdown filtre
+        # / All tags from visible events (published, future) for filter dropdown
+        context['all_tags'] = all_tags_tuples
 
         # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
         # / Date filter: keep only the selected date for card display
@@ -1882,7 +1910,7 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def embed(self, request):
         template_context = get_context(request)
-        template_context['dated_events'], template_context['paginated_info'] = self.federated_events_filter()
+        template_context['dated_events'], template_context['paginated_info'], _dates, _tags = self.federated_events_filter()
         template_context['embed'] = True
         response = render(
             request, "reunion/views/event/list.html",
