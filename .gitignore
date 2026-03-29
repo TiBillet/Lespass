@@ -175,3 +175,7 @@ documentation_v2
 CLAUDE.md
 AGENTS.md
 /demo_data.sql.gz
+
+#dev prod like
+docker-compose-filaos.yml
+dev-filaos
