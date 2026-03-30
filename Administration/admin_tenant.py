@@ -2856,21 +2856,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
 
-        try:
-            super().save_model(request, obj, form, change)
-        except IntegrityError as err:
-            err_str = str(err)
-            if (
-                "BaseBillet_event_name_datetime" in err_str
-                or ("duplicate key value violates unique constraint" in err_str and "(name, datetime)" in err_str)
-            ):
-                messages.error(request, _("event existe déja"))
-                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
-            logger.error(err)
-            raise err
-        except Exception as err:
-            logger.error(err)
-            raise err
+        super().save_model(request, obj, form, change)
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
