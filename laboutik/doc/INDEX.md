@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans [`PHASES/`](PHASES/).
 >
-> Dernière mise à jour : 2026-03-30
+> Dernière mise à jour : 2026-03-30 (session 15 terminée)
 
 ---
 
@@ -199,24 +199,57 @@ Sessions 12 à 19. Voir `docs/superpowers/specs/2026-03-30-conformite-lne-caisse
 - [x] Management command `verify_integrity`
 - [x] 15 tests pytest (8 intégrité + 7 rapport), 276 total, 0 régression
 
-**Session 13 — Clôtures J/M/A + total perpétuel** (Ex.6, Ex.7)
-- [ ] Champs `niveau`, `numero_sequentiel`, `total_perpetuel`, `hash_lignes` sur ClotureCaisse
-- [ ] `datetime_ouverture` calculé auto (1ère vente après dernière clôture)
-- [ ] `cloturer()` connecté au RapportComptableService
-- [ ] Clôtures M/A automatiques (Celery Beat)
-- [ ] Total perpétuel incrémenté atomiquement, jamais remis à 0
-- [ ] Garde correction post-clôture
+**Session 13 — Clôtures J/M/A + total perpétuel** (Ex.6, Ex.7) ✅ FAIT
+- [x] Champs `niveau`, `numero_sequentiel`, `total_perpetuel`, `hash_lignes` sur ClotureCaisse
+- [x] `datetime_cloture` : `default=timezone.now` (plus `auto_now_add`)
+- [x] `datetime_ouverture` calculé auto (1ère vente après dernière clôture)
+- [x] `ClotureSerializer` simplifié (plus de `datetime_ouverture`)
+- [x] `cloturer()` connecté au RapportComptableService (rapport 13 clés)
+- [x] **Clôture GLOBALE au tenant** (pas par PV). `point_de_vente` nullable/informatif
+- [x] Numéro séquentiel atomique par niveau (`select_for_update`), global au tenant
+- [x] Total perpétuel incrémenté atomiquement (`F()` expression), jamais remis à 0
+- [x] Clôtures M/A automatiques (Celery Beat : M le 1er à 3h, A le 1er janv. à 4h)
+- [x] Garde anti-doublon Celery (`exists()` avant `create()`)
+- [x] Garde correction post-clôture (`ligne_couverte_par_cloture` filtre `niveau='J'`)
+- [x] Admin Unfold enrichi avec badge intégrité
+- [x] Fix bug affichage espèces (locale virgule → `|unlocalize` + conversion serveur)
+- [x] 7 tests pytest nouveaux + 7 tests existants adaptés, 283 total, 0 régression
 
-**Session 14 — Mentions légales tickets + traçabilité impressions** (Ex.3, Ex.9)
-- [ ] Modèle `ImpressionLog`
-- [ ] Ticket de vente avec raison sociale, SIRET, TVA, ventilation TVA, n° séquentiel
-- [ ] Mention "DUPLICATA" sur réimpressions
-- [ ] Traçabilité : ImpressionLog à chaque impression
+**Session 14 — Mentions légales tickets + traçabilité impressions** (Ex.3, Ex.9) ✅ FAIT
+- [x] Modèle `ImpressionLog` (uuid PK, FK ligne_article/cloture/operateur/printer, type, duplicata, format)
+- [x] `compteur_tickets` sur LaboutikConfiguration (incrémenté atomiquement avec `select_for_update`)
+- [x] Ticket de vente enrichi : raison sociale, adresse, SIRET, TVA (ou art. 293 B), n° séquentiel (T-000001)
+- [x] Ventilation TVA par taux (tableau HT/TVA/TTC) + totaux HT/TVA globaux
+- [x] Mention "*** DUPLICATA ***" (gras, double hauteur+largeur) sur réimpressions
+- [x] Traçabilité : `ImpressionLog` créé dans `imprimer_async()` via `impression_meta`
+- [x] Détection duplicata par `uuid_transaction` (garde : pas de faux positif si uuid=None)
+- [x] Builder ESC/POS étendu (sections legal, TVA breakdown, DUPLICATA)
+- [x] `pied_ticket` personnalisé sur les tickets + dans l'admin
+- [x] `ImpressionLogAdmin` lecture seule (audit log immutable)
+- [x] Index `db_index=True` sur `ImpressionLog.uuid_transaction`
+- [x] 8 tests pytest nouveaux, 291 total, 0 régression
 
-**Session 15 — Mode école + exports admin** (Ex.5)
-- [ ] `sale_origin=LABOUTIK_TEST` + `mode_ecole` sur config + bandeau UI
-- [ ] Vue détail HTML du rapport (12 sections)
-- [ ] Export PDF, CSV, Excel
+**Session 15 — Mode école + exports admin** (Ex.5) ✅ FAIT
+- [x] `sale_origin=LABOUTIK_TEST` dans SaleOrigin + `mode_ecole` BooleanField sur LaboutikConfiguration
+- [x] Bandeau "MODE ECOLE — SIMULATION" conditionnel sur l'interface POS (header.html)
+- [x] Ventes marquées `LABOUTIK_TEST` en mode école (`_creer_lignes_articles()`)
+- [x] Tickets portent "*** SIMULATION ***" en mode école (formatter + escpos_builder)
+- [x] Exclusion automatique du rapport de production (filtre exact `sale_origin=LABOUTIK`)
+- [x] Vue détail HTML du rapport (13 sections structurées, pas JSON brut)
+- [x] Export PDF A4 (WeasyPrint), CSV (délimiteur `;`), Excel (openpyxl, 1 onglet/section)
+- [x] `mode_ecole` dans l'admin LaboutikConfiguration
+- [x] 8 tests pytest nouveaux, 299 total, 0 régression
+
+**Session 15b — Enrichissement rapports comptables** ✅ FAIT
+- [x] Filtre template `|euros` : conversion centimes → affichage "127,50 €" (symbole via `Configuration.currency_code`)
+- [x] `prix_achat` IntegerField sur Product (centimes, articles POS uniquement)
+- [x] `calculer_totaux_par_moyen()` enrichi : `cashless_detail` (noms monnaies via `fedow_core.Asset`) + `currency_code`
+- [x] `calculer_detail_ventes()` enrichi : `qty_vendus`/`qty_offerts`, `prix_achat_unit`, `cout_total`, `benefice`
+- [x] `calculer_habitus()` enrichi : `depense_mediane`, `recharge_mediane`, `reste_moyenne`/`med_on_card` (via `fedow_core.Token`), `nouveaux_membres`
+- [x] Template admin `cloture_detail.html` : 13 sections en tableaux structurés (plus de `pprint`), tout en euros, tout en `{% translate %}`
+- [x] Template PDF aligné sur l'admin
+- [x] i18n fieldsets admin (Période, Totaux, Détails)
+- [x] 3 tests pytest nouveaux + 1 adapté, 302 total, 0 régression
 
 **Session 16 — Menu Ventes : Ticket X + liste**
 - [ ] Ticket X (3 sous-vues), liste des ventes scrollable, détail

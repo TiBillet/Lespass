@@ -116,7 +116,7 @@ def _make_client(admin_user, tenant):
     return client
 
 
-def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method_code, dt=None):
+def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method_code, dt=None, pv=None):
     """
     Cree une LigneArticle directement en base (sans passer par la vue).
     Creates a LigneArticle directly in DB (without going through the view).
@@ -126,6 +126,7 @@ def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method
     :param montant_centimes: int en centimes
     :param payment_method_code: PaymentMethod.CASH, .CC, .LOCAL_EURO, etc.
     :param dt: datetime optionnel (None = maintenant)
+    :param pv: PointDeVente optionnel (None = pas de PV)
     """
     # ProductSold : snapshot du produit
     # / Product snapshot
@@ -148,6 +149,7 @@ def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method
         sale_origin=SaleOrigin.LABOUTIK,
         payment_method=payment_method_code,
         status=LigneArticle.VALID,
+        point_de_vente=pv,
     )
     # Mettre a jour le datetime si specifie (auto_now_add ne permet pas de le setter)
     # / Update datetime if specified (auto_now_add prevents setting it)
@@ -176,21 +178,16 @@ class TestClotureTotauxCorrects:
         with schema_context(TENANT_SCHEMA):
             produit, prix = premier_produit_et_prix
 
-            # Moment de reference pour l'ouverture du service
-            # / Reference moment for service opening
-            datetime_ouverture = timezone.now()
-
             # Creer les 3 LigneArticle
             # / Create the 3 LigneArticle
             _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH)
             _creer_ligne_article_directe(produit, prix, 1000, PaymentMethod.CC)
             _creer_ligne_article_directe(produit, prix, 2000, PaymentMethod.LOCAL_EURO)
 
-            # Appeler l'endpoint de cloture
-            # / Call the closure endpoint
+            # Appeler l'endpoint de cloture (datetime_ouverture est calcule automatiquement)
+            # / Call the closure endpoint (datetime_ouverture is computed automatically)
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
             response = client.post('/laboutik/caisse/cloturer/', data=post_data)
@@ -219,7 +216,6 @@ class TestClotureNombreTransactions:
         """
         with schema_context(TENANT_SCHEMA):
             produit, prix = premier_produit_et_prix
-            datetime_ouverture = timezone.now()
 
             _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
             _creer_ligne_article_directe(produit, prix, 200, PaymentMethod.CC)
@@ -227,7 +223,6 @@ class TestClotureNombreTransactions:
 
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
             response = client.post('/laboutik/caisse/cloturer/', data=post_data)
@@ -244,14 +239,16 @@ class TestClotureFermeTables:
     / Verify that open tables are freed after closure."""
 
     def test_cloture_ferme_tables(
-        self, admin_user, tenant, premier_pv,
+        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
     ):
         """
-        Setup : 2 tables OCCUPEE.
+        Setup : 2 tables OCCUPEE + 1 vente (pour que la cloture ait quelque chose a cloturer).
         Action : cloturer().
         Verify : les 2 tables passent a LIBRE.
         """
         with schema_context(TENANT_SCHEMA):
+            produit, prix = premier_produit_et_prix
+
             # Creer 2 tables OCCUPEE pour le test
             # / Create 2 OCCUPIED tables for the test
             table1, _ = Table.objects.get_or_create(
@@ -268,11 +265,12 @@ class TestClotureFermeTables:
             table2.statut = Table.OCCUPEE
             table2.save(update_fields=['statut'])
 
-            datetime_ouverture = timezone.now()
+            # Il faut au moins une vente pour que la cloture fonctionne
+            # / Need at least one sale for the closure to work
+            _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
 
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
             response = client.post('/laboutik/caisse/cloturer/', data=post_data)
@@ -299,13 +297,11 @@ class TestClotureRapportJSON:
         """
         with schema_context(TENANT_SCHEMA):
             produit, prix = premier_produit_et_prix
-            datetime_ouverture = timezone.now()
 
             _creer_ligne_article_directe(produit, prix, 500, PaymentMethod.CASH)
 
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
             response = client.post('/laboutik/caisse/cloturer/', data=post_data)
@@ -315,26 +311,34 @@ class TestClotureRapportJSON:
             assert cloture is not None
             rapport = cloture.rapport_json
 
-            assert 'par_categorie' in rapport
-            assert 'par_produit' in rapport
-            assert 'par_moyen_paiement' in rapport
-            assert 'par_tva' in rapport
-            assert 'commandes' in rapport
+            # Les 13 cles du RapportComptableService
+            # / The 13 keys from RapportComptableService
+            assert 'totaux_par_moyen' in rapport
+            assert 'detail_ventes' in rapport
+            assert 'tva' in rapport
+            assert 'solde_caisse' in rapport
+            assert 'recharges' in rapport
+            assert 'adhesions' in rapport
+            assert 'remboursements' in rapport
+            assert 'habitus' in rapport
+            assert 'billets' in rapport
+            assert 'synthese_operations' in rapport
+            assert 'operateurs' in rapport
+            assert 'ventilation_par_pv' in rapport
+            assert 'infos_legales' in rapport
 
-            # Verifier la structure par_moyen_paiement
-            # / Verify par_moyen_paiement structure
-            par_mp = rapport['par_moyen_paiement']
-            assert 'especes' in par_mp
-            assert 'cb' in par_mp
-            assert 'nfc' in par_mp
+            # Verifier la structure totaux_par_moyen
+            # / Verify totaux_par_moyen structure
+            totaux = rapport['totaux_par_moyen']
+            assert 'especes' in totaux
+            assert 'carte_bancaire' in totaux
+            assert 'cashless' in totaux
 
-            # Verifier la structure par_tva
-            # / Verify par_tva structure
-            par_tva = rapport['par_tva']
-            assert isinstance(par_tva, dict)
-            # Au moins un taux de TVA doit etre present (la LigneArticle creee a un taux)
-            # / At least one VAT rate must be present
-            for cle_taux, donnees_tva in par_tva.items():
+            # Verifier la structure TVA
+            # / Verify TVA structure
+            tva = rapport['tva']
+            assert isinstance(tva, dict)
+            for cle_taux, donnees_tva in tva.items():
                 assert 'taux' in donnees_tva
                 assert 'total_ttc' in donnees_tva
                 assert 'total_ht' in donnees_tva
@@ -342,60 +346,38 @@ class TestClotureRapportJSON:
 
 
 @pytest.mark.usefixtures("test_data")
-class TestClotureFiltreDatetime:
-    """Verifie que seules les LigneArticle apres datetime_ouverture sont comptees.
-    / Verify that only LigneArticle after datetime_ouverture are counted."""
+class TestClotureCalculAutoDatetime:
+    """Verifie que datetime_ouverture est calcule automatiquement.
+    / Verify that datetime_ouverture is computed automatically."""
 
-    def test_cloture_filtre_par_datetime(
+    def test_cloture_datetime_ouverture_auto(
         self, admin_user, tenant, premier_pv, premier_produit_et_prix,
     ):
         """
-        Setup : LigneArticle hier + LigneArticle maintenant.
-        Action : cloturer(datetime_ouverture=maintenant).
-        Verify : seule la ligne d'aujourd'hui est comptee.
+        Setup : creer une vente.
+        Action : cloturer (sans datetime_ouverture dans le POST).
+        Verify : la cloture a bien un datetime_ouverture et contient la vente.
         """
         with schema_context(TENANT_SCHEMA):
             produit, prix = premier_produit_et_prix
-            from datetime import timedelta
 
-            # Creer une LigneArticle "hier" (avant la periode)
-            # / Create a LigneArticle "yesterday" (before the period)
-            hier = timezone.now() - timedelta(days=1)
-            _creer_ligne_article_directe(produit, prix, 9999, PaymentMethod.CASH, dt=hier)
-
-            # datetime_ouverture = maintenant (apres la ligne "hier")
-            # / datetime_ouverture = now (after the "yesterday" line)
-            datetime_ouverture = timezone.now()
-
-            # Creer une LigneArticle "maintenant" (dans la periode)
-            # / Create a LigneArticle "now" (in the period)
+            # Creer une LigneArticle
+            # / Create a LigneArticle
             _creer_ligne_article_directe(produit, prix, 777, PaymentMethod.CASH)
-
-            # Compter les clotures avant
-            # / Count closures before
-            nb_clotures_avant = ClotureCaisse.objects.count()
 
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
             response = client.post('/laboutik/caisse/cloturer/', data=post_data)
             assert response.status_code == 200
 
-            # La nouvelle cloture
-            # / The new closure
+            # La cloture doit exister avec datetime_ouverture renseigne
+            # / The closure must exist with datetime_ouverture set
             cloture = ClotureCaisse.objects.order_by('-datetime_cloture').first()
             assert cloture is not None
-
-            # Le total especes doit inclure la ligne 777 mais PAS la ligne 9999
-            # La ligne 9999 est avant datetime_ouverture
-            # / Cash total must include the 777 line but NOT the 9999 line
-            assert cloture.total_especes >= 777
-            # Verifier que la ligne "hier" n'est pas comptee en verifiant
-            # que 9999 n'est pas inclus (total < 9999 + 777 serait incorrect ici
-            # car d'autres tests ajoutent des lignes — on verifie juste que la ligne existe)
-            # / Verify the "yesterday" line is not counted
+            assert cloture.datetime_ouverture is not None
+            assert cloture.datetime_ouverture < cloture.datetime_cloture
             assert cloture.nombre_transactions >= 1
 
 
@@ -413,7 +395,6 @@ class TestDoubleClotureMmePeriode:
         """
         with schema_context(TENANT_SCHEMA):
             produit, prix = premier_produit_et_prix
-            datetime_ouverture = timezone.now()
 
             _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
 
@@ -421,7 +402,6 @@ class TestDoubleClotureMmePeriode:
 
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
 
@@ -430,8 +410,12 @@ class TestDoubleClotureMmePeriode:
             response1 = client.post('/laboutik/caisse/cloturer/', data=post_data)
             assert response1.status_code == 200
 
-            # Deuxieme cloture (meme periode)
-            # / Second closure (same period)
+            # Creer une nouvelle vente pour la 2eme cloture
+            # / Create a new sale for the 2nd closure
+            _creer_ligne_article_directe(produit, prix, 200, PaymentMethod.CC)
+
+            # Deuxieme cloture
+            # / Second closure
             response2 = client.post('/laboutik/caisse/cloturer/', data=post_data)
             assert response2.status_code == 200
 
@@ -447,14 +431,16 @@ class TestClotureAnnuleCommandes:
     / Verify that OPEN orders are cancelled after closure."""
 
     def test_cloture_annule_commandes_ouvertes(
-        self, admin_user, tenant, premier_pv,
+        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
     ):
         """
-        Setup : 1 commande OPEN.
+        Setup : 1 commande OPEN + 1 vente.
         Action : cloturer().
         Verify : la commande passe a CANCEL.
         """
         with schema_context(TENANT_SCHEMA):
+            produit, prix = premier_produit_et_prix
+
             # Creer une commande OPEN pour le test
             # / Create an OPEN order for the test
             commande = CommandeSauvegarde.objects.create(
@@ -462,11 +448,12 @@ class TestClotureAnnuleCommandes:
                 commentaire='Test cloture phase 5',
             )
 
-            datetime_ouverture = timezone.now()
+            # Il faut au moins une vente pour que la cloture fonctionne
+            # / Need at least one sale for the closure to work
+            _creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
 
             client = _make_client(admin_user, tenant)
             post_data = {
-                'datetime_ouverture': datetime_ouverture.isoformat(),
                 'uuid_pv': str(premier_pv.uuid),
             }
             response = client.post('/laboutik/caisse/cloturer/', data=post_data)

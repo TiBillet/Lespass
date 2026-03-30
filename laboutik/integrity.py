@@ -167,17 +167,19 @@ def calculer_total_ht(amount_ttc_centimes, taux_tva):
 
 def ligne_couverte_par_cloture(ligne):
     """
-    Verifie si une LigneArticle est couverte par une cloture existante.
+    Verifie si une LigneArticle est couverte par une cloture journaliere existante.
     Retourne la ClotureCaisse si oui, None sinon.
     Utilisee comme garde pour interdire les corrections post-cloture.
-    / Checks if a LigneArticle is covered by an existing closure.
+    Seules les clotures J sont verifiees (M/A sont des agregats, pas des periodes).
+    / Checks if a LigneArticle is covered by an existing daily closure.
     Returns the ClotureCaisse if yes, None otherwise.
-    Used as a guard to prevent post-closure corrections.
+    Only daily closures are checked (M/A are aggregates, not periods).
 
     LOCALISATION : laboutik/integrity.py
     """
     from laboutik.models import ClotureCaisse
     return ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.JOURNALIERE,
         datetime_ouverture__lte=ligne.datetime,
         datetime_cloture__gte=ligne.datetime,
     ).first()

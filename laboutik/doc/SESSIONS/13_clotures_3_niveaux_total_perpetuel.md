@@ -1,5 +1,12 @@
 # Session 13 — Clotures J/M/A + total perpetuel
 
+> **DECISION POST-SESSION** : la cloture est **GLOBALE au tenant** (pas par PV).
+> `point_de_vente` sur ClotureCaisse est nullable/informatif (d'ou declenchee).
+> Le numero sequentiel est par niveau uniquement, pas par PV.
+> Les references a `point_de_vente=pv` dans le code ci-dessous ont ete corrigees.
+> Raison : contexte festival, 40 PV, impossible de cloturer un par un.
+> La ventilation par PV est dans `rapport_json['ventilation_par_pv']`.
+
 ## CONTEXTE
 
 Tu travailles sur `laboutik/` (POS Django).

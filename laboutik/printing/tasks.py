@@ -32,21 +32,23 @@ logger = logging.getLogger(__name__)
 def imprimer_async(self, printer_pk, ticket_data, schema_name):
     """
     Imprime un ticket de maniere asynchrone via Celery.
+    Cree un ImpressionLog pour la tracabilite (LNE exigence 9).
     Retry exponentiel en cas d'echec recoverable (imprimante injoignable).
     Abandon immediat si l'imprimante n'existe plus en DB (erreur permanente).
     / Prints a ticket asynchronously via Celery.
+    Creates an ImpressionLog for tracking (LNE requirement 9).
     Exponential retry on recoverable failure (printer unreachable).
     Immediate abort if printer no longer exists in DB (permanent error).
 
     LOCALISATION : laboutik/printing/tasks.py
 
     :param printer_pk: UUID (str) de l'imprimante
-    :param ticket_data: dict avec header, articles, total, qrcode, footer
+    :param ticket_data: dict avec header, articles, total, qrcode, footer + impression_meta optionnel
     :param schema_name: nom du schema tenant (pour schema_context)
     """
     try:
         with schema_context(schema_name):
-            from laboutik.models import Printer
+            from laboutik.models import Printer, ImpressionLog
             from laboutik.printing import imprimer
 
             # Erreur permanente : l'imprimante n'existe plus → pas de retry
@@ -59,6 +61,79 @@ def imprimer_async(self, printer_pk, ticket_data, schema_name):
                     f"abandon (pas de retry)"
                 )
                 return
+
+            # --- Tracabilite : creer ImpressionLog (LNE exigence 9) ---
+            # Le dict ticket_data peut contenir une cle "impression_meta"
+            # avec les infos necessaires a la tracabilite.
+            # / Tracking: create ImpressionLog (LNE requirement 9)
+            # ticket_data may contain an "impression_meta" key
+            # with information needed for tracking.
+            impression_meta = ticket_data.pop("impression_meta", None)
+            if impression_meta:
+                uuid_transaction = impression_meta.get("uuid_transaction")
+                cloture_uuid = impression_meta.get("cloture_uuid")
+                type_justificatif = impression_meta.get("type_justificatif", "VENTE")
+                operateur_pk_str = impression_meta.get("operateur_pk")
+                format_emission = impression_meta.get("format_emission", "P")
+
+                # Detecter duplicata : une impression precedente existe-t-elle ?
+                # Sans uuid_transaction ni cloture_uuid, impossible de determiner
+                # le duplicata — on considere que c'est un original.
+                # / Detect duplicate: does a previous print exist?
+                # Without uuid_transaction or cloture_uuid, we can't determine
+                # duplicate status — treat as original.
+                est_duplicata = False
+                if uuid_transaction:
+                    nb_precedentes = ImpressionLog.objects.filter(
+                        uuid_transaction=uuid_transaction,
+                        type_justificatif=type_justificatif,
+                    ).count()
+                    est_duplicata = nb_precedentes > 0
+                elif cloture_uuid:
+                    nb_precedentes = ImpressionLog.objects.filter(
+                        cloture__uuid=cloture_uuid,
+                        type_justificatif=type_justificatif,
+                    ).count()
+                    est_duplicata = nb_precedentes > 0
+
+                # Injecter is_duplicata dans ticket_data pour le builder ESC/POS
+                # / Inject is_duplicata into ticket_data for the ESC/POS builder
+                ticket_data["is_duplicata"] = est_duplicata
+
+                # Operateur (peut etre None si tache Celery sans user)
+                # / Operator (may be None if Celery task without user)
+                operateur = None
+                if operateur_pk_str:
+                    from AuthBillet.models import TibilletUser
+                    try:
+                        operateur = TibilletUser.objects.get(pk=operateur_pk_str)
+                    except TibilletUser.DoesNotExist:
+                        pass
+
+                # Cloture (pour les tickets Z)
+                # / Closure (for Z-tickets)
+                cloture_obj = None
+                if cloture_uuid:
+                    from laboutik.models import ClotureCaisse
+                    try:
+                        cloture_obj = ClotureCaisse.objects.get(uuid=cloture_uuid)
+                    except ClotureCaisse.DoesNotExist:
+                        pass
+
+                ImpressionLog.objects.create(
+                    uuid_transaction=uuid_transaction,
+                    cloture=cloture_obj,
+                    operateur=operateur,
+                    printer=printer,
+                    type_justificatif=type_justificatif,
+                    is_duplicata=est_duplicata,
+                    format_emission=format_emission,
+                )
+
+                logger.info(
+                    f"[PRINT TASK] ImpressionLog cree — "
+                    f"type={type_justificatif} duplicata={est_duplicata}"
+                )
 
             result = imprimer(printer, ticket_data)
 

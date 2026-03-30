@@ -53,8 +53,12 @@ class RapportComptableService:
         self.debut = datetime_debut
         self.fin = datetime_fin
 
-        # Queryset de base : lignes valides de la caisse dans la periode
-        # / Base queryset: valid POS lines within the period
+        # Queryset de base : lignes valides de la caisse dans la periode.
+        # Le filtre exact sale_origin=SaleOrigin.LABOUTIK exclut automatiquement
+        # les lignes LABOUTIK_TEST (mode ecole, LNE exigence 5).
+        # / Base queryset: valid POS lines within the period.
+        # The exact sale_origin=SaleOrigin.LABOUTIK filter automatically excludes
+        # LABOUTIK_TEST lines (training mode, LNE req. 5).
         self.lignes = LigneArticle.objects.filter(
             sale_origin=SaleOrigin.LABOUTIK,
             datetime__gte=self.debut,
@@ -71,7 +75,9 @@ class RapportComptableService:
     def calculer_totaux_par_moyen(self):
         """
         Especes (CA), CB (CC), cashless (LE+LG), cheque (CH), total.
+        Enrichi avec le detail cashless par asset et le code devise.
         / Cash, credit card, cashless, check, total.
+        Enriched with cashless detail by asset and currency code.
         """
         total_especes = self.lignes.filter(
             payment_method=PaymentMethod.CASH,
@@ -93,12 +99,47 @@ class RapportComptableService:
 
         total_general = total_especes + total_carte_bancaire + total_cashless + total_cheque
 
+        # Detail cashless par asset (nom de la monnaie)
+        # / Cashless detail by asset (currency name)
+        cashless_detail = []
+        lignes_cashless_par_asset = self.lignes.filter(
+            payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
+            asset__isnull=False,
+        ).values('asset').annotate(
+            montant=Sum('amount'),
+        ).order_by('-montant')
+
+        # Prefetch tous les assets en une seule requete (evite N+1)
+        # / Prefetch all assets in one query (avoids N+1)
+        from fedow_core.models import Asset as FedowAsset
+        asset_uuids = [ligne['asset'] for ligne in lignes_cashless_par_asset]
+        assets_par_uuid = {
+            a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
+        }
+
+        for ligne in lignes_cashless_par_asset:
+            asset_uuid = ligne['asset']
+            montant = ligne['montant'] or 0
+            asset_obj = assets_par_uuid.get(asset_uuid)
+            nom_asset = asset_obj.name if asset_obj else str(_("Inconnu"))
+            code_asset = asset_obj.currency_code if asset_obj else ""
+            cashless_detail.append({
+                "nom": nom_asset,
+                "code": code_asset,
+                "montant": montant,
+            })
+
+        config_tenant = Configuration.get_solo()
+        code_devise = config_tenant.currency_code or "EUR"
+
         return {
             "especes": total_especes,
             "carte_bancaire": total_carte_bancaire,
             "cashless": total_cashless,
+            "cashless_detail": cashless_detail,
             "cheque": total_cheque,
             "total": total_general,
+            "currency_code": code_devise,
         }
 
     # ------------------------------------------------------------------
@@ -107,13 +148,17 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def calculer_detail_ventes(self):
         """
-        Par article avec nom, qty, CA TTC, CA HT, TVA. Groupe par categorie.
-        / By article with name, qty, revenue incl. tax, excl. tax, VAT. Grouped by category.
+        Par article avec qty vendus/offerts, CA TTC/HT, TVA, cout, benefice.
+        Groupe par categorie.
+        / By article with sold/gifted qty, revenue incl./excl. tax, VAT, cost, profit.
+        Grouped by category.
         """
         produits_agreg = self.lignes.values(
             'pricesold__productsold__product__name',
             'pricesold__productsold__product__categorie_pos__name',
+            'pricesold__productsold__product__prix_achat',
             'vat',
+            'payment_method',
         ).annotate(
             total_ttc=Sum('amount'),
             total_qty=Sum('qty'),
@@ -122,13 +167,51 @@ class RapportComptableService:
             'pricesold__productsold__product__name',
         )
 
-        # Regrouper par categorie / Group by category
-        categories = {}
+        # Methodes de paiement "cadeau" / Gift payment methods
+        methodes_cadeau = [PaymentMethod.LOCAL_GIFT]
+        if hasattr(PaymentMethod, 'EXTERIEUR_GIFT'):
+            methodes_cadeau.append(PaymentMethod.EXTERIEUR_GIFT)
+
+        # Regrouper par (categorie, produit, taux_tva) en separant vendus/offerts
+        # / Group by (category, product, vat_rate) separating sold/gifted
+        cle_articles = {}
         for ligne in produits_agreg:
             nom_categorie = ligne['pricesold__productsold__product__categorie_pos__name'] or str(_("Sans catégorie"))
             nom_produit = ligne['pricesold__productsold__product__name'] or str(_("Inconnu"))
+            prix_achat_unit = ligne['pricesold__productsold__product__prix_achat'] or 0
             total_ttc = ligne['total_ttc'] or 0
+            total_qty = float(ligne['total_qty'] or 0)
             taux_tva = float(ligne['vat'] or 0)
+            moyen_paiement = ligne['payment_method']
+
+            cle = f"{nom_categorie}|{nom_produit}|{taux_tva}"
+            if cle not in cle_articles:
+                cle_articles[cle] = {
+                    "categorie": nom_categorie,
+                    "nom": nom_produit,
+                    "taux_tva": taux_tva,
+                    "prix_achat_unit": prix_achat_unit,
+                    "qty_vendus": 0.0,
+                    "qty_offerts": 0.0,
+                    "ttc_vendus": 0,
+                    "ttc_offerts": 0,
+                }
+
+            if moyen_paiement in methodes_cadeau:
+                cle_articles[cle]["qty_offerts"] += total_qty
+                cle_articles[cle]["ttc_offerts"] += total_ttc
+            else:
+                cle_articles[cle]["qty_vendus"] += total_qty
+                cle_articles[cle]["ttc_vendus"] += total_ttc
+
+        # Construire la structure finale par categorie
+        # / Build final structure by category
+        categories = {}
+        for cle, article in cle_articles.items():
+            nom_categorie = article["categorie"]
+            qty_total = article["qty_vendus"] + article["qty_offerts"]
+            total_ttc = article["ttc_vendus"] + article["ttc_offerts"]
+            taux_tva = article["taux_tva"]
 
             # Calcul HT depuis TTC : HT = TTC / (1 + taux/100)
             # / Compute excl. tax from incl. tax: HT = TTC / (1 + rate/100)
@@ -138,16 +221,24 @@ class RapportComptableService:
                 total_ht = total_ttc
             total_tva = total_ttc - total_ht
 
+            cout_total = article["prix_achat_unit"] * int(qty_total)
+            benefice = total_ht - cout_total
+
             if nom_categorie not in categories:
                 categories[nom_categorie] = {"articles": [], "total_ttc": 0}
 
             categories[nom_categorie]["articles"].append({
-                "nom": nom_produit,
-                "qty": float(ligne['total_qty'] or 0),
+                "nom": article["nom"],
+                "qty_vendus": article["qty_vendus"],
+                "qty_offerts": article["qty_offerts"],
+                "qty_total": qty_total,
                 "total_ttc": total_ttc,
                 "total_ht": total_ht,
                 "total_tva": total_tva,
                 "taux_tva": taux_tva,
+                "prix_achat_unit": article["prix_achat_unit"],
+                "cout_total": cout_total,
+                "benefice": benefice,
             })
             categories[nom_categorie]["total_ttc"] += total_ttc
 
@@ -320,23 +411,97 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def calculer_habitus(self):
         """
-        Cartes NFC distinctes (carte non null). Sans N+1.
-        / Distinct NFC cards (non-null carte). No N+1.
+        Statistiques cartes NFC : nb cartes, panier moyen, medianes, soldes wallets.
+        / NFC card stats: card count, average basket, medians, wallet balances.
         """
-        lignes_avec_carte = self.lignes.filter(
-            carte__isnull=False,
-        ).values('carte').annotate(
-            total=Sum('amount'),
+        import statistics
+
+        # Depenses par carte dans la periode / Spending per card in period
+        depenses_par_carte = list(
+            self.lignes.filter(
+                carte__isnull=False,
+            ).values('carte').annotate(
+                total=Sum('amount'),
+            ).values_list('total', flat=True)
         )
 
-        nb_cartes = lignes_avec_carte.count()
-        total = sum(l['total'] or 0 for l in lignes_avec_carte)
+        nb_cartes = len(depenses_par_carte)
+        total = sum(d or 0 for d in depenses_par_carte)
         panier_moyen = int(round(total / nb_cartes)) if nb_cartes > 0 else 0
+
+        depense_mediane = 0
+        if nb_cartes > 0:
+            depense_mediane = int(statistics.median(depenses_par_carte))
+
+        # Recharges par carte dans la periode / Top-ups per card in period
+        recharges_par_carte = list(
+            self.lignes.filter(
+                carte__isnull=False,
+                pricesold__productsold__product__methode_caisse__in=[
+                    Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS,
+                ],
+            ).values('carte').annotate(
+                total=Sum('amount'),
+            ).values_list('total', flat=True)
+        )
+
+        recharge_mediane = 0
+        if recharges_par_carte:
+            recharge_mediane = int(statistics.median(recharges_par_carte))
+
+        # Soldes des wallets lies aux cartes actives (via fedow_core.Token)
+        # / Wallet balances for active cards (via fedow_core.Token)
+        reste_moyenne = 0
+        med_on_card = 0
+        try:
+            from fedow_core.models import Token as FedowToken, Asset as FedowAsset
+            from QrcodeCashless.models import CarteCashless
+
+            cartes_actives_ids = self.lignes.filter(
+                carte__isnull=False,
+            ).values_list('carte', flat=True).distinct()
+
+            # Recuperer les wallets via CarteCashless.user.wallet
+            # / Get wallets via CarteCashless.user.wallet
+            wallets_ids = CarteCashless.objects.filter(
+                pk__in=cartes_actives_ids,
+                user__isnull=False,
+                user__wallet__isnull=False,
+            ).values_list('user__wallet', flat=True)
+
+            # Soldes en monnaie locale (TLF) / Balances in local currency (TLF)
+            soldes = list(
+                FedowToken.objects.filter(
+                    wallet__in=wallets_ids,
+                    asset__category=FedowAsset.TLF,
+                ).values_list('value', flat=True)
+            )
+
+            if soldes:
+                reste_moyenne = int(round(sum(soldes) / len(soldes)))
+                med_on_card = int(statistics.median(soldes))
+        except Exception as erreur_soldes:
+            # fedow_core pas encore actif ou pas de donnees
+            # / fedow_core not yet active or no data
+            logger.warning("Calcul soldes wallets impossible : %s", erreur_soldes)
+            pass
+
+        # Nouveaux membres dans la periode / New members in period
+        from BaseBillet.models import Membership
+        nouveaux_membres = Membership.objects.filter(
+            date_added__gte=self.debut,
+            date_added__lte=self.fin,
+        ).count()
 
         return {
             "nb_cartes": nb_cartes,
             "total": total,
             "panier_moyen": panier_moyen,
+            "depense_mediane": depense_mediane,
+            "recharge_mediane": recharge_mediane,
+            "reste_moyenne": reste_moyenne,
+            "med_on_card": med_on_card,
+            "nouveaux_membres": nouveaux_membres,
         }
 
     # ------------------------------------------------------------------
@@ -459,7 +624,7 @@ class RapportComptableService:
         ).aggregate(total=Sum('amount'))['total'] or 0
         if total_sans_pv > 0:
             ventilation.append({
-                'nom': 'Non attribue',
+                'nom': str(_("Non attribué")),
                 'uuid': '',
                 'total_ttc': total_sans_pv,
             })

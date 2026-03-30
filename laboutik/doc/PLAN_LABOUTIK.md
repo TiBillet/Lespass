@@ -284,19 +284,28 @@ ArticleCommandeSauvegarde
 
 #### `ClotureCaisse`
 
+**GLOBALE au tenant** (pas par PV). Couvre tous les PV d'une soirée.
+`point_de_vente` est informatif (d'où la clôture a été déclenchée). Nullable.
+La ventilation par PV est dans `rapport_json['ventilation_par_pv']`.
+Seul un gérant peut déclencher une clôture J.
+
 ```
 ClotureCaisse
 ├── uuid (PK)
-├── point_de_vente (FK → PointDeVente, PROTECT)
+├── point_de_vente (FK → PointDeVente, SET_NULL, nullable) — informatif
 ├── responsable (FK → TibilletUser, SET_NULL)
-├── datetime_ouverture (DateTimeField)
-├── datetime_cloture (DateTimeField, auto_now_add)
+├── datetime_ouverture (DateTimeField) — calculé auto (1ère vente après dernière clôture)
+├── datetime_cloture (DateTimeField, default=timezone.now) — explicite
+├── niveau (CharField J/M/A) — J=journalière, M=mensuelle, A=annuelle
+├── numero_sequentiel (PositiveIntegerField) — par niveau, global au tenant
 ├── total_especes (IntegerField, centimes)
 ├── total_carte_bancaire (IntegerField, centimes)
 ├── total_cashless (IntegerField, centimes)
 ├── total_general (IntegerField, centimes)
+├── total_perpetuel (IntegerField, centimes) — snapshot au moment de la clôture
 ├── nombre_transactions (IntegerField) — nb LigneArticle dans la période
-└── rapport_json (JSONField) — détail par catégorie, produit, moyen de paiement, commandes
+├── hash_lignes (CharField 64) — SHA-256 des lignes couvertes
+└── rapport_json (JSONField) — 13 clés dont ventilation_par_pv
 ```
 
 ### 3.2 `BaseBillet.Product` enrichi (Product unifié)
@@ -585,7 +594,7 @@ Contient les méthodes de paiement et le flux adhésion (identification + créat
 | `PanierSerializer` | `articles[]`, méthode statique `extraire_articles_du_post()` | Panier complet |
 | `ArticleCommandeSerializer` | `product_uuid`, `price_uuid`, `qty` | Ligne de commande |
 | `CommandeSerializer` | `table_uuid`, `articles[]` | Nouvelle commande |
-| `ClotureSerializer` | `uuid_point_de_vente`, `datetime_ouverture` | Clôture |
+| `ClotureSerializer` | `uuid_pv` (datetime_ouverture calculé auto) | Clôture |
 | `AdhesionIdentificationSerializer` | `email`, `first_name`, `last_name`, `tag_id` | Identification client adhésion |
 | `EnvoyerRapportSerializer` | `email`, `uuid_cloture` | Envoi rapport clôture |
 

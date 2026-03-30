@@ -236,14 +236,10 @@ class ClotureSerializer(serializers.Serializer):
     LOCALISATION : laboutik/serializers.py
 
     Utilise par CaisseViewSet.cloturer() (POST).
+    Le datetime_ouverture est calcule automatiquement (1ere vente apres derniere cloture).
     Used by CaisseViewSet.cloturer() (POST).
+    datetime_ouverture is computed automatically (1st sale after last closure).
     """
-    datetime_ouverture = serializers.DateTimeField(
-        error_messages={
-            'required': _("La date d'ouverture du service est requise"),
-            'invalid': _("Format de date invalide"),
-        },
-    )
     uuid_pv = serializers.UUIDField(
         error_messages={
             'required': _("L'UUID du point de vente est requis"),

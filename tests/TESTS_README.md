@@ -836,6 +836,145 @@ importe. Corrige : ajoute dans `from BaseBillet.models import ..., Ticket`.
 Symptome : `NameError: name 'Ticket' is not defined` lors du paiement especes
 en billetterie.
 
+### Clotures enrichies (session 13)
+
+**9.60 — `datetime_ouverture` auto : les tests ne peuvent pas utiliser de total absolu.**
+`cloturer()` calcule `datetime_ouverture` = 1ere vente apres la derniere cloture J.
+Si on supprime les clotures d'un PV (`ClotureCaisse.objects.filter(pv=pv).delete()`)
+pour "repartir a zero", TOUTES les ventes passees (des tests precedents) sont
+incluses dans la prochaine cloture. Les totaux absolus (`assert total == 5000`)
+echouent systematiquement.
+Solution : verifier les deltas (difference entre avant et apres), pas les absolus.
+```python
+perpetuel_avant = config.total_perpetuel
+# ... cloturer ...
+config.refresh_from_db()
+delta = config.total_perpetuel - perpetuel_avant
+assert delta == 5000
+```
+
+**9.61 — `cloturer()` retourne 400 sans vente : les tests "tables" et "commandes" cassent.**
+Avant session 13, `cloturer()` acceptait toujours (meme sans vente).
+Maintenant il retourne 400 "Aucune vente a cloturer" si `datetime_ouverture`
+est `None` (pas de `LigneArticle` apres la derniere cloture).
+Les tests qui ne creent que des tables ou des commandes (sans `LigneArticle`)
+doivent ajouter au moins une vente pour que la cloture fonctionne :
+```python
+_creer_ligne_article_directe(produit, prix, 100, PaymentMethod.CASH)
+```
+
+**9.62 — `ClotureSerializer` n'a plus de `datetime_ouverture`.**
+Les tests qui envoyaient `datetime_ouverture` dans le POST continuent de
+fonctionner MAIS le champ est simplement ignore par le serializer (DRF ignore
+les champs inconnus). Cependant, c'est trompeur — retirer le champ du payload.
+
+**9.63 — Clotures M/A Celery Beat : `_generer_cloture_agregee()` est testable directement.**
+Pas besoin de mocker Celery Beat pour tester les clotures mensuelles/annuelles.
+La fonction utilitaire `_generer_cloture_agregee()` est importable directement :
+```python
+from laboutik.tasks import _generer_cloture_agregee
+_generer_cloture_agregee(niveau='M', niveau_source='J', date_debut=..., date_fin=...)
+```
+
+**9.64 — La cloture est GLOBALE au tenant, pas par PV.**
+`ClotureCaisse.point_de_vente` est nullable et informatif (d'ou la cloture
+a ete declenchee). Le numero sequentiel est par niveau (J/M/A), global au tenant.
+Ne JAMAIS filtrer par `point_de_vente` pour retrouver des clotures dans les tests.
+Utiliser `ClotureCaisse.objects.filter(niveau=ClotureCaisse.JOURNALIERE)`.
+Pour nettoyer : `ClotureCaisse.objects.all().delete()` (pas `.filter(pv=pv)`).
+
+**9.65 — Bug locale especes : `{{ total }}` rend une virgule en francais.**
+`USE_L10N=True` fait que `{{ 5.0 }}` rend `5,0` dans un template Django.
+Si cette valeur est passee dans un query param (`?total=5,0`), cote serveur
+`floatformat("5,0")` echoue silencieusement (Python `float()` n'accepte pas
+les virgules). Solution : utiliser `{{ total|unlocalize }}` dans les URLs
+et `total_brut.replace(",", ".")` cote serveur.
+
+### Mentions legales et tracabilite impressions (session 14)
+
+**9.66 — `Price.vat` est un CharField avec des codes, pas un Decimal.**
+`Price.vat` contient des codes TVA ('NA', 'DX', 'VG'...) definis dans `BaseBillet.models`.
+`LigneArticle.vat` est un DecimalField (le taux numerique). La conversion se fait
+dans `_creer_lignes_articles()` de `views.py`. Dans les tests, ne pas passer
+`price.vat` directement a `LigneArticle.create()` — utiliser un mapping :
+```python
+CODES_TVA = {'NA': 0, 'DX': 10, 'VG': 20}
+taux_tva = Decimal(str(CODES_TVA.get(str(price.vat), 0)))
+```
+Symptome : `InvalidOperation` ou `ValueError` en creant une LigneArticle de test.
+
+**9.67 — `compteur_tickets` race condition : toujours utiliser `select_for_update()`.**
+Le compteur sequentiel de tickets (sur `LaboutikConfiguration`) est incremente
+atomiquement dans `formatter_ticket_vente()`. Sans `select_for_update()`, deux
+workers Celery simultanees peuvent lire la meme valeur apres l'UPDATE :
+```python
+# BON : verrou sur la ligne pendant la transaction
+from django.db import transaction
+with transaction.atomic():
+    LaboutikConfiguration.objects.select_for_update().filter(
+        pk=config.pk,
+    ).update(compteur_tickets=F('compteur_tickets') + 1)
+    config.refresh_from_db()
+```
+Meme pattern que `numero_sequentiel` dans `cloturer()` (session 13).
+
+**9.68 — Detection duplicata : garde quand `uuid_transaction` est `None`.**
+Si `impression_meta` est fourni sans `uuid_transaction` ni `cloture_uuid`,
+le filtre `ImpressionLog.objects.filter(type_justificatif=...)` remonte TOUTES
+les impressions du type — faux positif systematique. Garde implementee :
+```python
+if not uuid_transaction and not cloture_uuid:
+    est_duplicata = False  # Pas de reference → original par defaut
+```
+
+**9.69 — `ticket_data.pop("impression_meta")` dans `imprimer_async()`.**
+Le `.pop()` retire la cle `impression_meta` du dict avant de le passer au
+builder ESC/POS (qui ne connait pas cette cle). En contexte Celery serialise,
+le dict est deserialisee independamment donc pas de side-effect. Mais si le
+code est appele en synchrone (tests), le dict de l'appelant est modifie.
+Pour les tests, passer une copie du dict ou ne pas re-utiliser `ticket_data`.
+
+**9.70 — `detail_ventes` dans `rapport_json` est un dict, pas une liste.**
+Le `RapportComptableService.calculer_detail_ventes()` retourne un dict
+`{ "categorie_nom": { "articles": [...], "total_ttc": int } }`, pas une
+liste plate d'items. Dans les templates admin, iterer avec
+`{% for cat_nom, cat_data in section.items %}` puis
+`{% for article in cat_data.articles %}`. Ne pas supposer une liste plate.
+
+**9.71 — `actions_row` Unfold sur un admin read-only.**
+`ClotureCaisseAdmin` a `has_change_permission = False`. Les `actions_row`
+s'affichent quand meme (icone `more_horiz` a droite de chaque ligne).
+Le pattern fonctionne tant que les actions retournent une `TemplateResponse`
+ou `HttpResponse` directe (pas un redirect vers un formulaire de modification).
+
+**9.72 — Filtre produit POS dans les tests : `methode_caisse` vs `categorie_article`.**
+`Product.VENTE` est un choix de `methode_caisse`, pas de `categorie_article`.
+Pour filtrer les produits de vente directe dans les tests, utiliser
+`Product.objects.filter(methode_caisse=Product.VENTE)` et non
+`Product.objects.filter(categorie_article=Product.VENTE)`.
+
+**9.73 — `calculer_totaux_par_moyen()` retourne des cles non-numeriques.**
+Apres enrichissement, le dict retourne par `calculer_totaux_par_moyen()` contient
+`cashless_detail` (list) et `currency_code` (str) en plus des montants (int).
+Les tests qui iterent sur les valeurs du dict pour verifier qu'elles sont toutes
+des entiers doivent exclure ces cles :
+```python
+for cle, valeur in totaux.items():
+    if cle in ('cashless_detail', 'currency_code'):
+        continue
+    assert isinstance(valeur, int)
+```
+
+**9.74 — `statistics.median()` leve `StatisticsError` sur liste vide.**
+Le module `statistics` de Python leve `StatisticsError` si on passe une
+liste vide a `median()`. Dans `calculer_habitus()`, toujours verifier
+`if liste:` avant d'appeler `statistics.median(liste)`.
+
+**9.75 — Soldes wallets via `fedow_core.Token` : wrap dans try/except.**
+La query `Token.objects.filter(wallet__in=..., asset__category=Asset.TLF)`
+peut echouer si fedow_core n'est pas encore peuple (pas d'asset TLF cree).
+Toujours wraper dans `try/except` avec fallback a 0.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

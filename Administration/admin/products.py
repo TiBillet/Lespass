@@ -1074,6 +1074,7 @@ class POSProductAdmin(ProductAdmin):
                 'methode_caisse',
                 'categorie_pos',
                 'tva',
+                'prix_achat',
             ),
         }),
         (_('POS display'), {

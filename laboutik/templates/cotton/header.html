@@ -1,6 +1,15 @@
-{% load static %}
 {% load static i18n %}
 <header class="header-background">
+{% if mode_ecole %}
+{# Bandeau orange visible en mode ecole (LNE exigence 5) — indique que les ventes sont des simulations #}
+{# / Orange banner visible in training mode (LNE req. 5) — indicates sales are simulations #}
+<div style="background: #ff6600; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 1.2em; position: relative; z-index: 1000;"
+     role="alert"
+     aria-label="{% translate 'Mode ecole actif' %}"
+     data-testid="banner-mode-ecole">
+    {% translate "MODE ECOLE — SIMULATION" %}
+</div>
+{% endif %}
 	<!-- link = first sales point of the primary card -->
 	<div class="header-img"
 		onclick="window.location = '{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{card.pvs_list.0.uuid}}&tag_id_cm={{card.tag_id}}'">

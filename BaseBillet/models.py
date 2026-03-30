@@ -69,6 +69,7 @@ class Weekday(models.Model):
 class SaleOrigin(models.TextChoices):
     LESPASS = "LP", _("Online platform")
     LABOUTIK = "LB", _("Cash register")
+    LABOUTIK_TEST = "LT", _("LaBoutik (test mode)")
     ADMIN = "AD", _("Administration")
     EXTERNAL = "EX", _("External")
     QRCODE_MA = "QR", _("QrCode online")
@@ -1139,6 +1140,21 @@ class Product(models.Model):
         max_length=50, blank=True, null=True,
         verbose_name=_("POS icon"),
         help_text=_("Icon name for the POS button (e.g. Bootstrap Icons class)."),
+    )
+
+    # Prix d'achat unitaire en centimes (uniquement pour les articles POS).
+    # Utilise pour le calcul du benefice estime dans les rapports de cloture.
+    # / Unit purchase price in cents (POS articles only).
+    # Used for estimated profit calculation in closure reports.
+    prix_achat = models.IntegerField(
+        default=0,
+        verbose_name=_("Purchase price (cents)"),
+        help_text=_(
+            "Prix d'achat unitaire en centimes. "
+            "Utilise pour le calcul du benefice estime. "
+            "/ Unit purchase price in cents. "
+            "Used for estimated profit calculation."
+        ),
     )
 
     def fedow_category(self):

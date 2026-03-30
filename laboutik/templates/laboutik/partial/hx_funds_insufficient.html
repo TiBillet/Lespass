@@ -1,4 +1,4 @@
-{% load static i18n %}
+{% load static i18n l10n %}
 {% load laboutik_process %}
 
 <div class="BF-col" data-testid="paiement-nfc-insuffisant" aria-live="polite">
@@ -20,7 +20,7 @@
 
   {% if payments_accepted.accepte_especes %}
   <c-bt.paiement name='{% translate "ESPÈCE" %}' total="{{ payment.missing }}" icon="fa-coins" hx-trigger="click"
-    hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing  }}"
+    hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing|unlocalize }}"
     hx-target="#confirm" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')
     {% if uuid_transaction != '' %}; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}'){% endif %}"/>
@@ -28,7 +28,7 @@
 
   {% if payments_accepted.accepte_carte_bancaire %}
   <c-bt.paiement name='{% translate "CB" %}' total="{{ payment.missing }}" icon="fa-coins"
-    hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing  }}"
+    hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire&uuid_transaction={{ uuid_transaction }}&total={{ payment.missing|unlocalize }}"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')
     {% if uuid_transaction != '' %}; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}'){% endif %}"/>

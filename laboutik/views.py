@@ -25,7 +25,7 @@ from rest_framework.decorators import action
 
 from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.db.models import Prefetch, Sum, Count, Q
+from django.db.models import F, Prefetch, Sum, Count, Q
 
 from fedow_core.exceptions import SoldeInsuffisant
 from fedow_core.models import Asset
@@ -53,6 +53,7 @@ from laboutik.serializers import (
     CommandeSerializer, ArticleCommandeSerializer,
     ClotureSerializer, EnvoyerRapportSerializer,
 )
+from laboutik.reports import RapportComptableService
 from laboutik.utils import method as payment_method
 from laboutik.integrity import calculer_hmac, obtenir_previous_hmac, calculer_total_ht
 
@@ -890,6 +891,9 @@ class CaisseViewSet(viewsets.ViewSet):
             "uuidArticlePaiementFractionne": "42ffe511-d880-4964-9b96-0981a9fe4071",
             "id_table": id_table,
             "laboutik_config": laboutik_config,
+            # Mode ecole : active le bandeau SIMULATION dans header.html (LNE exigence 5)
+            # / Training mode: enables SIMULATION banner in header.html (LNE req. 5)
+            "mode_ecole": laboutik_config.mode_ecole,
         }
         return render(request, template_name, context)
 
@@ -902,19 +906,15 @@ class CaisseViewSet(viewsets.ViewSet):
     def cloturer(self, request):
         """
         POST /laboutik/caisse/cloturer/
-        Cloture le service en cours : calcule les totaux, ferme les tables, cree le rapport.
-        Closes the current service: calculates totals, closes tables, creates the report.
+        Cloture journaliere (niveau J) : calcule le rapport via RapportComptableService,
+        cree ClotureCaisse avec numero sequentiel et total perpetuel, ferme les tables.
+        / Daily closure (level J): computes report via RapportComptableService,
+        creates ClotureCaisse with sequential number and perpetual total, closes tables.
 
         LOCALISATION : laboutik/views.py
-
-        FLUX / FLOW :
-        1. Valider avec ClotureSerializer (datetime_ouverture + uuid_pv)
-        2. Agreger les LigneArticle par moyen de paiement (depuis datetime_ouverture)
-        3. Construire le rapport JSON (par categorie, produit, moyen de paiement, commandes)
-        4. Creer ClotureCaisse
-        5. Fermer tables ouvertes et commandes OPEN
-        6. Retourner le rapport (template partial)
         """
+        # --- 1. Valider les donnees (uuid_pv uniquement) ---
+        # --- 1. Validate input (uuid_pv only) ---
         serializer = ClotureSerializer(data=request.data)
         if not serializer.is_valid():
             premiere_erreur = next(iter(serializer.errors.values()))[0]
@@ -925,16 +925,15 @@ class CaisseViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
 
-        datetime_ouverture = serializer.validated_data["datetime_ouverture"]
         uuid_pv = serializer.validated_data["uuid_pv"]
 
-        # --- Vérifier que la carte primaire a accès au PV ---
-        # --- Check that the primary card has access to the PV ---
+        # --- 2. Verifier que la carte primaire a acces au PV ---
+        # --- 2. Check that the primary card has access to the PV ---
         tag_id_carte_manager = request.POST.get("tag_id_cm", "")
         _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv)
 
-        # Charger le point de vente
-        # Load the point of sale
+        # --- 3. Charger le point de vente ---
+        # --- 3. Load the point of sale ---
         try:
             point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
         except PointDeVente.DoesNotExist:
@@ -945,141 +944,102 @@ class CaisseViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
 
-        # --- Filtrer les LigneArticle de la periode ---
-        # --- Filter LigneArticle for the period ---
-        lignes_periode = LigneArticle.objects.filter(
-            sale_origin=SaleOrigin.LABOUTIK,
-            datetime__gte=datetime_ouverture,
-            status=LigneArticle.VALID,
-        )
-
-        # --- Calculer les totaux par moyen de paiement (en centimes) ---
-        # --- Calculate totals by payment method (in cents) ---
-        total_especes = lignes_periode.filter(
-            payment_method=PaymentMethod.CASH,
-        ).aggregate(total=Sum('amount'))['total'] or 0
-
-        total_carte_bancaire = lignes_periode.filter(
-            payment_method=PaymentMethod.CC,
-        ).aggregate(total=Sum('amount'))['total'] or 0
-
-        # NFC / cashless : LOCAL_EURO (monnaie fiduciaire) + LOCAL_GIFT (cadeau)
-        # NFC / cashless: LOCAL_EURO (fiat) + LOCAL_GIFT (gift)
-        total_cashless = lignes_periode.filter(
-            payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
-        ).aggregate(total=Sum('amount'))['total'] or 0
-
-        total_general = total_especes + total_carte_bancaire + total_cashless
-        nombre_transactions = lignes_periode.count()
-
-        # --- Construire le rapport JSON ---
-        # --- Build the JSON report ---
-
-        # Par moyen de paiement / By payment method
-        rapport_par_moyen_paiement = {
-            "especes": total_especes,
-            "cb": total_carte_bancaire,
-            "nfc": total_cashless,
-        }
-
-        # Par produit / By product
-        # Agreger par nom de produit via PriceSold → ProductSold → Product
-        # Aggregate by product name via PriceSold → ProductSold → Product
-        rapport_par_produit = {}
-        produits_agreg = lignes_periode.values(
-            'pricesold__productsold__product__name',
-        ).annotate(
-            total_amount=Sum('amount'),
-            total_qty=Sum('qty'),
-        ).order_by('pricesold__productsold__product__name')
-
-        for ligne in produits_agreg:
-            nom_produit = ligne['pricesold__productsold__product__name'] or _("Inconnu")
-            rapport_par_produit[nom_produit] = {
-                "total": ligne['total_amount'] or 0,
-                "qty": float(ligne['total_qty'] or 0),
-            }
-
-        # Par categorie / By category
-        # Agreger par categorie POS du produit
-        # Aggregate by product POS category
-        rapport_par_categorie = {}
-        categories_agreg = lignes_periode.values(
-            'pricesold__productsold__product__categorie_pos__name',
-        ).annotate(
-            total_amount=Sum('amount'),
-        ).order_by('pricesold__productsold__product__categorie_pos__name')
-
-        for ligne in categories_agreg:
-            nom_categorie = ligne['pricesold__productsold__product__categorie_pos__name'] or _("Sans catégorie")
-            rapport_par_categorie[str(nom_categorie)] = ligne['total_amount'] or 0
-
-        # Par taux de TVA / By VAT rate
-        # Agreger par taux de TVA — calcule HT et TVA depuis le TTC (amount) et le taux (vat)
-        # Aggregate by VAT rate — compute HT and VAT from TTC (amount) and rate (vat)
-        rapport_par_tva = {}
-        tva_agreg = lignes_periode.values('vat').annotate(
-            total_ttc=Sum('amount'),
-        ).order_by('vat')
-
-        for ligne in tva_agreg:
-            taux_tva = float(ligne['vat'] or 0)
-            total_ttc_centimes = ligne['total_ttc'] or 0
-
-            # Calcul du HT depuis le TTC : HT = TTC / (1 + taux/100)
-            # Calculate HT from TTC: HT = TTC / (1 + rate/100)
-            if taux_tva > 0:
-                total_ht_centimes = int(round(total_ttc_centimes / (1 + taux_tva / 100)))
-                total_tva_centimes = total_ttc_centimes - total_ht_centimes
-            else:
-                total_ht_centimes = total_ttc_centimes
-                total_tva_centimes = 0
-
-            cle_tva = f"{taux_tva:.2f}%"
-            rapport_par_tva[cle_tva] = {
-                "taux": taux_tva,
-                "total_ttc": total_ttc_centimes,
-                "total_ht": total_ht_centimes,
-                "total_tva": total_tva_centimes,
-            }
-
-        # Commandes / Orders
-        commandes_total = CommandeSauvegarde.objects.filter(
-            datetime__gte=datetime_ouverture,
-        ).count()
-        commandes_annulees = CommandeSauvegarde.objects.filter(
-            datetime__gte=datetime_ouverture,
-            statut=CommandeSauvegarde.CANCEL,
-        ).count()
-        rapport_commandes = {
-            "total": commandes_total,
-            "annulees": commandes_annulees,
-        }
-
-        rapport_json = {
-            "par_categorie": rapport_par_categorie,
-            "par_produit": rapport_par_produit,
-            "par_moyen_paiement": rapport_par_moyen_paiement,
-            "par_tva": rapport_par_tva,
-            "commandes": rapport_commandes,
-        }
-
-        # --- Creer la ClotureCaisse ---
-        # --- Create the ClotureCaisse ---
-        cloture = ClotureCaisse.objects.create(
+        # --- 4. Calculer datetime_ouverture automatiquement ---
+        # Trouver la derniere cloture journaliere de ce PV
+        # / Find the last daily closure for this PV
+        derniere_cloture = ClotureCaisse.objects.filter(
             point_de_vente=point_de_vente,
-            responsable=request.user if request.user.is_authenticated else None,
-            datetime_ouverture=datetime_ouverture,
-            total_especes=total_especes,
-            total_carte_bancaire=total_carte_bancaire,
-            total_cashless=total_cashless,
-            total_general=total_general,
-            nombre_transactions=nombre_transactions,
-            rapport_json=rapport_json,
-        )
+            niveau=ClotureCaisse.JOURNALIERE,
+        ).order_by('-datetime_cloture').first()
 
-        # --- Fermer les tables ouvertes (OCCUPEE ou SERVIE → LIBRE) ---
-        # --- Close open tables (OCCUPIED or SERVED → FREE) ---
+        if derniere_cloture:
+            # datetime_ouverture = 1ere LigneArticle VALID apres la derniere cloture
+            # / datetime_ouverture = 1st VALID LigneArticle after the last closure
+            premiere_vente = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                status=LigneArticle.VALID,
+                datetime__gt=derniere_cloture.datetime_cloture,
+            ).order_by('datetime').first()
+        else:
+            # Aucune cloture precedente : 1ere LigneArticle VALID tous temps confondus
+            # / No previous closure: 1st VALID LigneArticle ever
+            premiere_vente = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                status=LigneArticle.VALID,
+            ).order_by('datetime').first()
+
+        if not premiere_vente:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Aucune vente à clôturer"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+
+        datetime_ouverture = premiere_vente.datetime
+
+        # --- 5. Calculer le rapport via RapportComptableService ---
+        # --- 5. Compute the report via RapportComptableService ---
+        datetime_cloture = dj_timezone.now()
+        service = RapportComptableService(point_de_vente, datetime_ouverture, datetime_cloture)
+        rapport = service.generer_rapport_complet()
+        totaux = rapport['totaux_par_moyen']
+        hash_lignes = service.calculer_hash_lignes()
+
+        # Extraire les totaux pour la ClotureCaisse et l'affichage
+        # / Extract totals for ClotureCaisse and display
+        total_especes = totaux['especes']
+        total_carte_bancaire = totaux['carte_bancaire']
+        total_cashless = totaux['cashless']
+        total_general = totaux['total']
+        nombre_transactions = service.lignes.count()
+
+        # --- 6. Bloc atomique : numero sequentiel + total perpetuel + creation ---
+        # La cloture est GLOBALE au tenant (couvre tous les PV).
+        # Le numero sequentiel est par niveau, pas par PV.
+        # Le point_de_vente est informatif (d'ou la cloture a ete declenchee).
+        # / Closure is GLOBAL to the tenant (covers all POS).
+        # Sequential number is per level, not per POS.
+        # point_de_vente is informational (where closure was triggered from).
+        with db_transaction.atomic():
+            # Numero sequentiel global par niveau : dernier +1, avec verrou
+            # / Global sequential number per level: last +1, with lock
+            clotures_niveau = ClotureCaisse.objects.select_for_update().filter(
+                niveau=ClotureCaisse.JOURNALIERE,
+            ).order_by('-numero_sequentiel')
+
+            dernier_seq = clotures_niveau.first()
+            numero_sequentiel = (dernier_seq.numero_sequentiel + 1) if dernier_seq else 1
+
+            # Total perpetuel : mise a jour atomique avec F() puis refresh
+            # / Perpetual total: atomic update with F() then refresh
+            config = LaboutikConfiguration.get_solo()
+            LaboutikConfiguration.objects.filter(pk=config.pk).update(
+                total_perpetuel=F('total_perpetuel') + total_general
+            )
+            config.refresh_from_db()
+
+            # Creer la ClotureCaisse — point_de_vente = informatif
+            # / Create ClotureCaisse — point_de_vente = informational
+            cloture = ClotureCaisse.objects.create(
+                point_de_vente=point_de_vente,
+                responsable=request.user if request.user.is_authenticated else None,
+                datetime_ouverture=datetime_ouverture,
+                datetime_cloture=datetime_cloture,
+                total_especes=total_especes,
+                total_carte_bancaire=total_carte_bancaire,
+                total_cashless=total_cashless,
+                total_general=total_general,
+                nombre_transactions=nombre_transactions,
+                rapport_json=rapport,
+                niveau=ClotureCaisse.JOURNALIERE,
+                numero_sequentiel=numero_sequentiel,
+                total_perpetuel=config.total_perpetuel,
+                hash_lignes=hash_lignes,
+            )
+
+        # --- 7. Fermer les tables ouvertes (OCCUPEE ou SERVIE → LIBRE) ---
+        # --- 7. Close open tables (OCCUPIED or SERVED → FREE) ---
         Table.objects.filter(
             statut__in=[Table.OCCUPEE, Table.SERVIE],
         ).update(statut=Table.LIBRE)
@@ -1090,26 +1050,30 @@ class CaisseViewSet(viewsets.ViewSet):
             statut=CommandeSauvegarde.OPEN,
         ).update(statut=CommandeSauvegarde.CANCEL)
 
+        # --- 8. Logger avec les infos enrichies ---
+        # --- 8. Log with enriched info ---
         logger.info(
             f"Cloture caisse: PV={point_de_vente.name}, "
-            f"total={total_general}cts, transactions={nombre_transactions}"
+            f"niveau={cloture.niveau}, seq={numero_sequentiel}, "
+            f"total={total_general}cts, perpetuel={config.total_perpetuel}cts, "
+            f"transactions={nombre_transactions}"
         )
 
-        # --- Convertir la TVA en euros pour l'affichage ---
-        # --- Convert VAT to euros for display ---
+        # --- 9. Convertir la TVA en euros pour l'affichage ---
+        # --- 9. Convert VAT to euros for display ---
         rapport_tva_euros = {}
-        for taux_label, tva_data in rapport_par_tva.items():
+        for taux_label, tva_data in rapport['tva'].items():
             rapport_tva_euros[taux_label] = {
                 "total_ht_euros": f"{tva_data['total_ht'] / 100:.2f}",
                 "total_tva_euros": f"{tva_data['total_tva'] / 100:.2f}",
                 "total_ttc_euros": f"{tva_data['total_ttc'] / 100:.2f}",
             }
 
-        # --- Retourner le rapport ---
-        # --- Return the report ---
+        # --- 10. Retourner le rapport ---
+        # --- 10. Return the report ---
         context = {
             "cloture": cloture,
-            "rapport": rapport_json,
+            "rapport": rapport,
             "rapport_tva_euros": rapport_tva_euros,
             "total_especes_euros": total_especes / 100,
             "total_cb_euros": total_carte_bancaire / 100,
@@ -1466,6 +1430,16 @@ def _creer_lignes_articles(
     """
     methode_db = MAPPING_CODES_PAIEMENT.get(code_methode_paiement, PaymentMethod.UNKNOWN)
 
+    # Determiner l'origine de la vente selon le mode ecole (LNE exigence 5)
+    # En mode ecole, les ventes sont marquees LABOUTIK_TEST et exclues des rapports.
+    # / Determine sale origin based on training mode (LNE req. 5)
+    # In training mode, sales are marked LABOUTIK_TEST and excluded from reports.
+    laboutik_config_pour_mode = LaboutikConfiguration.get_solo()
+    if laboutik_config_pour_mode.mode_ecole:
+        sale_origin_pour_ligne = SaleOrigin.LABOUTIK_TEST
+    else:
+        sale_origin_pour_ligne = SaleOrigin.LABOUTIK
+
     lignes_creees = []
     for article in articles_panier:
         produit = article['product']
@@ -1495,7 +1469,7 @@ def _creer_lignes_articles(
             pricesold=price_sold,
             qty=quantite,
             amount=prix_centimes,
-            sale_origin=SaleOrigin.LABOUTIK,
+            sale_origin=sale_origin_pour_ligne,
             payment_method=methode_db,
             status=LigneArticle.VALID,
             uuid_transaction=uuid_transaction,
@@ -2268,8 +2242,17 @@ class PaiementViewSet(viewsets.ViewSet):
         For cash, an input field allows entering the amount given.
         """
         moyen_paiement_choisi = request.GET.get("method")
-        total_a_payer = request.GET.get("total")
         uuid_transaction = request.GET.get("uuid_transaction", "")
+
+        # Convertir le total en float — le parametre GET peut contenir une virgule
+        # (locale francaise : USE_L10N rend "5,0" au lieu de "5.0" dans le template).
+        # / Convert total to float — GET param may contain comma (French locale).
+        total_brut = request.GET.get("total", "0")
+        total_brut = total_brut.replace(",", ".")
+        try:
+            total_a_payer = float(total_brut)
+        except (ValueError, TypeError):
+            total_a_payer = 0
 
         context = {
             "method": moyen_paiement_choisi,
@@ -3331,6 +3314,16 @@ class PaiementViewSet(viewsets.ViewSet):
         ticket_data = formatter_ticket_vente(
             lignes_du_paiement, point_de_vente, operateur, moyen_paiement,
         )
+
+        # Ajouter les metadonnees d'impression pour la tracabilite (LNE exigence 9)
+        # / Add print metadata for tracking (LNE requirement 9)
+        ticket_data["impression_meta"] = {
+            "uuid_transaction": uuid_transaction_str,
+            "cloture_uuid": None,
+            "type_justificatif": "VENTE",
+            "operateur_pk": str(operateur.pk) if operateur else None,
+            "format_emission": "P",
+        }
 
         imprimer_async.delay(
             str(point_de_vente.printer.pk),

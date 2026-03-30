@@ -1,0 +1,493 @@
+{% extends "admin/base_site.html" %}
+{% load i18n laboutik_filters %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 960px; margin: 0 auto; padding: 20px;">
+
+    {# ── En-tête du rapport / Report header ── #}
+    <div style="margin-bottom: 24px; padding: 16px; background: #f8f9fa; border-radius: 8px;" data-testid="section-header">
+        <h2 style="margin: 0 0 12px;">{{ title }}</h2>
+        <p style="margin: 4px 0; color: #666;">
+            <strong>{% translate "Level" %}:</strong> {{ cloture.get_niveau_display }}
+            — <strong>{% translate "Number" %}:</strong> #{{ cloture.numero_sequentiel }}
+        </p>
+        <p style="margin: 4px 0; color: #666;">
+            <strong>{% translate "Responsible" %}:</strong> {{ cloture.responsable }}
+        </p>
+        {% if cloture.point_de_vente %}
+        <p style="margin: 4px 0; color: #666;">
+            <strong>{% translate "Point of sale" %}:</strong> {{ cloture.point_de_vente.name }}
+        </p>
+        {% endif %}
+        <p style="margin: 4px 0; color: #666;">
+            <strong>{% translate "Period" %}:</strong>
+            {{ cloture.datetime_ouverture|default:"—" }} → {{ cloture.datetime_cloture }}
+        </p>
+    </div>
+
+    {# ── Section 1 : Totaux par moyen de paiement / Totals by payment method ── #}
+    {% with section=rapport.totaux_par_moyen %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-totaux-par-moyen">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Totals by payment method" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Payment method" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Cash" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.especes|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Credit card" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.carte_bancaire|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Cashless" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.cashless|euros }}</td>
+                </tr>
+                {# Sous-détail cashless par monnaie / Cashless detail per currency #}
+                {% if section.cashless_detail %}
+                {% for asset in section.cashless_detail %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; padding-left: 24px; color: #666; font-style: italic;">↳ {{ asset.nom }} ({{ asset.code }})</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right; color: #666;">{{ asset.montant|euros }}</td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Check" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.cheque|euros }}</td>
+                </tr>
+                {# Ligne total / Total row #}
+                <tr style="background: #e8f5e9; font-weight: bold;">
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 2 : Détail des ventes par catégorie / Sales detail by category ── #}
+    {% with section=rapport.detail_ventes %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-detail-ventes">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Sales detail" %}</h3>
+        {% for categorie_nom, categorie_data in section.items %}
+        <h4 style="margin: 12px 0 4px; color: #555;">{{ categorie_nom }}</h4>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Product" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Sold" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Free" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Total qty" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "HT" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "VAT" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "TTC" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Cost" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Profit" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for article in categorie_data.articles %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ article.nom|default:"—" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.qty_vendus|default:0 }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.qty_offerts|default:0 }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.qty_total|default:0 }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.total_ht|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.total_tva|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.total_ttc|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.cout_total|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.benefice|euros }}</td>
+                </tr>
+                {% endfor %}
+                {# Total de la catégorie / Category total #}
+                <tr style="background: #e8f5e9; font-weight: bold;">
+                    <td colspan="6" style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %} {{ categorie_nom }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ categorie_data.total_ttc|euros }}</td>
+                    <td colspan="2" style="padding: 6px 8px; border: 1px solid #ddd;"></td>
+                </tr>
+            </tbody>
+        </table>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 3 : TVA / VAT breakdown ── #}
+    {% with section=rapport.tva %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-tva">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "VAT breakdown" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Rate" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "HT" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "VAT" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "TTC" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for taux_label, tva_data in section.items %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ taux_label }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ tva_data.total_ht|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ tva_data.total_tva|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ tva_data.total_ttc|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 4 : Solde caisse / Cash register balance ── #}
+    {% with section=rapport.solde_caisse %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-solde-caisse">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Cash register balance" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Opening float" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.fond_de_caisse|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Cash income" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.entrees_especes|euros }}</td>
+                </tr>
+                <tr style="background: #e8f5e9; font-weight: bold;">
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Balance" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.solde|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 5 : Recharges cashless / Cashless top-ups ── #}
+    {% with section=rapport.recharges %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-recharges">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Cashless top-ups" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Type" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Payment method" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Amount" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Count" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code, rec in section.detail.items %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ rec.methode_caisse|default:code }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ rec.moyen_paiement|default:"—" }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ rec.total|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ rec.nb }}</td>
+                </tr>
+                {% endfor %}
+                <tr style="background: #e8f5e9; font-weight: bold;">
+                    <td colspan="2" style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.total|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 6 : Adhésions / Memberships ── #}
+    {% with section=rapport.adhesions %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-adhesions">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Memberships" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Payment method" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Count" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code, adh in section.detail.items %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ code }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ adh.nb }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ adh.total|euros }}</td>
+                </tr>
+                {% endfor %}
+                <tr style="background: #e8f5e9; font-weight: bold;">
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.nb }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 7 : Remboursements / Refunds ── #}
+    {% with section=rapport.remboursements %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-remboursements">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Refunds" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Count" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.nb }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Total" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 8 : Habitus (statistiques clientèle) / Customer statistics ── #}
+    {% with section=rapport.habitus %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-habitus">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Customer statistics" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Statistic" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Value" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Cards used" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.nb_cartes }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total spent" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.total|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Average basket" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.panier_moyen|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Median spend" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.depense_mediane|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Median top-up" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.recharge_mediane|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Average remaining on card" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.reste_moyenne|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Median remaining on card" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.med_on_card|euros }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "New members" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.nouveaux_membres }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 9 : Billets / Tickets ── #}
+    {% with section=rapport.billets %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-billets">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Tickets" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Event" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Count" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event_nom, event_data in section.detail.items %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ event_nom }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ event_data.nb }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ event_data.total|euros }}</td>
+                </tr>
+                {% endfor %}
+                <tr style="background: #e8f5e9; font-weight: bold;">
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.nb }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 10 : Synthèse des opérations / Operations summary ── #}
+    {% with section=rapport.synthese_operations %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-synthese-operations">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Operations summary" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Operation" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Cash" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Credit card" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Cashless" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Total" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for op_nom, op_data in section.items %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{{ op_nom|title }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.especes|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.carte_bancaire|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.cashless|euros }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">{{ op_data.total|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 11 : Opérateurs / Operators ── #}
+    <div style="margin-bottom: 20px;" data-testid="section-operateurs">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Operators" %}</h3>
+        {% with section=rapport.operateurs %}
+        {% if section %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Operator" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for op_nom, op_montant in section.items %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ op_nom }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_montant|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: #999; font-style: italic;">{% translate "Not yet available" %}</p>
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    {# ── Section 12 : Ventilation par point de vente / Breakdown by point of sale ── #}
+    {% with section=rapport.ventilation_par_pv %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-ventilation-par-pv">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Breakdown by point of sale" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f0f0f0;">
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: left;">{% translate "Point of sale" %}</th>
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Revenue incl. tax" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pv in section %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ pv.nom }}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ pv.total_ttc|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 13 : Informations légales / Legal information ── #}
+    {% with section=rapport.infos_legales %}
+    {% if section %}
+    <div style="margin-bottom: 20px;" data-testid="section-infos-legales">
+        <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Legal information" %}</h3>
+        <table style="width: 100%; border-collapse: collapse;">
+            <tbody>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Organisation" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.organisation|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Address" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.adresse|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Postal code" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.code_postal|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "City" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.ville|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "SIREN" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.siren|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "VAT number" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.tva_number|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Email" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.email|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Phone" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd;">{{ section.phone|default:"—" }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Intégrité / Integrity ── #}
+    <div style="margin-top: 24px; padding: 12px; background: #f0f0f0; border-radius: 4px; font-size: 0.85em; color: #666;" data-testid="section-integrite">
+        <strong>{% translate "Integrity" %}:</strong><br>
+        hash_lignes = {{ cloture.hash_lignes|default:"—" }}<br>
+        total_perpetuel = {{ cloture.total_perpetuel|euros }}
+    </div>
+
+    {# ── Bouton retour / Back button ── #}
+    <div style="margin-top: 20px;">
+        <a href="../" style="display: inline-block; padding: 8px 16px; background: #0066cc; color: white; border-radius: 6px; text-decoration: none;">
+            &larr; {% translate "Back to list" %}
+        </a>
+    </div>
+</div>
+{% endblock %}

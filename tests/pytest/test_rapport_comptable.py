@@ -141,12 +141,20 @@ class TestTotauxParMoyen:
 
     def test_totaux_tous_entiers(self, tenant, service):
         """
-        Tous les montants sont des entiers (centimes).
-        / All amounts are integers (cents).
+        Les montants numeriques sont des entiers (centimes).
+        Les cles non-numeriques (cashless_detail, currency_code) sont ignorees.
+        / Numeric amounts are integers (cents).
+        Non-numeric keys (cashless_detail, currency_code) are skipped.
         """
+        # Cles non-numeriques ajoutees par l'enrichissement
+        # / Non-numeric keys added by enrichment
+        CLES_NON_NUMERIQUES = {'cashless_detail', 'currency_code'}
+
         with tenant_context(tenant):
             totaux = service.calculer_totaux_par_moyen()
             for cle, valeur in totaux.items():
+                if cle in CLES_NON_NUMERIQUES:
+                    continue
                 assert isinstance(valeur, int), f"{cle} n'est pas un int: {type(valeur)}"
 
 

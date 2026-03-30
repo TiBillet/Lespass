@@ -8,6 +8,7 @@ LOCALISATION : laboutik/models.py
 import uuid as uuid_module
 
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from solo.models import SingletonModel
 
@@ -138,6 +139,39 @@ class LaboutikConfiguration(SingletonModel):
             "Ne doit jamais etre remis a zero. "
             "/ Cumulative total of all closures since first use. "
             "Must never be reset to zero."
+        ),
+    )
+
+    # --- Compteur sequentiel de tickets de vente (conformite LNE) ---
+    # Incremente a chaque ticket de vente imprime. Global au tenant.
+    # / Sequential receipt counter (LNE compliance). Incremented per printed sale ticket. Global to tenant.
+    compteur_tickets = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Receipt counter"),
+        help_text=_(
+            "Compteur sequentiel de tickets de vente. "
+            "Incremente automatiquement a chaque impression. "
+            "/ Sequential receipt counter. "
+            "Auto-incremented on each print."
+        ),
+    )
+
+    # --- Mode ecole / formation (conformite LNE exigence 5) ---
+    # Quand actif, les ventes sont marquees LABOUTIK_TEST.
+    # Le bandeau "MODE ECOLE" est visible sur l'interface POS.
+    # Les tickets portent la mention "SIMULATION".
+    # / Training mode (LNE compliance req. 5).
+    # When active, sales are marked LABOUTIK_TEST.
+    # "TRAINING MODE" banner visible on POS interface.
+    # Receipts carry "SIMULATION" label.
+    mode_ecole = models.BooleanField(
+        default=False,
+        verbose_name=_("Training mode"),
+        help_text=_(
+            "Active le mode ecole. Les ventes sont marquees comme fictives "
+            "et exclues des rapports de production. "
+            "/ Enables training mode. Sales are marked as fictitious "
+            "and excluded from production reports."
         ),
     )
 
@@ -791,12 +825,14 @@ class ArticleCommandeSauvegarde(models.Model):
 
 class ClotureCaisse(models.Model):
     """
-    Rapport de cloture de caisse.
-    Un rapport est cree a chaque fin de service pour un point de vente.
+    Rapport de cloture de caisse. GLOBAL au tenant (couvre tous les PV).
+    Un rapport est cree a chaque fin de soiree/service.
     Les totaux sont en centimes (int).
-    / Cash register closure report.
-    A report is created at the end of each service for a point of sale.
+    La ventilation par PV est dans rapport_json['ventilation_par_pv'].
+    / Cash register closure report. GLOBAL to the tenant (covers all POS).
+    A report is created at the end of each evening/service.
     All totals are in cents (int).
+    Per-POS breakdown is in rapport_json['ventilation_par_pv'].
 
     LOCALISATION : laboutik/models.py
     """
@@ -804,13 +840,23 @@ class ClotureCaisse(models.Model):
         primary_key=True, default=uuid_module.uuid4, editable=False, unique=True, db_index=True,
     )
 
-    # Point de vente qui a declenche la cloture
-    # / Point of sale that triggered the closure
+    # Point de vente depuis lequel la cloture a ete declenchee (informatif).
+    # Nullable : la cloture couvre TOUT le tenant, pas un seul PV.
+    # La ventilation par PV est dans rapport_json['ventilation_par_pv'].
+    # / Point of sale from which the closure was triggered (informational).
+    # Nullable: the closure covers the ENTIRE tenant, not a single POS.
+    # Per-POS breakdown is in rapport_json['ventilation_par_pv'].
     point_de_vente = models.ForeignKey(
-        PointDeVente, on_delete=models.PROTECT,
+        PointDeVente, on_delete=models.SET_NULL,
+        blank=True, null=True,
         related_name='clotures',
-        verbose_name=_("Point of sale"),
-        help_text=_("Point of sale that triggered this closure."),
+        verbose_name=_("Triggered from POS"),
+        help_text=_(
+            "Point de vente depuis lequel la cloture a ete declenchee (informatif). "
+            "La cloture couvre tout le tenant. "
+            "/ POS from which closure was triggered (informational). "
+            "Closure covers the entire tenant."
+        ),
     )
 
     # Responsable (caissier) qui a declenche la cloture
@@ -830,11 +876,12 @@ class ClotureCaisse(models.Model):
         help_text=_("Start of the service period covered by this closure."),
     )
 
-    # Moment de la cloture (automatique a la creation)
-    # / Closure timestamp (automatic on creation)
+    # Moment de la cloture (explicite, pas auto_now_add)
+    # / Closure timestamp (explicit, not auto_now_add)
     datetime_cloture = models.DateTimeField(
-        auto_now_add=True,
+        default=timezone.now,
         verbose_name=_("Closure datetime"),
+        help_text=_("Moment of the closure. Set explicitly, not auto_now_add."),
     )
 
     # Totaux par moyen de paiement — en centimes (ex: 50.10€ = 5010)
@@ -866,6 +913,63 @@ class ClotureCaisse(models.Model):
         help_text=_("Number of LigneArticle records in this period."),
     )
 
+    # --- Niveau de cloture (conformite LNE exigence 6) ---
+    # J = journaliere (declenchee par le caissier)
+    # M = mensuelle (automatique Celery Beat, agrege les J du mois)
+    # A = annuelle (automatique Celery Beat, agrege les M de l'annee)
+    # / Closure level (LNE compliance req. 6)
+    JOURNALIERE = 'J'
+    MENSUELLE = 'M'
+    ANNUELLE = 'A'
+    NIVEAU_CHOICES = [
+        (JOURNALIERE, _('Daily')),
+        (MENSUELLE, _('Monthly')),
+        (ANNUELLE, _('Annual')),
+    ]
+    niveau = models.CharField(
+        max_length=1, choices=NIVEAU_CHOICES, default=JOURNALIERE,
+        verbose_name=_("Closure level"),
+        help_text=_(
+            "J = journaliere (caissier), M = mensuelle (auto), A = annuelle (auto). "
+            "/ J = daily (cashier), M = monthly (auto), A = annual (auto)."
+        ),
+    )
+
+    # Numero sequentiel par niveau, sans trou (conformite LNE exigence 6)
+    # Global au tenant — pas par PV (la cloture couvre tout le tenant).
+    # / Sequential number per level, no gap (LNE compliance req. 6)
+    # Global to the tenant — not per POS (closure covers the entire tenant).
+    numero_sequentiel = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Sequential number"),
+        help_text=_(
+            "Numero sequentiel par niveau de cloture. Sans trou. Global au tenant. "
+            "/ Sequential number per closure level. No gap. Global to tenant."
+        ),
+    )
+
+    # Total perpetuel snapshot au moment de la cloture (conformite LNE exigence 7)
+    # / Perpetual total snapshot at closure time (LNE compliance req. 7)
+    total_perpetuel = models.IntegerField(
+        default=0,
+        verbose_name=_("Perpetual total (cents)"),
+        help_text=_(
+            "Total cumule depuis la mise en service, snapshot au moment de cette cloture. "
+            "/ Cumulative total since first use, snapshot at this closure time."
+        ),
+    )
+
+    # Hash SHA-256 des LigneArticle couvertes (filet de securite)
+    # / SHA-256 hash of covered LigneArticle (safety net)
+    hash_lignes = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name=_("Lines integrity hash"),
+        help_text=_(
+            "SHA-256 des LigneArticle couvertes. Filet de securite. "
+            "/ SHA-256 of covered LigneArticle. Safety net."
+        ),
+    )
+
     # Detail complet du rapport (par categorie, produit, moyen de paiement, commandes)
     # / Full report detail (by category, product, payment method, orders)
     rapport_json = models.JSONField(
@@ -881,3 +985,172 @@ class ClotureCaisse(models.Model):
         ordering = ('-datetime_cloture',)
         verbose_name = _('Cash register closure')
         verbose_name_plural = _('Cash register closures')
+
+
+# --- Journal des impressions (conformite LNE exigence 9) ---
+# Chaque impression physique ou electronique d'un justificatif est tracee.
+# / Print audit log (LNE compliance req. 9).
+# Every physical or electronic printing of a receipt is recorded.
+
+class ImpressionLog(models.Model):
+    """
+    Journal d'audit des impressions de justificatifs (tickets de vente, clotures, billets).
+    Chaque impression — y compris les duplicatas — est tracee de facon immutable.
+    Requis par la certification LNE (exigence 9 : tracabilite des impressions).
+    / Audit log for receipt printing (sale tickets, closures, event tickets).
+    Every print — including duplicates — is recorded immutably.
+    Required by LNE certification (req. 9: print traceability).
+
+    LOCALISATION : laboutik/models.py
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False, unique=True, db_index=True,
+    )
+
+    # Horodatage de l'impression — pose automatiquement a la creation.
+    # / Print timestamp — set automatically on creation.
+    datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Print datetime"),
+    )
+
+    # Ligne d'article imprimee (nullable : pour les clotures ou billets sans LigneArticle)
+    # / Printed article line (nullable: for closures or tickets without a LigneArticle)
+    ligne_article = models.ForeignKey(
+        'BaseBillet.LigneArticle',
+        on_delete=models.PROTECT,
+        blank=True, null=True,
+        related_name='impressions',
+        verbose_name=_("Article line"),
+        help_text=_(
+            "Ligne d'article concernee par cette impression. "
+            "Null pour les clotures et billets. "
+            "/ Article line for this print. Null for closures and tickets."
+        ),
+    )
+
+    # UUID de transaction — regroupe plusieurs lignes d'un meme ticket de vente.
+    # Un ticket multi-articles peut couvrir N LigneArticle avec le meme uuid_transaction.
+    # / Transaction UUID — groups multiple lines of the same sale receipt.
+    # A multi-article receipt may cover N LigneArticle with the same uuid_transaction.
+    uuid_transaction = models.UUIDField(
+        blank=True, null=True, db_index=True,
+        verbose_name=_("Transaction UUID"),
+        help_text=_(
+            "Identifiant de transaction pour regrouper les lignes d'un meme ticket. "
+            "/ Transaction identifier to group lines of the same receipt."
+        ),
+    )
+
+    # Cloture de caisse associee (uniquement pour les justificatifs de cloture)
+    # / Associated cash register closure (only for closure receipts)
+    cloture = models.ForeignKey(
+        ClotureCaisse,
+        on_delete=models.PROTECT,
+        blank=True, null=True,
+        related_name='impressions',
+        verbose_name=_("Closure"),
+        help_text=_(
+            "Cloture de caisse concernee par cette impression. "
+            "Null pour les tickets de vente et billets. "
+            "/ Cash register closure for this print. Null for sale tickets and event tickets."
+        ),
+    )
+
+    # Operateur qui a declenche l'impression (caissier connecte au moment de l'impression)
+    # / Operator who triggered the print (cashier logged in at print time)
+    operateur = models.ForeignKey(
+        TibilletUser,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='impressions',
+        verbose_name=_("Operator"),
+        help_text=_(
+            "Caissier connecte au moment de l'impression. "
+            "/ Cashier who triggered this print."
+        ),
+    )
+
+    # Imprimante utilisee (peut etre nulle si impression electronique)
+    # / Printer used (may be null for electronic receipts)
+    printer = models.ForeignKey(
+        Printer,
+        on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='impressions',
+        verbose_name=_("Printer"),
+        help_text=_(
+            "Imprimante physique utilisee pour cette impression. "
+            "Null pour les emissions electroniques. "
+            "/ Physical printer used for this print. Null for electronic receipts."
+        ),
+    )
+
+    # Type de justificatif imprime
+    # VENTE : ticket de vente (transaction POS)
+    # CLOTURE : rapport de cloture de caisse
+    # COMMANDE : bon de commande cuisine / bar
+    # BILLET : billet d'entree evenement
+    # / Type of receipt printed
+    # VENTE: sale receipt (POS transaction)
+    # CLOTURE: cash register closure report
+    # COMMANDE: kitchen / bar order ticket
+    # BILLET: event entry ticket
+    VENTE = 'VENTE'
+    CLOTURE = 'CLOT'
+    COMMANDE = 'COMM'
+    BILLET = 'BILL'
+    TYPE_JUSTIFICATIF_CHOICES = [
+        (VENTE, _('Sale receipt')),
+        (CLOTURE, _('Closure report')),
+        (COMMANDE, _('Order ticket')),
+        (BILLET, _('Event ticket')),
+    ]
+    type_justificatif = models.CharField(
+        max_length=10, choices=TYPE_JUSTIFICATIF_CHOICES, default=VENTE,
+        verbose_name=_("Receipt type"),
+        help_text=_(
+            "Type de justificatif imprime : VENTE, CLOT, COMM ou BILL. "
+            "/ Type of printed receipt: VENTE, CLOT, COMM or BILL."
+        ),
+    )
+
+    # Duplicata : True si cette impression est une re-impression d'un justificatif deja emis.
+    # Chaque duplicata doit etre mentionne sur le ticket (exigence LNE).
+    # / Duplicate: True if this print is a re-print of an already-issued receipt.
+    # Each duplicate must be mentioned on the ticket (LNE requirement).
+    is_duplicata = models.BooleanField(
+        default=False,
+        verbose_name=_("Duplicate"),
+        help_text=_(
+            "Cocher si cette impression est un duplicata (re-impression). "
+            "/ Check if this print is a duplicate (re-print)."
+        ),
+    )
+
+    # Format d'emission : P = papier (imprimante thermique), E = electronique (email/PDF)
+    # / Emission format: P = paper (thermal printer), E = electronic (email/PDF)
+    PAPIER = 'P'
+    ELECTRONIQUE = 'E'
+    FORMAT_EMISSION_CHOICES = [
+        (PAPIER, _('Paper')),
+        (ELECTRONIQUE, _('Electronic')),
+    ]
+    format_emission = models.CharField(
+        max_length=1, choices=FORMAT_EMISSION_CHOICES, default=PAPIER,
+        verbose_name=_("Emission format"),
+        help_text=_(
+            "P = papier (imprimante thermique), E = electronique (email/PDF). "
+            "/ P = paper (thermal printer), E = electronic (email/PDF)."
+        ),
+    )
+
+    def __str__(self):
+        duplicata_label = f" [{_('DUPLICATE')}]" if self.is_duplicata else ""
+        return f"{self.get_type_justificatif_display()}{duplicata_label} — {self.datetime:%Y-%m-%d %H:%M}"
+
+    class Meta:
+        ordering = ('-datetime',)
+        verbose_name = _('Print log')
+        verbose_name_plural = _('Print logs')

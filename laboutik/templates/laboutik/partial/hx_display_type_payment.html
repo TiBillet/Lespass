@@ -1,4 +1,4 @@
-{% load static i18n %}
+{% load static i18n l10n %}
 {% load laboutik_process %}
 <!--
 ECRAN CHOIX DU MOYEN DE PAIEMENT / IDENTIFICATION CLIENT
@@ -126,7 +126,7 @@ FLUX :
   {% endif %}
 
   {% if 'espece' in moyens_paiement %}
-  <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total }}"
+  <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total|unlocalize }}"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')"
     data-testid="paiement-btn-especes" />

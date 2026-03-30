@@ -34,6 +34,21 @@ def schema_name():
 
 
 
+@app.task
+def cloture_mensuelle_task():
+    """Proxy task pour appeler generer_cloture_mensuelle depuis Celery Beat.
+    / Proxy task to call generer_cloture_mensuelle from Celery Beat."""
+    from laboutik.tasks import generer_cloture_mensuelle
+    generer_cloture_mensuelle()
+
+@app.task
+def cloture_annuelle_task():
+    """Proxy task pour appeler generer_cloture_annuelle depuis Celery Beat.
+    / Proxy task to call generer_cloture_annuelle from Celery Beat."""
+    from laboutik.tasks import generer_cloture_annuelle
+    generer_cloture_annuelle()
+
+
 @app.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     # doc : https://docs.celeryq.dev/en/stable/userguide/periodic-tasks.html#crontab-schedules
@@ -56,6 +71,22 @@ def setup_periodic_tasks(sender, **kwargs):
         crontab(hour=5, minute=0),
         cron_morning.s(),
     )
+    # Cloture mensuelle : le 1er de chaque mois a 3h UTC
+    # / Monthly closure: 1st of each month at 3am UTC
+    logger.info('setup_periodic_tasks cloture_mensuelle at 3AM UTC, 1st of month')
+    sender.add_periodic_task(
+        crontab(day_of_month=1, hour=3, minute=0),
+        cloture_mensuelle_task.s(),
+    )
+
+    # Cloture annuelle : le 1er janvier a 4h UTC
+    # / Annual closure: January 1st at 4am UTC
+    logger.info('setup_periodic_tasks cloture_annuelle at 4AM UTC, Jan 1st')
+    sender.add_periodic_task(
+        crontab(month_of_year=1, day_of_month=1, hour=4, minute=0),
+        cloture_annuelle_task.s(),
+    )
+
     logger.info(f'setup_periodic_tasks DONE')
 
 

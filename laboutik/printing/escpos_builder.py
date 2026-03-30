@@ -30,20 +30,15 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
     """
     Construit les donnees ESC/POS a partir d'un dict ticket_data.
     Retourne les octets binaires prets a etre envoyes a l'imprimante.
+    Supporte les mentions legales, ventilation TVA et mention DUPLICATA (LNE exigences 3 et 9).
     / Builds ESC/POS data from a ticket_data dict.
     Returns raw binary bytes ready to send to the printer.
+    Supports legal mentions, VAT breakdown and DUPLICATE marking (LNE requirements 3 and 9).
 
     LOCALISATION : laboutik/printing/escpos_builder.py
 
-    Le SunmiCloudPrinter est utilise ici comme un builder ESC/POS pur.
-    Il n'envoie rien — on recupere juste les octets via .orderData.
-    L'envoi est gere par le backend (Cloud, LAN, Inner).
-    / SunmiCloudPrinter is used here as a pure ESC/POS builder.
-    It doesn't send anything — we just get the bytes via .orderData.
-    Sending is handled by the backend (Cloud, LAN, Inner).
-
     :param dots_per_line: Nombre de dots par ligne (576, 384, 240)
-    :param ticket_data: dict avec header, articles, total, qrcode, footer
+    :param ticket_data: dict avec header, articles, total, qrcode, footer + legal, tva_breakdown, is_duplicata
     :return: bytes ESC/POS
     """
     # On passe des valeurs bidon pour app_id/app_key/sn car on n'utilise
@@ -84,8 +79,55 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
         builder.setAlignment(ALIGN_CENTER)
         builder.appendText(date_text + "\n")
 
-    if title or subtitle or date_text:
+    # --- Mentions legales (raison sociale, SIRET, TVA) ---
+    # / Legal mentions (business name, SIRET, VAT)
+    legal = ticket_data.get("legal")
+    if legal:
+        builder.setAlignment(ALIGN_CENTER)
+        business_name = legal.get("business_name", "")
+        if business_name:
+            builder.setPrintModes(bold=True, double_h=False, double_w=False)
+            builder.appendText(business_name + "\n")
+            builder.setPrintModes(bold=False, double_h=False, double_w=False)
+
+        address = legal.get("address", "")
+        if address:
+            builder.appendText(address + "\n")
+
+        siret = legal.get("siret", "")
+        if siret:
+            builder.appendText(f"SIRET: {siret}\n")
+
+        tva_number = legal.get("tva_number", "")
+        if tva_number:
+            builder.appendText(f"TVA: {tva_number}\n")
+
+        receipt_number = legal.get("receipt_number", "")
+        if receipt_number:
+            builder.appendText(f"Ticket: {receipt_number}\n")
+
+    if title or subtitle or date_text or legal:
         builder.appendText("--------------------------------\n")
+
+    # --- Mention DUPLICATA (en haut, bien visible) ---
+    # / DUPLICATE mention (at the top, clearly visible)
+    is_duplicata = ticket_data.get("is_duplicata", False)
+    if is_duplicata:
+        builder.setAlignment(ALIGN_CENTER)
+        builder.setPrintModes(bold=True, double_h=True, double_w=True)
+        builder.appendText("*** DUPLICATA ***\n")
+        builder.setPrintModes(bold=False, double_h=False, double_w=False)
+        builder.appendText("--------------------------------\n")
+
+    # --- Mention SIMULATION (mode ecole, LNE exigence 5) ---
+    # / SIMULATION label (training mode, LNE req. 5)
+    is_simulation = ticket_data.get("is_simulation", False)
+    if is_simulation:
+        builder.setAlignment(ALIGN_CENTER)
+        builder.setPrintModes(bold=True, double_h=True, double_w=True)
+        builder.appendText("*** SIMULATION ***\n")
+        builder.setPrintModes(bold=False, double_h=False, double_w=False)
+        builder.appendText("\n")
 
     # --- Articles ---
     # / Articles
@@ -99,13 +141,7 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
             article_total = article.get("total", 0)
 
             # Distinguer ticket vente (avec prix) et ticket commande cuisine (sans prix).
-            # Un article offert a un prix unitaire (price > 0) mais total = 0.
-            # Un article cuisine a price = 0 et total = 0.
-            # On utilise "price" pour decider si on affiche le format vente ou cuisine.
             # / Distinguish sale ticket (with price) from kitchen order (no price).
-            # A free article has a unit price (price > 0) but total = 0.
-            # A kitchen article has price = 0 and total = 0.
-            # We use "price" to decide between sale and kitchen format.
             article_a_un_prix = (article_price is not None and article_price > 0)
 
             if article_a_un_prix:
@@ -127,9 +163,7 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
     total_label = total_data.get("label", "")
 
     # Afficher le total meme si 0 (retour de consigne, articles offerts).
-    # Ne pas afficher si "amount" est absent du dict total (ticket cuisine sans total).
     # / Display total even if 0 (deposit return, free articles).
-    # Don't display if "amount" is missing from total dict (kitchen ticket without total).
     total_est_present = "amount" in total_data and total_amount is not None
     if total_est_present:
         builder.setAlignment(ALIGN_LEFT)
@@ -141,11 +175,44 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
     if total_label:
         builder.appendText(f"{total_label}\n")
 
+    # --- Ventilation TVA par taux ---
+    # / VAT breakdown by rate
+    tva_breakdown = ticket_data.get("tva_breakdown", [])
+    if tva_breakdown:
+        builder.appendText("--------------------------------\n")
+        builder.setAlignment(ALIGN_LEFT)
+
+        # En-tete du tableau TVA
+        # / VAT table header
+        builder.appendText("TVA%     HT       TVA      TTC\n")
+
+        for tva_ligne in tva_breakdown:
+            taux = tva_ligne.get("rate", "0.00")
+            ht = tva_ligne.get("ht", 0)
+            tva_montant = tva_ligne.get("tva", 0)
+            ttc = tva_ligne.get("ttc", 0)
+
+            ht_euros = f"{ht / 100:.2f}"
+            tva_euros = f"{tva_montant / 100:.2f}"
+            ttc_euros = f"{ttc / 100:.2f}"
+
+            builder.appendText(
+                f"{taux:>5}% {ht_euros:>7} {tva_euros:>7} {ttc_euros:>7}\n"
+            )
+
+        # Totaux HT et TVA globaux
+        # / Global HT and VAT totals
+        total_ht = ticket_data.get("total_ht", 0)
+        total_tva = ticket_data.get("total_tva", 0)
+
+        if total_ht or total_tva:
+            builder.appendText("--------------------------------\n")
+            builder.appendText(f"Total HT:  {total_ht / 100:.2f} EUR\n")
+            builder.appendText(f"Total TVA: {total_tva / 100:.2f} EUR\n")
+
     # --- QR code ---
     # QR code agrandi (module_size=8, ec_level=2) pour les billets.
-    # Plus gros = plus facile a scanner au portail d'entree.
     # / Enlarged QR code (module_size=8, ec_level=2) for tickets.
-    # Bigger = easier to scan at the entry gate.
     qrcode_text = ticket_data.get("qrcode")
     if qrcode_text:
         builder.lineFeed(1)

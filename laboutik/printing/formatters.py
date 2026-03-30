@@ -24,7 +24,9 @@ from django.utils.translation import gettext as _
 def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     """
     Formate un ticket de vente client (apres paiement).
+    Inclut les mentions legales (raison sociale, SIRET, TVA) conformement LNE exigence 3.
     / Formats a customer sale ticket (after payment).
+    Includes legal mentions (business name, SIRET, VAT) per LNE requirement 3.
 
     LOCALISATION : laboutik/printing/formatters.py
 
@@ -34,12 +36,61 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     :param moyen_paiement: str (ex: "Especes", "CB", "NFC")
     :return: dict ticket_data
     """
+    from BaseBillet.models import Configuration
+    from laboutik.models import LaboutikConfiguration
+    from django.db.models import F
+
     now = timezone.localtime(timezone.now())
 
-    # Construire la liste des articles
-    # / Build the articles list
+    # --- Infos legales depuis Configuration (singleton du tenant) ---
+    # / Legal info from Configuration (tenant singleton)
+    config = Configuration.get_solo()
+    laboutik_config = LaboutikConfiguration.get_solo()
+
+    # Adresse complete
+    # / Full address
+    parties_adresse = []
+    if config.adress:
+        parties_adresse.append(config.adress)
+    if config.postal_code:
+        parties_adresse.append(str(config.postal_code))
+    if config.city:
+        parties_adresse.append(config.city)
+    adresse_complete = " ".join(parties_adresse)
+
+    # TVA : numero ou mention d'exoneration
+    # / VAT: number or exemption notice
+    tva_display = config.tva_number if config.tva_number else _(
+        "TVA non applicable, art. 293 B du CGI"
+    )
+
+    # Numero sequentiel du ticket (incremente atomiquement avec verrou)
+    # Le select_for_update() garantit qu'aucun autre worker ne lit
+    # la meme valeur entre l'UPDATE et le refresh_from_db().
+    # / Sequential receipt number (atomically incremented with lock)
+    from django.db import transaction
+    with transaction.atomic():
+        LaboutikConfiguration.objects.select_for_update().filter(
+            pk=laboutik_config.pk,
+        ).update(compteur_tickets=F('compteur_tickets') + 1)
+        laboutik_config.refresh_from_db()
+    numero_ticket = laboutik_config.compteur_tickets
+
+    legal = {
+        "business_name": config.organisation or "",
+        "address": adresse_complete,
+        "siret": config.siren or "",
+        "tva_number": tva_display,
+        "receipt_number": f"T-{numero_ticket:06d}",
+        "terminal_id": pv.name if pv else "",
+    }
+
+    # --- Construire la liste des articles avec taux TVA ---
+    # / Build the articles list with VAT rate
     articles = []
     total_centimes = 0
+    tva_par_taux = {}
+
     for ligne in lignes_articles:
         # LigneArticle.amount est en centimes, qty est un Decimal
         # / LigneArticle.amount is in cents, qty is a Decimal
@@ -52,11 +103,50 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         # / Product name via PriceSold → ProductSold
         product_name = str(ligne.pricesold) if ligne.pricesold else _("Article")
 
+        # Taux TVA de la ligne
+        # / VAT rate of the line
+        taux_tva = float(ligne.vat or 0)
+
         articles.append({
             "name": product_name,
             "qty": qty,
             "price": amount_centimes,
             "total": article_total,
+            "vat_rate": f"{taux_tva:.2f}",
+        })
+
+        # Accumuler la TVA par taux
+        # / Accumulate VAT by rate
+        cle_tva = f"{taux_tva:.2f}"
+        if cle_tva not in tva_par_taux:
+            tva_par_taux[cle_tva] = {"rate": cle_tva, "ttc": 0}
+        tva_par_taux[cle_tva]["ttc"] += article_total
+
+    # Calculer HT et TVA pour chaque taux
+    # / Compute HT and VAT for each rate
+    tva_breakdown = []
+    total_ht_global = 0
+    total_tva_global = 0
+
+    for cle_tva, donnees_tva in tva_par_taux.items():
+        taux = float(cle_tva)
+        ttc = donnees_tva["ttc"]
+
+        if taux > 0:
+            ht = int(round(ttc / (1 + taux / 100)))
+            tva_montant = ttc - ht
+        else:
+            ht = ttc
+            tva_montant = 0
+
+        total_ht_global += ht
+        total_tva_global += tva_montant
+
+        tva_breakdown.append({
+            "rate": cle_tva,
+            "ht": ht,
+            "tva": tva_montant,
+            "ttc": ttc,
         })
 
     # Nom de l'operateur
@@ -65,19 +155,39 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     if operateur:
         operateur_name = operateur.email if operateur.email else str(operateur)
 
+    # Pied de ticket personnalise
+    # / Custom receipt footer
+    pied_ticket = laboutik_config.pied_ticket or ""
+
+    footer_lines = []
+    if pied_ticket:
+        footer_lines.append(pied_ticket)
+    footer_lines.append(_("Merci de votre visite !"))
+
+    # Mode ecole : les tickets portent la mention "SIMULATION" (LNE exigence 5)
+    # / Training mode: receipts carry "SIMULATION" label (LNE req. 5)
+    is_simulation = laboutik_config.mode_ecole
+
     return {
         "header": {
             "title": pv.name if pv else "",
             "subtitle": operateur_name,
             "date": now.strftime("%d/%m/%Y %H:%M"),
         },
+        "legal": legal,
         "articles": articles,
         "total": {
             "amount": total_centimes,
             "label": moyen_paiement,
         },
+        "tva_breakdown": tva_breakdown,
+        "total_ht": total_ht_global,
+        "total_tva": total_tva_global,
+        "is_duplicata": False,
+        "is_simulation": is_simulation,
+        "pied_ticket": pied_ticket,
         "qrcode": None,
-        "footer": [_("Merci de votre visite !")],
+        "footer": footer_lines,
     }
 
 
