@@ -2918,6 +2918,19 @@ class LigneArticle(models.Model):
     wallet = models.ForeignKey("AuthBillet.Wallet", blank=True, null=True, on_delete=models.PROTECT,
                                verbose_name=_("Wallet from"))
 
+    # Point de vente d'ou provient cette vente
+    # / Point of sale where this sale originated
+    point_de_vente = models.ForeignKey(
+        'laboutik.PointDeVente', on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='lignes_articles',
+        verbose_name=_("Point of sale"),
+        help_text=_(
+            "Point de vente ou cette vente a ete realisee. "
+            "/ Point of sale where this sale was made."
+        ),
+    )
+
     CANCELED, REFUNDED, CREATED = 'C', 'R', 'O',
     UNPAID, PAID, FREERES = 'U', 'P', 'F'
     VALID, FAILED = 'V', 'D'

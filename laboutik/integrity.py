@@ -62,7 +62,7 @@ def calculer_hmac(ligne, cle_secrete, previous_hmac=''):
     ).hexdigest()
 
 
-def obtenir_previous_hmac(sale_origin='LABOUTIK'):
+def obtenir_previous_hmac(sale_origin=None):
     """
     Retourne le hmac_hash de la derniere LigneArticle chainee.
     Les chaines sont separees par sale_origin (production vs test).
@@ -71,7 +71,9 @@ def obtenir_previous_hmac(sale_origin='LABOUTIK'):
 
     LOCALISATION : laboutik/integrity.py
     """
-    from BaseBillet.models import LigneArticle
+    from BaseBillet.models import LigneArticle, SaleOrigin
+    if sale_origin is None:
+        sale_origin = SaleOrigin.LABOUTIK
     derniere_hmac = LigneArticle.objects.filter(
         sale_origin=sale_origin,
         hmac_hash__gt='',

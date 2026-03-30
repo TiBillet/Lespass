@@ -29,7 +29,7 @@
 
 | # | Fichier | Exigences LNE | Depend de | Statut |
 |---|---------|---------------|-----------|--------|
-| 12 | `12_rapports_comptables_service.md` | Ex.3, Ex.8 | — | A FAIRE |
+| 12 | `12_rapports_comptables_service.md` | Ex.3, Ex.8 | — | FAIT |
 | 13 | `13_clotures_3_niveaux_total_perpetuel.md` | Ex.6, Ex.7 | 12 | A FAIRE |
 | 14 | `14_mentions_legales_tracabilite_impressions.md` | Ex.3, Ex.9 | 12 | A FAIRE |
 | 15 | `15_mode_ecole_exports_admin.md` | Ex.5 | 13, 14 | A FAIRE |

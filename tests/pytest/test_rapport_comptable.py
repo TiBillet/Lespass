@@ -90,10 +90,10 @@ def service_vide(tenant):
 class TestRapportComplet:
     """Tests sur generer_rapport_complet(). / Tests on generer_rapport_complet()."""
 
-    def test_rapport_complet_12_cles(self, tenant, service):
+    def test_rapport_complet_13_cles(self, tenant, service):
         """
-        generer_rapport_complet() retourne un dict avec exactement 12 cles.
-        / generer_rapport_complet() returns a dict with exactly 12 keys.
+        generer_rapport_complet() retourne un dict avec exactement 13 cles.
+        / generer_rapport_complet() returns a dict with exactly 13 keys.
         """
         with tenant_context(tenant):
             rapport = service.generer_rapport_complet()
@@ -110,10 +110,11 @@ class TestRapportComplet:
                 'billets',
                 'synthese_operations',
                 'operateurs',
+                'ventilation_par_pv',
                 'infos_legales',
             }
             assert set(rapport.keys()) == cles_attendues
-            assert len(rapport) == 12
+            assert len(rapport) == 13
 
 
 class TestTotauxParMoyen:

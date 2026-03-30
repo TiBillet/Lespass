@@ -37,7 +37,7 @@ from django.utils import timezone as dj_timezone
 
 from BaseBillet.models import (
     Configuration, Event, LigneArticle, Membership, Price, PriceSold, Product,
-    ProductSold, SaleOrigin, PaymentMethod,
+    ProductSold, SaleOrigin, PaymentMethod, Ticket,
 )
 from BaseBillet.permissions import HasLaBoutikAccess
 from QrcodeCashless.models import CarteCashless
@@ -1443,7 +1443,7 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
 def _creer_lignes_articles(
     articles_panier, code_methode_paiement,
     asset_uuid=None, carte=None, wallet=None,
-    uuid_transaction=None,
+    uuid_transaction=None, point_de_vente=None,
 ):
     """
     Crée ProductSold, PriceSold et LigneArticle pour chaque article du panier.
@@ -1461,6 +1461,7 @@ def _creer_lignes_articles(
     :param asset_uuid: UUID de l'asset fedow_core (NFC uniquement, None pour espèces/CB)
     :param carte: CarteCashless (NFC uniquement, None pour espèces/CB)
     :param wallet: Wallet du client (NFC uniquement, None pour espèces/CB)
+    :param point_de_vente: PointDeVente d'origine (nullable, pour ventilation CA par PV)
     :return: liste de LigneArticle créées
     """
     methode_db = MAPPING_CODES_PAIEMENT.get(code_methode_paiement, PaymentMethod.UNKNOWN)
@@ -1498,6 +1499,7 @@ def _creer_lignes_articles(
             payment_method=methode_db,
             status=LigneArticle.VALID,
             uuid_transaction=uuid_transaction,
+            point_de_vente=point_de_vente,
             # Champs NFC (optionnels, None pour espèces/CB)
             # NFC fields (optional, None for cash/CC)
             asset=asset_uuid,
@@ -2444,6 +2446,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 lignes_normales = _creer_lignes_articles(
                     articles_normaux, moyen_paiement_code,
                     uuid_transaction=uuid_transaction,
+                    point_de_vente=point_de_vente,
                 )
 
             # Adhesions → creer les Memberships et les rattacher aux LigneArticle
@@ -2571,6 +2574,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     lignes_normales = _creer_lignes_articles(
                         articles_normaux, moyen_paiement_code,
                         uuid_transaction=uuid_transaction,
+                        point_de_vente=point_de_vente,
                     )
 
                 # Adhesions → creer les Memberships et les rattacher aux LigneArticle
@@ -2790,6 +2794,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         carte=carte_client,
                         wallet=wallet_client,
                         uuid_transaction=uuid_transaction,
+                        point_de_vente=point_de_vente,
                     )
 
                 # b) Adhésions (AD) — débit tokens TLF + création Membership
@@ -2810,6 +2815,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         carte=carte_client,
                         wallet=wallet_client,
                         uuid_transaction=uuid_transaction,
+                        point_de_vente=point_de_vente,
                     )
 
                 # Creer/renouveler les adhesions et rattacher aux LigneArticle
@@ -3808,7 +3814,10 @@ class CommandeViewSet(viewsets.ViewSet):
         # --- Paiement non-NFC (espèces, CB, chèque) ---
         # --- Non-NFC payment (cash, CC, check) ---
         with db_transaction.atomic():
-            _creer_lignes_articles(articles_panier, moyen_paiement_code)
+            _creer_lignes_articles(
+                articles_panier, moyen_paiement_code,
+                point_de_vente=point_de_vente,
+            )
 
             # Marquer la commande comme payée
             # Mark order as paid

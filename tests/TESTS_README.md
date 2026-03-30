@@ -67,7 +67,7 @@ docker exec lespass_django poetry run pytest tests/pytest/ \
 
 ### Tests pytest (DB-only) — `tests/pytest/`
 
-**186 tests, ~30 secondes.**
+**276 tests, ~70 secondes.**
 
 Testent la logique **Python/Django** : modeles, serializers, vues, API, validations serveur, triggers post-paiement. Utilisent le client Django in-process (`self.client`) — pas de reseau, pas de navigateur.
 
@@ -75,7 +75,7 @@ Stripe est **mocke** cote serveur (`@patch("stripe.checkout.Session.create")`) p
 
 ### Tests E2E (navigateur) — `tests/e2e/`
 
-**36 tests, ~3 minutes.**
+**42 tests, ~6 minutes.**
 
 Testent le comportement **JavaScript/CSS/navigateur** : validation HTML5, web components (`bs-counter`), SweetAlert2, HTMX swaps, rendu visuel POS, simulation NFC, navigation cross-tenant.
 
@@ -801,6 +801,40 @@ Symptome : `AttributeError: module does not have the attribute 'imprimer'`
 **9.55 — Restart Celery obligatoire apres ajout de nouvelles taches.**
 Celery charge les taches au demarrage. Si on ajoute `laboutik/printing/tasks.py`
 sans restart, le worker ignore les messages. `docker restart lespass_celery` suffit.
+
+### Chainage HMAC et integrite LNE (session 12)
+
+**9.56 — `Decimal` vs `float` vs `str` dans le HMAC : normaliser avant de hasher.**
+`LigneArticle.qty` est un `DecimalField(max_digits=12, decimal_places=6)`.
+Au moment du `create()`, `qty=1` (int en memoire). Apres le `save()` et re-read
+depuis la DB, `qty=Decimal('1.000000')`. Si on utilise `str()` directement,
+le hash change entre creation et verification (`'1'` vs `'1.000000'`).
+Solution : normaliser avec un format fixe : `f"{float(ligne.qty):.6f}"`.
+Meme chose pour `vat` : `f"{float(ligne.vat):.2f}"`.
+
+**9.57 — Isolation des tests HMAC : utiliser `uuid_transaction`.**
+Les tests pytest ne font pas de rollback (pas de `TransactionTestCase` avec
+django-tenants). Si un test cree des `LigneArticle` avec HMAC, le suivant les
+verra dans ses queries. Filtrer par `uuid_transaction` unique par test :
+```python
+import uuid as uuid_module
+test_uuid = uuid_module.uuid4()
+ligne.uuid_transaction = test_uuid
+# ... plus tard :
+lignes = LigneArticle.objects.filter(uuid_transaction=test_uuid)
+```
+
+**9.58 — `obtenir_previous_hmac()` et `verifier_chaine()` doivent trier identiquement.**
+Les deux fonctions parcourent les LigneArticle dans un ordre. Si l'un trie
+par `(-datetime, -pk)` et l'autre par `(datetime, uuid)`, les lignes avec le
+meme `datetime` (creees dans la meme seconde) seront dans un ordre different.
+`uuid` est aleatoire, `pk` est auto-increment. Toujours utiliser `(datetime, pk)`.
+
+**9.59 — `Ticket` non importe dans `laboutik/views.py` (bug pre-existant).**
+Le modele `Ticket` est utilise a 6 endroits dans `views.py` mais n'etait pas
+importe. Corrige : ajoute dans `from BaseBillet.models import ..., Ticket`.
+Symptome : `NameError: name 'Ticket' is not defined` lors du paiement especes
+en billetterie.
 
 ---
 

@@ -424,7 +424,50 @@ class RapportComptableService:
         return {}
 
     # ------------------------------------------------------------------
-    # 12. Infos legales / Legal information
+    # 12. Ventilation du CA par point de vente / Revenue breakdown by POS
+    # ------------------------------------------------------------------
+    def calculer_ventilation_par_pv(self):
+        """
+        Chiffre d'affaires par point de vente.
+        Utilise la FK point_de_vente sur LigneArticle.
+        / Revenue per point of sale.
+        Uses the point_de_vente FK on LigneArticle.
+
+        LOCALISATION : laboutik/reports.py
+        """
+        resultats = self.lignes.filter(
+            point_de_vente__isnull=False,
+        ).values(
+            'point_de_vente__name',
+            'point_de_vente__uuid',
+        ).annotate(
+            total_ttc=Sum('amount'),
+        ).order_by('-total_ttc')
+
+        ventilation = []
+        for ligne in resultats:
+            ventilation.append({
+                'nom': ligne['point_de_vente__name'],
+                'uuid': str(ligne['point_de_vente__uuid']),
+                'total_ttc': ligne['total_ttc'] or 0,
+            })
+
+        # Lignes sans PV (anciennes donnees avant la FK)
+        # / Lines without PV (old data before FK was added)
+        total_sans_pv = self.lignes.filter(
+            point_de_vente__isnull=True,
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        if total_sans_pv > 0:
+            ventilation.append({
+                'nom': 'Non attribue',
+                'uuid': '',
+                'total_ttc': total_sans_pv,
+            })
+
+        return ventilation
+
+    # ------------------------------------------------------------------
+    # 13. Infos legales / Legal information
     # ------------------------------------------------------------------
     def _infos_legales(self):
         """
@@ -448,8 +491,8 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def generer_rapport_complet(self):
         """
-        Appelle les 12 methodes et retourne un dict avec 12 cles.
-        / Calls all 12 methods and returns a dict with 12 keys.
+        Appelle les 13 methodes et retourne un dict avec 13 cles.
+        / Calls all 13 methods and returns a dict with 13 keys.
         """
         return {
             "totaux_par_moyen": self.calculer_totaux_par_moyen(),
@@ -463,6 +506,7 @@ class RapportComptableService:
             "billets": self.calculer_billets(),
             "synthese_operations": self.calculer_synthese_operations(),
             "operateurs": self.calculer_operateurs(),
+            "ventilation_par_pv": self.calculer_ventilation_par_pv(),
             "infos_legales": self._infos_legales(),
         }
 

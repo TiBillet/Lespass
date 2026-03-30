@@ -56,7 +56,7 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **② Billetterie + Refonte typage** | Typage par article (pas PV), flow identification unifié, tuiles BI dans la grille, jauge, panier mixte | ✅ FAIT |
 | **③ WebSocket** | Push serveur HTMX 2 ws, Daphne, badge test, broadcast jauge | ✅ FAIT |
 | **④ Impression** | 4 backends (Cloud/LAN/Inner/Mock), ESC/POS builder, formatters, Celery async, bouton Imprimer, auto-print billets, MockBackend decode ESC/POS | ✅ FAIT |
-| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ⏳ **PROCHAIN** (sessions 12-19) |
+| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ⏳ **EN COURS** — session 12 FAIT, sessions 13-19 à faire |
 | **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ⏳ Sessions 16-17 (intégré dans ⑤) |
 | **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑤⑥ |
 | **⑧ Multi-Asset** | Paniers mixtes EUR + tokens (à détailler avec le mainteneur) | ⏳ À DÉTAILLER |

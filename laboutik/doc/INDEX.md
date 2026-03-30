@@ -189,13 +189,15 @@ Sessions 10-11-12 (bouton).
 Conformité au référentiel LNE v1.7 (21 exigences). Design spec validé le 2026-03-30.
 Sessions 12 à 19. Voir `docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`.
 
-**Session 12 — Fondation HMAC + service de calcul** (Ex.3, Ex.8)
-- [ ] Clé HMAC par tenant (Fernet) dans LaboutikConfiguration
-- [ ] `hmac_hash` + `previous_hmac` + `total_ht` sur LigneArticle
-- [ ] `laboutik/integrity.py` : calculer_hmac(), verifier_chaine()
-- [ ] Chaînage HMAC intégré dans `_creer_lignes_articles()`
-- [ ] `RapportComptableService` (12 méthodes) dans `laboutik/reports.py`
-- [ ] Management command `verify_integrity`
+**Session 12 — Fondation HMAC + service de calcul** (Ex.3, Ex.8) ✅ FAIT
+- [x] Clé HMAC par tenant (Fernet) dans LaboutikConfiguration
+- [x] `hmac_hash` + `previous_hmac` + `total_ht` sur LigneArticle
+- [x] FK `point_de_vente` sur LigneArticle (ventilation CA par PV)
+- [x] `laboutik/integrity.py` : calculer_hmac(), verifier_chaine(), calculer_total_ht()
+- [x] Chaînage HMAC intégré dans `_creer_lignes_articles()` + PV passé dans tous les appels
+- [x] `RapportComptableService` (13 méthodes dont ventilation par PV) dans `laboutik/reports.py`
+- [x] Management command `verify_integrity`
+- [x] 15 tests pytest (8 intégrité + 7 rapport), 276 total, 0 régression
 
 **Session 13 — Clôtures J/M/A + total perpétuel** (Ex.6, Ex.7)
 - [ ] Champs `niveau`, `numero_sequentiel`, `total_perpetuel`, `hash_lignes` sur ClotureCaisse

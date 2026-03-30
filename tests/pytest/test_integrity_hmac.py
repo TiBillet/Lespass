@@ -63,15 +63,15 @@ class TestCleHMAC:
 
 
 from decimal import Decimal
+from BaseBillet.models import SaleOrigin, PaymentMethod
 
 
 def _creer_ligne_article_test(tenant, amount=1200, vat=Decimal('20.00'),
-                               payment_method='CA', sale_origin='LB'):
+                               payment_method=PaymentMethod.CASH,
+                               sale_origin=SaleOrigin.LABOUTIK):
     """
     Cree une LigneArticle de test avec les champs minimaux.
-    On utilise les codes courts (2 chars) des choix Django.
     / Creates a test LigneArticle with minimal fields.
-    Uses short codes (2 chars) matching Django choices.
     """
     with tenant_context(tenant):
         from BaseBillet.models import LigneArticle, Product, Price, PriceSold, ProductSold
