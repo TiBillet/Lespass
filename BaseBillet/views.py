@@ -1857,7 +1857,7 @@ class EventMVT(viewsets.ViewSet):
             search = str(search)
 
         tags = request.GET.getlist('tag')
-        page = int(request.GET.get('page', 1))
+        page = int(request.GET.get('page') or 1)
 
         logger.info(f"request.GET : {request.GET}")
 
