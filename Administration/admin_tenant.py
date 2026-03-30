@@ -2849,11 +2849,6 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
 
-        # Fabrication des pricesold event/prix pour pouvoir être selectionné sur le + billet
-        for product in obj.products.all():
-            for price in product.prices.all():
-                get_or_create_price_sold(price=price, event=obj)
-
         try:
             super().save_model(request, obj, form, change)
         except IntegrityError as err:
@@ -2869,6 +2864,16 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         except Exception as err:
             logger.error(err)
             raise err
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        obj = form.instance
+        # Fabrication des pricesold event/prix pour pouvoir être selectionné sur le + billet
+        # Doit être dans save_related (pas save_model) car les M2M products
+        # ne sont disponibles qu'après que Django les a sauvées.
+        for product in obj.products.all():
+            for price in product.prices.all():
+                get_or_create_price_sold(price=price, event=obj)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
