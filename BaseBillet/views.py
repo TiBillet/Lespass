@@ -1955,7 +1955,7 @@ class EventMVT(viewsets.ViewSet):
         response['X-Frame-Options'] = ''
         return response
 
-    def retrieve(self, request, pk=None):
+    def retrieve(self, request, pk=None, **kwargs):
         slug = pk
         hex8 = None
         match = re.search(r'([0-9a-fA-F]{8})(?:/)?$', pk)

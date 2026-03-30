@@ -440,7 +440,14 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             else:
                 messages.add_message(request, messages.ERROR, _("Cashless server OFFLINE or BAD KEY"))
 
-        super().save_model(request, obj, form, change)
+        try:
+            super().save_model(request, obj, form, change)
+        except ValidationError as e:
+            # Le ValidationError vient de Configuration.save() (ex: SEPA pas activé dans Stripe)
+            # On le transforme en message d'erreur admin au lieu d'un 500
+            # / ValidationError from Configuration.save() (e.g. SEPA not active in Stripe)
+            # / Convert to admin error message instead of 500
+            messages.error(request, e.message)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
