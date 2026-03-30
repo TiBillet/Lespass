@@ -2430,7 +2430,7 @@ class MembershipMVT(viewsets.ViewSet):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
-            logger.error(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
+            logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
             return HttpResponseClientRedirect(request.headers['Referer'])
