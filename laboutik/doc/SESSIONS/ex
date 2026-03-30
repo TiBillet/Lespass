@@ -1,6 +1,6 @@
-	/using-superpowers va checker une derniere fois tout le code écrit dans cette session et vérifie la conformité /stack-ccc
-	  Une fois terminé, mets à jour les fichier @laboutik/doc/PLAN_LABOUTIK.md @laboutik/doc/INDEX.md @laboutik/doc/SESSIONS/README.md
-	  Ajoute aussi dans @tests/TESTS_README.md les pièges eventuels que tu as rencontré
+	/using-superpowers va checker une derniere fois tout le code écrit dans cette session et vérifie la conformité /djc
+	Une fois terminé, mets à jour les fichier @laboutik/doc/PLAN_LABOUTIK.md @laboutik/doc/INDEX.md @laboutik/doc/SESSIONS/README.md
+	Ajoute aussi dans @tests/TESTS_README.md les pièges eventuels que tu as rencontré
 	Soit critique envers le travail, si tu vois des amélioration, note les et dis les moi.
 	Indique moi comment tester moi même a la main les nouveautées.
 	Vérifie que les test python/django couvrent bien ce nouveau code, et que les ancien fonctionnent toujours.

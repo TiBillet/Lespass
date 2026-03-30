@@ -14,7 +14,7 @@ from solo.models import SingletonModel
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import CategorieProduct, Price, Product
 from QrcodeCashless.models import CarteCashless
-from fedow_connect.utils import fernet_encrypt, fernet_decrypt
+from root_billet.utils import fernet_encrypt, fernet_decrypt
 
 
 # --- Configuration globale de l'interface caisse ---
@@ -71,6 +71,76 @@ class LaboutikConfiguration(SingletonModel):
         ),
     )
 
+    # --- Cle HMAC pour le chainage d'integrite (conformite LNE exigence 8) ---
+    # La cle est chiffree avec Fernet. L'utilisateur final n'y a jamais acces.
+    # / HMAC key for integrity chaining (LNE compliance req. 8)
+    # Key is Fernet-encrypted. End user never has access.
+    hmac_key = models.CharField(
+        max_length=200, blank=True, null=True,
+        verbose_name=_("HMAC key (encrypted)"),
+        help_text=_(
+            "Cle HMAC pour le chainage d'integrite des donnees d'encaissement. "
+            "Generee automatiquement, stockee chiffree Fernet. "
+            "/ HMAC key for POS data integrity chaining. "
+            "Auto-generated, Fernet-encrypted."
+        ),
+    )
+
+    # --- Configuration rapports comptables ---
+    # / Accounting reports configuration
+    fond_de_caisse = models.IntegerField(
+        default=0,
+        verbose_name=_("Cash float (cents)"),
+        help_text=_(
+            "Montant initial du tiroir-caisse en centimes. "
+            "/ Initial cash drawer amount in cents."
+        ),
+    )
+    rapport_emails = models.JSONField(
+        default=list, blank=True,
+        verbose_name=_("Report email recipients"),
+        help_text=_(
+            "Liste d'adresses email pour l'envoi automatique des rapports. "
+            "/ List of email addresses for automatic report sending."
+        ),
+    )
+    PERIODICITE_CHOICES = [
+        ('daily', _('Daily')),
+        ('weekly', _('Weekly')),
+        ('monthly', _('Monthly')),
+        ('yearly', _('Yearly')),
+    ]
+    rapport_periodicite = models.CharField(
+        max_length=10, choices=PERIODICITE_CHOICES, default='daily',
+        verbose_name=_("Report frequency"),
+        help_text=_(
+            "Frequence d'envoi automatique des rapports comptables. "
+            "/ Automatic accounting report sending frequency."
+        ),
+    )
+    pied_ticket = models.TextField(
+        blank=True, default='',
+        verbose_name=_("Receipt footer text"),
+        help_text=_(
+            "Texte libre imprime en bas de chaque ticket de vente. "
+            "/ Custom text printed at the bottom of every receipt."
+        ),
+    )
+
+    # --- Total perpetuel (conformite LNE exigence 7) ---
+    # Cumul depuis la mise en service. JAMAIS remis a 0.
+    # / Cumulative total since first use. NEVER reset to 0.
+    total_perpetuel = models.IntegerField(
+        default=0,
+        verbose_name=_("Perpetual total (cents)"),
+        help_text=_(
+            "Total cumule de toutes les clotures depuis la mise en service. "
+            "Ne doit jamais etre remis a zero. "
+            "/ Cumulative total of all closures since first use. "
+            "Must never be reset to zero."
+        ),
+    )
+
     def get_sunmi_app_id(self):
         """Dechiffre et retourne le Sunmi App ID, ou None si vide.
         / Decrypts and returns the Sunmi App ID, or None if empty."""
@@ -100,6 +170,40 @@ class LaboutikConfiguration(SingletonModel):
             self.sunmi_app_key = None
         else:
             self.sunmi_app_key = fernet_encrypt(value)
+
+    def get_hmac_key(self):
+        """Dechiffre et retourne la cle HMAC, ou None si vide.
+        / Decrypts and returns the HMAC key, or None if empty."""
+        if not self.hmac_key:
+            return None
+        from root_billet.utils import fernet_decrypt
+        return fernet_decrypt(self.hmac_key)
+
+    def set_hmac_key(self, value):
+        """Chiffre et stocke la cle HMAC.
+        / Encrypts and stores the HMAC key."""
+        if not value:
+            self.hmac_key = None
+        else:
+            from root_billet.utils import fernet_encrypt
+            self.hmac_key = fernet_encrypt(value)
+
+    def get_or_create_hmac_key(self):
+        """
+        Retourne la cle HMAC. La genere si elle n'existe pas encore.
+        Cle de 256 bits (32 octets) en hexadecimal.
+        / Returns HMAC key. Generates it if not yet created.
+        256-bit key (32 bytes) in hexadecimal.
+        """
+        cle_existante = self.get_hmac_key()
+        if cle_existante:
+            return cle_existante
+
+        import secrets
+        nouvelle_cle = secrets.token_hex(32)
+        self.set_hmac_key(nouvelle_cle)
+        self.save(update_fields=['hmac_key'])
+        return nouvelle_cle
 
     def __str__(self):
         return "LaBoutik Configuration"

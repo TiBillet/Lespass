@@ -2,7 +2,7 @@
 
 > **Ce fichier est la source unique.** Les prompts et comptes-rendus de sessions sont archivés dans `PHASES/`.
 >
-> Dernière mise à jour : 2026-03-19 (refonte typage article/PV, flow identification unifié, phases WebSocket/Impression/Rapports/Menu Ventes, nettoyage mocks)
+> Dernière mise à jour : 2026-03-30 (conformité LNE : HMAC chain, clôtures J/M/A, total perpétuel, archivage fiscal, mode école — sessions 12-19 redécoupées)
 
 ---
 
@@ -56,13 +56,39 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **② Billetterie + Refonte typage** | Typage par article (pas PV), flow identification unifié, tuiles BI dans la grille, jauge, panier mixte | ✅ FAIT |
 | **③ WebSocket** | Push serveur HTMX 2 ws, Daphne, badge test, broadcast jauge | ✅ FAIT |
 | **④ Impression** | 4 backends (Cloud/LAN/Inner/Mock), ESC/POS builder, formatters, Celery async, bouton Imprimer, auto-print billets, MockBackend decode ESC/POS | ✅ FAIT |
-| **⑤ Rapports Comptables** | Ticket Z enrichi, `RapportComptableService`, mentions légales ticket, admin Unfold, PDF/CSV/Excel, envoi auto | ⏳ **PROCHAIN** |
-| **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ⏳ Après ⑤ |
-| **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑥ |
+| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ⏳ **PROCHAIN** (sessions 12-19) |
+| **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ⏳ Sessions 16-17 (intégré dans ⑤) |
+| **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑤⑥ |
 | **⑧ Multi-Asset** | Paniers mixtes EUR + tokens (à détailler avec le mainteneur) | ⏳ À DÉTAILLER |
-| **⑨ Stress test (3.3)** | `verify_transactions` + 2000 tx concurrentes | ⏳ À FAIRE |
+| **⑨ Stress test (3.3)** | `verify_transactions` + `verify_integrity` (HMAC chain) + 2000 tx concurrentes | ⏳ À FAIRE |
 | **⑩ Migration (6)** | Import données anciens tenants Fedow + LaBoutik | ⏳ À FAIRE |
 | **⑪ Consolidation (7)** | Hashes, suppression fedow_connect | ⏳ À FAIRE |
+
+### Conformité LNE — référentiel v1.7 (détail sessions 12-19)
+
+> **Design spec** : `docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`
+> **Référentiel LNE** : `~/Nextcloud/TiBillet/10.Certification LNE/referentiel-certification-systemes-caisse.pdf`
+> **Objectif** : moyen terme (préparer le terrain technique, certification ultérieure)
+
+| Session | Titre | Exigences LNE | Dépend de |
+|---------|-------|---------------|-----------|
+| **12** | Fondation HMAC + service de calcul | Ex.3, Ex.8 | — |
+| **13** | Clôtures J/M/A + total perpétuel | Ex.6, Ex.7 | 12 |
+| **14** | Mentions légales tickets + traçabilité impressions | Ex.3, Ex.9 | 12 |
+| **15** | Mode école + exports admin | Ex.5 | 13, 14 |
+| **16** | Menu Ventes : Ticket X + liste | — | 12 |
+| **17** | Corrections + fond/sortie de caisse | Ex.4 | 13, 16 |
+| **18** | Archivage fiscal + accès administration | Ex.10-12, Ex.15, Ex.19 | 13 |
+| **19** | Envoi auto rapports + version | Ex.21 | 15, 18 |
+
+**Décisions architecturales clés :**
+- **Inaltérabilité** : chaînage HMAC-SHA256 sur chaque `LigneArticle` (clé Fernet par tenant)
+- **Clôtures** : 3 niveaux (J/M/A) dans `ClotureCaisse`, M/A auto via Celery Beat
+- **Total perpétuel** : dans `LaboutikConfiguration`, snapshot sur chaque clôture, jamais remis à 0
+- **`datetime_ouverture`** : calculé auto = datetime 1ère vente après dernière clôture (pas de saisie)
+- **Corrections** : opérations de +/- uniquement (CREDIT_NOTE). Post-clôture interdit
+- **Mode école** : `sale_origin=LABOUTIK_TEST` + bandeau UI visible + tickets "SIMULATION"
+- **Archivage** : CSV/JSON dans ZIP avec hash HMAC, max 1 an par archive
 
 ### Les 3 règles à ne jamais oublier
 

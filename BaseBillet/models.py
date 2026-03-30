@@ -2961,6 +2961,45 @@ class LigneArticle(models.Model):
         verbose_name=_("Credit note for"),  # Avoir pour
     )
 
+    # --- Chainage HMAC-SHA256 (conformite LNE exigence 8) ---
+    # Chaque ligne est chainee avec la precedente via HMAC.
+    # La cle secrete est par tenant (LaboutikConfiguration.hmac_key).
+    # / HMAC-SHA256 chaining (LNE compliance requirement 8).
+    # Each line is chained with the previous one via HMAC.
+    # Secret key is per tenant (LaboutikConfiguration.hmac_key).
+    hmac_hash = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name=_("HMAC hash"),
+        help_text=_(
+            "HMAC-SHA256 de cette ligne, chainee avec la precedente. "
+            "/ HMAC-SHA256 of this line, chained with the previous one."
+        ),
+    )
+    previous_hmac = models.CharField(
+        max_length=64, blank=True, default='',
+        verbose_name=_("Previous HMAC"),
+        help_text=_(
+            "HMAC de la LigneArticle precedente dans la chaine. "
+            "/ HMAC of the previous LigneArticle in the chain."
+        ),
+    )
+
+    # --- Donnee elementaire HT (conformite LNE exigence 3) ---
+    # Le referentiel LNE exige le total HT comme donnee elementaire,
+    # pas seulement comme valeur calculee.
+    # / LNE requirement 3: HT must be stored as elementary data,
+    # not just computed.
+    total_ht = models.IntegerField(
+        default=0,
+        verbose_name=_("Total HT (cents)"),
+        help_text=_(
+            "Total hors taxes en centimes. "
+            "Calcule : TTC / (1 + taux_tva/100). "
+            "/ Total excluding tax in cents. "
+            "Computed: TTC / (1 + vat_rate/100)."
+        ),
+    )
+
     class Meta:
         ordering = ('-datetime',)
 

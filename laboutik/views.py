@@ -54,6 +54,7 @@ from laboutik.serializers import (
     ClotureSerializer, EnvoyerRapportSerializer,
 )
 from laboutik.utils import method as payment_method
+from laboutik.integrity import calculer_hmac, obtenir_previous_hmac, calculer_total_ht
 
 
 # --------------------------------------------------------------------------- #
@@ -1504,6 +1505,39 @@ def _creer_lignes_articles(
             wallet=wallet,
         )
         lignes_creees.append(ligne)
+
+    # --- Chainage HMAC (conformite LNE exigence 8) ---
+    # Calcule le total HT et le HMAC pour chaque ligne creee.
+    # Le HMAC est chaine avec la ligne precedente.
+    # / HMAC chaining (LNE compliance req. 8).
+    # Computes HT and HMAC for each created line.
+    config_laboutik = LaboutikConfiguration.get_solo()
+    cle_hmac = config_laboutik.get_or_create_hmac_key()
+
+    # Determiner le sale_origin pour la chaine HMAC
+    # / Determine sale_origin for HMAC chain
+    sale_origin_pour_chaine = SaleOrigin.LABOUTIK
+    if lignes_creees:
+        sale_origin_pour_chaine = lignes_creees[0].sale_origin
+
+    previous_hmac_value = obtenir_previous_hmac(sale_origin=sale_origin_pour_chaine)
+
+    for ligne_a_chainer in lignes_creees:
+        # Calculer le HT (donnee elementaire LNE exigence 3)
+        # / Compute HT (LNE req. 3 elementary data)
+        ligne_a_chainer.total_ht = calculer_total_ht(
+            ligne_a_chainer.amount, ligne_a_chainer.vat
+        )
+
+        # Chainer le HMAC avec la ligne precedente
+        # / Chain HMAC with previous line
+        ligne_a_chainer.previous_hmac = previous_hmac_value
+        ligne_a_chainer.hmac_hash = calculer_hmac(
+            ligne_a_chainer, cle_hmac, previous_hmac_value
+        )
+        ligne_a_chainer.save(update_fields=['total_ht', 'hmac_hash', 'previous_hmac'])
+
+        previous_hmac_value = ligne_a_chainer.hmac_hash
 
     return lignes_creees
 

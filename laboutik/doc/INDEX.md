@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans [`PHASES/`](PHASES/).
 >
-> Dernière mise à jour : 2026-03-23
+> Dernière mise à jour : 2026-03-30
 
 ---
 
@@ -184,35 +184,56 @@ Sessions 10-11-12 (bouton).
 - [x] Imprimante mock "Console (mock)" dans les données de test
 - [x] 18 tests pytest impression + 5 tests bouton = 0 régression (252 tests total)
 
-### 6. Rapports Comptables ← PROCHAIN
+### 6. Conformité LNE + Rapports Comptables ← PROCHAIN
 
-Ticket Z enrichi — document comptable légal. Service de calcul partagé avec le Menu Ventes.
-Sessions 12 (rapports) + 13.
+Conformité au référentiel LNE v1.7 (21 exigences). Design spec validé le 2026-03-30.
+Sessions 12 à 19. Voir `docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`.
 
-- [ ] Modèle `RapportComptable` (numéro séquentiel par PV)
-- [ ] `laboutik/reports.py` : `RapportComptableService` (12 sections de calcul)
-- [ ] **Mentions légales ticket de vente** : enrichir `formatter_ticket_vente` avec raison sociale, adresse, SIRET, n° TVA, ventilation TVA par taux, total HT/TVA/TTC, n° ticket séquentiel, `pied_ticket` custom (conformité note de frais)
-- [ ] Champ `pied_ticket` sur `LaboutikConfiguration` (texte libre pied de ticket)
-- [ ] Admin Unfold section "Ventes" avec vue détail HTML
-- [ ] Export PDF (A4 formel), CSV, Excel (openpyxl)
-- [ ] Envoi automatique (Celery Beat : quotidien/hebdo/mensuel/annuel)
-- [ ] Config : `rapport_emails`, `rapport_periodicite`, `fond_de_caisse`
-- [ ] Tests
+**Session 12 — Fondation HMAC + service de calcul** (Ex.3, Ex.8)
+- [ ] Clé HMAC par tenant (Fernet) dans LaboutikConfiguration
+- [ ] `hmac_hash` + `previous_hmac` + `total_ht` sur LigneArticle
+- [ ] `laboutik/integrity.py` : calculer_hmac(), verifier_chaine()
+- [ ] Chaînage HMAC intégré dans `_creer_lignes_articles()`
+- [ ] `RapportComptableService` (12 méthodes) dans `laboutik/reports.py`
+- [ ] Management command `verify_integrity`
 
-### 7. Menu Ventes (caisse tactile)
+**Session 13 — Clôtures J/M/A + total perpétuel** (Ex.6, Ex.7)
+- [ ] Champs `niveau`, `numero_sequentiel`, `total_perpetuel`, `hash_lignes` sur ClotureCaisse
+- [ ] `datetime_ouverture` calculé auto (1ère vente après dernière clôture)
+- [ ] `cloturer()` connecté au RapportComptableService
+- [ ] Clôtures M/A automatiques (Celery Beat)
+- [ ] Total perpétuel incrémenté atomiquement, jamais remis à 0
+- [ ] Garde correction post-clôture
 
-Menu "Ventes" dans le burger menu POS. Consomme le même `RapportComptableService`.
-Sessions 14 + 15.
+**Session 14 — Mentions légales tickets + traçabilité impressions** (Ex.3, Ex.9)
+- [ ] Modèle `ImpressionLog`
+- [ ] Ticket de vente avec raison sociale, SIRET, TVA, ventilation TVA, n° séquentiel
+- [ ] Mention "DUPLICATA" sur réimpressions
+- [ ] Traçabilité : ImpressionLog à chaque impression
 
-- [ ] **Ticket X** : récap' en cours (3 sous-vues) — lecture seule, pas de clôture
-- [ ] **Liste des ventes** : historique scrollable, filtres, pagination HTMX
-- [ ] **Détail + correction** : corriger moyen paiement (ESP↔CB↔CHQ, pas NFC)
-- [ ] **Ré-impression ticket** : reconstruit → `imprimer_async.delay()`
-- [ ] **Fond de caisse** : saisie/modification montant initial
-- [ ] **Sortie de caisse** : retrait espèces, ventilation par coupure, justificatif
-- [ ] Modèles : `CorrectionPaiement` (audit), `SortieCaisse`
-- [ ] Navigation : sidebar desktop, onglets mobile
-- [ ] Tests
+**Session 15 — Mode école + exports admin** (Ex.5)
+- [ ] `sale_origin=LABOUTIK_TEST` + `mode_ecole` sur config + bandeau UI
+- [ ] Vue détail HTML du rapport (12 sections)
+- [ ] Export PDF, CSV, Excel
+
+**Session 16 — Menu Ventes : Ticket X + liste**
+- [ ] Ticket X (3 sous-vues), liste des ventes scrollable, détail
+
+**Session 17 — Corrections + fond/sortie de caisse** (Ex.4)
+- [ ] Correction ESP/CB/CHQ (NFC interdit, post-clôture interdit)
+- [ ] Fond de caisse, sortie espèces avec ventilation
+
+**Session 18 — Archivage fiscal + accès administration** (Ex.10-12, Ex.15, Ex.19)
+- [ ] Export CSV/JSON avec hash HMAC, max 1 an par archive
+- [ ] Management commands `archiver_donnees`, `verifier_archive`, `acces_fiscal`
+
+**Session 19 — Envoi auto rapports + version** (Ex.21)
+- [ ] Celery Beat envoi périodique
+- [ ] Version visible dans l'interface POS
+
+### 7. Menu Ventes (intégré dans sessions 16-17)
+
+Voir sessions 16 et 17 ci-dessus.
 
 ### 8. Multi-Tarif UX
 
