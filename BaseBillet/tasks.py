@@ -877,7 +877,7 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
 
     json_data = json.dumps(payload, cls=DjangoJSONEncoder)
 
-    url = f’{config.server_cashless}/api/stripebankdepositfromlespass’
+    url = f"{config.server_cashless}/api/stripebankdepositfromlespass"
     try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
@@ -948,7 +948,7 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
-    url = f’{config.server_cashless}/api/refundfromlespass’
+    url = f"{config.server_cashless}/api/refundfromlespass"
     try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
@@ -1041,7 +1041,7 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
-    url = f’{config.server_cashless}/api/salefromlespass’
+    url = f"{config.server_cashless}/api/salefromlespass"
     try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
