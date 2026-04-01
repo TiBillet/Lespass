@@ -19,7 +19,9 @@ Même langage visuel que les cartes AW/AV : bordure latérale accentuée, fond t
   <svg style="width:1rem;height:1rem;color:#16a34a;flex-shrink:0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
   <p style="font-size:.8125rem;color:#166534;margin:0;line-height:1.5625">
     <strong>{% translate "Email envoyé." %}</strong>
-    {% if membership.price %}
+    {% if membership.contribution_value %}
+      {% blocktrans with amount=membership.contribution_value %}L'adhérent·e recevra le lien de paiement pour régler {{ amount }} €.{% endblocktrans %}
+    {% elif membership.price %}
       {% blocktrans with amount=membership.price.prix %}L'adhérent·e recevra le lien de paiement pour régler {{ amount }} €.{% endblocktrans %}
     {% else %}
       {% translate "L'adhérent·e recevra le lien de paiement par email." %}
