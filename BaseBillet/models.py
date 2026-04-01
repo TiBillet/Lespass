@@ -2078,6 +2078,8 @@ class Reservation(models.Model):
         Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
         / Creates a credit note for a non-Stripe LigneArticle.
         """
+        metadata = ligne.metadata if ligne.metadata else {}
+        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
         avoir = LigneArticle.objects.create(
             pricesold=ligne.pricesold,
             qty=-ligne.qty,
@@ -2090,6 +2092,7 @@ class Reservation(models.Model):
             wallet=ligne.wallet,
             sale_origin=SaleOrigin.ADMIN,
             credit_note_for=ligne,
+            metadata=metadata,
             status=LigneArticle.CREATED,
         )
         avoir.status = LigneArticle.CREDIT_NOTE
