@@ -42,6 +42,9 @@
                          alt="Faire Festival"
                          class="img-fluid logo-homepage">
                 </div>
+                <div>
+                    <p class="fw-bold fs-5 mt-5">Le grand rendez-vous toulousain pour réinventer notre façon de produire, de consommer et de transmettre !</p>
+                </div>
             </div>
 
             <!-- Colonne vide pour l'équilibre à droite -->
@@ -148,7 +151,7 @@
                 <!-- ========================================================
                      GRILLE DES JOURS (Jour 01, 02, 03)
                      ======================================================== -->
-                <div class="row g-3 justify-content-center text-center mb-5">
+                <div class="row g-3 justify-content-center text-center">
 
                     <!-- Carte Jour 01 -->
                     <div class="col-md-4">
@@ -197,11 +200,33 @@
                             </p>
                         </div>
                     </div>
+                      <!-- Bouton -->
+            <div class="">
+                <a href="{% url 'event-list' %}"
+                   class="btn btn-block w-50 bouton-action police-titre"
+                   hx-get="{% url 'event-list' %}"
+                   hx-target="body"
+                   hx-push-url="true">
+                <p class="mb-0">{% translate "En savoir plus sur le Faire Festival" %}</p>
+                </a>
+            </div>
                 </div> <!-- Fin Row Jours -->
-
             </div> <!-- Fin Col Droite -->
         </div> <!-- Fin Row Principale -->
     </section>
+
+    <!-- Partie tuto programme de festival -->
+   
+
+        <div class="titre-principal titre-programme mb-4 w-100">
+            <img src="{% static 'faire_festival/image/Fichier-14.png' %}"
+                     alt="Comment créer son programme"
+                     class="img-fluid d-flex align-items-center ">
+        </div>     
+        
+        <section class="grid-3">
+            <div></div>
+        </section>
 
 </main>
 

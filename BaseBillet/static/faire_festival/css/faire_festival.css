@@ -645,6 +645,22 @@
     height: auto;
 }
 
+/* --- Titre Programme (réduit et centré) --- */
+.skin-faire-festival .titre-programme {
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.skin-faire-festival .titre-programme img {
+    max-width: 50%;
+    max-height: 120px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
 /* Logo homepage - taille augmentée */
 .skin-faire-festival .logo-homepage {
     width: 90%;
