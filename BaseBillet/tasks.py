@@ -858,24 +858,26 @@ def send_membership_payment_link_user(membership_uuid: str):
 @shared_task(bind=True, max_retries=20)
 def send_stripe_bank_deposit_to_laboutik(self, payload):
     # Le max de temps entre deux retries : 24 heures
+    # / Max time between two retries: 24 hours
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     config = Configuration.get_solo()
     # On check si le serveur cashless est bien opérationnel :
+    # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
             logger.warning(f"No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
             return True
+    except MaxRetriesExceededError:
+        logger.error(f"send_stripe_bank_deposit_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
+        return False
     except Exception as exc:
         logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
-        # Ajoute un backoff exponentiel pour les autres erreurs
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
-    except MaxRetriesExceededError:
-        logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
     json_data = json.dumps(payload, cls=DjangoJSONEncoder)
 
-    url = f'{config.server_cashless}/api/stripebankdepositfromlespass'
+    url = f’{config.server_cashless}/api/stripebankdepositfromlespass’
     try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
@@ -890,22 +892,25 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
         )
         if response.status_code == 200:
             logger.info("send_stripe_bank_deposit_to_laboutik sended_to_laboutik = True")
-        # Si la réponse est 404, on déclenche un retry
-        if response.status_code == 404:
-            # Augmente le délai de retry avec un backoff exponentiel
+            return True
+        elif response.status_code == 429 or 500 <= response.status_code < 600:
+            logger.warning(f"LaBoutik a répondu {response.status_code} pour {url}")
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
             raise self.retry(countdown=retry_delay)
-
-    except requests.exceptions.RequestException as exc:
-        # Log et retry en cas d’erreur réseau ou autre exception
-        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
-
-        # Ajoute un backoff exponentiel pour les autres erreurs
-        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
-        raise self.retry(exc=exc, countdown=retry_delay)
+        elif response.status_code == 404:
+            logger.error(f"LaBoutik 404 pour {url} — endpoint introuvable")
+            return False
+        else:
+            logger.error(f"LaBoutik a répondu {response.status_code} pour {url} — abandon (pas de retry)")
+            return False
 
     except MaxRetriesExceededError:
-        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
+        logger.error(f"send_stripe_bank_deposit_to_laboutik abandonnée après {self.request.retries} retries pour {url}")
+        return False
+    except requests.exceptions.RequestException as exc:
+        logger.error(f"Erreur réseau lors de l’envoi à {url}: {exc}")
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
 
 
 @shared_task(bind=True, max_retries=20)
