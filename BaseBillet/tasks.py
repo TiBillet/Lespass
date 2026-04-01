@@ -911,36 +911,39 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
 @shared_task(bind=True, max_retries=20)
 def send_refund_to_laboutik(self, ligne_article_pk):
     # Le max de temps entre deux retries : 24 heures
+    # / Max time between two retries: 24 hours
     MAX_RETRY_TIME = 86400  # 24 * 60 * 60 seconds = 24 h
     logger.info(f"send_refund_to_laboutik - waiting for save: {ligne_article_pk}")
     time.sleep(5)
     config = Configuration.get_solo()
 
-    # Tache lancé sur un celery. Le save n'est peut être pas encore réalisé coté trigger.
+    # Tache lancée sur celery. Le save n’est peut-être pas encore réalisé côté trigger.
+    # / Task launched on celery. The save may not be done yet on the trigger side.
     ligne_article = LigneArticle.objects.get(pk=ligne_article_pk)
     if ligne_article.sended_to_laboutik:
         logger.info("refund déjà envoyé à Laboutik – skip")
         return True
 
     # On check si le serveur cashless est bien opérationnel :
+    # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
             logger.warning(f"No serveur cashless on config. Article not sended")
             return True
+    except MaxRetriesExceededError:
+        logger.error(f"send_refund_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
+        return False
     except Exception as exc:
         logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
-        # Ajoute un backoff exponentiel pour les autres erreurs
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
-    except MaxRetriesExceededError:
-        logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
     logger.info(f"send_refund_to_laboutik -> ligne_article status : {ligne_article.get_status_display()}")
 
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
-    url = f'{config.server_cashless}/api/refundfromlespass'
+    url = f’{config.server_cashless}/api/refundfromlespass’
     try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
@@ -954,30 +957,33 @@ def send_refund_to_laboutik(self, ligne_article_pk):
             timeout=(5, 10),  # 5s de connexion, 10s de lecture
         )
 
-        # Si la réponse est 404, on déclenche un retry
         if response.status_code == 200:
             logger.info("sended_to_laboutik = True")
             ligne_article.sended_to_laboutik = True
             ligne_article.save()
             return True
         elif response.status_code == 429 or 500 <= response.status_code < 600:
+            # Erreur serveur ou rate limit : retry avec backoff exponentiel
+            # / Server error or rate limit: retry with exponential backoff
+            logger.warning(f"LaBoutik a répondu {response.status_code} pour {url}")
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
             raise self.retry(countdown=retry_delay)
-        if response.status_code == 404:
-            # Augmente le délai de retry avec un backoff exponentiel
-            logger.error("Serveur down ?")
+        elif response.status_code == 404:
+            logger.error(f"LaBoutik 404 pour {url} — endpoint introuvable")
+            return False
+        else:
+            # Erreur client inattendue (400, 403, etc.) : ne pas retry, c’est une erreur permanente
+            # / Unexpected client error (400, 403, etc.): don’t retry, it’s a permanent error
+            logger.error(f"LaBoutik a répondu {response.status_code} pour {url} — abandon (pas de retry)")
             return False
 
+    except MaxRetriesExceededError:
+        logger.error(f"send_refund_to_laboutik abandonnée après {self.request.retries} retries pour {url}")
+        return False
     except requests.exceptions.RequestException as exc:
-        # Log et retry en cas d’erreur réseau ou autre exception
-        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
-
-        # Ajoute un backoff exponentiel pour les autres erreurs
+        logger.error(f"Erreur réseau lors de l’envoi à {url}: {exc}")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
-
-    except MaxRetriesExceededError:
-        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
 
 
 # @app.task
@@ -1005,20 +1011,21 @@ def send_sale_to_laboutik(self, ligne_article_pk):
 
 
     # On check si le serveur cashless est bien opérationnel :
+    # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
             logger.warning(f"No serveur cashless on config. Article not sended")
             return True
+    except MaxRetriesExceededError:
+        logger.error(f"send_sale_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
+        return False
     except Exception as exc:
         logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
-        # Ajoute un backoff exponentiel pour les autres erreurs
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
-    except MaxRetriesExceededError:
-        logger.error(f"La tâche a échoué après plusieurs tentatives pour {config.check_serveur_cashless()}")
 
-
-    # On va relancer la requete vers la db tant que ligne_article n'est pas valide
+    # On va relancer la requete vers la db tant que ligne_article n’est pas valide
+    # / Keep polling the DB until ligne_article is valid
     timed = 0
     while ligne_article.status != LigneArticle.VALID and timed < 100:
         time.sleep(1)
@@ -1029,7 +1036,7 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     serialized_ligne_article = LigneArticleSerializer(ligne_article).data
     json_data = json.dumps(serialized_ligne_article, cls=DjangoJSONEncoder)
 
-    url = f'{config.server_cashless}/api/salefromlespass'
+    url = f’{config.server_cashless}/api/salefromlespass’
     try:
         logger.info(f"start celery_post_request to {url}")
         response = requests.post(
@@ -1046,22 +1053,25 @@ def send_sale_to_laboutik(self, ligne_article_pk):
             logger.info("sended_to_laboutik = True")
             ligne_article.sended_to_laboutik = True
             ligne_article.save()
-        # Si la réponse est 404, on déclenche un retry
-        if response.status_code == 404:
-            # Augmente le délai de retry avec un backoff exponentiel
+            return True
+        elif response.status_code == 429 or 500 <= response.status_code < 600:
+            logger.warning(f"LaBoutik a répondu {response.status_code} pour {url}")
             retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
             raise self.retry(countdown=retry_delay)
-
-    except requests.exceptions.RequestException as exc:
-        # Log et retry en cas d’erreur réseau ou autre exception
-        logger.error(f"Erreur lors de l'envoi de la requête POST à {url}: {exc}")
-
-        # Ajoute un backoff exponentiel pour les autres erreurs
-        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
-        raise self.retry(exc=exc, countdown=retry_delay)
+        elif response.status_code == 404:
+            logger.error(f"LaBoutik 404 pour {url} — endpoint introuvable")
+            return False
+        else:
+            logger.error(f"LaBoutik a répondu {response.status_code} pour {url} — abandon (pas de retry)")
+            return False
 
     except MaxRetriesExceededError:
-        logger.error(f"La tâche a échoué après plusieurs tentatives pour {url}")
+        logger.error(f"send_sale_to_laboutik abandonnée après {self.request.retries} retries pour {url}")
+        return False
+    except requests.exceptions.RequestException as exc:
+        logger.error(f"Erreur réseau lors de l’envoi à {url}: {exc}")
+        retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
+        raise self.retry(exc=exc, countdown=retry_delay)
 
 
 def create_ticket_pdf(ticket: Ticket):
