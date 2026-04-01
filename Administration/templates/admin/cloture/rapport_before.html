@@ -1,10 +1,11 @@
-{% extends "admin/base_site.html" %}
 {% load i18n laboutik_filters %}
+{# Cacher les fieldsets Unfold (le rapport remplace le formulaire standard) #}
+{# / Hide Unfold fieldsets (the report replaces the standard form) #}
+<style>
+    .aligned, fieldset.module, .submit-row { display: none !important; }
+</style>
 
-{% block title %}{{ title }}{% endblock %}
-
-{% block content %}
-<div style="max-width: 960px; margin: 0 auto; padding: 20px;">
+<div style="padding: 20px;">
 
     {# ── En-tête du rapport / Report header ── #}
     <div style="margin-bottom: 24px; padding: 16px; background: #f8f9fa; border-radius: 8px;" data-testid="section-header">
@@ -12,20 +13,20 @@
             <div>
                 <h2 style="margin: 0 0 12px;">{{ title }}</h2>
                 <p style="margin: 4px 0; color: #666;">
-                    <strong>{% translate "Level" %}:</strong> {{ cloture.get_niveau_display }}
-                    — <strong>{% translate "Number" %}:</strong> #{{ cloture.numero_sequentiel }}
+                    <strong>{% translate "Level" %}:</strong> {{ cloture_obj.get_niveau_display }}
+                    — <strong>{% translate "Number" %}:</strong> #{{ cloture_obj.numero_sequentiel }}
                 </p>
                 <p style="margin: 4px 0; color: #666;">
-                    <strong>{% translate "Responsible" %}:</strong> {{ cloture.responsable }}
+                    <strong>{% translate "Responsible" %}:</strong> {{ cloture_obj.responsable }}
                 </p>
-                {% if cloture.point_de_vente %}
+                {% if cloture_obj.point_de_vente %}
                 <p style="margin: 4px 0; color: #666;">
-                    <strong>{% translate "Point of sale" %}:</strong> {{ cloture.point_de_vente.name }}
+                    <strong>{% translate "Point of sale" %}:</strong> {{ cloture_obj.point_de_vente.name }}
                 </p>
                 {% endif %}
                 <p style="margin: 4px 0; color: #666;">
                     <strong>{% translate "Period" %}:</strong>
-                    {{ cloture.datetime_ouverture|default:"—" }} → {{ cloture.datetime_cloture }}
+                    {{ cloture_obj.datetime_ouverture|default:"—" }} → {{ cloture_obj.datetime_cloture }}
                 </p>
             </div>
             {# Boutons d'export en en-tete / Export buttons in header #}
@@ -394,7 +395,6 @@
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Cash" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Credit card" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Cashless" %}</th>
-                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Check" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Total" %}</th>
                 </tr>
             </thead>
@@ -405,7 +405,6 @@
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.especes|euros }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.carte_bancaire|euros }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.cashless|euros }}</td>
-                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ op_data.cheque|euros }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right; font-weight: bold;">{{ op_data.total|euros }}</td>
                 </tr>
                 {% endfor %}
@@ -515,15 +514,10 @@
     {# ── Intégrité / Integrity ── #}
     <div style="margin-top: 24px; padding: 12px; background: #f0f0f0; border-radius: 4px; font-size: 0.85em; color: #666;" data-testid="section-integrite">
         <strong>{% translate "Integrity" %}:</strong><br>
-        hash_lignes = {{ cloture.hash_lignes|default:"—" }}<br>
-        total_perpetuel = {{ cloture.total_perpetuel|euros }}
+        hash_lignes = {{ cloture_obj.hash_lignes|default:"—" }}<br>
+        total_perpetuel = {{ cloture_obj.total_perpetuel|euros }}
     </div>
 
-    {# ── Bouton retour / Back button ── #}
-    <div style="margin-top: 20px;">
-        <a href="../" style="display: inline-block; padding: 8px 16px; background: #0066cc; color: white; border-radius: 6px; text-decoration: none;">
-            &larr; {% translate "Back to list" %}
-        </a>
-    </div>
+
 </div>
-{% endblock %}
+

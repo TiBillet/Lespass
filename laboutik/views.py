@@ -25,7 +25,8 @@ from rest_framework.decorators import action
 
 from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.db.models import F, Prefetch, Sum, Count, Q
+from django.db.models import F, Max, Prefetch, Sum, Count, Q
+from django.db.models.functions import Coalesce
 
 from fedow_core.exceptions import SoldeInsuffisant
 from fedow_core.models import Asset
@@ -1184,6 +1185,424 @@ class CaisseViewSet(viewsets.ViewSet):
             "msg_content": _("Rapport envoyé par email"),
         }
         return render(request, "laboutik/partial/hx_messages.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  Menu Ventes — Ticket X + liste des ventes (Session 16)                  #
+    #  Sales menu — Ticket X + sales list (Session 16)                         #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get"], url_path="recap-en-cours", url_name="recap_en_cours")
+    def recap_en_cours(self, request):
+        """
+        GET /laboutik/caisse/recap-en-cours/?vue=toutes|par_pv|par_moyen
+        Ticket X : synthese comptable du service en cours (lecture seule).
+        Pas de creation de ClotureCaisse. Appelle RapportComptableService.
+        / Ticket X: accounting summary of the current shift (read-only).
+        No ClotureCaisse created. Calls RapportComptableService.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Calcule datetime_ouverture (1ere vente apres derniere cloture journaliere)
+        2. Instancie RapportComptableService(pv=None, debut, fin=now())
+        3. Selon le param ?vue : genere le rapport correspondant
+        4. Rend hx_recap_en_cours.html dans #products-container
+        """
+        datetime_ouverture = _calculer_datetime_ouverture_service()
+        vue = request.GET.get("vue", "toutes")
+
+        # Si aucune vente depuis la derniere cloture, afficher un message
+        # / If no sales since last closure, show a message
+        if datetime_ouverture is None:
+            context = {
+                "aucune_vente": True,
+                "vue": vue,
+            }
+            return _rendre_vue_ventes(request, "laboutik/partial/hx_recap_en_cours.html", context)
+
+        datetime_fin = dj_timezone.now()
+        service = RapportComptableService(None, datetime_ouverture, datetime_fin)
+
+        # Construire le contexte selon la vue demandee
+        # / Build context based on the requested view
+        context = {
+            "vue": vue,
+            "aucune_vente": False,
+            "datetime_ouverture": datetime_ouverture,
+            "datetime_fin": datetime_fin,
+            "nb_transactions": service.lignes.count(),
+        }
+
+        if vue == "par_pv":
+            context["ventilation_par_pv"] = service.calculer_ventilation_par_pv()
+            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
+        elif vue == "par_moyen":
+            context["synthese_operations"] = service.calculer_synthese_operations()
+            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
+        elif vue == "detail_articles":
+            context["detail_ventes"] = service.calculer_detail_ventes()
+        else:
+            # Vue "toutes" : totaux, TVA, solde
+            # / "toutes" view: totals, VAT, cash balance
+            context["totaux_par_moyen"] = service.calculer_totaux_par_moyen()
+            context["tva"] = service.calculer_tva()
+            context["solde_caisse"] = service.calculer_solde_caisse()
+
+        return _rendre_vue_ventes(request, "laboutik/partial/hx_recap_en_cours.html", context)
+
+    @action(detail=False, methods=["get"], url_path="liste-ventes", url_name="liste_ventes")
+    def liste_ventes(self, request):
+        """
+        GET /laboutik/caisse/liste-ventes/?pv=uuid&moyen=CA&page=1
+        Liste paginee des ventes du service en cours.
+        Pagination HTMX avec scroll infini (hx-trigger="revealed").
+        / Paginated list of sales for the current shift.
+        HTMX pagination with infinite scroll.
+
+        LOCALISATION : laboutik/views.py
+        """
+        datetime_ouverture = _calculer_datetime_ouverture_service()
+
+        if datetime_ouverture is None:
+            context = {
+                "aucune_vente": True,
+                "ventes_groupees": [],
+                "page_courante": 1,
+                "a_page_suivante": False,
+            }
+            return _rendre_vue_ventes(request, "laboutik/partial/hx_liste_ventes.html", context)
+
+        # Queryset de base : lignes valides du service en cours
+        # / Base queryset: valid lines from current shift
+        lignes = LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+            datetime__gte=datetime_ouverture,
+            datetime__lte=dj_timezone.now(),
+            status=LigneArticle.VALID,
+        )
+
+        # Appliquer les filtres GET
+        # / Apply GET filters
+        filtre_pv = request.GET.get("pv")
+        filtre_moyen = request.GET.get("moyen")
+
+        if filtre_pv:
+            lignes = lignes.filter(point_de_vente__uuid=filtre_pv)
+        if filtre_moyen:
+            lignes = lignes.filter(payment_method=filtre_moyen)
+
+        # Regrouper par uuid_transaction cote PostgreSQL (GROUP BY).
+        # Les lignes sans uuid_transaction utilisent leur uuid comme cle.
+        # Coalesce(uuid_transaction, uuid) = COALESCE(uuid_transaction, uuid) en SQL.
+        # Tout le travail est fait par la DB : pas de chargement en memoire Python.
+        # / Group by uuid_transaction on the PostgreSQL side (GROUP BY).
+        # Lines without uuid_transaction use their uuid as key.
+        # All work done by the DB: no Python in-memory loading.
+        ventes_requete = lignes.values(
+            cle_vente=Coalesce('uuid_transaction', 'uuid'),
+        ).annotate(
+            derniere_datetime=Max('datetime'),
+            total=Sum('amount'),
+            nb_articles=Count('uuid'),
+            moyen_paiement=Max('payment_method'),
+            nom_pv=Max('point_de_vente__name'),
+        ).order_by('-derniere_datetime')
+
+        # Pagination SQL native via slicing Django (traduit en LIMIT/OFFSET)
+        # / Native SQL pagination via Django slicing (translates to LIMIT/OFFSET)
+        try:
+            page = int(request.GET.get("page", 1))
+        except (ValueError, TypeError):
+            page = 1
+        if page < 1:
+            page = 1
+        taille_page = 20
+        offset = (page - 1) * taille_page
+        ventes_page = list(ventes_requete[offset:offset + taille_page])
+        a_page_suivante = ventes_requete[offset + taille_page:offset + taille_page + 1].exists()
+
+        # Liste des PV pour le filtre (select)
+        # / POS list for the filter (select)
+        points_de_vente = PointDeVente.objects.filter(
+            hidden=False,
+        ).order_by('poid_liste').values('uuid', 'name')
+
+        context = {
+            "aucune_vente": False,
+            "ventes_groupees": ventes_page,
+            "page_courante": page,
+            "a_page_suivante": a_page_suivante,
+            "page_suivante": page + 1,
+            "filtre_pv": filtre_pv or "",
+            "filtre_moyen": filtre_moyen or "",
+            "points_de_vente": list(points_de_vente),
+            "moyens_paiement": [
+                {"code": PaymentMethod.CASH, "label": _("Espèces")},
+                {"code": PaymentMethod.CC, "label": _("Carte bancaire")},
+                {"code": PaymentMethod.LOCAL_EURO, "label": _("Cashless")},
+                {"code": PaymentMethod.LOCAL_GIFT, "label": _("Cadeau")},
+                {"code": PaymentMethod.CHEQUE, "label": _("Chèque")},
+            ],
+        }
+        return _rendre_vue_ventes(request, "laboutik/partial/hx_liste_ventes.html", context)
+
+    @action(
+        detail=False, methods=["get"],
+        url_path=r"detail-vente/(?P<uuid_transaction>[^/.]+)",
+        url_name="detail_vente",
+    )
+    def detail_vente(self, request, uuid_transaction=None):
+        """
+        GET /laboutik/caisse/detail-vente/<uuid_transaction>/
+        Detail d'une vente : toutes les LigneArticle du meme uuid_transaction.
+        / Sale detail: all LigneArticle with the same uuid_transaction.
+
+        LOCALISATION : laboutik/views.py
+        """
+        # Valider le format UUID avant la requete
+        # / Validate UUID format before the query
+        try:
+            uuid_tx_valide = uuid_module.UUID(str(uuid_transaction))
+        except (ValueError, AttributeError):
+            context = {
+                "msg_type": "warning",
+                "msg_content": _("Transaction introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context, status=404)
+
+        # Recuperer les lignes de cette transaction.
+        # La cle peut etre un uuid_transaction (regroupement) ou un uuid de ligne
+        # (ventes sans uuid_transaction, anciennes donnees).
+        # On cherche d'abord par uuid_transaction, puis par uuid (pk).
+        # / Get all lines for this transaction.
+        # The key can be a uuid_transaction (grouped) or a line uuid
+        # (sales without uuid_transaction, old data).
+        # Try uuid_transaction first, then uuid (pk).
+        lignes = LigneArticle.objects.filter(
+            uuid_transaction=uuid_tx_valide,
+            sale_origin=SaleOrigin.LABOUTIK,
+        ).select_related(
+            'pricesold__productsold__product',
+            'pricesold__price',
+            'point_de_vente',
+        ).order_by('datetime')
+
+        # Si pas trouve par uuid_transaction, chercher par uuid (pk de la ligne)
+        # / If not found by uuid_transaction, search by uuid (line pk)
+        if not lignes.exists():
+            lignes = LigneArticle.objects.filter(
+                uuid=uuid_tx_valide,
+                sale_origin=SaleOrigin.LABOUTIK,
+            ).select_related(
+                'pricesold__productsold__product',
+                'pricesold__price',
+                'point_de_vente',
+            ).order_by('datetime')
+
+        if not lignes.exists():
+            context = {
+                "msg_type": "warning",
+                "msg_content": _("Transaction introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context, status=404)
+
+        # Construire le detail des articles
+        # / Build article details
+        premiere_ligne = lignes.first()
+        articles_detail = []
+        total_transaction = 0
+
+        for ligne in lignes:
+            nom_article = ""
+            nom_tarif = ""
+            if ligne.pricesold:
+                if ligne.pricesold.productsold:
+                    nom_article = ligne.pricesold.productsold.product.name
+                if ligne.pricesold.price:
+                    nom_tarif = ligne.pricesold.price.name
+
+            articles_detail.append({
+                "nom": nom_article,
+                "tarif": nom_tarif,
+                "qty": ligne.qty,
+                "montant": ligne.amount or 0,
+            })
+            total_transaction += ligne.amount or 0
+
+        context = {
+            "uuid_transaction": uuid_transaction,
+            "datetime": premiere_ligne.datetime,
+            "moyen_paiement": premiere_ligne.payment_method or "",
+            "nom_pv": premiere_ligne.point_de_vente.name if premiere_ligne.point_de_vente else "",
+            "articles": articles_detail,
+            "total": total_transaction,
+            "nb_articles": len(articles_detail),
+        }
+        return _rendre_vue_ventes(request, "laboutik/partial/hx_detail_vente.html", context)
+
+
+# --------------------------------------------------------------------------- #
+#  Fonctions utilitaires — Menu Ventes (Session 16)                            #
+#  Utility functions — Sales Menu (Session 16)                                 #
+# --------------------------------------------------------------------------- #
+
+
+def _calculer_datetime_ouverture_service():
+    """
+    Calcule le debut du service en cours : 1ere LigneArticle VALID
+    apres la derniere cloture journaliere.
+    Retourne None si aucune vente depuis la derniere cloture.
+    / Computes the start of the current shift: 1st VALID LigneArticle
+    after the last daily closure.
+    Returns None if no sales since the last closure.
+
+    LOCALISATION : laboutik/views.py
+
+    Logique identique a cloturer() lignes 947-979.
+    / Same logic as cloturer() lines 947-979.
+    """
+    # La cloture est globale au tenant (pas par PV)
+    # / Closure is global to the tenant (not per POS)
+    derniere_cloture = ClotureCaisse.objects.filter(
+        niveau=ClotureCaisse.JOURNALIERE,
+    ).order_by('-datetime_cloture').first()
+
+    if derniere_cloture:
+        premiere_vente = LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+            status=LigneArticle.VALID,
+            datetime__gt=derniere_cloture.datetime_cloture,
+        ).order_by('datetime').first()
+    else:
+        premiere_vente = LigneArticle.objects.filter(
+            sale_origin=SaleOrigin.LABOUTIK,
+            status=LigneArticle.VALID,
+        ).order_by('datetime').first()
+
+    if not premiere_vente:
+        return None
+
+    return premiere_vente.datetime
+
+
+def _construire_contexte_ventes(request):
+    """
+    Construit le contexte commun des vues Ventes (header + params retour).
+    Les params uuid_pv et tag_id_cm sont propages dans les URLs HTMX
+    pour que le bouton Retour et les onglets fonctionnent.
+    / Builds common context for Sales views (header + return params).
+    uuid_pv and tag_id_cm params are propagated in HTMX URLs
+    so that the Back button and tabs work.
+
+    LOCALISATION : laboutik/views.py
+    """
+    uuid_pv = request.GET.get("uuid_pv", "")
+    tag_id_cm = request.GET.get("tag_id_cm", "")
+
+    # Charger le PV et la carte primaire pour le header
+    # / Load POS and primary card for the header
+    pv_dict = {"id": uuid_pv, "name": "", "icon": "", "comportement": "D"}
+    card_dict = {"tag_id": tag_id_cm, "name": "", "mode_gerant": False, "pvs_list": []}
+
+    if uuid_pv:
+        try:
+            pv_obj = PointDeVente.objects.get(uuid=uuid_pv)
+            pv_dict["name"] = pv_obj.name
+            pv_dict["icon"] = pv_obj.icon or ""
+            pv_dict["comportement"] = pv_obj.comportement
+        except (PointDeVente.DoesNotExist, ValueError):
+            pass
+
+    if tag_id_cm:
+        carte_primaire_obj, _erreur = _charger_carte_primaire(tag_id_cm)
+        if carte_primaire_obj is not None:
+            card_dict["name"] = str(
+                carte_primaire_obj.carte.number or carte_primaire_obj.carte.tag_id
+            )
+            card_dict["mode_gerant"] = carte_primaire_obj.edit_mode
+            pvs_list = list(
+                carte_primaire_obj.points_de_vente
+                .filter(hidden=False)
+                .order_by('poid_liste')
+                .values_list('uuid', 'name', 'poid_liste', 'icon')
+            )
+            card_dict["pvs_list"] = [
+                {"uuid": str(uuid), "name": name, "poid_liste": poid, "icon": icon or ""}
+                for uuid, name, poid, icon in pvs_list
+            ]
+
+    # URL de retour vers l'interface POS
+    # / Return URL to the POS interface
+    url_retour_pv = reverse('laboutik-caisse-point_de_vente')
+    if uuid_pv:
+        url_retour_pv += f"?uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}"
+
+    # Params a propager dans toutes les URLs HTMX des vues Ventes
+    # / Params to propagate in all HTMX URLs of Sales views
+    params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+
+    laboutik_config = LaboutikConfiguration.get_solo()
+
+    # state et stateJson : necessaires pour base.html (JS init)
+    # Un state minimal suffit pour les vues Ventes (pas de NFC, pas de panier)
+    # / state and stateJson: needed for base.html (JS init)
+    # A minimal state is enough for Sales views (no NFC, no cart)
+    state = _construire_state()
+
+    return {
+        "pv": pv_dict,
+        "card": card_dict,
+        "title": _("Ventes"),
+        "url_retour_pv": url_retour_pv,
+        "params_ventes": params_ventes,
+        "mode_ecole": laboutik_config.mode_ecole,
+        "state": state,
+        "stateJson": dumps(state),
+    }
+
+
+def _rendre_vue_ventes(request, template_partiel, context):
+    """
+    Rend une vue Ventes : page complete (body swap) ou partial (zone swap).
+    Si la requete HTMX cible #ventes-zone, on rend juste le partial.
+    Sinon (navigation depuis le burger menu), on rend la page complete
+    avec le header et le wrapper ventes.html.
+    / Renders a Sales view: full page (body swap) or partial (zone swap).
+    If the HTMX request targets #ventes-zone, render just the partial.
+    Otherwise (nav from burger menu), render full page with header.
+
+    LOCALISATION : laboutik/views.py
+    """
+    # Ajouter le contexte header/retour commun
+    # / Add common header/return context
+    context_ventes = _construire_contexte_ventes(request)
+    context.update(context_ventes)
+
+    # Page complete seulement si :
+    # - Pas de requete HTMX (acces direct via URL)
+    # - OU target == "body" (navigation depuis burger menu)
+    # Tout le reste (onglets, scroll infini, filtres) = partial seul.
+    # / Full page only if:
+    # - Not an HTMX request (direct URL access)
+    # - OR target == "body" (navigation from burger menu)
+    # Everything else (tabs, infinite scroll, filters) = partial only.
+    est_navigation_complete = (
+        not hasattr(request, 'htmx')
+        or not request.htmx
+        or request.htmx.target == "body"
+    )
+
+    if not est_navigation_complete:
+        # Swap interne : juste le partial (onglets, pagination, detail)
+        # / Internal swap: just the partial (tabs, pagination, detail)
+        return render(request, template_partiel, context)
+    else:
+        # Navigation complete : page avec header + wrapper
+        # / Full navigation: page with header + wrapper
+        context["vue_partiel"] = template_partiel
+        return render(request, "laboutik/views/ventes.html", context)
 
 
 # --------------------------------------------------------------------------- #

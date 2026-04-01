@@ -740,4 +740,194 @@ class Command(BaseCommand):
                 reset_carte(tag_id_client3)
                 self.stdout.write(f"  Carte 3 remise a zero (DEBUG=True)")
 
+            # ================================================================ #
+            #  Cloture de demo avec LigneArticle de tous les types             #
+            #  Rempli tous les tableaux du rapport comptable                    #
+            #  Demo closure with LigneArticle of all types                     #
+            #  Fills all accounting report tables                              #
+            # ================================================================ #
+
+            from BaseBillet.models import (
+                LigneArticle, ProductSold, PriceSold,
+                PaymentMethod, SaleOrigin, Event,
+            )
+            from laboutik.models import ClotureCaisse
+            from django.utils import timezone
+            from datetime import timedelta
+
+            now = timezone.now()
+            debut_service = now - timedelta(hours=6)
+
+            # Verifier si une cloture de demo existe deja (idempotent)
+            # / Check if a demo closure already exists (idempotent)
+            cloture_demo_existe = ClotureCaisse.objects.filter(
+                nombre_transactions__gte=10,
+            ).exists()
+
+            if cloture_demo_existe:
+                self.stdout.write("  Cloture de demo existante — pas de recreation")
+            else:
+                self.stdout.write("  Creation de la cloture de demo...")
+
+                uuid_transaction_demo = uuid_module.uuid4()
+                lignes_demo = []
+
+                def creer_ligne_demo(produit, prix_obj, quantite, methode_paiement,
+                                     asset_uuid=None, carte=None, wallet=None):
+                    """Cree ProductSold + PriceSold + LigneArticle."""
+                    product_sold, _ = ProductSold.objects.get_or_create(
+                        product=produit, event=None,
+                        defaults={'categorie_article': produit.categorie_article},
+                    )
+                    price_sold, _ = PriceSold.objects.get_or_create(
+                        productsold=product_sold, price=prix_obj,
+                        defaults={'prix': prix_obj.prix},
+                    )
+                    prix_centimes = int(round(float(prix_obj.prix) * 100))
+                    ligne = LigneArticle.objects.create(
+                        pricesold=price_sold,
+                        qty=quantite,
+                        amount=prix_centimes * quantite,
+                        sale_origin=SaleOrigin.LABOUTIK,
+                        payment_method=methode_paiement,
+                        status=LigneArticle.VALID,
+                        uuid_transaction=uuid_transaction_demo,
+                        asset=asset_uuid,
+                        carte=carte,
+                        wallet=wallet,
+                    )
+                    lignes_demo.append(ligne)
+                    return ligne
+
+                # Recuperer les produits existants
+                produit_biere = Product.objects.filter(name="Biere", methode_caisse=Product.VENTE).first()
+                produit_coca = Product.objects.filter(name="Coca", methode_caisse=Product.VENTE).first()
+                produit_eau = Product.objects.filter(name="Eau", methode_caisse=Product.VENTE).first()
+                produit_chips = Product.objects.filter(name="Chips", methode_caisse=Product.VENTE).first()
+                produit_vin_rouge = Product.objects.filter(name="Vin rouge", methode_caisse=Product.VENTE).first()
+                produit_recharge_eur = Product.objects.filter(name="Recharge EUR Test", methode_caisse=Product.RECHARGE_EUROS).first()
+                produit_recharge_cadeau = Product.objects.filter(name="Recharge Cadeau Test", methode_caisse=Product.RECHARGE_CADEAU).first()
+                produit_adhesion = Product.objects.filter(name="Adhesion POS Test", methode_caisse=Product.ADHESION).first()
+                produit_adhesion_mix = Product.objects.filter(name="Adhesion Test Mix", methode_caisse=Product.ADHESION).first()
+
+                # Assets fedow pour les paiements NFC
+                from fedow_core.models import Asset as FedowAsset
+                asset_tlf = FedowAsset.objects.filter(category=FedowAsset.TLF, active=True).first()
+
+                # Carte NFC
+                tag_id_client1 = getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543")
+                carte_nfc = CarteCashless.objects.filter(tag_id=tag_id_client1).first()
+                wallet_nfc = carte_nfc.user.wallet if carte_nfc and carte_nfc.user else None
+
+                # 1. Ventes bar (especes + CB + NFC)
+                if produit_biere:
+                    tarif = Price.objects.filter(product=produit_biere).first()
+                    if tarif:
+                        creer_ligne_demo(produit_biere, tarif, 10, PaymentMethod.CASH)
+                        creer_ligne_demo(produit_biere, tarif, 5, PaymentMethod.CC)
+                        if asset_tlf and carte_nfc:
+                            creer_ligne_demo(produit_biere, tarif, 3, PaymentMethod.LOCAL_EURO,
+                                             asset_uuid=asset_tlf.uuid, carte=carte_nfc, wallet=wallet_nfc)
+
+                if produit_coca:
+                    tarif = Price.objects.filter(product=produit_coca).first()
+                    if tarif:
+                        creer_ligne_demo(produit_coca, tarif, 4, PaymentMethod.CASH)
+                        creer_ligne_demo(produit_coca, tarif, 2, PaymentMethod.CC)
+
+                if produit_eau:
+                    tarif = Price.objects.filter(product=produit_eau).first()
+                    if tarif:
+                        creer_ligne_demo(produit_eau, tarif, 3, PaymentMethod.CASH)
+
+                if produit_chips:
+                    tarif = Price.objects.filter(product=produit_chips).first()
+                    if tarif:
+                        creer_ligne_demo(produit_chips, tarif, 2, PaymentMethod.CASH)
+
+                if produit_vin_rouge:
+                    tarif = Price.objects.filter(product=produit_vin_rouge).first()
+                    if tarif:
+                        creer_ligne_demo(produit_vin_rouge, tarif, 2, PaymentMethod.CC)
+                        if asset_tlf and carte_nfc:
+                            creer_ligne_demo(produit_vin_rouge, tarif, 1, PaymentMethod.LOCAL_EURO,
+                                             asset_uuid=asset_tlf.uuid, carte=carte_nfc, wallet=wallet_nfc)
+
+                # 2. Recharges cashless (especes)
+                if produit_recharge_eur:
+                    tarif = Price.objects.filter(product=produit_recharge_eur).first()
+                    if tarif:
+                        creer_ligne_demo(produit_recharge_eur, tarif, 2, PaymentMethod.CASH)
+
+                if produit_recharge_cadeau:
+                    tarif = Price.objects.filter(product=produit_recharge_cadeau).first()
+                    if tarif:
+                        creer_ligne_demo(produit_recharge_cadeau, tarif, 1, PaymentMethod.CASH)
+
+                # 3. Adhesions (especes + CB)
+                if produit_adhesion:
+                    tarif = Price.objects.filter(product=produit_adhesion).first()
+                    if tarif:
+                        creer_ligne_demo(produit_adhesion, tarif, 3, PaymentMethod.CASH)
+                        creer_ligne_demo(produit_adhesion, tarif, 1, PaymentMethod.CC)
+
+                if produit_adhesion_mix:
+                    tarif = Price.objects.filter(product=produit_adhesion_mix).first()
+                    if tarif:
+                        creer_ligne_demo(produit_adhesion_mix, tarif, 2, PaymentMethod.CASH)
+
+                # 4. Billets (si un event existe)
+                event_futur = Event.objects.filter(datetime__gte=now - timedelta(days=30)).first()
+                if event_futur:
+                    produit_billet = Product.objects.filter(
+                        events=event_futur,
+                        categorie_article__in=[Product.BILLET, Product.FREERES],
+                    ).first()
+                    if produit_billet:
+                        tarif = Price.objects.filter(product=produit_billet).first()
+                        if tarif:
+                            creer_ligne_demo(produit_billet, tarif, 3, PaymentMethod.CASH)
+                            creer_ligne_demo(produit_billet, tarif, 1, PaymentMethod.CC)
+
+                # 5. Creer la cloture
+                total_especes = sum(l.amount for l in lignes_demo if l.payment_method == PaymentMethod.CASH)
+                total_cb = sum(l.amount for l in lignes_demo if l.payment_method == PaymentMethod.CC)
+                total_cashless = sum(l.amount for l in lignes_demo
+                                     if l.payment_method in [PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT])
+                total_general = total_especes + total_cb + total_cashless
+
+                from AuthBillet.models import TibilletUser
+                admin_email = getattr(settings, 'ADMIN_EMAIL', 'jturbeaux@pm.me')
+                responsable = TibilletUser.objects.filter(email=admin_email).first()
+
+                cloture_demo = ClotureCaisse.objects.create(
+                    point_de_vente=pdv_bar,
+                    responsable=responsable,
+                    datetime_ouverture=debut_service,
+                    datetime_cloture=now,
+                    total_especes=total_especes,
+                    total_carte_bancaire=total_cb,
+                    total_cashless=total_cashless,
+                    total_general=total_general,
+                    nombre_transactions=len(lignes_demo),
+                )
+
+                # Generer et sauvegarder le rapport JSON complet
+                from laboutik.reports import RapportComptableService
+                service = RapportComptableService(
+                    point_de_vente=pdv_bar,
+                    datetime_debut=debut_service,
+                    datetime_fin=now,
+                )
+                cloture_demo.rapport_json = service.generer_rapport_complet()
+                cloture_demo.save(update_fields=['rapport_json'])
+
+                self.stdout.write(
+                    f"  Cloture de demo : {len(lignes_demo)} lignes, "
+                    f"total {total_general / 100:.2f} EUR "
+                    f"(especes {total_especes / 100:.2f}, "
+                    f"CB {total_cb / 100:.2f}, "
+                    f"cashless {total_cashless / 100:.2f})"
+                )
+
             self.stdout.write(self.style.SUCCESS("Donnees de test POS creees avec succes."))

@@ -1,0 +1,65 @@
+{% load i18n laboutik_filters %}
+<!--
+DETAIL D'UNE VENTE — collapse dans un <td colspan="5"> sous la ligne cliquee
+/ SALE DETAIL — collapsed inside a <td colspan="5"> below the clicked row
+LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
+-->
+<div class="ventes-detail-collapse" data-testid="ventes-detail">
+
+    <div class="ventes-detail-info" data-testid="detail-info">
+        <div class="ventes-detail-info-item">
+            <i class="fas fa-clock" aria-hidden="true"></i>
+            {{ datetime|date:"d/m/Y H:i" }}
+        </div>
+        {% if nom_pv %}
+        <div class="ventes-detail-info-item">
+            <i class="fas fa-store" aria-hidden="true"></i>
+            {{ nom_pv }}
+        </div>
+        {% endif %}
+        <div class="ventes-detail-info-item">
+            <i class="fas fa-credit-card" aria-hidden="true"></i>
+            <span class="ventes-badge-moyen ventes-badge-{{ moyen_paiement }}">{{ moyen_paiement }}</span>
+        </div>
+    </div>
+
+    <table class="ventes-table" data-testid="detail-articles">
+        <thead>
+            <tr>
+                <th>{% translate "Article" %}</th>
+                <th>{% translate "Tarif" %}</th>
+                <th class="text-end">{% translate "Qty" %}</th>
+                <th class="text-end">{% translate "Montant" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in articles %}
+            <tr>
+                <td>{{ article.nom }}</td>
+                <td>{{ article.tarif }}</td>
+                <td class="text-end">{{ article.qty|floatformat:0 }}</td>
+                <td class="text-end">{{ article.montant|euros }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="ventes-total-row">
+                <td colspan="3"><strong>{% translate "Total" %}</strong></td>
+                <td class="text-end"><strong>{{ total|euros }}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+
+    {% if uuid_transaction %}
+    <div class="ventes-detail-actions" data-testid="detail-actions">
+        <button class="ventes-btn-action"
+                hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
+                hx-target="closest .ventes-detail-actions"
+                hx-swap="innerHTML"
+                hx-vals='{"uuid_transaction": "{{ uuid_transaction }}"}'
+                data-testid="btn-reimprimer">
+            <i class="fas fa-print" aria-hidden="true"></i>
+            {% translate "Ré-imprimer" %}
+        </button>
+    </div>
+    {% endif %}
+
+</div>

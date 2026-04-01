@@ -72,8 +72,14 @@
 			<i class="menu-burger-item-content fas fa-utensils"></i>
 			<div class="menu-burger-item-content">{% translate "TABLES" %}</div>
 		</div>
-		<div class="menu-burger-item menu-burger-item-content">
-			<i class="menu-burger-item-content fas fa-concierge-bell"></i>
+		<div class="menu-burger-item menu-burger-item-content"
+			hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?uuid_pv={{ pv.id }}&tag_id_cm={{ card.tag_id }}"
+			hx-target="body"
+			hx-swap="innerHTML"
+			hx-push-url="true"
+			onclick="hideMenuBurger()"
+			data-testid="menu-ventes">
+			<i class="menu-burger-item-content fas fa-cash-register" aria-hidden="true"></i>
 			<div class="menu-burger-item-content">{% translate "VENTES" %}</div>
 		</div>
 		<div class="menu-burger-item menu-burger-item-content" onclick="showSubMenu(event, '.sub-menu-params')">

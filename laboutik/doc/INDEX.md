@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans [`PHASES/`](PHASES/).
 >
-> Dernière mise à jour : 2026-03-30 (session 15 terminée)
+> Dernière mise à jour : 2026-04-01 (session 16 terminée)
 
 ---
 
@@ -251,8 +251,19 @@ Sessions 12 à 19. Voir `docs/superpowers/specs/2026-03-30-conformite-lne-caisse
 - [x] i18n fieldsets admin (Période, Totaux, Détails)
 - [x] 3 tests pytest nouveaux + 1 adapté, 302 total, 0 régression
 
-**Session 16 — Menu Ventes : Ticket X + liste**
-- [ ] Ticket X (3 sous-vues), liste des ventes scrollable, détail
+**Session 16 — Menu Ventes : Ticket X + liste** ✅ FAIT
+- [x] Entrée "VENTES" dans le burger menu POS (`hx-target="body"` + `hx-push-url`)
+- [x] Page plein écran `ventes.html` (header + zone ventes, sans catégories/footer/WebSocket)
+- [x] `recap_en_cours` (Ticket X) : 5 onglets (toutes, par PV, par moyen, détail articles, liste ventes)
+- [x] `liste_ventes` : pagination SQL `GROUP BY COALESCE(uuid_transaction, uuid)` + `LIMIT/OFFSET` natif PostgreSQL
+- [x] `detail_vente` : pattern **collapse** (clic ligne → détail s'ouvre en `<tr>` dessous, re-clic → ferme)
+- [x] Fallback `uuid_transaction` → `uuid` (pk) pour les anciennes données sans uuid_transaction
+- [x] `_construire_contexte_ventes()` : contexte header/PV/params pour toutes les vues Ventes
+- [x] `_rendre_vue_ventes()` : détection `htmx.target` pour page complète vs partial interne
+- [x] Colonne Chèque ajoutée dans `calculer_synthese_operations()` (service + template)
+- [x] CSS `ventes.css` : thème sombre Luciole, responsive, `table-layout:fixed`, `font-variant-numeric:tabular-nums`
+- [x] `stateJson` minimal dans le contexte ventes (fix `JSON.parse("")` crash dans base.html)
+- [x] 9 tests pytest + 4 E2E Playwright, 311 pytest total, 0 régression
 
 **Session 17 — Corrections + fond/sortie de caisse** (Ex.4)
 - [ ] Correction ESP/CB/CHQ (NFC interdit, post-clôture interdit)

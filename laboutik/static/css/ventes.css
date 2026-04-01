@@ -1,0 +1,426 @@
+/*
+ * STYLES DU MENU VENTES — Ticket X + liste + detail
+ * / SALES MENU STYLES — Ticket X + list + detail
+ *
+ * LOCALISATION : laboutik/static/css/ventes.css
+ *
+ * Police Luciole (lisibilite nocturne, dyslexie).
+ * Fond sombre, texte clair — coherent avec le theme POS.
+ */
+
+/* ------------------------------------------------------------------ */
+/*  Container principal                                                */
+/* ------------------------------------------------------------------ */
+
+/* Le .ventes-container est injecte dans #products-container qui est
+   display:flex row (pour articles + addition cote a cote).
+   On force la largeur 100% et le scroll vertical pour occuper tout l'espace.
+   / .ventes-container is injected into #products-container which is
+   display:flex row (for articles + addition side by side).
+   We force 100% width and vertical scroll to fill the space. */
+/* Container avec marges laterales pour ne pas coller aux bords.
+   max-width 1100px pour rester lisible sur grand ecran.
+   / Container with side margins, max-width 1100px for readability. */
+.ventes-container {
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0 5%;
+    max-width: 1100px;
+    margin: 0 auto;
+    font-family: "Luciole-regular", sans-serif;
+    color: #e0e0e0;
+    background-color: var(--bleu11, #1a1a2e);
+}
+
+/* ------------------------------------------------------------------ */
+/*  En-tete (titre + bouton retour)                                    */
+/* ------------------------------------------------------------------ */
+
+.ventes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ventes-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.ventes-title {
+    font-size: 1.4rem;
+    margin: 0;
+    color: #ffffff;
+}
+
+.ventes-btn-retour {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: "Luciole-regular", sans-serif;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+
+.ventes-btn-retour:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Onglets HTMX                                                      */
+/* ------------------------------------------------------------------ */
+
+.ventes-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 15px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 8px;
+}
+
+.ventes-tab {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #b0b0b0;
+    padding: 8px 14px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-family: "Luciole-regular", sans-serif;
+    font-size: 0.95rem;
+    transition: background 0.2s, color 0.2s;
+}
+
+.ventes-tab:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+.ventes-tab-active {
+    background: rgba(99, 102, 241, 0.5);
+    color: #ffffff;
+    border-color: rgba(99, 102, 241, 0.7);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Contenu du rapport                                                 */
+/* ------------------------------------------------------------------ */
+
+.ventes-content {
+    /* Pas de max-height ici — le scroll est gere par .ventes-container */
+    /* / No max-height here — scroll is handled by .ventes-container */
+}
+
+.ventes-periode {
+    font-size: 0.9rem;
+    color: #a0a0a0;
+    margin-bottom: 12px;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.ventes-total-general {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.ventes-message-vide {
+    text-align: center;
+    padding: 40px 20px;
+    color: #888;
+    font-size: 1.1rem;
+}
+
+.ventes-section-title {
+    font-size: 1.1rem;
+    margin: 20px 0 8px 0;
+    color: #c0c0c0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 4px;
+}
+
+.ventes-categorie {
+    margin-bottom: 15px;
+}
+
+.ventes-categorie-titre {
+    font-size: 1rem;
+    margin: 0 0 6px 0;
+    color: #d0d0d0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Tableaux                                                           */
+/* ------------------------------------------------------------------ */
+
+/* table-layout:fixed + colonnes explicites pour aligner les montants proprement.
+   / table-layout:fixed + explicit columns for clean amount alignment. */
+.ventes-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 12px;
+    font-size: 0.95rem;
+    table-layout: fixed;
+}
+
+.ventes-table th {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: normal;
+    color: #a0a0a0;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.ventes-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    /* Chiffres tabulaires pour que les colonnes s'alignent parfaitement
+       / Tabular numbers for perfect column alignment */
+    font-variant-numeric: tabular-nums;
+}
+
+.ventes-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.ventes-table-compact {
+    font-size: 0.9rem;
+}
+
+.ventes-table-compact th,
+.ventes-table-compact td {
+    padding: 5px 8px;
+}
+
+.ventes-total-row {
+    background: rgba(99, 102, 241, 0.1) !important;
+    border-top: 2px solid rgba(99, 102, 241, 0.3);
+}
+
+.ventes-sous-ligne td {
+    color: #888;
+    font-size: 0.85rem;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Blocs PV (vue par_pv)                                              */
+/* ------------------------------------------------------------------ */
+
+.ventes-bloc-pv {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid rgba(99, 102, 241, 0.5);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Filtres (liste des ventes)                                         */
+/* ------------------------------------------------------------------ */
+
+.ventes-filtres {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.ventes-filtre-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: "Luciole-regular", sans-serif;
+    font-size: 0.95rem;
+    min-width: 160px;
+}
+
+.ventes-filtre-select option {
+    background: #2a2a3e;
+    color: #e0e0e0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Liste scrollable                                                   */
+/* ------------------------------------------------------------------ */
+
+.ventes-liste-scroll {
+    /* Pas de max-height — le scroll est gere par .ventes-container parent */
+    /* / No max-height — scroll is handled by parent .ventes-container */
+}
+
+.ventes-ligne-cliquable {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.ventes-ligne-cliquable:hover {
+    background: rgba(99, 102, 241, 0.15) !important;
+}
+
+/* Ligne active (surlignee quand son detail est ouvert)
+   / Active row (highlighted when its detail is open) */
+.ventes-ligne-active {
+    background: rgba(99, 102, 241, 0.2) !important;
+    border-left: 3px solid rgba(99, 102, 241, 0.7);
+}
+
+/* Ligne detail collapse — injectee sous la ligne cliquee
+   / Collapse detail row — injected below the clicked row */
+.ventes-detail-row {
+    background: rgba(99, 102, 241, 0.05) !important;
+    border-left: 3px solid rgba(99, 102, 241, 0.4);
+}
+
+.ventes-detail-row td {
+    padding: 12px 10px;
+}
+
+.ventes-detail-collapse {
+    padding: 8px 0;
+}
+
+.ventes-detail-collapse .ventes-table {
+    margin-bottom: 8px;
+}
+
+.ventes-detail-collapse .ventes-detail-info {
+    margin-bottom: 10px;
+}
+
+.ventes-articles-tronque {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Badges moyen de paiement                                           */
+/* ------------------------------------------------------------------ */
+
+.ventes-badge-moyen {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.ventes-badge-CA { background: rgba(34, 197, 94, 0.3); color: #4ade80; }
+.ventes-badge-CC { background: rgba(59, 130, 246, 0.3); color: #60a5fa; }
+.ventes-badge-LE { background: rgba(168, 85, 247, 0.3); color: #c084fc; }
+.ventes-badge-LG { background: rgba(251, 146, 60, 0.3); color: #fdba74; }
+.ventes-badge-CH { background: rgba(156, 163, 175, 0.3); color: #d1d5db; }
+
+/* ------------------------------------------------------------------ */
+/*  Detail d'une vente                                                 */
+/* ------------------------------------------------------------------ */
+
+.ventes-detail-info {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+}
+
+.ventes-detail-info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 1rem;
+}
+
+.ventes-detail-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+}
+
+.ventes-btn-action {
+    background: rgba(99, 102, 241, 0.4);
+    border: 1px solid rgba(99, 102, 241, 0.6);
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: "Luciole-regular", sans-serif;
+    font-size: 1rem;
+    transition: background 0.2s;
+}
+
+.ventes-btn-action:hover {
+    background: rgba(99, 102, 241, 0.6);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Utilitaires (Bootstrap n'est pas charge dans le contexte POS)      */
+/* ------------------------------------------------------------------ */
+
+.text-end {
+    text-align: right;
+}
+
+.ps-4 {
+    padding-left: 1.5rem;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Responsive                                                         */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 768px) {
+    .ventes-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ventes-tabs {
+        flex-direction: column;
+    }
+
+    .ventes-tab {
+        border-radius: 4px;
+    }
+
+    .ventes-filtres {
+        flex-direction: column;
+    }
+
+    .ventes-filtre-select {
+        min-width: auto;
+        width: 100%;
+    }
+
+    .ventes-detail-info {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .ventes-articles-tronque {
+        max-width: 120px;
+    }
+}

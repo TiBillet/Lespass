@@ -975,6 +975,81 @@ La query `Token.objects.filter(wallet__in=..., asset__category=Asset.TLF)`
 peut echouer si fedow_core n'est pas encore peuple (pas d'asset TLF cree).
 Toujours wraper dans `try/except` avec fallback a 0.
 
+### Menu Ventes — Ticket X + liste (session 16)
+
+**9.76 — `uuid_transaction` dans l'URL de `detail_vente` : valider le format UUID.**
+Le `url_path` accepte toute chaine (`[^/.]+`). Si on passe `"pas-un-uuid"`,
+Django leve `ValidationError` sur le filtre `uuid_transaction=...` (UUIDField).
+La vue `detail_vente()` doit valider avec `uuid_module.UUID(str(uuid_transaction))`
+dans un `try/except (ValueError, AttributeError)` avant le filtre ORM.
+
+**9.77 — `page` en query param : toujours wrapper dans try/except.**
+`int(request.GET.get("page", 1))` leve `ValueError` si `?page=abc`.
+Pattern defensif :
+```python
+try:
+    page = int(request.GET.get("page", 1))
+except (ValueError, TypeError):
+    page = 1
+```
+
+**9.78 — Bouton "Retour" dans les vues Ventes : pas de `hx-get` vers `point_de_vente`.**
+Les vues du menu Ventes (Ticket X, liste, detail) sont chargees dans
+`#products-container` par HTMX. La vue `point_de_vente()` a besoin de
+`?uuid_pv=...&tag_id_cm=...` — ces params ne sont pas disponibles dans le
+contexte des vues Ventes. Utiliser `window.location.reload()` pour revenir
+a l'interface POS (recharge la page complete qui a les bons params dans l'URL).
+
+**9.79 — `_calculer_datetime_ouverture_service()` est global au tenant, pas par PV.**
+La fonction cherche la derniere `ClotureCaisse` journaliere tous PV confondus
+(pas de filtre `point_de_vente`). C'est le meme comportement que `cloturer()`
+(la cloture est globale au tenant, session 13). Ne jamais filtrer par PV.
+
+**9.80 — Pagination SQL `Coalesce` + `Max` : les agrégats sont par transaction, pas par ligne.**
+`liste_ventes` utilise `GROUP BY COALESCE(uuid_transaction, uuid)` cote SQL.
+Les champs `moyen_paiement=Max('payment_method')` et `nom_pv=Max('point_de_vente__name')`
+retournent la valeur la plus grande alphabetiquement. En pratique, toutes les
+lignes d'une transaction ont le meme moyen et le meme PV, donc `Max` est correct.
+Mais si un jour le split payment est implemente (2 moyens sur 1 transaction),
+le `Max` retournera un seul moyen — celui qui gagne le tri alphabetique.
+
+**9.81 — `detail_vente` : fallback uuid_transaction → uuid (pk).**
+La vue `detail_vente` cherche d'abord par `uuid_transaction`, puis par `uuid`
+(pk de `LigneArticle`). Ce fallback est necessaire car `Coalesce(uuid_transaction, uuid)`
+dans la pagination peut retourner un uuid de ligne (quand `uuid_transaction` est `NULL`).
+Sans ce fallback, le clic sur une vente sans `uuid_transaction` retourne 404.
+
+**9.82 — Commentaires Django `{# #}` HORS d'un element HTML → texte brut dans les swaps HTMX.**
+Quand un partial HTMX commence par un commentaire Django `{# TITRE ... #}` avant
+le premier `<div>`, HTMX injecte le commentaire comme du texte brut visible dans
+la page. Les commentaires de template dans un `<body>` ou `<td>` sont interpretes
+comme du texte par le navigateur. Solution : utiliser des commentaires HTML
+`<!-- ... -->` a l'interieur du premier element, ou supprimer les commentaires
+du haut du fichier.
+
+**9.83 — `stateJson` manquant dans les vues Ventes → `JSON.parse("")` crash.**
+`base.html` ligne 32 fait `const state = JSON.parse("{{stateJson|escapejs}}")`.
+Si `stateJson` n'est pas dans le contexte, Django rend une chaine vide et
+`JSON.parse("")` leve `SyntaxError`. Ce crash empeche htmx de s'initialiser
+(les `hx-*` ne fonctionnent plus). Solution : fournir un `stateJson` minimal
+(via `_construire_state()`) dans le contexte de toutes les pages qui
+etendent `base.html`.
+
+**9.84 — Pattern collapse pour le detail de vente : `fetch()` + `insertAfter`.**
+Le detail d'une vente dans la liste utilise un pattern collapse JS minimal :
+`toggleDetailVente(ligneTr, url)` fait un `fetch()` pour charger le partial
+et l'insere comme `<tr class="ventes-detail-row">` apres la ligne cliquee.
+Re-clic = retire le `<tr>`. Ce n'est PAS du HTMX pur (pas de `hx-get`
+sur le `<tr>`) car on a besoin du toggle et de la gestion de l'ancien
+detail ouvert — trop complexe en attributs HTMX seuls.
+
+**9.85 — `_rendre_vue_ventes()` : detection page complete vs partial.**
+La fonction verifie `request.htmx.target == "body"` pour decider si elle
+rend la page complete (avec header via `ventes.html`) ou juste le partial.
+Les onglets HTMX ciblent `#ventes-zone` → partial seul.
+Le scroll infini cible `this` (outerHTML sur le `<tr>` loader) → partial.
+Seul le burger menu cible `body` → page complete.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

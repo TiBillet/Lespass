@@ -187,7 +187,8 @@
 <table>
     <thead>
         <tr>
-            <th>{% translate "Type" %}</th>
+            <th>{% translate "Product" %}</th>
+            <th>{% translate "Currency" %}</th>
             <th>{% translate "Payment method" %}</th>
             <th class="text-right">{% translate "Amount" %}</th>
             <th class="text-right">{% translate "Count" %}</th>
@@ -196,14 +197,15 @@
     <tbody>
         {% for code, rec in section.detail.items %}
         <tr>
-            <td>{{ rec.methode_caisse|default:code }}</td>
+            <td>{{ rec.nom_produit }}</td>
+            <td>{{ rec.nom_monnaie|default:"—" }}</td>
             <td>{{ rec.moyen_paiement|default:"—" }}</td>
             <td class="text-right">{{ rec.total|euros }}</td>
             <td class="text-right">{{ rec.nb }}</td>
         </tr>
         {% endfor %}
         <tr class="total-row">
-            <td colspan="2">{% translate "Total" %}</td>
+            <td colspan="3">{% translate "Total" %}</td>
             <td class="text-right">{{ section.total|euros }}</td>
             <td></td>
         </tr>
@@ -219,6 +221,8 @@
 <table>
     <thead>
         <tr>
+            <th>{% translate "Product" %}</th>
+            <th>{% translate "Price tier" %}</th>
             <th>{% translate "Payment method" %}</th>
             <th class="text-right">{% translate "Count" %}</th>
             <th class="text-right">{% translate "Amount" %}</th>
@@ -227,13 +231,15 @@
     <tbody>
         {% for code, adh in section.detail.items %}
         <tr>
-            <td>{{ code }}</td>
+            <td>{{ adh.nom_produit }}</td>
+            <td>{{ adh.nom_tarif|default:"—" }}</td>
+            <td>{{ adh.moyen_paiement }}</td>
             <td class="text-right">{{ adh.nb }}</td>
             <td class="text-right">{{ adh.total|euros }}</td>
         </tr>
         {% endfor %}
         <tr class="total-row">
-            <td>{% translate "Total" %}</td>
+            <td colspan="3">{% translate "Total" %}</td>
             <td class="text-right">{{ section.nb }}</td>
             <td class="text-right">{{ section.total|euros }}</td>
         </tr>
@@ -318,20 +324,24 @@
     <thead>
         <tr>
             <th>{% translate "Event" %}</th>
+            <th>{% translate "Date" %}</th>
+            <th>{% translate "Product / Price tier" %}</th>
             <th class="text-right">{% translate "Count" %}</th>
             <th class="text-right">{% translate "Amount" %}</th>
         </tr>
     </thead>
     <tbody>
-        {% for event_nom, event_data in section.detail.items %}
+        {% for cle, billet_data in section.detail.items %}
         <tr>
-            <td>{{ event_nom }}</td>
-            <td class="text-right">{{ event_data.nb }}</td>
-            <td class="text-right">{{ event_data.total|euros }}</td>
+            <td>{{ billet_data.nom_event }}</td>
+            <td>{{ billet_data.date_event|default:"—" }}</td>
+            <td>{{ billet_data.nom_produit }}{% if billet_data.nom_tarif %} / {{ billet_data.nom_tarif }}{% endif %}</td>
+            <td class="text-right">{{ billet_data.nb }}</td>
+            <td class="text-right">{{ billet_data.total|euros }}</td>
         </tr>
         {% endfor %}
         <tr class="total-row">
-            <td>{% translate "Total" %}</td>
+            <td colspan="3">{% translate "Total" %}</td>
             <td class="text-right">{{ section.nb }}</td>
             <td class="text-right">{{ section.total|euros }}</td>
         </tr>
@@ -351,6 +361,7 @@
             <th class="text-right">{% translate "Cash" %}</th>
             <th class="text-right">{% translate "Credit card" %}</th>
             <th class="text-right">{% translate "Cashless" %}</th>
+            <th class="text-right">{% translate "Check" %}</th>
             <th class="text-right">{% translate "Total" %}</th>
         </tr>
     </thead>
@@ -361,6 +372,7 @@
             <td class="text-right">{{ op_data.especes|euros }}</td>
             <td class="text-right">{{ op_data.carte_bancaire|euros }}</td>
             <td class="text-right">{{ op_data.cashless|euros }}</td>
+            <td class="text-right">{{ op_data.cheque|euros }}</td>
             <td class="text-right"><strong>{{ op_data.total|euros }}</strong></td>
         </tr>
         {% endfor %}

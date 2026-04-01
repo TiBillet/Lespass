@@ -76,7 +76,7 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **13** | Clôtures J/M/A + total perpétuel | Ex.6, Ex.7 | 12 |
 | **14** | Mentions légales tickets + traçabilité impressions | Ex.3, Ex.9 | 12 |
 | **15** | Mode école + exports admin | Ex.5 | 13, 14 |
-| **16** | Menu Ventes : Ticket X + liste | — | 12 |
+| **16** | Menu Ventes : Ticket X + liste | — | 12 | ✅ FAIT |
 | **17** | Corrections + fond/sortie de caisse | Ex.4 | 13, 16 |
 | **18** | Archivage fiscal + accès administration | Ex.10-12, Ex.15, Ex.19 | 13 |
 | **19** | Envoi auto rapports + version | Ex.21 | 15, 18 |

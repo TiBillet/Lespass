@@ -1,0 +1,295 @@
+{% load i18n laboutik_filters %}
+<div class="ventes-container" data-testid="ventes-recap">
+    <!--
+    TICKET X — Synthese comptable du service en cours (lecture seule)
+    / Ticket X — Accounting summary of the current shift (read-only)
+    LOCALISATION : laboutik/templates/laboutik/partial/hx_recap_en_cours.html
+    -->
+
+    {# --- En-tete avec titre et bouton retour --- #}
+    {# / Header with title and back button #}
+    <div class="ventes-header">
+        <h2 class="ventes-title">
+            <i class="fas fa-receipt" aria-hidden="true"></i>
+            {% translate "Ticket X — Récapitulatif" %}
+        </h2>
+        {# Retour vers le POS : utiliser le burger menu (nav PV) #}
+        {# / Back to POS: use the burger menu (POS nav) #}
+    </div>
+
+    {# --- Onglets de navigation HTMX --- #}
+    {# / HTMX navigation tabs #}
+    <div class="ventes-tabs" role="tablist" aria-label="{% translate 'Vues du rapport' %}">
+        <button class="ventes-tab {% if vue == 'toutes' %}ventes-tab-active{% endif %}"
+                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=toutes&{{ params_ventes }}"
+                hx-target="#ventes-zone"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                role="tab"
+                aria-selected="{% if vue == 'toutes' %}true{% else %}false{% endif %}"
+                data-testid="tab-toutes">
+            {% translate "Toutes caisses" %}
+        </button>
+        <button class="ventes-tab {% if vue == 'par_pv' %}ventes-tab-active{% endif %}"
+                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_pv&{{ params_ventes }}"
+                hx-target="#ventes-zone"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                role="tab"
+                aria-selected="{% if vue == 'par_pv' %}true{% else %}false{% endif %}"
+                data-testid="tab-par-pv">
+            {% translate "Par point de vente" %}
+        </button>
+        <button class="ventes-tab {% if vue == 'par_moyen' %}ventes-tab-active{% endif %}"
+                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=par_moyen&{{ params_ventes }}"
+                hx-target="#ventes-zone"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                role="tab"
+                aria-selected="{% if vue == 'par_moyen' %}true{% else %}false{% endif %}"
+                data-testid="tab-par-moyen">
+            {% translate "Par moyen" %}
+        </button>
+
+        <button class="ventes-tab {% if vue == 'detail_articles' %}ventes-tab-active{% endif %}"
+                hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?vue=detail_articles&{{ params_ventes }}"
+                hx-target="#ventes-zone"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                role="tab"
+                aria-selected="{% if vue == 'detail_articles' %}true{% else %}false{% endif %}"
+                data-testid="tab-detail-articles">
+            {% translate "Détail articles" %}
+        </button>
+
+        {# Lien vers la liste des ventes #}
+        {# / Link to sales list #}
+        <button class="ventes-tab"
+                hx-get="{% url 'laboutik-caisse-liste_ventes' %}?{{ params_ventes }}"
+                hx-target="#ventes-zone"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                role="tab"
+                aria-selected="false"
+                data-testid="tab-liste-ventes">
+            <i class="fas fa-list" aria-hidden="true"></i>
+            {% translate "Liste ventes" %}
+        </button>
+    </div>
+
+    {# --- Contenu du rapport --- #}
+    {# / Report content #}
+    <div id="recap-content" class="ventes-content" aria-live="polite">
+
+        {% if aucune_vente %}
+            {# Aucune vente depuis la derniere cloture #}
+            {# / No sales since the last closure #}
+            <div class="ventes-message-vide" data-testid="recap-aucune-vente">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                {% translate "Aucune vente depuis la dernière clôture" %}
+            </div>
+
+        {% elif vue == "toutes" %}
+            {# --- VUE TOUTES CAISSES --- #}
+
+            {# Periode #}
+            <div class="ventes-periode" data-testid="recap-periode">
+                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
+                — {{ nb_transactions }} {% translate "transaction(s)" %}
+            </div>
+
+            {# Totaux par moyen de paiement #}
+            {# / Totals by payment method #}
+            <table class="ventes-table" data-testid="recap-totaux-moyen">
+                <thead>
+                    <tr>
+                        <th>{% translate "Moyen de paiement" %}</th>
+                        <th class="text-end">{% translate "Montant" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><i class="fas fa-coins" aria-hidden="true"></i> {% translate "Espèces" %}</td>
+                        <td class="text-end">{{ totaux_par_moyen.especes|euros }}</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-credit-card" aria-hidden="true"></i> {% translate "Carte bancaire" %}</td>
+                        <td class="text-end">{{ totaux_par_moyen.carte_bancaire|euros }}</td>
+                    </tr>
+                    <tr>
+                        <td><i class="fas fa-wifi" aria-hidden="true"></i> {% translate "Cashless" %}</td>
+                        <td class="text-end">{{ totaux_par_moyen.cashless|euros }}</td>
+                    </tr>
+                    {% for detail_cashless in totaux_par_moyen.cashless_detail %}
+                    <tr class="ventes-sous-ligne">
+                        <td class="ps-4">↳ {{ detail_cashless.nom }}</td>
+                        <td class="text-end">{{ detail_cashless.montant|euros }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <td><i class="fas fa-money-check" aria-hidden="true"></i> {% translate "Chèque" %}</td>
+                        <td class="text-end">{{ totaux_par_moyen.cheque|euros }}</td>
+                    </tr>
+                    <tr class="ventes-total-row">
+                        <td><strong>{% translate "TOTAL" %}</strong></td>
+                        <td class="text-end"><strong>{{ totaux_par_moyen.total|euros }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            {# Detail des ventes retire de cette vue — visible dans "Liste ventes" #}
+            {# / Sales detail removed from this view — available in "Liste ventes" #}
+
+            {# TVA par taux #}
+            {# / VAT by rate #}
+            {% if tva %}
+            <h3 class="ventes-section-title">{% translate "TVA" %}</h3>
+            <table class="ventes-table ventes-table-compact" data-testid="recap-tva">
+                <thead>
+                    <tr>
+                        <th>{% translate "Taux" %}</th>
+                        <th class="text-end">{% translate "HT" %}</th>
+                        <th class="text-end">{% translate "TVA" %}</th>
+                        <th class="text-end">{% translate "TTC" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for taux_cle, taux_data in tva.items %}
+                    <tr>
+                        <td>{{ taux_cle }}</td>
+                        <td class="text-end">{{ taux_data.total_ht|euros }}</td>
+                        <td class="text-end">{{ taux_data.total_tva|euros }}</td>
+                        <td class="text-end">{{ taux_data.total_ttc|euros }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+
+            {# Solde de caisse #}
+            {# / Cash drawer balance #}
+            {% if solde_caisse %}
+            <h3 class="ventes-section-title">{% translate "Solde caisse" %}</h3>
+            <table class="ventes-table ventes-table-compact" data-testid="recap-solde">
+                <tbody>
+                    <tr>
+                        <td>{% translate "Fond de caisse" %}</td>
+                        <td class="text-end">{{ solde_caisse.fond_de_caisse|euros }}</td>
+                    </tr>
+                    <tr>
+                        <td>{% translate "Entrées espèces" %}</td>
+                        <td class="text-end">{{ solde_caisse.entrees_especes|euros }}</td>
+                    </tr>
+                    <tr class="ventes-total-row">
+                        <td><strong>{% translate "Solde" %}</strong></td>
+                        <td class="text-end"><strong>{{ solde_caisse.solde|euros }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+            {% endif %}
+
+        {% elif vue == "par_pv" %}
+            {# --- VUE PAR POINT DE VENTE --- #}
+
+            <div class="ventes-periode" data-testid="recap-periode">
+                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
+                — {{ nb_transactions }} {% translate "transaction(s)" %}
+            </div>
+
+            {# Total general #}
+            <div class="ventes-total-general" data-testid="recap-total-general">
+                {% translate "Total général" %} : <strong>{{ totaux_par_moyen.total|euros }}</strong>
+            </div>
+
+            {% for pv_item in ventilation_par_pv %}
+            <div class="ventes-bloc-pv" data-testid="recap-pv-{{ forloop.counter }}">
+                <h4 class="ventes-categorie-titre">
+                    <i class="fas fa-store" aria-hidden="true"></i>
+                    {{ pv_item.nom }} — {{ pv_item.total_ttc|euros }}
+                </h4>
+            </div>
+            {% empty %}
+            <div class="ventes-message-vide">
+                {% translate "Aucune vente attribuée à un point de vente" %}
+            </div>
+            {% endfor %}
+
+        {% elif vue == "par_moyen" %}
+            {# --- VUE PAR MOYEN DE PAIEMENT --- #}
+
+            <div class="ventes-periode" data-testid="recap-periode">
+                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
+                — {{ nb_transactions }} {% translate "transaction(s)" %}
+            </div>
+
+            {# Total general #}
+            <div class="ventes-total-general" data-testid="recap-total-general">
+                {% translate "Total général" %} : <strong>{{ totaux_par_moyen.total|euros }}</strong>
+            </div>
+
+            {# Tableau croise type x moyen #}
+            {# / Cross table: type x payment method #}
+            <table class="ventes-table" data-testid="recap-synthese-operations">
+                <thead>
+                    <tr>
+                        <th>{% translate "Type" %}</th>
+                        <th class="text-end">{% translate "Espèces" %}</th>
+                        <th class="text-end">{% translate "CB" %}</th>
+                        <th class="text-end">{% translate "Cashless" %}</th>
+                        <th class="text-end">{% translate "Chèque" %}</th>
+                        <th class="text-end">{% translate "Total" %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for type_nom, type_data in synthese_operations.items %}
+                    <tr>
+                        <td>{{ type_nom }}</td>
+                        <td class="text-end">{{ type_data.especes|euros }}</td>
+                        <td class="text-end">{{ type_data.carte_bancaire|euros }}</td>
+                        <td class="text-end">{{ type_data.cashless|euros }}</td>
+                        <td class="text-end">{{ type_data.cheque|euros }}</td>
+                        <td class="text-end"><strong>{{ type_data.total|euros }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% elif vue == "detail_articles" %}
+            {# --- VUE DETAIL PAR ARTICLE ET CATEGORIE --- #}
+
+            <div class="ventes-periode" data-testid="recap-periode">
+                {% translate "Depuis" %} {{ datetime_ouverture|date:"d/m/Y H:i" }}
+                — {{ nb_transactions }} {% translate "transaction(s)" %}
+            </div>
+
+            {% for cat_nom, cat_data in detail_ventes.items %}
+            <div class="ventes-categorie" data-testid="recap-categorie-{{ forloop.counter }}">
+                <h4 class="ventes-categorie-titre">{{ cat_nom }} — {{ cat_data.total_ttc|euros }}</h4>
+                <table class="ventes-table ventes-table-compact">
+                    <thead>
+                        <tr>
+                            <th>{% translate "Article" %}</th>
+                            <th class="text-end">{% translate "Qty" %}</th>
+                            <th class="text-end">{% translate "TTC" %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for article in cat_data.articles %}
+                        <tr>
+                            <td>{{ article.nom }}</td>
+                            <td class="text-end">{{ article.qty_total|floatformat:0 }}</td>
+                            <td class="text-end">{{ article.total_ttc|euros }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% empty %}
+            <div class="ventes-message-vide">
+                {% translate "Aucune vente" %}
+            </div>
+            {% endfor %}
+
+        {% endif %}
+    </div>
+</div>

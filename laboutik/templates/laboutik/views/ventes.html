@@ -1,0 +1,30 @@
+{% extends "laboutik/base.html" %}
+{% load static i18n %}
+{#
+PAGE VENTES — conteneur plein ecran pour le menu Ventes
+/ SALES PAGE — full screen container for the Sales menu
+
+LOCALISATION : laboutik/templates/laboutik/views/ventes.html
+
+Charge uniquement le header (pour la nav burger) et la zone ventes.
+Pas de categories, pas de footer, pas de WebSocket — on est en consultation.
+
+FLUX :
+1. Burger menu "VENTES" → hx-target="body" → cette page complete
+2. Onglets internes → hx-target="#ventes-zone" → partials seuls
+3. Bouton "Retour" → hx-target="body" → point_de_vente (POS complet)
+
+COMMUNICATION :
+Recoit : CaisseViewSet.recap_en_cours / liste_ventes / detail_vente
+#}
+
+{% block content %}
+{# Header avec navigation burger (PV, retour) #}
+<c-header :title="title" />
+
+{# Zone ventes — remplacee par les partials HTMX via hx-target="#ventes-zone" #}
+{# / Sales zone — replaced by HTMX partials via hx-target="#ventes-zone" #}
+<div id="ventes-zone">
+    {% include vue_partiel %}
+</div>
+{% endblock %}

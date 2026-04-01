@@ -33,7 +33,7 @@
 | 13 | `13_clotures_3_niveaux_total_perpetuel.md` | Ex.6, Ex.7 | 12 | FAIT |
 | 14 | `14_mentions_legales_tracabilite_impressions.md` | Ex.3, Ex.9 | 12 | FAIT |
 | 15 | `15_mode_ecole_exports_admin.md` | Ex.5 | 13, 14 | FAIT |
-| 16 | `16_menu_ventes_ticket_x_liste.md` | — | 12 | A FAIRE |
+| 16 | `16_menu_ventes_ticket_x_liste.md` | — | 12 | FAIT |
 | 17 | `17_corrections_fond_sortie_caisse.md` | Ex.4 | 13, 16 | A FAIRE |
 | 18 | `18_archivage_fiscal_acces_administration.md` | Ex.10-12, 15, 19 | 13 | A FAIRE |
 | 19 | `19_envoi_auto_version.md` | Ex.21 | 15, 18 | A FAIRE |

@@ -99,8 +99,12 @@ class RapportComptableService:
 
         total_general = total_especes + total_carte_bancaire + total_cashless + total_cheque
 
-        # Detail cashless par asset (nom de la monnaie)
-        # / Cashless detail by asset (currency name)
+        # Detail cashless par nom de monnaie (pas par UUID d'asset).
+        # En test, il peut y avoir des dizaines d'assets avec le meme nom.
+        # On regroupe par nom pour avoir une seule ligne par monnaie.
+        # / Cashless detail by currency name (not by asset UUID).
+        # In test, there can be dozens of assets with the same name.
+        # We group by name to get one line per currency.
         cashless_detail = []
         lignes_cashless_par_asset = self.lignes.filter(
             payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
@@ -117,17 +121,26 @@ class RapportComptableService:
             a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
         }
 
+        # Regrouper par nom de monnaie (pas par UUID)
+        # / Group by currency name (not by UUID)
+        totaux_par_nom_monnaie = {}
         for ligne in lignes_cashless_par_asset:
             asset_uuid = ligne['asset']
             montant = ligne['montant'] or 0
             asset_obj = assets_par_uuid.get(asset_uuid)
             nom_asset = asset_obj.name if asset_obj else str(_("Inconnu"))
             code_asset = asset_obj.currency_code if asset_obj else ""
-            cashless_detail.append({
-                "nom": nom_asset,
-                "code": code_asset,
-                "montant": montant,
-            })
+
+            if nom_asset not in totaux_par_nom_monnaie:
+                totaux_par_nom_monnaie[nom_asset] = {
+                    "nom": nom_asset,
+                    "code": code_asset,
+                    "montant": 0,
+                }
+            totaux_par_nom_monnaie[nom_asset]["montant"] += montant
+
+        for nom_monnaie in totaux_par_nom_monnaie:
+            cashless_detail.append(totaux_par_nom_monnaie[nom_monnaie])
 
         config_tenant = Configuration.get_solo()
         code_devise = config_tenant.currency_code or "EUR"
@@ -242,7 +255,19 @@ class RapportComptableService:
             })
             categories[nom_categorie]["total_ttc"] += total_ttc
 
-        return categories
+        # Trier les categories : alphabetique, "Sans catégorie" en dernier.
+        # / Sort categories: alphabetical, "Uncategorized" last.
+        nom_sans_categorie = str(_("Sans catégorie"))
+        categories_triees = {}
+        for nom in sorted(categories.keys()):
+            if nom != nom_sans_categorie:
+                categories_triees[nom] = categories[nom]
+        # Ajouter "Sans catégorie" a la fin si elle existe
+        # / Add "Uncategorized" at the end if it exists
+        if nom_sans_categorie in categories:
+            categories_triees[nom_sans_categorie] = categories[nom_sans_categorie]
+
+        return categories_triees
 
     # ------------------------------------------------------------------
     # 3. TVA par taux / VAT by rate
@@ -308,28 +333,50 @@ class RapportComptableService:
     def calculer_recharges(self):
         """
         Filtre les lignes dont le produit a methode_caisse in (RE, RC, TM).
-        Agrege par methode_caisse et par moyen de paiement.
+        Agrege par nom de monnaie (asset) et par moyen de paiement.
         / Filter lines whose product has methode_caisse in (RE, RC, TM).
-        Aggregate by POS method and payment method.
+        Aggregate by currency name (asset) and payment method.
         """
         methodes_recharge = [Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS]
 
         recharges = self.lignes.filter(
             pricesold__productsold__product__methode_caisse__in=methodes_recharge,
         ).values(
+            'pricesold__productsold__product__name',
             'pricesold__productsold__product__methode_caisse',
             'payment_method',
+            'asset',
         ).annotate(
             total=Sum('amount'),
             nb=Count('uuid'),
-        ).order_by('pricesold__productsold__product__methode_caisse')
+        ).order_by('pricesold__productsold__product__name')
+
+        # Prefetch les noms des assets pour afficher le nom de la monnaie
+        # / Prefetch asset names to display the currency name
+        from fedow_core.models import Asset as FedowAsset
+        asset_uuids = [l['asset'] for l in recharges if l.get('asset')]
+        assets_par_uuid = {}
+        if asset_uuids:
+            assets_par_uuid = {
+                a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
+            }
 
         resultat = {}
         for ligne in recharges:
+            nom_produit = ligne['pricesold__productsold__product__name'] or "?"
             methode = ligne['pricesold__productsold__product__methode_caisse']
             moyen = ligne['payment_method'] or 'UK'
-            cle = f"{methode}_{moyen}"
+
+            # Nom de la monnaie depuis l'asset (si disponible)
+            # / Currency name from asset (if available)
+            asset_uuid = ligne.get('asset')
+            asset_obj = assets_par_uuid.get(asset_uuid) if asset_uuid else None
+            nom_monnaie = asset_obj.name if asset_obj else ""
+
+            cle = f"{nom_produit}_{moyen}"
             resultat[cle] = {
+                "nom_produit": nom_produit,
+                "nom_monnaie": nom_monnaie,
                 "methode_caisse": methode,
                 "moyen_paiement": moyen,
                 "total": ligne['total'] or 0,
@@ -348,22 +395,34 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def calculer_adhesions(self):
         """
-        Lignes avec membership non null. Compter et sommer par moyen.
-        / Lines with non-null membership. Count and sum by payment method.
+        Lignes avec membership non null. Classe par produit, tarif et moyen de paiement.
+        / Lines with non-null membership. Grouped by product, price tier and payment method.
         """
         adhesions = self.lignes.filter(
             membership__isnull=False,
         ).values(
+            'pricesold__productsold__product__name',
+            'pricesold__price__name',
             'payment_method',
         ).annotate(
             total=Sum('amount'),
             nb=Count('uuid'),
-        ).order_by('payment_method')
+        ).order_by('pricesold__productsold__product__name', 'pricesold__price__name')
 
         detail = {}
         for ligne in adhesions:
+            nom_produit = ligne['pricesold__productsold__product__name'] or str(_("Inconnu"))
+            nom_tarif = ligne['pricesold__price__name'] or ""
             moyen = ligne['payment_method'] or 'UK'
-            detail[moyen] = {
+
+            # Cle : "Produit — Tarif (moyen)" pour regroupement unique
+            # / Key: "Product — Price tier (method)" for unique grouping
+            label_tarif = f"{nom_produit} — {nom_tarif}" if nom_tarif else nom_produit
+            cle = f"{label_tarif}_{moyen}"
+            detail[cle] = {
+                "nom_produit": nom_produit,
+                "nom_tarif": nom_tarif,
+                "moyen_paiement": moyen,
                 "total": ligne['total'] or 0,
                 "nb": ligne['nb'] or 0,
             }
@@ -509,22 +568,48 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def calculer_billets(self):
         """
-        Lignes avec reservation non null. Compter par evenement.
-        / Lines with non-null reservation. Count by event.
+        Lignes avec reservation non null.
+        Classe par evenement (date + nom) et par tarif (produit + prix).
+        / Lines with non-null reservation.
+        Grouped by event (date + name) and by price tier (product + price name).
         """
         billets = self.lignes.filter(
             reservation__isnull=False,
         ).values(
             'reservation__event__name',
+            'reservation__event__datetime',
+            'pricesold__productsold__product__name',
+            'pricesold__price__name',
         ).annotate(
             nb=Count('uuid'),
             total=Sum('amount'),
-        ).order_by('reservation__event__name')
+        ).order_by('reservation__event__datetime', 'reservation__event__name')
 
         detail = {}
         for ligne in billets:
             nom_event = ligne['reservation__event__name'] or str(_("Inconnu"))
-            detail[nom_event] = {
+            datetime_event = ligne['reservation__event__datetime']
+            nom_produit = ligne['pricesold__productsold__product__name'] or ""
+            nom_tarif = ligne['pricesold__price__name'] or ""
+
+            # Formater la date de l'event si disponible
+            # / Format event date if available
+            date_str = ""
+            if datetime_event:
+                from django.utils import timezone as tz
+                date_str = tz.localtime(datetime_event).strftime("%d/%m/%Y %H:%M")
+
+            # Cle : "Event (date) — Produit / Tarif"
+            # / Key: "Event (date) — Product / Price tier"
+            label_event = f"{nom_event} ({date_str})" if date_str else nom_event
+            label_tarif = f"{nom_produit} / {nom_tarif}" if nom_tarif else nom_produit
+            cle = f"{label_event}__{label_tarif}"
+
+            detail[cle] = {
+                "nom_event": nom_event,
+                "date_event": date_str,
+                "nom_produit": nom_produit,
+                "nom_tarif": nom_tarif,
                 "nb": ligne['nb'] or 0,
                 "total": ligne['total'] or 0,
             }
@@ -561,6 +646,7 @@ class RapportComptableService:
             "especes": Q(payment_method=PaymentMethod.CASH),
             "carte_bancaire": Q(payment_method=PaymentMethod.CC),
             "cashless": Q(payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT]),
+            "cheque": Q(payment_method=PaymentMethod.CHEQUE),
         }
 
         synthese = {}
