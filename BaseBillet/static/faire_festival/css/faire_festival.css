@@ -953,5 +953,63 @@
 }
 
 /* ==========================================================================
+   25. SECTION TUTO - COMMENT CRÉER SON PROGRAMME
+   ========================================================================== */
+
+/* Conteneur d'une étape du tuto */
+.skin-faire-festival .etape-tuto {
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Numéro de l'étape */
+.skin-faire-festival .numero-etape {
+    display: flex;
+    justify-content: center;
+}
+
+/* Badge numéroté (cercle avec chiffre) */
+.skin-faire-festival .badge-numero {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-titre);
+    font-size: 1.2rem;
+    font-weight: bold;
+    border-radius: 50%;
+    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+}
+
+/* Conteneur de l'image d'étape */
+.skin-faire-festival .image-etape {
+    width: 100%;
+    max-width: 200px;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skin-faire-festival .image-etape img {
+    max-height: 180px;
+    width: auto;
+    object-fit: contain;
+}
+
+/* Description de l'étape */
+.skin-faire-festival .etape-tuto p {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+}
+
+/* ==========================================================================
    FIN DU FICHIER CSS FAIRE FESTIVAL
    ========================================================================== */

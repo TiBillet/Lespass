@@ -52,44 +52,6 @@
         </div>
     </section>
 
-    <!-- ===================================================================
-          SECTION APPEL À L'ACTION (CTA - Call To Action)
-          Boutons principaux pour naviguer vers les sections importantes
-          =================================================================== -->
-    <section class="container py-4">
-        <div class="row g-4 justify-content-center">
-
-            <!-- Bouton vers la liste des événements -->
-            <div class="col-md-4">
-                <a href="{% url 'event-list' %}"
-                   class="btn btn-block w-100 bouton-action police-titre"
-                   hx-get="{% url 'event-list' %}"
-                   hx-target="body"
-                   hx-push-url="true">
-                <p class="mb-0">{% translate "Découvrir le programme" %}</p>
-                </a>
-            </div>
-
-            <!-- Bouton vers la liste des adhésions/billets -->
-            <div class="col-md-4">
-                <a href="{% url 'membership_mvt-list' %}"
-                   class="btn btn-block w-100 bouton-action police-titre"
-                   hx-get="{% url 'membership_mvt-list' %}"
-                   hx-target="body"
-                   hx-push-url="true">
-                    {% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}{% translate 'Prendre mes billets' %}{% endif %}
-                </a>
-            </div>
-
-            <!-- Bouton vers la newsletter -->
-            <div class="col-md-4">
-                <a href="https://48f51656.sibforms.com/serve/MUIFAArFIX33ZM9-a7q9l01i5hINeSqwQgaWsymRXJiTLCHEqCoivWnhvTE99gbq6bXLyM77Q2PAup8lpgZvyBxA5mtfST8GrTwqJ-vm6OblXffc6MBqKCi1qsB55MsSLzSQhJcXPHEZCK7T6dhOVNxtMzaWmzkf4DgtX1sizFjj3I9W64f-3xPF56EDw0rV94p1ryPqALhK5j05?utm_content=link_in_bio&utm_medium=social&utm_source=ig"
-                   class="btn btn-block w-100 bouton-action police-titre">
-                    {% translate "S'inscrire à la newsletter" %}
-                </a>
-            </div>
-        </div>
-    </section>
 
     <!-- ===================================================================
          SECTION INFORMATION & PRÉSENTATION
@@ -215,18 +177,105 @@
         </div> <!-- Fin Row Principale -->
     </section>
 
-    <!-- Partie tuto programme de festival -->
-   
-
-        <div class="titre-principal titre-programme mb-4 w-100">
-            <img src="{% static 'faire_festival/image/Fichier-14.png' %}"
-                     alt="Comment créer son programme"
-                     class="img-fluid d-flex align-items-center ">
-        </div>     
+    <!-- ===================================================================
+         SECTION TUTO - COMMENT CRÉER SON PROGRAMME
+         Tutoriel en 3 étapes pour guider l'utilisateur
+         =================================================================== -->
+    <section class="container py-5">
         
-        <section class="grid-3">
-            <div></div>
-        </section>
+        <!-- Titre avec image -->
+        <div class="titre-principal titre-programme mb-5 w-100">
+            <img src="{% static 'faire_festival/image/Fichier-14.png' %}"
+                 alt="{% translate 'Comment créer son programme' %}"
+                 class="img-fluid">
+        </div>
+        
+        <!-- Grille des 3 étapes -->
+        <div class="row g-4">
+            
+            <!-- ÉTAPE 1 : Billetterie -->
+            <div class="col-md-4">
+                <div class="etape-tuto text-center">
+                    
+                    <!-- Image illustrative -->
+                    <div class="image-etape mb-3">
+                        <img src="{% static 'faire_festival/image/Fichier-11.png' %}"
+                             alt="{% translate 'Billets' %}"
+                             class="img-fluid">
+                    </div>
+                    
+                    <!-- Description -->
+                    <p class="texte-bleu police-mono small mb-3">
+                        {% translate "Rendez-vous sur l'onglet billetterie et prenez vos billets à prix libre !" %}
+                    </p>
+                    
+                    <!-- Bouton d'action -->
+                    <a href="{% url 'membership_mvt-list' %}"
+                       class="btn bouton-action w-100"
+                       hx-get="{% url 'membership_mvt-list' %}"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate "Billetterie" %}
+                    </a>
+                </div>
+            </div>
+            
+            <!-- ÉTAPE 2 : Programmation -->
+            <div class="col-md-4">
+                <div class="etape-tuto text-center">
+                    
+                    <!-- Image illustrative -->
+                    <div class="image-etape mb-3">
+                        <img src="{% static 'faire_festival/image/Fichier-12.png' %}"
+                             alt="{% translate 'Programmation' %}"
+                             class="img-fluid">
+                    </div>
+                    
+                    <!-- Description -->
+                    <p class="texte-bleu police-mono small mb-3">
+                        {% translate "Accédez aux différents événements classés par 22 thématiques !" %}
+                    </p>
+                    
+                    <!-- Bouton d'action -->
+                    <a href="{% url 'event-list' %}"
+                       class="btn bouton-action w-100"
+                       hx-get="{% url 'event-list' %}"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate "Programmation" %}
+                    </a>
+                </div>
+            </div>
+            
+            <!-- ÉTAPE 3 : Infos pratiques -->
+            <div class="col-md-4">
+                <div class="etape-tuto text-center">
+                    
+                    <!-- Image illustrative -->
+                    <div class="image-etape mb-3">
+                        <img src="{% static 'faire_festival/image/Fichier-13.png' %}"
+                             alt="{% translate 'Faire Festival' %}"
+                             class="img-fluid">
+                    </div>
+                    
+                    <!-- Description -->
+                    <p class="texte-bleu police-mono small mb-3">
+                        {% translate "Venez profiter les 28, 29 et 30 mai lors du Faire Festival !" %}
+                    </p>
+                    
+                    <!-- Bouton d'action -->
+                    <a href="/infos-pratiques/"
+                       class="btn bouton-action w-100"
+                       hx-get="/infos-pratiques/"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate "Infos pratiques" %}
+                    </a>
+                </div>
+            </div>
+            
+        </div> <!-- Fin row -->
+    </section>
 
 </main>
 
