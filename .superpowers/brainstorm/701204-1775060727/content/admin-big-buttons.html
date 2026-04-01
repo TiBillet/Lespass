@@ -1,0 +1,152 @@
+<h2>Gros boutons admin par tenant</h2>
+<p class="subtitle">Chaque tenant administrable = un bouton rouge avec nom + adresse. Remplace le bouton unique "Panneau d'administration".</p>
+
+<div class="section">
+  <p class="label">Contexte</p>
+  <p>L'utilisateur est admin de 2 tenants (Festival Raffinerie + Café associatif) mais pas du tenant courant (TiBillet Meta). Les boutons admin apparaissent dans la grille existante, au même niveau que "Mon portefeuille", "Mes réservations", etc.</p>
+</div>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3>A — Boutons intégrés dans la grille</h3>
+      <p>Les boutons admin s'ajoutent directement dans la grille existante (row-cols-2), au même format que les autres boutons du compte.</p>
+    </div>
+    <div class="card-image" style="padding: 20px; background: #f8f9fa;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 500px; margin: 0 auto; font-family: system-ui;">
+        <!-- Existing buttons -->
+        <div style="border: 2px solid #0d6efd; border-radius: 8px; padding: 16px; text-align: center; color: #0d6efd;">
+          <div style="font-size: 28px;">&#x1F4B0;</div>
+          <div style="font-size: 13px; font-weight: 500;">Mon portefeuille</div>
+        </div>
+        <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 16px; text-align: center; color: #6c757d;">
+          <div style="font-size: 28px;">&#x1F3AB;</div>
+          <div style="font-size: 13px; font-weight: 500;">Mes abonnements</div>
+        </div>
+        <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 16px; text-align: center; color: #6c757d;">
+          <div style="font-size: 28px;">&#x1F39F;</div>
+          <div style="font-size: 13px; font-weight: 500;">Mes réservations</div>
+        </div>
+        <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 16px; text-align: center; color: #6c757d;">
+          <div style="font-size: 28px;">&#x2699;</div>
+          <div style="font-size: 13px; font-weight: 500;">Mes paramètres</div>
+        </div>
+        <!-- Admin buttons - same grid -->
+        <div style="border: 2px solid #dc3545; border-radius: 8px; padding: 16px; text-align: center; color: #dc3545;">
+          <div style="font-size: 28px;">&#x1F511;</div>
+          <div style="font-size: 13px; font-weight: 600;">Festival Raffinerie</div>
+          <div style="font-size: 11px; color: #999; margin-top: 2px;">raffinerie.tibillet.coop</div>
+        </div>
+        <div style="border: 2px solid #dc3545; border-radius: 8px; padding: 16px; text-align: center; color: #dc3545;">
+          <div style="font-size: 28px;">&#x1F511;</div>
+          <div style="font-size: 13px; font-weight: 600;">Café associatif</div>
+          <div style="font-size: 11px; color: #999; margin-top: 2px;">cafe.tibillet.coop</div>
+        </div>
+        <!-- Logout -->
+        <div style="grid-column: span 2; border: 2px solid #6c757d; border-radius: 8px; padding: 16px; text-align: center; color: #6c757d;">
+          <div style="font-size: 28px;">&#x1F6AA;</div>
+          <div style="font-size: 13px; font-weight: 500;">Se déconnecter</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3>B — Section séparée sous la grille</h3>
+      <p>Les boutons perso restent entre eux. En dessous, un titre "Administration" introduit les boutons admin en rouge, toujours en grille 2 colonnes. Séparation visuelle claire.</p>
+    </div>
+    <div class="card-image" style="padding: 20px; background: #f8f9fa;">
+      <div style="max-width: 500px; margin: 0 auto; font-family: system-ui;">
+        <!-- Existing buttons (compact) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+          <div style="border: 2px solid #0d6efd; border-radius: 8px; padding: 12px; text-align: center; color: #0d6efd; font-size: 12px;">
+            <span style="font-size: 22px;">&#x1F4B0;</span><br>Mon portefeuille
+          </div>
+          <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+            <span style="font-size: 22px;">&#x1F3AB;</span><br>Mes abonnements
+          </div>
+          <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+            <span style="font-size: 22px;">&#x1F39F;</span><br>Mes réservations
+          </div>
+          <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+            <span style="font-size: 22px;">&#x2699;</span><br>Mes paramètres
+          </div>
+        </div>
+
+        <!-- Separator -->
+        <div style="font-size: 14px; font-weight: 600; color: #dc3545; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #dc3545;">
+          &#x1F511; Administration
+        </div>
+
+        <!-- Admin buttons -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+          <div style="border: 2px solid #dc3545; border-radius: 8px; padding: 16px; text-align: center; color: #dc3545;">
+            <div style="font-size: 28px;">&#x1F511;</div>
+            <div style="font-size: 13px; font-weight: 600;">Festival Raffinerie</div>
+            <div style="font-size: 11px; color: #999; margin-top: 2px;">raffinerie.tibillet.coop</div>
+          </div>
+          <div style="border: 2px solid #dc3545; border-radius: 8px; padding: 16px; text-align: center; color: #dc3545;">
+            <div style="font-size: 28px;">&#x1F511;</div>
+            <div style="font-size: 13px; font-weight: 600;">Café associatif</div>
+            <div style="font-size: 11px; color: #999; margin-top: 2px;">cafe.tibillet.coop</div>
+          </div>
+        </div>
+
+        <!-- Logout -->
+        <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+          <span style="font-size: 22px;">&#x1F6AA;</span><br>Se déconnecter
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-body">
+      <h3>C — Section au-dessus de la grille</h3>
+      <p>La zone admin est placée EN HAUT, avant les boutons perso. Le user voit d'abord ses rôles admin, puis ses outils personnels. Le logout reste en bas.</p>
+    </div>
+    <div class="card-image" style="padding: 20px; background: #f8f9fa;">
+      <div style="max-width: 500px; margin: 0 auto; font-family: system-ui;">
+
+        <!-- Admin section FIRST -->
+        <div style="font-size: 14px; font-weight: 600; color: #dc3545; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #dc3545;">
+          &#x1F511; Administration
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px;">
+          <div style="border: 2px solid #dc3545; border-radius: 8px; padding: 16px; text-align: center; color: #dc3545;">
+            <div style="font-size: 28px;">&#x1F511;</div>
+            <div style="font-size: 13px; font-weight: 600;">Festival Raffinerie</div>
+            <div style="font-size: 11px; color: #999; margin-top: 2px;">raffinerie.tibillet.coop</div>
+          </div>
+          <div style="border: 2px solid #dc3545; border-radius: 8px; padding: 16px; text-align: center; color: #dc3545;">
+            <div style="font-size: 28px;">&#x1F511;</div>
+            <div style="font-size: 13px; font-weight: 600;">Café associatif</div>
+            <div style="font-size: 11px; color: #999; margin-top: 2px;">cafe.tibillet.coop</div>
+          </div>
+        </div>
+
+        <!-- Personal buttons -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;">
+          <div style="border: 2px solid #0d6efd; border-radius: 8px; padding: 12px; text-align: center; color: #0d6efd; font-size: 12px;">
+            <span style="font-size: 22px;">&#x1F4B0;</span><br>Mon portefeuille
+          </div>
+          <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+            <span style="font-size: 22px;">&#x1F3AB;</span><br>Mes abonnements
+          </div>
+          <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+            <span style="font-size: 22px;">&#x1F39F;</span><br>Mes réservations
+          </div>
+          <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+            <span style="font-size: 22px;">&#x2699;</span><br>Mes paramètres
+          </div>
+        </div>
+
+        <!-- Logout -->
+        <div style="border: 2px solid #6c757d; border-radius: 8px; padding: 12px; text-align: center; color: #6c757d; font-size: 12px;">
+          <span style="font-size: 22px;">&#x1F6AA;</span><br>Se déconnecter
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

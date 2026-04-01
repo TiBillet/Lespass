@@ -604,18 +604,16 @@ class Configuration(SingletonModel):
     def check_serveur_cashless(self):
         logger.info(f"Checking cashless server... URL: {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
-            sess = requests.Session()
             try:
-                r = sess.get(
+                r = requests.get(
                     f'{self.server_cashless}/api/check_apikey',
                     headers={
                         'Authorization': f'Api-Key {self.key_cashless}',
                         'Origin': self.domain(),
                     },
-                    timeout=1,
+                    timeout=10,
                     verify=bool(not settings.DEBUG),
                 )
-                sess.close()
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
                     # TODO: Check cashless signature avec laboutik_public_pem
@@ -623,9 +621,7 @@ class Configuration(SingletonModel):
                 else:
                     logger.error(f"{r.status_code} {r.content}")
                     return False
-                    # raise Exception(f"{r.status_code} {r.content}")
             except Exception as e:
-                # import ipdb; ipdb.set_trace()
                 logger.error(f"    ERROR check_serveur_cashless : {e}")
                 raise e
         return False

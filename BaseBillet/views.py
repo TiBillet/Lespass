@@ -725,6 +725,24 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         template_context['account_tab'] = 'index'
 
+        # Liste des tenants que l'utilisateur peut administrer
+        # / List of tenants the user can administer
+        user = request.user
+        current_tenant = connection.tenant
+
+        if user.is_superuser:
+            # Superuser : ses client_admin + le tenant courant (toujours present)
+            # / Superuser: their client_admin + current tenant (always included)
+            admin_pks = set(user.client_admin.values_list('pk', flat=True))
+            admin_pks.add(current_tenant.pk)
+            tenants_admin = Client.objects.filter(
+                pk__in=admin_pks
+            ).prefetch_related('domains')
+        else:
+            tenants_admin = user.client_admin.prefetch_related('domains').all()
+
+        template_context['tenants_admin'] = tenants_admin
+
         if not request.user.email_valid:
             logger.warning("User email not active")
             messages.add_message(request, messages.WARNING,
