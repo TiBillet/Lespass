@@ -175,12 +175,12 @@ def get_context(request):
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
-            {'name': 'event-list', 'url': '/event/',
-             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
-             'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
+            {'name': 'event-list', 'url': '/event/',
+             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+             'icon': 'calendar-date'},
         ]
     }
 
