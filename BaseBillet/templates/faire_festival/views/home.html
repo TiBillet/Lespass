@@ -165,10 +165,10 @@
                 
                 <!-- Bouton En savoir plus sur le Faire Festival -->
                 <div class="mt-4">
-                    <a href="{% url 'event-list' %}"
-                       class="btn bouton-action police-titre"
-                       style="max-width: min(90vw, 300px); width: 100%; display: inline-block !important; padding: 0.6rem 1rem; font-size: 0.9rem;"
-                       hx-get="{% url 'event-list' %}"
+                    <a href="{% url 'le_faire_festival' %}"
+                       class="btn bouton-action police-titre pe-3"
+                       style="max-width: min(90vw, 300px); width: 100%; padding: 0.5rem 0.5rem; font-size: 0.7rem;"
+                       hx-get="{% url 'le_faire_festival' %}"
                        hx-target="body"
                        hx-push-url="true">
                         {% translate "En savoir plus sur le Faire Festival" %}
@@ -202,7 +202,8 @@
                     <div class="image-etape mb-3">
                         <img src="{% static 'faire_festival/image/Fichier-11.png' %}"
                              alt="{% translate 'Billets' %}"
-                             class="img-fluid">
+                             class="img-fluid"
+                             style="height: 180px; object-fit: contain;">
                     </div>
                     
                     <!-- Description -->
@@ -229,7 +230,8 @@
                     <div class="image-etape mb-3">
                         <img src="{% static 'faire_festival/image/Fichier-12.png' %}"
                              alt="{% translate 'Programmation' %}"
-                             class="img-fluid">
+                             class="img-fluid"
+                             style="height: 180px; object-fit: contain;">
                     </div>
                     
                     <!-- Description -->
@@ -256,7 +258,8 @@
                     <div class="image-etape mb-3">
                         <img src="{% static 'faire_festival/image/Fichier-13.png' %}"
                              alt="{% translate 'Faire Festival' %}"
-                             class="img-fluid">
+                             class="img-fluid"
+                             style="height: 180px; object-fit: contain;">
                     </div>
                     
                     <!-- Description -->
