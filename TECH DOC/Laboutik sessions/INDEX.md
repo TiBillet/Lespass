@@ -297,8 +297,12 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 - [x] Branchement `HistoriqueFondDeCaisse` dans `fond_de_caisse()` POST
 - [x] Filtre `sale_origin__in=[LABOUTIK, LABOUTIK_TEST]` sur l'extraction (pas de ventes en ligne)
 - [x] `transaction.atomic()` + `select_for_update()` sur le chaînage HMAC du journal
+- [x] Export fiscal HTMX inline dans l'admin (card Unfold + `hx-get` → formulaire en place)
+- [x] Fix `method="post"` sur formulaire fond de caisse (fallback sans HTMX)
+- [x] Fix `dj_timezone` (alias views.py) dans export_fiscal POST
 - [x] 14 tests pytest (ZIP, hash, CSV, période max, vérification OK/KO, accès fiscal, journal chaîné)
-- [x] 57 tests laboutik total, 0 régression
+- [x] 57 tests laboutik total + 44 E2E, 0 régression
+- [x] Documentation conformité LNE complète (`TECH DOC/A DOCUMENTER/conformite-lne-caisse-laboutik.md`)
 
 **Session 19 — Envoi auto rapports + version** (Ex.21)
 - [ ] Celery Beat envoi périodique

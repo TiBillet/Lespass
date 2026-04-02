@@ -1,3 +1,10 @@
 - La modal JS qui apparait lors d'un multi prix sur laboutik doit être clicable plusieurs fois.
 - checker tout le lancement avec supervisor
 - checker Traefik en mode widlcard pour la prod
+- Export comptable (FEC + CSV configurable) : briefing dans `TECH DOC/IDEAS/BRIEFING_EXPORT_COMPTABLE.md`
+  - Priorite 0 : mapping categorie -> compte PCG (CompteComptable, MappingCategorie, admin Unfold)
+  - Priorite 1 : generateur FEC (format pivot, couvre 80% des logiciels comptables)
+  - Priorite 2 : profils CSV configurables (Sage, EBP, Dolibarr, Paheko, PennyLane)
+- Refactoring frontend restant : validation prix libre serveur, fix XSS textContent, aria-live, extraction CSS inline
+- Purge securisee (Ex.13-14 LNE) : archivage obligatoire avant purge, cumulatifs jamais purges
+- Documentation reglementaire LNE (Ex.1-2, Ex.20) : 7 dossiers formels pour certification
