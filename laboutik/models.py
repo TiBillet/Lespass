@@ -1359,3 +1359,197 @@ class SortieCaisse(models.Model):
         ordering = ('-datetime',)
         verbose_name = _('Cash withdrawal')
         verbose_name_plural = _('Cash withdrawals')
+
+
+# --- Journal des operations techniques ---
+# Piste d'audit immutable pour les operations techniques (archivage,
+# verification d'integrite, export fiscal). Chaine HMAC-SHA256.
+# / Immutable audit trail for technical operations (archiving,
+# integrity verification, fiscal export). HMAC-SHA256 chained.
+
+class JournalOperation(models.Model):
+    """
+    Journal des operations techniques : archivage, verification, export fiscal.
+    Chaque entree est immutable et chainee par HMAC-SHA256.
+    / Technical operations log: archiving, verification, fiscal export.
+    Each entry is immutable and chained via HMAC-SHA256.
+
+    LOCALISATION : laboutik/models.py
+    """
+
+    # Types d'operation possibles
+    # / Possible operation types
+    ARCHIVAGE = 'ARCHIVAGE'
+    VERIFICATION = 'VERIFICATION'
+    EXPORT_FISCAL = 'EXPORT_FISCAL'
+    TYPE_CHOICES = [
+        (ARCHIVAGE, _('Archiving')),
+        (VERIFICATION, _('Verification')),
+        (EXPORT_FISCAL, _('Fiscal export')),
+    ]
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    # Type d'operation technique
+    # / Type of technical operation
+    type_operation = models.CharField(
+        max_length=20,
+        choices=TYPE_CHOICES,
+        verbose_name=_("Operation type"),
+        help_text=_(
+            "Type d'operation technique (archivage, verification, export fiscal). "
+            "/ Type of technical operation (archiving, verification, fiscal export)."
+        ),
+    )
+
+    # Horodatage de l'operation
+    # / Operation timestamp
+    datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Operation date"),
+    )
+
+    # Operateur qui a declenche l'operation
+    # / Operator who triggered the operation
+    operateur = models.ForeignKey(
+        TibilletUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='operations_journal',
+        verbose_name=_("Operator"),
+        help_text=_(
+            "Utilisateur qui a declenche l'operation technique. "
+            "/ User who triggered the technical operation."
+        ),
+    )
+
+    # Details de l'operation (format libre JSON)
+    # / Operation details (free-form JSON)
+    details = models.JSONField(
+        default=dict,
+        verbose_name=_("Details"),
+        help_text=_(
+            "Details de l'operation au format JSON. "
+            "/ Operation details in JSON format."
+        ),
+    )
+
+    # Hash HMAC-SHA256 pour la chaine d'integrite
+    # / HMAC-SHA256 hash for integrity chain
+    hmac_hash = models.CharField(
+        max_length=64,
+        blank=True, default='',
+        verbose_name=_("HMAC hash"),
+        help_text=_(
+            "Hash HMAC-SHA256 pour la verification d'integrite. "
+            "/ HMAC-SHA256 hash for integrity verification."
+        ),
+    )
+
+    def __str__(self):
+        return f"{self.get_type_operation_display()} ({self.datetime:%Y-%m-%d %H:%M})"
+
+    class Meta:
+        ordering = ('datetime',)
+        verbose_name = _('Operation log')
+        verbose_name_plural = _('Operation logs')
+
+
+# --- Historique du fond de caisse ---
+# Trace immutable de chaque changement de fond de caisse (montant initial
+# dans le tiroir-caisse). Enregistre l'ancien et le nouveau montant en
+# centimes, avec l'operateur et la raison du changement.
+# / Immutable trace of each cash float change (initial amount in the
+# cash register drawer). Records old and new amounts in cents, with
+# operator and reason for the change.
+
+class HistoriqueFondDeCaisse(models.Model):
+    """
+    Historique du fond de caisse : trace chaque modification du montant
+    initial present dans le tiroir-caisse.
+    / Cash float history: traces each change to the initial amount
+    in the cash register drawer.
+
+    LOCALISATION : laboutik/models.py
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    # Point de vente concerne
+    # / Concerned point of sale
+    point_de_vente = models.ForeignKey(
+        'laboutik.PointDeVente', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='historique_fond_de_caisse',
+        verbose_name=_("Point of sale"),
+        help_text=_(
+            "Point de vente dont le fond de caisse a ete modifie. "
+            "/ Point of sale whose cash float was modified."
+        ),
+    )
+
+    # Operateur qui a modifie le fond de caisse
+    # / Operator who modified the cash float
+    operateur = models.ForeignKey(
+        TibilletUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='historique_fond_de_caisse',
+        verbose_name=_("Operator"),
+        help_text=_(
+            "Utilisateur qui a modifie le fond de caisse. "
+            "/ User who modified the cash float."
+        ),
+    )
+
+    # Horodatage de la modification
+    # / Modification timestamp
+    datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Modification date"),
+    )
+
+    # Ancien montant du fond de caisse en centimes
+    # / Previous cash float amount in cents
+    ancien_montant = models.IntegerField(
+        verbose_name=_("Previous amount (cents)"),
+        help_text=_(
+            "Ancien montant du fond de caisse en centimes. "
+            "/ Previous cash float amount in cents."
+        ),
+    )
+
+    # Nouveau montant du fond de caisse en centimes
+    # / New cash float amount in cents
+    nouveau_montant = models.IntegerField(
+        verbose_name=_("New amount (cents)"),
+        help_text=_(
+            "Nouveau montant du fond de caisse en centimes. "
+            "/ New cash float amount in cents."
+        ),
+    )
+
+    # Raison du changement (optionnelle)
+    # / Reason for the change (optional)
+    raison = models.TextField(
+        blank=True, default='',
+        verbose_name=_("Reason"),
+        help_text=_(
+            "Raison du changement de fond de caisse. "
+            "/ Reason for the cash float change."
+        ),
+    )
+
+    def __str__(self):
+        ancien_euros = self.ancien_montant / 100
+        nouveau_euros = self.nouveau_montant / 100
+        return f"{ancien_euros:.2f} € → {nouveau_euros:.2f} € ({self.datetime:%Y-%m-%d %H:%M})"
+
+    class Meta:
+        ordering = ('-datetime',)
+        verbose_name = _('Cash float history')
+        verbose_name_plural = _('Cash float histories')

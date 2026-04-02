@@ -9,12 +9,10 @@ import logging
 from django import forms
 from django.contrib import admin
 from django.shortcuts import get_object_or_404
-from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from solo.admin import SingletonModelAdmin
 from unfold.admin import ModelAdmin, TabularInline
-from unfold.decorators import action
 
 from Administration.admin.products import ICON_POS, IconPickerWidget
 from Administration.admin.site import staff_admin_site
@@ -26,6 +24,8 @@ from laboutik.models import (
     CommandeSauvegarde, ArticleCommandeSauvegarde,
     ClotureCaisse,
     ImpressionLog,
+    JournalOperation,
+    HistoriqueFondDeCaisse,
 )
 
 logger = logging.getLogger(__name__)
@@ -540,6 +540,20 @@ class ClotureCaisseAdmin(ModelAdmin):
         euros_formate = f"{euros:,.2f} €".replace(",", " ")
         return format_html('<span style="font-variant-numeric: tabular-nums;">{}</span>', euros_formate)
 
+    def changelist_view(self, request, extra_context=None):
+        """
+        Injecte l'URL de l'export fiscal dans le contexte du changelist.
+        Affiche un bandeau avec le bouton "Export fiscal" en haut de la liste.
+        / Injects the fiscal export URL into the changelist context.
+        Displays a banner with the "Export fiscal" button at the top of the list.
+        LOCALISATION : Administration/admin/laboutik.py
+        """
+        extra_context = extra_context or {}
+        extra_context['export_fiscal_url'] = '/laboutik/caisse/export-fiscal/'
+        return super().changelist_view(request, extra_context)
+
+    list_before_template = "admin/cloture/changelist_before.html"
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
         Injecte le rapport recalcule dans le contexte du template before.
@@ -557,9 +571,9 @@ class ClotureCaisseAdmin(ModelAdmin):
 
     def get_urls(self):
         """
-        URLs custom pour les exports (CSV, PDF, Excel).
+        URLs custom pour les exports (CSV, PDF, Excel, fiscal ZIP).
         Le rapport est affiche via changeform_view (pas d'URL custom).
-        / Custom URLs for exports (CSV, PDF, Excel).
+        / Custom URLs for exports (CSV, PDF, Excel, fiscal ZIP).
         The report is displayed via changeform_view (no custom URL).
         """
         from django.urls import path
@@ -810,6 +824,77 @@ class ImpressionLogAdmin(ModelAdmin):
         'cloture', 'operateur', 'printer', 'type_justificatif',
         'is_duplicata', 'format_emission',
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# --- Journal des operations techniques (conformite LNE) ---
+# --- Technical operations log (LNE compliance) ---
+
+@admin.register(JournalOperation, site=staff_admin_site)
+class JournalOperationAdmin(ModelAdmin):
+    """Admin lecture seule pour le journal des operations techniques.
+    Read-only admin for the technical operations log.
+    LOCALISATION : Administration/admin/laboutik.py"""
+    list_display = ('datetime', 'type_operation', 'operateur')
+    list_filter = ('type_operation',)
+    search_fields = ('operateur__email',)
+    ordering = ('-datetime',)
+    readonly_fields = ('uuid', 'type_operation', 'datetime', 'operateur', 'details', 'hmac_hash')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# --- Historique du fond de caisse ---
+# --- Cash float history ---
+
+# Helpers de formatage definis HORS de la classe pour eviter qu'Unfold les wrappe avec @action.
+# / Formatting helpers defined OUTSIDE the class to prevent Unfold from wrapping them with @action.
+
+def _euros_ancien(obj):
+    """Formate l'ancien montant en euros. / Formats previous amount in euros."""
+    return f"{obj.ancien_montant / 100:.2f} €"
+
+_euros_ancien.short_description = _("Previous amount")
+
+
+def _euros_nouveau(obj):
+    """Formate le nouveau montant en euros. / Formats new amount in euros."""
+    return f"{obj.nouveau_montant / 100:.2f} €"
+
+_euros_nouveau.short_description = _("New amount")
+
+
+@admin.register(HistoriqueFondDeCaisse, site=staff_admin_site)
+class HistoriqueFondDeCaisseAdmin(ModelAdmin):
+    """Admin lecture seule pour l'historique du fond de caisse.
+    Read-only admin for cash float history.
+    LOCALISATION : Administration/admin/laboutik.py"""
+    list_display = ('datetime', _euros_ancien, _euros_nouveau, 'operateur')
+    list_filter = ('point_de_vente',)
+    search_fields = ('operateur__email',)
+    ordering = ('-datetime',)
+    readonly_fields = ('uuid', 'point_de_vente', 'operateur', 'datetime', 'ancien_montant', 'nouveau_montant', 'raison')
 
     def has_add_permission(self, request):
         return False

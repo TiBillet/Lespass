@@ -47,6 +47,7 @@ from laboutik.models import (
     PointDeVente, CartePrimaire, Table,
     CommandeSauvegarde, ArticleCommandeSauvegarde,
     ClotureCaisse, CorrectionPaiement, SortieCaisse,
+    HistoriqueFondDeCaisse,
 )
 from laboutik.serializers import (
     ClientIdentificationSerializer,
@@ -1315,6 +1316,116 @@ class CaisseViewSet(viewsets.ViewSet):
         })
 
     # ----------------------------------------------------------------------- #
+    #  Export fiscal — archive ZIP signee HMAC pour l'administration fiscale   #
+    #  Fiscal export — HMAC-signed ZIP archive for tax administration          #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get", "post"], url_path="export-fiscal", url_name="export_fiscal")
+    def export_fiscal(self, request):
+        """
+        GET /laboutik/caisse/export-fiscal/
+        Affiche le formulaire avec dates debut/fin optionnelles.
+        / Shows the form with optional start/end dates.
+
+        POST /laboutik/caisse/export-fiscal/
+        Genere et telecharge l'archive ZIP signee HMAC.
+        / Generates and downloads the HMAC-signed ZIP archive.
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. GET : affiche le formulaire (template hx_export_fiscal.html)
+        2. POST : valide les dates, genere les fichiers, calcule les hash,
+           empaquete en ZIP, journalise l'operation, renvoie le ZIP.
+        / 1. GET: shows the form
+        2. POST: validates dates, generates files, computes hashes,
+           packages into ZIP, logs the operation, returns the ZIP.
+        """
+        from datetime import date as date_type
+
+        from django.db import connection
+        from django.http import HttpResponse
+
+        from laboutik.archivage import (
+            calculer_hash_fichiers,
+            creer_entree_journal,
+            empaqueter_zip,
+            generer_fichiers_archive,
+        )
+
+        config = LaboutikConfiguration.get_solo()
+
+        if request.method == "GET":
+            # Detecter si la requete vient de l'admin (HTMX) ou d'un acces direct (POS)
+            # Si HTMX : renvoyer le partial admin Unfold (charge dans la card)
+            # Si direct : renvoyer la page POS complete
+            # / Detect if request comes from admin (HTMX) or direct access (POS)
+            est_requete_htmx = request.headers.get('HX-Request') == 'true'
+            if est_requete_htmx:
+                return render(request, "admin/cloture/export_fiscal_form.html", {
+                    "form_action_url": request.path,
+                    "cancel_url": request.headers.get('HX-Current-URL', '/admin/laboutik/cloturecaisse/'),
+                })
+            return render(request, "laboutik/partial/hx_export_fiscal.html")
+
+        # --- POST : generation de l'archive ZIP ---
+        # --- POST: ZIP archive generation ---
+
+        # Recuperer la cle HMAC / Get the HMAC key
+        cle = config.get_or_create_hmac_key()
+        if not cle:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Cle HMAC non configuree. Export impossible."),
+            }, status=500)
+
+        # Parser les dates optionnelles / Parse optional dates
+        debut = None
+        fin = None
+        debut_str = request.POST.get('debut', '').strip()
+        fin_str = request.POST.get('fin', '').strip()
+        try:
+            if debut_str:
+                debut = date_type.fromisoformat(debut_str)
+            if fin_str:
+                fin = date_type.fromisoformat(fin_str)
+        except ValueError:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Format de date invalide."),
+            }, status=400)
+
+        schema = connection.schema_name
+
+        # Generer les fichiers, calculer les hash, empaqueter en ZIP
+        # / Generate files, compute hashes, package into ZIP
+        fichiers = generer_fichiers_archive(schema, debut, fin)
+        hash_json = calculer_hash_fichiers(fichiers, cle)
+        zip_bytes = empaqueter_zip(fichiers, hash_json)
+
+        # Journaliser l'export / Log the export
+        details = {
+            'schema': schema,
+            'debut': debut_str or None,
+            'fin': fin_str or None,
+            'nb_fichiers': len(fichiers),
+            'taille_zip': len(zip_bytes),
+        }
+        creer_entree_journal(
+            type_operation='EXPORT_FISCAL',
+            details=details,
+            cle_secrete=cle,
+            operateur=request.user if request.user.is_authenticated else None,
+        )
+
+        # Reponse ZIP en telechargement / ZIP download response
+        date_label = dj_timezone.localtime(dj_timezone.now()).strftime('%Y%m%d_%H%M')
+        filename = f"export_fiscal_{schema}_{date_label}.zip"
+        response = HttpResponse(zip_bytes, content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    # ----------------------------------------------------------------------- #
     #  Fond de caisse — lecture et modification du montant initial              #
     #  Cash float — read and update initial drawer amount                      #
     # ----------------------------------------------------------------------- #
@@ -1349,6 +1460,21 @@ class CaisseViewSet(viewsets.ViewSet):
                 }, status=400)
 
             montant_centimes = serializer.validated_data['montant_euros']
+
+            # Trace du changement de fond de caisse avant modification
+            # / Record cash float change before modification
+            uuid_pv = request.POST.get('uuid_pv') or request.GET.get('uuid_pv')
+            point_de_vente_pour_historique = None
+            if uuid_pv:
+                point_de_vente_pour_historique = PointDeVente.objects.filter(uuid=uuid_pv).first()
+
+            HistoriqueFondDeCaisse.objects.create(
+                ancien_montant=config.fond_de_caisse,
+                nouveau_montant=montant_centimes,
+                operateur=request.user if request.user.is_authenticated else None,
+                point_de_vente=point_de_vente_pour_historique,
+            )
+
             config.fond_de_caisse = montant_centimes
             # save() sans update_fields : django-solo gere l'insert-or-update.
             # update_fields peut echouer si le singleton n'existe pas encore.

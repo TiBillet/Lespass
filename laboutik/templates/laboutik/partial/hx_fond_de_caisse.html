@@ -52,7 +52,9 @@ Bouton retour vers le recap "toutes caisses".
         <strong style="color: #e0e0e0; font-size: 1.2rem;">{{ montant_actuel_euros }} €</strong>
     </p>
 
-    <form hx-post="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
+    <form method="post"
+          action="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
+          hx-post="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
           hx-target="#ventes-zone"
           hx-swap="innerHTML"
           aria-label="{% translate 'Fond de caisse' %}">

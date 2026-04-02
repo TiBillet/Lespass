@@ -20,7 +20,6 @@ def adhesion_badge_callback(request):
 def get_sidebar_navigation(request):
     """Sidebar dynamique : masque les sections liees aux modules inactifs.
     Appelee par Unfold via SIDEBAR.navigation (string importable)."""
-    from BaseBillet.models import Configuration
 
     configuration = Configuration.get_solo()
 
@@ -196,6 +195,18 @@ def get_sidebar_navigation(request):
                     "title": _("Closures"),
                     "icon": "summarize",
                     "link": reverse_lazy("staff_admin:laboutik_cloturecaisse_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Operation logs"),
+                    "icon": "history",
+                    "link": reverse_lazy("staff_admin:laboutik_journaloperation_changelist"),
+                    "permission": admin_permission,
+                },
+                {
+                    "title": _("Cash float history"),
+                    "icon": "account_balance",
+                    "link": reverse_lazy("staff_admin:laboutik_historiquefonddecaisse_changelist"),
                     "permission": admin_permission,
                 },
                 {
@@ -433,7 +444,6 @@ def _build_modules_context(configuration):
 
 
 def dashboard_callback(request, context):
-    from BaseBillet.models import Configuration
 
     configuration = Configuration.get_solo()
 

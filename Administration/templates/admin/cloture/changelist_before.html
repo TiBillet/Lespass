@@ -1,0 +1,42 @@
+{% load i18n unfold %}
+{# Bandeau export fiscal au-dessus de la liste des clotures.                    #}
+{# Le bouton ouvre le formulaire en place via HTMX (pas de navigation).         #}
+{# / Fiscal export banner above the closures list.                              #}
+{# The button opens the form inline via HTMX (no navigation).                  #}
+
+{% if export_fiscal_url %}
+<div class="p-4 flex flex-col gap-4" data-testid="bandeau-export-fiscal">
+
+    {% component "unfold/components/card.html" with title=_("Fiscal export") %}
+        {# Contenu par defaut : description + bouton                            #}
+        {# Remplace par le formulaire quand on clique sur le bouton             #}
+        {# / Default content: description + button                              #}
+        {# Replaced by the form when clicking the button                        #}
+        <div id="export-fiscal-zone">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 py-2">
+
+                <div class="flex flex-col gap-1 min-w-0">
+                    <span class="text-sm text-font-subtle-light dark:text-font-subtle-dark">
+                        {% translate "Generate a signed archive (ZIP) of all POS data for the tax administration." %}
+                    </span>
+                    <span class="text-xs text-base-400 dark:text-base-500 flex items-center gap-1 mt-1">
+                        <span class="material-symbols-outlined" style="font-size: 14px;" aria-hidden="true">lock</span>
+                        {% translate "HMAC-SHA256 integrity — independently verifiable" %}
+                    </span>
+                </div>
+
+                <button type="button"
+                        hx-get="{{ export_fiscal_url }}"
+                        hx-target="#export-fiscal-zone"
+                        hx-swap="innerHTML"
+                        class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors flex-shrink-0"
+                        data-testid="btn-export-fiscal">
+                    <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                    {% translate "Export fiscal" %}
+                </button>
+            </div>
+        </div>
+    {% endcomponent %}
+
+</div>
+{% endif %}

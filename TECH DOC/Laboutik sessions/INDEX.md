@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-01 (session 17 terminée)
+> Dernière mise à jour : 2026-04-02 (session 18 terminée)
 
 ---
 
@@ -286,9 +286,19 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 - [x] Vue `sortie_de_caisse` refactorisée : utilise `calculer_solde_caisse()` (pas de duplication)
 - [x] 4 tests E2E sortie de caisse (DB + UI), 332 pytest total, 0 régression
 
-**Session 18 — Archivage fiscal + accès administration** (Ex.10-12, Ex.15, Ex.19)
-- [ ] Export CSV/JSON avec hash HMAC, max 1 an par archive
-- [ ] Management commands `archiver_donnees`, `verifier_archive`, `acces_fiscal`
+**Session 18 — Archivage fiscal + accès administration** (Ex.10-12, Ex.15, Ex.19) ✅ FAIT
+- [x] Modèles `JournalOperation` (traçabilité HMAC chaînée) + `HistoriqueFondDeCaisse` (migration 0017)
+- [x] Module `laboutik/archivage.py` : 15 fonctions (CSV `;` UTF-8 BOM, JSON, hash HMAC-SHA256, ZIP, README)
+- [x] Management command `archiver_donnees` : ZIP avec garde période max 365 jours (Ex.10-12)
+- [x] Management command `verifier_archive` : vérification intégrité indépendante (Ex.12)
+- [x] Management command `acces_fiscal` : export dossier complet + README français (Ex.19)
+- [x] Bouton "Export fiscal" dans ClotureCaisseAdmin (formulaire dates + téléchargement ZIP)
+- [x] Admin read-only `JournalOperationAdmin` + `HistoriqueFondDeCaisseAdmin` + sidebar
+- [x] Branchement `HistoriqueFondDeCaisse` dans `fond_de_caisse()` POST
+- [x] Filtre `sale_origin__in=[LABOUTIK, LABOUTIK_TEST]` sur l'extraction (pas de ventes en ligne)
+- [x] `transaction.atomic()` + `select_for_update()` sur le chaînage HMAC du journal
+- [x] 14 tests pytest (ZIP, hash, CSV, période max, vérification OK/KO, accès fiscal, journal chaîné)
+- [x] 57 tests laboutik total, 0 régression
 
 **Session 19 — Envoi auto rapports + version** (Ex.21)
 - [ ] Celery Beat envoi périodique
