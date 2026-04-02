@@ -965,26 +965,10 @@
     align-items: center;
 }
 
-/* Numéro de l'étape */
-.skin-faire-festival .numero-etape {
-    display: flex;
-    justify-content: center;
-}
-
-/* Badge numéroté (cercle avec chiffre) */
-.skin-faire-festival .badge-numero {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background-color: var(--couleur-bleu-vif);
-    color: var(--couleur-blanc);
-    font-family: var(--police-titre);
-    font-size: 1.2rem;
-    font-weight: bold;
-    border-radius: 50%;
-    border: var(--epaisseur-bordure) solid var(--couleur-bleu-vif);
+/* --- Boutons d'Action pour le tuto (plus petits) --- */
+.skin-faire-festival .etape-tuto .bouton-action {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
 }
 
 /* Conteneur de l'image d'étape */
@@ -998,7 +982,7 @@
 }
 
 .skin-faire-festival .image-etape img {
-    max-height: 180px;
+    max-height: 280px;
     width: auto;
     object-fit: contain;
 }

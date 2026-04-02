@@ -160,19 +160,20 @@
                                 {% translate "Espaces et" %}<br>
                                 {% translate "Communautés du Faire" %}
                             </p>
-                        </div>
                     </div>
-                      <!-- Bouton -->
-            <div class="">
-                <a href="{% url 'event-list' %}"
-                   class="btn btn-block w-50 bouton-action police-titre"
-                   hx-get="{% url 'event-list' %}"
-                   hx-target="body"
-                   hx-push-url="true">
-                <p class="mb-0">{% translate "En savoir plus sur le Faire Festival" %}</p>
-                </a>
-            </div>
                 </div> <!-- Fin Row Jours -->
+                
+                <!-- Bouton En savoir plus sur le Faire Festival -->
+                <div class="mt-4">
+                    <a href="{% url 'event-list' %}"
+                       class="btn bouton-action police-titre"
+                       style="max-width: min(90vw, 300px); width: 100%; display: inline-block !important; padding: 0.6rem 1rem; font-size: 0.9rem;"
+                       hx-get="{% url 'event-list' %}"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate "En savoir plus sur le Faire Festival" %}
+                    </a>
+                </div>
             </div> <!-- Fin Col Droite -->
         </div> <!-- Fin Row Principale -->
     </section>
