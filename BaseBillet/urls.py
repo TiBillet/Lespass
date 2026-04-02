@@ -61,6 +61,7 @@ urlpatterns = [
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     path('emailconfirmation/<str:token>', base_view.emailconfirmation, name='emailconfirmation'),
     path('infos-pratiques/', base_view.infos_pratiques, name='infos_pratiques'),
+    path('le-faire-festival/', base_view.le_faire_festival, name='le_faire_festival'),
 
     ##### TEST NICO
     # path("create_tenant/", base_view.create_tenant, name='create_tenant'),
