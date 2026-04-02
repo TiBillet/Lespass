@@ -1,0 +1,70 @@
+{% load i18n %}
+<!--
+GROUPE +/- POUR UNE COUPURE — partial inclus dans hx_sortie_de_caisse.html
+/ +/- GROUP FOR ONE DENOMINATION — partial included in hx_sortie_de_caisse.html
+
+LOCALISATION : laboutik/templates/laboutik/partial/_sortie_coupure_input.html
+
+Recu par contexte : coupure (dict avec centimes, label, cle_post)
+/ Received via context: coupure (dict with centimes, label, cle_post)
+-->
+<div style="display: inline-flex; align-items: center; gap: 0.4rem;">
+    <button type="button"
+            onclick="
+                var inp = document.getElementById('inp-{{ coupure.centimes }}');
+                var val = parseInt(inp.value) || 0;
+                if (val > 0) { inp.value = val - 1; }
+                recalculerTotalSortie();
+            "
+            aria-label="{% translate 'Diminuer' %}"
+            data-testid="sortie-btn-moins-{{ coupure.centimes }}"
+            style="
+                width: 44px; height: 44px;
+                background: rgba(239,68,68,0.15);
+                border: 2px solid rgba(239,68,68,0.5);
+                color: #f87171; border-radius: 8px;
+                font-size: 1.3rem; font-weight: 700;
+                cursor: pointer; line-height: 1;
+                display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0;
+            ">
+        &minus;
+    </button>
+
+    <input type="number" name="{{ coupure.cle_post }}"
+           id="inp-{{ coupure.centimes }}"
+           min="0" value="0"
+           data-centimes="{{ coupure.centimes }}"
+           oninput="recalculerTotalSortie()"
+           style="
+               width: 56px; height: 44px;
+               padding: 0.2rem; text-align: center;
+               font-size: 1.1rem; font-family: 'Luciole-regular';
+               font-weight: 700;
+               border-radius: 6px; border: 1px solid rgba(99,102,241,0.3);
+               background: rgba(0,0,0,0.25); color: #e0e0e0;
+           "
+           data-testid="sortie-input-{{ coupure.centimes }}">
+
+    <button type="button"
+            onclick="
+                var inp = document.getElementById('inp-{{ coupure.centimes }}');
+                var val = parseInt(inp.value) || 0;
+                inp.value = val + 1;
+                recalculerTotalSortie();
+            "
+            aria-label="{% translate 'Augmenter' %}"
+            data-testid="sortie-btn-plus-{{ coupure.centimes }}"
+            style="
+                width: 44px; height: 44px;
+                background: rgba(34,197,94,0.15);
+                border: 2px solid rgba(34,197,94,0.5);
+                color: #4ade80; border-radius: 8px;
+                font-size: 1.3rem; font-weight: 700;
+                cursor: pointer; line-height: 1;
+                display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0;
+            ">
+        &plus;
+    </button>
+</div>
