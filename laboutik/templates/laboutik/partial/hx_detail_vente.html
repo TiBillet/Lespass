@@ -19,7 +19,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
         {% endif %}
         <div class="ventes-detail-info-item">
             <i class="fas fa-credit-card" aria-hidden="true"></i>
-            <span class="ventes-badge-moyen ventes-badge-{{ moyen_paiement }}">{{ moyen_paiement }}</span>
+            <span class="ventes-badge-moyen ventes-badge-{{ moyen_paiement }}">{{ moyen_paiement_label|default:moyen_paiement }}</span>
         </div>
     </div>
 
@@ -59,7 +59,20 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
             <i class="fas fa-print" aria-hidden="true"></i>
             {% translate "Ré-imprimer" %}
         </button>
+        {% if correction_possible %}
+        <button class="ventes-btn-action"
+                hx-get="{% url 'laboutik-paiement-formulaire_correction' %}?ligne_uuid={{ premiere_ligne_uuid }}"
+                hx-target="#correction-zone-{{ premiere_ligne_uuid }}"
+                hx-swap="innerHTML"
+                data-testid="btn-corriger">
+            <i class="fas fa-edit" aria-hidden="true"></i>
+            {% translate "Corriger moyen" %}
+        </button>
+        {% endif %}
     </div>
+    <!-- Zone pour le formulaire de correction (chargee en HTMX) -->
+    <!-- / Zone for the correction form (loaded via HTMX) -->
+    <div id="correction-zone-{{ premiere_ligne_uuid }}" data-testid="correction-zone" aria-live="polite"></div>
     {% endif %}
 
 </div>

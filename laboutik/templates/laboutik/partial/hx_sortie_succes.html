@@ -1,0 +1,55 @@
+{% load i18n %}
+<!--
+CONFIRMATION SORTIE DE CAISSE — affiche le montant et un bouton retour
+/ CASH WITHDRAWAL CONFIRMATION — shows amount and back button
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_sortie_succes.html
+-->
+<div class="ventes-container" data-testid="sortie-succes">
+
+    <div style="
+        padding: 1.25rem; border-radius: 10px; margin-top: 1rem;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        font-family: 'Luciole-regular';
+    ">
+        <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+            <span style="
+                display: inline-flex; align-items: center; justify-content: center;
+                width: 32px; height: 32px; border-radius: 50%;
+                background: rgba(16, 185, 129, 0.25); color: #10b981; font-size: 1.1rem;
+            ">
+                <i class="fas fa-check" aria-hidden="true"></i>
+            </span>
+            <span style="color: #d1fae5; font-size: 1.1rem; font-weight: 600;">
+                {% translate "Sortie de caisse enregistree" %}
+            </span>
+        </div>
+        <p style="color: rgba(209, 250, 229, 0.7); font-size: 1rem; margin: 0 0 0 2.75rem;">
+            {{ montant_euros }} €
+        </p>
+    </div>
+
+    <div style="margin-top: 1.5rem;">
+        <button style="
+                display: inline-flex; align-items: center; gap: 0.4rem;
+                background: transparent; border: 1px solid rgba(255,255,255,0.15);
+                color: #a0a0a0; padding: 0.5rem 1.25rem; border-radius: 6px;
+                font-family: 'Luciole-regular'; font-size: 0.9rem; cursor: pointer;
+            "
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+            hx-target="#ventes-zone"
+            hx-swap="innerHTML"
+            data-testid="btn-retour-recap">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            {% translate "Retour au Ticket X" %}
+        </button>
+    </div>
+</div>
+
+<style>
+@keyframes correction-slide-in {
+    from { transform: translateY(-8px); opacity: 0; filter: blur(3px); }
+}
+</style>

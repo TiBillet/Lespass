@@ -1154,3 +1154,206 @@ class ImpressionLog(models.Model):
         ordering = ('-datetime',)
         verbose_name = _('Print log')
         verbose_name_plural = _('Print logs')
+
+
+# --- Correction de moyen de paiement ---
+# Trace d'audit pour chaque correction de moyen de paiement sur une LigneArticle.
+# Requis par la certification LNE (exigence 4 : pas de modification directe,
+# seulement des operations tracees). Le HMAC chain est casse volontairement
+# par la correction — ce modele sert de preuve pour distinguer une correction
+# tracee d'une falsification (voir integrity.py verifier_chaine()).
+# / Payment method correction audit trail.
+# Required by LNE certification (req. 4: no direct modification,
+# only traced operations). The HMAC chain is intentionally broken
+# by the correction — this model serves as proof to distinguish
+# a traced correction from tampering (see integrity.py verifier_chaine()).
+
+class CorrectionPaiement(models.Model):
+    """
+    Trace d'audit immutable pour une correction de moyen de paiement.
+    Chaque correction est enregistree avec l'ancien moyen, le nouveau moyen,
+    la raison et l'operateur. Seules les corrections ESP <-> CB <-> CHQ sont
+    autorisees. Les paiements NFC (cashless) ne peuvent pas etre corriges.
+    / Immutable audit trail for a payment method correction.
+    Only CASH <-> CC <-> CHECK corrections are allowed.
+    NFC (cashless) payments cannot be corrected.
+
+    LOCALISATION : laboutik/models.py
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    # Ligne d'article concernee par la correction
+    # / Article line affected by the correction
+    ligne_article = models.ForeignKey(
+        'BaseBillet.LigneArticle', on_delete=models.PROTECT,
+        related_name='corrections',
+        verbose_name=_("Article line"),
+        help_text=_(
+            "Ligne d'article dont le moyen de paiement a ete corrige. "
+            "/ Article line whose payment method was corrected."
+        ),
+    )
+
+    # Ancien moyen de paiement (code PaymentMethod, ex: 'CA', 'CC', 'CH')
+    # / Previous payment method code
+    ancien_moyen = models.CharField(
+        max_length=10,
+        verbose_name=_("Previous payment method"),
+        help_text=_(
+            "Code du moyen de paiement avant correction (ex: CA, CC, CH). "
+            "/ Payment method code before correction."
+        ),
+    )
+
+    # Nouveau moyen de paiement
+    # / New payment method code
+    nouveau_moyen = models.CharField(
+        max_length=10,
+        verbose_name=_("New payment method"),
+        help_text=_(
+            "Code du moyen de paiement apres correction. "
+            "/ Payment method code after correction."
+        ),
+    )
+
+    # Raison de la correction (obligatoire, conformite LNE)
+    # / Correction reason (mandatory, LNE compliance)
+    raison = models.TextField(
+        verbose_name=_("Reason"),
+        help_text=_(
+            "Raison de la correction. Obligatoire pour la tracabilite. "
+            "/ Correction reason. Mandatory for traceability."
+        ),
+    )
+
+    # Operateur qui a effectue la correction
+    # / Operator who performed the correction
+    operateur = models.ForeignKey(
+        TibilletUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='corrections_paiement',
+        verbose_name=_("Operator"),
+        help_text=_(
+            "Caissier qui a effectue la correction. "
+            "/ Cashier who performed the correction."
+        ),
+    )
+
+    # Horodatage de la correction
+    # / Correction timestamp
+    datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Correction date"),
+    )
+
+    def __str__(self):
+        return f"{self.ancien_moyen} → {self.nouveau_moyen} ({self.datetime:%Y-%m-%d %H:%M})"
+
+    class Meta:
+        ordering = ('-datetime',)
+        verbose_name = _('Payment correction')
+        verbose_name_plural = _('Payment corrections')
+
+
+# --- Sortie de caisse (retrait especes) ---
+# Enregistre chaque retrait d'especes du tiroir-caisse avec une ventilation
+# detaillee par coupure (billets et pieces). Le total est recalcule cote
+# serveur pour eviter toute manipulation.
+# / Cash withdrawal record.
+# Records each cash withdrawal from the register with a detailed
+# breakdown by denomination (bills and coins). Total is recalculated
+# server-side to prevent manipulation.
+
+class SortieCaisse(models.Model):
+    """
+    Sortie de caisse : retrait d'especes avec ventilation par coupure.
+    Le montant total est recalcule cote serveur (ne jamais faire confiance
+    au total envoye par le client).
+    / Cash withdrawal with breakdown by denomination.
+    Total amount is recalculated server-side.
+
+    LOCALISATION : laboutik/models.py
+    """
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    # Point de vente depuis lequel le retrait est effectue
+    # / Point of sale from which the withdrawal is made
+    point_de_vente = models.ForeignKey(
+        'laboutik.PointDeVente', on_delete=models.PROTECT,
+        related_name='sorties_caisse',
+        verbose_name=_("Point of sale"),
+        help_text=_(
+            "Point de vente depuis lequel le retrait d'especes est effectue. "
+            "/ Point of sale from which cash is withdrawn."
+        ),
+    )
+
+    # Operateur qui a effectue le retrait
+    # / Operator who performed the withdrawal
+    operateur = models.ForeignKey(
+        TibilletUser, on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='sorties_caisse',
+        verbose_name=_("Operator"),
+        help_text=_(
+            "Caissier qui a effectue le retrait d'especes. "
+            "/ Cashier who performed the cash withdrawal."
+        ),
+    )
+
+    # Horodatage du retrait
+    # / Withdrawal timestamp
+    datetime = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Withdrawal date"),
+    )
+
+    # Montant total retire en centimes (recalcule cote serveur)
+    # / Total amount withdrawn in cents (recalculated server-side)
+    montant_total = models.IntegerField(
+        verbose_name=_("Total amount (cents)"),
+        help_text=_(
+            "Montant total retire en centimes. Recalcule cote serveur. "
+            "/ Total withdrawn amount in cents. Recalculated server-side."
+        ),
+    )
+
+    # Ventilation par coupure : cle = valeur de la coupure en centimes,
+    # valeur = nombre de coupures de ce type.
+    # Exemple : {"50000": 1, "20000": 2, "500": 3} = 1x500€ + 2x200€ + 3x5€
+    # / Breakdown by denomination: key = denomination value in cents,
+    # value = number of that denomination.
+    ventilation = models.JSONField(
+        default=dict,
+        verbose_name=_("Denomination breakdown"),
+        help_text=_(
+            "Ventilation par coupure. Cle = valeur en centimes, valeur = quantite. "
+            "/ Denomination breakdown. Key = value in cents, value = quantity."
+        ),
+    )
+
+    # Note libre (optionnelle)
+    # / Optional note
+    note = models.TextField(
+        blank=True, default='',
+        verbose_name=_("Note"),
+        help_text=_(
+            "Note libre sur le retrait d'especes. "
+            "/ Optional note about the cash withdrawal."
+        ),
+    )
+
+    def __str__(self):
+        montant_euros = self.montant_total / 100
+        return f"{montant_euros:.2f} € ({self.datetime:%Y-%m-%d %H:%M})"
+
+    class Meta:
+        ordering = ('-datetime',)
+        verbose_name = _('Cash withdrawal')
+        verbose_name_plural = _('Cash withdrawals')

@@ -46,7 +46,7 @@ from laboutik.models import (
     LaboutikConfiguration,
     PointDeVente, CartePrimaire, Table,
     CommandeSauvegarde, ArticleCommandeSauvegarde,
-    ClotureCaisse,
+    ClotureCaisse, CorrectionPaiement, SortieCaisse,
 )
 from laboutik.serializers import (
     ClientIdentificationSerializer,
@@ -56,7 +56,9 @@ from laboutik.serializers import (
 )
 from laboutik.reports import RapportComptableService
 from laboutik.utils import method as payment_method
-from laboutik.integrity import calculer_hmac, obtenir_previous_hmac, calculer_total_ht
+from laboutik.integrity import (
+    calculer_hmac, obtenir_previous_hmac, calculer_total_ht, ligne_couverte_par_cloture,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -78,6 +80,17 @@ PAYMENT_METHOD_TRANSLATIONS = {
     "": _("inconnu"),
 }
 
+# Traduction des codes DB (PaymentMethod.choices) pour l'affichage POS
+# / DB code (PaymentMethod.choices) translations for POS display
+LABELS_MOYENS_PAIEMENT_DB = {
+    PaymentMethod.CASH: _("Espèces"),
+    PaymentMethod.CC: _("Carte bancaire"),
+    PaymentMethod.CHEQUE: _("Chèque"),
+    PaymentMethod.LOCAL_EURO: _("Cashless"),
+    PaymentMethod.LOCAL_GIFT: _("Cadeau"),
+    PaymentMethod.FREE: _("Offert"),
+}
+
 # UUID de l'article "consigne" — déclenche un flux de remboursement spécial
 # UUID of the "deposit" article — triggers a special refund flow
 UUID_ARTICLE_CONSIGNE = "8f08b90d-d3f0-49da-9dbd-8be795f689ef"
@@ -91,6 +104,40 @@ CATEGORIE_PAR_DEFAUT = {
     "couleur_backgr": "#FFFFFF",
     "couleur_texte": "#333333",
 }
+
+# Coupures standard pour la ventilation de sortie de caisse.
+# Liste de tuples (valeur_centimes, label_affichage).
+# / Standard denominations for cash withdrawal breakdown.
+# List of tuples (value_in_cents, display_label).
+COUPURES_CENTIMES = [
+    (50000, "500 €"),
+    (20000, "200 €"),
+    (10000, "100 €"),
+    (5000, "50 €"),
+    (2000, "20 €"),
+    (1000, "10 €"),
+    (500, "5 €"),
+    (200, "2 €"),
+    (100, "1 €"),
+    (50, "0,50 €"),
+    (20, "0,20 €"),
+    (10, "0,10 €"),
+]
+
+# Version pour le template (liste de dicts pour boucle {% for %})
+# / Template-friendly version (list of dicts for {% for %} loop)
+_COUPURES_POUR_TEMPLATE = [
+    {"centimes": centimes, "label": label, "cle_post": f"coupure_{centimes}"}
+    for centimes, label in COUPURES_CENTIMES
+]
+
+# Regroupement par paires pour l'affichage en 4 colonnes (2 coupures par ligne).
+# Paires adjacentes : (500€, 200€), (100€, 50€), (20€, 10€), (5€, 2€), (1€, 0,50€), (0,20€, 0,10€)
+# / Paired grouping for 4-column display (2 denominations per row).
+_COUPURES_PAIRES_POUR_TEMPLATE = [
+    (_COUPURES_POUR_TEMPLATE[i], _COUPURES_POUR_TEMPLATE[i + 1])
+    for i in range(0, len(_COUPURES_POUR_TEMPLATE), 2)
+]
 
 logger = logging.getLogger(__name__)
 
@@ -1187,6 +1234,214 @@ class CaisseViewSet(viewsets.ViewSet):
         return render(request, "laboutik/partial/hx_messages.html", context)
 
     # ----------------------------------------------------------------------- #
+    #  Fond de caisse — lecture et modification du montant initial              #
+    #  Cash float — read and update initial drawer amount                      #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get", "post"], url_path="fond-de-caisse", url_name="fond_de_caisse")
+    def fond_de_caisse(self, request):
+        """
+        GET /laboutik/caisse/fond-de-caisse/
+        Affiche le montant actuel du fond de caisse.
+        / Shows the current cash float amount.
+
+        POST /laboutik/caisse/fond-de-caisse/
+        Met a jour le montant du fond de caisse.
+        Le montant est recu en euros (decimal) et converti en centimes.
+        / Updates the cash float amount.
+        Amount is received in euros (decimal) and converted to cents.
+
+        LOCALISATION : laboutik/views.py
+        """
+        config = LaboutikConfiguration.get_solo()
+
+        if request.method == "POST":
+            # Validation via serializer DRF (conversion euros → centimes incluse)
+            # / Validation via DRF serializer (euros → cents conversion included)
+            from laboutik.serializers import FondDeCaisseSerializer
+            serializer = FondDeCaisseSerializer(data=request.POST)
+            if not serializer.is_valid():
+                premiere_erreur = list(serializer.errors.values())[0][0]
+                return render(request, "laboutik/partial/hx_messages.html", {
+                    "msg_type": "warning",
+                    "msg_content": str(premiere_erreur),
+                }, status=400)
+
+            montant_centimes = serializer.validated_data['montant_euros']
+            config.fond_de_caisse = montant_centimes
+            # save() sans update_fields : django-solo gere l'insert-or-update.
+            # update_fields peut echouer si le singleton n'existe pas encore.
+            # / save() without update_fields: django-solo handles insert-or-update.
+            config.save()
+
+            logger.info(
+                f"Fond de caisse mis a jour : {montant_centimes} centimes "
+                f"par {request.user}"
+            )
+
+        # GET ou POST reussi : afficher le formulaire avec le montant actuel
+        # / GET or successful POST: show the form with current amount
+        montant_actuel_euros = config.fond_de_caisse / 100
+
+        # Propager les params ventes pour le bouton retour
+        # / Propagate sales params for the back button
+        uuid_pv = request.GET.get("uuid_pv", request.POST.get("uuid_pv", ""))
+        tag_id_cm = request.GET.get("tag_id_cm", request.POST.get("tag_id_cm", ""))
+        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+
+        context = {
+            "montant_actuel_euros": f"{montant_actuel_euros:.2f}",
+            "montant_actuel_centimes": config.fond_de_caisse,
+            "message_succes": request.method == "POST",
+            "params_ventes": params_ventes,
+        }
+        return render(request, "laboutik/partial/hx_fond_de_caisse.html", context)
+
+    # ----------------------------------------------------------------------- #
+    #  Sortie de caisse — retrait especes avec ventilation par coupure          #
+    #  Cash withdrawal — cash removal with denomination breakdown              #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get"], url_path="sortie-de-caisse", url_name="sortie_de_caisse")
+    def sortie_de_caisse(self, request):
+        """
+        GET /laboutik/caisse/sortie-de-caisse/
+        Affiche le formulaire de sortie de caisse (ventilation par coupure).
+        / Shows the cash withdrawal form (denomination breakdown).
+
+        LOCALISATION : laboutik/views.py
+        """
+        # Recuperer le PV depuis le query param (le menu Ventes le passe)
+        # / Get PV from query param (Sales menu passes it)
+        uuid_pv = request.GET.get("uuid_pv", "")
+        tag_id_cm = request.GET.get("tag_id_cm", "")
+        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+
+        # Calculer le solde caisse pour la validation JS cote client
+        # / Calculate cash drawer balance for client-side JS validation
+        config = LaboutikConfiguration.get_solo()
+        fond_de_caisse_centimes = config.fond_de_caisse or 0
+
+        datetime_ouverture = _calculer_datetime_ouverture_service()
+        if datetime_ouverture:
+            datetime_fin = dj_timezone.now()
+            service = RapportComptableService(None, datetime_ouverture, datetime_fin)
+            entrees_especes_centimes = service.lignes.filter(
+                payment_method=PaymentMethod.CASH,
+            ).aggregate(total=Sum('amount'))['total'] or 0
+        else:
+            entrees_especes_centimes = 0
+
+        solde_total_centimes = fond_de_caisse_centimes + entrees_especes_centimes
+
+        context = {
+            "uuid_pv": uuid_pv,
+            "coupures": _COUPURES_POUR_TEMPLATE,
+            "coupures_paires": _COUPURES_PAIRES_POUR_TEMPLATE,
+            "params_ventes": params_ventes,
+            # Données pour la validation JS (indicatives — le serveur re-vérifie)
+            # / Data for JS validation (indicative — server re-validates)
+            "fond_de_caisse_centimes": fond_de_caisse_centimes,
+            "entrees_especes_centimes": entrees_especes_centimes,
+            # Chaînes pré-formatées pour l'affichage dans le template
+            # / Pre-formatted strings for display in the template
+            "fond_de_caisse_euros": f"{fond_de_caisse_centimes / 100:.2f}".replace('.', ','),
+            "entrees_especes_euros": f"{entrees_especes_centimes / 100:.2f}".replace('.', ','),
+            "solde_total_euros": f"{solde_total_centimes / 100:.2f}".replace('.', ','),
+        }
+        return render(request, "laboutik/partial/hx_sortie_de_caisse.html", context)
+
+    @action(detail=False, methods=["post"], url_path="creer-sortie-de-caisse", url_name="creer_sortie_de_caisse")
+    def creer_sortie_de_caisse(self, request):
+        """
+        POST /laboutik/caisse/creer-sortie-de-caisse/
+        Cree une SortieCaisse avec ventilation JSON.
+        Le total est recalcule cote serveur (ne jamais faire confiance au JS).
+        / Creates a SortieCaisse with JSON denomination breakdown.
+        Total is recalculated server-side (never trust JS).
+
+        LOCALISATION : laboutik/views.py
+        """
+        # Validation du PV et de la note via serializer DRF
+        # / Validate POS and note via DRF serializer
+        from laboutik.serializers import SortieDeCaisseSerializer
+        serializer = SortieDeCaisseSerializer(data=request.POST)
+        if not serializer.is_valid():
+            premiere_erreur = list(serializer.errors.values())[0][0]
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": str(premiere_erreur),
+            }, status=400)
+
+        uuid_pv = serializer.validated_data['uuid_pv']
+        note = serializer.validated_data.get('note', '').strip()
+
+        # Recuperer le point de vente
+        # / Get the point of sale
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except PointDeVente.DoesNotExist:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+            }, status=404)
+
+        # Lire les quantites par coupure et recalculer le total cote serveur
+        # / Read quantities per denomination and recalculate total server-side
+        ventilation = {}
+        montant_total_centimes = 0
+
+        for coupure_centimes, _label in COUPURES_CENTIMES:
+            cle_post = f"coupure_{coupure_centimes}"
+            quantite_brute = request.POST.get(cle_post, "0")
+
+            try:
+                quantite = int(quantite_brute)
+            except (ValueError, TypeError):
+                quantite = 0
+
+            if quantite < 0:
+                quantite = 0
+
+            if quantite > 0:
+                ventilation[str(coupure_centimes)] = quantite
+                montant_total_centimes += coupure_centimes * quantite
+
+        # Verifier qu'il y a au moins une coupure
+        # / Check that at least one denomination is present
+        if montant_total_centimes <= 0:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune coupure saisie"),
+            }, status=400)
+
+        # Creer la sortie de caisse
+        # / Create the cash withdrawal
+        SortieCaisse.objects.create(
+            point_de_vente=point_de_vente,
+            operateur=request.user if request.user.is_authenticated else None,
+            montant_total=montant_total_centimes,
+            ventilation=ventilation,
+            note=note,
+        )
+
+        logger.info(
+            f"Sortie de caisse : {montant_total_centimes} centimes "
+            f"depuis PV {point_de_vente.name} par {request.user}"
+        )
+
+        # Propager les params pour le bouton retour
+        # / Propagate params for the back button
+        tag_id_cm = request.POST.get("tag_id_cm", "")
+        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
+
+        montant_euros = f"{montant_total_centimes / 100:.2f}"
+        return render(request, "laboutik/partial/hx_sortie_succes.html", {
+            "montant_euros": montant_euros,
+            "params_ventes": params_ventes,
+        })
+
+    # ----------------------------------------------------------------------- #
     #  Menu Ventes — Ticket X + liste des ventes (Session 16)                  #
     #  Sales menu — Ticket X + sales list (Session 16)                         #
     # ----------------------------------------------------------------------- #
@@ -1321,6 +1576,13 @@ class CaisseViewSet(viewsets.ViewSet):
         ventes_page = list(ventes_requete[offset:offset + taille_page])
         a_page_suivante = ventes_requete[offset + taille_page:offset + taille_page + 1].exists()
 
+        # Ajouter le label humain du moyen de paiement a chaque vente
+        # (le queryset renvoie le code brut "CA", "CC", etc.)
+        # / Add human-readable payment method label to each sale
+        for vente in ventes_page:
+            code_moyen = vente.get('moyen_paiement', '')
+            vente['moyen_paiement_label'] = LABELS_MOYENS_PAIEMENT_DB.get(code_moyen, code_moyen)
+
         # Liste des PV pour le filtre (select)
         # / POS list for the filter (select)
         points_de_vente = PointDeVente.objects.filter(
@@ -1431,14 +1693,32 @@ class CaisseViewSet(viewsets.ViewSet):
             })
             total_transaction += ligne.amount or 0
 
+        # La correction est possible si le moyen n'est pas NFC
+        # et si la ligne n'est pas couverte par une cloture
+        # / Correction is possible if method is not NFC
+        # and line is not covered by a closure
+        moyen_de_la_ligne = premiere_ligne.payment_method or ""
+        moyens_nfc = (PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT)
+        correction_est_possible = (
+            moyen_de_la_ligne not in moyens_nfc
+            and not ligne_couverte_par_cloture(premiere_ligne)
+        )
+
+        # Label humain du moyen de paiement (ex: "Espèces" au lieu de "CA")
+        # / Human-readable payment method label (e.g. "Cash" instead of "CA")
+        moyen_paiement_label = LABELS_MOYENS_PAIEMENT_DB.get(moyen_de_la_ligne, moyen_de_la_ligne)
+
         context = {
             "uuid_transaction": uuid_transaction,
             "datetime": premiere_ligne.datetime,
-            "moyen_paiement": premiere_ligne.payment_method or "",
+            "moyen_paiement": moyen_de_la_ligne,
+            "moyen_paiement_label": moyen_paiement_label,
             "nom_pv": premiere_ligne.point_de_vente.name if premiere_ligne.point_de_vente else "",
             "articles": articles_detail,
             "total": total_transaction,
             "nb_articles": len(articles_detail),
+            "correction_possible": correction_est_possible,
+            "premiere_ligne_uuid": str(premiere_ligne.uuid),
         }
         return _rendre_vue_ventes(request, "laboutik/partial/hx_detail_vente.html", context)
 
@@ -1555,6 +1835,7 @@ def _construire_contexte_ventes(request):
         "pv": pv_dict,
         "card": card_dict,
         "title": _("Ventes"),
+        "hide_pv_name": True,
         "url_retour_pv": url_retour_pv,
         "params_ventes": params_ventes,
         "mode_ecole": laboutik_config.mode_ecole,
@@ -1588,10 +1869,14 @@ def _rendre_vue_ventes(request, template_partiel, context):
     # - Not an HTMX request (direct URL access)
     # - OR target == "body" (navigation from burger menu)
     # Everything else (tabs, infinite scroll, filters) = partial only.
+    # Le <body> a id="contenu" dans base.html — htmx envoie "contenu" pas "body".
+    # On accepte les deux + l'acces direct sans HTMX.
+    # / <body> has id="contenu" in base.html — htmx sends "contenu" not "body".
+    # We accept both + direct URL access without HTMX.
     est_navigation_complete = (
         not hasattr(request, 'htmx')
         or not request.htmx
-        or request.htmx.target == "body"
+        or request.htmx.target in ("body", "contenu")
     )
 
     if not est_navigation_complete:
@@ -3751,6 +4036,206 @@ class PaiementViewSet(viewsets.ViewSet):
         )
 
         return render(request, "laboutik/partial/hx_print_confirmation.html")
+
+    # ----------------------------------------------------------------------- #
+    #  Correction de moyen de paiement (conformite LNE exigence 4)             #
+    #  Payment method correction (LNE compliance requirement 4)                #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get"], url_path="formulaire_correction", url_name="formulaire_correction")
+    def formulaire_correction(self, request):
+        """
+        GET /laboutik/paiement/formulaire_correction/?ligne_uuid=...
+        Affiche le formulaire de correction de moyen de paiement.
+        / Shows the payment method correction form.
+
+        LOCALISATION : laboutik/views.py
+        """
+        ligne_uuid = request.GET.get("ligne_uuid")
+        if not ligne_uuid:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Ligne d'article introuvable"),
+            }, status=400)
+
+        try:
+            ligne = LigneArticle.objects.get(uuid=ligne_uuid)
+        except (LigneArticle.DoesNotExist, ValueError):
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Ligne d'article introuvable"),
+            }, status=404)
+
+        # Liste des moyens corrigeables (ESP/CB/CHQ), sans le moyen actuel
+        # / List of correctable methods (CASH/CC/CHECK), without the current one
+        moyens_corrigeables = []
+        if ligne.payment_method != PaymentMethod.CASH:
+            moyens_corrigeables.append({"code": PaymentMethod.CASH, "label": _("Especes")})
+        if ligne.payment_method != PaymentMethod.CC:
+            moyens_corrigeables.append({"code": PaymentMethod.CC, "label": _("Carte bancaire")})
+        if ligne.payment_method != PaymentMethod.CHEQUE:
+            moyens_corrigeables.append({"code": PaymentMethod.CHEQUE, "label": _("Cheque")})
+
+        # Label humain du moyen actuel + montant en euros pour l'affichage
+        # / Human label of current method + amount in euros for display
+        moyen_actuel_label = LABELS_MOYENS_PAIEMENT_DB.get(ligne.payment_method, ligne.payment_method)
+        montant_euros = f"{(ligne.amount or 0) / 100:.2f}"
+
+        # Nom de l'article pour le contexte
+        # / Article name for context
+        nom_article = ""
+        if ligne.pricesold and ligne.pricesold.productsold:
+            nom_article = ligne.pricesold.productsold.product.name
+
+        context = {
+            "ligne": ligne,
+            "moyens_corrigeables": moyens_corrigeables,
+            "moyen_actuel_label": moyen_actuel_label,
+            "montant_euros": montant_euros,
+            "nom_article": nom_article,
+        }
+        return render(request, "laboutik/partial/hx_corriger_moyen_paiement.html", context)
+
+    @action(detail=False, methods=["post"], url_path="corriger_moyen_paiement", url_name="corriger_moyen_paiement")
+    def corriger_moyen_paiement(self, request):
+        """
+        POST /laboutik/paiement/corriger_moyen_paiement/
+        Corrige le moyen de paiement d'une LigneArticle existante.
+        Cree une trace d'audit CorrectionPaiement (conformite LNE exigence 4).
+        Le HMAC chain est casse volontairement — CorrectionPaiement sert de preuve.
+        / Corrects the payment method of an existing LigneArticle.
+        Creates a CorrectionPaiement audit trail (LNE compliance req. 4).
+        The HMAC chain is intentionally broken — CorrectionPaiement serves as proof.
+
+        LOCALISATION : laboutik/views.py
+
+        Gardes de securite / Security guards :
+        1. Validation serializer (UUID valide, moyen dans ESP/CB/CHQ)
+        2. NFC interdit (ancien moyen) — les paiements cashless sont lies a des Transactions fedow_core
+        3. Post-cloture interdit — les lignes couvertes par une cloture sont immuables
+        4. Meme moyen interdit — pas de correction sans changement
+        """
+        # --- Validation des champs via serializer DRF ---
+        # Le serializer valide le format UUID, les choix de moyen, et la raison.
+        # Les gardes metier (NFC, post-cloture, meme moyen) restent dans la vue
+        # car elles dependent de l'etat en base.
+        # / Field validation via DRF serializer.
+        # Business guards (NFC, post-closure, same method) remain in the view
+        # because they depend on database state.
+        from laboutik.serializers import CorrectionPaiementSerializer
+        serializer = CorrectionPaiementSerializer(data=request.POST)
+        if not serializer.is_valid():
+            premiere_erreur = list(serializer.errors.values())[0][0]
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": str(premiere_erreur),
+            }, status=400)
+
+        ligne_uuid = serializer.validated_data['ligne_uuid']
+        nouveau_moyen = serializer.validated_data['nouveau_moyen']
+        raison = serializer.validated_data['raison']
+
+        # --- Recuperer la ligne d'article ---
+        # / Get the article line
+        try:
+            ligne = LigneArticle.objects.get(uuid=ligne_uuid)
+        except LigneArticle.DoesNotExist:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Ligne d'article introuvable"),
+            }, status=404)
+
+        # --- GARDE 1 : les paiements NFC (cashless) ne peuvent pas etre corriges ---
+        # Les paiements cashless sont lies a des Transactions fedow_core.
+        # Modifier le moyen de paiement casserait la coherence avec le registre fedow.
+        # / NFC payments are linked to fedow_core Transactions.
+        # Changing the method would break coherence with the fedow ledger.
+        moyens_nfc = (PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT)
+        if ligne.payment_method in moyens_nfc:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Les paiements cashless ne peuvent pas etre modifies"),
+            }, status=400)
+
+        # --- GARDE 2 : post-cloture interdit ---
+        # Les lignes couvertes par une cloture journaliere sont immuables.
+        # / Lines covered by a daily closure are immutable.
+        cloture_existante = ligne_couverte_par_cloture(ligne)
+        if cloture_existante:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Cette vente est couverte par une cloture. Modification interdite."),
+            }, status=400)
+
+        # --- GARDE 3 : meme moyen = pas de correction ---
+        # / Same method = no correction needed
+        if ligne.payment_method == nouveau_moyen:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Le moyen de paiement est deja identique"),
+            }, status=400)
+
+        # --- Recuperer TOUTES les lignes de la transaction ---
+        # Une transaction peut contenir plusieurs articles (ex: Biere + Coca).
+        # La correction s'applique a toutes les lignes du meme paiement.
+        # / Get ALL lines of the transaction.
+        # A transaction may contain multiple articles (e.g. Beer + Soda).
+        # The correction applies to all lines of the same payment.
+        ancien_moyen = ligne.payment_method
+        if ligne.uuid_transaction:
+            lignes_transaction = LigneArticle.objects.filter(
+                uuid_transaction=ligne.uuid_transaction,
+                payment_method=ancien_moyen,
+            )
+        else:
+            # Anciennes donnees sans uuid_transaction — corriger cette ligne seule
+            # / Old data without uuid_transaction — correct this line only
+            lignes_transaction = LigneArticle.objects.filter(uuid=ligne.uuid)
+
+        # --- Creer les traces d'audit + modifier le moyen (atomique) ---
+        # Les operations DOIVENT etre dans la meme transaction DB.
+        # Une CorrectionPaiement est creee par LigneArticle pour la tracabilite.
+        # / Create audit trails + modify the method (atomic).
+        # One CorrectionPaiement per LigneArticle for traceability.
+        operateur = request.user if request.user.is_authenticated else None
+        nombre_lignes_corrigees = 0
+
+        with db_transaction.atomic():
+            for ligne_a_corriger in lignes_transaction:
+                CorrectionPaiement.objects.create(
+                    ligne_article=ligne_a_corriger,
+                    ancien_moyen=ancien_moyen,
+                    nouveau_moyen=nouveau_moyen,
+                    raison=raison,
+                    operateur=operateur,
+                )
+                # Note : le HMAC chain est casse volontairement. C'est attendu.
+                # verifier_chaine() dans integrity.py croise avec CorrectionPaiement
+                # pour distinguer correction tracee de falsification.
+                # / Note: HMAC chain is intentionally broken. This is expected.
+                ligne_a_corriger.payment_method = nouveau_moyen
+                ligne_a_corriger.save(update_fields=['payment_method'])
+                nombre_lignes_corrigees += 1
+
+        logger.info(
+            f"Correction paiement : {nombre_lignes_corrigees} ligne(s) "
+            f"{ancien_moyen} → {nouveau_moyen} "
+            f"par {request.user} — raison : {raison}"
+        )
+
+        # Re-rendre le detail complet de la vente avec le nouveau moyen
+        # pour que la ligne se mette a jour visuellement.
+        # / Re-render the full sale detail with the new method
+        # so the row updates visually.
+        ancien_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(ancien_moyen, ancien_moyen)
+        nouveau_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(nouveau_moyen, nouveau_moyen)
+
+        return render(request, "laboutik/partial/hx_correction_succes.html", {
+            "ancien_moyen_label": ancien_moyen_label,
+            "nouveau_moyen_label": nouveau_moyen_label,
+            "ligne_uuid": str(ligne.uuid),
+            "uuid_transaction": str(ligne.uuid_transaction) if ligne.uuid_transaction else str(ligne.uuid),
+        })
 
 
 # --------------------------------------------------------------------------- #

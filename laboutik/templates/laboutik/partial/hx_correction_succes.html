@@ -1,0 +1,47 @@
+{% load i18n %}
+<!--
+CONFIRMATION DE CORRECTION — remplace la zone de correction apres succes
+/ CORRECTION CONFIRMATION — replaces the correction zone after success
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_correction_succes.html
+
+Affiche un message anime avec l'ancien et le nouveau moyen,
+puis propose de recharger le detail (pour voir le badge mis a jour).
+-->
+<div data-testid="correction-succes"
+     style="
+        padding: 1rem 1.25rem;
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        margin-top: 0.75rem;
+        animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        font-family: 'Luciole-regular';
+     ">
+
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+        <span style="
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(16, 185, 129, 0.25);
+            color: #10b981; font-size: 1rem;
+        ">
+            <i class="fas fa-check" aria-hidden="true"></i>
+        </span>
+        <span style="color: #d1fae5; font-size: 1.05rem; font-weight: 600;">
+            {% translate "Correction enregistree" %}
+        </span>
+    </div>
+
+    <p style="color: rgba(209, 250, 229, 0.7); font-size: 0.9rem; margin: 0 0 0 2.5rem; line-height: 1.5;">
+        {{ ancien_moyen_label }}
+        <span style="color: #6ee7b7; margin: 0 0.25rem;">&rarr;</span>
+        <strong style="color: #d1fae5;">{{ nouveau_moyen_label }}</strong>
+    </p>
+</div>
+
+<style>
+@keyframes correction-slide-in {
+    from { transform: translateY(-8px); opacity: 0; filter: blur(3px); }
+}
+</style>

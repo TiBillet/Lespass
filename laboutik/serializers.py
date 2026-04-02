@@ -297,6 +297,109 @@ class ClientIdentificationSerializer(serializers.Serializer):
     )
 
 
+class CorrectionPaiementSerializer(serializers.Serializer):
+    """
+    Valide les donnees d'une correction de moyen de paiement.
+    Validates payment method correction data.
+
+    LOCALISATION : laboutik/serializers.py
+
+    Utilise par PaiementViewSet.corriger_moyen_paiement() (POST).
+    Used by PaiementViewSet.corriger_moyen_paiement() (POST).
+
+    Seuls les moyens ESP (CA), CB (CC) et CHQ (CH) sont autorises.
+    Only CASH (CA), CC (CC) and CHECK (CH) are allowed.
+    """
+    ligne_uuid = serializers.UUIDField(
+        required=True,
+        error_messages={
+            'required': _("L'identifiant de la ligne est obligatoire"),
+            'invalid': _("Identifiant de ligne invalide"),
+        },
+    )
+    nouveau_moyen = serializers.ChoiceField(
+        choices=[('CA', _('Especes')), ('CC', _('Carte bancaire')), ('CH', _('Cheque'))],
+        required=True,
+        error_messages={
+            'required': _("Le nouveau moyen de paiement est obligatoire"),
+            'invalid_choice': _("Moyen de paiement invalide"),
+        },
+    )
+    raison = serializers.CharField(
+        required=False, allow_blank=True, default='',
+    )
+
+    def validate_raison(self, value):
+        """Nettoie la raison (strip). / Cleans the reason (strip)."""
+        return value.strip() if value else ''
+
+
+class FondDeCaisseSerializer(serializers.Serializer):
+    """
+    Valide le montant du fond de caisse (en euros, avec virgule FR acceptee).
+    Validates cash float amount (in euros, FR comma accepted).
+
+    LOCALISATION : laboutik/serializers.py
+
+    Utilise par CaisseViewSet.fond_de_caisse() (POST).
+    Used by CaisseViewSet.fond_de_caisse() (POST).
+    """
+    montant_euros = serializers.CharField(
+        required=True,
+        error_messages={
+            'required': _("Le montant est obligatoire"),
+        },
+    )
+
+    def validate_montant_euros(self, value):
+        """
+        Convertit le montant euros (string) en centimes (int).
+        Accepte la virgule comme separateur decimal (locale FR).
+        / Converts euros amount (string) to cents (int).
+        Accepts comma as decimal separator (FR locale).
+        """
+        from decimal import Decimal, InvalidOperation
+        try:
+            montant_nettoye = value.replace(",", ".")
+            montant_decimal = Decimal(montant_nettoye)
+            montant_centimes = int(round(montant_decimal * 100))
+        except (InvalidOperation, ValueError):
+            raise serializers.ValidationError(
+                _("Montant invalide")
+            )
+
+        if montant_centimes < 0:
+            raise serializers.ValidationError(
+                _("Le montant ne peut pas etre negatif")
+            )
+
+        return montant_centimes
+
+
+class SortieDeCaisseSerializer(serializers.Serializer):
+    """
+    Valide une sortie de caisse avec ventilation par coupure.
+    Le total est recalcule cote serveur (ne jamais faire confiance au client).
+    / Validates a cash withdrawal with denomination breakdown.
+    Total is recalculated server-side (never trust the client).
+
+    LOCALISATION : laboutik/serializers.py
+
+    Utilise par CaisseViewSet.creer_sortie_de_caisse() (POST).
+    Used by CaisseViewSet.creer_sortie_de_caisse() (POST).
+    """
+    uuid_pv = serializers.UUIDField(
+        required=True,
+        error_messages={
+            'required': _("Le point de vente est obligatoire"),
+            'invalid': _("Identifiant de point de vente invalide"),
+        },
+    )
+    note = serializers.CharField(
+        required=False, allow_blank=True, default='',
+    )
+
+
 class EnvoyerRapportSerializer(serializers.Serializer):
     """
     Valide l'adresse email pour l'envoi du rapport de cloture.

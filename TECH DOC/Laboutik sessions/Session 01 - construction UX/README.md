@@ -29,8 +29,8 @@ Un fichier = une etape = une session (ou demi-session).
 
 ## Phases UX
 
-Les plans d'amelioration UX/FALC de l'interface POS sont documentes dans `laboutik/doc/UX/`.
-Fichier principal : `laboutik/doc/UX/PLAN_UX_LABOUTIK.md`
+Les plans d'amelioration UX/FALC de l'interface POS sont documentes dans `UX/` (ce dossier).
+Fichier principal : `UX/` (5 phases)
 
 | Session UX | Statut |
 |------------|--------|

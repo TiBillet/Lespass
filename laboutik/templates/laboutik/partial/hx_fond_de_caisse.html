@@ -1,0 +1,87 @@
+{% load i18n %}
+<!--
+FOND DE CAISSE — formulaire de lecture/modification
+/ CASH FLOAT — read/update form
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_fond_de_caisse.html
+
+Affiche dans #ventes-zone (meme conteneur que le Ticket X).
+Bouton retour vers le recap "toutes caisses".
+-->
+<div class="ventes-container" data-testid="fond-de-caisse">
+
+    <!-- Bouton retour vers Ticket X -->
+    <!-- / Back button to Ticket X -->
+    <div style="margin-bottom: 1rem;">
+        <button style="
+                display: inline-flex; align-items: center; gap: 0.4rem;
+                background: transparent; border: 1px solid rgba(255,255,255,0.15);
+                color: #a0a0a0; padding: 0.4rem 1rem; border-radius: 6px;
+                font-family: 'Luciole-regular'; font-size: 0.85rem; cursor: pointer;
+            "
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+            hx-target="#ventes-zone"
+            hx-swap="innerHTML"
+            data-testid="btn-retour-recap">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            {% translate "Retour" %}
+        </button>
+    </div>
+
+    <h3 class="ventes-section-title">
+        <i class="fas fa-cash-register" aria-hidden="true"></i>
+        {% translate "Fond de caisse" %}
+    </h3>
+
+    {% if message_succes %}
+    <div style="
+            padding: 0.7rem 1rem; border-radius: 8px; margin-bottom: 1rem;
+            background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #6ee7b7; font-family: 'Luciole-regular'; font-size: 0.9rem;
+            animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        "
+        role="status" aria-live="polite" data-testid="fond-message-succes">
+        <i class="fas fa-check" aria-hidden="true" style="margin-right: 0.4rem;"></i>
+        {% translate "Fond de caisse mis a jour" %}
+    </div>
+    <style>@keyframes correction-slide-in { from { transform: translateY(-6px); opacity: 0; } }</style>
+    {% endif %}
+
+    <p style="color: #a0a0a0; margin-bottom: 1rem; font-family: 'Luciole-regular';">
+        {% translate "Montant actuel" %} :
+        <strong style="color: #e0e0e0; font-size: 1.2rem;">{{ montant_actuel_euros }} €</strong>
+    </p>
+
+    <form hx-post="{% url 'laboutik-caisse-fond_de_caisse' %}{% if params_ventes %}?{{ params_ventes }}{% endif %}"
+          hx-target="#ventes-zone"
+          hx-swap="innerHTML"
+          aria-label="{% translate 'Fond de caisse' %}">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 1rem;">
+            <label for="montant_euros" style="color: #c0c0c0; font-family: 'Luciole-regular'; display: block; margin-bottom: 0.4rem; font-size: 0.85rem;">
+                {% translate "Nouveau montant (euros)" %}
+            </label>
+            <input type="text" name="montant_euros" id="montant_euros"
+                   inputmode="decimal"
+                   value="{{ montant_actuel_euros }}"
+                   style="
+                       padding: 0.6rem 0.75rem; font-size: 1.1rem; font-family: 'Luciole-regular';
+                       border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);
+                       background: rgba(0,0,0,0.2); color: #e0e0e0; width: 180px;
+                   "
+                   data-testid="fond-input-montant">
+        </div>
+
+        <button type="submit"
+                style="
+                    background: linear-gradient(135deg, #6366f1, #4f46e5); color: white;
+                    padding: 0.6rem 1.5rem; border: none; border-radius: 8px;
+                    font-size: 0.95rem; font-weight: 600; font-family: 'Luciole-regular';
+                    cursor: pointer; box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+                "
+                data-testid="fond-btn-enregistrer">
+            {% translate "Enregistrer" %}
+        </button>
+    </form>
+</div>

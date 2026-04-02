@@ -1,0 +1,154 @@
+{% load static i18n %}
+<!--
+FORMULAIRE DE CORRECTION DE MOYEN DE PAIEMENT
+/ Payment method correction form
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_corriger_moyen_paiement.html
+
+Affiche le moyen actuel, un select avec les moyens corrigeables (ESP/CB/CHQ),
+un champ raison optionnel, et les boutons Annuler / Corriger.
+
+FLUX :
+1. Bouton "Corriger" dans hx_detail_vente.html → hx-get → cette page
+2. Utilisateur choisit nouveau moyen + saisit raison (optionnelle)
+3. Clic CORRIGER → hx-post → PaiementViewSet.corriger_moyen_paiement()
+4. Retour : hx_correction_succes.html (detail mis a jour)
+-->
+<div data-testid="correction-form"
+     style="
+        margin-top: 0.75rem;
+        padding: 1.25rem;
+        border-radius: 10px;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.04) 100%);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        animation: correction-form-in 350ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        font-family: 'Luciole-regular';
+     ">
+
+    <!-- En-tete : icone + titre + moyen actuel -->
+    <!-- / Header: icon + title + current method -->
+    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+        <span style="
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; border-radius: 8px;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc; font-size: 0.95rem;
+        ">
+            <i class="fas fa-exchange-alt" aria-hidden="true"></i>
+        </span>
+        <div>
+            <div style="color: #e0e7ff; font-size: 1rem; font-weight: 600; text-wrap: balance;">
+                {% translate "Corriger le moyen de paiement" %}
+            </div>
+            <div style="color: rgba(165, 180, 252, 0.6); font-size: 0.8rem; margin-top: 2px;">
+                {{ nom_article|default:"-" }} — {{ montant_euros }} €
+                <span style="
+                    display: inline-block; padding: 1px 6px; border-radius: 4px;
+                    background: rgba(255,255,255,0.08); margin-left: 4px;
+                    font-size: 0.75rem; color: rgba(255,255,255,0.5);
+                ">{{ moyen_actuel_label }}</span>
+            </div>
+        </div>
+    </div>
+
+    <form hx-post="{% url 'laboutik-paiement-corriger_moyen_paiement' %}"
+          hx-target="#correction-zone-{{ ligne.uuid }}"
+          hx-swap="innerHTML"
+          aria-label="{% translate 'Correction moyen de paiement' %}">
+        {% csrf_token %}
+        <input type="hidden" name="ligne_uuid" value="{{ ligne.uuid }}">
+
+        <!-- Boutons radio pour le nouveau moyen — plus intuitif qu'un select -->
+        <!-- / Radio buttons for new method — more intuitive than a select -->
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;" data-testid="correction-select-moyen">
+            {% for moyen in moyens_corrigeables %}
+            <label style="
+                flex: 1; min-width: 100px;
+                display: flex; align-items: center; justify-content: center;
+                padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer;
+                border: 1.5px solid rgba(99, 102, 241, 0.25);
+                background: rgba(99, 102, 241, 0.06);
+                color: #c7d2fe; font-size: 0.95rem;
+                transition: all 150ms ease;
+            "
+                   onmouseover="this.style.borderColor='rgba(99,102,241,0.5)'; this.style.background='rgba(99,102,241,0.15)'"
+                   onmouseout="if(!this.querySelector('input').checked){this.style.borderColor='rgba(99,102,241,0.25)'; this.style.background='rgba(99,102,241,0.06)'}"
+            >
+                <input type="radio" name="nouveau_moyen" value="{{ moyen.code }}"
+                       {% if forloop.first %}checked{% endif %}
+                       style="display: none;"
+                       onchange="
+                           document.querySelectorAll('[data-testid=correction-select-moyen] label').forEach(function(l){
+                               l.style.borderColor='rgba(99,102,241,0.25)';
+                               l.style.background='rgba(99,102,241,0.06)';
+                               l.style.color='#c7d2fe';
+                           });
+                           this.parentElement.style.borderColor='#818cf8';
+                           this.parentElement.style.background='rgba(99,102,241,0.25)';
+                           this.parentElement.style.color='#e0e7ff';
+                       ">
+                <span>{{ moyen.label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+
+        <!-- Raison (optionnelle) -->
+        <!-- / Reason (optional) -->
+        <div style="margin-bottom: 1rem;">
+            <textarea name="raison" rows="2"
+                      placeholder="{% translate 'Raison (optionnelle)' %}"
+                      style="
+                          width: 100%; padding: 0.6rem 0.75rem;
+                          font-size: 0.9rem; font-family: 'Luciole-regular';
+                          border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.2);
+                          background: rgba(0, 0, 0, 0.2); color: #e0e7ff;
+                          resize: vertical;
+                          transition: border-color 150ms ease;
+                      "
+                      onfocus="this.style.borderColor='rgba(99,102,241,0.5)'"
+                      onblur="this.style.borderColor='rgba(99,102,241,0.2)'"
+                      data-testid="correction-textarea-raison"></textarea>
+        </div>
+
+        <!-- Boutons : Annuler + Corriger -->
+        <!-- / Buttons: Cancel + Correct -->
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button type="button"
+                    onclick="this.closest('[id^=correction-zone-]').innerHTML=''"
+                    style="
+                        background: transparent; color: rgba(165, 180, 252, 0.6);
+                        padding: 0.5rem 1.25rem; border: 1px solid rgba(99, 102, 241, 0.15);
+                        border-radius: 8px; font-size: 0.9rem;
+                        font-family: 'Luciole-regular'; cursor: pointer;
+                        transition: all 150ms ease;
+                    "
+                    onmouseover="this.style.borderColor='rgba(99,102,241,0.3)'; this.style.color='#c7d2fe'"
+                    onmouseout="this.style.borderColor='rgba(99,102,241,0.15)'; this.style.color='rgba(165,180,252,0.6)'"
+                    data-testid="correction-btn-annuler">
+                {% translate "Annuler" %}
+            </button>
+            <button type="submit"
+                    style="
+                        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+                        color: white; padding: 0.5rem 1.5rem;
+                        border: none; border-radius: 8px;
+                        font-size: 0.9rem; font-weight: 600;
+                        font-family: 'Luciole-regular'; cursor: pointer;
+                        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+                        transition: all 150ms ease;
+                    "
+                    onmouseover="this.style.boxShadow='0 4px 12px rgba(99,102,241,0.45)'; this.style.transform='translateY(-1px)'"
+                    onmouseout="this.style.boxShadow='0 2px 8px rgba(99,102,241,0.3)'; this.style.transform='translateY(0)'"
+                    data-testid="correction-btn-valider">
+                <i class="fas fa-check" aria-hidden="true" style="margin-right: 0.35rem; font-size: 0.8rem;"></i>
+                {% translate "Corriger" %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+@keyframes correction-form-in {
+    from { transform: translateY(-6px); opacity: 0; filter: blur(2px); }
+}
+</style>

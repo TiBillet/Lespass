@@ -1050,6 +1050,70 @@ Les onglets HTMX ciblent `#ventes-zone` → partial seul.
 Le scroll infini cible `this` (outerHTML sur le `<tr>` loader) → partial.
 Seul le burger menu cible `body` → page complete.
 
+### Corrections, fond de caisse, sortie de caisse (session 17)
+
+**9.86 — `LaboutikConfiguration.get_solo()` en FastTenantTestCase : singleton absent.**
+Le singleton django-solo n'existe pas dans le schema de test cree par
+`FastTenantTestCase`. `get_solo()` retourne un objet en memoire avec
+`_state.adding=True`. Un `save(update_fields=[...])` sur cet objet leve
+`DatabaseError: Save with update_fields did not affect any rows.`
+Solution : utiliser `save()` sans `update_fields` pour le singleton.
+django-solo gere l'insert-or-update correctement quand `update_fields`
+n'est pas specifie.
+
+**9.87 — `ProductSold` n'a pas de champ `name` — ne pas passer `name=` au create.**
+`ProductSold` a seulement `product` (FK) et `categorie_article`.
+Le champ `name` n'existe pas. Utiliser `ProductSold.objects.create(product=produit)`.
+Le nom est derive de `self.product.name` via `__str__()`.
+De meme, `PriceSold.qty_solded` (et non `qty_sold`).
+
+**9.88 — Fixture `admin_user` post-flush : user `is_active=False`.**
+Apres un flush DB, le signal `pre_save_signal_status` peut mettre
+`is_active=False` sur le user admin. La fixture `admin_client` dans
+`conftest.py` fait `force_login()` mais l'admin Django refuse l'acces
+aux users inactifs → redirect 302 vers login sur toutes les pages admin.
+Fix : la fixture `admin_user` force `is_active=True` si necessaire :
+```python
+if not user.is_active:
+    user.is_active = True
+    user.save(update_fields=['is_active'])
+```
+
+**9.89 — Correction moyen de paiement : `transaction.atomic()` obligatoire.**
+La creation de `CorrectionPaiement` et la modification de `ligne.payment_method`
+doivent etre dans le meme `transaction.atomic()`. Si le `save()` echoue apres
+le `create()`, on a une trace d'audit sans correction reelle (incoherence LNE).
+
+**9.90 — Fond de caisse : conversion euros → centimes via `Decimal`, pas `float`.**
+La regle projet (MEMORY.md) est "jamais via float". Utiliser
+`Decimal(montant_brut)` puis `int(round(montant * 100))`. Attraper
+`InvalidOperation` en plus de `ValueError`.
+
+**9.91 — `fetch()` + `innerHTML` ne declenche PAS htmx : appeler `htmx.process()`.**
+Le pattern collapse de `toggleDetailVente()` dans `hx_liste_ventes.html`
+utilise `fetch()` + `td.innerHTML = html` pour injecter le detail sous la
+ligne cliquee. Le contenu injecte par `fetch()` n'est PAS traite par htmx :
+les attributs `hx-get`, `hx-post`, etc. sont **morts** dans le DOM.
+Les boutons "Re-imprimer" et "Corriger moyen" ne fonctionnent pas.
+Solution : ajouter `htmx.process(td)` apres `ligneTr.after(detailRow)`.
+htmx scanne alors le nouveau contenu et active les attributs `hx-*`.
+Regle generale : chaque fois qu'on injecte du HTML avec `hx-*` via JS
+natif (pas via htmx), il faut appeler `htmx.process(element)`.
+
+**9.92 — `hx-target="body"` envoie `HX-Target: contenu` a cause de `<body id="contenu">`.**
+Le `<body>` dans `laboutik/base.html` a `id="contenu"`. Quand un element a
+`hx-target="body"`, htmx resout le selecteur vers l'element `<body>` mais
+envoie son **id** dans le header HTTP : `HX-Target: contenu` (pas `"body"`).
+Cote serveur, `request.htmx.target == "body"` est **faux**.
+Solution dans `_rendre_vue_ventes()` : verifier les deux valeurs :
+```python
+est_navigation_complete = (
+    not request.htmx
+    or request.htmx.target in ("body", "contenu")
+)
+```
+Ce piege s'applique a toute logique serveur qui teste `request.htmx.target`.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

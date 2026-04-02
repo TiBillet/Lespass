@@ -9,7 +9,7 @@ Les clotures, corrections, et le menu ventes sont en place (sessions 12-17).
 Cette session couvre l'archivage des donnees et l'acces pour l'administration fiscale
 (exigences LNE 10, 11, 12, 15, 19).
 
-Lis le design spec : `docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`
+Lis le design spec : `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS et ventes/specs/2026-03-30-conformite-lne-caisse-design.md`
 
 ## TACHE 1 — Management command `archiver_donnees`
 

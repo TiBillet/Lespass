@@ -1,9 +1,9 @@
 # LaBoutik — Index des tâches
 
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
-> Les comptes-rendus de sessions sont dans [`PHASES/`](PHASES/).
+> Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-01 (session 16 terminée)
+> Dernière mise à jour : 2026-04-01 (session 17 terminée)
 
 ---
 
@@ -187,7 +187,7 @@ Sessions 10-11-12 (bouton).
 ### 6. Conformité LNE + Rapports Comptables ← PROCHAIN
 
 Conformité au référentiel LNE v1.7 (21 exigences). Design spec validé le 2026-03-30.
-Sessions 12 à 19. Voir `docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`.
+Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS et ventes/specs/2026-03-30-conformite-lne-caisse-design.md`.
 
 **Session 12 — Fondation HMAC + service de calcul** (Ex.3, Ex.8) ✅ FAIT
 - [x] Clé HMAC par tenant (Fernet) dans LaboutikConfiguration
@@ -265,9 +265,21 @@ Sessions 12 à 19. Voir `docs/superpowers/specs/2026-03-30-conformite-lne-caisse
 - [x] `stateJson` minimal dans le contexte ventes (fix `JSON.parse("")` crash dans base.html)
 - [x] 9 tests pytest + 4 E2E Playwright, 311 pytest total, 0 régression
 
-**Session 17 — Corrections + fond/sortie de caisse** (Ex.4)
-- [ ] Correction ESP/CB/CHQ (NFC interdit, post-clôture interdit)
-- [ ] Fond de caisse, sortie espèces avec ventilation
+**Session 17 — Corrections + fond/sortie de caisse** (Ex.4) ✅ FAIT
+- [x] Modèles `CorrectionPaiement` + `SortieCaisse` (migration 0015)
+- [x] Action `corriger_moyen_paiement` (PaiementViewSet) : gardes NFC, post-clôture, même moyen + serializer DRF
+- [x] Formulaire correction redesigné : radio buttons, animation, raison optionnelle, bouton Annuler
+- [x] Confirmation animée "Espèces → Carte bancaire" (`hx_correction_succes.html`)
+- [x] Badge moyen : label humain ("Espèces") au lieu du code DB ("CA") via `LABELS_MOYENS_PAIEMENT_DB`
+- [x] Fond de caisse GET/POST (`fond-de-caisse`) : conversion Decimal, virgule FR acceptée
+- [x] Sortie de caisse GET/POST (`sortie-de-caisse` / `creer-sortie-de-caisse`) : ventilation 12 coupures, total serveur
+- [x] `htmx.process(td)` dans `toggleDetailVente()` : fix boutons morts après fetch()
+- [x] Fix navigation PV : full reload (pas hx-get) pour ré-attacher les listeners JS POS
+- [x] Fix `hideMenuBurger()` : garde null après swap HTMX vers ventes.html
+- [x] 3 serializers DRF : `CorrectionPaiementSerializer`, `FondDeCaisseSerializer`, `SortieDeCaisseSerializer`
+- [x] `transaction.atomic()` sur création CorrectionPaiement + modification LigneArticle
+- [x] 20 tests pytest (dont auth 401/403, 404, UUID invalide), 323 total, 0 régression
+- [x] 12 tests E2E POS existants passent, 0 régression
 
 **Session 18 — Archivage fiscal + accès administration** (Ex.10-12, Ex.15, Ex.19)
 - [ ] Export CSV/JSON avec hash HMAC, max 1 an par archive

@@ -105,8 +105,13 @@ def admin_user(_inject_cli_env):
     with schema_context('lespass'):
         email = os.environ.get('ADMIN_EMAIL', 'jturbeaux@pm.me')
         user = TibilletUser.objects.get(email=email)
-        # S'assurer que l'utilisateur est admin du tenant
-        # / Ensure the user is admin of the tenant
+        # S'assurer que l'utilisateur est admin du tenant et actif.
+        # Apres un flush DB, is_active peut etre False (signal pre_save).
+        # / Ensure the user is admin of the tenant and active.
+        # After a DB flush, is_active can be False (pre_save signal).
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=['is_active'])
         user.client_admin.add(tenant)
         return user
 

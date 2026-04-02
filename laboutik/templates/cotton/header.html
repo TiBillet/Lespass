@@ -49,7 +49,7 @@
 	</div>
 	<div id="header-title">
 		<div>
-			<span>{{ title }}</span> - <i class="fas {{ pv.icon }}"></i> {{ pv.name }}
+			<span>{{ title }}</span>{% if pv.name and hide_pv_name != True %} - <i class="fas {{ pv.icon }}" aria-hidden="true"></i> {{ pv.name }}{% endif %}
 		</div>
 	</div>
 	<div class="header-menu pointer">
@@ -90,10 +90,12 @@
 	<!-- sub menu points de vente -->
 	<div class="sub-menu-pvs sub-menu hide">
 		{% for pv in card.pvs_list %}
+		{# Full reload (pas de hx-get) pour que les event listeners JS (articles.js, #}
+		{# addition.js, tarif.js) soient re-attaches au chargement de la page POS.    #}
+		{# Un swap HTMX body detruit ces listeners et le POS ne fonctionne plus.       #}
+		{# / Full reload (no hx-get) so JS event listeners are re-attached on POS load.#}
 		<a class="menu-burger-item menu-burger-item-content"
 			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
-			hx-get="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.uuid}}&tag_id_cm={{card.tag_id}}"
-			hx-target="body" hx-swap="innerHTML" hx-push-url="true"
 			style="text-decoration: none;">
 			<i class="menu-burger-item-content fas {{ pv.icon }}" aria-hidden="true"></i>
 			<div class="menu-burger-item-content">{{ pv.name }}</div>
@@ -124,11 +126,16 @@
 		document.querySelector(`#menu-burger-container ${subMenuClass}`).classList.remove('hide')
 	}
 
-	// Fermer le menu burger / Close burger menu
+	// Fermer le menu burger (avec garde null — l'element peut ne pas exister
+	// apres un swap HTMX vers ventes.html qui n'inclut pas le header complet)
+	// / Close burger menu (null guard — element may not exist after HTMX swap to ventes.html)
 	window.hideMenuBurger = function () {
-		document.querySelector('.menu-burger-icon').classList.remove('menu-burger-active')
-		document.querySelector('#menu-burger-container').classList.remove('menu-open')
-		document.querySelector('#menu-burger-overlay').classList.remove('menu-open')
+		var icon = document.querySelector('.menu-burger-icon')
+		var container = document.querySelector('#menu-burger-container')
+		var overlay = document.querySelector('#menu-burger-overlay')
+		if (icon) icon.classList.remove('menu-burger-active')
+		if (container) container.classList.remove('menu-open')
+		if (overlay) overlay.classList.remove('menu-open')
 	}
 
 	// Ouvrir/fermer le menu burger / Toggle burger menu

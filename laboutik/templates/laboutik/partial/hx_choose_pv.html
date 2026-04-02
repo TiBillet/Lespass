@@ -2,11 +2,12 @@
 <div data-testid="caisse-pv-list" aria-live="polite"
      data-loading-target="#laboutik-spinner" data-loading-delay="400">
     <h3>{% translate "Choisir un point de vente" %}</h3>
+    {# Full reload pour que les event listeners JS soient re-attaches #}
+    {# / Full reload so JS event listeners are re-attached #}
     {% for pv in points_de_vente %}
-    <button hx-get="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.uuid }}&tag_id_cm={{ tag_id_cm }}"
-            hx-target="body" hx-swap="innerHTML" hx-push-url="true"
-            class="btn-pv" data-testid="btn-pv-{{ pv.name|slugify }}">
+    <a href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.uuid }}&tag_id_cm={{ tag_id_cm }}"
+       class="btn-pv" data-testid="btn-pv-{{ pv.name|slugify }}">
         {{ pv.name }}
-    </button>
+    </a>
     {% endfor %}
 </div>

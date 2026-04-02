@@ -100,12 +100,21 @@
 
     <div class="ventes-liste-scroll" data-testid="liste-tableau">
         <table class="ventes-table">
+            <!-- Largeurs explicites pour aligner colonnes et valeurs -->
+            <!-- / Explicit widths to align columns and values -->
+            <colgroup>
+                <col style="width: 12%;">
+                <col style="width: 22%;">
+                <col style="width: 18%;">
+                <col style="width: 24%;">
+                <col style="width: 24%;">
+            </colgroup>
             <thead>
                 <tr>
                     <th>{% translate "Heure" %}</th>
                     <th>{% translate "Articles" %}</th>
                     <th class="text-end">{% translate "Total" %}</th>
-                    <th>{% translate "Moyen" %}</th>
+                    <th class="text-center">{% translate "Moyen" %}</th>
                     <th>{% translate "PV" %}</th>
                 </tr>
             </thead>
@@ -119,7 +128,7 @@
                     <td>{{ vente.derniere_datetime|date:"H:i" }}</td>
                     <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
                     <td class="text-end">{{ vente.total|euros }}</td>
-                    <td><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement }}</span></td>
+                    <td class="text-center"><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
                     <td>{{ vente.nom_pv }}</td>
                 </tr>
                 {% endfor %}
@@ -198,6 +207,11 @@ function toggleDetailVente(ligneTr, url) {
         td.innerHTML = html;
         detailRow.appendChild(td);
         ligneTr.after(detailRow);
+        // Demander a htmx de processer les attributs hx-* du contenu injecte
+        // (le fetch() n'est pas gere par htmx, donc les hx-get/hx-post sont morts sans ca)
+        // / Ask htmx to process hx-* attributes on the injected content
+        // (fetch() is not managed by htmx, so hx-get/hx-post are dead without this)
+        if (typeof htmx !== 'undefined') { htmx.process(td); }
     })
     .catch(function(erreur) {
         // Erreur reseau ou serveur → retirer le surlignage et afficher un message
@@ -218,7 +232,7 @@ function toggleDetailVente(ligneTr, url) {
     <td>{{ vente.derniere_datetime|date:"H:i" }}</td>
     <td>{{ vente.nb_articles }} {% translate "article(s)" %}</td>
     <td class="text-end">{{ vente.total|euros }}</td>
-    <td><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement }}</span></td>
+    <td class="text-center"><span class="ventes-badge-moyen ventes-badge-{{ vente.moyen_paiement }}">{{ vente.moyen_paiement_label|default:vente.moyen_paiement }}</span></td>
     <td>{{ vente.nom_pv }}</td>
 </tr>
 {% endfor %}

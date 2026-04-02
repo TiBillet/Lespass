@@ -1,0 +1,415 @@
+{% load i18n %}
+<!--
+SORTIE DE CAISSE — formulaire de ventilation par coupure
+/ CASH WITHDRAWAL — denomination breakdown form
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html
+
+Affiche dans #ventes-zone (meme conteneur que le Ticket X).
+12 lignes de coupures. Total recalcule cote serveur.
+
+Validation JS avant envoi :
+  - total > fond + especes : erreur bloquante
+  - total > especes seules : avertissement + propose nouveau fond de caisse
+-->
+<div class="ventes-container" data-testid="sortie-de-caisse">
+
+    <!-- Bouton retour vers Ticket X -->
+    <!-- / Back button to Ticket X -->
+    <div style="margin-bottom: 1rem;">
+        <button style="
+                display: inline-flex; align-items: center; gap: 0.4rem;
+                background: transparent; border: 1px solid rgba(255,255,255,0.15);
+                color: #a0a0a0; padding: 0.4rem 1rem; border-radius: 6px;
+                font-family: 'Luciole-regular'; font-size: 0.85rem; cursor: pointer;
+            "
+            hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
+            hx-target="#ventes-zone"
+            hx-swap="innerHTML"
+            data-testid="btn-retour-recap">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            {% translate "Retour" %}
+        </button>
+    </div>
+
+    <h3 class="ventes-section-title">
+        <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+        {% translate "Sortie de caisse" %}
+    </h3>
+
+    <!--
+    data-fond : fond de caisse actuel en centimes (depuis LaboutikConfiguration)
+    data-especes : total des ventes en especes depuis la derniere cloture, en centimes
+    Ces valeurs sont indicatives pour la validation JS.
+    Le serveur recalcule independamment cote POST.
+    /
+    data-fond : current cash float in cents (from LaboutikConfiguration)
+    data-especes : total cash sales since last closure, in cents
+    These values are indicative for JS validation.
+    The server independently recalculates on POST.
+    -->
+    <form id="form-sortie-caisse"
+          hx-post="{% url 'laboutik-caisse-creer_sortie_de_caisse' %}"
+          hx-target="#ventes-zone"
+          hx-swap="innerHTML"
+          aria-label="{% translate 'Sortie de caisse' %}"
+          data-fond="{{ fond_de_caisse_centimes }}"
+          data-especes="{{ entrees_especes_centimes }}">
+        {% csrf_token %}
+        <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+
+        <!--
+        Tableau des coupures en 4 colonnes : 2 coupures par ligne pour diviser la hauteur par 2.
+        Colonnes droites (coupure B) : fond légèrement différent + séparateur visuel.
+        Les inputs restent identifiables par data-centimes pour le JS de total.
+        /
+        Denomination table in 4 columns: 2 denominations per row to halve the height.
+        Right columns (denomination B): slightly different background + visual separator.
+        Inputs remain identifiable by data-centimes for the total JS.
+        -->
+        <table class="ventes-table" data-testid="sortie-coupures-table">
+            <colgroup>
+                <col style="width: 18%;">  <!-- label A -->
+                <col style="width: 32%;">  <!-- qty A -->
+                <col style="width: 18%;">  <!-- label B -->
+                <col style="width: 32%;">  <!-- qty B -->
+            </colgroup>
+            <thead>
+                <tr>
+                    <th colspan="2" style="text-align: center;">{% translate "Coupure" %} A</th>
+                    <th colspan="2" style="text-align: center;
+                        border-left: 2px solid rgba(255,255,255,0.08);">{% translate "Coupure" %} B</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for paire in coupures_paires %}
+                <tr>
+                    <!-- Coupure gauche (A) -->
+                    <!-- / Left denomination (A) -->
+                    <td style="font-size: 1.05rem; font-weight: 600; padding: 10px 8px;">
+                        {{ paire.0.label }}
+                    </td>
+                    <td class="text-center" style="padding: 7px 6px;">
+                        {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.0 %}
+                    </td>
+
+                    <!-- Coupure droite (B) — fond légèrement différent -->
+                    <!-- / Right denomination (B) — slightly different background -->
+                    <td style="
+                        font-size: 1.05rem; font-weight: 600; padding: 10px 8px;
+                        border-left: 2px solid rgba(255,255,255,0.06);
+                        background: rgba(99,102,241,0.05);
+                    ">
+                        {{ paire.1.label }}
+                    </td>
+                    <td class="text-center" style="padding: 7px 6px; background: rgba(99,102,241,0.05);">
+                        {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.1 %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <!-- Ligne total — recalculee en JS a chaque +/- ou saisie manuelle -->
+            <!-- / Total row — recalculated in JS on every +/- click or manual input -->
+            <tfoot>
+                <tr style="border-top: 2px solid rgba(255,255,255,0.15);">
+                    <td style="
+                        font-size: 1.1rem; font-weight: 700;
+                        padding: 12px 10px; color: #e0e0e0;
+                        font-family: 'Luciole-regular';
+                    ">
+                        {% translate "Total" %}
+                    </td>
+                    <td class="text-center" style="padding: 12px 10px;">
+                        <span id="sortie-total-affichage"
+                              data-testid="sortie-total"
+                              aria-live="polite"
+                              style="
+                                  font-size: 1.3rem; font-weight: 700;
+                                  color: #4ade80; font-family: 'Luciole-regular';
+                                  font-variant-numeric: tabular-nums;
+                              ">
+                            0,00 €
+                        </span>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <!-- Etat actuel de la caisse — lecture seule, rendu cote serveur -->
+        <!-- / Current cash drawer state — read-only, server-side rendered -->
+        <div data-testid="sortie-etat-caisse"
+             style="
+                 margin: 0.75rem 0 1.25rem 0;
+                 padding: 0.75rem 1rem;
+                 border-radius: 8px;
+                 background: rgba(255,255,255,0.04);
+                 border: 1px solid rgba(255,255,255,0.08);
+                 font-family: 'Luciole-regular'; font-size: 0.9rem;
+             ">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                <span style="color: #a0a0a0;">
+                    <i class="fas fa-coins" aria-hidden="true" style="margin-right: 0.35rem;"></i>
+                    {% translate "Fond de caisse" %}
+                </span>
+                <span style="color: #e0e0e0; font-variant-numeric: tabular-nums;">
+                    {{ fond_de_caisse_euros }} €
+                </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+                <span style="color: #a0a0a0;">
+                    <i class="fas fa-money-bill-wave" aria-hidden="true" style="margin-right: 0.35rem;"></i>
+                    {% translate "Ventes espèces" %}
+                </span>
+                <span style="color: #e0e0e0; font-variant-numeric: tabular-nums;">
+                    {{ entrees_especes_euros }} €
+                </span>
+            </div>
+            <div style="display: flex; justify-content: space-between;
+                        padding-top: 0.35rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                <span style="color: #c0c0c0; font-weight: 600;">
+                    <i class="fas fa-cash-register" aria-hidden="true" style="margin-right: 0.35rem;"></i>
+                    {% translate "Solde caisse" %}
+                </span>
+                <span style="color: #a78bfa; font-weight: 700; font-variant-numeric: tabular-nums;">
+                    {{ solde_total_euros }} €
+                </span>
+            </div>
+        </div>
+
+        <!-- Note optionnelle -->
+        <!-- / Optional note -->
+        <div style="margin: 1rem 0;">
+            <label for="note" style="color: #a0a0a0; font-family: 'Luciole-regular'; display: block; margin-bottom: 0.4rem; font-size: 0.85rem;">
+                {% translate "Note (optionnelle)" %}
+            </label>
+            <textarea name="note" id="note" rows="2"
+                      style="
+                          width: 100%; max-width: 400px; padding: 0.5rem 0.75rem;
+                          font-size: 0.9rem; font-family: 'Luciole-regular';
+                          border-radius: 8px; border: 1px solid rgba(239,68,68,0.2);
+                          background: rgba(0,0,0,0.2); color: #e0e0e0; resize: vertical;
+                      "
+                      data-testid="sortie-textarea-note"></textarea>
+        </div>
+
+        <!-- Zone d'alerte inline — visible uniquement si validation JS echoue -->
+        <!-- / Inline alert zone — visible only if JS validation fails -->
+        <div id="sortie-alerte"
+             role="alert"
+             aria-live="assertive"
+             data-testid="sortie-alerte"
+             style="display: none; margin: 1rem 0; padding: 1rem;
+                    border-radius: 8px; border: 2px solid rgba(251,191,36,0.5);
+                    background: rgba(251,191,36,0.08);">
+            <p id="sortie-alerte-texte"
+               style="margin: 0 0 0.75rem 0; color: #fbbf24;
+                      font-family: 'Luciole-regular'; font-size: 0.95rem; line-height: 1.5;">
+            </p>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <!-- Bouton confirmation : active le flag et re-soumet le formulaire HTMX -->
+                <!-- / Confirm button: sets the flag and re-submits the HTMX form -->
+                <button type="button"
+                        id="sortie-btn-confirmer-quand-meme"
+                        data-testid="sortie-btn-confirmer-quand-meme"
+                        onclick="confirmerSortieQuandMeme()"
+                        style="
+                            background: rgba(251,191,36,0.2); color: #fbbf24;
+                            border: 2px solid rgba(251,191,36,0.5);
+                            padding: 0.5rem 1.2rem; border-radius: 8px;
+                            font-family: 'Luciole-regular'; font-size: 0.9rem;
+                            font-weight: 600; cursor: pointer;
+                        ">
+                    <i class="fas fa-check" aria-hidden="true" style="margin-right: 0.3rem;"></i>
+                    {% translate "Confirmer quand même" %}
+                </button>
+                <button type="button"
+                        data-testid="sortie-btn-annuler-alerte"
+                        onclick="masquerAlerteSortie()"
+                        style="
+                            background: transparent; color: #a0a0a0;
+                            border: 1px solid rgba(255,255,255,0.15);
+                            padding: 0.5rem 1.2rem; border-radius: 8px;
+                            font-family: 'Luciole-regular'; font-size: 0.9rem;
+                            cursor: pointer;
+                        ">
+                    {% translate "Annuler" %}
+                </button>
+            </div>
+        </div>
+
+        <button type="submit"
+                style="
+                    background: linear-gradient(135deg, #ef4444, #dc2626); color: white;
+                    padding: 0.6rem 1.5rem; border: none; border-radius: 8px;
+                    font-size: 0.95rem; font-weight: 600; font-family: 'Luciole-regular';
+                    cursor: pointer; box-shadow: 0 2px 8px rgba(239,68,68,0.3);
+                "
+                data-testid="sortie-btn-enregistrer">
+            <i class="fas fa-sign-out-alt" aria-hidden="true" style="margin-right: 0.35rem;"></i>
+            {% translate "Enregistrer la sortie" %}
+        </button>
+    </form>
+</div>
+
+<script>
+/*
+ * Recalcule le total de sortie de caisse a partir des quantites saisies.
+ * / Recalculates cash withdrawal total from entered quantities.
+ *
+ * Chaque input a un attribut data-centimes = valeur de la coupure en centimes.
+ * On multiplie valeur × quantite pour chaque ligne, on somme, on affiche en euros.
+ * / Each input has data-centimes = denomination value in cents.
+ * Multiply value × quantity per row, sum, display in euros.
+ */
+function recalculerTotalSortie() {
+    var inputs = document.querySelectorAll('[data-centimes]');
+    var total_en_centimes = 0;
+    for (var i = 0; i < inputs.length; i++) {
+        var valeur_coupure = parseInt(inputs[i].getAttribute('data-centimes')) || 0;
+        var quantite_saisie = parseInt(inputs[i].value) || 0;
+        total_en_centimes += valeur_coupure * quantite_saisie;
+    }
+    var affichage = formaterEuros(total_en_centimes);
+    document.getElementById('sortie-total-affichage').textContent = affichage;
+}
+
+/*
+ * Formate un montant en centimes en chaine "X,XX €".
+ * / Formats a centimes amount into "X,XX €" string.
+ */
+function formaterEuros(centimes) {
+    var e = Math.floor(centimes / 100);
+    var c = centimes % 100;
+    return e + ',' + (c < 10 ? '0' + c : '' + c) + ' €';
+}
+
+/*
+ * Flag pour savoir si l'utilisateur a clique "Confirmer quand meme".
+ * Remis a false apres chaque envoi du formulaire.
+ * / Flag to track if the user clicked "Confirm anyway".
+ * Reset to false after each form submission.
+ */
+var _sortie_confirmee_par_utilisateur = false;
+
+/*
+ * L'utilisateur a clique "Confirmer quand meme" dans la zone d'alerte.
+ * Active le flag, masque l'alerte, re-soumet le formulaire via htmx.
+ * / User clicked "Confirm anyway" in the alert zone.
+ * Sets the flag, hides the alert, re-submits the form via htmx.
+ */
+function confirmerSortieQuandMeme() {
+    _sortie_confirmee_par_utilisateur = true;
+    masquerAlerteSortie();
+    /* htmx.trigger() re-envoie la requete HTMX sur le formulaire */
+    /* / htmx.trigger() re-sends the HTMX request on the form */
+    htmx.trigger(document.getElementById('form-sortie-caisse'), 'submit');
+}
+
+/* Cache la zone d'alerte. / Hides the alert zone. */
+function masquerAlerteSortie() {
+    document.getElementById('sortie-alerte').style.display = 'none';
+}
+
+/*
+ * Affiche la zone d'alerte avec un message et une couleur.
+ * / Shows the alert zone with a message and a color.
+ *
+ * @param {string} html_message - HTML du message a afficher
+ * @param {string} couleur - couleur CSS (ex: '#f87171' pour erreur, '#fbbf24' pour avertissement)
+ * @param {boolean} avec_confirmation - true pour afficher le bouton "Confirmer quand meme"
+ */
+function afficherAlerteSortie(html_message, couleur, avec_confirmation) {
+    var zone = document.getElementById('sortie-alerte');
+    var texte = document.getElementById('sortie-alerte-texte');
+    var btn_confirmer = document.getElementById('sortie-btn-confirmer-quand-meme');
+
+    texte.innerHTML = html_message;
+    texte.style.color = couleur;
+    zone.style.borderColor = couleur.replace(')', ',0.5)').replace('rgb', 'rgba');
+    /* On utilise une teinte de fond a 8% d'opacite */
+    /* / Use a background tint at 8% opacity */
+    zone.style.background = couleur.replace(')', ',0.08)').replace('rgb', 'rgba');
+    btn_confirmer.style.display = avec_confirmation ? '' : 'none';
+    zone.style.display = 'block';
+}
+
+/*
+ * Validation avant envoi HTMX (htmx:configRequest).
+ * Compare le total saisi avec les entrees especes et le solde total.
+ * / Validation before HTMX submission (htmx:configRequest).
+ * Compares entered total with cash entries and total cash balance.
+ *
+ * Logique :
+ *   total > fond + especes → erreur bloquante (impossible physiquement)
+ *   total > especes ET <= fond + especes → avertissement, propose nouveau fond de caisse
+ *   total <= especes → OK, envoi direct
+ * / Logic:
+ *   total > fond + especes → blocking error (physically impossible)
+ *   total > especes AND <= fond + especes → warning, propose new cash float
+ *   total <= especes → OK, direct submit
+ */
+document.getElementById('form-sortie-caisse').addEventListener('htmx:configRequest', function(event) {
+    /* Si l'utilisateur a deja confirme, on laisse passer et on remet a zero */
+    /* / If the user already confirmed, let it through and reset the flag */
+    if (_sortie_confirmee_par_utilisateur) {
+        _sortie_confirmee_par_utilisateur = false;
+        return;
+    }
+
+    var form = document.getElementById('form-sortie-caisse');
+    var fond_centimes = parseInt(form.getAttribute('data-fond')) || 0;
+    var especes_centimes = parseInt(form.getAttribute('data-especes')) || 0;
+    var solde_total_centimes = fond_centimes + especes_centimes;
+
+    /* Recalculer le total depuis les inputs */
+    /* / Recalculate total from inputs */
+    var inputs = document.querySelectorAll('[data-centimes]');
+    var total_centimes = 0;
+    for (var i = 0; i < inputs.length; i++) {
+        var val_coupure = parseInt(inputs[i].getAttribute('data-centimes')) || 0;
+        var qte = parseInt(inputs[i].value) || 0;
+        total_centimes += val_coupure * qte;
+    }
+
+    /* Cas 1 : total superieur au solde total — erreur bloquante */
+    /* / Case 1: total exceeds total balance — blocking error */
+    if (total_centimes > solde_total_centimes) {
+        afficherAlerteSortie(
+            '<i class="fas fa-exclamation-circle" aria-hidden="true" style="margin-right:0.4rem;"></i>'
+            + '{% translate "Montant impossible" %} : '
+            + formaterEuros(total_centimes)
+            + ' &gt; {% translate "solde caisse" %} ('
+            + formaterEuros(solde_total_centimes)
+            + ').',
+            '#f87171',
+            false  /* pas de bouton confirmer — erreur bloquante */
+        );
+        event.preventDefault();
+        return;
+    }
+
+    /* Cas 2 : total depasse les ventes especes mais reste dans le fond + especes */
+    /* / Case 2: total exceeds cash sales but stays within float + cash */
+    if (total_centimes > especes_centimes) {
+        var nouveau_fond_centimes = solde_total_centimes - total_centimes;
+        afficherAlerteSortie(
+            '<i class="fas fa-exclamation-triangle" aria-hidden="true" style="margin-right:0.4rem;"></i>'
+            + '{% translate "Le montant" %} ('
+            + formaterEuros(total_centimes)
+            + ') {% translate "dépasse les ventes en espèces" %} ('
+            + formaterEuros(especes_centimes)
+            + ').<br>'
+            + '{% translate "Le nouveau fond de caisse serait de" %} '
+            + '<strong style="color:#4ade80">' + formaterEuros(nouveau_fond_centimes) + '</strong>.',
+            '#fbbf24',
+            true  /* bouton "Confirmer quand meme" visible */
+        );
+        event.preventDefault();
+        return;
+    }
+
+    /* Cas 3 : total OK — masquer l'alerte si elle etait visible */
+    /* / Case 3: total OK — hide alert if it was visible */
+    masquerAlerteSortie();
+});
+</script>

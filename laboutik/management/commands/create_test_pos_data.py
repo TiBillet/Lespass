@@ -880,7 +880,7 @@ class Command(BaseCommand):
                 event_futur = Event.objects.filter(datetime__gte=now - timedelta(days=30)).first()
                 if event_futur:
                     produit_billet = Product.objects.filter(
-                        events=event_futur,
+                        event=event_futur,
                         categorie_article__in=[Product.BILLET, Product.FREERES],
                     ).first()
                     if produit_billet:

@@ -24,7 +24,7 @@
 
 ## Sessions a faire — Conformite LNE + Rapports + Menu Ventes
 
-> **Design spec** : `docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`
+> **Design spec** : `specs/2026-03-30-conformite-lne-caisse-design.md`
 > **Referentiel LNE v1.7** : `~/Nextcloud/TiBillet/10.Certification LNE/`
 
 | # | Fichier | Exigences LNE | Depend de | Statut |
@@ -34,7 +34,7 @@
 | 14 | `14_mentions_legales_tracabilite_impressions.md` | Ex.3, Ex.9 | 12 | FAIT |
 | 15 | `15_mode_ecole_exports_admin.md` | Ex.5 | 13, 14 | FAIT |
 | 16 | `16_menu_ventes_ticket_x_liste.md` | — | 12 | FAIT |
-| 17 | `17_corrections_fond_sortie_caisse.md` | Ex.4 | 13, 16 | A FAIRE |
+| 17 | `17_corrections_fond_sortie_caisse.md` | Ex.4 | 13, 16 | FAIT |
 | 18 | `18_archivage_fiscal_acces_administration.md` | Ex.10-12, 15, 19 | 13 | A FAIRE |
 | 19 | `19_envoi_auto_version.md` | Ex.21 | 15, 18 | A FAIRE |
 
@@ -57,7 +57,7 @@ lancees en parallele apres 12. La session 15 necessite 13 et 14. Etc.
 Donner le contenu du fichier .md comme prompt a un agent Claude Code.
 L'agent doit :
 1. Lire les fichiers source indiques dans "CONTEXTE"
-2. Lire le design spec (`docs/superpowers/specs/2026-03-30-conformite-lne-caisse-design.md`)
+2. Lire le design spec (`specs/2026-03-30-conformite-lne-caisse-design.md`)
 3. Implementer les taches dans l'ordre
 4. Lancer les commandes de verification
 5. Ne pas passer a la tache suivante si un test echoue

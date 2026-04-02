@@ -101,6 +101,10 @@
             {# Totaux par moyen de paiement #}
             {# / Totals by payment method #}
             <table class="ventes-table" data-testid="recap-totaux-moyen">
+                <colgroup>
+                    <col style="width: 60%;">
+                    <col style="width: 40%;">
+                </colgroup>
                 <thead>
                     <tr>
                         <th>{% translate "Moyen de paiement" %}</th>
@@ -188,6 +192,50 @@
             </table>
             {% endif %}
 
+            {# Actions caisse : fond de caisse + sortie especes #}
+            {# / Cash management actions: cash float + cash withdrawal #}
+            <h3 class="ventes-section-title">{% translate "Gestion caisse" %}</h3>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;" data-testid="actions-caisse">
+                <button style="
+                        flex: 1; min-width: 180px;
+                        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+                        padding: 0.7rem 1.25rem;
+                        background: rgba(99, 102, 241, 0.12);
+                        border: 1px solid rgba(99, 102, 241, 0.3);
+                        border-radius: 8px; color: #a5b4fc;
+                        font-family: 'Luciole-regular'; font-size: 0.95rem;
+                        cursor: pointer; transition: all 150ms ease;
+                    "
+                    hx-get="{% url 'laboutik-caisse-fond_de_caisse' %}"
+                    hx-target="#ventes-zone"
+                    hx-swap="innerHTML"
+                    onmouseover="this.style.background='rgba(99,102,241,0.25)'; this.style.borderColor='#818cf8'"
+                    onmouseout="this.style.background='rgba(99,102,241,0.12)'; this.style.borderColor='rgba(99,102,241,0.3)'"
+                    data-testid="btn-fond-de-caisse">
+                    <i class="fas fa-cash-register" aria-hidden="true"></i>
+                    {% translate "Fond de caisse" %}
+                </button>
+                <button style="
+                        flex: 1; min-width: 180px;
+                        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+                        padding: 0.7rem 1.25rem;
+                        background: rgba(239, 68, 68, 0.12);
+                        border: 1px solid rgba(239, 68, 68, 0.3);
+                        border-radius: 8px; color: #fca5a5;
+                        font-family: 'Luciole-regular'; font-size: 0.95rem;
+                        cursor: pointer; transition: all 150ms ease;
+                    "
+                    hx-get="{% url 'laboutik-caisse-sortie_de_caisse' %}?uuid_pv={{ pv.id }}"
+                    hx-target="#ventes-zone"
+                    hx-swap="innerHTML"
+                    onmouseover="this.style.background='rgba(239,68,68,0.25)'; this.style.borderColor='#f87171'"
+                    onmouseout="this.style.background='rgba(239,68,68,0.12)'; this.style.borderColor='rgba(239,68,68,0.3)'"
+                    data-testid="btn-sortie-de-caisse">
+                    <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+                    {% translate "Sortie de caisse" %}
+                </button>
+            </div>
+
         {% elif vue == "par_pv" %}
             {# --- VUE PAR POINT DE VENTE --- #}
 
@@ -230,6 +278,14 @@
             {# Tableau croise type x moyen #}
             {# / Cross table: type x payment method #}
             <table class="ventes-table" data-testid="recap-synthese-operations">
+                <colgroup>
+                    <col style="width: 20%;">
+                    <col style="width: 16%;">
+                    <col style="width: 16%;">
+                    <col style="width: 16%;">
+                    <col style="width: 16%;">
+                    <col style="width: 16%;">
+                </colgroup>
                 <thead>
                     <tr>
                         <th>{% translate "Type" %}</th>

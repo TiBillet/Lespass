@@ -56,8 +56,8 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **② Billetterie + Refonte typage** | Typage par article (pas PV), flow identification unifié, tuiles BI dans la grille, jauge, panier mixte | ✅ FAIT |
 | **③ WebSocket** | Push serveur HTMX 2 ws, Daphne, badge test, broadcast jauge | ✅ FAIT |
 | **④ Impression** | 4 backends (Cloud/LAN/Inner/Mock), ESC/POS builder, formatters, Celery async, bouton Imprimer, auto-print billets, MockBackend decode ESC/POS | ✅ FAIT |
-| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ⏳ **EN COURS** — session 12 FAIT, sessions 13-19 à faire |
-| **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ⏳ Sessions 16-17 (intégré dans ⑤) |
+| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ⏳ **EN COURS** — sessions 12-17 FAIT, sessions 18-19 à faire |
+| **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ✅ FAIT (sessions 16-17) |
 | **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑤⑥ |
 | **⑧ Multi-Asset** | Paniers mixtes EUR + tokens (à détailler avec le mainteneur) | ⏳ À DÉTAILLER |
 | **⑨ Stress test (3.3)** | `verify_transactions` + `verify_integrity` (HMAC chain) + 2000 tx concurrentes | ⏳ À FAIRE |
@@ -77,7 +77,7 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **14** | Mentions légales tickets + traçabilité impressions | Ex.3, Ex.9 | 12 |
 | **15** | Mode école + exports admin | Ex.5 | 13, 14 |
 | **16** | Menu Ventes : Ticket X + liste | — | 12 | ✅ FAIT |
-| **17** | Corrections + fond/sortie de caisse | Ex.4 | 13, 16 |
+| **17** | Corrections + fond/sortie de caisse | Ex.4 | 13, 16 | ✅ FAIT |
 | **18** | Archivage fiscal + accès administration | Ex.10-12, Ex.15, Ex.19 | 13 |
 | **19** | Envoi auto rapports + version | Ex.21 | 15, 18 |
 
