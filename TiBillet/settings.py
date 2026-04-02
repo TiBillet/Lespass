@@ -13,6 +13,8 @@ import os
 from datetime import timedelta
 from pathlib import Path
 
+from celery.schedules import crontab
+
 from django.db import connection
 from django.utils.translation import gettext_lazy as _
 from django.templatetags.static import static
@@ -383,6 +385,49 @@ BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_BROKER_URL = os.environ.get('CELERY_BROKER', 'redis://redis:6379/0')
 CELERY_RESULT_BACKEND = os.environ.get('CELERY_BACKEND', 'redis://redis:6379/0')
 # DJANGO_CELERY_BEAT_TZ_AWARE=False
+
+# Clotures automatiques mensuelles et annuelles (LNE exigences 6-7)
+# La cloture journaliere (J) reste manuelle (bouton dans le Ticket X).
+# Les clotures M et A aggregent les clotures J du mois/annee precedent.
+# / Automatic monthly and annual closures (LNE requirements 6-7)
+# Daily closure (J) remains manual (button in Ticket X).
+# M and A closures aggregate J closures from the previous month/year.
+CELERY_BEAT_SCHEDULE = {
+    # Cloture journaliere auto — lancee toutes les heures, ne traite que
+    # les tenants dont l'heure locale est 6h. Pas de cloture si aucune vente.
+    # / Auto daily closure — runs every hour, only processes tenants
+    # where local time is 6am. No closure if no sales.
+    'cloture-journaliere-auto': {
+        'task': 'laboutik.tasks.generer_cloture_journaliere_auto',
+        'schedule': crontab(minute=0),
+    },
+    # Cloture hebdomadaire — tous les lundis, toutes les heures (filtre TZ dans la tache)
+    # / Weekly closure — every Monday, every hour (TZ filter inside the task)
+    'cloture-hebdomadaire': {
+        'task': 'laboutik.tasks.generer_cloture_hebdomadaire',
+        'schedule': crontab(minute=0, day_of_week=1),
+    },
+    # Cloture mensuelle — le 1er du mois, toutes les heures (filtre TZ dans la tache)
+    # / Monthly closure — 1st of month, every hour (TZ filter inside the task)
+    'cloture-mensuelle': {
+        'task': 'laboutik.tasks.generer_cloture_mensuelle',
+        'schedule': crontab(minute=0, day_of_month=1),
+    },
+    # Cloture annuelle — le 1er janvier, toutes les heures (filtre TZ dans la tache)
+    # / Annual closure — January 1st, every hour (TZ filter inside the task)
+    'cloture-annuelle': {
+        'task': 'laboutik.tasks.generer_cloture_annuelle',
+        'schedule': crontab(minute=0, day_of_month=1, month_of_year=1),
+    },
+    # Envoi des rapports par email — 1h apres les clotures (7h locale tenant)
+    # PDF + CSV + Excel en pieces jointes.
+    # / Report email sending — 1h after closures (7am tenant local time)
+    # PDF + CSV + Excel attachments.
+    'envoi-rapports-clotures': {
+        'task': 'laboutik.tasks.envoyer_rapports_clotures_recentes',
+        'schedule': crontab(minute=0),
+    },
+}
 
 # CHANNELS
 ASGI_APPLICATION = "TiBillet.asgi.application"

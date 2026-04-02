@@ -297,6 +297,90 @@ def formatter_ticket_commande(commande, articles_groupe, printer):
     }
 
 
+def formatter_ticket_x(totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions):
+    """
+    Formate un Ticket X temporaire (consultation du service en cours, pas de cloture).
+    Le Ticket X est un instantane : il n'est pas persiste en base.
+    / Formats a temporary X-ticket (current shift consultation, no closure).
+    The X-ticket is a snapshot: it is not persisted in the database.
+
+    LOCALISATION : laboutik/printing/formatters.py
+
+    :param totaux_par_moyen: dict avec especes, carte_bancaire, cashless, cheque, total (centimes)
+    :param solde_caisse: dict avec fond_de_caisse, entrees_especes, sorties_especes, solde (centimes)
+    :param datetime_ouverture: datetime de la 1ere vente apres derniere cloture
+    :param nb_transactions: nombre de transactions dans la periode
+    :return: dict ticket_data
+    """
+    now = timezone.localtime(timezone.now())
+    date_ouverture = ""
+    if datetime_ouverture:
+        date_ouverture = timezone.localtime(datetime_ouverture).strftime("%d/%m/%Y %H:%M")
+
+    # Lignes par moyen de paiement / Lines by payment method
+    articles = []
+    if totaux_par_moyen.get('especes'):
+        articles.append({
+            "name": _("Especes"),
+            "qty": 1,
+            "price": totaux_par_moyen['especes'],
+            "total": totaux_par_moyen['especes'],
+        })
+    if totaux_par_moyen.get('carte_bancaire'):
+        articles.append({
+            "name": _("Carte bancaire"),
+            "qty": 1,
+            "price": totaux_par_moyen['carte_bancaire'],
+            "total": totaux_par_moyen['carte_bancaire'],
+        })
+    if totaux_par_moyen.get('cashless'):
+        articles.append({
+            "name": _("Cashless"),
+            "qty": 1,
+            "price": totaux_par_moyen['cashless'],
+            "total": totaux_par_moyen['cashless'],
+        })
+    if totaux_par_moyen.get('cheque'):
+        articles.append({
+            "name": _("Cheque"),
+            "qty": 1,
+            "price": totaux_par_moyen['cheque'],
+            "total": totaux_par_moyen['cheque'],
+        })
+
+    # Lignes solde caisse / Cash drawer balance lines
+    footer = [
+        f"{_('Ouverture')}: {date_ouverture}",
+        f"{_('Impression')}: {now.strftime('%d/%m/%Y %H:%M')}",
+        "",
+    ]
+    if solde_caisse:
+        fond = solde_caisse.get('fond_de_caisse', 0)
+        entrees = solde_caisse.get('entrees_especes', 0)
+        sorties = solde_caisse.get('sorties_especes', 0)
+        solde = solde_caisse.get('solde', 0)
+        footer.append(f"{_('Fond de caisse')}: {fond / 100:.2f} EUR")
+        footer.append(f"{_('Entrees especes')}: {entrees / 100:.2f} EUR")
+        if sorties:
+            footer.append(f"{_('Sorties especes')}: -{sorties / 100:.2f} EUR")
+        footer.append(f"{_('Solde caisse')}: {solde / 100:.2f} EUR")
+
+    return {
+        "header": {
+            "title": _("TICKET X"),
+            "subtitle": _("Consultation en cours"),
+            "date": now.strftime("%d/%m/%Y %H:%M"),
+        },
+        "articles": articles,
+        "total": {
+            "amount": totaux_par_moyen.get('total', 0),
+            "label": f"{nb_transactions} {_('transactions')}",
+        },
+        "qrcode": None,
+        "footer": footer,
+    }
+
+
 def formatter_ticket_cloture(cloture):
     """
     Formate un ticket de cloture de caisse (Z-ticket).

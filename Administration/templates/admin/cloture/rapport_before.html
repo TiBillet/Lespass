@@ -193,6 +193,14 @@
                     <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Cash income" %}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.entrees_especes|euros }}</td>
                 </tr>
+                {% if section.sorties_especes %}
+                <tr>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; font-weight: bold;">{% translate "Cash withdrawals" %}</td>
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right; color: #c62828;">
+                        &minus; {{ section.sorties_especes|euros }}
+                    </td>
+                </tr>
+                {% endif %}
                 <tr style="background: #e8f5e9; font-weight: bold;">
                     <td style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Balance" %}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ section.solde|euros }}</td>

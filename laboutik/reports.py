@@ -26,7 +26,7 @@ from BaseBillet.models import (
 )
 from laboutik.models import (
     LaboutikConfiguration,
-    CommandeSauvegarde,
+    SortieCaisse,
 )
 
 logger = logging.getLogger(__name__)
@@ -311,8 +311,12 @@ class RapportComptableService:
     # ------------------------------------------------------------------
     def calculer_solde_caisse(self):
         """
-        Fond de caisse (de LaboutikConfiguration) + total especes.
-        / Cash float (from LaboutikConfiguration) + total cash.
+        Fond de caisse + total especes - sorties de caisse de la periode.
+        Le solde represente ce qui est physiquement dans le tiroir-caisse.
+        / Cash float + total cash - cash withdrawals for the period.
+        Balance represents what's physically in the cash drawer.
+
+        LOCALISATION : laboutik/reports.py
         """
         config = LaboutikConfiguration.get_solo()
         fond_de_caisse = config.fond_de_caisse or 0
@@ -321,10 +325,22 @@ class RapportComptableService:
             payment_method=PaymentMethod.CASH,
         ).aggregate(total=Sum('amount'))['total'] or 0
 
+        # Soustraire les sorties de caisse effectuees pendant la periode.
+        # Pas de filtre par point de vente : la caisse est globale au tenant
+        # (meme logique que la cloture ClotureCaisse).
+        # / Subtract cash withdrawals made during the period.
+        # No point_de_vente filter: the cash drawer is global per tenant
+        # (same logic as ClotureCaisse closure).
+        sorties_especes = SortieCaisse.objects.filter(
+            datetime__gte=self.debut,
+            datetime__lte=self.fin,
+        ).aggregate(total=Sum('montant_total'))['total'] or 0
+
         return {
             "fond_de_caisse": fond_de_caisse,
             "entrees_especes": entrees_especes,
-            "solde": fond_de_caisse + entrees_especes,
+            "sorties_especes": sorties_especes,
+            "solde": fond_de_caisse + entrees_especes - sorties_especes,
         }
 
     # ------------------------------------------------------------------

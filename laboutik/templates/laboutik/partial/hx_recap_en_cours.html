@@ -184,6 +184,14 @@
                         <td>{% translate "Entrées espèces" %}</td>
                         <td class="text-end">{{ solde_caisse.entrees_especes|euros }}</td>
                     </tr>
+                    {% if solde_caisse.sorties_especes %}
+                    <tr>
+                        <td>{% translate "Sorties espèces" %}</td>
+                        <td class="text-end" style="color: #f87171;" data-testid="recap-sorties-especes">
+                            &minus; {{ solde_caisse.sorties_especes|euros }}
+                        </td>
+                    </tr>
+                    {% endif %}
                     <tr class="ventes-total-row">
                         <td><strong>{% translate "Solde" %}</strong></td>
                         <td class="text-end"><strong>{{ solde_caisse.solde|euros }}</strong></td>
@@ -234,6 +242,113 @@
                     <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
                     {% translate "Sortie de caisse" %}
                 </button>
+            </div>
+
+            {# Impression Ticket X + Cloture toutes caisses #}
+            {# / Print Ticket X + Close all registers #}
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem;" data-testid="actions-cloture">
+
+                {# Bouton Imprimer Ticket X — envoie le recap en cours a l'imprimante #}
+                {# / Print Ticket X button — sends current recap to the printer #}
+                <button style="
+                        flex: 1; min-width: 180px;
+                        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+                        padding: 0.7rem 1.25rem;
+                        background: rgba(74, 222, 128, 0.12);
+                        border: 1px solid rgba(74, 222, 128, 0.3);
+                        border-radius: 8px; color: #86efac;
+                        font-family: 'Luciole-regular'; font-size: 0.95rem;
+                        cursor: pointer; transition: all 150ms ease;
+                    "
+                    hx-post="{% url 'laboutik-caisse-imprimer_ticket_x' %}"
+                    hx-vals='{"uuid_pv": "{{ pv.id }}"}'
+                    hx-target="#recap-feedback"
+                    hx-swap="innerHTML"
+                    onmouseover="this.style.background='rgba(74,222,128,0.25)'; this.style.borderColor='#4ade80'"
+                    onmouseout="this.style.background='rgba(74,222,128,0.12)'; this.style.borderColor='rgba(74,222,128,0.3)'"
+                    data-testid="btn-imprimer-ticket-x">
+                    <i class="fas fa-print" aria-hidden="true"></i>
+                    {% translate "Imprimer Ticket X" %}
+                </button>
+
+                {# Bouton Cloturer — affiche la confirmation en dessous #}
+                {# / Close button — shows confirmation below #}
+                <button style="
+                        flex: 1; min-width: 180px;
+                        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+                        padding: 0.7rem 1.25rem;
+                        background: rgba(251, 146, 60, 0.12);
+                        border: 1px solid rgba(251, 146, 60, 0.3);
+                        border-radius: 8px; color: #fdba74;
+                        font-family: 'Luciole-regular'; font-size: 0.95rem;
+                        cursor: pointer; transition: all 150ms ease;
+                    "
+                    onclick="document.getElementById('cloture-confirmation').style.display='block'; this.style.display='none';"
+                    onmouseover="this.style.background='rgba(251,146,60,0.25)'; this.style.borderColor='#fb923c'"
+                    onmouseout="this.style.background='rgba(251,146,60,0.12)'; this.style.borderColor='rgba(251,146,60,0.3)'"
+                    data-testid="btn-cloture-caisse">
+                    <i class="fas fa-lock" aria-hidden="true"></i>
+                    {% translate "Clôturer toutes les caisses" %}
+                </button>
+            </div>
+
+            {# Zone feedback pour les messages d'impression #}
+            {# / Feedback zone for print messages #}
+            <div id="recap-feedback" aria-live="polite" style="margin-top: 0.5rem;"></div>
+
+            {# Zone de confirmation cloture — cachee par defaut #}
+            {# / Closure confirmation zone — hidden by default #}
+            <div id="cloture-confirmation"
+                 data-testid="cloture-confirmation"
+                 style="
+                    display: none; margin-top: 1rem; padding: 1rem;
+                    border-radius: 10px;
+                    border: 2px solid rgba(251, 146, 60, 0.5);
+                    background: rgba(251, 146, 60, 0.08);
+                    font-family: 'Luciole-regular';
+                 "
+                 role="alert" aria-live="assertive">
+                <p style="color: #fdba74; font-size: 0.95rem; margin: 0 0 0.75rem 0; line-height: 1.5;">
+                    <i class="fas fa-exclamation-triangle" aria-hidden="true" style="margin-right: 0.4rem;"></i>
+                    {% translate "Cette action va clôturer TOUTES les caisses. Les tables ouvertes seront fermées et les commandes en cours annulées." %}
+                </p>
+                <p style="color: #a0a0a0; font-size: 0.85rem; margin: 0 0 1rem 0;">
+                    {% translate "La clôture est définitive et ne peut pas être annulée." %}
+                </p>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <button style="
+                            display: inline-flex; align-items: center; gap: 0.4rem;
+                            padding: 0.6rem 1.25rem;
+                            background: rgba(239, 68, 68, 0.2);
+                            border: 2px solid rgba(239, 68, 68, 0.5);
+                            border-radius: 8px; color: #fca5a5;
+                            font-family: 'Luciole-regular'; font-size: 0.95rem;
+                            font-weight: 600; cursor: pointer;
+                        "
+                        hx-post="{% url 'laboutik-caisse-cloturer' %}"
+                        hx-vals='{"uuid_pv": "{{ pv.id }}", "tag_id_cm": "{{ card.tag_id }}"}'
+                        hx-target="#ventes-zone"
+                        hx-swap="innerHTML"
+                        data-testid="btn-confirmer-cloture">
+                        <i class="fas fa-lock" aria-hidden="true"></i>
+                        {% translate "Confirmer la clôture" %}
+                    </button>
+                    <button type="button" style="
+                            padding: 0.6rem 1.25rem;
+                            background: transparent;
+                            border: 1px solid rgba(255,255,255,0.12);
+                            border-radius: 8px; color: #9ca3af;
+                            font-family: 'Luciole-regular'; font-size: 0.95rem;
+                            cursor: pointer;
+                        "
+                        onclick="
+                            document.getElementById('cloture-confirmation').style.display='none';
+                            document.querySelector('[data-testid=btn-cloture-caisse]').style.display='';
+                        "
+                        data-testid="btn-annuler-cloture">
+                        {% translate "Annuler" %}
+                    </button>
+                </div>
             </div>
 
         {% elif vue == "par_pv" %}

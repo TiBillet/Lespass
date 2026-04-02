@@ -171,6 +171,12 @@
             <td><strong>{% translate "Cash income" %}</strong></td>
             <td class="text-right">{{ section.entrees_especes|euros }}</td>
         </tr>
+        {% if section.sorties_especes %}
+        <tr>
+            <td><strong>{% translate "Cash withdrawals" %}</strong></td>
+            <td class="text-right" style="color: #c62828;">&minus; {{ section.sorties_especes|euros }}</td>
+        </tr>
+        {% endif %}
         <tr class="total-row">
             <td>{% translate "Balance" %}</td>
             <td class="text-right">{{ section.solde|euros }}</td>

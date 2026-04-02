@@ -280,6 +280,11 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 - [x] `transaction.atomic()` sur création CorrectionPaiement + modification LigneArticle
 - [x] 20 tests pytest (dont auth 401/403, 404, UUID invalide), 323 total, 0 régression
 - [x] 12 tests E2E POS existants passent, 0 régression
+- [x] UI sortie de caisse redesignée : grille 2 colonnes, boutons +/- tactiles, total JS, état caisse (fond/espèces/solde), validation JS 3 niveaux
+- [x] `calculer_solde_caisse()` : soustrait `SortieCaisse` de la période (fond + espèces - sorties)
+- [x] Ticket X : ligne "Sorties espèces" en rouge quand il y a des retraits
+- [x] Vue `sortie_de_caisse` refactorisée : utilise `calculer_solde_caisse()` (pas de duplication)
+- [x] 4 tests E2E sortie de caisse (DB + UI), 332 pytest total, 0 régression
 
 **Session 18 — Archivage fiscal + accès administration** (Ex.10-12, Ex.15, Ex.19)
 - [ ] Export CSV/JSON avec hash HMAC, max 1 an par archive

@@ -5,13 +5,392 @@ SORTIE DE CAISSE — formulaire de ventilation par coupure
 
 LOCALISATION : laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html
 
-Affiche dans #ventes-zone (meme conteneur que le Ticket X).
-12 lignes de coupures. Total recalcule cote serveur.
+Affiche dans #ventes-zone (même conteneur que le Ticket X).
+12 coupures en grille 2 colonnes × 6 lignes. Total recalculé JS.
 
 Validation JS avant envoi :
   - total > fond + especes : erreur bloquante
   - total > especes seules : avertissement + propose nouveau fond de caisse
 -->
+
+<!--
+STYLES SCOPÉS — s'appliquent uniquement aux éléments de cette vue.
+/ SCOPED STYLES — apply only to elements in this view.
+-->
+<style>
+/* Animation d'entrée des cartes de coupures — stagger via --ordre
+   / Denomination card entrance animation — staggered via --ordre */
+@keyframes sortie-carte-entree {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Grille principale : 2 colonnes, gap minimal pour l'effet "cartes jointives"
+   / Main grid: 2 columns, minimal gap for "adjacent cards" effect */
+.sortie-grille {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px;
+    margin-bottom: 0.75rem;
+}
+
+/* Cellule individuelle (1 coupure = 1 carte)
+   / Individual cell (1 denomination = 1 card) */
+.sortie-cellule {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 10px 10px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    /* Ombre à 3 couches plutôt qu'une bordure plate (règle UI skill)
+       / 3-layer shadow instead of flat border (UI skill rule) */
+    box-shadow:
+        0 0 0 1px rgba(255,255,255,0.06),
+        0 1px 2px rgba(0,0,0,0.2);
+    /* Animation d'entrée avec délai en cascade (stagger)
+       / Entrance animation with cascading delay (stagger) */
+    animation: sortie-carte-entree 260ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: calc(45ms * var(--ordre, 0));
+    transition: box-shadow 150ms ease;
+}
+
+/* Colonne droite (B) : teinte indigo subtile pour distinguer les deux moitiés
+   / Right column (B): subtle indigo tint to distinguish both halves */
+.sortie-cellule-droite {
+    background: rgba(99,102,241,0.07);
+    box-shadow:
+        0 0 0 1px rgba(99,102,241,0.12),
+        0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Label de la coupure (montant en euros)
+   / Denomination label (euro amount) */
+.sortie-label {
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #e0e0e0;
+    white-space: nowrap;
+    min-width: 44px;
+    /* text-wrap: balance — évite les mots orphelins (règle UI skill) */
+    text-wrap: balance;
+}
+
+/* Ligne total en bas de grille (pleine largeur)
+   / Full-width total row at the bottom of the grid */
+.sortie-total-row {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: rgba(74,222,128,0.07);
+    border-radius: 8px;
+    /* Bordure concentrique : outer = inner_radius + padding (règle UI skill)
+       / Concentric border radius: outer = inner_radius + padding (UI skill rule) */
+    box-shadow:
+        0 0 0 1px rgba(74,222,128,0.2),
+        0 2px 8px rgba(74,222,128,0.08);
+    animation: sortie-carte-entree 260ms ease both;
+    animation-delay: calc(45ms * 7);
+}
+
+.sortie-total-label {
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #a0a0a0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sortie-total-valeur {
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #4ade80;
+    /* tabular-nums : évite le "saut" visuel quand le nombre change (règle UI skill)
+       / tabular-nums: prevents visual "jump" when number changes (UI skill rule) */
+    font-variant-numeric: tabular-nums;
+}
+
+/* Groupe +/- : bouton moins — input — bouton plus
+   / +/- group: minus button — input — plus button */
+.sortie-pm-groupe {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.sortie-btn-pm {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    font-size: 1.3rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Transition interruptible pour le feedback tactile (règle UI skill)
+       / Interruptible transition for tactile feedback (UI skill rule) */
+    transition: transform 100ms ease, box-shadow 100ms ease;
+    /* Rayon concentrique : btn est dans .sortie-pm-groupe (règle UI skill)
+       / Concentric radius: btn is inside .sortie-pm-groupe (UI skill rule) */
+}
+
+.sortie-btn-moins {
+    background: rgba(239,68,68,0.15);
+    border: 2px solid rgba(239,68,68,0.5);
+    color: #f87171;
+}
+
+.sortie-btn-plus {
+    background: rgba(34,197,94,0.15);
+    border: 2px solid rgba(34,197,94,0.5);
+    color: #4ade80;
+}
+
+/* Feedback tactile "press" — descend légèrement au clic
+   / Tactile "press" feedback — slight scale-down on click */
+.sortie-btn-pm:active {
+    transform: scale(0.90);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.08);
+}
+
+.sortie-pm-input {
+    width: 54px;
+    height: 44px;
+    padding: 0.2rem;
+    text-align: center;
+    font-size: 1.1rem;
+    font-family: 'Luciole-regular', sans-serif;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border-radius: 8px;
+    border: 1px solid rgba(99,102,241,0.3);
+    background: rgba(0,0,0,0.25);
+    color: #e0e0e0;
+    /* Transition sur le focus (interruptible — règle UI skill)
+       / Focus transition (interruptible — UI skill rule) */
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.sortie-pm-input:focus {
+    outline: none;
+    border-color: rgba(99,102,241,0.6);
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.15);
+}
+
+/* État caisse — panneau glassmorphism compact
+   / Cash drawer state — compact glassmorphism panel */
+.sortie-etat-caisse {
+    display: flex;
+    gap: 0px;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0.75rem 0 1.25rem 0;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+    animation: sortie-carte-entree 260ms ease both;
+    animation-delay: calc(45ms * 8);
+}
+
+.sortie-etat-bloc {
+    flex: 1;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sortie-etat-bloc + .sortie-etat-bloc {
+    border-left: 1px solid rgba(255,255,255,0.06);
+}
+
+.sortie-etat-bloc-solde {
+    background: rgba(167,139,250,0.07);
+}
+
+.sortie-etat-libelle {
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 0.72rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.sortie-etat-montant {
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #e0e0e0;
+    font-variant-numeric: tabular-nums;
+}
+
+.sortie-etat-montant-solde {
+    color: #a78bfa;
+}
+
+/* Alertes — classes prédéfinies, pas de calcul JS sur les couleurs
+   / Alerts — predefined classes, no JS color calculation */
+.sortie-alerte {
+    display: none;
+    margin: 1rem 0;
+    padding: 1rem;
+    border-radius: 10px;
+    border: 2px solid;
+    animation: sortie-carte-entree 200ms ease both;
+}
+
+.sortie-alerte-erreur {
+    border-color: rgba(239,68,68,0.5);
+    background: rgba(239,68,68,0.1);
+}
+
+.sortie-alerte-erreur #sortie-alerte-texte {
+    color: #fca5a5;
+}
+
+.sortie-alerte-avertissement {
+    border-color: rgba(251,191,36,0.5);
+    background: rgba(251,191,36,0.1);
+}
+
+.sortie-alerte-avertissement #sortie-alerte-texte {
+    color: #fde68a;
+}
+
+#sortie-alerte-texte {
+    margin: 0 0 0.75rem 0;
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+/* Note optionnelle
+   / Optional note */
+.sortie-note-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.sortie-note-textarea {
+    width: 100%;
+    max-width: 420px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    font-family: 'Luciole-regular', sans-serif;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.2);
+    color: #e0e0e0;
+    resize: vertical;
+    transition: border-color 150ms ease;
+}
+
+.sortie-note-textarea:focus {
+    outline: none;
+    border-color: rgba(255,255,255,0.25);
+}
+
+/* Bouton submit
+   / Submit button */
+.sortie-btn-submit {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    padding: 0.7rem 1.75rem;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: 'Luciole-regular', sans-serif;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(239,68,68,0.3);
+    transition: transform 100ms ease, box-shadow 100ms ease;
+    animation: sortie-carte-entree 260ms ease both;
+    animation-delay: calc(45ms * 9);
+}
+
+.sortie-btn-submit:active {
+    transform: scale(0.97);
+    box-shadow: 0 1px 4px rgba(239,68,68,0.2);
+}
+
+/* Responsive mobile (< 576px) :
+   - Cellule verticale : label en haut, +/- en bas centré
+   - Input plus étroit
+   - Submit pleine largeur
+   / Mobile responsive (< 576px):
+   - Vertical cell: label on top, +/- centered below
+   - Narrower input
+   - Full-width submit */
+@media (max-width: 575px) {
+    .sortie-cellule {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 10px 6px;
+        gap: 6px;
+    }
+
+    .sortie-label {
+        font-size: 0.95rem;
+    }
+
+    .sortie-btn-pm {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+
+    .sortie-pm-input {
+        width: 46px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .sortie-pm-groupe {
+        gap: 3px;
+    }
+
+    .sortie-total-valeur {
+        font-size: 1.25rem;
+    }
+
+    .sortie-etat-libelle {
+        font-size: 0.65rem;
+    }
+
+    .sortie-etat-montant {
+        font-size: 0.85rem;
+    }
+
+    .sortie-btn-submit {
+        width: 100%;
+        text-align: center;
+    }
+
+    .sortie-note-textarea {
+        max-width: 100%;
+    }
+}
+</style>
+
 <div class="ventes-container" data-testid="sortie-de-caisse">
 
     <!-- Bouton retour vers Ticket X -->
@@ -19,9 +398,10 @@ Validation JS avant envoi :
     <div style="margin-bottom: 1rem;">
         <button style="
                 display: inline-flex; align-items: center; gap: 0.4rem;
-                background: transparent; border: 1px solid rgba(255,255,255,0.15);
-                color: #a0a0a0; padding: 0.4rem 1rem; border-radius: 6px;
+                background: transparent; border: 1px solid rgba(255,255,255,0.12);
+                color: #6b7280; padding: 0.4rem 1rem; border-radius: 6px;
                 font-family: 'Luciole-regular'; font-size: 0.85rem; cursor: pointer;
+                transition: color 150ms ease, border-color 150ms ease;
             "
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
             hx-target="#ventes-zone"
@@ -32,22 +412,11 @@ Validation JS avant envoi :
         </button>
     </div>
 
-    <h3 class="ventes-section-title">
+    <h3 class="ventes-section-title" style="text-wrap: balance;">
         <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
         {% translate "Sortie de caisse" %}
     </h3>
 
-    <!--
-    data-fond : fond de caisse actuel en centimes (depuis LaboutikConfiguration)
-    data-especes : total des ventes en especes depuis la derniere cloture, en centimes
-    Ces valeurs sont indicatives pour la validation JS.
-    Le serveur recalcule independamment cote POST.
-    /
-    data-fond : current cash float in cents (from LaboutikConfiguration)
-    data-especes : total cash sales since last closure, in cents
-    These values are indicative for JS validation.
-    The server independently recalculates on POST.
-    -->
     <form id="form-sortie-caisse"
           hx-post="{% url 'laboutik-caisse-creer_sortie_de_caisse' %}"
           hx-target="#ventes-zone"
@@ -58,163 +427,96 @@ Validation JS avant envoi :
         {% csrf_token %}
         <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
 
-        <!--
-        Tableau des coupures en 4 colonnes : 2 coupures par ligne pour diviser la hauteur par 2.
-        Colonnes droites (coupure B) : fond légèrement différent + séparateur visuel.
-        Les inputs restent identifiables par data-centimes pour le JS de total.
-        /
-        Denomination table in 4 columns: 2 denominations per row to halve the height.
-        Right columns (denomination B): slightly different background + visual separator.
-        Inputs remain identifiable by data-centimes for the total JS.
-        -->
-        <table class="ventes-table" data-testid="sortie-coupures-table">
-            <colgroup>
-                <col style="width: 18%;">  <!-- label A -->
-                <col style="width: 32%;">  <!-- qty A -->
-                <col style="width: 18%;">  <!-- label B -->
-                <col style="width: 32%;">  <!-- qty B -->
-            </colgroup>
-            <thead>
-                <tr>
-                    <th colspan="2" style="text-align: center;">{% translate "Coupure" %} A</th>
-                    <th colspan="2" style="text-align: center;
-                        border-left: 2px solid rgba(255,255,255,0.08);">{% translate "Coupure" %} B</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for paire in coupures_paires %}
-                <tr>
-                    <!-- Coupure gauche (A) -->
-                    <!-- / Left denomination (A) -->
-                    <td style="font-size: 1.05rem; font-weight: 600; padding: 10px 8px;">
-                        {{ paire.0.label }}
-                    </td>
-                    <td class="text-center" style="padding: 7px 6px;">
-                        {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.0 %}
-                    </td>
+        <!-- Grille des coupures — 2 colonnes, 6 lignes, stagger animation -->
+        <!-- / Denomination grid — 2 columns, 6 rows, stagger animation -->
+        <div class="sortie-grille" data-testid="sortie-coupures-table">
+            {% for paire in coupures_paires %}
 
-                    <!-- Coupure droite (B) — fond légèrement différent -->
-                    <!-- / Right denomination (B) — slightly different background -->
-                    <td style="
-                        font-size: 1.05rem; font-weight: 600; padding: 10px 8px;
-                        border-left: 2px solid rgba(255,255,255,0.06);
-                        background: rgba(99,102,241,0.05);
-                    ">
-                        {{ paire.1.label }}
-                    </td>
-                    <td class="text-center" style="padding: 7px 6px; background: rgba(99,102,241,0.05);">
-                        {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.1 %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <!-- Ligne total — recalculee en JS a chaque +/- ou saisie manuelle -->
-            <!-- / Total row — recalculated in JS on every +/- click or manual input -->
-            <tfoot>
-                <tr style="border-top: 2px solid rgba(255,255,255,0.15);">
-                    <td style="
-                        font-size: 1.1rem; font-weight: 700;
-                        padding: 12px 10px; color: #e0e0e0;
-                        font-family: 'Luciole-regular';
-                    ">
-                        {% translate "Total" %}
-                    </td>
-                    <td class="text-center" style="padding: 12px 10px;">
-                        <span id="sortie-total-affichage"
-                              data-testid="sortie-total"
-                              aria-live="polite"
-                              style="
-                                  font-size: 1.3rem; font-weight: 700;
-                                  color: #4ade80; font-family: 'Luciole-regular';
-                                  font-variant-numeric: tabular-nums;
-                              ">
-                            0,00 €
-                        </span>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
+            <!-- Coupure gauche (A) — fond neutre -->
+            <!-- / Left denomination (A) — neutral background -->
+            <div class="sortie-cellule sortie-cellule-gauche" style="--ordre: {{ forloop.counter0 }}">
+                <span class="sortie-label">{{ paire.0.label }}</span>
+                {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.0 %}
+            </div>
 
-        <!-- Etat actuel de la caisse — lecture seule, rendu cote serveur -->
-        <!-- / Current cash drawer state — read-only, server-side rendered -->
-        <div data-testid="sortie-etat-caisse"
-             style="
-                 margin: 0.75rem 0 1.25rem 0;
-                 padding: 0.75rem 1rem;
-                 border-radius: 8px;
-                 background: rgba(255,255,255,0.04);
-                 border: 1px solid rgba(255,255,255,0.08);
-                 font-family: 'Luciole-regular'; font-size: 0.9rem;
-             ">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                <span style="color: #a0a0a0;">
-                    <i class="fas fa-coins" aria-hidden="true" style="margin-right: 0.35rem;"></i>
-                    {% translate "Fond de caisse" %}
+            <!-- Coupure droite (B) — fond indigo teinté -->
+            <!-- / Right denomination (B) — indigo-tinted background -->
+            <div class="sortie-cellule sortie-cellule-droite" style="--ordre: {{ forloop.counter0 }}">
+                <span class="sortie-label">{{ paire.1.label }}</span>
+                {% include "laboutik/partial/_sortie_coupure_input.html" with coupure=paire.1 %}
+            </div>
+
+            {% endfor %}
+
+            <!-- Ligne total pleine largeur -->
+            <!-- / Full-width total row -->
+            <div class="sortie-total-row">
+                <span class="sortie-total-label">
+                    <i class="fas fa-sigma" aria-hidden="true" style="margin-right: 0.4rem; opacity: 0.6;"></i>
+                    {% translate "Total sortie" %}
                 </span>
-                <span style="color: #e0e0e0; font-variant-numeric: tabular-nums;">
-                    {{ fond_de_caisse_euros }} €
+                <span id="sortie-total-affichage"
+                      data-testid="sortie-total"
+                      aria-live="polite"
+                      class="sortie-total-valeur">
+                    0,00 €
                 </span>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
-                <span style="color: #a0a0a0;">
-                    <i class="fas fa-money-bill-wave" aria-hidden="true" style="margin-right: 0.35rem;"></i>
-                    {% translate "Ventes espèces" %}
+        </div>
+
+        <!-- État actuel de la caisse : fond | espèces | solde -->
+        <!-- / Current cash drawer state: float | cash | balance -->
+        <div class="sortie-etat-caisse" data-testid="sortie-etat-caisse">
+            <div class="sortie-etat-bloc">
+                <span class="sortie-etat-libelle">
+                    <i class="fas fa-coins" aria-hidden="true"></i>
+                    {% translate "Fond" %}
                 </span>
-                <span style="color: #e0e0e0; font-variant-numeric: tabular-nums;">
-                    {{ entrees_especes_euros }} €
-                </span>
+                <span class="sortie-etat-montant">{{ fond_de_caisse_euros }} €</span>
             </div>
-            <div style="display: flex; justify-content: space-between;
-                        padding-top: 0.35rem; border-top: 1px solid rgba(255,255,255,0.08);">
-                <span style="color: #c0c0c0; font-weight: 600;">
-                    <i class="fas fa-cash-register" aria-hidden="true" style="margin-right: 0.35rem;"></i>
-                    {% translate "Solde caisse" %}
+            <div class="sortie-etat-bloc">
+                <span class="sortie-etat-libelle">
+                    <i class="fas fa-money-bill-wave" aria-hidden="true"></i>
+                    {% translate "Espèces" %}
                 </span>
-                <span style="color: #a78bfa; font-weight: 700; font-variant-numeric: tabular-nums;">
-                    {{ solde_total_euros }} €
+                <span class="sortie-etat-montant">{{ entrees_especes_euros }} €</span>
+            </div>
+            <div class="sortie-etat-bloc sortie-etat-bloc-solde">
+                <span class="sortie-etat-libelle">
+                    <i class="fas fa-cash-register" aria-hidden="true"></i>
+                    {% translate "Solde" %}
                 </span>
+                <span class="sortie-etat-montant sortie-etat-montant-solde">{{ solde_total_euros }} €</span>
             </div>
         </div>
 
         <!-- Note optionnelle -->
         <!-- / Optional note -->
-        <div style="margin: 1rem 0;">
-            <label for="note" style="color: #a0a0a0; font-family: 'Luciole-regular'; display: block; margin-bottom: 0.4rem; font-size: 0.85rem;">
+        <div style="margin: 0 0 1rem 0;">
+            <label for="note" class="sortie-note-label">
                 {% translate "Note (optionnelle)" %}
             </label>
             <textarea name="note" id="note" rows="2"
-                      style="
-                          width: 100%; max-width: 400px; padding: 0.5rem 0.75rem;
-                          font-size: 0.9rem; font-family: 'Luciole-regular';
-                          border-radius: 8px; border: 1px solid rgba(239,68,68,0.2);
-                          background: rgba(0,0,0,0.2); color: #e0e0e0; resize: vertical;
-                      "
+                      class="sortie-note-textarea"
                       data-testid="sortie-textarea-note"></textarea>
         </div>
 
-        <!-- Zone d'alerte inline — visible uniquement si validation JS echoue -->
-        <!-- / Inline alert zone — visible only if JS validation fails -->
+        <!-- Zone d'alerte inline — classes CSS prédéfinies (pas de calcul couleur JS)
+             / Inline alert zone — predefined CSS classes (no JS color calculation) -->
         <div id="sortie-alerte"
+             class="sortie-alerte"
              role="alert"
              aria-live="assertive"
-             data-testid="sortie-alerte"
-             style="display: none; margin: 1rem 0; padding: 1rem;
-                    border-radius: 8px; border: 2px solid rgba(251,191,36,0.5);
-                    background: rgba(251,191,36,0.08);">
-            <p id="sortie-alerte-texte"
-               style="margin: 0 0 0.75rem 0; color: #fbbf24;
-                      font-family: 'Luciole-regular'; font-size: 0.95rem; line-height: 1.5;">
-            </p>
+             data-testid="sortie-alerte">
+            <p id="sortie-alerte-texte"></p>
             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                <!-- Bouton confirmation : active le flag et re-soumet le formulaire HTMX -->
-                <!-- / Confirm button: sets the flag and re-submits the HTMX form -->
                 <button type="button"
                         id="sortie-btn-confirmer-quand-meme"
                         data-testid="sortie-btn-confirmer-quand-meme"
                         onclick="confirmerSortieQuandMeme()"
                         style="
-                            background: rgba(251,191,36,0.2); color: #fbbf24;
-                            border: 2px solid rgba(251,191,36,0.5);
+                            background: rgba(251,191,36,0.15); color: #fde68a;
+                            border: 2px solid rgba(251,191,36,0.4);
                             padding: 0.5rem 1.2rem; border-radius: 8px;
                             font-family: 'Luciole-regular'; font-size: 0.9rem;
                             font-weight: 600; cursor: pointer;
@@ -226,8 +528,8 @@ Validation JS avant envoi :
                         data-testid="sortie-btn-annuler-alerte"
                         onclick="masquerAlerteSortie()"
                         style="
-                            background: transparent; color: #a0a0a0;
-                            border: 1px solid rgba(255,255,255,0.15);
+                            background: transparent; color: #9ca3af;
+                            border: 1px solid rgba(255,255,255,0.12);
                             padding: 0.5rem 1.2rem; border-radius: 8px;
                             font-family: 'Luciole-regular'; font-size: 0.9rem;
                             cursor: pointer;
@@ -238,14 +540,9 @@ Validation JS avant envoi :
         </div>
 
         <button type="submit"
-                style="
-                    background: linear-gradient(135deg, #ef4444, #dc2626); color: white;
-                    padding: 0.6rem 1.5rem; border: none; border-radius: 8px;
-                    font-size: 0.95rem; font-weight: 600; font-family: 'Luciole-regular';
-                    cursor: pointer; box-shadow: 0 2px 8px rgba(239,68,68,0.3);
-                "
+                class="sortie-btn-submit"
                 data-testid="sortie-btn-enregistrer">
-            <i class="fas fa-sign-out-alt" aria-hidden="true" style="margin-right: 0.35rem;"></i>
+            <i class="fas fa-sign-out-alt" aria-hidden="true" style="margin-right: 0.4rem;"></i>
             {% translate "Enregistrer la sortie" %}
         </button>
     </form>
@@ -253,13 +550,10 @@ Validation JS avant envoi :
 
 <script>
 /*
- * Recalcule le total de sortie de caisse a partir des quantites saisies.
- * / Recalculates cash withdrawal total from entered quantities.
- *
- * Chaque input a un attribut data-centimes = valeur de la coupure en centimes.
- * On multiplie valeur × quantite pour chaque ligne, on somme, on affiche en euros.
- * / Each input has data-centimes = denomination value in cents.
- * Multiply value × quantity per row, sum, display in euros.
+ * Recalcule le total a partir des quantites saisies.
+ * Chaque input porte data-centimes = valeur de la coupure.
+ * / Recalculates total from entered quantities.
+ * Each input carries data-centimes = denomination value.
  */
 function recalculerTotalSortie() {
     var inputs = document.querySelectorAll('[data-centimes]');
@@ -269,13 +563,12 @@ function recalculerTotalSortie() {
         var quantite_saisie = parseInt(inputs[i].value) || 0;
         total_en_centimes += valeur_coupure * quantite_saisie;
     }
-    var affichage = formaterEuros(total_en_centimes);
-    document.getElementById('sortie-total-affichage').textContent = affichage;
+    document.getElementById('sortie-total-affichage').textContent = formaterEuros(total_en_centimes);
 }
 
 /*
- * Formate un montant en centimes en chaine "X,XX €".
- * / Formats a centimes amount into "X,XX €" string.
+ * Formate des centimes en "X,XX €".
+ * / Formats cents as "X,XX €".
  */
 function formaterEuros(centimes) {
     var e = Math.floor(centimes / 100);
@@ -283,74 +576,60 @@ function formaterEuros(centimes) {
     return e + ',' + (c < 10 ? '0' + c : '' + c) + ' €';
 }
 
-/*
- * Flag pour savoir si l'utilisateur a clique "Confirmer quand meme".
- * Remis a false apres chaque envoi du formulaire.
- * / Flag to track if the user clicked "Confirm anyway".
- * Reset to false after each form submission.
- */
+/* Flag : l'utilisateur a confirme malgre l'avertissement.
+   / Flag: user confirmed despite warning. */
 var _sortie_confirmee_par_utilisateur = false;
 
-/*
- * L'utilisateur a clique "Confirmer quand meme" dans la zone d'alerte.
- * Active le flag, masque l'alerte, re-soumet le formulaire via htmx.
- * / User clicked "Confirm anyway" in the alert zone.
- * Sets the flag, hides the alert, re-submits the form via htmx.
- */
+/* "Confirmer quand meme" : active le flag et re-soumet via htmx.
+   / "Confirm anyway": sets the flag and re-submits via htmx. */
 function confirmerSortieQuandMeme() {
     _sortie_confirmee_par_utilisateur = true;
     masquerAlerteSortie();
-    /* htmx.trigger() re-envoie la requete HTMX sur le formulaire */
-    /* / htmx.trigger() re-sends the HTMX request on the form */
     htmx.trigger(document.getElementById('form-sortie-caisse'), 'submit');
 }
 
-/* Cache la zone d'alerte. / Hides the alert zone. */
+/* Cache l'alerte et retire les classes de style.
+   / Hides the alert and removes style classes. */
 function masquerAlerteSortie() {
-    document.getElementById('sortie-alerte').style.display = 'none';
+    var zone = document.getElementById('sortie-alerte');
+    zone.style.display = 'none';
+    zone.classList.remove('sortie-alerte-erreur', 'sortie-alerte-avertissement');
 }
 
 /*
- * Affiche la zone d'alerte avec un message et une couleur.
- * / Shows the alert zone with a message and a color.
- *
- * @param {string} html_message - HTML du message a afficher
- * @param {string} couleur - couleur CSS (ex: '#f87171' pour erreur, '#fbbf24' pour avertissement)
- * @param {boolean} avec_confirmation - true pour afficher le bouton "Confirmer quand meme"
+ * Affiche l'alerte avec la classe CSS appropriee.
+ * type_alerte : 'erreur' ou 'avertissement'
+ * avec_confirmation : true pour montrer le bouton "Confirmer quand meme"
+ * / Shows the alert with the appropriate CSS class.
+ * type_alerte: 'erreur' or 'avertissement'
+ * avec_confirmation: true to show the "Confirm anyway" button
  */
-function afficherAlerteSortie(html_message, couleur, avec_confirmation) {
+function afficherAlerteSortie(html_message, type_alerte, avec_confirmation) {
     var zone = document.getElementById('sortie-alerte');
     var texte = document.getElementById('sortie-alerte-texte');
     var btn_confirmer = document.getElementById('sortie-btn-confirmer-quand-meme');
 
+    /* Appliquer la bonne classe de style (pas de calcul JS sur les couleurs)
+       / Apply the right style class (no JS color calculation) */
+    zone.classList.remove('sortie-alerte-erreur', 'sortie-alerte-avertissement');
+    zone.classList.add('sortie-alerte-' + type_alerte);
+
     texte.innerHTML = html_message;
-    texte.style.color = couleur;
-    zone.style.borderColor = couleur.replace(')', ',0.5)').replace('rgb', 'rgba');
-    /* On utilise une teinte de fond a 8% d'opacite */
-    /* / Use a background tint at 8% opacity */
-    zone.style.background = couleur.replace(')', ',0.08)').replace('rgb', 'rgba');
     btn_confirmer.style.display = avec_confirmation ? '' : 'none';
     zone.style.display = 'block';
 }
 
 /*
- * Validation avant envoi HTMX (htmx:configRequest).
- * Compare le total saisi avec les entrees especes et le solde total.
- * / Validation before HTMX submission (htmx:configRequest).
- * Compares entered total with cash entries and total cash balance.
- *
+ * Validation avant envoi HTMX.
  * Logique :
- *   total > fond + especes → erreur bloquante (impossible physiquement)
- *   total > especes ET <= fond + especes → avertissement, propose nouveau fond de caisse
- *   total <= especes → OK, envoi direct
- * / Logic:
- *   total > fond + especes → blocking error (physically impossible)
- *   total > especes AND <= fond + especes → warning, propose new cash float
- *   total <= especes → OK, direct submit
+ *   total > fond + especes → erreur bloquante
+ *   total > especes seules → avertissement avec nouveau fond propose
+ *   total <= especes → OK direct
+ * / Validation before HTMX submission.
  */
 document.getElementById('form-sortie-caisse').addEventListener('htmx:configRequest', function(event) {
-    /* Si l'utilisateur a deja confirme, on laisse passer et on remet a zero */
-    /* / If the user already confirmed, let it through and reset the flag */
+    /* Deja confirme par l'utilisateur : laisser passer et remettre a zero.
+       / Already confirmed by user: let through and reset. */
     if (_sortie_confirmee_par_utilisateur) {
         _sortie_confirmee_par_utilisateur = false;
         return;
@@ -371,8 +650,8 @@ document.getElementById('form-sortie-caisse').addEventListener('htmx:configReque
         total_centimes += val_coupure * qte;
     }
 
-    /* Cas 1 : total superieur au solde total — erreur bloquante */
-    /* / Case 1: total exceeds total balance — blocking error */
+    /* Cas 1 : total > solde total — erreur bloquante */
+    /* / Case 1: total > total balance — blocking error */
     if (total_centimes > solde_total_centimes) {
         afficherAlerteSortie(
             '<i class="fas fa-exclamation-circle" aria-hidden="true" style="margin-right:0.4rem;"></i>'
@@ -381,15 +660,15 @@ document.getElementById('form-sortie-caisse').addEventListener('htmx:configReque
             + ' &gt; {% translate "solde caisse" %} ('
             + formaterEuros(solde_total_centimes)
             + ').',
-            '#f87171',
-            false  /* pas de bouton confirmer — erreur bloquante */
+            'erreur',
+            false
         );
         event.preventDefault();
         return;
     }
 
-    /* Cas 2 : total depasse les ventes especes mais reste dans le fond + especes */
-    /* / Case 2: total exceeds cash sales but stays within float + cash */
+    /* Cas 2 : total > especes mais <= solde — avertissement avec fond propose */
+    /* / Case 2: total > cash but <= balance — warning with proposed float */
     if (total_centimes > especes_centimes) {
         var nouveau_fond_centimes = solde_total_centimes - total_centimes;
         afficherAlerteSortie(
@@ -401,15 +680,15 @@ document.getElementById('form-sortie-caisse').addEventListener('htmx:configReque
             + ').<br>'
             + '{% translate "Le nouveau fond de caisse serait de" %} '
             + '<strong style="color:#4ade80">' + formaterEuros(nouveau_fond_centimes) + '</strong>.',
-            '#fbbf24',
-            true  /* bouton "Confirmer quand meme" visible */
+            'avertissement',
+            true
         );
         event.preventDefault();
         return;
     }
 
-    /* Cas 3 : total OK — masquer l'alerte si elle etait visible */
-    /* / Case 3: total OK — hide alert if it was visible */
+    /* Cas 3 : total OK */
+    /* / Case 3: total OK */
     masquerAlerteSortie();
 });
 </script>

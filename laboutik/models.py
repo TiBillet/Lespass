@@ -919,10 +919,12 @@ class ClotureCaisse(models.Model):
     # A = annuelle (automatique Celery Beat, agrege les M de l'annee)
     # / Closure level (LNE compliance req. 6)
     JOURNALIERE = 'J'
+    HEBDOMADAIRE = 'H'
     MENSUELLE = 'M'
     ANNUELLE = 'A'
     NIVEAU_CHOICES = [
         (JOURNALIERE, _('Daily')),
+        (HEBDOMADAIRE, _('Weekly')),
         (MENSUELLE, _('Monthly')),
         (ANNUELLE, _('Annual')),
     ]

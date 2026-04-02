@@ -1098,8 +1098,22 @@ class CaisseViewSet(viewsets.ViewSet):
             statut=CommandeSauvegarde.OPEN,
         ).update(statut=CommandeSauvegarde.CANCEL)
 
-        # --- 8. Logger avec les infos enrichies ---
-        # --- 8. Log with enriched info ---
+        # --- 8. Imprimer le Ticket Z sur l'imprimante du PV ---
+        # / Print the Z-ticket on the POS printer
+        if point_de_vente.printer and point_de_vente.printer.active:
+            from laboutik.printing.formatters import formatter_ticket_cloture
+            from laboutik.printing.tasks import imprimer_async
+
+            ticket_z_data = formatter_ticket_cloture(cloture)
+            schema_name = connection.schema_name
+            imprimer_async.delay(
+                str(point_de_vente.printer.pk),
+                ticket_z_data,
+                schema_name,
+            )
+
+        # --- 9. Logger avec les infos enrichies ---
+        # --- 9. Log with enriched info ---
         logger.info(
             f"Cloture caisse: PV={point_de_vente.name}, "
             f"niveau={cloture.niveau}, seq={numero_sequentiel}, "
@@ -1234,6 +1248,73 @@ class CaisseViewSet(viewsets.ViewSet):
         return render(request, "laboutik/partial/hx_messages.html", context)
 
     # ----------------------------------------------------------------------- #
+    #  Imprimer Ticket X (consultation temporaire, pas de cloture)             #
+    #  Print Ticket X (temporary consultation, no closure)                     #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="imprimer-ticket-x", url_name="imprimer_ticket_x")
+    def imprimer_ticket_x(self, request):
+        """
+        POST /laboutik/caisse/imprimer-ticket-x/
+        Imprime un Ticket X (instantane du service en cours) sur l'imprimante du PV.
+        Le Ticket X n'est pas persiste en base — c'est une consultation temporaire.
+        / Prints an X-ticket (snapshot of the current shift) on the POS printer.
+        The X-ticket is not persisted in the database — it's a temporary consultation.
+
+        LOCALISATION : laboutik/views.py
+        """
+        uuid_pv = request.POST.get("uuid_pv", "")
+
+        # Recuperer le PV et son imprimante / Get POS and its printer
+        try:
+            point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+            }, status=404)
+
+        if not point_de_vente.printer or not point_de_vente.printer.active:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune imprimante configuree pour ce point de vente"),
+            }, status=400)
+
+        # Calculer le rapport du service en cours / Compute current shift report
+        datetime_ouverture = _calculer_datetime_ouverture_service()
+        if datetime_ouverture is None:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune vente en cours — rien a imprimer"),
+            }, status=400)
+
+        datetime_fin = dj_timezone.now()
+        service = RapportComptableService(None, datetime_ouverture, datetime_fin)
+        totaux_par_moyen = service.calculer_totaux_par_moyen()
+        solde_caisse = service.calculer_solde_caisse()
+        nb_transactions = service.lignes.count()
+
+        # Formater et imprimer / Format and print
+        from laboutik.printing.formatters import formatter_ticket_x
+        from laboutik.printing.tasks import imprimer_async
+
+        ticket_data = formatter_ticket_x(
+            totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions
+        )
+
+        schema_name = connection.schema_name
+        imprimer_async.delay(
+            str(point_de_vente.printer.pk),
+            ticket_data,
+            schema_name,
+        )
+
+        return render(request, "laboutik/partial/hx_messages.html", {
+            "msg_type": "success",
+            "msg_content": _("Ticket X envoye a l'imprimante"),
+        })
+
+    # ----------------------------------------------------------------------- #
     #  Fond de caisse — lecture et modification du montant initial              #
     #  Cash float — read and update initial drawer amount                      #
     # ----------------------------------------------------------------------- #
@@ -1317,22 +1398,23 @@ class CaisseViewSet(viewsets.ViewSet):
         tag_id_cm = request.GET.get("tag_id_cm", "")
         params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
 
-        # Calculer le solde caisse pour la validation JS cote client
-        # / Calculate cash drawer balance for client-side JS validation
-        config = LaboutikConfiguration.get_solo()
-        fond_de_caisse_centimes = config.fond_de_caisse or 0
-
+        # Calculer le solde caisse via le meme service que le Ticket X
+        # Evite la duplication de logique (fond + especes - sorties).
+        # / Calculate cash balance via the same service as Ticket X
+        # Avoids logic duplication (float + cash - withdrawals).
         datetime_ouverture = _calculer_datetime_ouverture_service()
         if datetime_ouverture:
             datetime_fin = dj_timezone.now()
             service = RapportComptableService(None, datetime_ouverture, datetime_fin)
-            entrees_especes_centimes = service.lignes.filter(
-                payment_method=PaymentMethod.CASH,
-            ).aggregate(total=Sum('amount'))['total'] or 0
+            solde_caisse = service.calculer_solde_caisse()
+            fond_de_caisse_centimes = solde_caisse["fond_de_caisse"]
+            entrees_especes_centimes = solde_caisse["entrees_especes"]
+            solde_total_centimes = solde_caisse["solde"]
         else:
+            config = LaboutikConfiguration.get_solo()
+            fond_de_caisse_centimes = config.fond_de_caisse or 0
             entrees_especes_centimes = 0
-
-        solde_total_centimes = fond_de_caisse_centimes + entrees_especes_centimes
+            solde_total_centimes = fond_de_caisse_centimes
 
         context = {
             "uuid_pv": uuid_pv,
