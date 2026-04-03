@@ -900,6 +900,109 @@ class TestRechargeNFCRejete:
 
 
 @pytest.mark.usefixtures("test_data")
+class TestPanierMixteVTplusRCparNFC:
+    """Test 10b : panier VT+RC paye par NFC → VT debite, RC credite en FREE."""
+
+    def test_panier_vt_rc_nfc_credit_sans_debit_cadeau(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, wallet_client, carte_client,
+        produit_recharge_cadeau,
+    ):
+        """VT (Biere) + RC (Cadeau) paye par NFC → Biere debitee, Cadeau credite FREE.
+        Le cadeau ne doit PAS etre debite du wallet du client.
+        / VT (Beer) + RC (Gift) paid by NFC → Beer debited, Gift credited FREE.
+        The gift must NOT be debited from the client's wallet."""
+        with schema_context(TENANT_SCHEMA):
+            # Setup : trouver le produit Biere (VT) du PV Bar
+            # / Setup: find the Beer (VT) product from the Bar POS
+            from BaseBillet.models import CategorieProduct
+            produit_biere = Product.objects.filter(
+                name='Biere', methode_caisse=Product.VENTE,
+            ).first()
+            assert produit_biere is not None, "Produit Biere introuvable"
+            prix_biere = produit_biere.prices.filter(publish=True, asset__isnull=True).first()
+            assert prix_biere is not None, "Prix Biere introuvable"
+            prix_biere_centimes = int(round(prix_biere.prix * 100))
+
+            # Ajouter Biere et Cadeau au PV
+            # / Add Beer and Gift to the POS
+            if not premier_pv.products.filter(pk=produit_biere.pk).exists():
+                premier_pv.products.add(produit_biere)
+            produit_cadeau, prix_cadeau = produit_recharge_cadeau
+
+            # Crediter les wallets lieu
+            # / Credit venue wallets
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+            from fedow_core.models import Asset as AssetModel
+            asset_tnf = AssetModel.objects.filter(
+                tenant_origin=tenant, category=AssetModel.TNF, active=True,
+            ).first()
+            assert asset_tnf is not None, "Asset TNF introuvable"
+            from AuthBillet.models import Wallet as WalletModel
+            if asset_tnf.wallet_origin:
+                _crediter_wallet(asset_tnf.wallet_origin, asset_tnf, 50000)
+
+            # Crediter le wallet client en TLF pour payer la Biere
+            # / Credit client wallet in TLF to pay for Beer
+            _crediter_wallet(wallet_client, asset_tlf, 10000)
+
+            solde_tlf_avant = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            solde_tnf_avant = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tnf,
+            )
+
+            client = _make_client(admin_user, tenant)
+            total_centimes = prix_biere_centimes  # Seule la Biere est payante / Only Beer is paid
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'nfc',
+                'total': str(total_centimes),
+                'given_sum': '',
+                'tag_id': carte_client.tag_id,
+                f'repid-{produit_biere.uuid}': '1',
+                f'repid-{produit_cadeau.uuid}': '1',
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 200
+
+            # TLF debite uniquement du prix de la Biere (pas du cadeau)
+            # / TLF debited only by Beer price (not by gift)
+            solde_tlf_apres = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            assert solde_tlf_apres == solde_tlf_avant - prix_biere_centimes, (
+                f"Attendu debit TLF de {prix_biere_centimes}c seulement, "
+                f"avant={solde_tlf_avant} apres={solde_tlf_apres}"
+            )
+
+            # TNF credite du montant du cadeau
+            # / TNF credited by gift amount
+            prix_cadeau_centimes = int(round(prix_cadeau.prix * 100))
+            solde_tnf_apres = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tnf,
+            )
+            assert solde_tnf_apres == solde_tnf_avant + prix_cadeau_centimes, (
+                f"Attendu credit TNF de {prix_cadeau_centimes}c, "
+                f"avant={solde_tnf_avant} apres={solde_tnf_apres}"
+            )
+
+            # LigneArticle cadeau avec payment_method=FREE
+            # / Gift LigneArticle with payment_method=FREE
+            ligne_cadeau = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                carte=carte_client,
+                pricesold__productsold__product=produit_cadeau,
+            ).order_by('-datetime').first()
+            assert ligne_cadeau is not None
+            assert ligne_cadeau.payment_method == PaymentMethod.FREE, (
+                f"Attendu FREE pour RC, obtenu {ligne_cadeau.payment_method}"
+            )
+
+
+@pytest.mark.usefixtures("test_data")
 class TestPanierMixteForceEspecesCB:
     """Test 11 : panier VT+RE → NFC absent des moyens proposes."""
 

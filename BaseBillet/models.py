@@ -2615,6 +2615,11 @@ class Ticket(models.Model):
                                       verbose_name=_("Payment method"))
 
     scanned_by = models.ForeignKey(ScanApp, on_delete=models.PROTECT, blank=True, null=True, )
+    scanned_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=_("Date et heure du scan / Date and time of scan"),
+    )
     metadata = models.JSONField(null=True, blank=True, verbose_name=_('Metadata'), help_text=_('Custom metadata'))
 
     def paid(self):

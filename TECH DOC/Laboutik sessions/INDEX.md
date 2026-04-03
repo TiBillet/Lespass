@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-02 (session 18 terminée)
+> Dernière mise à jour : 2026-04-03 (session 22 terminée)
 
 ---
 
@@ -331,6 +331,19 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 - [x] Générateur CSV dans `laboutik/csv_comptable.py` (3 modes : DEBIT_CREDIT, MONTANT_SENS, MONTANT_UNIQUE)
 - [x] Export par période (bandeau clôtures) + par clôture (vue détail) avec dropdown profil
 - [x] 8 tests pytest, 82 tests laboutik total, 0 régression
+
+**Session 22 — Refactoring frontend + corrections cashless** ✅ FAIT
+- [x] **XSS** : `escapeHtml()` centralisé dans `tibilletUtils.js`, utilisé dans `addition.js` (2 endroits) et `nfc.js` (1 endroit)
+- [x] **Accessibilité** : `aria-live="polite"` sur `#messages`, `#confirm`, `#ventes-zone`
+- [x] **CSS extraction** : 423 lignes inline → `sortie_de_caisse.css` (373 lignes) + `ws_indicator.css` (50 lignes)
+- [x] **Recharges gratuites** : RC (cadeau) et TM (temps) auto-crédités sans demande de paiement (`PaymentMethod.FREE`)
+- [x] **Carte anonyme + recharge seule** : skip formulaire email, récapitulatif direct
+- [x] **NFC non bloqué** pour RC/TM (seul RE bloque le NFC)
+- [x] **PV Cashless** : accepte espèces et CB (fixture corrigée pour tests E2E)
+- [x] **Tuiles articles** : pas de symbole € sur les prix RC/TM (monnaie cadeau/temps, pas euros)
+- [x] 4 tests pytest recharge ajoutés (CB, prix libre valide/rejeté, double consécutive)
+- [x] 2 tests identification ajoutés (carte anonyme recharge → récap, carte anonyme adhésion → formulaire)
+- [x] 376 pytest + 55 E2E, 0 régression
 
 ### 7. Menu Ventes (intégré dans sessions 16-17)
 

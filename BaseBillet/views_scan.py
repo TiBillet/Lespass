@@ -2,6 +2,7 @@ from uuid import UUID
 
 from django.core.signing import TimestampSigner
 from django.utils.http import urlsafe_base64_decode
+from django.utils import timezone
 from rest_framework import status, serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny
@@ -274,6 +275,7 @@ class ticket(APIView):
             scan_app = request.scan_app  # Set by HasScanApi permission
             ticket.status = Ticket.SCANNED
             ticket.scanned_by = scan_app
+            ticket.scanned_at = timezone.now()
             ticket.save()
 
             # Return a JSON response with the ticket details

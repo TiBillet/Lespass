@@ -2603,7 +2603,8 @@ def _construire_recapitulatif_articles(articles_panier, prenom_client, nom_clien
     :param nom_client: nom du client ou chaine vide (str)
     :return: liste de dicts {'description': str, 'prix_total_euros': float}
     """
-    METHODES_RECHARGE = {'RE', 'RC', 'TM'}
+    # Utilise la constante module METHODES_RECHARGE (ligne ~721)
+    # / Uses the module-level METHODES_RECHARGE constant
     articles_pour_recapitulatif = []
 
     for article in articles_panier:
@@ -3990,16 +3991,28 @@ class PaiementViewSet(viewsets.ViewSet):
 
         wallet_lieu = asset_tlf.wallet_origin
 
-        # 4. Classifier les articles : adhesion (categorie_article=ADHESION) vs vente
-        #    NFC = seulement ventes et adhesions. Les recharges sont rejetées par la garde.
-        # 4. Classify articles: membership (categorie_article=ADHESION) vs sale
-        #    NFC = only sales and memberships. Top-ups are rejected by the guard.
+        # 4. Classifier les articles en 3 categories :
+        #    - Ventes (VT) : debitent le wallet du client en TLF
+        #    - Adhesions (AD) : debitent le wallet du client en TLF + creent un Membership
+        #    - Recharges gratuites (RC/TM) : creditent le wallet du client (pas de debit)
+        #    Les recharges payantes (RE) sont bloquees par la garde ci-dessus.
+        # / 4. Classify articles into 3 categories:
+        #    - Sales (VT): debit the client's wallet in TLF
+        #    - Memberships (AD): debit the client's wallet in TLF + create a Membership
+        #    - Free top-ups (RC/TM): credit the client's wallet (no debit)
+        #    Paid top-ups (RE) are blocked by the guard above.
         articles_vente = []
         articles_adhesion = []
+        articles_recharge_gratuite = []
 
         for article in articles_panier:
+            methode = article['product'].methode_caisse
             if article['product'].categorie_article == Product.ADHESION:
                 articles_adhesion.append(article)
+            elif methode in METHODES_RECHARGE_GRATUITES:
+                # RC (cadeau) ou TM (temps) : credit gratuit, pas de debit
+                # / RC (gift) or TM (time): free credit, no debit
+                articles_recharge_gratuite.append(article)
             else:
                 # Vente classique (VT ou tout autre type)
                 # / Standard sale (VT or any other type)
@@ -4008,8 +4021,10 @@ class PaiementViewSet(viewsets.ViewSet):
         total_vente_centimes = _calculer_total_panier_centimes(articles_vente)
         total_adhesion_centimes = _calculer_total_panier_centimes(articles_adhesion)
 
-        # Le montant qui débite le client = ventes + adhésions
-        # Amount that debits the client = sales + memberships
+        # Le montant qui debite le client = ventes + adhesions.
+        # Les recharges gratuites (RC/TM) ne debitent PAS le client.
+        # / Amount that debits the client = sales + memberships.
+        # Free top-ups (RC/TM) do NOT debit the client.
         total_debit_client_centimes = total_vente_centimes + total_adhesion_centimes
 
         # 5. Vérifier le solde AVANT le bloc atomic (rejet rapide, sans verrou)
@@ -4085,6 +4100,19 @@ class PaiementViewSet(viewsets.ViewSet):
                         wallet=wallet_client,
                         uuid_transaction=uuid_transaction,
                         point_de_vente=point_de_vente,
+                    )
+
+                # c) Recharges gratuites (RC/TM) — credit wallet client, pas de debit
+                #    Meme logique que dans _payer_en_especes : _executer_recharges
+                #    avec code "gift" → PaymentMethod.FREE.
+                # / c) Free top-ups (RC/TM) — credit client wallet, no debit
+                #    Same logic as _payer_en_especes: _executer_recharges
+                #    with "gift" code → PaymentMethod.FREE.
+                if articles_recharge_gratuite:
+                    _executer_recharges(
+                        articles_recharge_gratuite, wallet_client, carte_client,
+                        code_methode_paiement="gift",
+                        ip_client=ip_client,
                     )
 
                 # Creer/renouveler les adhesions et rattacher aux LigneArticle

@@ -1114,6 +1114,26 @@ est_navigation_complete = (
 ```
 Ce piege s'applique a toute logique serveur qui teste `request.htmx.target`.
 
+**9.93 — RC/TM (recharges gratuites) utilisent `PaymentMethod.FREE`, pas le moyen de paiement du panier.**
+Les recharges cadeau (RC) et temps (TM) sont gratuites : le `payment_method` de
+leur `LigneArticle` est toujours `FREE` ("NA" en DB), meme si le panier contient
+d'autres articles payes en especes ou CB. Ne pas tester `payment_method == 'CA'`
+sur une LigneArticle de type RC/TM.
+
+Le code d'interface pour `PaymentMethod.FREE` est `"gift"`, pas `"NA"`.
+Le mapping est dans `MAPPING_CODES_PAIEMENT` : `"gift" → PaymentMethod.FREE`.
+Passer `PaymentMethod.FREE` directement a `_creer_lignes_articles()` donne
+`PaymentMethod.UNKNOWN` ("UK") car la fonction attend un code d'interface, pas
+une valeur DB.
+
+**9.94 — Carte anonyme + recharge seule (RE/RC/TM) : pas de formulaire email.**
+Quand une carte NFC sans user est scannee et que le panier ne contient que des
+recharges (pas d'adhesion, pas de billet), le flow court-circuite le formulaire
+email. Pour les recharges euros (RE), on affiche le recapitulatif avec boutons
+de paiement. Pour les recharges gratuites (RC/TM), le credit est immediat
+(ecran de succes direct). Le formulaire email ne s'affiche que si le panier
+contient un article qui necessite un user : adhesion (AD) ou billet.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

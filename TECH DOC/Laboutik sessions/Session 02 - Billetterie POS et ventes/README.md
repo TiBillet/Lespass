@@ -39,6 +39,7 @@
 | 19 | `19_envoi_auto_version.md` | Ex.21 | 15, 18 | FAIT |
 | 20 | `20_export_comptable_mapping_fec.md` | — | 18 | FAIT |
 | 21 | `21_export_comptable_profils_csv.md` | — | 20 | FAIT |
+| 22 | *(prompt direct)* | — | 21 | FAIT |
 
 ## Ordre des sessions (dependances)
 
