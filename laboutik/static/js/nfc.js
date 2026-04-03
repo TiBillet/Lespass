@@ -126,7 +126,7 @@ let NfcReader = class {
 			let uiSimu = ''
 			this.simuData.forEach((item, i) => {
 				uiSimu += `
-        <div class="nfc-reader-simu-bt" tag-id="${item.tag_id}">${item.name}</div>
+        <div class="nfc-reader-simu-bt" tag-id="${item.tag_id}">${escapeHtml(item.name)}</div>
       `
 			})
 			document.querySelector('#nfc-simu-tag').innerHTML = uiSimu

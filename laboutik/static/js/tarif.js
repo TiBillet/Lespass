@@ -20,23 +20,8 @@
  * 5. Clic tarif prix libre → affiche input → validation → ajoute au panier
  */
 
-/**
- * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
- * Utilisé pour tout texte dynamique injecté via innerHTML (noms de produits,
- * noms de tarifs, symboles monétaires).
- * / Escapes HTML special characters to prevent XSS injection.
- *
- * @param {String} texte - Texte brut à échapper
- * @returns {String} Texte avec caractères HTML échappés
- */
-function escapeHtml(texte) {
-	return String(texte)
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#39;')
-}
+// escapeHtml() est défini dans tibilletUtils.js (chargé dans le <head>).
+// / escapeHtml() is defined in tibilletUtils.js (loaded in <head>).
 
 /**
  * Affiche l'overlay de sélection de tarif

@@ -1124,3 +1124,241 @@ class TestFusionWalletEphemere:
             assert tx_fusion.sender == wallet_eph
             assert tx_fusion.receiver == user_fusion.wallet
             assert tx_fusion.amount == montant_recharge
+
+
+# ---------------------------------------------------------------------------
+# Tests — recharge par carte bancaire (CB)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("test_data")
+class TestRechargeCB:
+    """Test 15 : recharge euros payee par CB → Token TLF credite, LigneArticle CC."""
+
+    def test_recharge_euros_par_cb(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, wallet_client, carte_client,
+        produit_recharge_euros,
+    ):
+        """POST payer moyen=carte_bancaire + produit RE → Token TLF client credite, payment_method=CC.
+        / POST pay method=carte_bancaire + product RE → client TLF Token credited, payment_method=CC."""
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = produit_recharge_euros
+            prix_centimes = int(round(prix.prix * 100))
+
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            solde_client_avant = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'carte_bancaire',
+                'total': str(prix_centimes),
+                'given_sum': '',
+                'tag_id': carte_client.tag_id,
+                f'repid-{produit.uuid}': '1',
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 200
+
+            # Token TLF client credite du montant
+            # / Client TLF Token credited by amount
+            solde_client_apres = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            assert solde_client_apres == solde_client_avant + prix_centimes
+
+            # LigneArticle creee avec payment_method=CC (carte bancaire)
+            # / LigneArticle created with payment_method=CC (credit card)
+            derniere_ligne = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                carte=carte_client,
+            ).order_by('-datetime').first()
+            assert derniere_ligne is not None
+            assert derniere_ligne.payment_method == PaymentMethod.CC, (
+                f"Attendu payment_method=CC, obtenu {derniere_ligne.payment_method}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Tests — recharge prix libre
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def produit_recharge_prix_libre(premier_pv, test_data):
+    """Product recharge euros avec un Price free_price=True (prix minimum 5€).
+    / EUR top-up product with a free_price=True Price (minimum 5€)."""
+    with schema_context(TENANT_SCHEMA):
+        produit, _ = Product.objects.get_or_create(
+            name='Recharge Libre Test',
+            defaults={
+                'methode_caisse': Product.RECHARGE_EUROS,
+                'publish': True,
+            },
+        )
+        if not premier_pv.products.filter(pk=produit.pk).exists():
+            premier_pv.products.add(produit)
+
+        prix, _ = Price.objects.get_or_create(
+            product=produit,
+            prix=Decimal('5.00'),
+            defaults={
+                'publish': True,
+                'subscription_type': Price.NA,
+                'short_description': 'Recharge libre min 5 EUR',
+                'free_price': True,
+            },
+        )
+        # S'assurer que free_price est bien actif (peut exister d'un ancien run)
+        # / Ensure free_price is active (may exist from an older run)
+        if not prix.free_price:
+            prix.free_price = True
+            prix.save(update_fields=['free_price'])
+
+        return produit, prix
+
+
+@pytest.mark.usefixtures("test_data")
+class TestRechargePrixLibre:
+    """Tests 16-17 : recharge avec prix libre (custom_amount_centimes)."""
+
+    def test_recharge_prix_libre_montant_valide(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, wallet_client, carte_client,
+        produit_recharge_prix_libre,
+    ):
+        """Prix libre 25€ (minimum 5€) → Token TLF credite de 2500 centimes.
+        / Free price 25€ (min 5€) → TLF Token credited 2500 cents."""
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = produit_recharge_prix_libre
+            montant_libre_centimes = 2500  # 25,00 EUR
+
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            solde_avant = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'espece',
+                'total': str(montant_libre_centimes),
+                'given_sum': '',
+                'tag_id': carte_client.tag_id,
+                f'repid-{produit.uuid}--{prix.uuid}': '1',
+                f'custom-{produit.uuid}--{prix.uuid}': str(montant_libre_centimes),
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 200
+
+            # Token TLF credite du montant libre (2500), pas du minimum (500)
+            # / TLF Token credited by free amount (2500), not minimum (500)
+            solde_apres = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            assert solde_apres == solde_avant + montant_libre_centimes, (
+                f"Attendu solde +{montant_libre_centimes}c, "
+                f"obtenu avant={solde_avant} apres={solde_apres}"
+            )
+
+    def test_recharge_prix_libre_sous_minimum_rejete(
+        self, admin_user, tenant, premier_pv,
+        wallet_lieu, asset_tlf, carte_client,
+        produit_recharge_prix_libre,
+    ):
+        """Prix libre 2€ alors que minimum = 5€ → ValueError (rejet 400).
+        / Free price 2€ when minimum = 5€ → ValueError (400 reject)."""
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = produit_recharge_prix_libre
+            montant_trop_bas = 200  # 2,00 EUR < minimum 5,00 EUR
+
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            nb_lignes_avant = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+            ).count()
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'espece',
+                'total': str(montant_trop_bas),
+                'given_sum': '',
+                'tag_id': carte_client.tag_id,
+                f'repid-{produit.uuid}--{prix.uuid}': '1',
+                f'custom-{produit.uuid}--{prix.uuid}': str(montant_trop_bas),
+            }
+
+            response = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response.status_code == 400, (
+                f"Attendu 400, obtenu {response.status_code}"
+            )
+
+            # Aucune LigneArticle creee
+            # / No LigneArticle created
+            nb_lignes_apres = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+            ).count()
+            assert nb_lignes_apres == nb_lignes_avant
+
+
+# ---------------------------------------------------------------------------
+# Tests — double recharge consecutive (cumul solde)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.usefixtures("test_data")
+class TestDoubleRechargeConsecutive:
+    """Test 18 : deux recharges consecutives → solde cumule correctement."""
+
+    def test_double_recharge_cumul_solde(
+        self, admin_user, tenant, premier_pv, asset_tlf,
+        wallet_lieu, wallet_client, carte_client,
+        produit_recharge_euros,
+    ):
+        """Deux POST payer recharge 10€ → solde augmente de 2000 centimes au total.
+        / Two POST pay top-up 10€ → balance increases by 2000 cents total."""
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = produit_recharge_euros
+            prix_centimes = int(round(prix.prix * 100))
+
+            _crediter_wallet(wallet_lieu, asset_tlf, 50000)
+
+            solde_initial = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+
+            client = _make_client(admin_user, tenant)
+            post_data = {
+                'uuid_pv': str(premier_pv.uuid),
+                'moyen_paiement': 'espece',
+                'total': str(prix_centimes),
+                'given_sum': '',
+                'tag_id': carte_client.tag_id,
+                f'repid-{produit.uuid}': '1',
+            }
+
+            # Premiere recharge / First top-up
+            response_1 = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response_1.status_code == 200
+
+            solde_apres_1 = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            assert solde_apres_1 == solde_initial + prix_centimes
+
+            # Deuxieme recharge / Second top-up
+            response_2 = client.post('/laboutik/paiement/payer/', data=post_data)
+            assert response_2.status_code == 200
+
+            solde_apres_2 = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf,
+            )
+            assert solde_apres_2 == solde_initial + (prix_centimes * 2), (
+                f"Attendu solde={solde_initial + prix_centimes * 2}, "
+                f"obtenu {solde_apres_2}"
+            )

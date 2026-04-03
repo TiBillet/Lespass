@@ -115,12 +115,12 @@ function additionInsertArticle({ detail }) {
 		const additionLine = `
 			<div id="addition-line-${lineId}" data-quantity="${quantity}" data-price="${lineId}" data-unit-price="${prixAffiche}" class="addition-line-grid">
 				<div class="addition-col-bt">
-					<button type="button" class="addition-remove-btn" onclick="additionRemoveArticle('${lineId}');" title="Enlever un article" aria-label="Enlever ${name}">
+					<button type="button" class="addition-remove-btn" onclick="additionRemoveArticle('${lineId}');" title="Enlever un article" aria-label="Enlever ${escapeHtml(name)}">
 						<i class="fas fa-minus" aria-hidden="true"></i>
 					</button>
 				</div>
 				<div class="addition-col-info">
-					<div class="addition-col-name">${name}</div>
+					<div class="addition-col-name">${escapeHtml(name)}</div>
 					<div id="addition-quantity-${lineId}" class="addition-col-quantity-label">&times; ${quantity}</div>
 				</div>
 				<div class="addition-col-price">${(prixAffiche / 100).toFixed(2)}${currency}</div>

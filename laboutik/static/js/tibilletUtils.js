@@ -24,6 +24,29 @@ let currentConfiguration = null
 const logTypes = ['DANGER', 'WARNING', 'INFO']
 
 /**
+ * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
+ * Utilisé pour tout texte dynamique injecté via innerHTML ou insertAdjacentHTML
+ * (noms de produits, noms de tarifs, symboles monétaires).
+ * / Escapes HTML special characters to prevent XSS injection.
+ *
+ * LOCALISATION : laboutik/static/js/tibilletUtils.js
+ *
+ * Défini ici (chargé dans le <head>) pour être disponible dans tous les scripts :
+ * tarif.js, addition.js, nfc.js, articles.js.
+ *
+ * @param {String} texte - Texte brut à échapper
+ * @returns {String} Texte avec caractères HTML échappés
+ */
+function escapeHtml(texte) {
+	return String(texte)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;')
+}
+
+/**
  * Convertit les valeurs Django ('True', 'False', 'None') en valeurs JS
  * / Converts Django values to JS values
  */

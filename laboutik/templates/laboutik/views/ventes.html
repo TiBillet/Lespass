@@ -24,7 +24,7 @@ Recoit : CaisseViewSet.recap_en_cours / liste_ventes / detail_vente
 
 {# Zone ventes — remplacee par les partials HTMX via hx-target="#ventes-zone" #}
 {# / Sales zone — replaced by HTMX partials via hx-target="#ventes-zone" #}
-<div id="ventes-zone">
+<div id="ventes-zone" aria-live="polite">
     {% include vue_partiel %}
 </div>
 {% endblock %}

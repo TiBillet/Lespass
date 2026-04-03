@@ -24,56 +24,8 @@ COMMUNICATION :
 - Envoie : JSON via publicInterface.send() (wrapper HTMX ws)
 -->
 
-<style>
-  /* Indicateur reseau dans le header — petit bouton cliquable
-     / Network indicator in header — small clickable button */
-  .ws-indicator {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    padding: 0 10px;
-    height: 100%;
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 500;
-    transition: color 0.3s ease;
-    user-select: none;
-  }
-
-  .ws-indicator i {
-    font-size: 0.9rem;
-  }
-
-  /* Vert = connecte / Green = connected */
-  .ws-connected {
-    color: #198754;
-  }
-
-  /* Rouge = deconnecte / Red = disconnected */
-  .ws-disconnected {
-    color: #dc3545;
-  }
-
-  /* Animation flash au ping (retour du pong)
-     / Flash animation on ping (pong response) */
-  @keyframes ws-ping-flash {
-    0%   { color: #fff; }
-    100% { color: #198754; }
-  }
-  .ws-ping-flash {
-    animation: ws-ping-flash 0.4s ease-out;
-  }
-
-  /* Label de latence a droite de l'icone
-     / Latency label to the right of the icon */
-  .ws-indicator-label {
-    font-family: monospace;
-    font-size: 0.7rem;
-    min-width: 0;
-    white-space: nowrap;
-  }
-</style>
+<!-- CSS extrait vers laboutik/static/css/ws_indicator.css (chargé dans base.html <head>)
+     / CSS extracted to laboutik/static/css/ws_indicator.css (loaded in base.html <head>) -->
 
 <script>
   /**
