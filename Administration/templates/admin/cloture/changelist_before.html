@@ -25,15 +25,29 @@
                     </span>
                 </div>
 
-                <button type="button"
-                        hx-get="{{ export_fiscal_url }}"
-                        hx-target="#export-fiscal-zone"
-                        hx-swap="innerHTML"
-                        class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors flex-shrink-0"
-                        data-testid="btn-export-fiscal">
-                    <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
-                    {% translate "Export fiscal" %}
-                </button>
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <button type="button"
+                            hx-get="{{ export_fiscal_url }}"
+                            hx-target="#export-fiscal-zone"
+                            hx-swap="innerHTML"
+                            class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                            data-testid="btn-export-fiscal">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                        {% translate "Export fiscal" %}
+                    </button>
+
+                    {% if export_fec_url %}
+                    <button type="button"
+                            hx-get="{{ export_fec_url }}"
+                            hx-target="#export-fiscal-zone"
+                            hx-swap="innerHTML"
+                            class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                            data-testid="btn-export-fec">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                        {% translate "Export FEC" %}
+                    </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
     {% endcomponent %}

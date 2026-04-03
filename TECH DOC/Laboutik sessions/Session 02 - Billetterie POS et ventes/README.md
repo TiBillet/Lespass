@@ -36,12 +36,16 @@
 | 16 | `16_menu_ventes_ticket_x_liste.md` | — | 12 | FAIT |
 | 17 | `17_corrections_fond_sortie_caisse.md` | Ex.4 | 13, 16 | FAIT |
 | 18 | `18_archivage_fiscal_acces_administration.md` | Ex.10-12, 15, 19 | 13 | FAIT |
-| 19 | `19_envoi_auto_version.md` | Ex.21 | 15, 18 | A FAIRE |
+| 19 | `19_envoi_auto_version.md` | Ex.21 | 15, 18 | FAIT |
+| 20 | `20_export_comptable_mapping_fec.md` | — | 18 | FAIT |
+| 21 | `21_export_comptable_profils_csv.md` | — | 20 | A FAIRE |
 
 ## Ordre des sessions (dependances)
 
 ```
 12 ──→ 13 ──→ 15 ──→ 19
+                      ↓
+18 ──→ 20 ──→ 21
  │      │      ↑
  │      ├──→ 17 (corrections)
  │      └──→ 18 (archivage fiscal)

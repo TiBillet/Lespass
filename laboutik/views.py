@@ -148,6 +148,29 @@ logger = logging.getLogger(__name__)
 #  Utility functions — state, articles, categories                            #
 # --------------------------------------------------------------------------- #
 
+def _lire_version():
+    """
+    Lit le numero de version depuis le fichier VERSION a la racine du projet.
+    Format attendu : VERSION=X.Y.Z sur la premiere ligne.
+    Retourne la version ou '?' si le fichier est introuvable.
+    / Reads the version number from the VERSION file at the project root.
+    Expected format: VERSION=X.Y.Z on the first line.
+    Returns the version or '?' if the file is not found.
+
+    LOCALISATION : laboutik/views.py
+    """
+    try:
+        chemin_version = settings.BASE_DIR / 'VERSION'
+        with open(chemin_version, 'r') as fichier:
+            for ligne in fichier:
+                ligne = ligne.strip()
+                if ligne.startswith('VERSION='):
+                    return ligne.split('=', 1)[1]
+    except FileNotFoundError:
+        pass
+    return '?'
+
+
 def _construire_state(point_de_vente=None, carte_primaire_obj=None):
     """
     Construit le dictionnaire "state" à chaque requête.
@@ -158,7 +181,7 @@ def _construire_state(point_de_vente=None, carte_primaire_obj=None):
     """
     config = Configuration.get_solo()
     state = {
-        "version": "0.9.11",
+        "version": _lire_version(),
         "place": {
             "name": config.organisation,
             # Placeholder — sera remplacé par fedow_core en Phase 3
@@ -943,6 +966,9 @@ class CaisseViewSet(viewsets.ViewSet):
             # Mode ecole : active le bandeau SIMULATION dans header.html (LNE exigence 5)
             # / Training mode: enables SIMULATION banner in header.html (LNE req. 5)
             "mode_ecole": laboutik_config.mode_ecole,
+            # Version du logiciel pour le footer (LNE exigence 21)
+            # / Software version for the footer (LNE requirement 21)
+            "version_logiciel": _lire_version(),
         }
         return render(request, template_name, context)
 
@@ -1424,6 +1450,137 @@ class CaisseViewSet(viewsets.ViewSet):
         response = HttpResponse(zip_bytes, content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
+
+    # ----------------------------------------------------------------------- #
+    #  Export FEC — fichier des ecritures comptables (18 colonnes)              #
+    #  FEC export — accounting entries file (18 columns)                        #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get", "post"], url_path="export-fec", url_name="export_fec")
+    def export_fec(self, request):
+        """
+        GET /laboutik/caisse/export-fec/
+        Affiche le formulaire avec dates debut/fin optionnelles.
+        / Shows the form with optional start/end dates.
+
+        POST /laboutik/caisse/export-fec/
+        Genere et telecharge le fichier FEC (TSV 18 colonnes).
+        / Generates and downloads the FEC file (18-column TSV).
+
+        LOCALISATION : laboutik/views.py
+        """
+        from datetime import date as date_type
+
+        from django.db import connection
+        from django.http import HttpResponse
+
+        from laboutik.fec import generer_fec
+        from laboutik.models import ClotureCaisse
+
+        if request.method == "GET":
+            # Detecter si la requete vient de l'admin (HTMX) ou d'un acces direct (POS)
+            # / Detect if request comes from admin (HTMX) or direct access (POS)
+            est_requete_htmx = request.headers.get('HX-Request') == 'true'
+            if est_requete_htmx:
+                return render(request, "admin/cloture/export_fec_form.html", {
+                    "form_action_url": request.path,
+                    "cancel_url": request.headers.get('HX-Current-URL', '/admin/laboutik/cloturecaisse/'),
+                })
+            return render(request, "laboutik/partial/hx_export_fiscal.html")
+
+        # --- POST : generation du fichier FEC ---
+        # --- POST: FEC file generation ---
+
+        # Parser les dates optionnelles / Parse optional dates
+        debut = None
+        fin = None
+        debut_str = request.POST.get('debut', '').strip()
+        fin_str = request.POST.get('fin', '').strip()
+        try:
+            if debut_str:
+                debut = date_type.fromisoformat(debut_str)
+            if fin_str:
+                fin = date_type.fromisoformat(fin_str)
+        except ValueError:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Format de date invalide."),
+            }, status=400)
+
+        # Filtrer les clotures journalieres / Filter daily closures
+        clotures = ClotureCaisse.objects.filter(niveau=ClotureCaisse.JOURNALIERE).order_by('datetime_cloture')
+        if debut:
+            clotures = clotures.filter(datetime_cloture__date__gte=debut)
+        if fin:
+            clotures = clotures.filter(datetime_cloture__date__lte=fin)
+
+        if not clotures.exists():
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune cloture journaliere trouvee pour la periode."),
+            }, status=404)
+
+        schema = connection.schema_name
+        contenu_fec, nom_fichier, avertissements = generer_fec(clotures, schema)
+
+        response = HttpResponse(contenu_fec, content_type='text/tab-separated-values; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    # ----------------------------------------------------------------------- #
+    #  Charger plan comptable — jeu de comptes par defaut                      #
+    #  Load chart of accounts — default account set                            #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["post"], url_path="charger-plan-comptable", url_name="charger_plan_comptable")
+    def charger_plan_comptable(self, request):
+        """
+        POST /laboutik/caisse/charger-plan-comptable/
+        Charge un jeu de comptes comptables par defaut (bar_resto ou association).
+        / Loads a default chart of accounts set (bar_resto or association).
+
+        LOCALISATION : laboutik/views.py
+        """
+        from django.core.management import call_command
+        from django.db import connection
+
+        jeu = request.POST.get('jeu', '').strip()
+        if jeu not in ('bar_resto', 'association'):
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Jeu de comptes invalide."),
+            }, status=400)
+
+        # Verifier si des comptes existent deja — si oui, forcer le reset
+        # Sinon la commande afficherait un warning et ne ferait rien
+        # / Check if accounts already exist — if so, force reset
+        from laboutik.models import CompteComptable
+        nb_existants = CompteComptable.objects.count()
+
+        try:
+            call_command(
+                'charger_plan_comptable',
+                schema=connection.schema_name,
+                jeu=jeu,
+                reset=nb_existants > 0,
+            )
+        except Exception as e:
+            logger.error(f"Erreur chargement plan comptable : {e}")
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": str(e),
+            }, status=500)
+
+        message = _("Plan comptable charge avec succes.")
+        if nb_existants > 0:
+            message = _("Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes).") % {
+                "nb": nb_existants,
+            }
+
+        return render(request, "laboutik/partial/hx_messages.html", {
+            "msg_type": "success",
+            "msg_content": message,
+        })
 
     # ----------------------------------------------------------------------- #
     #  Fond de caisse — lecture et modification du montant initial              #

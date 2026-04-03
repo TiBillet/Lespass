@@ -1247,7 +1247,13 @@ class CategorieProductAdmin(ModelAdmin):
                 'icon',
             ),
         }),
+        (_('Accounting / Comptabilite'), {
+            'fields': (
+                'compte_comptable',
+            ),
+        }),
     )
+    autocomplete_fields = ['compte_comptable']
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

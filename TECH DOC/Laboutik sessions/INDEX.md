@@ -304,9 +304,29 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 - [x] 57 tests laboutik total + 44 E2E, 0 régression
 - [x] Documentation conformité LNE complète (`TECH DOC/A DOCUMENTER/conformite-lne-caisse-laboutik.md`)
 
-**Session 19 — Envoi auto rapports + version** (Ex.21)
-- [ ] Celery Beat envoi périodique
-- [ ] Version visible dans l'interface POS
+**Session 19 — Envoi auto rapports + version** (Ex.21) ✅ FAIT
+- [x] `rapport_emails` + `rapport_periodicite` branchés dans `envoyer_rapports_clotures_recentes()` (filtrage daily/weekly/monthly/yearly)
+- [x] Fieldset "Rapports automatiques" dans l'admin LaboutikConfiguration
+- [x] `_lire_version()` lit `VERSION` racine (remplace hardcode `0.9.11`)
+- [x] Version affichée dans le footer POS (Cotton component, discret)
+- [x] 6 tests pytest, 63 tests laboutik total, 0 régression
+- [x] `FISCAL_HASH.txt` + `version.py` reportés (CI/CD, pas bloquant pour le dev)
+
+**Session 20 — Export comptable : mapping + FEC** ✅ FAIT
+- [x] Modèle `CompteComptable` (7 natures PCG : VENTE, TVA, TRESORERIE, TIERS, CHARGE, PRODUIT_EXCEPTIONNEL, SPECIAL)
+- [x] Modèle `MappingMoyenDePaiement` (N→1, null = moyen ignoré à l'export)
+- [x] FK `compte_comptable` sur `CategorieProduct` (BaseBillet)
+- [x] Management command `charger_plan_comptable` : 2 fixtures (bar/resto 15 comptes, association 10 comptes) + mappings moyens
+- [x] Générateur FEC 18 colonnes (`laboutik/fec.py`) : tab, UTF-8, CRLF, virgule décimale, 1 écriture équilibrée par clôture Z
+- [x] Actions ViewSet `export_fec` + `charger_plan_comptable` + templates HTMX inline admin
+- [x] Admin Unfold CRUD CompteComptable + MappingMoyenDePaiement + bandeau chargement plan
+- [x] Bouton "Export FEC" dans bandeau clôtures (à côté de "Export fiscal")
+- [x] Documentation utilisateur complète (`TECH DOC/A DOCUMENTER/export-comptable-guide-utilisateur.md`)
+- [x] 11 tests pytest, 74 tests laboutik total, 0 régression
+
+**Session 21 — Export comptable : profils CSV configurables** (à faire)
+- [ ] Modèle ExportProfile + générateur CSV configurable
+- [ ] 5 profils pré-configurés (Sage, EBP, Dolibarr, Paheko, PennyLane)
 
 ### 7. Menu Ventes (intégré dans sessions 16-17)
 

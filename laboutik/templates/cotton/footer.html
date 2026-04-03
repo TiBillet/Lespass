@@ -18,7 +18,7 @@ Contient 3 boutons :
 Les événements click sont attachés par la vue parente (common_user_interface.html).
 / Click events are attached by the parent view (common_user_interface.html).
 -->
-<footer>
+<footer style="position: relative;">
 	<!--
 	BOUTON RESET - ANNULER LA COMMANDE
 	Action : Réinitialise toute la commande en cours
@@ -97,4 +97,14 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 			</div>
 		</div>
 	</div>
+	<!-- Version du logiciel — texte discret en bas a droite (LNE exigence 21) -->
+	<!-- / Software version — small text bottom right (LNE requirement 21) -->
+	{% if version_logiciel %}
+	<div style="position: absolute; bottom: 2px; right: 6px; font-size: 0.55rem;
+	            color: rgba(255,255,255,0.2); font-family: 'Luciole-regular';
+	            pointer-events: none; font-variant-numeric: tabular-nums;"
+	     data-testid="footer-version">
+		v{{ version_logiciel }}
+	</div>
+	{% endif %}
 </footer>

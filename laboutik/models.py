@@ -1553,3 +1553,225 @@ class HistoriqueFondDeCaisse(models.Model):
         ordering = ('-datetime',)
         verbose_name = _('Cash float history')
         verbose_name_plural = _('Cash float histories')
+
+
+# --- Compte comptable (Plan Comptable General / PCG) ---
+# Represente un compte du plan comptable associe au tenant.
+# Utilise pour l'export FEC et CSV comptable : chaque categorie de produit
+# pointe vers un compte de vente (classe 7), et chaque moyen de paiement
+# pointe vers un compte de tresorerie (classe 5).
+#
+# Rappel des classes PCG :
+#   4xx = comptes de tiers (clients, fournisseurs)
+#   5xx = comptes de tresorerie (banque, caisse)
+#   6xx = comptes de charges (achats, frais)
+#   7xx = comptes de produits / ventes (recettes)
+#
+# / PCG (French Chart of Accounts) entry.
+# Used for FEC and CSV accounting export: each product category
+# points to a sales account (class 7), and each payment method
+# points to a treasury account (class 5).
+#
+# PCG class reminder:
+#   4xx = third-party accounts (customers, suppliers)
+#   5xx = treasury accounts (bank, cash register)
+#   6xx = expense accounts (purchases, fees)
+#   7xx = revenue / sales accounts (income)
+
+class CompteComptable(models.Model):
+    """
+    Compte du Plan Comptable General (PCG) associe au tenant.
+    Exemples : 7072000 (Ventes de marchandises), 5311000 (Caisse),
+    4457100 (TVA collectee).
+    / PCG (French Chart of Accounts) entry for this tenant.
+    Examples: 7072000 (Merchandise sales), 5311000 (Cash register),
+    4457100 (Collected VAT).
+
+    LOCALISATION : laboutik/models.py
+    """
+
+    # --- Natures de compte ---
+    # Determine la classe comptable du compte.
+    # / Account nature — determines the accounting class.
+    VENTE = 'VENTE'
+    TVA = 'TVA'
+    TRESORERIE = 'TRESORERIE'
+    TIERS = 'TIERS'
+    CHARGE = 'CHARGE'
+    PRODUIT_EXCEPTIONNEL = 'PRODUIT_EXCEPTIONNEL'
+    SPECIAL = 'SPECIAL'
+    NATURE_CHOICES = [
+        (VENTE, _('Sales (class 7)')),
+        (TVA, _('VAT (class 4457)')),
+        (TRESORERIE, _('Treasury (class 5)')),
+        (TIERS, _('Third-party (class 4)')),
+        (CHARGE, _('Expense (class 6)')),
+        (PRODUIT_EXCEPTIONNEL, _('Exceptional income (class 77)')),
+        (SPECIAL, _('Special')),
+    ]
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    # Numero du compte PCG, ex: "7072000", "5311000", "4457100"
+    # / PCG account number, e.g. "7072000", "5311000", "4457100"
+    numero_de_compte = models.CharField(
+        max_length=20,
+        verbose_name=_("Account number"),
+        help_text=_(
+            "Numero du compte PCG (ex: 7072000). "
+            "/ PCG account number (e.g. 7072000)."
+        ),
+    )
+
+    # Libelle du compte, ex: "Ventes de marchandises"
+    # / Account label, e.g. "Merchandise sales"
+    libelle_du_compte = models.CharField(
+        max_length=200,
+        verbose_name=_("Account label"),
+        help_text=_(
+            "Libelle descriptif du compte (ex: Ventes de marchandises). "
+            "/ Descriptive account label (e.g. Merchandise sales)."
+        ),
+    )
+
+    # Nature du compte : vente, TVA, tresorerie, tiers, charge, etc.
+    # / Account nature: sales, VAT, treasury, third-party, expense, etc.
+    nature_du_compte = models.CharField(
+        max_length=30,
+        choices=NATURE_CHOICES,
+        verbose_name=_("Account nature"),
+        help_text=_(
+            "Nature du compte : VENTE (classe 7), TVA (4457), TRESORERIE (5), etc. "
+            "/ Account nature: SALES (class 7), VAT (4457), TREASURY (5), etc."
+        ),
+    )
+
+    # Taux de TVA applicable (uniquement pour les comptes VENTE et TVA).
+    # Null pour les comptes de tresorerie, tiers, charges, etc.
+    # / Applicable VAT rate (only for SALES and VAT accounts).
+    # Null for treasury, third-party, expense accounts, etc.
+    taux_de_tva = models.DecimalField(
+        max_digits=5, decimal_places=2,
+        null=True, blank=True,
+        verbose_name=_("VAT rate (%)"),
+        help_text=_(
+            "Taux de TVA en pourcentage (ex: 20.00, 10.00, 5.50). "
+            "Renseigner uniquement pour les comptes VENTE et TVA. "
+            "/ VAT rate as percentage (e.g. 20.00, 10.00, 5.50). "
+            "Only fill for SALES and VAT accounts."
+        ),
+    )
+
+    # Indique si le compte est actif (utilisable dans les mappings)
+    # / Whether the account is active (usable in mappings)
+    est_actif = models.BooleanField(
+        default=True,
+        verbose_name=_("Active"),
+        help_text=_(
+            "Decocher pour desactiver le compte sans le supprimer. "
+            "/ Uncheck to deactivate the account without deleting it."
+        ),
+    )
+
+    def __str__(self):
+        return f"{self.numero_de_compte} — {self.libelle_du_compte}"
+
+    class Meta:
+        ordering = ['numero_de_compte']
+        verbose_name = _('Accounting code')
+        verbose_name_plural = _('Accounting codes')
+
+
+# --- Mapping moyen de paiement → compte de tresorerie ---
+# Associe chaque code de moyen de paiement (CA, CC, CH, etc.) a un compte
+# de tresorerie du PCG. Utilise pour l'export comptable.
+#
+# Si `compte_de_tresorerie` est null, le moyen de paiement est IGNORE
+# dans l'export. C'est le cas par defaut pour les paiements cashless NFC :
+# l'encaissement reel a eu lieu au moment de la recharge (top-up), donc
+# la vente NFC ne genere pas d'ecriture de tresorerie supplementaire.
+#
+# / Maps each payment method code (CA, CC, CH, etc.) to a PCG
+# treasury account. Used for accounting export.
+#
+# If `compte_de_tresorerie` is null, the payment method is IGNORED
+# in the export. This is the default for cashless NFC payments:
+# the actual cash collection happened at top-up time, so the NFC
+# sale does not generate an additional treasury entry.
+
+class MappingMoyenDePaiement(models.Model):
+    """
+    Mapping entre un code de moyen de paiement (PaymentMethod) et un
+    compte de tresorerie du PCG.
+    Exemple : CA → 5311000 (Caisse), CC → 5121000 (Banque carte).
+    Si compte_de_tresorerie est null, le moyen est ignore dans l'export
+    (cas des paiements NFC cashless, deja encaisses a la recharge).
+    / Maps a PaymentMethod code to a PCG treasury account.
+    Example: CA → 5311000 (Cash register), CC → 5121000 (Card bank).
+    If compte_de_tresorerie is null, the method is ignored in export
+    (case of NFC cashless payments, already collected at top-up).
+
+    LOCALISATION : laboutik/models.py
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True, default=uuid_module.uuid4, editable=False,
+        unique=True, db_index=True,
+    )
+
+    # Code du moyen de paiement (unique par tenant).
+    # Correspond aux codes de PaymentMethod : CA, CC, CH, etc.
+    # / Payment method code (unique per tenant).
+    # Matches PaymentMethod codes: CA, CC, CH, etc.
+    moyen_de_paiement = models.CharField(
+        max_length=10,
+        unique=True,
+        verbose_name=_("Payment method code"),
+        help_text=_(
+            "Code du moyen de paiement (ex: CA = especes, CC = carte bancaire, "
+            "CH = cheque). Doit correspondre aux codes PaymentMethod. "
+            "/ Payment method code (e.g. CA = cash, CC = credit card, "
+            "CH = check). Must match PaymentMethod codes."
+        ),
+    )
+
+    # Libelle lisible du moyen de paiement
+    # / Human-readable payment method label
+    libelle_moyen = models.CharField(
+        max_length=100,
+        verbose_name=_("Payment method label"),
+        help_text=_(
+            "Libelle lisible (ex: Especes, Carte bancaire, Cheque). "
+            "/ Readable label (e.g. Cash, Credit card, Check)."
+        ),
+    )
+
+    # Compte de tresorerie associe (nullable : null = ignore dans l'export).
+    # Voir commentaire de classe pour l'explication du null (cas NFC cashless).
+    # / Associated treasury account (nullable: null = ignored in export).
+    # See class comment for null explanation (NFC cashless case).
+    compte_de_tresorerie = models.ForeignKey(
+        CompteComptable, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='moyens_de_paiement',
+        verbose_name=_("Treasury account"),
+        help_text=_(
+            "Compte de tresorerie PCG associe (ex: 5311000 pour especes). "
+            "Laisser vide pour ignorer ce moyen dans l'export comptable "
+            "(ex: paiements NFC cashless, deja encaisses a la recharge). "
+            "/ PCG treasury account (e.g. 5311000 for cash). "
+            "Leave blank to ignore this method in accounting export "
+            "(e.g. NFC cashless payments, already collected at top-up)."
+        ),
+    )
+
+    def __str__(self):
+        return f"{self.libelle_moyen} → {self.compte_de_tresorerie or '(ignored)'}"
+
+    class Meta:
+        ordering = ['moyen_de_paiement']
+        verbose_name = _('Payment method mapping')
+        verbose_name_plural = _('Payment method mappings')

@@ -186,11 +186,17 @@ def get_sidebar_navigation(request):
                     "permission": admin_permission,
                 },
                 {
-                    "title": _("Orders"),
-                    "icon": "receipt",
-                    "link": reverse_lazy("staff_admin:laboutik_commandesauvegarde_changelist"),
+                    "title": _("Printers"),
+                    "icon": "print",
+                    "link": reverse_lazy("staff_admin:laboutik_printer_changelist"),
                     "permission": admin_permission,
                 },
+                # {
+                #     "title": _("Orders"),
+                #     "icon": "receipt",
+                #     "link": reverse_lazy("staff_admin:laboutik_commandesauvegarde_changelist"),
+                #     "permission": admin_permission,
+                # },
                 {
                     "title": _("Closures"),
                     "icon": "summarize",
@@ -198,21 +204,9 @@ def get_sidebar_navigation(request):
                     "permission": admin_permission,
                 },
                 {
-                    "title": _("Operation logs"),
-                    "icon": "history",
-                    "link": reverse_lazy("staff_admin:laboutik_journaloperation_changelist"),
-                    "permission": admin_permission,
-                },
-                {
                     "title": _("Cash float history"),
-                    "icon": "account_balance",
+                    "icon": "account_balance_wallet",
                     "link": reverse_lazy("staff_admin:laboutik_historiquefonddecaisse_changelist"),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Printers"),
-                    "icon": "print",
-                    "link": reverse_lazy("staff_admin:laboutik_printer_changelist"),
                     "permission": admin_permission,
                 },
                 {
@@ -259,9 +253,10 @@ def get_sidebar_navigation(request):
             ],
         })
 
-    # --- Toujours visible : Sales ---
+    # --- Toujours visible : Ventes & comptabilite ---
+    # / --- Always visible: Sales & accounting ---
     navigation.append({
-        "title": _("Sales"),
+        "title": _("Sales & accounting"),
         "separator": True,
         "collapsible": True,
         "items": [
@@ -269,6 +264,25 @@ def get_sidebar_navigation(request):
                 "title": _("Entries"),
                 "icon": "receipt_long",
                 "link": reverse_lazy("staff_admin:BaseBillet_lignearticle_changelist"),
+                "permission": admin_permission,
+            },
+            # {
+            #     "title": _("Operation logs"),
+            #     "icon": "history",
+            #     "link": reverse_lazy("staff_admin:laboutik_journaloperation_changelist"),
+            #     "permission": admin_permission,
+            # },
+
+            {
+                "title": _("Accounting codes"),
+                "icon": "account_balance",
+                "link": reverse_lazy("staff_admin:laboutik_comptecomptable_changelist"),
+                "permission": admin_permission,
+            },
+            {
+                "title": _("Payment method mapping"),
+                "icon": "swap_horiz",
+                "link": reverse_lazy("staff_admin:laboutik_mappingmoyendepaiement_changelist"),
                 "permission": admin_permission,
             },
         ],

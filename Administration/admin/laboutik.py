@@ -26,6 +26,8 @@ from laboutik.models import (
     ImpressionLog,
     JournalOperation,
     HistoriqueFondDeCaisse,
+    CompteComptable,
+    MappingMoyenDePaiement,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,6 +70,16 @@ class LaboutikConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             'description': _(
                 "Personnalisation des tickets de vente. "
                 "/ Sale receipt customization."
+            ),
+        }),
+        (_('Rapports automatiques / Automatic reports'), {
+            'fields': (
+                'rapport_emails',
+                'rapport_periodicite',
+            ),
+            'description': _(
+                "Envoi automatique des rapports de cloture par email (7h locale). "
+                "/ Automatic closure report email sending (7am local time)."
             ),
         }),
     )
@@ -550,6 +562,7 @@ class ClotureCaisseAdmin(ModelAdmin):
         """
         extra_context = extra_context or {}
         extra_context['export_fiscal_url'] = '/laboutik/caisse/export-fiscal/'
+        extra_context['export_fec_url'] = '/laboutik/caisse/export-fec/'
         return super().changelist_view(request, extra_context)
 
     list_before_template = "admin/cloture/changelist_before.html"
@@ -904,6 +917,103 @@ class HistoriqueFondDeCaisseAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# --- Plan comptable (export comptable) ---
+# --- Chart of accounts (accounting export) ---
+
+@admin.register(CompteComptable, site=staff_admin_site)
+class CompteComptableAdmin(ModelAdmin):
+    """Admin CRUD pour les comptes du Plan Comptable General (PCG).
+    Bandeau « Charger un plan comptable » en haut de la liste.
+    CRUD admin for the French Chart of Accounts (PCG) entries.
+    "Load a chart of accounts" banner at the top of the list.
+    LOCALISATION : Administration/admin/laboutik.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = ('numero_de_compte', 'libelle_du_compte', 'nature_du_compte', 'taux_de_tva', 'est_actif')
+    list_filter = ('nature_du_compte', 'est_actif')
+    search_fields = ('numero_de_compte', 'libelle_du_compte')
+    ordering = ('numero_de_compte',)
+
+    list_before_template = "admin/comptable/changelist_before.html"
+
+    def changelist_view(self, request, extra_context=None):
+        """Injecte l'URL pour charger un plan comptable par defaut.
+        / Injects the URL to load a default chart of accounts."""
+        extra_context = extra_context or {}
+        extra_context['charger_plan_url'] = '/laboutik/caisse/charger-plan-comptable/'
+        return super().changelist_view(request, extra_context)
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+# Helper module-level : libelle humain du moyen de paiement pour la liste admin
+# Unfold wrappe les methodes du ModelAdmin — definir les helpers HORS de la classe.
+# / Module-level helper: human label for payment method in admin list
+def _display_moyen_paiement(obj):
+    """Affiche le libelle humain du moyen de paiement (PaymentMethod.label).
+    / Displays the human label of the payment method."""
+    from BaseBillet.models import PaymentMethod
+    # Chercher le label dans PaymentMethod.choices
+    # / Look up the label in PaymentMethod.choices
+    dict_labels = dict(PaymentMethod.choices)
+    code = obj.moyen_de_paiement
+    label = dict_labels.get(code, code)
+    return f"{label} ({code})"
+_display_moyen_paiement.short_description = _("Payment method")
+
+
+@admin.register(MappingMoyenDePaiement, site=staff_admin_site)
+class MappingMoyenDePaiementAdmin(ModelAdmin):
+    """Admin CRUD pour le mapping moyen de paiement → compte de tresorerie.
+    CRUD admin for payment method → treasury account mapping.
+    LOCALISATION : Administration/admin/laboutik.py"""
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    list_display = (_display_moyen_paiement, 'libelle_moyen', 'compte_de_tresorerie')
+    autocomplete_fields = ['compte_de_tresorerie']
+
+    def get_form(self, request, obj=None, **kwargs):
+        """
+        Remplace le champ texte libre 'moyen_de_paiement' par un menu deroulant
+        avec les choix PaymentMethod (libelles humains).
+        / Replaces the free text 'moyen_de_paiement' field with a dropdown
+        using PaymentMethod choices (human labels).
+        LOCALISATION : Administration/admin/laboutik.py
+        """
+        form = super().get_form(request, obj, **kwargs)
+        from BaseBillet.models import PaymentMethod
+        if 'moyen_de_paiement' in form.base_fields:
+            from unfold.widgets import UnfoldAdminSelectWidget
+            form.base_fields['moyen_de_paiement'].widget = UnfoldAdminSelectWidget(
+                choices=[('', '---')] + list(PaymentMethod.choices),
+            )
+        return form
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)

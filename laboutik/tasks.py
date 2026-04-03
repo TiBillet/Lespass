@@ -162,13 +162,41 @@ def envoyer_rapports_clotures_recentes():
                 if heure_locale != 7:
                     continue
 
-                # Destinataire / Recipient
-                destinataire = config.email
-                if not destinataire:
+                from laboutik.models import LaboutikConfiguration
+                laboutik_config = LaboutikConfiguration.get_solo()
+
+                # Destinataires : rapport_emails si configure, sinon config.email en fallback
+                # / Recipients: rapport_emails if set, otherwise config.email as fallback
+                destinataires = laboutik_config.rapport_emails
+                if not destinataires:
+                    if config.email:
+                        destinataires = [config.email]
+                    else:
+                        continue
+
+                # Verifier si c'est le bon moment selon la periodicite
+                # / Check if it's the right time based on frequency
+                maintenant_local = dj_timezone.now().astimezone(tz_tenant)
+                periodicite = laboutik_config.rapport_periodicite or 'daily'
+
+                doit_envoyer = False
+                if periodicite == 'daily':
+                    doit_envoyer = True
+                elif periodicite == 'weekly':
+                    # Le lundi seulement / Monday only
+                    doit_envoyer = (maintenant_local.weekday() == 0)
+                elif periodicite == 'monthly':
+                    # Le 1er du mois / 1st of month
+                    doit_envoyer = (maintenant_local.day == 1)
+                elif periodicite == 'yearly':
+                    # Le 1er janvier / January 1st
+                    doit_envoyer = (maintenant_local.month == 1 and maintenant_local.day == 1)
+
+                if not doit_envoyer:
                     continue
 
-                # Chercher les clotures des 24 dernieres heures
-                # / Find closures from the last 24 hours
+                # Chercher les clotures selon la periodicite
+                # / Find closures based on frequency
                 from laboutik.models import ClotureCaisse
                 from laboutik.pdf import generer_pdf_cloture
                 from laboutik.csv_export import generer_csv_cloture
@@ -176,7 +204,19 @@ def envoyer_rapports_clotures_recentes():
 
                 activate(config.language)
 
-                seuil = dj_timezone.now() - timedelta(hours=24)
+                # Periode de recherche selon la periodicite
+                # / Search period based on frequency
+                from dateutil.relativedelta import relativedelta
+                if periodicite == 'daily':
+                    seuil = dj_timezone.now() - timedelta(hours=24)
+                elif periodicite == 'weekly':
+                    seuil = dj_timezone.now() - timedelta(days=7)
+                elif periodicite == 'monthly':
+                    seuil = dj_timezone.now() - relativedelta(months=1)
+                elif periodicite == 'yearly':
+                    seuil = dj_timezone.now() - relativedelta(years=1)
+                else:
+                    seuil = dj_timezone.now() - timedelta(hours=24)
                 clotures = ClotureCaisse.objects.filter(
                     datetime_cloture__gte=seuil,
                 ).select_related(
@@ -310,7 +350,16 @@ def envoyer_rapports_clotures_recentes():
 
                 # Envoyer l'email / Send the email
                 from_email = os.environ.get('DEFAULT_FROM_EMAIL', os.environ.get('EMAIL_HOST_USER'))
-                sujet = _("Rapports de clôture — %(org)s — %(date)s") % {
+                labels_periodicite = {
+                    'daily': _("quotidien"),
+                    'weekly': _("hebdomadaire"),
+                    'monthly': _("mensuel"),
+                    'yearly': _("annuel"),
+                }
+                label_freq = labels_periodicite.get(periodicite, _("quotidien"))
+
+                sujet = _("Rapports de cloture (%(freq)s) — %(org)s — %(date)s") % {
+                    "freq": label_freq,
                     "org": config.organisation or tenant.schema_name,
                     "date": dj_timezone.now().astimezone(tz_tenant).strftime("%d/%m/%Y"),
                 }
@@ -319,7 +368,7 @@ def envoyer_rapports_clotures_recentes():
                     subject=sujet,
                     body=text_body,
                     from_email=from_email,
-                    to=[destinataire],
+                    to=destinataires,
                 )
                 mail.attach_alternative(html_body, "text/html")
 
@@ -330,7 +379,7 @@ def envoyer_rapports_clotures_recentes():
 
                 logger.info(
                     f"[{tenant.schema_name}] Email recapitulatif envoye: "
-                    f"{len(lignes_recap)} cloture(s) → {destinataire}"
+                    f"{len(lignes_recap)} cloture(s) → {destinataires}"
                 )
 
         except Exception as e:

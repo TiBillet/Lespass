@@ -942,6 +942,23 @@ class CategorieProduct(models.Model):
         ),
     )
 
+    # Compte comptable de vente associe a cette categorie (classe 7 du PCG).
+    # Utilise pour l'export FEC et CSV comptable.
+    # / Sales accounting code for this category (PCG class 7).
+    # Used for FEC and CSV accounting export.
+    compte_comptable = models.ForeignKey(
+        'laboutik.CompteComptable', on_delete=models.SET_NULL,
+        blank=True, null=True,
+        related_name='categories_produit',
+        verbose_name=_("Accounting code"),
+        help_text=_(
+            "Compte comptable de vente associe a cette categorie. "
+            "Utilise pour l'export FEC et CSV comptable. "
+            "/ Sales accounting code for this category. "
+            "Used for FEC and CSV accounting export."
+        ),
+    )
+
     def __str__(self):
         return self.name
 
