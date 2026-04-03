@@ -364,6 +364,11 @@ def _construire_donnees_articles(point_de_vente_instance):
             "tarifs": tarifs,
             "tarifs_json": dumps(tarifs) if tarifs else "[]",
             "methode_caisse": product.methode_caisse or "",
+            # RC (cadeau) et TM (temps) : pas de symbole € sur le prix,
+            # car ce ne sont pas des euros mais des unites de monnaie cadeau/temps.
+            # / RC (gift) and TM (time): no € symbol on the price,
+            # because they are not euros but gift/time currency units.
+            "est_recharge_gratuite": product.methode_caisse in METHODES_RECHARGE_GRATUITES,
         }
 
         articles.append(article_dict)
@@ -701,9 +706,27 @@ def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
         raise PermissionDenied(_("Accès non autorisé à ce point de vente"))
 
 
-# Constantes : methodes de caisse qui représentent des recharges cashless
+# Constantes : methodes de caisse qui representent des recharges cashless
 # Constants: POS methods that represent cashless top-ups
+#
+# TROIS TYPES DE RECHARGE :
+# - RE (Recharge Euros) : le client PAIE en especes/CB pour recevoir de la monnaie locale (TLF)
+# - RC (Recharge Cadeau) : le caissier OFFRE de la monnaie cadeau (TNF) — pas de paiement
+# - TM (Recharge Temps) : le caissier OFFRE du temps (TIM) — pas de paiement
+#
+# THREE TYPES OF TOP-UP:
+# - RE (Euro top-up): the client PAYS cash/card to receive local currency (TLF)
+# - RC (Gift top-up): the cashier GIVES gift currency (TNF) — no payment
+# - TM (Time top-up): the cashier GIVES time currency (TIM) — no payment
 METHODES_RECHARGE = (Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
+
+# Recharges payantes : le client doit payer (especes, CB, cheque)
+# Paid top-ups: the client must pay (cash, card, check)
+METHODES_RECHARGE_PAYANTES = (Product.RECHARGE_EUROS,)
+
+# Recharges gratuites : credit automatique, pas de paiement demande
+# Free top-ups: auto-credit, no payment asked
+METHODES_RECHARGE_GRATUITES = (Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
 
 
 def _panier_contient_recharges(articles_panier):
@@ -720,6 +743,44 @@ def _panier_contient_recharges(articles_panier):
         if article['product'].methode_caisse in METHODES_RECHARGE:
             return True
     return False
+
+
+def _panier_contient_recharges_payantes(articles_panier):
+    """
+    Vérifie si le panier contient des recharges euros (RE) qui nécessitent un paiement.
+    Les recharges cadeau (RC) et temps (TM) sont gratuites et ne comptent pas.
+    / Checks if the cart contains euro top-ups (RE) that require payment.
+    Gift (RC) and time (TM) top-ups are free and don't count.
+
+    LOCALISATION : laboutik/views.py
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si au moins une recharge payante (RE), False sinon
+    """
+    for article in articles_panier:
+        if article['product'].methode_caisse in METHODES_RECHARGE_PAYANTES:
+            return True
+    return False
+
+
+def _panier_contient_uniquement_recharges_gratuites(articles_panier):
+    """
+    Vérifie si le panier ne contient QUE des recharges gratuites (RC/TM).
+    Pas de ventes normales, pas de recharges euros, pas d'adhesions, pas de billets.
+    / Checks if the cart contains ONLY free top-ups (RC/TM).
+    No normal sales, no euro top-ups, no memberships, no tickets.
+
+    LOCALISATION : laboutik/views.py
+
+    :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier()
+    :return: True si uniquement RC/TM, False sinon
+    """
+    if not articles_panier:
+        return False
+    for article in articles_panier:
+        if article['product'].methode_caisse not in METHODES_RECHARGE_GRATUITES:
+            return False
+    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -2521,6 +2582,64 @@ def _calculer_total_panier_centimes(articles_panier):
     return total_centimes
 
 
+def _construire_recapitulatif_articles(articles_panier, prenom_client, nom_client):
+    """
+    Construit la liste d'articles pour l'ecran recapitulatif client.
+    Chaque article a un texte adaptatif selon son type (recharge, adhesion, billet, vente).
+    / Builds the article list for the client recap screen.
+    Each article gets adaptive text based on its type (top-up, membership, ticket, sale).
+
+    LOCALISATION : laboutik/views.py
+
+    Utilise par identifier_client() pour les deux cas :
+    - User identifie (carte avec user OU formulaire email)
+    - Carte anonyme avec recharge seule (prenom_client = tag_id)
+    / Used by identifier_client() for both cases:
+    - Identified user (card with user OR email form)
+    - Anonymous card with top-up only (prenom_client = tag_id)
+
+    :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
+    :param prenom_client: prenom du client ou tag_id de la carte (str)
+    :param nom_client: nom du client ou chaine vide (str)
+    :return: liste de dicts {'description': str, 'prix_total_euros': float}
+    """
+    METHODES_RECHARGE = {'RE', 'RC', 'TM'}
+    articles_pour_recapitulatif = []
+
+    for article in articles_panier:
+        produit = article['product']
+        prix_unitaire_euros = article['prix_centimes'] / 100
+        quantite = article['quantite']
+        prix_total_euros = prix_unitaire_euros * quantite
+
+        if hasattr(produit, 'methode_caisse') and produit.methode_caisse in METHODES_RECHARGE:
+            description = _("Recharge %(montant)s€ → carte de %(prenom)s") % {
+                'montant': f"{prix_unitaire_euros:.2f}",
+                'prenom': prenom_client,
+            }
+        elif produit.categorie_article == Product.ADHESION:
+            description = _("%(nom_prix)s → rattachée à %(prenom)s %(nom)s") % {
+                'nom_prix': article['price'].name,
+                'prenom': prenom_client,
+                'nom': nom_client.upper() if nom_client else "",
+            }
+        elif article.get('est_billet', False):
+            event_name = article['event'].name if article.get('event') else "?"
+            description = _("Billet %(nom)s — %(event)s") % {
+                'nom': article['price'].name,
+                'event': event_name,
+            }
+        else:
+            description = f"{produit.name} × {quantite}"
+
+        articles_pour_recapitulatif.append({
+            'description': description,
+            'prix_total_euros': prix_total_euros,
+        })
+
+    return articles_pour_recapitulatif
+
+
 def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     """
     Détermine les moyens de paiement disponibles selon la config du PV et le panier.
@@ -2528,10 +2647,12 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
 
     LOCALISATION : laboutik/views.py
 
-    RÈGLE MÉTIER : si le panier contient des recharges (RE/RC/TM), le paiement NFC
-    est interdit. Une recharge cashless ne peut pas être payée en cashless.
-    BUSINESS RULE: if the cart contains top-ups (RE/RC/TM), NFC payment is forbidden.
-    A cashless top-up cannot be paid with cashless.
+    RÈGLE MÉTIER : si le panier contient des recharges euros (RE), le paiement NFC
+    est interdit. Une recharge en monnaie locale ne peut pas être payée en cashless.
+    Les recharges cadeau (RC) et temps (TM) sont gratuites — elles ne bloquent pas le NFC.
+    BUSINESS RULE: if the cart contains euro top-ups (RE), NFC payment is forbidden.
+    A local currency top-up cannot be paid with cashless.
+    Gift (RC) and time (TM) top-ups are free — they don't block NFC.
 
     :param point_de_vente: instance PointDeVente
     :param articles_panier: liste de dicts retournée par _extraire_articles_du_panier() (optionnel)
@@ -2539,10 +2660,12 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     """
     moyens = []
 
-    # NFC interdit si le panier contient des recharges
-    # NFC forbidden if the cart contains top-ups
-    panier_a_recharges = articles_panier and _panier_contient_recharges(articles_panier)
-    if not panier_a_recharges:
+    # NFC interdit uniquement si le panier contient des recharges PAYANTES (RE).
+    # Les recharges gratuites (RC/TM) ne bloquent pas le NFC — elles sont auto-creditees.
+    # / NFC forbidden only if cart contains PAID top-ups (RE).
+    # Free top-ups (RC/TM) don't block NFC — they are auto-credited.
+    panier_a_recharges_payantes = articles_panier and _panier_contient_recharges_payantes(articles_panier)
+    if not panier_a_recharges_payantes:
         moyens.append('nfc')
 
     if point_de_vente.accepte_especes:
@@ -3187,7 +3310,13 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
         )
 
     # Recharge cadeau (RC) → TNF : lieu → client
-    # Gift top-up (RC) → TNF: venue → client
+    # GRATUIT : le caissier offre du cadeau, pas de paiement.
+    # Le payment_method est toujours FREE, quel que soit le moyen de paiement
+    # choisi pour les autres articles du panier.
+    # / Gift top-up (RC) → TNF: venue → client
+    # FREE: the cashier gives a gift, no payment.
+    # payment_method is always FREE regardless of the payment method
+    # chosen for other items in the cart.
     if articles_rc:
         asset_tnf = Asset.objects.filter(
             tenant_origin=tenant_courant,
@@ -3207,14 +3336,16 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
             ip=ip_client,
         )
         _creer_lignes_articles(
-            articles_rc, code_methode_paiement,
+            articles_rc, "gift",
             asset_uuid=asset_tnf.uuid,
             carte=carte_client,
             wallet=wallet_client,
         )
 
     # Recharge temps (TM) → TIM : lieu → client
-    # Time top-up (TM) → TIM: venue → client
+    # GRATUIT : meme logique que RC.
+    # / Time top-up (TM) → TIM: venue → client
+    # FREE: same logic as RC.
     if articles_tm:
         asset_tim = Asset.objects.filter(
             tenant_origin=tenant_courant,
@@ -3234,7 +3365,7 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
             ip=ip_client,
         )
         _creer_lignes_articles(
-            articles_tm, code_methode_paiement,
+            articles_tm, "gift",
             asset_uuid=asset_tim.uuid,
             carte=carte_client,
             wallet=wallet_client,
@@ -3811,9 +3942,11 @@ class PaiementViewSet(viewsets.ViewSet):
         6. Bloc atomic : ventes + recharges + adhésions
         7. Succès : afficher nouveau solde
         """
-        # GARDE : le paiement NFC est interdit si le panier contient des recharges
-        # GUARD: NFC payment is forbidden if the cart contains top-ups
-        if _panier_contient_recharges(articles_panier):
+        # GARDE : le paiement NFC est interdit si le panier contient des recharges PAYANTES (RE).
+        # Les recharges gratuites (RC/TM) sont auto-creditees et ne bloquent pas le NFC.
+        # / GUARD: NFC payment forbidden if cart has PAID top-ups (RE).
+        # Free top-ups (RC/TM) are auto-credited and don't block NFC.
+        if _panier_contient_recharges_payantes(articles_panier):
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Les recharges ne peuvent pas être payées en cashless"),
@@ -4190,6 +4323,71 @@ class PaiementViewSet(viewsets.ViewSet):
             if nom_ou_prenom_modifie:
                 user.save(update_fields=["first_name", "last_name"])
 
+        # ------------------------------------------------------------------
+        # COURT-CIRCUIT : panier avec UNIQUEMENT des recharges gratuites (RC/TM)
+        # et une carte scannee (user ou anonyme).
+        # Pas de paiement necessaire → on credite immediatement et on affiche le succes.
+        # Les RC/TM sont des cadeaux : le caissier scanne la carte et c'est tout.
+        #
+        # SHORT-CIRCUIT: cart with ONLY free top-ups (RC/TM) and a scanned card.
+        # No payment needed → credit immediately and show success.
+        # RC/TM are gifts: the cashier scans the card and that's it.
+        # ------------------------------------------------------------------
+        panier_uniquement_gratuit = _panier_contient_uniquement_recharges_gratuites(articles_panier)
+        if carte and panier_uniquement_gratuit:
+            ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
+            wallet_client = _obtenir_ou_creer_wallet(carte)
+
+            with db_transaction.atomic():
+                _executer_recharges(
+                    articles_panier, wallet_client, carte,
+                    code_methode_paiement="gift",
+                    ip_client=ip_client,
+                )
+
+            # Calculer le solde apres credit pour l'ecran de succes
+            # / Compute balance after credit for the success screen
+            solde_apres = 0
+            try:
+                solde_apres = WalletService.obtenir_total_en_centimes(wallet_client) / 100
+            except Exception:
+                pass
+
+            # Construire le recapitulatif des articles credites
+            # / Build the recap of credited items
+            carte_label = carte.tag_id
+            if user:
+                carte_label = user.first_name or carte.tag_id
+            articles_pour_recapitulatif = _construire_recapitulatif_articles(
+                articles_panier, carte_label, "",
+            )
+
+            # Construire donnees_paiement minimal pour le template de succes
+            # / Build minimal payment data for the success template
+            donnees_paiement = {
+                "total": total_en_euros,
+                "give_back": 0,
+                "uuid_transaction": "",
+            }
+            state = request.POST.get("stateJson", "{}")
+            context = {
+                "currency_data": CURRENCY_DATA,
+                "payment": donnees_paiement,
+                "moyen_paiement": _("crédit offert"),
+                "total": total_en_euros,
+                "state": state,
+                "deposit_is_present": False,
+                "original_payment": None,
+                "uuid_transaction": "",
+                "uuid_pv": uuid_pv or "",
+                # Infos supplementaires pour l'ecran de succes NFC
+                # / Additional info for NFC success screen
+                "carte_tag_id": carte.tag_id,
+                "solde_apres": solde_apres,
+                "articles_pour_recapitulatif": articles_pour_recapitulatif,
+            }
+            return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+
         # User identifie → ecran recapitulatif avec articles et boutons de paiement
         # / User identified → recap screen with articles and payment buttons
         if user:
@@ -4205,38 +4403,9 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Enrichir les articles avec un texte adaptatif par type
             # / Enrich articles with adaptive text per type
-            METHODES_RECHARGE = {'RE', 'RC', 'TM'}
-            articles_pour_recapitulatif = []
-            for article in articles_panier:
-                produit = article['product']
-                prix_unitaire_euros = article['prix_centimes'] / 100
-                quantite = article['quantite']
-                prix_total_euros = prix_unitaire_euros * quantite
-
-                if hasattr(produit, 'methode_caisse') and produit.methode_caisse in METHODES_RECHARGE:
-                    description = _("Recharge %(montant)s€ → carte de %(prenom)s") % {
-                        'montant': f"{prix_unitaire_euros:.2f}",
-                        'prenom': user_prenom,
-                    }
-                elif produit.categorie_article == Product.ADHESION:
-                    description = _("%(nom_prix)s → rattachée à %(prenom)s %(nom)s") % {
-                        'nom_prix': article['price'].name,
-                        'prenom': user_prenom,
-                        'nom': user_nom.upper(),
-                    }
-                elif article.get('est_billet', False):
-                    event_name = article['event'].name if article.get('event') else "?"
-                    description = _("Billet %(nom)s — %(event)s") % {
-                        'nom': article['price'].name,
-                        'event': event_name,
-                    }
-                else:
-                    description = f"{produit.name} × {quantite}"
-
-                articles_pour_recapitulatif.append({
-                    'description': description,
-                    'prix_total_euros': prix_total_euros,
-                })
+            articles_pour_recapitulatif = _construire_recapitulatif_articles(
+                articles_panier, user_prenom, user_nom,
+            )
 
             context = {
                 "user_email": user.email,
@@ -4253,17 +4422,86 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_recapitulatif_client.html", context)
 
-        # Carte anonyme (scan NFC mais pas de user) → formulaire avec tag_id
-        # / Anonymous card (NFC scan but no user) → form with tag_id
+        # ------------------------------------------------------------------
+        # Carte anonyme (scan NFC, pas de user associe a la carte).
+        # Anonymous card (NFC scan, no user linked to the card).
+        #
+        # QUAND LE FORMULAIRE EMAIL/NOM/PRENOM S'AFFICHE :
+        # Le formulaire ne s'affiche que si le panier contient un article
+        # qui NECESSITE un user en base de donnees :
+        #   - Adhesion (AD) → cree un Membership lie a un user
+        #   - Billet → cree une Reservation liee a un user
+        #
+        # QUAND LE FORMULAIRE NE S'AFFICHE PAS :
+        # Si le panier ne contient QUE des recharges (RE/RC/TM), le user
+        # n'est pas necessaire. La recharge credite le wallet de la carte
+        # (wallet_ephemere pour les cartes anonymes, cree automatiquement).
+        # On passe directement au recapitulatif avec les boutons de paiement.
+        #
+        # WHEN THE EMAIL/NAME FORM IS SHOWN:
+        # Only when the cart contains an item that REQUIRES a user in DB:
+        #   - Membership (AD) → creates a Membership linked to a user
+        #   - Ticket → creates a Reservation linked to a user
+        #
+        # WHEN THE FORM IS SKIPPED:
+        # If the cart contains ONLY top-ups (RE/RC/TM), no user is needed.
+        # The top-up credits the card's wallet (wallet_ephemere for anonymous
+        # cards, auto-created). We go straight to recap with payment buttons.
+        # ------------------------------------------------------------------
         if carte and not user:
+            panier_necessite_un_user = panier_a_adhesions or panier_a_billets
+
+            if panier_necessite_un_user:
+                # Adhesion ou billet dans le panier → il faut identifier le client
+                # / Membership or ticket in cart → client identification required
+                context = {
+                    "tag_id": tag_id,
+                    "panier_a_recharges": panier_a_recharges,
+                    "panier_a_adhesions": panier_a_adhesions,
+                    "panier_a_billets": panier_a_billets,
+                    "moyens_paiement_csv": moyens_paiement_csv,
+                }
+                return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
+
+            # Recharge seule sur carte anonyme → pas besoin de user.
+            # On affiche le recapitulatif directement avec le tag_id de la carte.
+            # Le wallet_ephemere sera cree automatiquement par _payer_par_recharge()
+            # si la carte n'en a pas encore.
+            # / Top-up only on anonymous card → no user needed.
+            # Show recap directly with the card's tag_id.
+            # wallet_ephemere will be auto-created by _payer_par_recharge()
+            # if the card doesn't have one yet.
+            solde_carte = 0
+            if carte.wallet_ephemere:
+                try:
+                    solde_carte = WalletService.obtenir_total_en_centimes(carte.wallet_ephemere) / 100
+                except Exception:
+                    solde_carte = 0
+            elif carte.user and hasattr(carte.user, 'wallet') and carte.user.wallet:
+                try:
+                    solde_carte = WalletService.obtenir_total_en_centimes(carte.user.wallet) / 100
+                except Exception:
+                    solde_carte = 0
+
+            carte_label = carte.tag_id
+            articles_pour_recapitulatif = _construire_recapitulatif_articles(
+                articles_panier, carte_label, "",
+            )
+
             context = {
+                "user_email": "",
+                "user_prenom": _("Carte anonyme"),
+                "user_nom": carte.tag_id,
+                "user_solde": solde_carte,
                 "tag_id": tag_id,
+                "moyens_paiement": moyens_paiement,
                 "panier_a_recharges": panier_a_recharges,
                 "panier_a_adhesions": panier_a_adhesions,
                 "panier_a_billets": panier_a_billets,
-                "moyens_paiement_csv": moyens_paiement_csv,
+                "articles_pour_recapitulatif": articles_pour_recapitulatif,
+                "total_en_euros": total_en_euros,
             }
-            return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
+            return render(request, "laboutik/partial/hx_recapitulatif_client.html", context)
 
         # Aucune info → formulaire vierge
         # / No info → blank form

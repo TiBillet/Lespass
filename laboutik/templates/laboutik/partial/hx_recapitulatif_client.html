@@ -25,11 +25,17 @@ FLUX :
   </div>
 
   {# --- Carte resume client --- #}
+  {# Si user_email est vide, c'est une carte anonyme (recharge seule). #}
+  {# On affiche "Carte anonyme" + tag_id au lieu de l'email.           #}
+  {# / If user_email is empty, it's an anonymous card (top-up only).   #}
+  {# We show "Carte anonyme" + tag_id instead of email.                #}
   <div class="adhesion-confirm-card adhesion-stagger" style="--ordre: 2" data-testid="client-recapitulatif-user">
+    {% if user_email %}
     <div class="adhesion-confirm-email">
       <i class="fas fa-envelope" aria-hidden="true"></i>
       {{ user_email }}
     </div>
+    {% endif %}
     <div class="adhesion-confirm-name">
       {{ user_prenom }} {{ user_nom|upper }}
     </div>

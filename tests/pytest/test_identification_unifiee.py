@@ -615,21 +615,54 @@ class TestIdentifierClient:
             assert 'client-btn-especes' in contenu
             assert 'client-btn-cb' in contenu
 
-    def test_nfc_carte_anonyme_affiche_formulaire(
+    def test_nfc_carte_anonyme_recharge_seule_recapitulatif_direct(
         self, admin_user_ident, tenant, carte_anonyme_ident,
     ):
-        """Scan NFC carte anonyme → formulaire."""
+        """Carte anonyme + recharge seule → recapitulatif direct (pas de formulaire email).
+        La recharge ne necessite pas de user : on credite le wallet de la carte.
+        / Anonymous card + top-up only → direct recap (no email form).
+        Top-up doesn't need a user: we credit the card's wallet."""
         with schema_context(TENANT_SCHEMA):
             client = _make_client(admin_user_ident, tenant)
             response = client.post('/laboutik/paiement/identifier_client/', data={
                 'tag_id': carte_anonyme_ident.tag_id,
                 'panier_a_recharges': 'True',
                 'panier_a_adhesions': 'False',
+                'panier_a_billets': 'False',
                 'moyens_paiement': 'espece',
             })
             assert response.status_code == 200
             contenu = response.content.decode()
-            assert 'client-form' in contenu
+            # Recapitulatif direct, pas de formulaire
+            # / Direct recap, no form
+            assert 'client-recapitulatif' in contenu, (
+                "Attendu recapitulatif direct pour recharge seule sur carte anonyme"
+            )
+            assert 'client-form' not in contenu
+
+    def test_nfc_carte_anonyme_adhesion_affiche_formulaire(
+        self, admin_user_ident, tenant, carte_anonyme_ident,
+    ):
+        """Carte anonyme + adhesion → formulaire email obligatoire.
+        L'adhesion cree un Membership qui necessite un user en base.
+        / Anonymous card + membership → email form required.
+        Membership creates a Membership record that needs a user in DB."""
+        with schema_context(TENANT_SCHEMA):
+            client = _make_client(admin_user_ident, tenant)
+            response = client.post('/laboutik/paiement/identifier_client/', data={
+                'tag_id': carte_anonyme_ident.tag_id,
+                'panier_a_recharges': 'False',
+                'panier_a_adhesions': 'True',
+                'panier_a_billets': 'False',
+                'moyens_paiement': 'espece',
+            })
+            assert response.status_code == 200
+            contenu = response.content.decode()
+            # Formulaire email, pas recapitulatif
+            # / Email form, not recap
+            assert 'client-form' in contenu, (
+                "Attendu formulaire email pour adhesion sur carte anonyme"
+            )
             assert 'client-recapitulatif' not in contenu
 
     def test_nfc_carte_inconnue_affiche_erreur(

@@ -9,7 +9,6 @@ Lancement / Run:
     docker exec lespass_django poetry run pytest tests/pytest/test_retour_carte_recharges.py -v --api-key dummy
 """
 
-import os
 import sys
 
 # Le code Django est dans /DjangoFiles a l'interieur du conteneur.
@@ -37,8 +36,8 @@ from BaseBillet.models import (
 )
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
-from fedow_core.models import Asset, Token, Transaction
-from fedow_core.services import AssetService, TransactionService, WalletService
+from fedow_core.models import Asset, Transaction
+from fedow_core.services import AssetService, WalletService
 from laboutik.models import PointDeVente
 
 
@@ -551,7 +550,11 @@ class TestRechargeCadeau:
         wallet_lieu_tnf, wallet_client, carte_client,
         produit_recharge_cadeau,
     ):
-        """POST payer avec produit RC → Token TNF client credite."""
+        """POST payer avec produit RC → Token TNF client credite, payment_method=FREE.
+        La recharge cadeau est gratuite : le payment_method est toujours FREE,
+        meme si le caissier a choisi especes comme moyen de paiement global.
+        / RC product → client TNF Token credited, payment_method=FREE.
+        Gift top-up is free: payment_method is always FREE."""
         with schema_context(TENANT_SCHEMA):
             produit, prix = produit_recharge_cadeau
             prix_centimes = int(round(prix.prix * 100))
@@ -596,6 +599,17 @@ class TestRechargeCadeau:
             ).order_by('-id').first()
             assert derniere_tx is not None
 
+            # LigneArticle avec payment_method=FREE (cadeau, pas de paiement)
+            # / LigneArticle with payment_method=FREE (gift, no payment)
+            derniere_ligne = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                carte=carte_client,
+            ).order_by('-datetime').first()
+            assert derniere_ligne is not None
+            assert derniere_ligne.payment_method == PaymentMethod.FREE, (
+                f"Attendu payment_method=FREE pour RC, obtenu {derniere_ligne.payment_method}"
+            )
+
 
 @pytest.mark.usefixtures("test_data")
 class TestRechargeTemps:
@@ -606,7 +620,10 @@ class TestRechargeTemps:
         wallet_lieu_tim, wallet_client, carte_client,
         produit_recharge_temps,
     ):
-        """POST payer avec produit TM → Token TIM client credite."""
+        """POST payer avec produit TM → Token TIM client credite, payment_method=FREE.
+        Meme logique que RC : la recharge temps est gratuite.
+        / TM product → client TIM Token credited, payment_method=FREE.
+        Same logic as RC: time top-up is free."""
         with schema_context(TENANT_SCHEMA):
             produit, prix = produit_recharge_temps
             prix_centimes = int(round(prix.prix * 100))
@@ -642,6 +659,17 @@ class TestRechargeTemps:
                 wallet=wallet_client, asset=asset_tim,
             )
             assert solde_tim_apres == solde_tim_avant + prix_centimes
+
+            # LigneArticle avec payment_method=FREE (temps, pas de paiement)
+            # / LigneArticle with payment_method=FREE (time, no payment)
+            derniere_ligne = LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                carte=carte_client,
+            ).order_by('-datetime').first()
+            assert derniere_ligne is not None
+            assert derniere_ligne.payment_method == PaymentMethod.FREE, (
+                f"Attendu payment_method=FREE pour TM, obtenu {derniere_ligne.payment_method}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -896,7 +924,7 @@ class TestPanierMixteForceEspecesCB:
             # Le bouton CASHLESS ne doit pas apparaitre
             # / The CASHLESS button must not appear
             assert 'CASHLESS' not in contenu, (
-                f"Le bouton CASHLESS ne devrait pas etre propose pour une recharge"
+                "Le bouton CASHLESS ne devrait pas etre propose pour une recharge"
             )
             # Mais ESPECE ou CB doivent etre proposes
             # / But CASH or CC must be offered

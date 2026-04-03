@@ -77,7 +77,9 @@
 					      aria-label="{% translate 'prix libre' %}">? {{ currency_data.symbol }}</span>
 					{% else %}
 					<span class="article-tarif-pill">
-						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}
+						{# Pas de symbole € pour les recharges gratuites (RC/TM) : ce ne sont pas des euros #}
+						{# / No € symbol for free top-ups (RC/TM): they are not euros #}
+						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{% if not article.est_recharge_gratuite %}{{ currency_data.symbol }}{% endif %}
 					</span>
 					{% endif %}
 				{% endfor %}
@@ -88,7 +90,9 @@
 			     / single price as pill: same design as multi-rate pills -->
 			<div class="article-tarifs-pills">
 				<span class="article-tarif-pill">
-					{{ article.prix|divide_by:100|floatformat:"-2" }}{{ currency_data.symbol }}
+					{# Pas de symbole € pour les recharges gratuites (RC/TM) #}
+					{# / No € symbol for free top-ups (RC/TM) #}
+					{{ article.prix|divide_by:100|floatformat:"-2" }}{% if not article.est_recharge_gratuite %}{{ currency_data.symbol }}{% endif %}
 				</span>
 			</div>
 			{% endif %}

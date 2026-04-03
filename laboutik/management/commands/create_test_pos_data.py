@@ -22,7 +22,6 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
-from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import schema_context
 
 from BaseBillet.models import CategorieProduct, Product, Price
@@ -457,6 +456,12 @@ class Command(BaseCommand):
             # Les articles du M2M sont charges en plus.
             # / Cashless POS: auto-loads top-up products (CASHLESS type)
             # M2M articles are loaded in addition.
+            # accepte_especes et accepte_carte_bancaire = True :
+            # les recharges euros (RE) doivent etre payees en especes ou CB.
+            # Les recharges cadeau (RC) et temps (TM) sont gratuites (auto-creditees).
+            # / accepte_especes and accepte_carte_bancaire = True:
+            # euro top-ups (RE) must be paid with cash or card.
+            # Gift (RC) and time (TM) top-ups are free (auto-credited).
             pdv_cashless, _ = PointDeVente.objects.update_or_create(
                 name="Cashless",
                 defaults={
@@ -464,8 +469,8 @@ class Command(BaseCommand):
                     "comportement": PointDeVente.CASHLESS,
                     "service_direct": True,
                     "afficher_les_prix": True,
-                    "accepte_especes": False,
-                    "accepte_carte_bancaire": False,
+                    "accepte_especes": True,
+                    "accepte_carte_bancaire": True,
                     "accepte_cheque": False,
                     "accepte_commandes": False,
                     "poid_liste": 3,
@@ -738,7 +743,7 @@ class Command(BaseCommand):
             if settings.DEBUG:
                 from laboutik.utils.test_helpers import reset_carte
                 reset_carte(tag_id_client3)
-                self.stdout.write(f"  Carte 3 remise a zero (DEBUG=True)")
+                self.stdout.write("  Carte 3 remise a zero (DEBUG=True)")
 
             # ================================================================ #
             #  Cloture de demo avec LigneArticle de tous les types             #
