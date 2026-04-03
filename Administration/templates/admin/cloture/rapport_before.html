@@ -48,9 +48,26 @@
                    data-testid="btn-export-excel">
                     <i class="fas fa-file-excel" aria-hidden="true"></i> Excel
                 </a>
+                <a href="../exporter-fec/"
+                   style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #6366f1; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85em; font-weight: 500;"
+                   data-testid="btn-export-fec">
+                    <i class="fas fa-file-alt" aria-hidden="true"></i> FEC
+                </a>
+                <button type="button"
+                   hx-get="../exporter-csv-comptable/"
+                   hx-target="#detail-export-zone"
+                   hx-swap="innerHTML"
+                   style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #8B5CF6; color: white; border-radius: 6px; border: none; cursor: pointer; font-size: 0.85em; font-weight: 500;"
+                   data-testid="btn-export-csv-comptable">
+                    <i class="fas fa-file-csv" aria-hidden="true"></i> {% translate "CSV compta" %}
+                </button>
             </div>
         </div>
     </div>
+
+    {# Zone pour le formulaire CSV comptable charge en HTMX (pas de navigation) #}
+    {# / Zone for the CSV accounting form loaded via HTMX (no navigation) #}
+    <div id="detail-export-zone"></div>
 
     {# ── Section 1 : Totaux par moyen de paiement / Totals by payment method ── #}
     {% with section=rapport.totaux_par_moyen %}

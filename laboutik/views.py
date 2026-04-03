@@ -1528,6 +1528,90 @@ class CaisseViewSet(viewsets.ViewSet):
         return response
 
     # ----------------------------------------------------------------------- #
+    #  Export CSV comptable — multi-profils (Sage, EBP, Dolibarr, etc.)       #
+    #  CSV accounting export — multi-profile (Sage, EBP, Dolibarr, etc.)      #
+    # ----------------------------------------------------------------------- #
+
+    @action(detail=False, methods=["get", "post"], url_path="export-csv-comptable", url_name="export_csv_comptable")
+    def export_csv_comptable(self, request):
+        """
+        GET /laboutik/caisse/export-csv-comptable/
+        Affiche le formulaire avec dates debut/fin + choix de profil.
+        / Shows the form with optional start/end dates + profile choice.
+
+        POST /laboutik/caisse/export-csv-comptable/
+        Genere et telecharge le fichier CSV comptable.
+        / Generates and downloads the accounting CSV file.
+
+        LOCALISATION : laboutik/views.py
+        """
+        from datetime import date as date_type
+
+        from django.db import connection
+        from django.http import HttpResponse
+
+        from laboutik.csv_comptable import generer_csv_comptable
+        from laboutik.models import ClotureCaisse
+        from laboutik.profils_csv import PROFILS
+
+        if request.method == "GET":
+            return render(request, "admin/cloture/export_csv_comptable_form.html", {
+                "form_action_url": request.path,
+                "profils": PROFILS,
+            })
+
+        # --- POST : generation du fichier CSV comptable ---
+        # --- POST: accounting CSV file generation ---
+
+        # Valider le profil choisi / Validate the chosen profile
+        profil_nom = request.POST.get('profil', '').strip()
+        if profil_nom not in PROFILS:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Profil inconnu. Choix : %(profils)s") % {
+                    "profils": ", ".join(PROFILS.keys()),
+                },
+            }, status=400)
+
+        # Parser les dates optionnelles / Parse optional dates
+        debut = None
+        fin = None
+        debut_str = request.POST.get('debut', '').strip()
+        fin_str = request.POST.get('fin', '').strip()
+        try:
+            if debut_str:
+                debut = date_type.fromisoformat(debut_str)
+            if fin_str:
+                fin = date_type.fromisoformat(fin_str)
+        except ValueError:
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Format de date invalide."),
+            }, status=400)
+
+        # Filtrer les clotures journalieres / Filter daily closures
+        clotures = ClotureCaisse.objects.filter(niveau=ClotureCaisse.JOURNALIERE).order_by('datetime_cloture')
+        if debut:
+            clotures = clotures.filter(datetime_cloture__date__gte=debut)
+        if fin:
+            clotures = clotures.filter(datetime_cloture__date__lte=fin)
+
+        if not clotures.exists():
+            return render(request, "laboutik/partial/hx_messages.html", {
+                "msg_type": "warning",
+                "msg_content": _("Aucune cloture journaliere trouvee pour la periode."),
+            }, status=404)
+
+        schema = connection.schema_name
+        contenu_bytes, nom_fichier, avertissements = generer_csv_comptable(clotures, profil_nom, schema)
+
+        profil = PROFILS[profil_nom]
+        content_type = 'text/csv; charset=' + profil["encodage"]
+        response = HttpResponse(contenu_bytes, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    # ----------------------------------------------------------------------- #
     #  Charger plan comptable — jeu de comptes par defaut                      #
     #  Load chart of accounts — default account set                            #
     # ----------------------------------------------------------------------- #

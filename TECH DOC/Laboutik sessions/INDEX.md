@@ -324,9 +324,13 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 - [x] Documentation utilisateur complète (`TECH DOC/A DOCUMENTER/export-comptable-guide-utilisateur.md`)
 - [x] 11 tests pytest, 74 tests laboutik total, 0 régression
 
-**Session 21 — Export comptable : profils CSV configurables** (à faire)
-- [ ] Modèle ExportProfile + générateur CSV configurable
-- [ ] 5 profils pré-configurés (Sage, EBP, Dolibarr, Paheko, PennyLane)
+**Session 21 — Export comptable : profils CSV configurables** ✅ FAIT
+- [x] Refactorisation : logique de ventilation extraite dans `laboutik/ventilation.py` (commune FEC + CSV)
+- [x] `laboutik/fec.py` refactorisé pour utiliser `ventilation.py` (sortie identique, 11 tests inchangés)
+- [x] 5 profils CSV en dur dans `laboutik/profils_csv.py` (Sage 50, EBP, Dolibarr, Paheko, PennyLane)
+- [x] Générateur CSV dans `laboutik/csv_comptable.py` (3 modes : DEBIT_CREDIT, MONTANT_SENS, MONTANT_UNIQUE)
+- [x] Export par période (bandeau clôtures) + par clôture (vue détail) avec dropdown profil
+- [x] 8 tests pytest, 82 tests laboutik total, 0 régression
 
 ### 7. Menu Ventes (intégré dans sessions 16-17)
 

@@ -13,8 +13,13 @@ LOCALISATION : laboutik/fec.py
 import logging
 from decimal import Decimal
 
-from BaseBillet.models import CategorieProduct, Configuration
-from laboutik.models import CompteComptable, MappingMoyenDePaiement
+from BaseBillet.models import Configuration
+from laboutik.ventilation import (
+    charger_mappings_paiement,
+    charger_categories_par_nom,
+    charger_comptes_tva,
+    ventiler_cloture,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +46,6 @@ ENTETE_FEC = (
     "Montantdevise",
     "Idevise",
 )
-
-# Mapping entre les cles du rapport_json['totaux_par_moyen'] et
-# les codes MappingMoyenDePaiement.
-# / Mapping between rapport_json['totaux_par_moyen'] keys and
-# MappingMoyenDePaiement codes.
-CLE_RAPPORT_VERS_CODE_PAIEMENT = {
-    'especes': 'CA',
-    'carte_bancaire': 'CC',
-    'cheque': 'CH',
-    'cashless': 'LE',
-}
 
 
 def _formater_montant(centimes):
@@ -143,29 +137,11 @@ def generer_fec(clotures_queryset, schema_name):
             f"SIREN absent de la configuration. Utilisation de '{siren}' par defaut."
         )
 
-    # --- Charger tous les mappings moyen de paiement en memoire ---
-    # Peu d'enregistrements (4-6 max), on charge tout d'un coup.
-    # / Load all payment method mappings into memory.
-    # Few records (4-6 max), load all at once.
-    mappings_paiement = {}
-    for mapping in MappingMoyenDePaiement.objects.select_related('compte_de_tresorerie').all():
-        mappings_paiement[mapping.moyen_de_paiement] = mapping
-
-    # --- Charger toutes les categories avec leur compte comptable ---
-    # / Load all categories with their accounting code
-    categories_par_nom = {}
-    for categorie in CategorieProduct.objects.select_related('compte_comptable').all():
-        categories_par_nom[categorie.name] = categorie
-
-    # --- Charger les comptes TVA indexes par taux ---
-    # / Load VAT accounts indexed by rate
-    comptes_tva = {}
-    for compte in CompteComptable.objects.filter(nature_du_compte=CompteComptable.TVA, est_actif=True):
-        if compte.taux_de_tva is not None:
-            # Cle = chaine du taux tel qu'il apparait dans rapport_json (ex: "20.00%")
-            # / Key = rate string as it appears in rapport_json (e.g. "20.00%")
-            cle_taux = f"{compte.taux_de_tva:.2f}%"
-            comptes_tva[cle_taux] = compte
+    # --- Charger les mappings comptables en memoire (une seule fois) ---
+    # / Load accounting mappings into memory (once)
+    mappings_paiement = charger_mappings_paiement()
+    categories_par_nom = charger_categories_par_nom()
+    comptes_tva = charger_comptes_tva()
 
     # --- Construire les lignes FEC ---
     # / Build FEC lines
@@ -182,129 +158,39 @@ def generer_fec(clotures_queryset, schema_name):
     clotures = clotures_queryset.order_by('datetime_cloture')
 
     for seq, cloture in enumerate(clotures, start=1):
-        rapport = cloture.rapport_json or {}
         date_cloture_str = _formater_date(cloture.datetime_cloture)
         numero_ecriture = f"VE-{date_cloture_str}-{seq:03d}"
         reference_piece = f"Z-{date_cloture_str}-{seq:03d}"
 
-        # --- 1. LIGNES DEBIT : moyens de paiement ---
-        # Pour chaque moyen de paiement avec montant > 0, chercher le mapping.
-        # / For each payment method with amount > 0, look up the mapping.
-        totaux_par_moyen = rapport.get('totaux_par_moyen', {})
+        # Ventiler la cloture via le module partage
+        # / Break down the closure via the shared module
+        lignes_ventilees, avertissements_cloture = ventiler_cloture(
+            cloture, mappings_paiement, categories_par_nom, comptes_tva
+        )
+        avertissements.extend(avertissements_cloture)
 
-        for cle_rapport, code_paiement in CLE_RAPPORT_VERS_CODE_PAIEMENT.items():
-            montant_centimes = totaux_par_moyen.get(cle_rapport, 0)
-            if montant_centimes <= 0:
-                continue
-
-            mapping = mappings_paiement.get(code_paiement)
-            if mapping is None or mapping.compte_de_tresorerie is None:
-                # Moyen de paiement sans mapping ou sans compte : on ignore.
-                # Par defaut, le cashless NFC est mappe vers 4191 (avances clients)
-                # pour equilibrer le FEC. Si le gerant a mis null, on ignore.
-                # / Payment method without mapping or account: skip.
-                # By default, cashless NFC is mapped to 4191 (customer advances)
-                # to balance the FEC. If the user set null, we skip.
-                continue
-
-            compte = mapping.compte_de_tresorerie
-            ligne = _generer_ligne_fec(
-                journal_code=journal_code,
-                journal_lib=journal_lib,
-                numero_ecriture=numero_ecriture,
-                date_ecriture=date_cloture_str,
-                numero_compte=compte.numero_de_compte,
-                libelle_compte=compte.libelle_du_compte,
-                reference_piece=reference_piece,
-                date_piece=date_cloture_str,
-                libelle_ecriture=f"Cloture {date_cloture_str} — {mapping.libelle_moyen}",
-                debit_centimes=montant_centimes,
-                credit_centimes=0,
-                date_validation=date_cloture_str,
-            )
-            lignes.append(ligne)
-
-        # --- 2. LIGNES CREDIT : ventes par categorie (HT) ---
-        # Pour chaque categorie dans detail_ventes, chercher le compte comptable.
-        # / For each category in detail_ventes, look up the accounting code.
-        detail_ventes = rapport.get('detail_ventes', {})
-
-        for nom_categorie, donnees_categorie in detail_ventes.items():
-            # Le total_ht peut etre dans les articles ou calcule
-            # On utilise total_ttc - tva pour obtenir le HT si total_ht n'est pas direct
-            # / total_ht might be in articles or computed
-            articles = donnees_categorie.get('articles', [])
-            total_ht_centimes = 0
-            for article in articles:
-                total_ht_centimes += article.get('total_ht', 0)
-
-            if total_ht_centimes <= 0:
-                continue
-
-            # Chercher la categorie et son compte comptable
-            # / Look up the category and its accounting code
-            categorie = categories_par_nom.get(nom_categorie)
-            if categorie and categorie.compte_comptable:
-                numero_compte = categorie.compte_comptable.numero_de_compte
-                libelle_compte = categorie.compte_comptable.libelle_du_compte
+        # Convertir chaque dict ventile en ligne FEC
+        # / Convert each ventilated dict into a FEC line
+        for ligne_dict in lignes_ventilees:
+            if ligne_dict["sens"] == "D":
+                debit_centimes = ligne_dict["montant_centimes"]
+                credit_centimes = 0
             else:
-                numero_compte = "000000"
-                libelle_compte = f"Compte inconnu ({nom_categorie})"
-                avertissements.append(
-                    f"Cloture {date_cloture_str} : categorie '{nom_categorie}' "
-                    f"sans compte comptable. Utilisation du compte 000000."
-                )
+                debit_centimes = 0
+                credit_centimes = ligne_dict["montant_centimes"]
 
             ligne = _generer_ligne_fec(
                 journal_code=journal_code,
                 journal_lib=journal_lib,
                 numero_ecriture=numero_ecriture,
                 date_ecriture=date_cloture_str,
-                numero_compte=numero_compte,
-                libelle_compte=libelle_compte,
+                numero_compte=ligne_dict["numero_compte"],
+                libelle_compte=ligne_dict["libelle_compte"],
                 reference_piece=reference_piece,
                 date_piece=date_cloture_str,
-                libelle_ecriture=f"Cloture {date_cloture_str} — Ventes {nom_categorie} (HT)",
-                debit_centimes=0,
-                credit_centimes=total_ht_centimes,
-                date_validation=date_cloture_str,
-            )
-            lignes.append(ligne)
-
-        # --- 3. LIGNES CREDIT : TVA par taux ---
-        # Pour chaque taux dans rapport_json['tva'], chercher le CompteComptable TVA.
-        # / For each rate in rapport_json['tva'], look up the TVA CompteComptable.
-        tva_rapport = rapport.get('tva', {})
-
-        for cle_taux, donnees_tva in tva_rapport.items():
-            total_tva_centimes = donnees_tva.get('total_tva', 0)
-            if total_tva_centimes <= 0:
-                continue
-
-            compte_tva = comptes_tva.get(cle_taux)
-            if compte_tva:
-                numero_compte = compte_tva.numero_de_compte
-                libelle_compte = compte_tva.libelle_du_compte
-            else:
-                numero_compte = "000000"
-                libelle_compte = f"TVA inconnue ({cle_taux})"
-                avertissements.append(
-                    f"Cloture {date_cloture_str} : taux TVA '{cle_taux}' "
-                    f"sans compte comptable TVA. Utilisation du compte 000000."
-                )
-
-            ligne = _generer_ligne_fec(
-                journal_code=journal_code,
-                journal_lib=journal_lib,
-                numero_ecriture=numero_ecriture,
-                date_ecriture=date_cloture_str,
-                numero_compte=numero_compte,
-                libelle_compte=libelle_compte,
-                reference_piece=reference_piece,
-                date_piece=date_cloture_str,
-                libelle_ecriture=f"Cloture {date_cloture_str} — TVA {cle_taux}",
-                debit_centimes=0,
-                credit_centimes=total_tva_centimes,
+                libelle_ecriture=ligne_dict["libelle_ecriture"],
+                debit_centimes=debit_centimes,
+                credit_centimes=credit_centimes,
                 date_validation=date_cloture_str,
             )
             lignes.append(ligne)

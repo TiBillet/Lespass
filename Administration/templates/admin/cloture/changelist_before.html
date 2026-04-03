@@ -47,6 +47,18 @@
                         {% translate "Export FEC" %}
                     </button>
                     {% endif %}
+
+                    {% if export_csv_comptable_url %}
+                    <button type="button"
+                            hx-get="{{ export_csv_comptable_url }}"
+                            hx-target="#export-fiscal-zone"
+                            hx-swap="innerHTML"
+                            class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                            data-testid="btn-export-csv-comptable">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                        {% translate "Export CSV comptable" %}
+                    </button>
+                    {% endif %}
                 </div>
             </div>
         </div>

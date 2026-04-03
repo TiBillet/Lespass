@@ -563,6 +563,7 @@ class ClotureCaisseAdmin(ModelAdmin):
         extra_context = extra_context or {}
         extra_context['export_fiscal_url'] = '/laboutik/caisse/export-fiscal/'
         extra_context['export_fec_url'] = '/laboutik/caisse/export-fec/'
+        extra_context['export_csv_comptable_url'] = '/laboutik/caisse/export-csv-comptable/'
         return super().changelist_view(request, extra_context)
 
     list_before_template = "admin/cloture/changelist_before.html"
@@ -606,6 +607,16 @@ class ClotureCaisseAdmin(ModelAdmin):
                 '<path:object_id>/exporter-excel/',
                 self.admin_site.admin_view(self.exporter_excel),
                 name='laboutik_cloturecaisse_exporter_excel',
+            ),
+            path(
+                '<path:object_id>/exporter-fec/',
+                self.admin_site.admin_view(self.exporter_fec),
+                name='laboutik_cloturecaisse_exporter_fec',
+            ),
+            path(
+                '<path:object_id>/exporter-csv-comptable/',
+                self.admin_site.admin_view(self.exporter_csv_comptable),
+                name='laboutik_cloturecaisse_exporter_csv_comptable',
             ),
         ]
         return custom_urls + urls
@@ -787,6 +798,104 @@ class ClotureCaisseAdmin(ModelAdmin):
         filename = f"rapport_{cloture.get_niveau_display()}_{cloture.numero_sequentiel}.xlsx"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         wb.save(response)
+        return response
+
+    def exporter_fec(self, request, object_id):
+        """
+        Exporte une seule cloture au format FEC (18 colonnes).
+        Le fichier contient 1 ecriture comptable equilibree (debits = credits).
+        / Exports a single closure as FEC format (18 columns).
+        The file contains 1 balanced accounting entry (debits = credits).
+        LOCALISATION : Administration/admin/laboutik.py
+        """
+        from django.db import connection
+        from django.http import HttpResponse
+
+        from laboutik.fec import generer_fec
+
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+
+        # Generer le FEC pour cette seule cloture
+        # / Generate FEC for this single closure
+        schema = connection.schema_name
+        contenu_bytes, nom_fichier, avertissements = generer_fec(
+            ClotureCaisse.objects.filter(pk=object_id),
+            schema,
+        )
+
+        response = HttpResponse(contenu_bytes, content_type='text/plain; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    def exporter_csv_comptable(self, request, object_id):
+        """
+        GET : mini-formulaire avec choix du profil comptable.
+        POST : telecharge le CSV comptable pour cette cloture.
+        / GET: mini form with accounting profile choice.
+        POST: downloads the accounting CSV for this closure.
+        LOCALISATION : Administration/admin/laboutik.py
+        """
+        from django.db import connection
+        from django.http import HttpResponse
+        from django.template.response import TemplateResponse
+
+        from laboutik.csv_comptable import generer_csv_comptable
+        from laboutik.profils_csv import PROFILS
+
+        cloture = get_object_or_404(ClotureCaisse, pk=object_id)
+
+        if request.method == "GET":
+            # Renvoie un partial HTMX charge dans #detail-export-zone
+            # Le formulaire POST pointe vers la meme URL admin
+            # / Returns an HTMX partial loaded into #detail-export-zone
+            from django.http import HttpResponse as HR
+            from django.middleware.csrf import get_token
+            profil_options = ''.join(
+                f'<option value="{cle}">{p["nom"]}</option>'
+                for cle, p in PROFILS.items()
+            )
+            csrf = get_token(request)
+            html = f'''
+            <div style="margin: 16px 0; padding: 16px; background: #f8f9fa; border-radius: 8px;
+                        animation: fadeSlideIn 300ms ease both;" data-testid="detail-csv-comptable-form">
+                <style>@keyframes fadeSlideIn {{ from {{ opacity: 0; transform: translateY(-6px); }} }}</style>
+                <form method="post" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <input type="hidden" name="csrfmiddlewaretoken" value="{csrf}">
+                    <label style="font-weight: 500; font-size: 0.85em; color: #333;">Profil :</label>
+                    <select name="profil" style="padding: 6px 12px; border-radius: 4px; border: 1px solid #ccc; font-size: 0.85em;">
+                        {profil_options}
+                    </select>
+                    <button type="submit" style="padding: 6px 16px; background: #8B5CF6; color: white;
+                            border: none; border-radius: 6px; font-size: 0.85em; font-weight: 500; cursor: pointer;">
+                        <i class="fas fa-download" aria-hidden="true"></i> Telecharger
+                    </button>
+                    <button type="button" onclick="document.getElementById(\'detail-export-zone\').innerHTML=\'\'"
+                            style="padding: 6px 12px; background: none; border: none; color: #666;
+                                   font-size: 0.85em; cursor: pointer;">
+                        Annuler
+                    </button>
+                </form>
+            </div>'''
+            return HR(html)
+
+        # --- POST : generation du CSV comptable ---
+        # --- POST: accounting CSV generation ---
+        profil_nom = request.POST.get('profil', '').strip()
+        if profil_nom not in PROFILS:
+            from django.http import HttpResponseBadRequest
+            return HttpResponseBadRequest("Profil inconnu.")
+
+        schema = connection.schema_name
+        contenu_bytes, nom_fichier, avertissements = generer_csv_comptable(
+            ClotureCaisse.objects.filter(pk=object_id),
+            profil_nom,
+            schema,
+        )
+
+        profil = PROFILS[profil_nom]
+        content_type = 'text/csv; charset=' + profil["encodage"]
+        response = HttpResponse(contenu_bytes, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
         return response
 
     @admin.display(description=_("Integrity"))

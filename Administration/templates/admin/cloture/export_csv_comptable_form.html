@@ -1,0 +1,104 @@
+{% load i18n %}
+{# Formulaire export CSV comptable — partial charge via HTMX dans la card Unfold. #}
+{# Styles Unfold (classes Tailwind internes). Pas de styles inline.               #}
+{# / CSV accounting export form — HTMX partial loaded inside Unfold card.         #}
+{# Unfold styles (internal Tailwind classes). No inline styles.                   #}
+
+<div class="py-3" data-testid="export-csv-comptable-form"
+     style="animation: fadeSlideIn 300ms ease both;">
+
+    <style>
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(-6px); }
+        }
+    </style>
+
+    <form method="post"
+          action="{{ form_action_url }}"
+          aria-label="{% translate 'CSV accounting export' %}"
+          class="flex flex-col gap-4">
+        {% csrf_token %}
+
+        {# Champs date cote a cote / Date fields side by side #}
+        <div class="flex flex-col sm:flex-row gap-3">
+            <div class="flex-1">
+                <label for="id_csv_debut"
+                       class="block text-xs font-medium text-font-subtle-light dark:text-font-subtle-dark mb-1">
+                    {% translate "Start date" %}
+                    <span class="text-base-400 dark:text-base-500 font-normal ml-1">({% translate "optional" %})</span>
+                </label>
+                <input type="date" id="id_csv_debut" name="debut"
+                       class="w-full px-3 py-2 text-sm rounded-default
+                              border border-base-200 dark:border-base-700
+                              bg-white dark:bg-base-900
+                              text-font-default-light dark:text-font-default-dark
+                              focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                              transition-colors"
+                       data-testid="export-csv-comptable-debut">
+            </div>
+            <div class="flex-1">
+                <label for="id_csv_fin"
+                       class="block text-xs font-medium text-font-subtle-light dark:text-font-subtle-dark mb-1">
+                    {% translate "End date" %}
+                    <span class="text-base-400 dark:text-base-500 font-normal ml-1">({% translate "optional" %})</span>
+                </label>
+                <input type="date" id="id_csv_fin" name="fin"
+                       class="w-full px-3 py-2 text-sm rounded-default
+                              border border-base-200 dark:border-base-700
+                              bg-white dark:bg-base-900
+                              text-font-default-light dark:text-font-default-dark
+                              focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                              transition-colors"
+                       data-testid="export-csv-comptable-fin">
+            </div>
+        </div>
+
+        {# Selection du profil comptable / Accounting profile selection #}
+        <div>
+            <label for="id_csv_profil"
+                   class="block text-xs font-medium text-font-subtle-light dark:text-font-subtle-dark mb-1">
+                {% translate "Accounting software" %}
+            </label>
+            <select id="id_csv_profil" name="profil"
+                    class="w-full px-3 py-2 text-sm rounded-default
+                           border border-base-200 dark:border-base-700
+                           bg-white dark:bg-base-900
+                           text-font-default-light dark:text-font-default-dark
+                           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+                           transition-colors"
+                    data-testid="export-csv-comptable-profil">
+                {% for cle, profil in profils.items %}
+                <option value="{{ cle }}">{{ profil.nom }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <p class="text-xs text-base-400 dark:text-base-500">
+            {% translate "Generates a CSV file formatted for the chosen accounting software (columns, separator, encoding)." %}
+        </p>
+
+        {# Boutons action / Action buttons #}
+        <div class="flex items-center gap-3">
+            <button type="submit"
+                    class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default
+                           justify-center whitespace-nowrap cursor-pointer
+                           bg-primary-600 text-white hover:bg-primary-700
+                           focus:outline-none focus:ring-2 focus:ring-primary-500
+                           focus:ring-offset-2 dark:focus:ring-offset-base-900
+                           transition-colors"
+                    data-testid="export-csv-comptable-submit">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                {% translate "Download CSV" %}
+            </button>
+
+            <button type="button"
+                    onclick="window.location.reload()"
+                    class="text-sm text-font-subtle-light dark:text-font-subtle-dark
+                           hover:text-font-default-light dark:hover:text-font-default-dark
+                           transition-colors cursor-pointer"
+                    data-testid="export-csv-comptable-cancel">
+                {% translate "Cancel" %}
+            </button>
+        </div>
+    </form>
+</div>
