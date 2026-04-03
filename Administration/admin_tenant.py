@@ -12,4 +12,5 @@ from Administration.admin.dashboard import (  # noqa: F401
 from Administration.admin import (  # noqa: F401
     configuration, tags, products, prices, laboutik, users,
     membership, sales, events, reservations, settings_apps, fedow, crowds,
+    inventaire,
 )

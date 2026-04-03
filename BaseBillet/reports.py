@@ -9,16 +9,15 @@ All amounts are in cents (int). Never use float for amounts.
 
 LOCALISATION : BaseBillet/reports.py
 """
+
 import logging
-from collections import defaultdict
 from decimal import Decimal
 
 from django.db.models import Sum, Count, Q, Case, When, IntegerField, Value
-from django.db.models.functions import TruncDate, ExtractHour, ExtractMinute
+from django.db.models.functions import TruncDate, ExtractHour
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import (
-    Event,
     LigneArticle,
     Ticket,
     PaymentMethod,
@@ -50,10 +49,10 @@ class RapportBilletterieService:
         self.lignes = LigneArticle.objects.filter(
             reservation__event=event,
         ).select_related(
-            'pricesold__price__product',
-            'pricesold__productsold',
-            'promotional_code',
-            'reservation',
+            "pricesold__price__product",
+            "pricesold__productsold",
+            "promotional_code",
+            "reservation",
         )
 
         # Queryset de base : tickets lies a cet evenement via reservation.
@@ -99,18 +98,18 @@ class RapportBilletterieService:
         resultat_ca = self.lignes.filter(
             status=LigneArticle.VALID,
         ).aggregate(
-            ca_ttc=Sum('amount'),
+            ca_ttc=Sum("amount"),
         )
-        ca_ttc = resultat_ca['ca_ttc'] or 0
+        ca_ttc = resultat_ca["ca_ttc"] or 0
 
         # Remboursements = somme des montants des lignes REFUNDED (centimes)
         # / Refunds = sum of REFUNDED line amounts (cents)
         resultat_remb = self.lignes.filter(
             status=LigneArticle.REFUNDED,
         ).aggregate(
-            remboursements=Sum('amount'),
+            remboursements=Sum("amount"),
         )
-        remboursements = resultat_remb['remboursements'] or 0
+        remboursements = resultat_remb["remboursements"] or 0
 
         ca_net = ca_ttc - remboursements
 
@@ -121,15 +120,15 @@ class RapportBilletterieService:
             taux_remplissage = 0.0
 
         return {
-            'jauge_max': jauge_max,
-            'billets_vendus': billets_vendus,
-            'billets_scannes': billets_scannes,
-            'billets_annules': billets_annules,
-            'no_show': no_show,
-            'ca_ttc': ca_ttc,
-            'remboursements': remboursements,
-            'ca_net': ca_net,
-            'taux_remplissage': taux_remplissage,
+            "jauge_max": jauge_max,
+            "billets_vendus": billets_vendus,
+            "billets_scannes": billets_scannes,
+            "billets_annules": billets_annules,
+            "no_show": no_show,
+            "ca_ttc": ca_ttc,
+            "remboursements": remboursements,
+            "ca_net": ca_net,
+            "taux_remplissage": taux_remplissage,
         }
 
     # ------------------------------------------------------------------
@@ -144,12 +143,11 @@ class RapportBilletterieService:
         """
         # Grouper les lignes VALID par jour / Group VALID lines by day
         ventes_par_jour = (
-            self.lignes
-            .filter(status=LigneArticle.VALID)
-            .annotate(jour=TruncDate('datetime'))
-            .values('jour')
-            .annotate(montant_jour=Sum('amount'))
-            .order_by('jour')
+            self.lignes.filter(status=LigneArticle.VALID)
+            .annotate(jour=TruncDate("datetime"))
+            .values("jour")
+            .annotate(montant_jour=Sum("amount"))
+            .order_by("jour")
         )
 
         labels = []
@@ -157,17 +155,17 @@ class RapportBilletterieService:
         cumul = 0
 
         for vente in ventes_par_jour:
-            jour = vente['jour']
+            jour = vente["jour"]
             labels.append(jour.isoformat())
-            cumul += vente['montant_jour'] or 0
+            cumul += vente["montant_jour"] or 0
             donnees_cumulees.append(cumul)
 
         return {
-            'labels': labels,
-            'datasets': [
+            "labels": labels,
+            "datasets": [
                 {
-                    'label': str(_('Cumulative revenue (cents)')),
-                    'data': donnees_cumulees,
+                    "label": str(_("Cumulative revenue (cents)")),
+                    "data": donnees_cumulees,
                 },
             ],
         }
@@ -188,29 +186,28 @@ class RapportBilletterieService:
 
         # Grouper par tarif (price uuid + nom) / Group by rate
         tarifs_bruts = (
-            lignes_valides
-            .values(
-                'pricesold__price__uuid',
-                'pricesold__price__name',
+            lignes_valides.values(
+                "pricesold__price__uuid",
+                "pricesold__price__name",
             )
             .annotate(
                 vendus=Count(
-                    'uuid',
+                    "uuid",
                     filter=~Q(payment_method=PaymentMethod.FREE),
                 ),
                 offerts=Count(
-                    'uuid',
+                    "uuid",
                     filter=Q(payment_method=PaymentMethod.FREE),
                 ),
-                ca_ttc=Sum('amount'),
+                ca_ttc=Sum("amount"),
             )
-            .order_by('pricesold__price__name')
+            .order_by("pricesold__price__name")
         )
 
         resultats = []
         for tarif in tarifs_bruts:
-            ca_ttc = tarif['ca_ttc'] or 0
-            price_uuid = tarif['pricesold__price__uuid']
+            ca_ttc = tarif["ca_ttc"] or 0
+            price_uuid = tarif["pricesold__price__uuid"]
 
             # Recuperer le taux TVA depuis la premiere LigneArticle de ce tarif
             # / Get VAT rate from the first LigneArticle of this rate
@@ -218,7 +215,7 @@ class RapportBilletterieService:
                 pricesold__price__uuid=price_uuid,
             ).first()
 
-            taux_tva = Decimal('0')
+            taux_tva = Decimal("0")
             if premiere_ligne and premiere_ligne.vat:
                 taux_tva = premiere_ligne.vat
 
@@ -236,17 +233,19 @@ class RapportBilletterieService:
                 pricesold__price__uuid=price_uuid,
             ).count()
 
-            resultats.append({
-                'nom': tarif['pricesold__price__name'] or '',
-                'price_uuid': str(price_uuid) if price_uuid else '',
-                'vendus': tarif['vendus'] or 0,
-                'offerts': tarif['offerts'] or 0,
-                'ca_ttc': ca_ttc,
-                'ca_ht': ca_ht,
-                'tva': tva_montant,
-                'taux_tva': float(taux_tva),
-                'rembourses': rembourses,
-            })
+            resultats.append(
+                {
+                    "nom": tarif["pricesold__price__name"] or "",
+                    "price_uuid": str(price_uuid) if price_uuid else "",
+                    "vendus": tarif["vendus"] or 0,
+                    "offerts": tarif["offerts"] or 0,
+                    "ca_ttc": ca_ttc,
+                    "ca_ht": ca_ht,
+                    "tva": tva_montant,
+                    "taux_tva": float(taux_tva),
+                    "rembourses": rembourses,
+                }
+            )
 
         return resultats
 
@@ -263,23 +262,22 @@ class RapportBilletterieService:
         lignes_valides = self.lignes.filter(status=LigneArticle.VALID)
 
         # Total pour calculer les pourcentages / Total for percentage calculation
-        total_ca = lignes_valides.aggregate(total=Sum('amount'))['total'] or 0
+        total_ca = lignes_valides.aggregate(total=Sum("amount"))["total"] or 0
 
         # Grouper par moyen de paiement / Group by payment method
         moyens_bruts = (
-            lignes_valides
-            .values('payment_method')
+            lignes_valides.values("payment_method")
             .annotate(
-                montant=Sum('amount'),
-                nb_billets=Count('uuid'),
+                montant=Sum("amount"),
+                nb_billets=Count("uuid"),
             )
-            .order_by('-montant')
+            .order_by("-montant")
         )
 
         resultats = []
         for moyen in moyens_bruts:
-            code = moyen['payment_method'] or ''
-            montant = moyen['montant'] or 0
+            code = moyen["payment_method"] or ""
+            montant = moyen["montant"] or 0
 
             # Label humain via PaymentMethod / Human label via PaymentMethod
             try:
@@ -293,13 +291,15 @@ class RapportBilletterieService:
             else:
                 pourcentage = 0.0
 
-            resultats.append({
-                'code': code,
-                'label': label,
-                'montant': montant,
-                'pourcentage': pourcentage,
-                'nb_billets': moyen['nb_billets'] or 0,
-            })
+            resultats.append(
+                {
+                    "code": code,
+                    "label": label,
+                    "montant": montant,
+                    "pourcentage": pourcentage,
+                    "nb_billets": moyen["nb_billets"] or 0,
+                }
+            )
 
         return resultats
 
@@ -317,13 +317,12 @@ class RapportBilletterieService:
 
         # Grouper par canal / Group by channel
         canaux_bruts = (
-            lignes_valides
-            .values('sale_origin')
+            lignes_valides.values("sale_origin")
             .annotate(
-                montant=Sum('amount'),
-                nb_billets=Count('uuid'),
+                montant=Sum("amount"),
+                nb_billets=Count("uuid"),
             )
-            .order_by('-montant')
+            .order_by("-montant")
         )
 
         # Convertir en liste pour compter / Convert to list to count
@@ -336,7 +335,7 @@ class RapportBilletterieService:
 
         resultats = []
         for canal in canaux_liste:
-            code = canal['sale_origin'] or ''
+            code = canal["sale_origin"] or ""
 
             # Label humain via SaleOrigin / Human label via SaleOrigin
             try:
@@ -344,12 +343,14 @@ class RapportBilletterieService:
             except ValueError:
                 label = code
 
-            resultats.append({
-                'code': code,
-                'label': label,
-                'montant': canal['montant'] or 0,
-                'nb_billets': canal['nb_billets'] or 0,
-            })
+            resultats.append(
+                {
+                    "code": code,
+                    "label": label,
+                    "montant": canal["montant"] or 0,
+                    "nb_billets": canal["nb_billets"] or 0,
+                }
+            )
 
         return resultats
 
@@ -381,7 +382,7 @@ class RapportBilletterieService:
             # Annoter chaque ticket avec sa tranche de 30 min
             # / Annotate each ticket with its 30-min slot
             tickets_avec_tranche = tickets_scannes.annotate(
-                heure=ExtractHour('scanned_at'),
+                heure=ExtractHour("scanned_at"),
                 # Arrondir les minutes a 0 ou 30 / Floor minutes to 0 or 30
                 demi_heure=Case(
                     When(
@@ -395,31 +396,30 @@ class RapportBilletterieService:
 
             # Grouper par heure + demi-heure / Group by hour + half-hour
             tranches_brutes = (
-                tickets_avec_tranche
-                .values('heure', 'demi_heure')
-                .annotate(nombre=Count('uuid'))
-                .order_by('heure', 'demi_heure')
+                tickets_avec_tranche.values("heure", "demi_heure")
+                .annotate(nombre=Count("uuid"))
+                .order_by("heure", "demi_heure")
             )
 
             labels = []
             data = []
             for tranche in tranches_brutes:
-                heure = tranche['heure']
-                minutes = tranche['demi_heure']
+                heure = tranche["heure"]
+                minutes = tranche["demi_heure"]
                 label = f"{heure:02d}:{minutes:02d}"
                 labels.append(label)
-                data.append(tranche['nombre'])
+                data.append(tranche["nombre"])
 
             tranches_horaires = {
-                'labels': labels,
-                'data': data,
+                "labels": labels,
+                "data": data,
             }
 
         return {
-            'scannes': scannes,
-            'non_scannes': non_scannes,
-            'annules': annules,
-            'tranches_horaires': tranches_horaires,
+            "scannes": scannes,
+            "non_scannes": non_scannes,
+            "annules": annules,
+            "tranches_horaires": tranches_horaires,
         }
 
     # ------------------------------------------------------------------
@@ -446,30 +446,29 @@ class RapportBilletterieService:
 
         # Grouper par code promo / Group by promo code
         promos_brutes = (
-            lignes_avec_promo
-            .values(
-                'promotional_code__uuid',
-                'promotional_code__name',
-                'promotional_code__discount_rate',
+            lignes_avec_promo.values(
+                "promotional_code__uuid",
+                "promotional_code__name",
+                "promotional_code__discount_rate",
             )
             .annotate(
-                utilisations=Count('uuid'),
-                total_paye=Sum('amount'),
+                utilisations=Count("uuid"),
+                total_paye=Sum("amount"),
             )
-            .order_by('promotional_code__name')
+            .order_by("promotional_code__name")
         )
 
         resultats = []
         for promo in promos_brutes:
-            code_uuid = promo['promotional_code__uuid']
-            total_paye = promo['total_paye'] or 0
+            code_uuid = promo["promotional_code__uuid"]
+            total_paye = promo["total_paye"] or 0
 
             # Calculer le prix catalogue total pour les lignes de ce code promo
             # prix_catalogue = pricesold.price.prix * 100 (conversion euros → centimes)
             # / Compute total catalog price for lines with this promo code
             lignes_de_ce_promo = lignes_avec_promo.filter(
                 promotional_code__uuid=code_uuid,
-            ).select_related('pricesold__price')
+            ).select_related("pricesold__price")
 
             prix_catalogue_total = 0
             for ligne in lignes_de_ce_promo:
@@ -479,12 +478,16 @@ class RapportBilletterieService:
 
             manque_a_gagner = prix_catalogue_total - total_paye
 
-            resultats.append({
-                'nom': promo['promotional_code__name'] or '',
-                'taux_reduction': float(promo['promotional_code__discount_rate'] or 0),
-                'utilisations': promo['utilisations'] or 0,
-                'manque_a_gagner': manque_a_gagner,
-            })
+            resultats.append(
+                {
+                    "nom": promo["promotional_code__name"] or "",
+                    "taux_reduction": float(
+                        promo["promotional_code__discount_rate"] or 0
+                    ),
+                    "utilisations": promo["utilisations"] or 0,
+                    "manque_a_gagner": manque_a_gagner,
+                }
+            )
 
         return resultats
 
@@ -503,9 +506,12 @@ class RapportBilletterieService:
             status=LigneArticle.REFUNDED,
         ).count()
 
-        montant_total = self.lignes.filter(
-            status=LigneArticle.REFUNDED,
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        montant_total = (
+            self.lignes.filter(
+                status=LigneArticle.REFUNDED,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
         nombre_valides = self.lignes.filter(
             status=LigneArticle.VALID,
@@ -519,7 +525,7 @@ class RapportBilletterieService:
             taux = 0.0
 
         return {
-            'nombre': nombre_rembourses,
-            'montant_total': montant_total,
-            'taux': taux,
+            "nombre": nombre_rembourses,
+            "montant_total": montant_total,
+            "taux": taux,
         }

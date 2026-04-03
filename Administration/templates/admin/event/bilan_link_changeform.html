@@ -1,0 +1,8 @@
+{% load i18n %}
+{# Lien vers le bilan dans la fiche event (changeform) / Link to report in event detail (changeform) #}
+{% if original and original.reservation.exists %}
+<div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;" data-testid="bilan-link-changeform">
+    <span class="material-symbols-outlined" style="font-size: 20px; color: #3B82F6;" aria-hidden="true">assessment</span>
+    <a href="bilan/" style="color: #3B82F6; text-decoration: none; font-weight: 500;">{% translate "View ticketing report" %}</a>
+</div>
+{% endif %}

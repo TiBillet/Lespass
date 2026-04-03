@@ -1,0 +1,94 @@
+{% load i18n %}
+{# Formulaire export par periode — partial charge via HTMX dans le dashboard. #}
+{# / Period export form — HTMX partial loaded inside the dashboard.           #}
+
+<div style="animation: fadeSlideIn 300ms ease both; padding: 16px 0;"
+     data-testid="export-periode-form">
+
+    <style>
+        @keyframes fadeSlideIn {
+            from { opacity: 0; transform: translateY(-6px); }
+        }
+    </style>
+
+    <form method="post"
+          action="{{ form_action_url }}"
+          aria-label="{% translate 'Period export' %}"
+          style="display: flex; flex-direction: column; gap: 12px;">
+        {% csrf_token %}
+
+        {# Champs date cote a cote / Date fields side by side #}
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 180px;">
+                <label for="id_date_debut"
+                       style="display: block; font-size: 0.8rem; font-weight: 500; color: #6B7280; margin-bottom: 4px;">
+                    {% translate "Start date" %} *
+                </label>
+                <input type="date" id="id_date_debut" name="date_debut"
+                       required
+                       style="width: 100%; padding: 8px 12px; font-size: 0.9rem; border-radius: 6px;
+                              border: 1px solid #D1D5DB; background: #fff;"
+                       data-testid="export-periode-date-debut">
+            </div>
+            <div style="flex: 1; min-width: 180px;">
+                <label for="id_date_fin"
+                       style="display: block; font-size: 0.8rem; font-weight: 500; color: #6B7280; margin-bottom: 4px;">
+                    {% translate "End date" %} *
+                </label>
+                <input type="date" id="id_date_fin" name="date_fin"
+                       required
+                       style="width: 100%; padding: 8px 12px; font-size: 0.9rem; border-radius: 6px;
+                              border: 1px solid #D1D5DB; background: #fff;"
+                       data-testid="export-periode-date-fin">
+            </div>
+        </div>
+
+        <p style="font-size: 0.8rem; color: #9CA3AF; margin: 0;">
+            {% translate "Dates correspond to the event start date." %}
+        </p>
+
+        {# Hidden input pour le format — sera rempli par les boutons submit / Hidden input for format — filled by submit buttons #}
+        <input type="hidden" name="format_export" id="id_format_export" value="csv">
+
+        {# Boutons action / Action buttons #}
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button type="submit"
+                    onclick="document.getElementById('id_format_export').value='csv';"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+                           background: #16A34A; color: white; border-radius: 6px; border: none;
+                           font-size: 0.85em; font-weight: 500; cursor: pointer;"
+                    data-testid="export-periode-csv">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+                CSV
+            </button>
+
+            <button type="submit"
+                    onclick="document.getElementById('id_format_export').value='pdf';"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+                           background: #DC2626; color: white; border-radius: 6px; border: none;
+                           font-size: 0.85em; font-weight: 500; cursor: pointer;"
+                    data-testid="export-periode-pdf">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">picture_as_pdf</span>
+                PDF
+            </button>
+
+            <button type="submit"
+                    onclick="document.getElementById('id_format_export').value='excel';"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+                           background: #2563EB; color: white; border-radius: 6px; border: none;
+                           font-size: 0.85em; font-weight: 500; cursor: pointer;"
+                    data-testid="export-periode-excel">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">table_view</span>
+                Excel
+            </button>
+
+            <button type="button"
+                    onclick="document.getElementById('export-zone').innerHTML='';"
+                    style="font-size: 0.85em; color: #6B7280; background: none; border: none;
+                           cursor: pointer; padding: 8px;"
+                    data-testid="export-periode-cancel">
+                {% translate "Cancel" %}
+            </button>
+        </div>
+    </form>
+</div>

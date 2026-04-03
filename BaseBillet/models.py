@@ -557,6 +557,11 @@ class Configuration(SingletonModel):
         default=False,
         verbose_name=_("POS & restaurant module"),
     )
+    module_inventaire = models.BooleanField(
+        default=False,
+        verbose_name=_("Inventory module"),
+        help_text=_("Enable stock management for POS products."),
+    )
 
     currency_code = models.CharField(max_length=3, default="EUR")
 
@@ -1345,6 +1350,17 @@ class Price(models.Model):
                                      help_text=_(
                                          "Number of valid memberships possible simultaneously or maximum capacity for this price per event. Leave this field blank if the quantity is unlimited."),
                                      )
+
+    contenance = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Serving size"),
+        help_text=_(
+            "Quantity consumed per unit sold, in the stock's base unit. "
+            "E.g.: pint=50 (cl), half=25 (cl), portion=150 (g). "
+            "Empty = 1 unit by default."
+        ),
+    )
 
     def out_of_stock(self, event=None):
         if self.stock is None or self.stock < 1:

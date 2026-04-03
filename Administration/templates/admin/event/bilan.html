@@ -1,0 +1,55 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "Report" %} — {{ event.name }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto; padding: 20px;">
+
+    {# En-tete : nom event, date, boutons export / Header: event name, date, export buttons #}
+    <div style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h1 style="margin: 0 0 8px; font-size: 1.5rem;" data-testid="bilan-titre">{% translate "Ticketing report" %}</h1>
+            <p style="margin: 0; color: #6B7280; font-size: 0.95rem;">
+                {{ event.name }} — {{ event.datetime|date:"l d F Y, H:i" }}
+            </p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <a href="pdf/" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #DC2626; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85em; font-weight: 500;" data-testid="btn-export-pdf">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">picture_as_pdf</span> PDF
+            </a>
+            <a href="csv/" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #16A34A; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85em; font-weight: 500;" data-testid="btn-export-csv">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span> CSV
+            </a>
+            <a href="excel/" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #2563EB; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85em; font-weight: 500;" data-testid="btn-export-excel">
+                <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">table_view</span> Excel
+            </a>
+        </div>
+    </div>
+
+    {# ── SECTION 1 : SYNTHESE / SUMMARY ── #}
+    {% include "admin/event/partials/synthese.html" %}
+
+    {# ── SECTION 2 : VENTES PAR TARIF / SALES BY RATE ── #}
+    {% include "admin/event/partials/ventes_tarif.html" %}
+
+    {# ── SECTION 3 : PAR MOYEN DE PAIEMENT / BY PAYMENT METHOD ── #}
+    {% include "admin/event/partials/moyens_paiement.html" %}
+
+    {# ── SECTION 4 : PAR CANAL DE VENTE (conditionnel) / BY SALES CHANNEL (conditional) ── #}
+    {% if par_canal %}
+        {% include "admin/event/partials/canaux_vente.html" %}
+    {% endif %}
+
+    {# ── SECTION 5 : SCANS (masque si aucun billet) / SCANS (hidden if no tickets) ── #}
+    {% if has_scans %}
+        {% include "admin/event/partials/scans.html" %}
+    {% endif %}
+
+    {# ── SECTION 6 : CODES PROMO (conditionnel) / PROMO CODES (conditional) ── #}
+    {% if codes_promo %}
+        {% include "admin/event/partials/codes_promo.html" %}
+    {% endif %}
+
+</div>
+{% endblock %}

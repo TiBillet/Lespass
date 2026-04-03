@@ -1,5 +1,34 @@
 # Changelog / Journal des modifications
 
+## Gestion d'inventaire et stock POS / POS Inventory and Stock Management
+
+**Date :** Avril 2026
+**Migration :** Oui
+
+**Quoi / What:** Nouvelle app `inventaire` (TENANT_APP) pour gérer le stock des produits POS. Stock optionnel par produit, 3 unités (pièces/centilitres/grammes), journal de mouvements (6 types : vente, réception, ajustement, offert, perte, débit mètre), décrémentation atomique à la vente, actions rapides caissier, endpoint API pour capteur débit mètre (Raspberry Pi).
+
+**Pourquoi / Why:** Les bars et salles associatifs ont besoin de tracer leur stock pour l'AG et détecter les écarts (casse, offerts). Système minimaliste adapté aux 20-50 références d'un petit lieu.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `inventaire/*` | Nouvelle app : models, services, views, serializers, urls, templates |
+| `BaseBillet/models.py` | `module_inventaire` sur Configuration + `contenance` sur Price |
+| `TiBillet/settings.py` | `'inventaire'` dans TENANT_APPS |
+| `TiBillet/urls_tenants.py` | Route `api/inventaire/` |
+| `Administration/admin/dashboard.py` | MODULE_FIELDS + sidebar Inventaire |
+| `Administration/admin/products.py` | StockInline + ajustement inventaire |
+| `Administration/admin/inventaire.py` | MouvementStockAdmin (lecture seule) |
+| `Administration/admin_tenant.py` | Import admin inventaire |
+| `laboutik/views.py` | Branchement décrémentation stock dans `_creer_lignes_articles()` |
+
+### Migration
+- `inventaire/migrations/0001_initial.py` (Stock + MouvementStock)
+- `BaseBillet/migrations/0213_configuration_module_inventaire_price_contenance.py`
+- Commande : `docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing`
+
+---
+
 ## v1.7.7 — Unification actions admin Membership dans MembershipMVT
 
 **Date :** Mars 2026

@@ -1,0 +1,30 @@
+{% load i18n billet_filters %}
+<div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin-bottom: 20px;" data-testid="bilan-codes-promo" aria-label="{% translate 'Promotional codes' %}">
+    <h2 style="margin: 0 0 16px; font-size: 1.1rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">
+        {% translate "Promotional codes" %}
+    </h2>
+
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+            <caption class="visually-hidden">{% translate "Promotional codes usage" %}</caption>
+            <thead>
+                <tr style="border-bottom: 2px solid #E5E7EB; text-align: left;">
+                    <th scope="col" style="padding: 8px 12px;">{% translate "Code" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Uses" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Discount" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Revenue loss" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for promo in codes_promo %}
+                <tr style="border-bottom: 1px solid #F3F4F6;" data-testid="promo-row">
+                    <td style="padding: 8px 12px;">{{ promo.nom }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ promo.utilisations }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ promo.taux_reduction }}%</td>
+                    <td style="padding: 8px 12px; text-align: right; color: #DC2626;">{{ promo.manque_a_gagner|cents_to_euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

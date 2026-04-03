@@ -48,6 +48,9 @@ urlpatterns = [
 
     path('laboutik/', include('laboutik.urls')),
 
+    # Endpoints inventaire (stock + debit metre) / Inventory endpoints
+    path('api/inventaire/', include('inventaire.urls')),
+
     # pour carte GEN1 Bisik
     # re_path(r'(?P<numero_carte>^[qsdf974]{5}$)', include('QrcodeCashless.urls')),
 

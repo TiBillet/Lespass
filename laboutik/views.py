@@ -2757,6 +2757,23 @@ def _creer_lignes_articles(
             carte=carte,
             wallet=wallet,
         )
+        # --- Décrémentation stock inventaire ---
+        # Si le produit a un Stock lié, on décrémente automatiquement.
+        # / If the product has a linked Stock, auto-decrement.
+        try:
+            stock_du_produit = produit.stock_inventaire
+            from inventaire.services import StockService
+            StockService.decrementer_pour_vente(
+                stock=stock_du_produit,
+                contenance=prix_obj.contenance,
+                qty=quantite,
+                ligne_article=ligne,
+            )
+        except Exception:
+            # Pas de stock géré pour ce produit — comportement normal
+            # / No stock managed for this product — normal behavior
+            pass
+
         lignes_creees.append(ligne)
 
     # --- Chainage HMAC (conformite LNE exigence 8) ---

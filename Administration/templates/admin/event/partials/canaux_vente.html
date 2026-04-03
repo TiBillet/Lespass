@@ -1,0 +1,28 @@
+{% load i18n billet_filters %}
+<div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin-bottom: 20px;" data-testid="bilan-canaux-vente" aria-label="{% translate 'By sales channel' %}">
+    <h2 style="margin: 0 0 16px; font-size: 1.1rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">
+        {% translate "By sales channel" %}
+    </h2>
+
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+            <caption class="visually-hidden">{% translate "Sales breakdown by channel" %}</caption>
+            <thead>
+                <tr style="border-bottom: 2px solid #E5E7EB; text-align: left;">
+                    <th scope="col" style="padding: 8px 12px;">{% translate "Channel" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Tickets" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for canal in par_canal %}
+                <tr style="border-bottom: 1px solid #F3F4F6;" data-testid="canal-row">
+                    <td style="padding: 8px 12px;">{{ canal.label }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ canal.nb_billets }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ canal.montant|cents_to_euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

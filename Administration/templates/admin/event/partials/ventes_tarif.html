@@ -1,0 +1,54 @@
+{% load i18n billet_filters %}
+<div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin-bottom: 20px;" data-testid="bilan-ventes-tarif" aria-label="{% translate 'Sales by rate' %}">
+    <h2 style="margin: 0 0 16px; font-size: 1.1rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">
+        {% translate "Sales by rate" %}
+    </h2>
+
+    <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+            <caption class="visually-hidden">{% translate "Sales breakdown by rate" %}</caption>
+            <thead>
+                <tr style="border-bottom: 2px solid #E5E7EB; text-align: left;">
+                    <th scope="col" style="padding: 8px 12px;">{% translate "Rate" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Sold" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Free" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Revenue incl. tax" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Excl. tax" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "VAT" %}</th>
+                    <th scope="col" style="padding: 8px 12px; text-align: right;">{% translate "Refunded" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tarif in ventes_par_tarif %}
+                <tr style="border-bottom: 1px solid #F3F4F6;" data-testid="tarif-row">
+                    <td style="padding: 8px 12px;">{{ tarif.nom }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ tarif.vendus }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ tarif.offerts }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ tarif.ca_ttc|cents_to_euros }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ tarif.ca_ht|cents_to_euros }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ tarif.tva|cents_to_euros }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ tarif.rembourses }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" style="padding: 12px; text-align: center; color: #9CA3AF;">{% translate "No sales" %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {# Ligne TOTAL — affichee seulement s'il y a des tarifs / TOTAL row — only shown when rates exist #}
+            {% if totaux_tarifs %}
+            <tfoot>
+                <tr style="font-weight: bold; background: #F3F4F6; border-top: 2px solid #E5E7EB;" data-testid="tarif-total-row">
+                    <td style="padding: 8px 12px;">{% translate "Total" %}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ totaux_tarifs.vendus }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ totaux_tarifs.offerts }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ totaux_tarifs.ca_ttc|cents_to_euros }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ totaux_tarifs.ca_ht|cents_to_euros }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ totaux_tarifs.tva|cents_to_euros }}</td>
+                    <td style="padding: 8px 12px; text-align: right;">{{ totaux_tarifs.rembourses }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>

@@ -7,7 +7,7 @@ Cree des donnees de test fraiches pour chaque fixture.
 / Uses the existing dev database with tenant_context.
 Creates fresh test data for each fixture.
 """
-import uuid
+
 from datetime import timedelta
 from decimal import Decimal
 
@@ -34,6 +34,7 @@ from BaseBillet.reports import RapportBilletterieService
 # Fixtures
 # ---------------------------------------------------------------
 
+
 @pytest.fixture
 def event_vide(tenant):
     """
@@ -41,6 +42,7 @@ def event_vide(tenant):
     / An event with no sales or reservations.
     """
     from django_tenants.utils import tenant_context
+
     with tenant_context(tenant):
         event = Event.objects.create(
             name="Test Bilan Vide",
@@ -60,6 +62,7 @@ def event_jauge_zero(tenant):
     / An event with jauge_max = 0 (no division by zero).
     """
     from django_tenants.utils import tenant_context
+
     with tenant_context(tenant):
         event = Event.objects.create(
             name="Test Jauge Zero",
@@ -85,7 +88,7 @@ def event_avec_ventes(tenant):
         # Creer un user pour les reservations / Create a user for reservations
         user, _ = TibilletUser.objects.get_or_create(
             email="test-rapport-billet@tibillet.test",
-            defaults={'username': 'test_rapport_billet'},
+            defaults={"username": "test_rapport_billet"},
         )
 
         # Creer un evenement / Create an event
@@ -106,14 +109,14 @@ def event_avec_ventes(tenant):
         price = Price.objects.create(
             product=product,
             name="Tarif Normal Test",
-            prix=Decimal('15.00'),
+            prix=Decimal("15.00"),
         )
 
         # Creer un 2e tarif / Create a 2nd rate
         price_reduit = Price.objects.create(
             product=product,
             name="Tarif Reduit Test",
-            prix=Decimal('10.00'),
+            prix=Decimal("10.00"),
         )
 
         # Creer les ProductSold / Create ProductSold instances
@@ -126,13 +129,13 @@ def event_avec_ventes(tenant):
         pricesold_normal = PriceSold.objects.create(
             productsold=product_sold,
             price=price,
-            prix=Decimal('15.00'),
+            prix=Decimal("15.00"),
         )
 
         pricesold_reduit = PriceSold.objects.create(
             productsold=product_sold,
             price=price_reduit,
-            prix=Decimal('10.00'),
+            prix=Decimal("10.00"),
         )
 
         # -- Reservation 1 : paiement CB, 3 billets tarif normal --
@@ -164,7 +167,7 @@ def event_avec_ventes(tenant):
                 reservation=resa1,
                 amount=1500,
                 qty=1,
-                vat=Decimal('0'),
+                vat=Decimal("0"),
                 status=LigneArticle.VALID,
                 sale_origin=SaleOrigin.LESPASS,
                 payment_method=PaymentMethod.STRIPE_NOFED,
@@ -196,7 +199,7 @@ def event_avec_ventes(tenant):
                 reservation=resa2,
                 amount=1000,
                 qty=1,
-                vat=Decimal('0'),
+                vat=Decimal("0"),
                 status=LigneArticle.VALID,
                 sale_origin=SaleOrigin.ADMIN,
                 payment_method=PaymentMethod.CASH,
@@ -224,7 +227,7 @@ def event_avec_ventes(tenant):
             reservation=resa3,
             amount=0,
             qty=1,
-            vat=Decimal('0'),
+            vat=Decimal("0"),
             status=LigneArticle.VALID,
             sale_origin=SaleOrigin.LESPASS,
             payment_method=PaymentMethod.FREE,
@@ -251,22 +254,22 @@ def event_avec_ventes(tenant):
             reservation=resa1,
             amount=1500,
             qty=1,
-            vat=Decimal('0'),
+            vat=Decimal("0"),
             status=LigneArticle.REFUNDED,
             sale_origin=SaleOrigin.LESPASS,
             payment_method=PaymentMethod.STRIPE_NOFED,
         )
 
         yield {
-            'event': event,
-            'user': user,
-            'product': product,
-            'price': price,
-            'price_reduit': price_reduit,
-            'product_sold': product_sold,
-            'pricesold_normal': pricesold_normal,
-            'pricesold_reduit': pricesold_reduit,
-            'reservations': [resa1, resa2, resa3, resa4],
+            "event": event,
+            "user": user,
+            "product": product,
+            "price": price,
+            "price_reduit": price_reduit,
+            "product_sold": product_sold,
+            "pricesold_normal": pricesold_normal,
+            "pricesold_reduit": pricesold_reduit,
+            "reservations": [resa1, resa2, resa3, resa4],
         }
 
         # Nettoyage dans l'ordre inverse des FK (queryset.delete pour eviter signals stdimage)
@@ -274,7 +277,9 @@ def event_avec_ventes(tenant):
         LigneArticle.objects.filter(reservation__event=event).delete()
         Ticket.objects.filter(reservation__event=event).delete()
         Reservation.objects.filter(event=event).delete()
-        PriceSold.objects.filter(pk__in=[pricesold_normal.pk, pricesold_reduit.pk]).delete()
+        PriceSold.objects.filter(
+            pk__in=[pricesold_normal.pk, pricesold_reduit.pk]
+        ).delete()
         ProductSold.objects.filter(pk=product_sold.pk).delete()
         Event.objects.filter(pk=event.pk).delete()
         Price.objects.filter(pk__in=[price.pk, price_reduit.pk]).delete()
@@ -293,7 +298,7 @@ def event_avec_promo(tenant):
     with tenant_context(tenant):
         user, _ = TibilletUser.objects.get_or_create(
             email="test-rapport-promo@tibillet.test",
-            defaults={'username': 'test_rapport_promo'},
+            defaults={"username": "test_rapport_promo"},
         )
 
         event = Event.objects.create(
@@ -311,12 +316,12 @@ def event_avec_promo(tenant):
         price = Price.objects.create(
             product=product,
             name="Tarif Promo Test",
-            prix=Decimal('20.00'),
+            prix=Decimal("20.00"),
         )
 
         promo_code = PromotionalCode.objects.create(
             name="PROMO_RAPPORT_TEST",
-            discount_rate=Decimal('25.00'),
+            discount_rate=Decimal("25.00"),
             product=product,
         )
 
@@ -328,7 +333,7 @@ def event_avec_promo(tenant):
         pricesold = PriceSold.objects.create(
             productsold=product_sold,
             price=price,
-            prix=Decimal('15.00'),  # prix apres reduction / after discount
+            prix=Decimal("15.00"),  # prix apres reduction / after discount
         )
 
         resa = Reservation.objects.create(
@@ -353,7 +358,7 @@ def event_avec_promo(tenant):
                 reservation=resa,
                 amount=1500,
                 qty=1,
-                vat=Decimal('0'),
+                vat=Decimal("0"),
                 status=LigneArticle.VALID,
                 sale_origin=SaleOrigin.LESPASS,
                 payment_method=PaymentMethod.STRIPE_NOFED,
@@ -361,8 +366,8 @@ def event_avec_promo(tenant):
             )
 
         yield {
-            'event': event,
-            'promo_code': promo_code,
+            "event": event,
+            "promo_code": promo_code,
         }
 
         # Nettoyage (queryset.delete pour eviter signals stdimage)
@@ -382,6 +387,7 @@ def event_avec_promo(tenant):
 # Tests
 # ---------------------------------------------------------------
 
+
 @pytest.mark.django_db
 class TestRapportBilletterieService:
     """Tests pour RapportBilletterieService."""
@@ -393,19 +399,20 @@ class TestRapportBilletterieService:
         / An empty event must return all counters at 0.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
             service = RapportBilletterieService(event_vide)
             synthese = service.calculer_synthese()
 
-            assert synthese['jauge_max'] == 100
-            assert synthese['billets_vendus'] == 0
-            assert synthese['billets_scannes'] == 0
-            assert synthese['billets_annules'] == 0
-            assert synthese['no_show'] == 0
-            assert synthese['ca_ttc'] == 0
-            assert synthese['remboursements'] == 0
-            assert synthese['ca_net'] == 0
-            assert synthese['taux_remplissage'] == 0.0
+            assert synthese["jauge_max"] == 100
+            assert synthese["billets_vendus"] == 0
+            assert synthese["billets_scannes"] == 0
+            assert synthese["billets_annules"] == 0
+            assert synthese["no_show"] == 0
+            assert synthese["ca_ttc"] == 0
+            assert synthese["remboursements"] == 0
+            assert synthese["ca_net"] == 0
+            assert synthese["taux_remplissage"] == 0.0
 
     # --- 2. Synthese event avec ventes ---
     def test_synthese_event_avec_ventes(self, tenant, event_avec_ventes):
@@ -414,27 +421,28 @@ class TestRapportBilletterieService:
         / Verify summary totals with test data.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             synthese = service.calculer_synthese()
 
             # 3 NOT_SCANNED (resa1) + 2 SCANNED (resa2) + 1 NOT_SCANNED (offert) = 6 vendus
-            assert synthese['billets_vendus'] == 6
+            assert synthese["billets_vendus"] == 6
             # 2 SCANNED (resa2)
-            assert synthese['billets_scannes'] == 2
+            assert synthese["billets_scannes"] == 2
             # 1 annule (resa4)
-            assert synthese['billets_annules'] == 1
+            assert synthese["billets_annules"] == 1
             # no_show = 6 - 2 = 4
-            assert synthese['no_show'] == 4
+            assert synthese["no_show"] == 4
             # CA TTC = 3*1500 + 2*1000 + 0 = 6500 centimes
-            assert synthese['ca_ttc'] == 6500
+            assert synthese["ca_ttc"] == 6500
             # 1 remboursement de 1500
-            assert synthese['remboursements'] == 1500
+            assert synthese["remboursements"] == 1500
             # CA net = 6500 - 1500 = 5000
-            assert synthese['ca_net'] == 5000
+            assert synthese["ca_net"] == 5000
             # Taux remplissage = 6/200 * 100 = 3.0
-            assert synthese['taux_remplissage'] == 3.0
+            assert synthese["taux_remplissage"] == 3.0
 
     # --- 3. Ventes par tarif ---
     def test_ventes_par_tarif(self, tenant, event_avec_ventes):
@@ -443,8 +451,9 @@ class TestRapportBilletterieService:
         / Verify keys are present and totals are consistent.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             tarifs = service.calculer_ventes_par_tarif()
 
@@ -452,15 +461,25 @@ class TestRapportBilletterieService:
             assert len(tarifs) >= 2  # au moins 2 tarifs / at least 2 rates
 
             # Verifier les cles de chaque tarif / Verify keys of each rate
-            cles_attendues = {'nom', 'price_uuid', 'vendus', 'offerts', 'ca_ttc', 'ca_ht', 'tva', 'taux_tva', 'rembourses'}
+            cles_attendues = {
+                "nom",
+                "price_uuid",
+                "vendus",
+                "offerts",
+                "ca_ttc",
+                "ca_ht",
+                "tva",
+                "taux_tva",
+                "rembourses",
+            }
             for tarif in tarifs:
                 assert cles_attendues.issubset(tarif.keys())
 
             # Le total CA TTC des tarifs doit correspondre a la synthese
             # / Total rate revenue must match the summary
-            total_ca_tarifs = sum(t['ca_ttc'] for t in tarifs)
+            total_ca_tarifs = sum(t["ca_ttc"] for t in tarifs)
             synthese = service.calculer_synthese()
-            assert total_ca_tarifs == synthese['ca_ttc']
+            assert total_ca_tarifs == synthese["ca_ttc"]
 
     # --- 4. Par moyen de paiement ---
     def test_par_moyen_paiement(self, tenant, event_avec_ventes):
@@ -469,25 +488,26 @@ class TestRapportBilletterieService:
         / Total amounts by payment method must equal gross revenue.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             moyens = service.calculer_par_moyen_paiement()
 
             assert isinstance(moyens, list)
             assert len(moyens) >= 2  # au moins CB + especes / at least CC + cash
 
-            total_montant = sum(m['montant'] for m in moyens)
+            total_montant = sum(m["montant"] for m in moyens)
             synthese = service.calculer_synthese()
-            assert total_montant == synthese['ca_ttc']
+            assert total_montant == synthese["ca_ttc"]
 
             # Verifier les cles / Verify keys
             for moyen in moyens:
-                assert 'code' in moyen
-                assert 'label' in moyen
-                assert 'montant' in moyen
-                assert 'pourcentage' in moyen
-                assert 'nb_billets' in moyen
+                assert "code" in moyen
+                assert "label" in moyen
+                assert "montant" in moyen
+                assert "pourcentage" in moyen
+                assert "nb_billets" in moyen
 
     # --- 5. Par canal masque si canal unique ---
     def test_par_canal_masque_si_canal_unique(self, tenant, event_vide):
@@ -496,6 +516,7 @@ class TestRapportBilletterieService:
         / An event without sales returns None (no channel).
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
             service = RapportBilletterieService(event_vide)
             canaux = service.calculer_par_canal()
@@ -508,8 +529,9 @@ class TestRapportBilletterieService:
         / An event with 2 channels (LESPASS + ADMIN) returns a list.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             canaux = service.calculer_par_canal()
 
@@ -525,19 +547,20 @@ class TestRapportBilletterieService:
         / Verify scan counters.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             scans = service.calculer_scans()
 
-            assert scans['scannes'] == 2
-            assert scans['non_scannes'] == 4  # 3 resa1 + 1 offert
-            assert scans['annules'] == 1
+            assert scans["scannes"] == 2
+            assert scans["non_scannes"] == 4  # 3 resa1 + 1 offert
+            assert scans["annules"] == 1
 
             # Les 2 tickets scannes ont scanned_at => tranches_horaires non None
-            assert scans['tranches_horaires'] is not None
-            assert 'labels' in scans['tranches_horaires']
-            assert 'data' in scans['tranches_horaires']
+            assert scans["tranches_horaires"] is not None
+            assert "labels" in scans["tranches_horaires"]
+            assert "data" in scans["tranches_horaires"]
 
     # --- 7. Codes promo retourne None si aucun ---
     def test_codes_promo_retourne_none_si_aucun(self, tenant, event_vide):
@@ -546,6 +569,7 @@ class TestRapportBilletterieService:
         / An event without promo code returns None.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
             service = RapportBilletterieService(event_vide)
             promos = service.calculer_codes_promo()
@@ -558,8 +582,9 @@ class TestRapportBilletterieService:
         / An event with promo code returns a list with revenue shortfall.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_promo['event']
+            event = event_avec_promo["event"]
             service = RapportBilletterieService(event)
             promos = service.calculer_codes_promo()
 
@@ -567,11 +592,11 @@ class TestRapportBilletterieService:
             assert len(promos) == 1
 
             promo = promos[0]
-            assert promo['nom'] == "PROMO_RAPPORT_TEST"
-            assert promo['taux_reduction'] == 25.0
-            assert promo['utilisations'] == 2
+            assert promo["nom"] == "PROMO_RAPPORT_TEST"
+            assert promo["taux_reduction"] == 25.0
+            assert promo["utilisations"] == 2
             # manque_a_gagner = (2 * 2000) - (2 * 1500) = 1000 centimes
-            assert promo['manque_a_gagner'] == 1000
+            assert promo["manque_a_gagner"] == 1000
 
     # --- 8. Remboursements sans donnees ---
     def test_remboursements_sans_donnees(self, tenant, event_vide):
@@ -580,13 +605,14 @@ class TestRapportBilletterieService:
         / An event without refunds returns count=0, rate=0.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
             service = RapportBilletterieService(event_vide)
             remb = service.calculer_remboursements()
 
-            assert remb['nombre'] == 0
-            assert remb['montant_total'] == 0
-            assert remb['taux'] == 0.0
+            assert remb["nombre"] == 0
+            assert remb["montant_total"] == 0
+            assert remb["taux"] == 0.0
 
     # --- 8b. Remboursements avec donnees ---
     def test_remboursements_avec_donnees(self, tenant, event_avec_ventes):
@@ -595,15 +621,16 @@ class TestRapportBilletterieService:
         / Verify refund rate.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             remb = service.calculer_remboursements()
 
-            assert remb['nombre'] == 1
-            assert remb['montant_total'] == 1500
+            assert remb["nombre"] == 1
+            assert remb["montant_total"] == 1500
             # 6 valides + 1 rembourse = 7, taux = 1/7 * 100 ≈ 14.3
-            assert remb['taux'] == pytest.approx(14.3, abs=0.1)
+            assert remb["taux"] == pytest.approx(14.3, abs=0.1)
 
     # --- 9. Courbe de ventes ---
     def test_courbe_ventes(self, tenant, event_avec_ventes):
@@ -612,16 +639,17 @@ class TestRapportBilletterieService:
         / Verify that curve data is cumulative.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
-            event = event_avec_ventes['event']
+            event = event_avec_ventes["event"]
             service = RapportBilletterieService(event)
             courbe = service.calculer_courbe_ventes()
 
-            assert 'labels' in courbe
-            assert 'datasets' in courbe
-            assert len(courbe['datasets']) == 1
+            assert "labels" in courbe
+            assert "datasets" in courbe
+            assert len(courbe["datasets"]) == 1
 
-            donnees = courbe['datasets'][0]['data']
+            donnees = courbe["datasets"][0]["data"]
             # Les donnees doivent etre croissantes (cumulees)
             # / Data must be increasing (cumulative)
             for i in range(1, len(donnees)):
@@ -630,18 +658,34 @@ class TestRapportBilletterieService:
             # Le dernier cumul = CA TTC total
             if donnees:
                 synthese = service.calculer_synthese()
-                assert donnees[-1] == synthese['ca_ttc']
+                assert donnees[-1] == synthese["ca_ttc"]
 
-    # --- 10. Synthese jauge zero ---
+    # --- 10. Courbe ventes event vide ---
+    def test_courbe_ventes_event_vide(self, tenant, event_vide):
+        """
+        Event sans ventes retourne des listes vides.
+        / Event without sales returns empty lists.
+        """
+        from django_tenants.utils import tenant_context
+
+        with tenant_context(tenant):
+            service = RapportBilletterieService(event_vide)
+            courbe = service.calculer_courbe_ventes()
+
+            assert courbe["labels"] == []
+            assert courbe["datasets"][0]["data"] == []
+
+    # --- 11. Synthese jauge zero ---
     def test_synthese_jauge_zero(self, tenant, event_jauge_zero):
         """
         Pas de division par zero quand jauge_max = 0.
         / No division by zero when jauge_max = 0.
         """
         from django_tenants.utils import tenant_context
+
         with tenant_context(tenant):
             service = RapportBilletterieService(event_jauge_zero)
             synthese = service.calculer_synthese()
 
-            assert synthese['jauge_max'] == 0
-            assert synthese['taux_remplissage'] == 0.0
+            assert synthese["jauge_max"] == 0
+            assert synthese["taux_remplissage"] == 0.0

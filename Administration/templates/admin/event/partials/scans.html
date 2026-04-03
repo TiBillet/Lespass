@@ -1,0 +1,32 @@
+{% load i18n %}
+<div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin-bottom: 20px;" data-testid="bilan-scans" aria-label="{% translate 'Scans' %}">
+    <h2 style="margin: 0 0 16px; font-size: 1.1rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">
+        {% translate "Scans" %}
+    </h2>
+
+    {# Chiffres cles scans / Key scan figures #}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px;">
+        <div style="padding: 12px; background: #F0FDF4; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Scanned" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: #16A34A;" data-testid="scans-scannes">{{ scans.scannes }}</div>
+        </div>
+        <div style="padding: 12px; background: #FFF7ED; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Not scanned" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: #EA580C;" data-testid="scans-non-scannes">{{ scans.non_scannes }}</div>
+        </div>
+        <div style="padding: 12px; background: #FEF2F2; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Cancelled" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: #DC2626;" data-testid="scans-annules">{{ scans.annules }}</div>
+        </div>
+    </div>
+
+    {# Graphique tranches horaires / Time slots chart #}
+    {% if scans_tranches_json != "null" %}
+    <div style="margin-top: 16px;">
+        <h3 style="font-size: 0.95rem; margin: 0 0 8px; color: #374151;">{% translate "Entries by time slot" %}</h3>
+        <div style="position: relative; height: 250px; width: 100%;">
+            <canvas class="chart" data-type="bar" data-value='{{ scans_tranches_json|safe }}' data-testid="chart-scans"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>

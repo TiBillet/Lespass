@@ -1,0 +1,235 @@
+{% load billet_filters %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Bilan — {{ event.name }}</title>
+    <style>
+        @page { size: A4 landscape; margin: 15mm; }
+        body { font-family: sans-serif; font-size: 10pt; color: #333; }
+        h1 { font-size: 16pt; margin-bottom: 4px; }
+        h2 { font-size: 12pt; margin-top: 20px; border-bottom: 1px solid #999; padding-bottom: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th { background: #f0f0f0; text-align: left; padding: 6px 8px; border: 1px solid #ccc; font-size: 9pt; }
+        td { padding: 6px 8px; border: 1px solid #ddd; font-size: 9pt; }
+        .text-right { text-align: right; }
+        .total-row { font-weight: bold; background: #f5f5f5; }
+        .header-info { color: #666; font-size: 9pt; margin: 2px 0; }
+        .summary-grid { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }
+        .summary-item { padding: 8px 12px; background: #f9f9f9; border-radius: 4px; min-width: 120px; }
+        .summary-label { font-size: 8pt; color: #666; }
+        .summary-value { font-size: 13pt; font-weight: 600; }
+        .footer { margin-top: 24px; font-size: 8pt; color: #999; text-align: center; border-top: 1px solid #ddd; padding-top: 8px; }
+        .progress-bar { background: #e5e5e5; height: 6px; border-radius: 3px; margin: 4px 0; }
+        .progress-fill { background: #3B82F6; height: 100%; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>Bilan de billetterie</h1>
+    <p class="header-info">{{ event.name }}</p>
+    <p class="header-info">{{ event.datetime|date:"l d F Y, H:i" }}</p>
+    {% if config.organisation %}
+    <p class="header-info">{{ config.organisation }}</p>
+    {% endif %}
+
+    {# -- SYNTHESE / SUMMARY -- #}
+    <h2>Synthese</h2>
+    <p>Billets vendus : <strong>{{ synthese.billets_vendus }}</strong> / {{ synthese.jauge_max }} ({{ synthese.taux_remplissage }}%)</p>
+    <div class="progress-bar"><div class="progress-fill" style="width: {{ synthese.taux_remplissage }}%; max-width: 100%;"></div></div>
+    <div class="summary-grid">
+        <div class="summary-item">
+            <div class="summary-label">Scannes</div>
+            <div class="summary-value">{{ synthese.billets_scannes }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">No-show</div>
+            <div class="summary-value">{{ synthese.no_show }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">CA TTC</div>
+            <div class="summary-value">{{ synthese.ca_ttc|cents_to_euros }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">Remboursements</div>
+            <div class="summary-value" style="color: #dc2626;">-{{ synthese.remboursements|cents_to_euros }}</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-label">CA net</div>
+            <div class="summary-value">{{ synthese.ca_net|cents_to_euros }}</div>
+        </div>
+    </div>
+
+    {# -- VENTES PAR TARIF / SALES BY RATE -- #}
+    <h2>Ventes par tarif</h2>
+    {% if ventes_par_tarif %}
+    <table>
+        <thead>
+            <tr>
+                <th>Tarif</th>
+                <th class="text-right">Vendus</th>
+                <th class="text-right">Offerts</th>
+                <th class="text-right">CA TTC</th>
+                <th class="text-right">HT</th>
+                <th class="text-right">TVA</th>
+                <th class="text-right">Remb.</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for t in ventes_par_tarif %}
+            <tr>
+                <td>{{ t.nom }}</td>
+                <td class="text-right">{{ t.vendus }}</td>
+                <td class="text-right">{{ t.offerts }}</td>
+                <td class="text-right">{{ t.ca_ttc|cents_to_euros }}</td>
+                <td class="text-right">{{ t.ca_ht|cents_to_euros }}</td>
+                <td class="text-right">{{ t.tva|cents_to_euros }}</td>
+                <td class="text-right">{{ t.rembourses }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        {% if totaux_tarifs %}
+        <tfoot>
+            <tr class="total-row">
+                <td>Total</td>
+                <td class="text-right">{{ totaux_tarifs.vendus }}</td>
+                <td class="text-right">{{ totaux_tarifs.offerts }}</td>
+                <td class="text-right">{{ totaux_tarifs.ca_ttc|cents_to_euros }}</td>
+                <td class="text-right">{{ totaux_tarifs.ca_ht|cents_to_euros }}</td>
+                <td class="text-right">{{ totaux_tarifs.tva|cents_to_euros }}</td>
+                <td class="text-right">{{ totaux_tarifs.rembourses }}</td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+    {% else %}
+    <p>Aucune vente.</p>
+    {% endif %}
+
+    {# -- PAR MOYEN DE PAIEMENT / BY PAYMENT METHOD -- #}
+    <h2>Par moyen de paiement</h2>
+    {% if par_moyen_paiement %}
+    <table>
+        <thead>
+            <tr>
+                <th>Moyen</th>
+                <th class="text-right">Montant</th>
+                <th class="text-right">Pourcentage</th>
+                <th class="text-right">Nb billets</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for m in par_moyen_paiement %}
+            <tr>
+                <td>{{ m.label }}</td>
+                <td class="text-right">{{ m.montant|cents_to_euros }}</td>
+                <td class="text-right">{{ m.pourcentage }}%</td>
+                <td class="text-right">{{ m.nb_billets }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Aucun paiement.</p>
+    {% endif %}
+
+    {# -- PAR CANAL DE VENTE / BY SALES CHANNEL (conditionnel) -- #}
+    {% if par_canal %}
+    <h2>Par canal de vente</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Canal</th>
+                <th class="text-right">Nb billets</th>
+                <th class="text-right">Montant</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for c in par_canal %}
+            <tr>
+                <td>{{ c.label }}</td>
+                <td class="text-right">{{ c.nb_billets }}</td>
+                <td class="text-right">{{ c.montant|cents_to_euros }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {# -- SCANS -- #}
+    <h2>Scans</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Statut</th>
+                <th class="text-right">Nombre</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Scannes</td>
+                <td class="text-right">{{ scans.scannes }}</td>
+            </tr>
+            <tr>
+                <td>Non scannes</td>
+                <td class="text-right">{{ scans.non_scannes }}</td>
+            </tr>
+            <tr>
+                <td>Annules</td>
+                <td class="text-right">{{ scans.annules }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    {# -- CODES PROMO / PROMO CODES (conditionnel) -- #}
+    {% if codes_promo %}
+    <h2>Codes promo</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th class="text-right">Utilisations</th>
+                <th class="text-right">Reduction</th>
+                <th class="text-right">Manque a gagner</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for p in codes_promo %}
+            <tr>
+                <td>{{ p.nom }}</td>
+                <td class="text-right">{{ p.utilisations }}</td>
+                <td class="text-right">{{ p.taux_reduction }}%</td>
+                <td class="text-right">{{ p.manque_a_gagner|cents_to_euros }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {# -- REMBOURSEMENTS / REFUNDS -- #}
+    <h2>Remboursements</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Indicateur</th>
+                <th class="text-right">Valeur</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Nombre</td>
+                <td class="text-right">{{ remboursements.nombre }}</td>
+            </tr>
+            <tr>
+                <td>Montant total</td>
+                <td class="text-right">{{ remboursements.montant_total|cents_to_euros }}</td>
+            </tr>
+            <tr>
+                <td>Taux</td>
+                <td class="text-right">{{ remboursements.taux }}%</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="footer">Genere par TiBillet le {{ date_generation }}</div>
+</body>
+</html>

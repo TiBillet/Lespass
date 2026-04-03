@@ -1,0 +1,61 @@
+{% load i18n l10n billet_filters %}
+<div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 12px;"
+     data-testid="event-card" aria-label="{{ event.name }}">
+
+    {# Nom et date / Name and date #}
+    <div>
+        <h3 style="margin: 0 0 4px; font-size: 0.95rem; font-weight: 600; color: #111827;">
+            {{ event.name|truncatewords:8 }}
+        </h3>
+        <p style="margin: 0; font-size: 0.8rem; color: #6B7280;">
+            {{ event.datetime|date:"l d F Y, H:i" }}
+        </p>
+    </div>
+
+    {# Progress bar jauge / Fill rate progress bar #}
+    <div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
+            <span>{{ event.nb_vendus }} / {{ event.jauge_max }}</span>
+            <span style="font-weight: 600;">{{ event.taux_remplissage }}%</span>
+        </div>
+        <div style="background: #E5E7EB; border-radius: 4px; height: 6px; overflow: hidden;">
+            {# |unlocalize force le point decimal (pas la virgule FR) dans le CSS #}
+            {# / |unlocalize forces dot decimal (not FR comma) in CSS #}
+            <div style="background: #3B82F6; height: 100%; width: {{ event.taux_remplissage|unlocalize }}%; max-width: 100%; border-radius: 4px;"></div>
+        </div>
+    </div>
+
+    {# Chiffres cles / Key figures #}
+    <div style="display: flex; gap: 12px; font-size: 0.8rem;">
+        <div>
+            <div style="color: #6B7280;">{% translate "Sold" %}</div>
+            <div style="font-weight: 600;">{{ event.nb_vendus }}</div>
+        </div>
+        <div>
+            <div style="color: #6B7280;">{% translate "Scanned" %}</div>
+            <div style="font-weight: 600;">{{ event.nb_scannes }}</div>
+        </div>
+        <div>
+            <div style="color: #6B7280;">{% translate "Net revenue" %}</div>
+            <div style="font-weight: 600;">{{ event.ca_net|cents_to_euros }}</div>
+        </div>
+    </div>
+
+    {# Liens / Links #}
+    <div style="display: flex; gap: 8px; margin-top: auto;">
+        {% if event.nb_reservations > 0 %}
+        <a href="{% url 'staff_admin:BaseBillet_event_bilan' event.pk %}"
+           style="font-size: 0.8rem; color: #6366f1; text-decoration: none; font-weight: 500;"
+           data-testid="card-lien-bilan">
+            <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;" aria-hidden="true">assessment</span>
+            {% translate "Report" %}
+        </a>
+        {% endif %}
+        <a href="{% url 'staff_admin:BaseBillet_event_change' event.pk %}"
+           style="font-size: 0.8rem; color: #6B7280; text-decoration: none; font-weight: 500;"
+           data-testid="card-lien-modifier">
+            <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;" aria-hidden="true">edit</span>
+            {% translate "Edit" %}
+        </a>
+    </div>
+</div>

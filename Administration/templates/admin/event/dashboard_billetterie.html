@@ -1,0 +1,111 @@
+{% extends "admin/base_site.html" %}
+{% load i18n billet_filters %}
+
+{% block title %}{% translate "Ticketing dashboard" %}{% endblock %}
+
+{% block content %}
+{# Style pour les sections collapsibles details/summary #}
+{# / Style for collapsible details/summary sections #}
+<style>
+    .dashboard-section summary {
+        cursor: pointer;
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #E5E7EB;
+        margin-bottom: 16px;
+    }
+    .dashboard-section summary::-webkit-details-marker { display: none; }
+    .dashboard-section summary::after {
+        content: "▸";
+        font-size: 1.2rem;
+        color: #9CA3AF;
+        transition: transform 0.2s;
+    }
+    .dashboard-section[open] summary::after {
+        transform: rotate(90deg);
+    }
+</style>
+
+<div style="max-width: 1400px; margin: 0 auto; padding: 20px;">
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+        <h1 style="margin: 0; font-size: 1.5rem;" data-testid="dashboard-titre">
+            {% translate "Ticketing dashboard" %}
+        </h1>
+        <button type="button"
+                hx-get="{% url 'staff_admin:BaseBillet_event_dashboard_export' %}"
+                hx-target="#export-zone"
+                hx-swap="innerHTML"
+                style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px;
+                       background: #6366F1; color: white; border-radius: 6px; border: none;
+                       font-size: 0.85em; font-weight: 500; cursor: pointer;"
+                data-testid="btn-export-periode">
+            <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">download</span>
+            {% translate "Export report" %}
+        </button>
+    </div>
+
+    {# Zone pour le formulaire d'export charge via HTMX / Zone for HTMX-loaded export form #}
+    <div id="export-zone" data-testid="export-zone"></div>
+
+    {# --- EVENTS A VENIR / UPCOMING EVENTS --- #}
+    <details class="dashboard-section" style="margin-bottom: 32px;" open data-testid="section-a-venir">
+        <summary>
+            <h2 style="font-size: 1.1rem; margin: 0; color: #374151;">
+                {% translate "Upcoming events" %}
+                {% if events_a_venir %}
+                    <span style="font-size: 0.8rem; font-weight: 400; color: #9CA3AF; margin-left: 8px;">
+                        ({{ events_a_venir|length }})
+                    </span>
+                {% endif %}
+            </h2>
+        </summary>
+
+        {% if events_a_venir %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+            {% for event in events_a_venir %}
+                {% include "admin/event/partials/event_card.html" with event=event %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #9CA3AF; padding: 20px; text-align: center;">{% translate "No upcoming events" %}</p>
+        {% endif %}
+    </details>
+
+    {# --- EVENTS PASSES / PAST EVENTS (6 derniers) --- #}
+    <details class="dashboard-section" data-testid="section-passes">
+        <summary>
+            <div style="display: flex; align-items: center; gap: 16px; flex: 1;">
+                <h2 style="font-size: 1.1rem; margin: 0; color: #374151;">
+                    {% translate "Past events" %}
+                    {% if events_passes %}
+                        <span style="font-size: 0.8rem; font-weight: 400; color: #9CA3AF; margin-left: 8px;">
+                            ({{ events_passes|length }})
+                        </span>
+                    {% endif %}
+                </h2>
+                <a href="{% url 'staff_admin:BaseBillet_event_changelist' %}"
+                   style="font-size: 0.8rem; color: #6366f1; text-decoration: none;"
+                   data-testid="lien-tous-events"
+                   onclick="event.stopPropagation();">
+                    {% translate "View all events" %} &rarr;
+                </a>
+            </div>
+        </summary>
+
+        {% if events_passes %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+            {% for event in events_passes %}
+                {% include "admin/event/partials/event_card.html" with event=event %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color: #9CA3AF; padding: 20px; text-align: center;">{% translate "No past events" %}</p>
+        {% endif %}
+    </details>
+
+</div>
+{% endblock %}

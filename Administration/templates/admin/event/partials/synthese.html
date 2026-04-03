@@ -1,0 +1,56 @@
+{% load i18n l10n billet_filters %}
+<div style="background: white; border: 1px solid #E5E7EB; border-radius: 8px; padding: 20px; margin-bottom: 20px;" data-testid="bilan-synthese" aria-label="{% translate 'Summary' %}">
+    <h2 style="margin: 0 0 16px; font-size: 1.1rem; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px;">
+        {% translate "Summary" %}
+    </h2>
+
+    {# Jauge / Progress bar #}
+    <div style="margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.9rem;">
+            <span>{% translate "Tickets sold" %}: <strong data-testid="billets-vendus">{{ synthese.billets_vendus }}</strong> / {{ synthese.jauge_max }}</span>
+            <span><strong data-testid="taux-remplissage">{{ synthese.taux_remplissage }}%</strong></span>
+        </div>
+        <div style="background: #E5E7EB; border-radius: 4px; height: 8px; overflow: hidden;">
+            {# |unlocalize force le point decimal dans le CSS / Forces dot decimal in CSS #}
+            <div style="background: #3B82F6; height: 100%; width: {{ synthese.taux_remplissage|unlocalize }}%; max-width: 100%; border-radius: 4px;" data-testid="jauge-barre"></div>
+        </div>
+        <p class="visually-hidden">{% translate "Fill rate" %}: {{ synthese.taux_remplissage }}%</p>
+    </div>
+
+    {# Chiffres cles / Key figures #}
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px;">
+        <div style="padding: 12px; background: #F9FAFB; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Scanned" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600;" data-testid="billets-scannes">{{ synthese.billets_scannes }}</div>
+        </div>
+        <div style="padding: 12px; background: #F9FAFB; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "No-show" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600;" data-testid="no-show">{{ synthese.no_show }}</div>
+        </div>
+        <div style="padding: 12px; background: #F9FAFB; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Revenue incl. tax" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600;" data-testid="ca-ttc">{{ synthese.ca_ttc|cents_to_euros }}</div>
+        </div>
+        <div style="padding: 12px; background: #F9FAFB; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Refunds" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600; color: #DC2626;" data-testid="remboursements">-{{ synthese.remboursements|cents_to_euros }}</div>
+        </div>
+        <div style="padding: 12px; background: #F9FAFB; border-radius: 6px;">
+            <div style="font-size: 0.8rem; color: #6B7280;">{% translate "Net revenue" %}</div>
+            <div style="font-size: 1.3rem; font-weight: 600;" data-testid="ca-net">{{ synthese.ca_net|cents_to_euros }}</div>
+        </div>
+    </div>
+
+    {# Courbe de ventes cumulees — Chart.js natif Unfold / Cumulated sales chart — native Unfold Chart.js #}
+    {# On utilise has_courbe_ventes (booleen) au lieu de comparer des strings JSON #}
+    {% if has_courbe_ventes %}
+    <div style="margin-top: 16px;">
+        <h3 style="font-size: 0.95rem; margin: 0 0 8px; color: #374151;">{% translate "Cumulated sales" %}</h3>
+        {# Le wrapper avec position:relative + hauteur fixe contraint Chart.js #}
+        {# Sans ca, Chart.js prend toute la largeur du parent avec un ratio 2:1 #}
+        <div style="position: relative; height: 250px; width: 100%;">
+            <canvas class="chart" data-type="line" data-value='{{ courbe_ventes_json|safe }}' data-testid="courbe-ventes"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>

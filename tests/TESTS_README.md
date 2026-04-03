@@ -1136,5 +1136,31 @@ contient un article qui necessite un user : adhesion (AD) ou billet.
 
 ---
 
+### Float Django dans les attributs CSS style — piege `USE_L10N`
+
+Quand on injecte un float Django dans un attribut `style=""` d'un template
+(ex: `width: {{ pourcentage }}%`), et que `USE_L10N=True`, Django formate
+le nombre avec la virgule francaise : `width: 84,6%` au lieu de `width: 84.6%`.
+
+Le CSS est invalide — le navigateur ignore la propriete et applique le defaut
+(souvent `width: auto` ou `100%`).
+
+**Solution** : utiliser `|unlocalize` sur les nombres injectes dans du CSS.
+
+```html
+{% load l10n %}
+{# BON — le point decimal est force #}
+<div style="width: {{ pourcentage|unlocalize }}%;"></div>
+
+{# MAUVAIS — la virgule casse le CSS en locale FR #}
+<div style="width: {{ pourcentage }}%;"></div>
+```
+
+Ce piege affecte toutes les progress bars et tout element avec une dimension
+calculee depuis une variable Django. Decouvert sur les progress bars du bilan
+billetterie (Session 05, avril 2026).
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

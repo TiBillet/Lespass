@@ -1,0 +1,54 @@
+<!--
+MODALE D'ACTION RAPIDE STOCK (POS)
+/ Quick stock action modal (POS)
+
+LOCALISATION : inventaire/templates/inventaire/partial/modale_mouvement.html
+
+Chargée en hx-get depuis le menu contextuel d'un article POS.
+Soumet en hx-post vers StockViewSet (réception/perte/offert).
+-->
+{% load i18n %}
+
+<div id="modale-stock" style="padding: 16px;" data-testid="modale-stock">
+    <h4 style="margin: 0 0 12px;">
+        {{ product_name }} — {{ action_label }}
+    </h4>
+
+    <form hx-post="{{ action_url }}"
+          hx-target="#modale-stock"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+
+        <div style="margin-bottom: 12px;">
+            <label for="quantite" style="display: block; margin-bottom: 4px;">
+                {% translate "Quantité" %} ({{ unite_label }})
+            </label>
+            <input type="number" name="quantite" id="quantite" min="1" required
+                   style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 120px;"
+                   data-testid="input-quantite-mouvement">
+        </div>
+
+        <div style="margin-bottom: 12px;">
+            <label for="motif" style="display: block; margin-bottom: 4px;">
+                {% translate "Motif (optionnel)" %}
+            </label>
+            <input type="text" name="motif" id="motif" maxlength="200"
+                   style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 100%;"
+                   data-testid="input-motif-mouvement">
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+            <button type="submit"
+                    style="padding: 8px 16px; background: var(--color-primary-600, #2563eb); color: white; border: none; border-radius: 4px; cursor: pointer;"
+                    data-testid="btn-valider-mouvement">
+                {% translate "Valider" %}
+            </button>
+            <button type="button"
+                    onclick="this.closest('#modale-stock').remove()"
+                    style="padding: 8px 16px; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                    data-testid="btn-annuler-mouvement">
+                {% translate "Annuler" %}
+            </button>
+        </div>
+    </form>
+</div>

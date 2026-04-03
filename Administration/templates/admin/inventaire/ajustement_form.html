@@ -1,0 +1,62 @@
+<!--
+FORMULAIRE D'AJUSTEMENT INVENTAIRE
+/ Inventory adjustment form
+
+LOCALISATION : Administration/templates/admin/inventaire/ajustement_form.html
+
+Affiché sous le formulaire produit POS (change_form_after_template).
+Visible uniquement si le produit a un Stock lié.
+-->
+{% load i18n %}
+
+{% if original and original.stock_inventaire %}
+{% with stock=original.stock_inventaire %}
+<div style="margin-top: 20px; padding: 16px; border: 1px solid var(--color-primary-200, #e5e7eb); border-radius: 8px; background: var(--color-base-0, #fff);">
+    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">
+        {% translate "Ajustement inventaire" %}
+    </h3>
+
+    <p style="margin: 0 0 12px 0; color: var(--color-base-500, #6b7280);">
+        {% translate "Stock actuel" %} :
+        <strong>{{ stock.quantite }} {{ stock.get_unite_display }}</strong>
+        {% if stock.est_en_alerte %}
+            <span style="color: #d97706; font-weight: 600;">{% translate "Alerte" %}</span>
+        {% elif stock.est_en_rupture %}
+            <span style="color: #dc2626; font-weight: 600;">{% translate "Rupture" %}</span>
+        {% endif %}
+    </p>
+
+    <form method="post"
+          action="../ajustement-stock/"
+          style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+        {% csrf_token %}
+
+        <div>
+            <label for="stock_reel" style="display: block; font-size: 13px; margin-bottom: 4px;">
+                {% translate "Stock réel compté" %}
+            </label>
+            <input type="number" name="stock_reel" id="stock_reel" required
+                   style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 150px;"
+                   placeholder="{{ stock.quantite }}"
+                   data-testid="input-stock-reel">
+        </div>
+
+        <div>
+            <label for="motif" style="display: block; font-size: 13px; margin-bottom: 4px;">
+                {% translate "Motif (optionnel)" %}
+            </label>
+            <input type="text" name="motif" id="motif" maxlength="200"
+                   style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 250px;"
+                   placeholder="{% translate 'Inventaire physique' %}"
+                   data-testid="input-motif-ajustement">
+        </div>
+
+        <button type="submit"
+                style="padding: 8px 16px; background-color: #d97706; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;"
+                data-testid="btn-ajustement-stock">
+            {% translate "Ajuster" %}
+        </button>
+    </form>
+</div>
+{% endwith %}
+{% endif %}

@@ -91,6 +91,12 @@ def get_sidebar_navigation(request):
             "collapsible": True,
             "items": [
                 {
+                    "title": _("Dashboard"),
+                    "icon": "monitoring",
+                    "link": reverse_lazy("staff_admin:BaseBillet_event_dashboard"),
+                    "permission": admin_permission,
+                },
+                {
                     "title": _("Ticket products"),
                     "icon": "storefront",
                     "link": reverse_lazy("staff_admin:BaseBillet_ticketproduct_changelist"),
@@ -248,6 +254,23 @@ def get_sidebar_navigation(request):
                     "title": _("Federations"),
                     "icon": "hub",
                     "link": reverse_lazy("staff_admin:fedow_core_federation_changelist"),
+                    "permission": admin_permission,
+                },
+            ],
+        })
+
+    # --- module_inventaire : Stock et mouvements ---
+    # / --- module_inventaire: Stock and movements ---
+    if configuration.module_inventaire:
+        navigation.append({
+            "title": _("Inventaire"),
+            "separator": True,
+            "collapsible": True,
+            "items": [
+                {
+                    "title": _("Mouvements de stock"),
+                    "icon": "inventory_2",
+                    "link": reverse_lazy("staff_admin:inventaire_mouvementstock_changelist"),
                     "permission": admin_permission,
                 },
             ],
@@ -429,6 +452,11 @@ MODULE_FIELDS = {
         "link_url": "/laboutik/caisse/",
         "link_label": _("Open POS"),
         "link_icon": "fa-cash-register",
+    },
+    "module_inventaire": {
+        "name": _("Inventory"),
+        "description": _("Stock management for POS products: tracking, alerts, movements."),
+        "testid": "dashboard-card-inventaire",
     },
 }
 

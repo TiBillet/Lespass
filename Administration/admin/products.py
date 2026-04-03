@@ -4,6 +4,8 @@ import re
 
 from django import forms
 from django.contrib import admin, messages
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
 from django.db import models, IntegrityError
 from django.forms import ModelForm
 from django.http import HttpRequest
@@ -19,11 +21,11 @@ from unfold.decorators import action
 from unfold.widgets import UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget, UnfoldAdminColorInputWidget
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
+from Administration.admin.inventaire import StockInline
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from BaseBillet.models import (
     Configuration, Product, TicketProduct, MembershipProduct, POSProduct,
-    CategorieProduct, Price, FormbricksForms, ProductFormField, Tva,
-    PromotionalCode
+    CategorieProduct, Price, FormbricksForms, ProductFormField, Tva
 )
 
 logger = logging.getLogger(__name__)
@@ -519,7 +521,7 @@ class ProductAdminCustomForm(ModelForm):
                 if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
                     return super().clean()
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
-            except Exception as e:
+            except Exception:
                 raise forms.ValidationError(_("Please add at least one rate to this product."))
 
 
@@ -1064,7 +1066,8 @@ class POSProductAdmin(ProductAdmin):
     Filtered admin view: only POS products (methode_caisse IS NOT NULL).
     LOCALISATION : Administration/admin/products.py"""
     form = POSProductForm
-    inlines = [PriceInline]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+    inlines = [StockInline, PriceInline]  # StockInline + prix, pas de ProductFormFieldInline (champs dynamiques = adhesions)
+    change_form_after_template = "admin/inventaire/ajustement_form.html"
 
     fieldsets = (
         (_('General'), {
@@ -1117,6 +1120,55 @@ class POSProductAdmin(ProductAdmin):
         # / Only products with a POS method set
         qs = super().get_queryset(request)
         return qs.filter(methode_caisse__isnull=False)
+
+    def get_urls(self):
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<path:object_id>/ajustement-stock/',
+                self.admin_site.admin_view(
+                    csrf_protect(require_POST(self._ajustement_stock_view))
+                ),
+                name='basebillet_posproduct_ajustement_stock',
+            ),
+        ]
+        return custom_urls + urls
+
+    def _ajustement_stock_view(self, request, object_id):
+        """
+        Traite un ajustement de stock depuis l'admin.
+        / Processes a stock adjustment from the admin.
+        """
+        from inventaire.models import Stock
+        from inventaire.serializers import AjustementSerializer
+        from inventaire.services import StockService
+
+        product = get_object_or_404(Product, pk=object_id)
+
+        try:
+            stock = product.stock_inventaire
+        except Stock.DoesNotExist:
+            messages.error(request, _("This product has no configured stock."))
+            return redirect(request.META.get("HTTP_REFERER", "/"))
+
+        serializer = AjustementSerializer(data=request.POST)
+        if not serializer.is_valid():
+            messages.error(request, str(serializer.errors))
+            return redirect(request.META.get("HTTP_REFERER", "/"))
+
+        StockService.ajuster_inventaire(
+            stock=stock,
+            stock_reel=serializer.validated_data['stock_reel'],
+            motif=serializer.validated_data.get('motif', ''),
+            utilisateur=request.user,
+        )
+
+        messages.success(
+            request,
+            _("Stock adjusted for %(product)s.") % {'product': product.name},
+        )
+        return redirect(request.META.get("HTTP_REFERER", "/"))
 
 
 # ---------------------------------------------------------------------------
