@@ -12,7 +12,7 @@
 	</nav>
 	<div id="tables-container">
 		{% for table in tables %}
-		<a class="BF-col-haut table-bouton"
+		<a class="BF-col-haut table-bouton" data-nav-spinner
 			href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&id_table={{table.id}}">
 			<div class="BF-col table-nom">{{table.name}}</div>
 			<div class="BF-ligne table-etat" style="background-color: var({{ table_status_colors|sel:table.statut }});">
@@ -31,7 +31,7 @@
 		</div>
 	</div>
 	<!-- bouton service direct -->
-	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
+	<a class="BF-ligne footer-bt fond-coul1 test-service-direct" data-nav-spinner href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{pv.id}}&tag_id_cm={{card.tag_id}}&force_service_direct=true">
 		<i class="fas fa-cash-register md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "SERVICE DIRECT" %}</div>

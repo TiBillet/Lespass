@@ -340,6 +340,8 @@ def _charger_events_billetterie():
     Charge tous les events futurs avec annotations et prefetch en 3 requêtes max.
     Loads all future events with annotations and prefetch in max 3 queries.
 
+    LOCALISATION : laboutik/views.py
+
     Retourne (events_list, compteur_tickets_par_price) :
     - events_list : liste d'Event annotés (nb_tickets_valides, nb_en_cours_achat)
       avec produits publiés et prix EUR pré-chargés (to_attr).
@@ -388,7 +390,9 @@ def _charger_events_billetterie():
             # / Nested prefetch: published products → published EUR prices
             Prefetch(
                 "products",
-                queryset=Product.objects.filter(publish=True).prefetch_related(
+                queryset=Product.objects.filter(publish=True)
+                .select_related("categorie_pos")
+                .prefetch_related(
                     Prefetch(
                         "prices",
                         queryset=Price.objects.filter(
@@ -1198,8 +1202,12 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # --- Construire les données articles et catégories ---
         # --- Build article and category data ---
-        articles = _construire_donnees_articles(pv, events_billetterie=events_billetterie)
-        categories = _construire_donnees_categories(pv, events_billetterie=events_billetterie)
+        articles = _construire_donnees_articles(
+            pv, events_billetterie=events_billetterie
+        )
+        categories = _construire_donnees_categories(
+            pv, events_billetterie=events_billetterie
+        )
 
         # --- Construire le state (enrichi avec PV + carte primaire) ---
         # --- Build state (enriched with POS + primary card) ---

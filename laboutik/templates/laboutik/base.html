@@ -165,19 +165,19 @@
 	<div id="event-organizer" class="hide"></div>
 	<script>
 		/**
-		 * Affiche le spinner de navigation au clic sur un lien de full page reload.
-		 * Cible : tous les liens <a> dont le href contient "point_de_vente" (navigation entre PV).
+		 * Affiche le spinner de navigation au clic sur un element marque data-nav-spinner.
+		 * Cible : liens <a> et elements avec onclick qui font un full page reload (navigation PV, tables).
 		 * Le spinner apparait immediatement sur la page courante.
 		 * Le full reload remplace tout le DOM — pas besoin de cacher le spinner apres.
-		 * / Shows the navigation spinner on click on a full page reload link.
-		 * Targets: all <a> links whose href contains "point_de_vente" (POS navigation).
+		 * / Shows the navigation spinner on click on elements marked with data-nav-spinner.
+		 * Targets: <a> links and onclick elements that trigger full page reloads (POS navigation, tables).
 		 * Spinner appears immediately on the current page.
 		 * Full reload replaces the entire DOM — no need to hide the spinner after.
 		 *
 		 * LOCALISATION : laboutik/templates/laboutik/base.html
 		 */
-		document.querySelectorAll('a[href*="point_de_vente"]').forEach(function(lien) {
-			lien.addEventListener('click', function() {
+		document.querySelectorAll('[data-nav-spinner]').forEach(function(element) {
+			element.addEventListener('click', function() {
 				var spinner = document.getElementById('page-load-spinner');
 				if (spinner) spinner.style.display = 'flex';
 			});

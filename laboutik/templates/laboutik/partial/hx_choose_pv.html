@@ -6,7 +6,7 @@
     {# / Full reload so JS event listeners are re-attached #}
     {% for pv in points_de_vente %}
     <a href="{% url 'laboutik-caisse-point_de_vente' %}?uuid_pv={{ pv.uuid }}&tag_id_cm={{ tag_id_cm }}"
-       class="btn-pv" data-testid="btn-pv-{{ pv.name|slugify }}">
+       class="btn-pv" data-nav-spinner data-testid="btn-pv-{{ pv.name|slugify }}">
         {{ pv.name }}
     </a>
     {% endfor %}
