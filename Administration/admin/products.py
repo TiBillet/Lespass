@@ -334,11 +334,22 @@ class PriceInline(TabularInline):
     def get_fields(self, request, obj=None):
         # Champs de base pour tous les produits
         # / Base fields for all products
-        fields = ["name", "product", "prix", "free_price", "subscription_type", "publish"]
+        fields = [
+            "name",
+            "product",
+            "prix",
+            "free_price",
+            "subscription_type",
+            "publish",
+        ]
 
         # Contenance visible uniquement pour les articles POS de type vente
         # / Contenance visible only for POS sale products (methode_caisse=VT)
-        if obj and hasattr(obj, "methode_caisse") and obj.methode_caisse == Product.VENTE:
+        if (
+            obj
+            and hasattr(obj, "methode_caisse")
+            and obj.methode_caisse == Product.VENTE
+        ):
             fields.insert(4, "contenance")
 
         return fields

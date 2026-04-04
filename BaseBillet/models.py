@@ -737,7 +737,7 @@ class Configuration(SingletonModel):
                 msg = _('Link your stripe account to accept payment')
                 return format_html(f"<a href='https://{tenant_url}/tenant/onboard_stripe_from_config'>{msg}</a>")
             return _("Stripe connected")
-        except Exception as e:
+        except Exception:
             logger.error(_("Stripe error, check admin"))
             return format_html("<p>" + _("Stripe error, check admin") + "</p>")
 
@@ -2858,7 +2858,7 @@ class Paiement_stripe(models.Model):
         if checkout_session.get('payment_method_types'):
             logger.info(f"checkout_session.get('payment_method_types') : {checkout_session.get('payment_method_types')}")
             if 'sepa_debit' in checkout_session.get('payment_method_types'):
-                logger.info(f"sepa_debit detected")
+                logger.info("sepa_debit detected")
 
                 # uniquement si paiement direct.
                 payment_intent_id = checkout_session.get('payment_intent')
@@ -3301,7 +3301,7 @@ class Membership(models.Model):
             return str(self.user.email).lower()
         if self.card_number:
             return _('Anonymous ') + self.card_number
-        return f'Anonymous'
+        return 'Anonymous'
 
     def member_name(self):
         if self.pseudo:
@@ -3573,7 +3573,7 @@ class FederatedPlace(models.Model):
         return self.tenant.name
 
     def save(self, *args, **kwargs):
-        cache.delete(f"federated_places")
+        cache.delete("federated_places")
         super().save(*args, **kwargs)
 
 
