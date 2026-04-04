@@ -188,14 +188,49 @@ class StockAdmin(ModelAdmin):
         "autoriser_vente_hors_stock",
     ]
 
+    def lien_vers_pos_product(self, obj):
+        """
+        Affiche le nom du produit comme lien cliquable vers POSProductAdmin.
+        / Displays product name as a clickable link to POSProductAdmin.
+        """
+        if not obj or not obj.product:
+            return "-"
+        from django.urls import reverse
+        from django.utils.html import format_html
+
+        url = reverse("staff_admin:BaseBillet_posproduct_change", args=[obj.product.pk])
+        return format_html('<a href="{}">{}</a>', url, obj.product.name)
+
+    lien_vers_pos_product.short_description = _("Article")
+
+    def get_fields(self, request, obj=None):
+        # En mode change : remplacer "product" par le lien cliquable vers POSProduct
+        # En mode add : garder "product" (autocomplete)
+        # / In change mode: replace "product" with clickable link to POSProduct
+        # In add mode: keep "product" (autocomplete)
+        if obj is not None:
+            return [
+                "lien_vers_pos_product",
+                "quantite",
+                "unite",
+                "seuil_alerte",
+                "autoriser_vente_hors_stock",
+            ]
+        return [
+            "product",
+            "quantite",
+            "unite",
+            "seuil_alerte",
+            "autoriser_vente_hors_stock",
+        ]
+
     def get_readonly_fields(self, request, obj=None):
-        # En mode change : article, quantité et unité sont en lecture seule
-        # (la quantité se modifie via les actions stock, pas en éditant le champ)
+        # En mode change : article (lien), quantité et unité sont en lecture seule
         # En mode add : tout est éditable
-        # / In change mode: article, quantity and unit are read-only
+        # / In change mode: article (link), quantity and unit are read-only
         # In add mode: everything is editable
         if obj is not None:
-            return ["product", "quantite", "unite"]
+            return ["lien_vers_pos_product", "quantite", "unite"]
         return []
 
     change_form_after_template = "admin/inventaire/stock_actions.html"
