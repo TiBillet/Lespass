@@ -71,7 +71,8 @@ FLUX :
        hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
        hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv }}"}'
        hx-target="#print-feedback"
-       hx-swap="innerHTML">
+       hx-swap="innerHTML"
+       data-loading-disable>
     <div class="bt-basic-icon">
       <i class="fas fa-print" aria-hidden="true"></i>
     </div>

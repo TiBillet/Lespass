@@ -41,6 +41,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_sortie_succes.html
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
             hx-target="#ventes-zone"
             hx-swap="innerHTML"
+            data-loading-disable
             data-testid="btn-retour-recap">
             <i class="fas fa-arrow-left" aria-hidden="true"></i>
             {% translate "Retour au Ticket X" %}

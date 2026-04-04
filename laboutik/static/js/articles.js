@@ -270,6 +270,18 @@ function syncStockBloquantApresWebSocket() {
 	}
 }
 
+/**
+ * Ferme le panel contextuel article (vide son contenu).
+ * Appelé par les boutons [✕] dans les partials du panel.
+ * / Closes the article context panel (empties its content).
+ * Called by [✕] buttons in panel partials.
+ *
+ * LOCALISATION : laboutik/static/js/articles.js
+ */
+function closeArticlePanel() {
+	document.getElementById('article-panel').innerHTML = ''
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 	document.querySelector('#products').addEventListener('click', manageKey)
 	document.querySelector('#products').addEventListener('articlesRemove', articlesRemove)
@@ -281,4 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
 	// / After each WebSocket message, sync blocking state
 	// from stock badges to article containers.
 	document.body.addEventListener('htmx:wsAfterMessage', syncStockBloquantApresWebSocket)
+
+	// Long press sur un article → charger le panel contextuel via HTMX
+	// / Long press on article → load contextual panel via HTMX
+	document.querySelector('#products').addEventListener('longpress', function(e) {
+		const uuid = e.detail.productUuid
+		if (!uuid) return
+		htmx.ajax('GET', '/laboutik/article-panel/' + uuid + '/panel/', {
+			target: '#article-panel',
+			swap: 'innerHTML'
+		})
+	})
 })

@@ -28,6 +28,7 @@ FLUX :
   <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" bg="--bleu03" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
     hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')"
+    data-loading-disable
     data-testid="deposit-btn-cashless" />
   {% endif %}
 
@@ -86,6 +87,7 @@ FLUX :
     hx-get="{% url 'laboutik-paiement-lire_nfc_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&panier_a_billets={{ panier_a_billets }}&moyens_paiement={{ moyens_paiement_csv }}"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     data-testid="client-choose-nfc"
+    data-loading-disable
     role="button" tabindex="0"
     aria-label="{% translate 'Scanner une carte TiBillet' %}">
     <i class="fas fa-id-card choose-id-icon" aria-hidden="true"></i>
@@ -104,6 +106,7 @@ FLUX :
     hx-get="{% url 'laboutik-paiement-formulaire_identification_client' %}?panier_a_recharges={{ panier_a_recharges }}&panier_a_adhesions={{ panier_a_adhesions }}&panier_a_billets={{ panier_a_billets }}&moyens_paiement={{ moyens_paiement_csv }}"
     hx-target="#messages" hx-trigger="click" hx-swap="innerHTML"
     data-testid="client-choose-email"
+    data-loading-disable
     role="button" tabindex="0"
     aria-label="{% translate 'Saisir email / nom' %}">
     <i class="fas fa-envelope choose-id-icon" aria-hidden="true"></i>
@@ -122,6 +125,7 @@ FLUX :
   <c-bt.paiement name='{% translate "CASHLESS" %}' icon="fa-address-card" bg="--bleu03" hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm"
     hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc')"
+    data-loading-disable
     data-testid="paiement-btn-cashless" />
   {% endif %}
 
@@ -129,6 +133,7 @@ FLUX :
   <c-bt.paiement name='{% translate "ESPÈCE" %}' icon="fa-coins" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=espece&total={{ total|unlocalize }}"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','espece')"
+    data-loading-disable
     data-testid="paiement-btn-especes" />
   {% endif %}
 
@@ -136,6 +141,7 @@ FLUX :
   <c-bt.paiement name='{% translate "CB" %}' icon="fa-credit-card" bg="--bleu05" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=carte_bancaire"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','carte_bancaire')"
+    data-loading-disable
     data-testid="paiement-btn-cb" />
   {% endif %}
 
@@ -143,6 +149,7 @@ FLUX :
   <c-bt.paiement name='{% translate "CHÈQUE" %}' icon="fa-money-check" bg="--gris02" hx-get="{% url 'laboutik-paiement-confirmer' %}?method=CH"
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','CH')"
+    data-loading-disable
     data-testid="paiement-btn-cheque" />
   {% endif %}
 
@@ -151,6 +158,7 @@ FLUX :
     hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','gift')"
     style="color: var(--noir01);"
+    data-loading-disable
     data-testid="paiement-btn-offrir" />
   {% endif %}
 

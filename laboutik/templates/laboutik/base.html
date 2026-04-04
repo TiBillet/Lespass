@@ -38,6 +38,22 @@
 <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()"
 	hx-on::after-request="spinnerRequestOff()" style="background-color:#000000;"> -->
 <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-ext="loading-states" style="background-color:#000000;">
+	<!-- SPINNER NAVIGATION — overlay pour les full page reloads (navigation entre PV).
+	     Cache par defaut. Affiche via JS onclick sur les liens de navigation.
+	     Le full reload remplace tout le DOM, donc pas besoin de le cacher manuellement.
+	     Complementaire du spinner HTMX (#laboutik-spinner) qui gere les requetes AJAX.
+	     / PAGE LOAD SPINNER — overlay for full page reloads (navigation between POS).
+	     Hidden by default. Shown via JS onclick on navigation links.
+	     Full reload replaces the entire DOM, so no manual hide needed.
+	     Complements the HTMX spinner (#laboutik-spinner) which handles AJAX requests. -->
+	<div id="page-load-spinner"
+	     aria-hidden="true"
+	     style="position:fixed;inset:0;z-index:10000;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);">
+		<div role="status"
+		     style="width:3rem;height:3rem;border-radius:50%;border:3px solid rgba(255,255,255,0.2);border-top-color:var(--vert01,#00e676);animation:laboutik-spin 0.7s linear infinite;">
+			<span class="visually-hidden">{% load i18n %}{% translate "Chargement..." %}</span>
+		</div>
+	</div>
 	{% block content %} {% endblock content %}
 
 	<!-- SPINNER DE CHARGEMENT — extension loading-states officielle.
@@ -147,6 +163,26 @@
 	</script>
 	{% block script %} {% endblock script %}
 	<div id="event-organizer" class="hide"></div>
+	<script>
+		/**
+		 * Affiche le spinner de navigation au clic sur un lien de full page reload.
+		 * Cible : tous les liens <a> dont le href contient "point_de_vente" (navigation entre PV).
+		 * Le spinner apparait immediatement sur la page courante.
+		 * Le full reload remplace tout le DOM — pas besoin de cacher le spinner apres.
+		 * / Shows the navigation spinner on click on a full page reload link.
+		 * Targets: all <a> links whose href contains "point_de_vente" (POS navigation).
+		 * Spinner appears immediately on the current page.
+		 * Full reload replaces the entire DOM — no need to hide the spinner after.
+		 *
+		 * LOCALISATION : laboutik/templates/laboutik/base.html
+		 */
+		document.querySelectorAll('a[href*="point_de_vente"]').forEach(function(lien) {
+			lien.addEventListener('click', function() {
+				var spinner = document.getElementById('page-load-spinner');
+				if (spinner) spinner.style.display = 'flex';
+			});
+		});
+	</script>
 </body>
 
 </html>

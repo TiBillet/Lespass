@@ -57,7 +57,7 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 	the listener. With innerHTML, the original #messages element is preserved.
 	-->
 	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" data-testid="footer-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
-		hx-target="#messages" hx-swap="innerHTML">
+		hx-target="#messages" hx-swap="innerHTML" data-loading-disable>
 		<i class="fas fa-money-check-alt md4px"></i>
 		<div class="BF-col-deb footer-bt-text mg4px">
 			<div>{% translate "CHECK" %}</div>

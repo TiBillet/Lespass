@@ -1,0 +1,61 @@
+{% load i18n %}
+<div class="panel-header">
+    <span class="panel-title">{{ product.name }}</span>
+    <button class="panel-close-btn"
+            onclick="closeArticlePanel()"
+            aria-label="{% translate 'Fermer' %}"
+            data-testid="panel-close">
+        ✕
+    </button>
+</div>
+
+<div class="panel-body">
+    {% if has_stock %}
+    <button class="panel-menu-btn"
+            hx-get="/laboutik/article-panel/{{ product.uuid }}/stock/"
+            hx-target="#article-panel"
+            hx-swap="innerHTML"
+            data-loading-disable
+            data-testid="panel-btn-stock">
+        <span class="panel-menu-icon">📦</span>
+        <span class="panel-menu-label">{% translate "Stock" %}</span>
+    </button>
+    {% else %}
+    <button class="panel-menu-btn" disabled
+            data-testid="panel-btn-stock-disabled">
+        <span class="panel-menu-icon">📦</span>
+        <span class="panel-menu-label">{% translate "Stock" %}</span>
+        <span class="panel-menu-badge">{% translate "non configuré" %}</span>
+    </button>
+    {% endif %}
+
+    <button class="panel-menu-btn" disabled data-testid="panel-btn-categorie">
+        <span class="panel-menu-icon">🏷️</span>
+        <span class="panel-menu-label">{% translate "Catégorie" %}</span>
+        <span class="panel-menu-badge">{% translate "bientôt" %}</span>
+    </button>
+
+    <button class="panel-menu-btn" disabled data-testid="panel-btn-pdv">
+        <span class="panel-menu-icon">🏪</span>
+        <span class="panel-menu-label">{% translate "Point de vente" %}</span>
+        <span class="panel-menu-badge">{% translate "bientôt" %}</span>
+    </button>
+
+    <button class="panel-menu-btn" disabled data-testid="panel-btn-prix">
+        <span class="panel-menu-icon">💰</span>
+        <span class="panel-menu-label">{% translate "Prix" %}</span>
+        <span class="panel-menu-badge">{% translate "bientôt" %}</span>
+    </button>
+
+    <button class="panel-menu-btn" disabled data-testid="panel-btn-apparence">
+        <span class="panel-menu-icon">🎨</span>
+        <span class="panel-menu-label">{% translate "Apparence" %}</span>
+        <span class="panel-menu-badge">{% translate "bientôt" %}</span>
+    </button>
+
+    <button class="panel-menu-btn" disabled data-testid="panel-btn-dupliquer">
+        <span class="panel-menu-icon">📋</span>
+        <span class="panel-menu-label">{% translate "Dupliquer" %}</span>
+        <span class="panel-menu-badge">{% translate "bientôt" %}</span>
+    </button>
+</div>

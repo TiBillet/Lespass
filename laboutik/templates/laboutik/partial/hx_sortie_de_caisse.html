@@ -31,6 +31,7 @@ Validation JS avant envoi :
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
             hx-target="#ventes-zone"
             hx-swap="innerHTML"
+            data-loading-disable
             data-testid="btn-retour-recap">
             <i class="fas fa-arrow-left" aria-hidden="true"></i>
             {% translate "Retour" %}
@@ -166,6 +167,7 @@ Validation JS avant envoi :
 
         <button type="submit"
                 class="sortie-btn-submit"
+                data-loading-disable
                 data-testid="sortie-btn-enregistrer">
             <i class="fas fa-sign-out-alt" aria-hidden="true" style="margin-right: 0.4rem;"></i>
             {% translate "Enregistrer la sortie" %}

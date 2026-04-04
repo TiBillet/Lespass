@@ -12,7 +12,7 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-from unfold.admin import ModelAdmin, TabularInline
+from unfold.admin import ModelAdmin, StackedInline, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action
@@ -289,70 +289,95 @@ class IconPickerWidget(forms.Widget):
         )
 
 
-class PriceInlineChangeForm(ModelForm):
-    # Formulaire inline pour les tarifs (dans ProductAdmin et POSProductAdmin)
-    # / Inline form for prices (in ProductAdmin and POSProductAdmin)
+class BasePriceInlineForm(ModelForm):
+    """Formulaire de base pour les tarifs inline (TabularInline).
+    Validation commune : prix entre 0 et 1 EUR interdit.
+    / Base form for inline prices (TabularInline).
+    Common validation: price between 0 and 1 EUR forbidden."""
+
     class Meta:
         model = Price
-        fields = (
-            "name",
-            "product",
-            "prix",
-            "free_price",
-            "subscription_type",
-            "publish",
-        )
+        # Champs exclus : ceux geres automatiquement ou non pertinents dans les inlines
+        # / Excluded fields: auto-managed or not relevant in inlines
+        exclude = ("short_description", "long_description", "vat")
 
     def clean_prix(self):
-        cleaned_data = self.cleaned_data
-        prix = cleaned_data.get("prix")
+        prix = self.cleaned_data.get("prix")
         if 0 < prix < 1:
             raise forms.ValidationError(
                 _("A rate cannot be between 0€ and 1€"), code="invalid"
             )
         return prix
 
+
+class MembershipPriceInlineForm(BasePriceInlineForm):
+    """Formulaire inline specifique aux tarifs adhesion.
+    Ajoute la validation : duree obligatoire + coherence paiement recurrent.
+    / Inline form specific to membership prices.
+    Adds validation: duration required + recurring payment coherence."""
+
     def clean_subscription_type(self):
-        cleaned_data = self.cleaned_data
-        product: Product = cleaned_data.get("product")
-        subscription_type = cleaned_data.get("subscription_type")
-        if product.categorie_article == Product.ADHESION:
+        product = self.cleaned_data.get("product")
+        subscription_type = self.cleaned_data.get("subscription_type")
+        if product and product.categorie_article == Product.ADHESION:
             if subscription_type == Price.NA:
                 raise forms.ValidationError(
                     _("A subscription must have a duration"), code="invalid"
                 )
         return subscription_type
 
+    def clean_recurring_payment(self):
+        recurring_payment = self.cleaned_data.get("recurring_payment")
+        if not recurring_payment:
+            return recurring_payment
 
-class PriceInline(TabularInline):
+        # Verifier que le produit est bien une adhesion
+        # / Verify the product is indeed a membership
+        if hasattr(self.instance, "product"):
+            categorie_product = self.instance.product.categorie_article
+        elif self.cleaned_data.get("product"):
+            categorie_product = self.cleaned_data["product"].categorie_article
+        else:
+            raise forms.ValidationError(_("No product ?"), code="invalid")
+
+        if categorie_product and categorie_product != Product.ADHESION:
+            raise forms.ValidationError(
+                _("A recurring payment plan must have a membership-type product."),
+                code="invalid",
+            )
+
+        # Verifier que subscription_type est defini
+        # / Verify subscription_type is set
+        if self.data.get("subscription_type") not in [
+            Price.DAY,
+            Price.WEEK,
+            Price.MONTH,
+            Price.CAL_MONTH,
+            Price.YEAR,
+        ]:
+            raise forms.ValidationError(
+                _("A recurring payment must have a membership term. Re-enter the term just above."),
+                code="invalid",
+            )
+
+        return recurring_payment
+
+
+class BasePriceInline(StackedInline):
+    """Inline de base pour les tarifs (StackedInline Unfold).
+    Champs communs a tous les types de produit. Chaque tarif = un bloc vertical.
+    / Base inline for prices (Unfold StackedInline).
+    Common fields for all product types. Each price = a vertical block."""
+
     model = Price
     fk_name = "product"
-    form = PriceInlineChangeForm
+    form = BasePriceInlineForm
     extra = 0
-    show_change_link = True
+    show_change_link = False
+    fields = ("name", ("prix", "free_price"), ("publish", "order"))
 
-    def get_fields(self, request, obj=None):
-        # Champs de base pour tous les produits
-        # / Base fields for all products
-        fields = [
-            "name",
-            "product",
-            "prix",
-            "free_price",
-            "subscription_type",
-            "publish",
-        ]
-
-        # Contenance visible uniquement pour les articles POS de type vente
-        # / Contenance visible only for POS sale products (methode_caisse=VT)
-        if (
-            obj
-            and hasattr(obj, "methode_caisse")
-            and obj.methode_caisse == Product.VENTE
-        ):
-            fields.insert(4, "contenance")
-
-        return fields
+    class Media:
+        css = {"all": ("admin/css/price_inline.css",)}
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -365,6 +390,57 @@ class PriceInline(TabularInline):
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+
+class TicketPriceInlineForm(BasePriceInlineForm):
+    """Formulaire inline specifique aux tarifs billetterie.
+    Retire le bouton "+" sur adhesions_obligatoires.
+    / Inline form specific to ticket prices.
+    Removes the "add" button on adhesions_obligatoires."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pas de bouton "+" pour creer un produit depuis ce champ
+        # / No "add" button to create a product from this field
+        if "adhesions_obligatoires" in self.fields:
+            self.fields["adhesions_obligatoires"].widget.can_add_related = False
+
+
+class TicketPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits billetterie.
+    Ajoute stock (jauge par evenement), max_per_user et adhesions_obligatoires.
+    / Price inline for ticket products.
+    Adds stock (capacity per event), max_per_user and adhesions_obligatoires."""
+
+    form = TicketPriceInlineForm
+    autocomplete_fields = ["adhesions_obligatoires"]
+    fields = ("name", ("prix", "free_price"), ("stock", "max_per_user"), "adhesions_obligatoires", ("publish", "order"))
+
+
+class MembershipPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits adhesion.
+    Ajoute les champs abonnement : duree, recurrence, engagement, jauge, max par user.
+    / Price inline for membership products.
+    Adds subscription fields: duration, recurrence, commitment, capacity, max per user."""
+
+    form = MembershipPriceInlineForm
+    fields = (
+        "name",
+        ("prix", "free_price"),
+        ("subscription_type", "recurring_payment"),
+        ("iteration", "commitment"),
+        ("stock", "max_per_user"),
+        ("publish", "order"),
+    )
+
+
+class POSPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits de caisse (POS).
+    Ajoute contenance (volume par vente). Le stock POS est gere par l'app inventaire.
+    / Price inline for POS products.
+    Adds contenance (volume per sale). POS stock managed by inventaire app."""
+
+    fields = ("name", "prix", "contenance", ("publish", "order"))
 
 
 class ProductFormFieldInlineForm(ModelForm):
@@ -636,7 +712,7 @@ class ProductArchiveFilter(admin.SimpleListFilter):
 class ProductAdmin(ModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
-    inlines = [PriceInline, ProductFormFieldInline]
+    inlines = [BasePriceInline, ProductFormFieldInline]
 
     list_before_template = "admin/product/product_list_before.html"  # appelle le component CheckStripe plus haut pour le contexte
 
@@ -995,9 +1071,7 @@ class TicketProductAdmin(ProductAdmin):
     Filtered admin view: only ticket products (Ticket booking, Free booking)."""
 
     form = TicketProductForm
-    inlines = [
-        PriceInline
-    ]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+    inlines = [TicketPriceInline]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
 
     list_filter = ["publish"]  # categorie_article inutile, deja filtre
 
@@ -1012,7 +1086,7 @@ class MembershipProductAdmin(ProductAdmin):
     Filtered admin view: only membership products."""
 
     form = MembershipProductForm
-    inlines = [PriceInline, ProductFormFieldInline]
+    inlines = [MembershipPriceInline, ProductFormFieldInline]
 
     list_filter = ["publish"]  # categorie_article inutile, deja filtre
 
@@ -1173,7 +1247,7 @@ class POSProductAdmin(ProductAdmin):
     LOCALISATION : Administration/admin/products.py"""
 
     form = POSProductForm
-    inlines = [PriceInline]
+    inlines = [POSPriceInline]
 
     fieldsets = (
         (
@@ -1238,8 +1312,8 @@ class POSProductAdmin(ProductAdmin):
         if obj is None:
             from Administration.admin.inventaire import StockInline
 
-            return [StockInline, PriceInline]
-        return [PriceInline]
+            return [StockInline, POSPriceInline]
+        return [POSPriceInline]
 
     def get_queryset(self, request):
         # Uniquement les produits avec une methode de caisse definie

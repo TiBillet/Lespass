@@ -15,8 +15,8 @@ from json import dumps
 
 from django.conf import settings
 from django.db import transaction as db_transaction
-from django.http import Http404
-from django.shortcuts import render
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django_htmx.http import HttpResponseClientRedirect
@@ -74,7 +74,10 @@ from laboutik.serializers import (
 )
 from laboutik.reports import RapportComptableService
 from laboutik.utils import method as payment_method
-from inventaire.models import Stock
+from inventaire.models import Stock, TypeMouvement
+from inventaire.serializers import MouvementRapideSerializer
+from inventaire.services import StockService
+from wsocket.broadcast import broadcast_stock_update
 from laboutik.integrity import (
     calculer_hmac,
     obtenir_previous_hmac,
@@ -277,7 +280,166 @@ def _formater_stock_lisible(quantite, unite):
     return str(quantite)
 
 
-def _construire_donnees_articles(point_de_vente_instance):
+def _build_stock_context(product, stock, message_feedback=None, erreur_feedback=None):
+    """
+    Construit le contexte pour le template article_panel_stock.html.
+    Convertit les unités de base en unités pratiques pour l'affichage.
+    / Builds context for article_panel_stock.html template.
+    Converts base units to practical units for display.
+
+    LOCALISATION : laboutik/views.py
+    """
+    quantite_lisible = _formater_stock_lisible(stock.quantite, stock.unite)
+    seuil_lisible = ""
+    if stock.seuil_alerte is not None:
+        seuil_lisible = _formater_stock_lisible(stock.seuil_alerte, stock.unite)
+
+    # Déterminer l'unité pratique pour le champ de saisie
+    # / Determine practical unit for the input field
+    unite_saisie_map = {
+        "UN": _("pièces"),
+        "CL": "cl",
+        "GR": "g",
+    }
+    unite_saisie = unite_saisie_map.get(stock.unite, stock.unite)
+
+    # Déterminer l'état du stock / Determine stock state
+    if stock.est_en_rupture():
+        etat = "rupture"
+    elif stock.est_en_alerte():
+        etat = "alerte"
+    else:
+        etat = "ok"
+
+    # Derniers mouvements manuels (pas les ventes/debits auto)
+    # / Recent manual movements (not auto sales/meter debits)
+    from inventaire.models import MouvementStock, TypeMouvement as TM
+
+    derniers_mouvements = (
+        MouvementStock.objects.filter(stock=stock)
+        .exclude(type_mouvement__in=[TM.VE, TM.DM])
+        .select_related("cree_par")
+        .order_by("-cree_le")[:5]
+    )
+
+    return {
+        "product": product,
+        "stock": stock,
+        "quantite_lisible": quantite_lisible,
+        "seuil_lisible": seuil_lisible,
+        "unite_saisie": unite_saisie,
+        "etat": etat,
+        "derniers_mouvements": derniers_mouvements,
+        "message_feedback": message_feedback,
+        "erreur_feedback": erreur_feedback,
+    }
+
+
+def _charger_events_billetterie():
+    """
+    Charge tous les events futurs avec annotations et prefetch en 3 requêtes max.
+    Loads all future events with annotations and prefetch in max 3 queries.
+
+    Retourne (events_list, compteur_tickets_par_price) :
+    - events_list : liste d'Event annotés (nb_tickets_valides, nb_en_cours_achat)
+      avec produits publiés et prix EUR pré-chargés (to_attr).
+    - compteur_tickets_par_price : dict {(event_pk, price_pk): nb_tickets}
+      pour les tarifs ayant un stock (jauge par tarif).
+    / Returns (events_list, ticket_counts_per_price):
+    - events_list: list of annotated Events with prefetched published products + EUR prices.
+    - ticket_counts_per_price: dict {(event_pk, price_pk): ticket_count}
+      for prices with a stock limit (per-rate gauge).
+    """
+    now = dj_timezone.now()
+
+    # 1 requête : events annotés avec compteurs tickets
+    # / 1 query: events annotated with ticket counters
+    events_qs = (
+        Event.objects.filter(
+            published=True,
+            archived=False,
+            datetime__gte=now - timedelta(days=1),
+        )
+        .annotate(
+            nb_tickets_valides=Count(
+                "reservation__tickets",
+                filter=Q(
+                    reservation__tickets__status__in=[
+                        Ticket.NOT_SCANNED,
+                        Ticket.SCANNED,
+                    ]
+                ),
+                distinct=True,
+            ),
+            nb_en_cours_achat=Count(
+                "reservation__tickets",
+                filter=Q(
+                    reservation__tickets__status__in=[
+                        Ticket.CREATED,
+                        Ticket.NOT_ACTIV,
+                    ],
+                    reservation__datetime__gt=now - timedelta(minutes=15),
+                ),
+                distinct=True,
+            ),
+        )
+        .prefetch_related(
+            # Prefetch imbriqué : produits publiés → prix EUR publiés
+            # / Nested prefetch: published products → published EUR prices
+            Prefetch(
+                "products",
+                queryset=Product.objects.filter(publish=True).prefetch_related(
+                    Prefetch(
+                        "prices",
+                        queryset=Price.objects.filter(
+                            publish=True, asset__isnull=True
+                        ).order_by("order"),
+                        to_attr="prix_euros",
+                    )
+                ),
+                to_attr="produits_publies",
+            )
+        )
+        .order_by("datetime")
+    )
+
+    # Évaluer le queryset pour pouvoir itérer 2 fois (articles + catégories)
+    # / Evaluate queryset so we can iterate twice (articles + categories)
+    events_list = list(events_qs)
+
+    # Collecter les (event_pk, price_pk) qui ont un stock (jauge par tarif)
+    # / Collect (event_pk, price_pk) pairs that have a stock limit (per-rate gauge)
+    event_pks_avec_stock = set()
+    price_pks_avec_stock = set()
+    for event in events_list:
+        for product in event.produits_publies:
+            for price in product.prix_euros:
+                if price.stock is not None and price.stock > 0:
+                    event_pks_avec_stock.add(event.pk)
+                    price_pks_avec_stock.add(price.pk)
+
+    # 1 requête batch : compteurs tickets par (event, price) pour les tarifs avec stock
+    # / 1 batch query: ticket counts per (event, price) for prices with stock
+    compteur_tickets_par_price = {}
+    if price_pks_avec_stock:
+        rows = (
+            Ticket.objects.filter(
+                reservation__event__pk__in=event_pks_avec_stock,
+                pricesold__price__pk__in=price_pks_avec_stock,
+                status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+            )
+            .values("reservation__event", "pricesold__price")
+            .annotate(nb=Count("pk"))
+        )
+        compteur_tickets_par_price = {
+            (row["reservation__event"], row["pricesold__price"]): row["nb"]
+            for row in rows
+        }
+
+    return events_list, compteur_tickets_par_price
+
+
+def _construire_donnees_articles(point_de_vente_instance, events_billetterie=None):
     """
     Construit la liste de dicts articles au format attendu par les templates.
     Builds the list of article dicts in the format expected by templates.
@@ -315,7 +477,6 @@ def _construire_donnees_articles(point_de_vente_instance):
         .order_by("poids", "name")
     )
 
-    now = dj_timezone.now()
     articles = []
     for product in produits:
         # Premier prix publié en euros (déjà filtré par le Prefetch)
@@ -474,20 +635,8 @@ def _construire_donnees_articles(point_de_vente_instance):
     est_pv_billetterie = (
         point_de_vente_instance.comportement == PointDeVente.BILLETTERIE
     )
-    if est_pv_billetterie:
-        from BaseBillet.models import (
-            Ticket,
-        )  # Import ici pour eviter circulaire / Import here to avoid circular
-
-        events_futurs = (
-            Event.objects.filter(
-                published=True,
-                archived=False,
-                datetime__gte=now - timedelta(days=1),
-            )
-            .prefetch_related("products__prices")
-            .order_by("datetime")
-        )
+    if est_pv_billetterie and events_billetterie is not None:
+        events_list, compteur_tickets_par_price = events_billetterie
 
         # Palette de couleurs pour distinguer les events visuellement
         # Chaque event reçoit une couleur de fond unique.
@@ -504,24 +653,24 @@ def _construire_donnees_articles(point_de_vente_instance):
             "#BE185D",  # rose
         ]
 
-        for index_event, event in enumerate(events_futurs):
-            places_vendues_event = event.valid_tickets_count()
+        for index_event, event in enumerate(events_list):
+            # Compteurs pré-calculés par annotation (0 requête)
+            # / Pre-computed counters via annotation (0 queries)
+            places_vendues_event = event.nb_tickets_valides
             jauge_max_event = event.jauge_max or 0
-            est_complet_event = event.complet()
-            pourcentage_event = (
-                int(round(places_vendues_event / jauge_max_event * 100))
-                if jauge_max_event
-                else 0
+            est_complet_event = (
+                jauge_max_event > 0
+                and (places_vendues_event + event.nb_en_cours_achat) >= jauge_max_event
             )
 
             # Couleur de fond par event (palette cyclique)
             # / Background color per event (cyclic palette)
             couleur_fond_event = couleurs_events[index_event % len(couleurs_events)]
 
-            # Produits publiés de cet event avec au moins un prix EUR
-            # / Published products of this event with at least one EUR price
-            produits_event = event.products.filter(publish=True)
-            if not produits_event.exists():
+            # Produits publiés pré-chargés par Prefetch (to_attr, 0 requête)
+            # / Published products pre-loaded by Prefetch (to_attr, 0 queries)
+            produits_event = event.produits_publies
+            if not produits_event:
                 continue
 
             for product in produits_event:
@@ -556,28 +705,21 @@ def _construire_donnees_articles(point_de_vente_instance):
                     except Exception:
                         url_image = None
 
-                # Pour chaque Price publiée en EUR (asset=null) → 1 tuile
-                # / For each published EUR Price (asset=null) → 1 tile
-                prix_euros = product.prices.filter(
-                    publish=True, asset__isnull=True
-                ).order_by("order")
-
-                for price in prix_euros:
+                # Prix EUR pré-chargés par Prefetch (to_attr, 0 requête)
+                # / EUR prices pre-loaded by Prefetch (to_attr, 0 queries)
+                for price in product.prix_euros:
                     prix_en_centimes = int(round(price.prix * 100))
 
                     # Jauge : Price.stock si défini, sinon Event.jauge_max
                     # / Gauge: Price.stock if set, otherwise Event.jauge_max
                     if price.stock is not None and price.stock > 0:
-                        # Jauge par tarif — compter les tickets vendus pour cette Price
-                        # / Per-rate gauge — count tickets sold for this Price
-                        places_vendues_price = Ticket.objects.filter(
-                            reservation__event__pk=event.pk,
-                            pricesold__price__pk=price.pk,
-                            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
-                        ).count()
+                        # Jauge par tarif — lookup dans le dict batch (0 requête)
+                        # / Per-rate gauge — lookup in batch dict (0 queries)
+                        places_vendues_tuile = compteur_tickets_par_price.get(
+                            (event.pk, price.pk), 0
+                        )
                         jauge_max_tuile = price.stock
-                        places_vendues_tuile = places_vendues_price
-                        est_complet_tuile = price.out_of_stock(event)
+                        est_complet_tuile = places_vendues_tuile >= price.stock
                     else:
                         # Jauge globale de l'event
                         # / Global event gauge
@@ -643,7 +785,7 @@ def _construire_donnees_articles(point_de_vente_instance):
     return articles
 
 
-def _construire_donnees_categories(point_de_vente_instance):
+def _construire_donnees_categories(point_de_vente_instance, events_billetterie=None):
     """
     Construit la liste de dicts catégories au format attendu par les templates.
     Pour un PV BILLETTERIE, ajoute les events futurs comme pseudo-catégories
@@ -685,24 +827,23 @@ def _construire_donnees_categories(point_de_vente_instance):
     est_pv_billetterie = (
         point_de_vente_instance.comportement == PointDeVente.BILLETTERIE
     )
-    if est_pv_billetterie:
-        now = dj_timezone.now()
-        events_futurs = Event.objects.filter(
-            published=True,
-            archived=False,
-            datetime__gte=now - timedelta(days=1),
-        ).order_by("datetime")
+    if est_pv_billetterie and events_billetterie is not None:
+        events_list, _compteur = events_billetterie
 
-        for event in events_futurs:
-            # Ignorer les events sans produit publié
-            # / Skip events without published products
-            if not event.products.filter(publish=True).exists():
+        for event in events_list:
+            # Ignorer les events sans produit publié (déjà filtré par Prefetch)
+            # / Skip events without published products (already filtered by Prefetch)
+            if not event.produits_publies:
                 continue
 
-            places_vendues = event.valid_tickets_count()
+            places_vendues = event.nb_tickets_valides
             jauge_max = event.jauge_max or 0
             pourcentage = (
                 int(round(places_vendues / jauge_max * 100)) if jauge_max else 0
+            )
+            est_complet = (
+                jauge_max > 0
+                and (places_vendues + event.nb_en_cours_achat) >= jauge_max
             )
             categories.append(
                 {
@@ -715,7 +856,7 @@ def _construire_donnees_categories(point_de_vente_instance):
                     "jauge_max": jauge_max,
                     "places_vendues": places_vendues,
                     "pourcentage": pourcentage,
-                    "complet": event.complet(),
+                    "complet": est_complet,
                 }
             )
 
@@ -1049,10 +1190,16 @@ class CaisseViewSet(viewsets.ViewSet):
                     .values_list("uuid", "name", "poid_liste", "icon")
                 )
 
+        # --- Pré-charger les events billetterie en 3 requêtes max ---
+        # --- Pre-load billetterie events in max 3 queries ---
+        events_billetterie = None
+        if pv.comportement == PointDeVente.BILLETTERIE:
+            events_billetterie = _charger_events_billetterie()
+
         # --- Construire les données articles et catégories ---
         # --- Build article and category data ---
-        articles = _construire_donnees_articles(pv)
-        categories = _construire_donnees_categories(pv)
+        articles = _construire_donnees_articles(pv, events_billetterie=events_billetterie)
+        categories = _construire_donnees_categories(pv, events_billetterie=events_billetterie)
 
         # --- Construire le state (enrichi avec PV + carte primaire) ---
         # --- Build state (enriched with POS + primary card) ---
@@ -6467,3 +6614,195 @@ class CommandeViewSet(viewsets.ViewSet):
             "selector_bt_retour": "#messages",
         }
         return render(request, "laboutik/partial/hx_messages.html", context)
+
+
+class ArticlePanelViewSet(viewsets.ViewSet):
+    """
+    Panel contextuel article POS — menu d'actions + vue stock.
+    Ouvert par un long press sur une tuile article.
+    / Article context panel for POS — actions menu + stock view.
+    Opened by a long press on an article tile.
+
+    LOCALISATION : laboutik/views.py
+
+    URLS :
+        GET  /laboutik/article-panel/{product_uuid}/panel/  → menu principal
+        GET  /laboutik/article-panel/{product_uuid}/stock/   → vue stock
+        POST /laboutik/article-panel/{product_uuid}/stock/{action}/ → action stock
+
+    TEMPLATES :
+        laboutik/partial/article_panel.html       → menu principal
+        laboutik/partial/article_panel_stock.html  → vue stock détaillée
+    """
+
+    permission_classes = [HasLaBoutikAccess]
+
+    ACTIONS_AUTORISEES = ["reception", "perte", "ajustement"]
+
+    # Mapping action URL → TypeMouvement / URL action → movement type mapping
+    ACTION_TYPE_MAP = {
+        "reception": TypeMouvement.RE,
+        "perte": TypeMouvement.PE,
+        "ajustement": TypeMouvement.AJ,
+    }
+
+    def panel(self, request, product_uuid):
+        """
+        GET — Menu principal du panel contextuel.
+        / GET — Main menu of the context panel.
+        """
+        product = get_object_or_404(Product, uuid=product_uuid)
+        stock = Stock.objects.filter(product=product).first()
+
+        context = {
+            "product": product,
+            "has_stock": stock is not None,
+        }
+        return render(request, "laboutik/partial/article_panel.html", context)
+
+    def stock_detail(self, request, product_uuid):
+        """
+        GET — Vue stock détaillée avec formulaire d'actions.
+        / GET — Detailed stock view with action form.
+        """
+        product = get_object_or_404(Product, uuid=product_uuid)
+        stock = get_object_or_404(Stock, product=product)
+        context = _build_stock_context(product, stock)
+        return render(request, "laboutik/partial/article_panel_stock.html", context)
+
+    def stock_action(self, request, product_uuid, action):
+        """
+        POST — Exécute une action stock (reception/perte/ajustement).
+        Retourne la vue stock mise à jour + header HX-Trigger.
+        / POST — Execute a stock action. Returns updated stock view + HX-Trigger header.
+        """
+        # Valider l'action contre la whitelist / Validate action against whitelist
+        if action not in self.ACTIONS_AUTORISEES:
+            return HttpResponse("Action invalide", status=400)
+
+        product = get_object_or_404(Product, uuid=product_uuid)
+        stock = get_object_or_404(Stock, product=product)
+
+        # L'ajustement utilise AjustementSerializer (stock_reel >= 0)
+        # Les autres utilisent MouvementRapideSerializer (quantite >= 1)
+        # / Adjustment uses AjustementSerializer (stock_reel >= 0)
+        # Others use MouvementRapideSerializer (quantite >= 1)
+        if action == "ajustement":
+            from inventaire.serializers import AjustementSerializer
+
+            # Le formulaire POS envoie "quantite" → on mappe vers "stock_reel"
+            # / POS form sends "quantite" → map to "stock_reel"
+            data_ajustement = {
+                "stock_reel": request.POST.get("quantite", ""),
+                "motif": request.POST.get("motif", ""),
+            }
+            serializer = AjustementSerializer(data=data_ajustement)
+        else:
+            serializer = MouvementRapideSerializer(data=request.POST)
+
+        if not serializer.is_valid():
+            messages_erreur = []
+            for champ, erreurs in serializer.errors.items():
+                for erreur in erreurs:
+                    messages_erreur.append(str(erreur))
+            erreur_feedback = " ".join(messages_erreur)
+
+            context = _build_stock_context(
+                product, stock, erreur_feedback=erreur_feedback
+            )
+            return render(request, "laboutik/partial/article_panel_stock.html", context)
+
+        utilisateur = request.user if request.user.is_authenticated else None
+        motif = serializer.validated_data.get("motif", "")
+
+        if action == "ajustement":
+            # Ajustement : stock_reel = stock réel compté, le service calcule le delta
+            # / Adjustment: stock_reel = real counted stock, service computes delta
+            StockService.ajuster_inventaire(
+                stock=stock,
+                stock_reel=serializer.validated_data["stock_reel"],
+                motif=motif,
+                utilisateur=utilisateur,
+            )
+        else:
+            type_mouvement = self.ACTION_TYPE_MAP[action]
+            StockService.creer_mouvement(
+                stock=stock,
+                type_mouvement=type_mouvement,
+                quantite=serializer.validated_data["quantite"],
+                motif=motif,
+                utilisateur=utilisateur,
+            )
+
+        stock.refresh_from_db()
+
+        # Broadcast WebSocket pour synchroniser les autres caisses
+        # / WebSocket broadcast to sync other POS terminals
+        donnees_broadcast = [
+            {
+                "product_uuid": str(product.uuid),
+                "quantite": stock.quantite,
+                "unite": stock.unite,
+                "en_alerte": stock.est_en_alerte(),
+                "en_rupture": stock.est_en_rupture(),
+                "bloquant": stock.est_en_rupture()
+                and not stock.autoriser_vente_hors_stock,
+                "quantite_lisible": _formater_stock_lisible(
+                    stock.quantite, stock.unite
+                ),
+            }
+        ]
+        broadcast_stock_update(donnees_broadcast)
+
+        # Message de feedback / Feedback message
+        label_action = {
+            "reception": _("Réception"),
+            "perte": _("Perte"),
+            "ajustement": _("Ajustement"),
+        }
+        quantite_lisible = _formater_stock_lisible(stock.quantite, stock.unite)
+        message = f"{label_action[action]} effectuée. Stock : {quantite_lisible}"
+
+        context = _build_stock_context(product, stock, message_feedback=message)
+        response = render(request, "laboutik/partial/article_panel_stock.html", context)
+        response["HX-Trigger"] = "stockUpdated"
+        return response
+
+    def toggle_bloquant(self, request, product_uuid):
+        """
+        POST — Bascule autoriser_vente_hors_stock sur le stock.
+        / POST — Toggle autoriser_vente_hors_stock on stock.
+        """
+        product = get_object_or_404(Product, uuid=product_uuid)
+        stock = get_object_or_404(Stock, product=product)
+
+        stock.autoriser_vente_hors_stock = not stock.autoriser_vente_hors_stock
+        stock.save(update_fields=["autoriser_vente_hors_stock"])
+
+        # Broadcast pour mettre à jour l'état bloquant sur les autres caisses
+        # / Broadcast to update blocking state on other POS terminals
+        donnees_broadcast = [
+            {
+                "product_uuid": str(product.uuid),
+                "quantite": stock.quantite,
+                "unite": stock.unite,
+                "en_alerte": stock.est_en_alerte(),
+                "en_rupture": stock.est_en_rupture(),
+                "bloquant": stock.est_en_rupture()
+                and not stock.autoriser_vente_hors_stock,
+                "quantite_lisible": _formater_stock_lisible(
+                    stock.quantite, stock.unite
+                ),
+            }
+        ]
+        broadcast_stock_update(donnees_broadcast)
+
+        etat_label = (
+            _("autorisée") if stock.autoriser_vente_hors_stock else _("bloquée")
+        )
+        message = f"{_('Vente hors stock')} : {etat_label}"
+
+        context = _build_stock_context(product, stock, message_feedback=message)
+        response = render(request, "laboutik/partial/article_panel_stock.html", context)
+        response["HX-Trigger"] = "stockUpdated"
+        return response

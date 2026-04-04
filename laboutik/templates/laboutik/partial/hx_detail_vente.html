@@ -55,6 +55,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
                 hx-target="closest .ventes-detail-actions"
                 hx-swap="innerHTML"
                 hx-vals='{"uuid_transaction": "{{ uuid_transaction }}"}'
+                data-loading-disable
                 data-testid="btn-reimprimer">
             <i class="fas fa-print" aria-hidden="true"></i>
             {% translate "Ré-imprimer" %}
@@ -64,6 +65,7 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
                 hx-get="{% url 'laboutik-paiement-formulaire_correction' %}?ligne_uuid={{ premiere_ligne_uuid }}"
                 hx-target="#correction-zone-{{ premiere_ligne_uuid }}"
                 hx-swap="innerHTML"
+                data-loading-disable
                 data-testid="btn-corriger">
             <i class="fas fa-edit" aria-hidden="true"></i>
             {% translate "Corriger moyen" %}

@@ -1,0 +1,25 @@
+/* price_inline.css — Style pour les titres StackedInline des tarifs
+   Scope sur #prices-group pour ne pas affecter les autres inlines.
+   / Styling for Price StackedInline row titles.
+   Scoped to #prices-group to avoid affecting other inlines.
+   LOCALISATION : Administration/static/admin/css/price_inline.css */
+
+/* Titre de chaque tarif : fond colore, bien visible, taille lisible */
+/* Each price title: colored background, clearly visible, readable size */
+#prices-group h3.group\/title {
+    font-size: 0.95rem;
+    background-color: rgb(243 244 246);  /* gray-100 */
+    border-radius: 0.375rem 0.375rem 0 0;
+    padding: 0.625rem 0.75rem;
+}
+
+/* Mode sombre / Dark mode */
+.dark #prices-group h3.group\/title {
+    background-color: rgb(31 41 55);  /* gray-800 */
+}
+
+/* Nom du tarif en gras, taille lisible */
+/* Price name: bold, readable size */
+#prices-group h3.group\/title strong {
+    font-size: 0.95rem;
+}

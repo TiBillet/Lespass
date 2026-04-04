@@ -116,10 +116,15 @@ Structure en 3 colonnes sur desktop :
 		-->
 		<c-addition />
 	</div>
+
 </main>
+
+<div id="article-panel"></div>
+<div id="article-panel-backdrop"></div>
 
 <c-footer />
 
+<script src="{% static 'js/longpress.js' %}"></script>
 <script>
 	/**
 	* Réinitialise complètement l'interface de vente
@@ -232,6 +237,21 @@ Structure en 3 colonnes sur desktop :
 		document.querySelector('#bt-reset').addEventListener('click', manageReset)
 		document.querySelector('#bt-valider').addEventListener('updateBtValider', updateBtValider)
 		document.querySelector('#bt-valider').addEventListener('click', displayPaymentTypes)
+
+		// Long press sur les tuiles article → ouvre le panel contextuel
+		// / Long press on article tiles → opens contextual panel
+		initLongPress({
+			container: document.querySelector('#products'),
+			selector: '.article-container',
+			delay: 600,
+			moveThreshold: 10
+		})
+
+		// Fermeture du panel via le backdrop
+		// / Close panel via backdrop click
+		document.getElementById('article-panel-backdrop').addEventListener('click', function() {
+			document.getElementById('article-panel').innerHTML = ''
+		})
 	})
 </script>
 

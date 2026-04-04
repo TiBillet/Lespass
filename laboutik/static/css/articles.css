@@ -457,3 +457,363 @@
 		--bt-article-width: 160px;
 	}
 }
+
+
+/* --- LONG PRESS FEEDBACK --- */
+/* Retour visuel pendant l'appui long (600ms).
+   La tuile s'assombrit et rétrécit légèrement.
+   / Visual feedback during long press (600ms).
+   Tile darkens and slightly shrinks. */
+.article-container.pressing {
+    transform: scale(0.97);
+    filter: brightness(0.85);
+    transition: transform 300ms ease, filter 300ms ease;
+    touch-action: none;  /* Empeche le scroll pendant le press sur mobile / Prevents scroll during press on mobile */
+}
+
+/* Désactiver le :active natif pendant le pressing
+   (sinon double effet scale)
+   / Disable native :active during pressing
+   (otherwise double scale effect) */
+.article-container.pressing:active {
+    transform: scale(0.97);
+}
+
+
+/* --- PANEL CONTEXTUEL ARTICLE --- */
+/* Panel lateral droit — meme fond que la sidebar categories (--noir04).
+   Vide = display:none. Non-vide = slide-in anime.
+   / Right side panel — same background as category sidebar (--noir04).
+   Empty = display:none. Not-empty = animated slide-in. */
+#article-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 40%;
+    height: 100vh;
+    z-index: 1001;
+    background-color: var(--noir04);
+    color: var(--blanc01);
+    border-left: 1px solid var(--gris01);
+    overflow-y: auto;
+    font-family: "Luciole-regular", sans-serif;
+    display: none;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+#article-panel:not(:empty) {
+    display: block;
+    animation: panel-slide-in 300ms ease;
+}
+
+@keyframes panel-slide-in {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+#article-panel-backdrop {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+#article-panel:not(:empty) ~ #article-panel-backdrop {
+    display: block;
+}
+
+@media (max-width: 768px) {
+    #article-panel { width: 100%; }
+}
+
+
+/* --- PANEL : COMPOSANTS INTERNES --- */
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--noir02);
+}
+
+.panel-title {
+    font-size: 1.2rem;
+    font-weight: bold;
+    flex: 1;
+    margin-right: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.panel-close-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: var(--rouge07);
+    color: var(--blanc01);
+    font-size: 1.1rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.panel-close-btn:active {
+    transform: scale(0.95);
+}
+
+.panel-body {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Bouton menu — meme style que les lignes du panier (addition-line-grid)
+   / Menu button — same style as cart lines (addition-line-grid) */
+.panel-menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--blanc01);
+    font-size: 1.05rem;
+    font-family: "Luciole-regular", sans-serif;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 150ms ease, transform 100ms ease;
+}
+
+.panel-menu-btn:active {
+    background: rgba(255, 255, 255, 0.08);
+    transform: scale(0.98);
+}
+
+.panel-menu-btn[disabled] {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.panel-menu-icon {
+    font-size: 1.2rem;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.panel-menu-label {
+    flex: 1;
+}
+
+.panel-menu-badge {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--gris07);
+}
+
+/* Bouton retour / Back button */
+.panel-back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--gris07);
+    font-size: 1rem;
+    font-family: "Luciole-regular", sans-serif;
+    cursor: pointer;
+    transition: color 150ms ease;
+}
+
+.panel-back-btn:active {
+    color: var(--blanc01);
+}
+
+
+/* --- PANEL STOCK : VUE DETAILLEE --- */
+
+.stock-info-card {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stock-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.stock-info-label {
+    font-size: 0.9rem;
+    color: var(--gris07);
+}
+
+.stock-info-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.stock-badge-ok      { color: var(--vert03); }
+.stock-badge-alerte  { color: var(--warning); }
+.stock-badge-rupture { color: var(--rouge03); }
+
+.stock-separator {
+    height: 1px;
+    background: var(--noir02);
+    margin: 10px 0;
+}
+
+/* Formulaire actions stock / Stock action form */
+.stock-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stock-form-label {
+    font-size: 0.85rem;
+    color: var(--gris07);
+}
+
+.stock-form-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stock-form-input {
+    height: 48px;
+    width: 100px;
+    font-size: 1.3rem;
+    text-align: center;
+    border: 1px solid var(--gris01);
+    border-radius: 10px;
+    background: var(--noir03);
+    color: var(--blanc01);
+    font-variant-numeric: tabular-nums;
+    font-family: "Luciole-regular", sans-serif;
+}
+
+.stock-form-input:focus {
+    outline: none;
+    border-color: var(--vert03);
+}
+
+.stock-form-unit {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gris07);
+}
+
+.stock-form-motif {
+    height: 40px;
+    width: 100%;
+    padding: 0 12px;
+    font-size: 0.95rem;
+    border: 1px solid var(--gris01);
+    border-radius: 10px;
+    background: var(--noir03);
+    color: var(--blanc01);
+    font-family: "Luciole-regular", sans-serif;
+}
+
+.stock-form-motif:focus {
+    outline: none;
+    border-color: var(--gris04);
+}
+
+.stock-form-motif::placeholder {
+    color: var(--gris05);
+}
+
+/* Boutons d'action stock — meme hauteur que les boutons footer POS
+   / Stock action buttons — same height as POS footer buttons */
+.stock-actions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stock-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 48px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    font-family: "Luciole-regular", sans-serif;
+    cursor: pointer;
+    color: var(--blanc01);
+    transition: transform 100ms ease;
+}
+
+.stock-action-btn:active {
+    transform: scale(0.97);
+}
+
+.stock-action-btn-reception { background: var(--vert03); }
+.stock-action-btn-perte     { background: var(--rouge07); }
+
+/* Lien admin / Admin link */
+.stock-admin-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+    font-size: 0.85rem;
+    color: var(--gris07);
+    text-decoration: none;
+    transition: color 150ms ease;
+}
+
+.stock-admin-link:active {
+    color: var(--blanc01);
+}
+
+/* Feedback apres action / Feedback after action */
+.stock-feedback {
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: center;
+    animation: overlay-fade-up 300ms ease;
+}
+
+.stock-feedback-success {
+    background: var(--vert04);
+    color: var(--vert02);
+}
+
+.stock-feedback-error {
+    background: var(--rouge07);
+    color: var(--rouge05);
+}

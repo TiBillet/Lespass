@@ -621,6 +621,18 @@ Le setup NFC (asset + wallet + credit) prend ~2s. `scope="module"` evite de le r
 **9.14 — Pagination changelist admin.**
 Toujours filtrer par nom (`?q=...`) pour eviter qu'un asset soit invisible a cause de la pagination.
 
+**9.23 — Proxy models sans manager filtre (TicketProduct, POSProduct, etc.).**
+`TicketProduct.objects.first()` retourne N'IMPORTE QUEL Product (pas forcement un billet). Les proxy models n'ont pas de manager custom filtre — le filtrage est dans l'admin (`get_queryset`). Dans les tests, filtrer explicitement comme le fait l'admin :
+```python
+# ❌ Retourne une adhesion, pas un billet
+product = TicketProduct.objects.first()
+
+# ✅ Filtrer comme l'admin
+product = Product.objects.filter(
+    categorie_article__in=[Product.BILLET, Product.FREERES]
+).first()
+```
+
 **9.15 — `django_shell` parametre `schema`.**
 Parametre optionnel pour executer du code sur un autre tenant : `django_shell("...", schema="chantefrein")`.
 

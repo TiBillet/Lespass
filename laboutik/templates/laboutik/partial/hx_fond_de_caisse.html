@@ -22,6 +22,7 @@ Bouton retour vers le recap "toutes caisses".
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
             hx-target="#ventes-zone"
             hx-swap="innerHTML"
+            data-loading-disable
             data-testid="btn-retour-recap">
             <i class="fas fa-arrow-left" aria-hidden="true"></i>
             {% translate "Retour" %}
@@ -82,6 +83,7 @@ Bouton retour vers le recap "toutes caisses".
                     font-size: 0.95rem; font-weight: 600; font-family: 'Luciole-regular';
                     cursor: pointer; box-shadow: 0 2px 8px rgba(99,102,241,0.3);
                 "
+                data-loading-disable
                 data-testid="fond-btn-enregistrer">
             {% translate "Enregistrer" %}
         </button>
