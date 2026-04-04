@@ -67,7 +67,7 @@ docker exec lespass_django poetry run pytest tests/pytest/ \
 
 ### Tests pytest (DB-only) — `tests/pytest/`
 
-**276 tests, ~70 secondes.**
+**446 tests, ~3 minutes.**
 
 Testent la logique **Python/Django** : modeles, serializers, vues, API, validations serveur, triggers post-paiement. Utilisent le client Django in-process (`self.client`) — pas de reseau, pas de navigateur.
 
@@ -75,7 +75,7 @@ Stripe est **mocke** cote serveur (`@patch("stripe.checkout.Session.create")`) p
 
 ### Tests E2E (navigateur) — `tests/e2e/`
 
-**42 tests, ~6 minutes.**
+**62 tests, ~6 minutes.**
 
 Testent le comportement **JavaScript/CSS/navigateur** : validation HTML5, web components (`bs-counter`), SweetAlert2, HTMX swaps, rendu visuel POS, simulation NFC, navigation cross-tenant.
 
@@ -166,6 +166,16 @@ docker exec lespass_django poetry run pytest tests/e2e/test_asset_federation.py 
 docker exec lespass_django poetry run pytest tests/pytest/test_admin_*.py -v
 ```
 
+### Inventaire / Stock
+
+```bash
+# Modeles, services, ViewSet API, actions admin, affichage POS
+docker exec lespass_django poetry run pytest tests/pytest/test_inventaire.py tests/pytest/test_stock_visuel_pos.py tests/pytest/test_stock_actions_admin.py -v
+
+# E2E admin inventaire (bandeaux aide, autocomplete, actions HTMX, filtres)
+docker exec lespass_django poetry run pytest tests/e2e/test_admin_inventaire.py -v -s
+```
+
 ---
 
 ## Couverture : ce qui EST teste
@@ -247,6 +257,17 @@ docker exec lespass_django poetry run pytest tests/pytest/test_admin_*.py -v
 - Proxy products (TicketProduct, MembershipProduct, formulaires restreints)
 - Avoir/credit note (creation + anti-doublon)
 - Audit fixes (tous les changelist accessibles)
+
+### Inventaire / Stock (27 pytest + 5 pytest actions + 14 pytest POS + 7 E2E)
+- Modeles Stock, MouvementStock, UniteStock, TypeMouvement (tests/pytest/test_inventaire.py)
+- StockService : decrementation atomique F(), mouvements, ajustement (tests/pytest/test_inventaire.py)
+- StockViewSet API : reception, perte, offert (tests/pytest/test_inventaire.py)
+- DebitMetreViewSet : capteur Pi (tests/pytest/test_inventaire.py)
+- ResumeStockService : resume cloture (tests/pytest/test_inventaire.py)
+- Actions admin : stock_action_view reception/ajustement/perte/offert + validation type invalide (tests/pytest/test_stock_actions_admin.py)
+- Affichage POS : _formater_stock_lisible 10 cas, _construire_donnees_articles enrichissement stock 3 cas, broadcast WebSocket 1 cas (tests/pytest/test_stock_visuel_pos.py)
+- Admin E2E : bandeau aide stock list, add form autocomplete VT, actions HTMX (reception/ajustement/perte), mouvements list aide + filtre (tests/e2e/test_admin_inventaire.py)
+- **Non teste en E2E** : WebSocket multi-onglet (vente sur onglet 1 → badge mis a jour sur onglet 2), stock bloquant grise sur POS
 
 ### Auth / Theme (2 + 3 E2E)
 - Login flow complet (TEST MODE)
@@ -1159,6 +1180,211 @@ Le CSS est invalide — le navigateur ignore la propriete et applique le defaut
 Ce piege affecte toutes les progress bars et tout element avec une dimension
 calculee depuis une variable Django. Decouvert sur les progress bars du bilan
 billetterie (Session 05, avril 2026).
+
+---
+
+### Piege 56 : `AutocompleteSelect` dans un formulaire custom Unfold
+
+`AutocompleteSelect(field, admin_site)` attend `field.remote_field` (la relation FK),
+pas le field Django lui-meme. De plus, `autocomplete_fields` sur le ModelAdmin ne
+s'applique PAS si `get_form()` retourne une classe de formulaire directement
+(`return self.add_form`). Il faut passer par `kwargs["form"] = self.add_form` puis
+`return super().get_form(request, obj, **kwargs)` pour que Django applique les widgets.
+
+Pour retirer le lien "+" (add related) d'un autocomplete, le faire dans `get_form()`
+(pas dans `formfield_for_foreignkey` — `autocomplete_fields` ecrase le widget apres).
+
+```python
+def get_form(self, request, obj=None, **kwargs):
+    form = super().get_form(request, obj, **kwargs)
+    if "product" in form.base_fields:
+        form.base_fields["product"].widget.can_add_related = False
+    return form
+```
+
+Decouvert sur StockAdmin (Session 25, avril 2026).
+
+---
+
+### Piege 57 : Unfold `@display(label=...)` avec label complet
+
+Pour afficher un label complet (ex: "Reception") avec une couleur de badge,
+la fonction display doit retourner un **tuple `(cle, texte)`**. La cle est matchee
+contre le dict `label`, le texte est affiche.
+
+```python
+LABELS = {TypeMouvement.RE: "success", TypeMouvement.PE: "danger"}
+
+@display(description=_("Type"), label=LABELS)
+def display_type(obj):
+    # Tuple (cle, texte) : cle pour la couleur, texte pour l'affichage
+    return obj.type_mouvement, obj.get_type_mouvement_display()
+```
+
+Si on retourne juste une string, Unfold l'utilise comme cle ET comme texte.
+Retourner `get_type_mouvement_display()` seul ne matche pas les cles du dict
+(qui sont les codes courts VE, RE, etc.).
+
+Decouvert sur MouvementStockAdmin (Session 25, avril 2026).
+
+---
+
+### Piege 58 : HTMX double submit — boutons dans un form avec hx-target
+
+Des boutons avec `hx-post` dans un `<form hx-target="...">` declenchent DEUX
+requetes HTMX : une du bouton, une du form (heritage). Le partial se retrouve
+imbrique dans lui-meme.
+
+Solution : pas de `<form>`, des boutons `type="button"` autonomes avec
+`hx-post`, `hx-vals`, `hx-include`, `hx-target` et `hx-headers` pour le CSRF.
+
+```html
+<!-- BON : bouton autonome, pas de form -->
+<button type="button"
+        hx-post="/action/"
+        hx-vals='{"type": "RE"}'
+        hx-include="#input-qty, #input-motif"
+        hx-target="#container"
+        hx-swap="innerHTML"
+        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    Reception
+</button>
+```
+
+Decouvert sur stock_actions_partial.html (Session 25, avril 2026).
+
+---
+
+### Piege 59 : OOB swap `innerHTML` vs `outerHTML` — les attributs ne sont PAS mis a jour
+
+`hx-swap-oob="innerHTML"` remplace uniquement le **contenu interieur** du div cible.
+Les attributs du div lui-meme (`data-*`, `class`, `aria-*`) ne sont **pas** modifies.
+
+Si on a besoin de mettre a jour un `data-stock-bloquant` sur le div badge via OOB,
+il faut `hx-swap-oob="outerHTML"` pour remplacer le div entier (tag + attributs + contenu).
+
+```html
+<!-- MAUVAIS : innerHTML ne met PAS a jour data-stock-bloquant sur le div -->
+<div id="stock-badge-xxx" hx-swap-oob="innerHTML" data-stock-bloquant="true">
+    <span>Epuise</span>
+</div>
+
+<!-- BON : outerHTML remplace tout le div, attributs inclus -->
+<div id="stock-badge-xxx" hx-swap-oob="outerHTML" data-stock-bloquant="true">
+    <span>Epuise</span>
+</div>
+```
+
+Attention avec `outerHTML` : le nouveau div doit avoir le meme `id` pour que
+les swaps suivants (ou le JS) puissent le retrouver.
+
+Decouvert sur hx_stock_badge.html (Session 25, avril 2026).
+
+---
+
+### Piege 60 : HTMX WebSocket n'execute PAS les `<script>` dans les messages
+
+Les `<script>` inclus dans du HTML recu via l'extension HTMX ws (`hx-ext="ws"`)
+ne sont **jamais executes**. C'est une decision de securite de HTMX.
+
+Si on a besoin de modifier le DOM au-dela de l'OOB swap (ex: propager un attribut
+d'un badge vers un container parent), utiliser un listener JS sur `htmx:wsAfterMessage`
+qui lit le DOM apres le swap et propage les changements.
+
+```javascript
+// Le script inline dans le HTML WebSocket ne s'execute PAS :
+// <script>document.querySelector(...).classList.add('bloquant')</script>
+
+// Solution : listener global qui s'execute apres chaque message WebSocket
+document.body.addEventListener('htmx:wsAfterMessage', function() {
+    // Lire le badge et propager l'etat vers le container parent
+    var badges = document.querySelectorAll('[id^="stock-badge-"]');
+    badges.forEach(function(badge) {
+        var uuid = badge.id.replace('stock-badge-', '');
+        var container = document.querySelector('[data-uuid="' + uuid + '"]');
+        if (!container) return;
+        if (badge.dataset.stockBloquant === 'true') {
+            container.classList.add('article-bloquant');
+            container.dataset.stockBloquant = 'true';
+        } else {
+            container.classList.remove('article-bloquant');
+            delete container.dataset.stockBloquant;
+        }
+    });
+});
+```
+
+Decouvert sur le broadcast stock WebSocket (Session 25, avril 2026).
+
+---
+
+### Piege 61 : Dedupliquer les broadcasts quand le panier a N fois le meme article
+
+Quand le panier contient 5x Biere, `_creer_lignes_articles()` boucle 5 fois
+sur le meme produit. Chaque iteration decremente le stock et collecte les donnees
+pour le broadcast. Sans deduplication, le broadcast envoie 5 divs OOB avec le meme
+`id` — le resultat depend de l'ordre d'iteration de HTMX sur `fragment.children`.
+
+Solution : dedupliquer par `product_uuid` et ne garder que le dernier etat (stock final).
+
+```python
+# MAUVAIS : 5 entrees pour le meme produit
+donnees_a_broadcaster = list(produits_stock_mis_a_jour)
+
+# BON : deduplication par product_uuid, seul l'etat final compte
+donnees_par_produit = {}
+for donnee in produits_stock_mis_a_jour:
+    donnees_par_produit[donnee["product_uuid"]] = donnee
+donnees_a_broadcaster = list(donnees_par_produit.values())
+```
+
+Decouvert via le test E2E WebSocket multi-onglet (Session 25, avril 2026).
+
+---
+
+### Piege 62 : `stock.save()` apres `StockService.ajuster_inventaire()` ecrase la quantite
+
+`StockService.ajuster_inventaire()` utilise `F()` pour un update atomique de la quantite.
+L'instance Python en memoire garde l'ancienne valeur. Si on fait `stock.save()` apres
+(pour modifier un autre champ comme `autoriser_vente_hors_stock`), Django ecrase
+la quantite en DB avec l'ancienne valeur en memoire.
+
+```python
+# MAUVAIS : stock.save() ecrase la quantite ajustee par F()
+stock.autoriser_vente_hors_stock = True
+stock.save()
+StockService.ajuster_inventaire(stock=stock, stock_reel=10)  # DB: qty=10
+stock.autoriser_vente_hors_stock = False
+stock.save()  # DB: qty=100 (ancienne valeur en memoire !)
+
+# BON : utiliser update() pour modifier uniquement le champ voulu
+StockService.ajuster_inventaire(stock=stock, stock_reel=10)
+stock.refresh_from_db()
+Stock.objects.filter(pk=stock.pk).update(autoriser_vente_hors_stock=False)
+```
+
+Ce piege affecte tout code qui appelle `save()` sur une instance dont un champ
+a ete modifie par `F()` ou `update()` sans `refresh_from_db()` entre les deux.
+
+Decouvert dans le setup du test E2E WebSocket (Session 25, avril 2026).
+
+---
+
+### Piege 63 : Daphne ne hot-reload PAS les consumers WebSocket
+
+Contrairement a `runserver` qui recharge le code Python a chaque modification,
+Daphne charge les consumers au demarrage et ne les recharge jamais.
+
+Si on ajoute une methode `stock_update()` sur `LaboutikConsumer`, les messages
+`type: "stock_update"` sont **silencieusement ignores** tant que Daphne n'est pas
+redemarre. Les logs montrent le broadcast mais rien n'arrive aux navigateurs.
+
+```bash
+# Apres modification de wsocket/consumers.py, toujours redemarrer Daphne
+# Le serveur HTTP hot-reload (views, templates) mais PAS les consumers ASGI
+```
+
+Decouvert lors du debug WebSocket (Session 25, avril 2026).
 
 ---
 

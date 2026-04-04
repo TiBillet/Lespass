@@ -1354,11 +1354,11 @@ class Price(models.Model):
     contenance = models.PositiveIntegerField(
         null=True,
         blank=True,
-        verbose_name=_("Serving size"),
+        verbose_name=_("Contenance"),
         help_text=_(
-            "Quantity consumed per unit sold, in the stock's base unit. "
-            "E.g.: pint=50 (cl), half=25 (cl), portion=150 (g). "
-            "Empty = 1 unit by default."
+            "Quantité consommée par unité vendue, dans l'unité du stock. "
+            "Ex : pinte=50 (cl), demi=25 (cl), portion=150 (g). "
+            "Vide = 1 unité par défaut."
         ),
     )
 

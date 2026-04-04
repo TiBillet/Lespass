@@ -10,6 +10,7 @@ LOCALISATION : inventaire/views.py
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -18,8 +19,13 @@ from rest_framework.response import Response
 from BaseBillet.models import Product
 from BaseBillet.permissions import HasLaBoutikAccess
 from inventaire.models import MouvementStock, Stock, TypeMouvement, UniteStock
-from inventaire.serializers import DebitMetreSerializer, MouvementRapideSerializer
+from inventaire.serializers import (
+    DebitMetreSerializer,
+    MouvementRapideSerializer,
+    StockActionSerializer,
+)
 from inventaire.services import StockService
+from laboutik.views import _formater_stock_lisible
 
 
 class StockViewSet(viewsets.ViewSet):
@@ -175,9 +181,6 @@ def stock_action_view(request, stock_uuid):
     4. Relit le stock depuis la DB (refresh_from_db)
     5. Rend le partial stock_actions_partial.html
     """
-    from inventaire.serializers import StockActionSerializer
-    from laboutik.views import _formater_stock_lisible
-
     stock = get_object_or_404(Stock, pk=stock_uuid)
 
     serializer = StockActionSerializer(data=request.POST)
@@ -245,7 +248,9 @@ def stock_action_view(request, stock_uuid):
         "derniers_mouvements": derniers_mouvements,
         "message_feedback": message_feedback,
         "erreur_feedback": erreur_feedback,
-        "stock_action_url": f"/admin/inventaire/stock/{stock.pk}/action/",
+        "stock_action_url": reverse(
+            "staff_admin:inventaire_stock_action", args=[stock.pk]
+        ),
     }
 
     html = render_to_string(

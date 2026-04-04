@@ -290,7 +290,8 @@ class IconPickerWidget(forms.Widget):
 
 
 class PriceInlineChangeForm(ModelForm):
-    # Le formulaire pour changer une adhésion
+    # Formulaire inline pour les tarifs (dans ProductAdmin et POSProductAdmin)
+    # / Inline form for prices (in ProductAdmin and POSProductAdmin)
     class Meta:
         model = Price
         fields = (
@@ -327,17 +328,21 @@ class PriceInline(TabularInline):
     model = Price
     fk_name = "product"
     form = PriceInlineChangeForm
-    # hide_title = True
-    # collapsible = True # usefull for StackedInline
-
-    # ordering_field = "weight"
-    # max_num = 1
     extra = 0
     show_change_link = True
 
-    # tab = True # don't set to false : comment or the tab title will be visible
+    def get_fields(self, request, obj=None):
+        # Champs de base pour tous les produits
+        # / Base fields for all products
+        fields = ["name", "product", "prix", "free_price", "subscription_type", "publish"]
 
-    # Surcharger la méthode pour désactiver la suppression
+        # Contenance visible uniquement pour les articles POS de type vente
+        # / Contenance visible only for POS sale products (methode_caisse=VT)
+        if obj and hasattr(obj, "methode_caisse") and obj.methode_caisse == Product.VENTE:
+            fields.insert(4, "contenance")
+
+        return fields
+
     def has_delete_permission(self, request, obj=None):
         return False
 

@@ -242,8 +242,10 @@ class StockAdmin(ModelAdmin):
             extra_context["stock"] = stock
             extra_context["product_name"] = stock.product.name
             extra_context["derniers_mouvements"] = derniers_mouvements
-            extra_context["stock_action_url"] = (
-                f"/admin/inventaire/stock/{object_id}/action/"
+            from django.urls import reverse
+
+            extra_context["stock_action_url"] = reverse(
+                "staff_admin:inventaire_stock_action", args=[object_id]
             )
         return super().changeform_view(request, object_id, form_url, extra_context)
 

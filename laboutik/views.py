@@ -3297,9 +3297,15 @@ def _creer_lignes_articles(
         from django.db import transaction
         from wsocket.broadcast import broadcast_stock_update
 
-        # Copie de la liste pour que la closure capture les données actuelles
-        # / Copy the list so the closure captures current data
-        donnees_a_broadcaster = list(produits_stock_mis_a_jour)
+        # Dédupliquer par product_uuid : ne garder que le dernier état
+        # (si le panier contient 5x Biere, on a 5 entrées pour le même produit
+        # mais seul l'état final compte pour l'affichage)
+        # / Deduplicate by product_uuid: keep only the last state
+        donnees_par_produit = {}
+        for donnee in produits_stock_mis_a_jour:
+            donnees_par_produit[donnee["product_uuid"]] = donnee
+        donnees_a_broadcaster = list(donnees_par_produit.values())
+
         transaction.on_commit(lambda: broadcast_stock_update(donnees_a_broadcaster))
 
     return lignes_creees

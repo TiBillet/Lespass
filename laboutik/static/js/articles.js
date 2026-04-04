@@ -226,9 +226,59 @@ function articlesDisplayCategory(event) {
  * - 'articlesReset' → articlesReset() : Réinitialise tout (bouton RESET)
  * - 'articlesDisplayCategory' → articlesDisplayCategory() : Filtre par catégorie
  */
+/**
+ * Synchronise l'état bloquant de tous les badges stock vers les containers articles.
+ * / Syncs blocking state from all stock badges to their article containers.
+ *
+ * LOCALISATION : laboutik/static/js/articles.js
+ *
+ * Appelée après chaque message WebSocket (htmx:wsAfterMessage).
+ * Parcourt tous les badges stock et propage data-stock-bloquant
+ * vers le container parent (.article-container).
+ *
+ * Les <script> dans du HTML WebSocket ne sont PAS exécutés par HTMX.
+ * Cette fonction remplace les scripts inline du template OOB.
+ *
+ * COMMUNICATION :
+ * Reçoit : 'htmx:wsAfterMessage' (HTMX ws extension — après réception message WebSocket)
+ */
+function syncStockBloquantApresWebSocket() {
+	try {
+		// Parcourir tous les badges stock présents dans le DOM
+		// / Loop through all stock badges in the DOM
+		const tousLesBadges = document.querySelectorAll('[id^="stock-badge-"]')
+
+		for (const badgeDiv of tousLesBadges) {
+			const productUuid = badgeDiv.id.replace('stock-badge-', '')
+			const articleContainer = document.querySelector(`[data-uuid="${productUuid}"]`)
+			if (!articleContainer) {
+				continue
+			}
+
+			// Propager l'état bloquant du badge vers le container
+			// / Propagate blocking state from badge to container
+			if (badgeDiv.dataset.stockBloquant === 'true') {
+				articleContainer.classList.add('article-bloquant')
+				articleContainer.dataset.stockBloquant = 'true'
+			} else {
+				articleContainer.classList.remove('article-bloquant')
+				delete articleContainer.dataset.stockBloquant
+			}
+		}
+	} catch (error) {
+		console.log('-> articles.js - syncStockBloquantApresWebSocket,', error)
+	}
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 	document.querySelector('#products').addEventListener('click', manageKey)
 	document.querySelector('#products').addEventListener('articlesRemove', articlesRemove)
 	document.querySelector('#products').addEventListener('articlesReset', articlesReset)
 	document.querySelector('#products').addEventListener('articlesDisplayCategory', articlesDisplayCategory)
+
+	// Après chaque message WebSocket, synchroniser l'état bloquant
+	// des badges stock vers les containers articles.
+	// / After each WebSocket message, sync blocking state
+	// from stock badges to article containers.
+	document.body.addEventListener('htmx:wsAfterMessage', syncStockBloquantApresWebSocket)
 })
