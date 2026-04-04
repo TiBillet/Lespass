@@ -1,0 +1,47 @@
+{% load i18n %}
+<!--
+PASTILLE STOCK OOB — mise à jour via WebSocket après chaque vente
+/ Stock badge OOB — real-time update via WebSocket after each sale
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_stock_badge.html
+
+Ce partial est rendu par broadcast_stock_update() (wsocket/broadcast.py)
+et envoyé via WebSocket à toutes les caisses du tenant.
+
+Chaque badge a un ID unique "stock-badge-{product_uuid}".
+Les caisses qui n'affichent pas ce produit n'ont pas cet ID dans leur DOM.
+HTMX ignore silencieusement le swap — pas d'erreur.
+
+CONTEXT :
+- produits_stock[] : liste de dicts {product_uuid, quantite, unite, en_alerte, en_rupture, bloquant, quantite_lisible}
+-->
+
+{% for produit in produits_stock %}
+<!-- Badge stock OOB — aria-live sur le conteneur cible (cotton/articles.html)
+     / Stock badge OOB — aria-live is on the target container (cotton/articles.html) -->
+<div id="stock-badge-{{ produit.product_uuid }}" hx-swap-oob="innerHTML">
+    {% if produit.en_alerte %}
+    <span class="article-stock-badge article-stock-badge-alerte"
+          data-testid="stock-badge-alerte">{{ produit.quantite_lisible }}</span>
+    {% elif produit.en_rupture %}
+    <span class="article-stock-badge article-stock-badge-rupture"
+          data-testid="stock-badge-rupture">{% translate "Épuisé" %}</span>
+    {% endif %}
+</div>
+
+{% if produit.bloquant %}
+<script>
+(function() {
+    var el = document.querySelector('[data-uuid="{{ produit.product_uuid }}"]');
+    if (el) { el.classList.add('article-bloquant'); el.dataset.stockBloquant = 'true'; }
+})();
+</script>
+{% elif not produit.en_rupture and not produit.en_alerte %}
+<script>
+(function() {
+    var el = document.querySelector('[data-uuid="{{ produit.product_uuid }}"]');
+    if (el) { el.classList.remove('article-bloquant'); delete el.dataset.stockBloquant; }
+})();
+</script>
+{% endif %}
+{% endfor %}

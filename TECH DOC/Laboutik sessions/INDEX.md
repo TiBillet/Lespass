@@ -354,8 +354,8 @@ Voir sessions 16 et 17 ci-dessus.
 Gestion de stock optionnelle par produit POS. App `inventaire` (TENANT_APP).
 Spec : `Session 03 - Inventaire et stock/SPEC_INVENTAIRE.md`.
 
-- [ ] **Session 23 — Modèles + services** : app `inventaire`, modèles Stock + MouvementStock, `contenance` sur Price, `module_inventaire` sur Configuration, service décrémentation atomique `F()`
-- [x] **Session 24 — Admin Unfold + actions rapides** : StockInline sur POSProductAdmin, MouvementStockAdmin lecture seule, sidebar conditionnelle, ajustement inventaire, StockViewSet (réception/perte/offert), DebitMetreViewSet (endpoint capteur Pi), intégration résumé stock dans clôture de caisse, 27 tests pytest, 427 total, 0 régression
+- [x] **Session 23 — Modèles + services + fondation** : app `inventaire`, modèles Stock + MouvementStock, `contenance` sur Price, `module_inventaire` sur Configuration, service décrémentation atomique `F()`, branchement dans `_creer_lignes_articles()`
+- [x] **Session 24 — Admin Unfold + API + actions rapides** : StockInline (quantité read-only), MouvementStockAdmin avec ajout (réception/ajustement/perte/offert/DM), sidebar conditionnelle, ajustement admin, StockViewSet, DebitMetreViewSet, résumé stock clôture, templates HTMX, 27 tests pytest, 427 total, 0 régression
 - [ ] **Session 25 — Affichage visuel stock dans le POS** : enrichir données articles POS avec état stock (`select_related('stock_inventaire')`), adapter templates tuiles (3 états : normal, alerte orange, rupture rouge), grisage produit bloquant, pastille quantité restante, `aria-live` accessibilité, tests E2E Playwright
 
 ### 8. Multi-Tarif UX

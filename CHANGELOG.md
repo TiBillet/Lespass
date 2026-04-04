@@ -1,5 +1,47 @@
 # Changelog / Journal des modifications
 
+## Formulaire d'actions stock dans l'admin / Stock actions form in admin
+
+**Date :** Avril 2026
+**Migration :** Non
+
+**Quoi / What:** Formulaire HTMX sur la fiche Stock admin (réception, ajustement, offert, perte/casse) avec 4 boutons colorés. Template before aide sur les mouvements. Ajustement stock retiré de POSProduct (déplacé dans Stock admin). Documentation technique et utilisateur complète.
+
+**Pourquoi / Why:** Centraliser la gestion de stock dans une page dédiée plutôt que la disperser dans le formulaire produit.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `inventaire/views.py` | `stock_action_view()` — endpoint HTMX pour les 4 actions |
+| `inventaire/serializers.py` | `StockActionSerializer` — validation type/quantité/motif |
+| `Administration/admin/inventaire.py` | `StockAdmin` after template + contexte + get_urls, `MouvementStockAdmin` before template |
+| `Administration/admin/products.py` | Retirer StockInline du changeform POSProduct (garder sur add) |
+| `Administration/templates/admin/inventaire/` | 3 templates (stock_actions, partial, mouvements before) |
+
+---
+
+## Affichage visuel stock dans le POS / Stock visual display in POS
+
+**Date :** Avril 2026
+**Migration :** Non
+
+**Quoi / What:** Pastille stock sur les tuiles articles POS avec mise à jour temps réel via WebSocket. 3 états visuels : alerte (orange), rupture (rouge), bloquant (grisé + non cliquable). Après chaque vente, le badge se met à jour automatiquement sur toutes les caisses connectées du tenant.
+
+**Pourquoi / Why:** Le caissier doit voir d'un coup d'œil quels produits sont en alerte ou en rupture de stock, sans avoir à consulter l'admin.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/views.py` | `_formater_stock_lisible()` + enrichissement `_construire_donnees_articles()` + broadcast WS dans `_creer_lignes_articles()` |
+| `laboutik/templates/cotton/articles.html` | Pastille stock conditionnelle + classe `article-bloquant` |
+| `laboutik/templates/laboutik/partial/hx_stock_badge.html` | Template OOB swap pour WebSocket (nouveau) |
+| `laboutik/static/css/articles.css` | Styles pastille stock (3 états) |
+| `laboutik/static/js/articles.js` | Bloquer clic articles en rupture bloquante |
+| `wsocket/broadcast.py` | `broadcast_stock_update()` |
+| `wsocket/consumers.py` | Handler `stock_update()` |
+
+---
+
 ## Gestion d'inventaire et stock POS / POS Inventory and Stock Management
 
 **Date :** Avril 2026

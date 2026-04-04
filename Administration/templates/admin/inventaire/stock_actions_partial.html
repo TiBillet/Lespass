@@ -1,0 +1,153 @@
+<!--
+PARTIAL HTMX — formulaire d'actions stock + feedback
+Renvoyé par stock_action_view() après chaque action.
+/ HTMX partial — stock actions form + feedback.
+
+LOCALISATION : Administration/templates/admin/inventaire/stock_actions_partial.html
+-->
+{% load i18n %}
+
+<div style="padding: 20px; border: 1px solid var(--color-primary-200, #e5e7eb); border-radius: 10px; background: var(--color-base-0, #fff);">
+
+    <h3 style="margin: 0 0 16px 0; font-size: 16px; font-weight: 600;">
+        {% translate "Opérations de stock" %} — {{ product_name }}
+    </h3>
+
+    {% if message_feedback %}
+    <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #dcfce7; color: #166534; font-weight: 500;"
+         data-testid="stock-action-success">
+        {{ message_feedback }}
+    </div>
+    {% endif %}
+    {% if erreur_feedback %}
+    <div style="padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; background-color: #fef2f2; color: #991b1b; font-weight: 500;"
+         data-testid="stock-action-error">
+        {{ erreur_feedback }}
+    </div>
+    {% endif %}
+
+    <details open style="margin-bottom: 16px;">
+        <summary style="cursor: pointer; font-size: 13px; color: var(--color-base-500, #6b7280); user-select: none;">
+            {% translate "Aide : comprendre les actions" %}
+        </summary>
+        <div style="margin-top: 8px; padding: 12px; background: var(--color-base-50, #f9fafb); border-radius: 6px; font-size: 13px; line-height: 1.6; color: var(--color-base-600, #4b5563);">
+            <p style="margin: 0 0 8px 0;">
+                <strong style="color: #16a34a;">{% translate "Réception" %}</strong> :
+                {% translate "Ajoute du stock après une livraison. La quantité saisie est ajoutée au stock actuel." %}
+            </p>
+            <p style="margin: 0 0 8px 0;">
+                <strong style="color: #d97706;">{% translate "Ajustement" %}</strong> :
+                {% translate "Remplace la quantité actuelle par le stock réel compté lors d'un inventaire physique. Le système calcule le delta automatiquement." %}
+            </p>
+            <p style="margin: 0 0 8px 0;">
+                <strong style="color: #2563eb;">{% translate "Offert" %}</strong> :
+                {% translate "Retire du stock pour un produit offert. Attention : cette action n'apparaît PAS dans les ventes ni les rapports comptables. Pour offrir un produit avec traçabilité comptable, utilisez le bouton « Offrir » dans le POS." %}
+            </p>
+            <p style="margin: 0 0 4px 0;">
+                <strong style="color: #dc2626;">{% translate "Perte/casse" %}</strong> :
+                {% translate "Retire du stock pour un produit cassé, périmé ou perdu." %}
+            </p>
+            <p style="margin: 8px 0 0 0; font-style: italic;">
+                {% translate "Chaque action est tracée dans le journal des mouvements de stock." %}
+            </p>
+        </div>
+    </details>
+
+    <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px;">
+        <div>
+            <label for="id_quantite_action" style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">
+                {% translate "Quantité" %}
+            </label>
+            <input type="number" name="quantite" id="id_quantite_action" required min="0"
+                   style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 120px; font-size: 14px;"
+                   data-testid="input-quantite-action">
+        </div>
+
+        <div style="flex: 1; min-width: 200px;">
+            <label for="id_motif_action" style="display: block; font-size: 13px; margin-bottom: 4px; font-weight: 500;">
+                {% translate "Motif" %} <span style="color: var(--color-base-400, #9ca3af);">({% translate "optionnel" %})</span>
+            </label>
+            <input type="text" name="motif" id="id_motif_action" maxlength="200"
+                   style="padding: 8px 12px; border: 1px solid var(--color-base-300, #d1d5db); border-radius: 6px; width: 100%; font-size: 14px;"
+                   data-testid="input-motif-action">
+        </div>
+    </div>
+
+    {% comment %}
+    4 boutons HTMX autonomes — pas de <form> wrapper pour éviter le double submit.
+    Chaque bouton envoie type_mouvement + quantite + motif via hx-post + hx-include.
+    Le CSRF est passé via hx-headers (pas de <form> = pas de {% csrf_token %}).
+    / 4 standalone HTMX buttons — no <form> wrapper to avoid double submit.
+    CSRF passed via hx-headers.
+    {% endcomment %}
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button type="button"
+                hx-post="{{ stock_action_url }}"
+                hx-vals='{"type_mouvement": "RE"}'
+                hx-include="#id_quantite_action, #id_motif_action"
+                hx-target="#stock-actions-container"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                style="padding: 8px 18px; background-color: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
+                data-testid="btn-reception">
+            {% translate "Réception" %}
+        </button>
+        <button type="button"
+                hx-post="{{ stock_action_url }}"
+                hx-vals='{"type_mouvement": "AJ"}'
+                hx-include="#id_quantite_action, #id_motif_action"
+                hx-target="#stock-actions-container"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                style="padding: 8px 18px; background-color: #d97706; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
+                data-testid="btn-ajustement">
+            {% translate "Ajustement" %}
+        </button>
+        <button type="button"
+                hx-post="{{ stock_action_url }}"
+                hx-vals='{"type_mouvement": "OF"}'
+                hx-include="#id_quantite_action, #id_motif_action"
+                hx-target="#stock-actions-container"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                style="padding: 8px 18px; background-color: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
+                data-testid="btn-offert">
+            {% translate "Offert" %}
+        </button>
+        <button type="button"
+                hx-post="{{ stock_action_url }}"
+                hx-vals='{"type_mouvement": "PE"}'
+                hx-include="#id_quantite_action, #id_motif_action"
+                hx-target="#stock-actions-container"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                style="padding: 8px 18px; background-color: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;"
+                data-testid="btn-perte">
+            {% translate "Perte/casse" %}
+        </button>
+    </div>
+
+    {% if derniers_mouvements %}
+    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-base-200, #e5e7eb);">
+        <h4 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: var(--color-base-500, #6b7280);">
+            {% translate "Derniers mouvements" %}
+        </h4>
+        <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px;">
+            {% for mvt in derniers_mouvements %}
+            <li style="padding: 4px 0; color: var(--color-base-600, #4b5563);">
+                {{ mvt.cree_le|date:"d/m H:i" }}
+                — <strong>{{ mvt.get_type_mouvement_display }}</strong>
+                {% if mvt.quantite >= 0 %}+{% endif %}{{ mvt.quantite }}
+                {% if mvt.motif %} — <em>{{ mvt.motif }}</em>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="/admin/inventaire/mouvementstock/?stock__pk__exact={{ stock.pk }}&amp;type_mvt=all"
+           style="display: inline-block; margin-top: 8px; font-size: 13px; color: var(--color-primary-600, #2563eb);"
+           data-testid="link-tous-mouvements">
+            {% translate "Voir tous les mouvements de cet article" %} →
+        </a>
+    </div>
+    {% endif %}
+
+</div>

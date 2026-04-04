@@ -1,0 +1,26 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% comment %}
+AIDE FORMULAIRE AJOUT STOCK
+Affiché au-dessus du formulaire d'ajout d'un nouveau stock.
+Explique qu'un mouvement de réception sera créé automatiquement.
+/ ADD STOCK FORM HELP
+Displayed above the add stock form.
+Explains that a reception movement will be created automatically.
+
+LOCALISATION : Administration/templates/admin/inventaire/stock_add_help.html
+{% endcomment %}
+
+{% block content %}
+<div style="padding: 12px 16px; margin-bottom: 16px; border-radius: 8px; background: var(--color-base-50, #f0f9ff); border: 1px solid var(--color-base-200, #bae6fd); font-size: 13px; line-height: 1.6; color: var(--color-base-600, #4b5563);"
+     data-testid="stock-add-help">
+    <p style="margin: 0 0 4px 0; font-weight: 600;">
+        {% translate "Créer un stock pour un article" %}
+    </p>
+    <p style="margin: 0;">
+        {% translate "Sélectionnez l'article, indiquez la quantité initiale et l'unité de mesure. Un mouvement de type « Réception » sera automatiquement créé dans le journal des mouvements pour tracer cette entrée de stock initiale." %}
+    </p>
+</div>
+{{ block.super }}
+{% endblock %}

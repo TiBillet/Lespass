@@ -12,6 +12,7 @@ Le message_type correspond a la methode du consumer qui recevra le message.
 Par exemple "jauge_update" appelle LaboutikConsumer.jauge_update().
 Le point "." dans le type est converti en "_" par Channels.
 """
+
 import logging
 
 from asgiref.sync import async_to_sync
@@ -79,7 +80,8 @@ def broadcast_jauge_event(event):
     jauge_max_event = event.jauge_max or 0
     pourcentage_event = (
         int(round(places_vendues_event / jauge_max_event * 100))
-        if jauge_max_event else 0
+        if jauge_max_event
+        else 0
     )
     est_complet_event = event.complet()
 
@@ -127,18 +129,21 @@ def broadcast_jauge_event(event):
 
         pourcentage_tuile = (
             int(round(places_vendues_tuile / jauge_max_tuile * 100))
-            if jauge_max_tuile else 0
+            if jauge_max_tuile
+            else 0
         )
 
-        tuiles.append({
-            # ID composite event__price — meme format que article.id dans la tuile
-            # / Composite event__price ID — same format as article.id in the tile
-            "id": f"{event.uuid}__{price.uuid}",
-            "jauge_max": jauge_max_tuile,
-            "places_vendues": places_vendues_tuile,
-            "pourcentage": pourcentage_tuile,
-            "complet": est_complet_tuile,
-        })
+        tuiles.append(
+            {
+                # ID composite event__price — meme format que article.id dans la tuile
+                # / Composite event__price ID — same format as article.id in the tile
+                "id": f"{event.uuid}__{price.uuid}",
+                "jauge_max": jauge_max_tuile,
+                "places_vendues": places_vendues_tuile,
+                "pourcentage": pourcentage_tuile,
+                "complet": est_complet_tuile,
+            }
+        )
 
     # Group tenant-scoped : toutes les caisses du tenant recoivent le broadcast
     # / Tenant-scoped group: all POS terminals in the tenant receive the broadcast
@@ -155,4 +160,40 @@ def broadcast_jauge_event(event):
         template_name="laboutik/partial/hx_jauge_billet.html",
         context={"event": event_data, "tuiles": tuiles},
         message_type="jauge_update",
+    )
+
+
+def broadcast_stock_update(produits_stock_data):
+    """
+    Broadcast la mise à jour des badges stock à toutes les caisses du tenant.
+    / Broadcasts stock badge updates to all POS terminals in the tenant.
+
+    LOCALISATION : wsocket/broadcast.py
+
+    Appelé via transaction.on_commit() depuis _creer_lignes_articles()
+    après chaque décrémentation de stock.
+
+    Le group laboutik-jauges-{schema} est déjà rejoint par tous les consumers
+    (voir LaboutikConsumer.connect()).
+
+    :param produits_stock_data: liste de dicts avec les données stock mises à jour.
+        Chaque dict : {product_uuid, quantite, unite, en_alerte, en_rupture, bloquant, quantite_lisible}
+    """
+    from django.db import connection
+
+    if not produits_stock_data:
+        return
+
+    group_name = f"laboutik-jauges-{connection.schema_name}"
+
+    logger.info(
+        f"[WS] Broadcast stock update : {len(produits_stock_data)} produit(s) "
+        f"→ {group_name}"
+    )
+
+    broadcast_html(
+        group_name=group_name,
+        template_name="laboutik/partial/hx_stock_badge.html",
+        context={"produits_stock": produits_stock_data},
+        message_type="stock_update",
     )

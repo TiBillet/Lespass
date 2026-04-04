@@ -13,19 +13,19 @@ from django.utils.translation import gettext_lazy as _
 
 # Unités de mesure pour le stock / Stock measurement units
 class UniteStock(models.TextChoices):
-    UN = "UN", _("Pièces / Units")
+    UN = "UN", _("Pièces")
     CL = "CL", _("Centilitres")
-    GR = "GR", _("Grammes / Grams")
+    GR = "GR", _("Grammes")
 
 
 # Types de mouvement de stock / Stock movement types
 class TypeMouvement(models.TextChoices):
-    VE = "VE", _("Vente / Sale")
-    RE = "RE", _("Réception / Reception")
-    AJ = "AJ", _("Ajustement / Adjustment")
-    OF = "OF", _("Offert / Offered")
-    PE = "PE", _("Perte/casse / Loss/breakage")
-    DM = "DM", _("Débit mètre / Meter debit")
+    VE = "VE", _("Vente")
+    RE = "RE", _("Réception")
+    AJ = "AJ", _("Ajustement")
+    OF = "OF", _("Offert")
+    PE = "PE", _("Perte/casse")
+    DM = "DM", _("Débit mètre")
 
 
 class StockInsuffisant(Exception):
@@ -64,20 +64,16 @@ class Stock(models.Model):
         "BaseBillet.Product",
         on_delete=models.CASCADE,
         related_name="stock_inventaire",
-        verbose_name=_("Produit / Product"),
-        help_text=_(
-            "Le produit POS associé à ce stock / The POS product linked to this stock"
-        ),
+        verbose_name=_("Produit"),
+        help_text=_("Le produit POS associé à ce stock"),
     )
 
     # Quantité en stock, en unités choisies. Peut être négatif.
     # / Current stock quantity in chosen units. Can be negative.
     quantite = models.IntegerField(
         default=0,
-        verbose_name=_("Quantité / Quantity"),
-        help_text=_(
-            "Quantité actuelle en stock (peut être négative) / Current stock quantity (can be negative)"
-        ),
+        verbose_name=_("Quantité"),
+        help_text=_("Quantité actuelle en stock (peut être négative)"),
     )
 
     # Unité de mesure / Measurement unit
@@ -85,8 +81,8 @@ class Stock(models.Model):
         max_length=2,
         choices=UniteStock.choices,
         default=UniteStock.UN,
-        verbose_name=_("Unité / Unit"),
-        help_text=_("Unité de mesure du stock / Stock measurement unit"),
+        verbose_name=_("Unité"),
+        help_text=_("Unité de mesure du stock"),
     )
 
     # Seuil d'alerte. Si null, pas d'alerte.
@@ -94,10 +90,9 @@ class Stock(models.Model):
     seuil_alerte = models.PositiveIntegerField(
         null=True,
         blank=True,
-        verbose_name=_("Seuil d'alerte / Alert threshold"),
+        verbose_name=_("Seuil d'alerte"),
         help_text=_(
-            "Alerte quand le stock descend sous ce seuil (vide = pas d'alerte) "
-            "/ Alert when stock drops below this threshold (empty = no alert)"
+            "Alerte quand le stock descend sous ce seuil (vide = pas d'alerte)"
         ),
     )
 
@@ -105,11 +100,8 @@ class Stock(models.Model):
     # / Allow sales even when stock is 0 or negative
     autoriser_vente_hors_stock = models.BooleanField(
         default=True,
-        verbose_name=_("Autoriser vente hors stock / Allow out-of-stock sales"),
-        help_text=_(
-            "Si coché, la vente reste possible même en rupture de stock "
-            "/ If checked, sales remain possible even when out of stock"
-        ),
+        verbose_name=_("Autoriser vente hors stock"),
+        help_text=_("Si coché, la vente reste possible même en rupture de stock"),
     )
 
     class Meta:
@@ -156,35 +148,28 @@ class MouvementStock(models.Model):
         on_delete=models.CASCADE,
         related_name="mouvements",
         verbose_name=_("Stock"),
-        help_text=_(
-            "Le stock concerné par ce mouvement / The stock affected by this movement"
-        ),
+        help_text=_("Le stock concerné par ce mouvement"),
     )
 
     # Type de mouvement / Movement type
     type_mouvement = models.CharField(
         max_length=2,
         choices=TypeMouvement.choices,
-        verbose_name=_("Type de mouvement / Movement type"),
-        help_text=_("Nature du mouvement de stock / Nature of the stock movement"),
+        verbose_name=_("Type de mouvement"),
+        help_text=_("Nature du mouvement de stock"),
     )
 
     # Delta signé : négatif pour les sorties, positif pour les entrées
     # / Signed delta: negative for outgoing, positive for incoming
     quantite = models.IntegerField(
-        verbose_name=_("Quantité (delta) / Quantity (delta)"),
-        help_text=_(
-            "Variation signée du stock (négatif = sortie, positif = entrée) "
-            "/ Signed stock change (negative = outgoing, positive = incoming)"
-        ),
+        verbose_name=_("Quantité (delta)"),
+        help_text=_("Variation signée du stock (négatif = sortie, positif = entrée)"),
     )
 
     # Quantité en stock AVANT ce mouvement / Stock quantity BEFORE this movement
     quantite_avant = models.IntegerField(
-        verbose_name=_("Quantité avant / Quantity before"),
-        help_text=_(
-            "Niveau de stock avant ce mouvement / Stock level before this movement"
-        ),
+        verbose_name=_("Quantité avant"),
+        help_text=_("Niveau de stock avant ce mouvement"),
     )
 
     # Motif libre / Free-text reason
@@ -192,10 +177,8 @@ class MouvementStock(models.Model):
         max_length=200,
         blank=True,
         default="",
-        verbose_name=_("Motif / Reason"),
-        help_text=_(
-            "Raison du mouvement (optionnel) / Reason for the movement (optional)"
-        ),
+        verbose_name=_("Motif"),
+        help_text=_("Raison du mouvement (optionnel)"),
     )
 
     # Liens optionnels / Optional links
@@ -205,8 +188,8 @@ class MouvementStock(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="mouvements_stock",
-        verbose_name=_("Ligne article / Order line"),
-        help_text=_("Ligne de vente liée (si vente) / Related sale line (if sale)"),
+        verbose_name=_("Ligne article"),
+        help_text=_("Ligne de vente liée (si vente)"),
     )
 
     cloture = models.ForeignKey(
@@ -215,10 +198,8 @@ class MouvementStock(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="mouvements_stock",
-        verbose_name=_("Clôture de caisse / Cash register closure"),
-        help_text=_(
-            "Clôture pendant laquelle ce mouvement a eu lieu / Closure during which this movement occurred"
-        ),
+        verbose_name=_("Clôture de caisse"),
+        help_text=_("Clôture pendant laquelle ce mouvement a eu lieu"),
     )
 
     cree_par = models.ForeignKey(
@@ -227,23 +208,19 @@ class MouvementStock(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="mouvements_stock_crees",
-        verbose_name=_("Créé par / Created by"),
-        help_text=_(
-            "Utilisateur ayant effectué ce mouvement / User who performed this movement"
-        ),
+        verbose_name=_("Créé par"),
+        help_text=_("Utilisateur ayant effectué ce mouvement"),
     )
 
     cree_le = models.DateTimeField(
         auto_now_add=True,
-        verbose_name=_("Créé le / Created at"),
-        help_text=_(
-            "Date et heure de création du mouvement / Movement creation date and time"
-        ),
+        verbose_name=_("Créé le"),
+        help_text=_("Date et heure de création du mouvement"),
     )
 
     class Meta:
-        verbose_name = _("Mouvement de stock / Stock movement")
-        verbose_name_plural = _("Mouvements de stock / Stock movements")
+        verbose_name = _("Mouvement de stock")
+        verbose_name_plural = _("Mouvements de stock")
         ordering = ["-cree_le"]
         indexes = [
             models.Index(fields=["-cree_le"], name="idx_mvt_cree_le"),

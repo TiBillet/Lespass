@@ -37,28 +37,49 @@ from AuthBillet.utils import get_or_create_user
 from django.utils import timezone as dj_timezone
 
 from BaseBillet.models import (
-    Configuration, Event, LigneArticle, Membership, Price, PriceSold, Product,
-    ProductSold, SaleOrigin, PaymentMethod, Ticket,
+    Configuration,
+    Event,
+    LigneArticle,
+    Membership,
+    Price,
+    PriceSold,
+    Product,
+    ProductSold,
+    SaleOrigin,
+    PaymentMethod,
+    Ticket,
 )
 from BaseBillet.permissions import HasLaBoutikAccess
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
     LaboutikConfiguration,
-    PointDeVente, CartePrimaire, Table,
-    CommandeSauvegarde, ArticleCommandeSauvegarde,
-    ClotureCaisse, CorrectionPaiement, SortieCaisse,
+    PointDeVente,
+    CartePrimaire,
+    Table,
+    CommandeSauvegarde,
+    ArticleCommandeSauvegarde,
+    ClotureCaisse,
+    CorrectionPaiement,
+    SortieCaisse,
     HistoriqueFondDeCaisse,
 )
 from laboutik.serializers import (
     ClientIdentificationSerializer,
-    CartePrimaireSerializer, PanierSerializer,
-    CommandeSerializer, ArticleCommandeSerializer,
-    ClotureSerializer, EnvoyerRapportSerializer,
+    CartePrimaireSerializer,
+    PanierSerializer,
+    CommandeSerializer,
+    ArticleCommandeSerializer,
+    ClotureSerializer,
+    EnvoyerRapportSerializer,
 )
 from laboutik.reports import RapportComptableService
 from laboutik.utils import method as payment_method
+from inventaire.models import Stock
 from laboutik.integrity import (
-    calculer_hmac, obtenir_previous_hmac, calculer_total_ht, ligne_couverte_par_cloture,
+    calculer_hmac,
+    obtenir_previous_hmac,
+    calculer_total_ht,
+    ligne_couverte_par_cloture,
 )
 
 
@@ -148,6 +169,7 @@ logger = logging.getLogger(__name__)
 #  Utility functions — state, articles, categories                            #
 # --------------------------------------------------------------------------- #
 
+
 def _lire_version():
     """
     Lit le numero de version depuis le fichier VERSION a la racine du projet.
@@ -160,15 +182,15 @@ def _lire_version():
     LOCALISATION : laboutik/views.py
     """
     try:
-        chemin_version = settings.BASE_DIR / 'VERSION'
-        with open(chemin_version, 'r') as fichier:
+        chemin_version = settings.BASE_DIR / "VERSION"
+        with open(chemin_version, "r") as fichier:
             for ligne in fichier:
                 ligne = ligne.strip()
-                if ligne.startswith('VERSION='):
-                    return ligne.split('=', 1)[1]
+                if ligne.startswith("VERSION="):
+                    return ligne.split("=", 1)[1]
     except FileNotFoundError:
         pass
-    return '?'
+    return "?"
 
 
 def _construire_state(point_de_vente=None, carte_primaire_obj=None):
@@ -222,6 +244,39 @@ def _construire_state(point_de_vente=None, carte_primaire_obj=None):
     return state
 
 
+def _formater_stock_lisible(quantite, unite):
+    """
+    Formate la quantité de stock en texte lisible pour la tuile POS.
+    / Formats the stock quantity as human-readable text for the POS tile.
+
+    Règles / Rules:
+      - UN (pièces / units) : "3", "0", "-2"
+      - CL (centilitres) : >= 100 → "1.5 L" ou "1 L" ; < 100 → "50 cl"
+      - GR (grammes / grams) : >= 1000 → "1.2 kg" ou "1 kg" ; < 1000 → "800 g"
+    """
+    if unite == "UN":
+        return str(quantite)
+
+    if unite == "CL":
+        if quantite >= 100:
+            litres = quantite / 100
+            if litres == int(litres):
+                return f"{int(litres)} L"
+            return f"{litres:g} L"
+        return f"{quantite} cl"
+
+    if unite == "GR":
+        if quantite >= 1000:
+            kg = quantite / 1000
+            if kg == int(kg):
+                return f"{int(kg)} kg"
+            return f"{kg:g} kg"
+        return f"{quantite} g"
+
+    # Fallback — unite inconnue / unknown unit
+    return str(quantite)
+
+
 def _construire_donnees_articles(point_de_vente_instance):
     """
     Construit la liste de dicts articles au format attendu par les templates.
@@ -240,9 +295,11 @@ def _construire_donnees_articles(point_de_vente_instance):
     # Avec Prefetch(queryset=...), Django charge tout en 1 requête et filtre en mémoire.
     # Filtered prefetch: only published EUR prices, sorted by display order.
     prix_euros_prefetch = Prefetch(
-        'prices',
-        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by('order'),
-        to_attr='prix_euros',
+        "prices",
+        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
+            "order"
+        ),
+        to_attr="prix_euros",
     )
 
     # Produits du M2M du PV : articles POS (methode_caisse) OU adhesions (categorie_article)
@@ -250,11 +307,12 @@ def _construire_donnees_articles(point_de_vente_instance):
     # / POS M2M products: POS articles (methode_caisse) OR memberships (categorie_article)
     # Memberships don't necessarily have methode_caisse, identified by categorie_article.
     produits = list(
-        point_de_vente_instance.products
-        .filter(Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION))
-        .select_related('categorie_pos')
+        point_de_vente_instance.products.filter(
+            Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION)
+        )
+        .select_related("categorie_pos", "stock_inventaire")
         .prefetch_related(prix_euros_prefetch)
-        .order_by('poids', 'name')
+        .order_by("poids", "name")
     )
 
     now = dj_timezone.now()
@@ -310,22 +368,32 @@ def _construire_donnees_articles(point_de_vente_instance):
         tarifs = []
         if multi_tarif:
             for p in product.prix_euros:
-                tarifs.append({
-                    "price_uuid": str(p.uuid),
-                    "name": p.name,
-                    "prix_centimes": int(round(p.prix * 100)),
-                    "free_price": p.free_price,
-                    "subscription_label": p.get_subscription_type_display() if hasattr(p, 'get_subscription_type_display') else "",
-                })
+                tarifs.append(
+                    {
+                        "price_uuid": str(p.uuid),
+                        "name": p.name,
+                        "prix_centimes": int(round(p.prix * 100)),
+                        "free_price": p.free_price,
+                        "subscription_label": p.get_subscription_type_display()
+                        if hasattr(p, "get_subscription_type_display")
+                        else "",
+                    }
+                )
 
         # Couleurs : override produit si défini, sinon catégorie
         # Colors: product override if set, otherwise category
-        couleur_backgr = product.couleur_fond_pos or (categorie_pos.couleur_fond if categorie_pos else "#17a2b8")
-        couleur_texte_article = product.couleur_texte_pos or (categorie_pos.couleur_texte if categorie_pos else "#333333")
+        couleur_backgr = product.couleur_fond_pos or (
+            categorie_pos.couleur_fond if categorie_pos else "#17a2b8"
+        )
+        couleur_texte_article = product.couleur_texte_pos or (
+            categorie_pos.couleur_texte if categorie_pos else "#333333"
+        )
 
         # Icône : override produit si défini, sinon icône de la catégorie, sinon rien
         # Icon: product override if set, otherwise category icon, otherwise nothing
-        icone_brute = product.icon_pos or (categorie_pos.icon if categorie_pos else None) or ""
+        icone_brute = (
+            product.icon_pos or (categorie_pos.icon if categorie_pos else None) or ""
+        )
 
         # Détection du système d'icône selon le nom stocké :
         #   - FontAwesome : noms préfixés par "fa" (ex: "fa-coffee", "fas-X")
@@ -368,8 +436,30 @@ def _construire_donnees_articles(point_de_vente_instance):
             # car ce ne sont pas des euros mais des unites de monnaie cadeau/temps.
             # / RC (gift) and TM (time): no € symbol on the price,
             # because they are not euros but gift/time currency units.
-            "est_recharge_gratuite": product.methode_caisse in METHODES_RECHARGE_GRATUITES,
+            "est_recharge_gratuite": product.methode_caisse
+            in METHODES_RECHARGE_GRATUITES,
         }
+
+        # --- Données stock pour l'affichage dans la tuile POS ---
+        # Si le produit a un Stock lié, on enrichit le dict avec l'état du stock.
+        # Sinon, stock_quantite=None signifie "pas de gestion de stock".
+        # / If the product has a linked Stock, enrich the dict with stock state.
+        # Otherwise, stock_quantite=None means "no stock management".
+        try:
+            stock_du_produit = product.stock_inventaire
+            est_en_rupture = stock_du_produit.est_en_rupture()
+            article_dict["stock_quantite"] = stock_du_produit.quantite
+            article_dict["stock_unite"] = stock_du_produit.unite
+            article_dict["stock_en_alerte"] = stock_du_produit.est_en_alerte()
+            article_dict["stock_en_rupture"] = est_en_rupture
+            article_dict["stock_bloquant"] = (
+                est_en_rupture and not stock_du_produit.autoriser_vente_hors_stock
+            )
+            article_dict["stock_quantite_lisible"] = _formater_stock_lisible(
+                stock_du_produit.quantite, stock_du_produit.unite
+            )
+        except Stock.DoesNotExist:
+            article_dict["stock_quantite"] = None
 
         articles.append(article_dict)
 
@@ -385,17 +475,18 @@ def _construire_donnees_articles(point_de_vente_instance):
         point_de_vente_instance.comportement == PointDeVente.BILLETTERIE
     )
     if est_pv_billetterie:
-        from BaseBillet.models import Ticket  # Import ici pour eviter circulaire / Import here to avoid circular
+        from BaseBillet.models import (
+            Ticket,
+        )  # Import ici pour eviter circulaire / Import here to avoid circular
 
         events_futurs = (
-            Event.objects
-            .filter(
+            Event.objects.filter(
                 published=True,
                 archived=False,
                 datetime__gte=now - timedelta(days=1),
             )
-            .prefetch_related('products__prices')
-            .order_by('datetime')
+            .prefetch_related("products__prices")
+            .order_by("datetime")
         )
 
         # Palette de couleurs pour distinguer les events visuellement
@@ -403,14 +494,14 @@ def _construire_donnees_articles(point_de_vente_instance):
         # / Color palette to visually distinguish events.
         # Each event gets a unique background color.
         couleurs_events = [
-            '#7C3AED',  # violet
-            '#2563EB',  # bleu
-            '#059669',  # vert emeraude
-            '#D97706',  # ambre
-            '#DC2626',  # rouge
-            '#7C3AED',  # violet (cycle)
-            '#0891B2',  # cyan
-            '#BE185D',  # rose
+            "#7C3AED",  # violet
+            "#2563EB",  # bleu
+            "#059669",  # vert emeraude
+            "#D97706",  # ambre
+            "#DC2626",  # rouge
+            "#7C3AED",  # violet (cycle)
+            "#0891B2",  # cyan
+            "#BE185D",  # rose
         ]
 
         for index_event, event in enumerate(events_futurs):
@@ -419,7 +510,8 @@ def _construire_donnees_articles(point_de_vente_instance):
             est_complet_event = event.complet()
             pourcentage_event = (
                 int(round(places_vendues_event / jauge_max_event * 100))
-                if jauge_max_event else 0
+                if jauge_max_event
+                else 0
             )
 
             # Couleur de fond par event (palette cyclique)
@@ -440,12 +532,12 @@ def _construire_donnees_articles(point_de_vente_instance):
                 couleur_texte = (
                     product.couleur_texte_pos
                     or (categorie_pos.couleur_texte if categorie_pos else None)
-                    or '#ffffff'
+                    or "#ffffff"
                 )
                 icone_brute = (
                     product.icon_pos
                     or (categorie_pos.icon if categorie_pos else None)
-                    or 'fa-ticket-alt'
+                    or "fa-ticket-alt"
                 )
                 if icone_brute.startswith("fa"):
                     icone_type = "fa"
@@ -468,7 +560,7 @@ def _construire_donnees_articles(point_de_vente_instance):
                 # / For each published EUR Price (asset=null) → 1 tile
                 prix_euros = product.prices.filter(
                     publish=True, asset__isnull=True
-                ).order_by('order')
+                ).order_by("order")
 
                 for price in prix_euros:
                     prix_en_centimes = int(round(price.prix * 100))
@@ -495,7 +587,8 @@ def _construire_donnees_articles(point_de_vente_instance):
 
                     pourcentage_tuile = (
                         int(round(places_vendues_tuile / jauge_max_tuile * 100))
-                        if jauge_max_tuile else 0
+                        if jauge_max_tuile
+                        else 0
                     )
 
                     article_billet = {
@@ -536,7 +629,11 @@ def _construire_donnees_articles(point_de_vente_instance):
                             "datetime": event.datetime,
                             "jauge_max": jauge_max_tuile,
                             "places_vendues": places_vendues_tuile,
-                            "places_restantes": max(0, jauge_max_tuile - places_vendues_tuile) if jauge_max_tuile else None,
+                            "places_restantes": max(
+                                0, jauge_max_tuile - places_vendues_tuile
+                            )
+                            if jauge_max_tuile
+                            else None,
                             "pourcentage": pourcentage_tuile,
                             "complet": est_complet_tuile,
                         },
@@ -559,7 +656,7 @@ def _construire_donnees_categories(point_de_vente_instance):
     """
     # Catégories classiques du M2M (Bar, etc.) — toujours chargées
     # / Classic M2M categories (Bar, etc.) — always loaded
-    categories_qs = point_de_vente_instance.categories.order_by('poid_liste', 'name')
+    categories_qs = point_de_vente_instance.categories.order_by("poid_liste", "name")
     categories = []
     for categorie in categories_qs:
         icone_cat = categorie.icon or ""
@@ -572,12 +669,14 @@ def _construire_donnees_categories(point_de_vente_instance):
         else:
             icone_type_cat = "fa"
             icone_cat = "fa-th"
-        categories.append({
-            "id": str(categorie.uuid),
-            "name": categorie.name,
-            "icon": icone_cat,
-            "icone_type": icone_type_cat,
-        })
+        categories.append(
+            {
+                "id": str(categorie.uuid),
+                "name": categorie.name,
+                "icon": icone_cat,
+                "icone_type": icone_type_cat,
+            }
+        )
 
     # PV BILLETTERIE : ajouter les events futurs comme pseudo-catégories
     # La jauge event dans la sidebar = jauge globale (toutes catégories confondues)
@@ -592,7 +691,7 @@ def _construire_donnees_categories(point_de_vente_instance):
             published=True,
             archived=False,
             datetime__gte=now - timedelta(days=1),
-        ).order_by('datetime')
+        ).order_by("datetime")
 
         for event in events_futurs:
             # Ignorer les events sans produit publié
@@ -603,21 +702,22 @@ def _construire_donnees_categories(point_de_vente_instance):
             places_vendues = event.valid_tickets_count()
             jauge_max = event.jauge_max or 0
             pourcentage = (
-                int(round(places_vendues / jauge_max * 100))
-                if jauge_max else 0
+                int(round(places_vendues / jauge_max * 100)) if jauge_max else 0
             )
-            categories.append({
-                "id": str(event.uuid),
-                "name": event.name,
-                "icon": "fa-calendar-alt",
-                "icone_type": "fa",
-                "is_event": True,
-                "date": event.datetime,
-                "jauge_max": jauge_max,
-                "places_vendues": places_vendues,
-                "pourcentage": pourcentage,
-                "complet": event.complet(),
-            })
+            categories.append(
+                {
+                    "id": str(event.uuid),
+                    "name": event.name,
+                    "icon": "fa-calendar-alt",
+                    "icone_type": "fa",
+                    "is_event": True,
+                    "date": event.datetime,
+                    "jauge_max": jauge_max,
+                    "places_vendues": places_vendues,
+                    "pourcentage": pourcentage,
+                    "complet": event.complet(),
+                }
+            )
 
     return categories
 
@@ -673,7 +773,7 @@ def _obtenir_ou_creer_wallet(carte):
         name=f"Éphémère - {carte.tag_id}",
     )
     carte.wallet_ephemere = wallet
-    carte.save(update_fields=['wallet_ephemere'])
+    carte.save(update_fields=["wallet_ephemere"])
     logger.info(f"Wallet éphémère créé pour carte {carte.tag_id}: {wallet.uuid}")
     return wallet
 
@@ -718,7 +818,11 @@ def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
 # - RE (Euro top-up): the client PAYS cash/card to receive local currency (TLF)
 # - RC (Gift top-up): the cashier GIVES gift currency (TNF) — no payment
 # - TM (Time top-up): the cashier GIVES time currency (TIM) — no payment
-METHODES_RECHARGE = (Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS)
+METHODES_RECHARGE = (
+    Product.RECHARGE_EUROS,
+    Product.RECHARGE_CADEAU,
+    Product.RECHARGE_TEMPS,
+)
 
 # Recharges payantes : le client doit payer (especes, CB, cheque)
 # Paid top-ups: the client must pay (cash, card, check)
@@ -740,7 +844,7 @@ def _panier_contient_recharges(articles_panier):
     :return: True si au moins une recharge, False sinon
     """
     for article in articles_panier:
-        if article['product'].methode_caisse in METHODES_RECHARGE:
+        if article["product"].methode_caisse in METHODES_RECHARGE:
             return True
     return False
 
@@ -758,7 +862,7 @@ def _panier_contient_recharges_payantes(articles_panier):
     :return: True si au moins une recharge payante (RE), False sinon
     """
     for article in articles_panier:
-        if article['product'].methode_caisse in METHODES_RECHARGE_PAYANTES:
+        if article["product"].methode_caisse in METHODES_RECHARGE_PAYANTES:
             return True
     return False
 
@@ -778,7 +882,7 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
     if not articles_panier:
         return False
     for article in articles_panier:
-        if article['product'].methode_caisse not in METHODES_RECHARGE_GRATUITES:
+        if article["product"].methode_caisse not in METHODES_RECHARGE_GRATUITES:
             return False
     return True
 
@@ -786,6 +890,7 @@ def _panier_contient_uniquement_recharges_gratuites(articles_panier):
 # --------------------------------------------------------------------------- #
 #  CaisseViewSet — pages principales                                          #
 # --------------------------------------------------------------------------- #
+
 
 class CaisseViewSet(viewsets.ViewSet):
     """
@@ -796,6 +901,7 @@ class CaisseViewSet(viewsets.ViewSet):
     - carte_primaire()  → validation carte NFC + redirection / NFC card validation + redirect
     - point_de_vente()  → interface POS (service direct, tables, kiosk) / POS interface
     """
+
     permission_classes = [HasLaBoutikAccess]
 
     def list(self, request):
@@ -812,7 +918,12 @@ class CaisseViewSet(viewsets.ViewSet):
         }
         return render(request, "laboutik/views/ask_primary_card.html", context)
 
-    @action(detail=False, methods=["post"], url_path="carte_primaire", url_name="carte_primaire")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="carte_primaire",
+        url_name="carte_primaire",
+    )
     def carte_primaire(self, request):
         """
         POST /laboutik/caisse/carte_primaire/
@@ -832,9 +943,13 @@ class CaisseViewSet(viewsets.ViewSet):
             # Extraire le premier message d'erreur pour l'affichage
             # Extract the first error message for display
             premiere_erreur = next(iter(serializer.errors.values()))[0]
-            return render(request, "laboutik/partial/hx_primary_card_message.html", {
-                "msg": str(premiere_erreur),
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_primary_card_message.html",
+                {
+                    "msg": str(premiere_erreur),
+                },
+            )
 
         tag_id_carte_manager = serializer.validated_data["tag_id"]
         logger.debug(f"carte_primaire: tag_id reçu = {tag_id_carte_manager}")
@@ -844,33 +959,50 @@ class CaisseViewSet(viewsets.ViewSet):
         carte_primaire_obj, erreur = _charger_carte_primaire(tag_id_carte_manager)
         if erreur is not None:
             logger.debug(f"carte_primaire: {erreur}")
-            return render(request, "laboutik/partial/hx_primary_card_message.html", {
-                "msg": erreur,
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_primary_card_message.html",
+                {
+                    "msg": erreur,
+                },
+            )
 
         # Points de vente accessibles (non masqués) — évalué une seule fois
         # Accessible points of sale (not hidden) — evaluated once
         pvs = list(
-            carte_primaire_obj.points_de_vente.filter(hidden=False).order_by('poid_liste')
+            carte_primaire_obj.points_de_vente.filter(hidden=False).order_by(
+                "poid_liste"
+            )
         )
         nombre_de_pvs = len(pvs)
 
         if nombre_de_pvs == 0:
             logger.debug("carte_primaire: Aucun PV configuré")
-            return render(request, "laboutik/partial/hx_primary_card_message.html", {
-                "msg": _("Aucun point de vente configuré"),
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_primary_card_message.html",
+                {
+                    "msg": _("Aucun point de vente configuré"),
+                },
+            )
 
         # Toujours rediriger vers le premier PV de la liste (tri par poid_liste).
         # Comportement original de LaBoutik : pas de page de choix intermediaire.
         # Always redirect to the first POS in the list (sorted by poid_liste).
         pv = pvs[0]
         url_point_de_vente = reverse("laboutik-caisse-point_de_vente")
-        url_avec_params = f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}"
+        url_avec_params = (
+            f"{url_point_de_vente}?uuid_pv={pv.uuid}&tag_id_cm={tag_id_carte_manager}"
+        )
         logger.debug(f"carte_primaire: Redirection vers {url_avec_params}")
         return HttpResponseClientRedirect(url_avec_params)
 
-    @action(detail=False, methods=["get"], url_path="point_de_vente", url_name="point_de_vente")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="point_de_vente",
+        url_name="point_de_vente",
+    )
     def point_de_vente(self, request):
         """
         GET /laboutik/caisse/point_de_vente/
@@ -912,10 +1044,9 @@ class CaisseViewSet(viewsets.ViewSet):
             carte_primaire_obj, _erreur = _charger_carte_primaire(tag_id_carte_manager)
             if carte_primaire_obj is not None:
                 pvs_list = list(
-                    carte_primaire_obj.points_de_vente
-                    .filter(hidden=False)
-                    .order_by('poid_liste')
-                    .values_list('uuid', 'name', 'poid_liste', 'icon')
+                    carte_primaire_obj.points_de_vente.filter(hidden=False)
+                    .order_by("poid_liste")
+                    .values_list("uuid", "name", "poid_liste", "icon")
                 )
 
         # --- Construire les données articles et catégories ---
@@ -970,10 +1101,19 @@ class CaisseViewSet(viewsets.ViewSet):
             "tag_id": tag_id_carte_manager or "",
             "name": str(
                 carte_primaire_obj.carte.number or carte_primaire_obj.carte.tag_id
-            ) if carte_primaire_obj else "",
-            "mode_gerant": carte_primaire_obj.edit_mode if carte_primaire_obj else False,
+            )
+            if carte_primaire_obj
+            else "",
+            "mode_gerant": carte_primaire_obj.edit_mode
+            if carte_primaire_obj
+            else False,
             "pvs_list": [
-                {"uuid": str(uuid), "name": name, "poid_liste": poid, "icon": icon or ""}
+                {
+                    "uuid": str(uuid),
+                    "name": name,
+                    "poid_liste": poid,
+                    "icon": icon or "",
+                }
                 for uuid, name, poid, icon in pvs_list
             ],
         }
@@ -982,13 +1122,15 @@ class CaisseViewSet(viewsets.ViewSet):
         # --- Tables (restaurant mode) ---
         tables_list = []
         if pv.accepte_commandes:
-            tables_qs = Table.objects.filter(archive=False).order_by('poids', 'name')
+            tables_qs = Table.objects.filter(archive=False).order_by("poids", "name")
             for table in tables_qs:
-                tables_list.append({
-                    "id": str(table.uuid),
-                    "name": table.name,
-                    "statut": table.statut,
-                })
+                tables_list.append(
+                    {
+                        "id": str(table.uuid),
+                        "name": table.name,
+                        "statut": table.statut,
+                    }
+                )
 
         # Couleurs de statut des tables (mode restaurant)
         # Table status colors (restaurant mode) :
@@ -1059,7 +1201,9 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg_content": str(premiere_erreur),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         uuid_pv = serializer.validated_data["uuid_pv"]
 
@@ -1078,31 +1222,45 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         # --- 4. Calculer datetime_ouverture automatiquement ---
         # Trouver la derniere cloture journaliere de ce PV
         # / Find the last daily closure for this PV
-        derniere_cloture = ClotureCaisse.objects.filter(
-            point_de_vente=point_de_vente,
-            niveau=ClotureCaisse.JOURNALIERE,
-        ).order_by('-datetime_cloture').first()
+        derniere_cloture = (
+            ClotureCaisse.objects.filter(
+                point_de_vente=point_de_vente,
+                niveau=ClotureCaisse.JOURNALIERE,
+            )
+            .order_by("-datetime_cloture")
+            .first()
+        )
 
         if derniere_cloture:
             # datetime_ouverture = 1ere LigneArticle VALID apres la derniere cloture
             # / datetime_ouverture = 1st VALID LigneArticle after the last closure
-            premiere_vente = LigneArticle.objects.filter(
-                sale_origin=SaleOrigin.LABOUTIK,
-                status=LigneArticle.VALID,
-                datetime__gt=derniere_cloture.datetime_cloture,
-            ).order_by('datetime').first()
+            premiere_vente = (
+                LigneArticle.objects.filter(
+                    sale_origin=SaleOrigin.LABOUTIK,
+                    status=LigneArticle.VALID,
+                    datetime__gt=derniere_cloture.datetime_cloture,
+                )
+                .order_by("datetime")
+                .first()
+            )
         else:
             # Aucune cloture precedente : 1ere LigneArticle VALID tous temps confondus
             # / No previous closure: 1st VALID LigneArticle ever
-            premiere_vente = LigneArticle.objects.filter(
-                sale_origin=SaleOrigin.LABOUTIK,
-                status=LigneArticle.VALID,
-            ).order_by('datetime').first()
+            premiere_vente = (
+                LigneArticle.objects.filter(
+                    sale_origin=SaleOrigin.LABOUTIK,
+                    status=LigneArticle.VALID,
+                )
+                .order_by("datetime")
+                .first()
+            )
 
         if not premiere_vente:
             context_erreur = {
@@ -1110,24 +1268,28 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg_content": _("Aucune vente à clôturer"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         datetime_ouverture = premiere_vente.datetime
 
         # --- 5. Calculer le rapport via RapportComptableService ---
         # --- 5. Compute the report via RapportComptableService ---
         datetime_cloture = dj_timezone.now()
-        service = RapportComptableService(point_de_vente, datetime_ouverture, datetime_cloture)
+        service = RapportComptableService(
+            point_de_vente, datetime_ouverture, datetime_cloture
+        )
         rapport = service.generer_rapport_complet()
-        totaux = rapport['totaux_par_moyen']
+        totaux = rapport["totaux_par_moyen"]
         hash_lignes = service.calculer_hash_lignes()
 
         # Extraire les totaux pour la ClotureCaisse et l'affichage
         # / Extract totals for ClotureCaisse and display
-        total_especes = totaux['especes']
-        total_carte_bancaire = totaux['carte_bancaire']
-        total_cashless = totaux['cashless']
-        total_general = totaux['total']
+        total_especes = totaux["especes"]
+        total_carte_bancaire = totaux["carte_bancaire"]
+        total_cashless = totaux["cashless"]
+        total_general = totaux["total"]
         nombre_transactions = service.lignes.count()
 
         # --- 6. Bloc atomique : numero sequentiel + total perpetuel + creation ---
@@ -1140,18 +1302,24 @@ class CaisseViewSet(viewsets.ViewSet):
         with db_transaction.atomic():
             # Numero sequentiel global par niveau : dernier +1, avec verrou
             # / Global sequential number per level: last +1, with lock
-            clotures_niveau = ClotureCaisse.objects.select_for_update().filter(
-                niveau=ClotureCaisse.JOURNALIERE,
-            ).order_by('-numero_sequentiel')
+            clotures_niveau = (
+                ClotureCaisse.objects.select_for_update()
+                .filter(
+                    niveau=ClotureCaisse.JOURNALIERE,
+                )
+                .order_by("-numero_sequentiel")
+            )
 
             dernier_seq = clotures_niveau.first()
-            numero_sequentiel = (dernier_seq.numero_sequentiel + 1) if dernier_seq else 1
+            numero_sequentiel = (
+                (dernier_seq.numero_sequentiel + 1) if dernier_seq else 1
+            )
 
             # Total perpetuel : mise a jour atomique avec F() puis refresh
             # / Perpetual total: atomic update with F() then refresh
             config = LaboutikConfiguration.get_solo()
             LaboutikConfiguration.objects.filter(pk=config.pk).update(
-                total_perpetuel=F('total_perpetuel') + total_general
+                total_perpetuel=F("total_perpetuel") + total_general
             )
             config.refresh_from_db()
 
@@ -1212,7 +1380,7 @@ class CaisseViewSet(viewsets.ViewSet):
         # --- 9. Convertir la TVA en euros pour l'affichage ---
         # --- 9. Convert VAT to euros for display ---
         rapport_tva_euros = {}
-        for taux_label, tva_data in rapport['tva'].items():
+        for taux_label, tva_data in rapport["tva"].items():
             rapport_tva_euros[taux_label] = {
                 "total_ht_euros": f"{tva_data['total_ht'] / 100:.2f}",
                 "total_tva_euros": f"{tva_data['total_tva'] / 100:.2f}",
@@ -1239,7 +1407,9 @@ class CaisseViewSet(viewsets.ViewSet):
     #  PDF / CSV / Email export of the closure report (Phase 5)                #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=True, methods=["get"], url_path="rapport_pdf", url_name="rapport_pdf")
+    @action(
+        detail=True, methods=["get"], url_path="rapport_pdf", url_name="rapport_pdf"
+    )
     def rapport_pdf(self, request, pk=None):
         """
         GET /laboutik/caisse/<uuid>/rapport_pdf/
@@ -1252,7 +1422,8 @@ class CaisseViewSet(viewsets.ViewSet):
 
         try:
             cloture = ClotureCaisse.objects.select_related(
-                'point_de_vente', 'responsable',
+                "point_de_vente",
+                "responsable",
             ).get(uuid=pk)
         except ClotureCaisse.DoesNotExist:
             raise Http404
@@ -1263,11 +1434,14 @@ class CaisseViewSet(viewsets.ViewSet):
         nom_fichier = f"cloture_{date_str}.pdf"
 
         from django.http import HttpResponse
+
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
         return response
 
-    @action(detail=True, methods=["get"], url_path="rapport_csv", url_name="rapport_csv")
+    @action(
+        detail=True, methods=["get"], url_path="rapport_csv", url_name="rapport_csv"
+    )
     def rapport_csv(self, request, pk=None):
         """
         GET /laboutik/caisse/<uuid>/rapport_csv/
@@ -1280,7 +1454,8 @@ class CaisseViewSet(viewsets.ViewSet):
 
         try:
             cloture = ClotureCaisse.objects.select_related(
-                'point_de_vente', 'responsable',
+                "point_de_vente",
+                "responsable",
             ).get(uuid=pk)
         except ClotureCaisse.DoesNotExist:
             raise Http404
@@ -1291,11 +1466,17 @@ class CaisseViewSet(viewsets.ViewSet):
         nom_fichier = f"cloture_{date_str}.csv"
 
         from django.http import HttpResponse
+
         response = HttpResponse(csv_string, content_type="text/csv; charset=utf-8")
         response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
         return response
 
-    @action(detail=True, methods=["post"], url_path="envoyer_rapport", url_name="envoyer_rapport")
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="envoyer_rapport",
+        url_name="envoyer_rapport",
+    )
     def envoyer_rapport(self, request, pk=None):
         """
         POST /laboutik/caisse/<uuid>/envoyer_rapport/
@@ -1319,7 +1500,9 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg_content": str(premiere_erreur),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         email = serializer.validated_data.get("email") or None
 
@@ -1340,7 +1523,12 @@ class CaisseViewSet(viewsets.ViewSet):
     #  Print Ticket X (temporary consultation, no closure)                     #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="imprimer-ticket-x", url_name="imprimer_ticket_x")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="imprimer-ticket-x",
+        url_name="imprimer_ticket_x",
+    )
     def imprimer_ticket_x(self, request):
         """
         POST /laboutik/caisse/imprimer-ticket-x/
@@ -1355,26 +1543,45 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Recuperer le PV et son imprimante / Get POS and its printer
         try:
-            point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+            point_de_vente = PointDeVente.objects.select_related("printer").get(
+                uuid=uuid_pv
+            )
         except (PointDeVente.DoesNotExist, ValueError):
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Point de vente introuvable"),
-            }, status=404)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Point de vente introuvable"),
+                },
+                status=404,
+            )
 
         if not point_de_vente.printer or not point_de_vente.printer.active:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune imprimante configuree pour ce point de vente"),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Aucune imprimante configuree pour ce point de vente"
+                    ),
+                },
+                status=400,
+            )
 
         # Calculer le rapport du service en cours / Compute current shift report
         datetime_ouverture = _calculer_datetime_ouverture_service()
         if datetime_ouverture is None:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune vente en cours — rien a imprimer"),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Aucune vente en cours — rien a imprimer"),
+                },
+                status=400,
+            )
 
         datetime_fin = dj_timezone.now()
         service = RapportComptableService(None, datetime_ouverture, datetime_fin)
@@ -1397,17 +1604,26 @@ class CaisseViewSet(viewsets.ViewSet):
             schema_name,
         )
 
-        return render(request, "laboutik/partial/hx_messages.html", {
-            "msg_type": "success",
-            "msg_content": _("Ticket X envoye a l'imprimante"),
-        })
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "success",
+                "msg_content": _("Ticket X envoye a l'imprimante"),
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     #  Export fiscal — archive ZIP signee HMAC pour l'administration fiscale   #
     #  Fiscal export — HMAC-signed ZIP archive for tax administration          #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get", "post"], url_path="export-fiscal", url_name="export_fiscal")
+    @action(
+        detail=False,
+        methods=["get", "post"],
+        url_path="export-fiscal",
+        url_name="export_fiscal",
+    )
     def export_fiscal(self, request):
         """
         GET /laboutik/caisse/export-fiscal/
@@ -1447,12 +1663,18 @@ class CaisseViewSet(viewsets.ViewSet):
             # Si HTMX : renvoyer le partial admin Unfold (charge dans la card)
             # Si direct : renvoyer la page POS complete
             # / Detect if request comes from admin (HTMX) or direct access (POS)
-            est_requete_htmx = request.headers.get('HX-Request') == 'true'
+            est_requete_htmx = request.headers.get("HX-Request") == "true"
             if est_requete_htmx:
-                return render(request, "admin/cloture/export_fiscal_form.html", {
-                    "form_action_url": request.path,
-                    "cancel_url": request.headers.get('HX-Current-URL', '/admin/laboutik/cloturecaisse/'),
-                })
+                return render(
+                    request,
+                    "admin/cloture/export_fiscal_form.html",
+                    {
+                        "form_action_url": request.path,
+                        "cancel_url": request.headers.get(
+                            "HX-Current-URL", "/admin/laboutik/cloturecaisse/"
+                        ),
+                    },
+                )
             return render(request, "laboutik/partial/hx_export_fiscal.html")
 
         # --- POST : generation de l'archive ZIP ---
@@ -1461,26 +1683,36 @@ class CaisseViewSet(viewsets.ViewSet):
         # Recuperer la cle HMAC / Get the HMAC key
         cle = config.get_or_create_hmac_key()
         if not cle:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Cle HMAC non configuree. Export impossible."),
-            }, status=500)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Cle HMAC non configuree. Export impossible."),
+                },
+                status=500,
+            )
 
         # Parser les dates optionnelles / Parse optional dates
         debut = None
         fin = None
-        debut_str = request.POST.get('debut', '').strip()
-        fin_str = request.POST.get('fin', '').strip()
+        debut_str = request.POST.get("debut", "").strip()
+        fin_str = request.POST.get("fin", "").strip()
         try:
             if debut_str:
                 debut = date_type.fromisoformat(debut_str)
             if fin_str:
                 fin = date_type.fromisoformat(fin_str)
         except ValueError:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Format de date invalide."),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Format de date invalide."),
+                },
+                status=400,
+            )
 
         schema = connection.schema_name
 
@@ -1492,24 +1724,24 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Journaliser l'export / Log the export
         details = {
-            'schema': schema,
-            'debut': debut_str or None,
-            'fin': fin_str or None,
-            'nb_fichiers': len(fichiers),
-            'taille_zip': len(zip_bytes),
+            "schema": schema,
+            "debut": debut_str or None,
+            "fin": fin_str or None,
+            "nb_fichiers": len(fichiers),
+            "taille_zip": len(zip_bytes),
         }
         creer_entree_journal(
-            type_operation='EXPORT_FISCAL',
+            type_operation="EXPORT_FISCAL",
             details=details,
             cle_secrete=cle,
             operateur=request.user if request.user.is_authenticated else None,
         )
 
         # Reponse ZIP en telechargement / ZIP download response
-        date_label = dj_timezone.localtime(dj_timezone.now()).strftime('%Y%m%d_%H%M')
+        date_label = dj_timezone.localtime(dj_timezone.now()).strftime("%Y%m%d_%H%M")
         filename = f"export_fiscal_{schema}_{date_label}.zip"
-        response = HttpResponse(zip_bytes, content_type='application/zip')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response = HttpResponse(zip_bytes, content_type="application/zip")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
     # ----------------------------------------------------------------------- #
@@ -1517,7 +1749,12 @@ class CaisseViewSet(viewsets.ViewSet):
     #  FEC export — accounting entries file (18 columns)                        #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get", "post"], url_path="export-fec", url_name="export_fec")
+    @action(
+        detail=False,
+        methods=["get", "post"],
+        url_path="export-fec",
+        url_name="export_fec",
+    )
     def export_fec(self, request):
         """
         GET /laboutik/caisse/export-fec/
@@ -1541,12 +1778,18 @@ class CaisseViewSet(viewsets.ViewSet):
         if request.method == "GET":
             # Detecter si la requete vient de l'admin (HTMX) ou d'un acces direct (POS)
             # / Detect if request comes from admin (HTMX) or direct access (POS)
-            est_requete_htmx = request.headers.get('HX-Request') == 'true'
+            est_requete_htmx = request.headers.get("HX-Request") == "true"
             if est_requete_htmx:
-                return render(request, "admin/cloture/export_fec_form.html", {
-                    "form_action_url": request.path,
-                    "cancel_url": request.headers.get('HX-Current-URL', '/admin/laboutik/cloturecaisse/'),
-                })
+                return render(
+                    request,
+                    "admin/cloture/export_fec_form.html",
+                    {
+                        "form_action_url": request.path,
+                        "cancel_url": request.headers.get(
+                            "HX-Current-URL", "/admin/laboutik/cloturecaisse/"
+                        ),
+                    },
+                )
             return render(request, "laboutik/partial/hx_export_fiscal.html")
 
         # --- POST : generation du fichier FEC ---
@@ -1555,37 +1798,53 @@ class CaisseViewSet(viewsets.ViewSet):
         # Parser les dates optionnelles / Parse optional dates
         debut = None
         fin = None
-        debut_str = request.POST.get('debut', '').strip()
-        fin_str = request.POST.get('fin', '').strip()
+        debut_str = request.POST.get("debut", "").strip()
+        fin_str = request.POST.get("fin", "").strip()
         try:
             if debut_str:
                 debut = date_type.fromisoformat(debut_str)
             if fin_str:
                 fin = date_type.fromisoformat(fin_str)
         except ValueError:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Format de date invalide."),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Format de date invalide."),
+                },
+                status=400,
+            )
 
         # Filtrer les clotures journalieres / Filter daily closures
-        clotures = ClotureCaisse.objects.filter(niveau=ClotureCaisse.JOURNALIERE).order_by('datetime_cloture')
+        clotures = ClotureCaisse.objects.filter(
+            niveau=ClotureCaisse.JOURNALIERE
+        ).order_by("datetime_cloture")
         if debut:
             clotures = clotures.filter(datetime_cloture__date__gte=debut)
         if fin:
             clotures = clotures.filter(datetime_cloture__date__lte=fin)
 
         if not clotures.exists():
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune cloture journaliere trouvee pour la periode."),
-            }, status=404)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Aucune cloture journaliere trouvee pour la periode."
+                    ),
+                },
+                status=404,
+            )
 
         schema = connection.schema_name
         contenu_fec, nom_fichier, avertissements = generer_fec(clotures, schema)
 
-        response = HttpResponse(contenu_fec, content_type='text/tab-separated-values; charset=utf-8')
-        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        response = HttpResponse(
+            contenu_fec, content_type="text/tab-separated-values; charset=utf-8"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
         return response
 
     # ----------------------------------------------------------------------- #
@@ -1593,7 +1852,12 @@ class CaisseViewSet(viewsets.ViewSet):
     #  CSV accounting export — multi-profile (Sage, EBP, Dolibarr, etc.)      #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get", "post"], url_path="export-csv-comptable", url_name="export_csv_comptable")
+    @action(
+        detail=False,
+        methods=["get", "post"],
+        url_path="export-csv-comptable",
+        url_name="export_csv_comptable",
+    )
     def export_csv_comptable(self, request):
         """
         GET /laboutik/caisse/export-csv-comptable/
@@ -1616,60 +1880,86 @@ class CaisseViewSet(viewsets.ViewSet):
         from laboutik.profils_csv import PROFILS
 
         if request.method == "GET":
-            return render(request, "admin/cloture/export_csv_comptable_form.html", {
-                "form_action_url": request.path,
-                "profils": PROFILS,
-            })
+            return render(
+                request,
+                "admin/cloture/export_csv_comptable_form.html",
+                {
+                    "form_action_url": request.path,
+                    "profils": PROFILS,
+                },
+            )
 
         # --- POST : generation du fichier CSV comptable ---
         # --- POST: accounting CSV file generation ---
 
         # Valider le profil choisi / Validate the chosen profile
-        profil_nom = request.POST.get('profil', '').strip()
+        profil_nom = request.POST.get("profil", "").strip()
         if profil_nom not in PROFILS:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Profil inconnu. Choix : %(profils)s") % {
-                    "profils": ", ".join(PROFILS.keys()),
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Profil inconnu. Choix : %(profils)s")
+                    % {
+                        "profils": ", ".join(PROFILS.keys()),
+                    },
                 },
-            }, status=400)
+                status=400,
+            )
 
         # Parser les dates optionnelles / Parse optional dates
         debut = None
         fin = None
-        debut_str = request.POST.get('debut', '').strip()
-        fin_str = request.POST.get('fin', '').strip()
+        debut_str = request.POST.get("debut", "").strip()
+        fin_str = request.POST.get("fin", "").strip()
         try:
             if debut_str:
                 debut = date_type.fromisoformat(debut_str)
             if fin_str:
                 fin = date_type.fromisoformat(fin_str)
         except ValueError:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Format de date invalide."),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Format de date invalide."),
+                },
+                status=400,
+            )
 
         # Filtrer les clotures journalieres / Filter daily closures
-        clotures = ClotureCaisse.objects.filter(niveau=ClotureCaisse.JOURNALIERE).order_by('datetime_cloture')
+        clotures = ClotureCaisse.objects.filter(
+            niveau=ClotureCaisse.JOURNALIERE
+        ).order_by("datetime_cloture")
         if debut:
             clotures = clotures.filter(datetime_cloture__date__gte=debut)
         if fin:
             clotures = clotures.filter(datetime_cloture__date__lte=fin)
 
         if not clotures.exists():
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune cloture journaliere trouvee pour la periode."),
-            }, status=404)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Aucune cloture journaliere trouvee pour la periode."
+                    ),
+                },
+                status=404,
+            )
 
         schema = connection.schema_name
-        contenu_bytes, nom_fichier, avertissements = generer_csv_comptable(clotures, profil_nom, schema)
+        contenu_bytes, nom_fichier, avertissements = generer_csv_comptable(
+            clotures, profil_nom, schema
+        )
 
         profil = PROFILS[profil_nom]
-        content_type = 'text/csv; charset=' + profil["encodage"]
+        content_type = "text/csv; charset=" + profil["encodage"]
         response = HttpResponse(contenu_bytes, content_type=content_type)
-        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        response["Content-Disposition"] = f'attachment; filename="{nom_fichier}"'
         return response
 
     # ----------------------------------------------------------------------- #
@@ -1677,7 +1967,12 @@ class CaisseViewSet(viewsets.ViewSet):
     #  Load chart of accounts — default account set                            #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="charger-plan-comptable", url_name="charger_plan_comptable")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="charger-plan-comptable",
+        url_name="charger_plan_comptable",
+    )
     def charger_plan_comptable(self, request):
         """
         POST /laboutik/caisse/charger-plan-comptable/
@@ -1689,50 +1984,72 @@ class CaisseViewSet(viewsets.ViewSet):
         from django.core.management import call_command
         from django.db import connection
 
-        jeu = request.POST.get('jeu', '').strip()
-        if jeu not in ('bar_resto', 'association'):
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Jeu de comptes invalide."),
-            }, status=400)
+        jeu = request.POST.get("jeu", "").strip()
+        if jeu not in ("bar_resto", "association"):
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Jeu de comptes invalide."),
+                },
+                status=400,
+            )
 
         # Verifier si des comptes existent deja — si oui, forcer le reset
         # Sinon la commande afficherait un warning et ne ferait rien
         # / Check if accounts already exist — if so, force reset
         from laboutik.models import CompteComptable
+
         nb_existants = CompteComptable.objects.count()
 
         try:
             call_command(
-                'charger_plan_comptable',
+                "charger_plan_comptable",
                 schema=connection.schema_name,
                 jeu=jeu,
                 reset=nb_existants > 0,
             )
         except Exception as e:
             logger.error(f"Erreur chargement plan comptable : {e}")
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": str(e),
-            }, status=500)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": str(e),
+                },
+                status=500,
+            )
 
         message = _("Plan comptable charge avec succes.")
         if nb_existants > 0:
-            message = _("Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes).") % {
+            message = _(
+                "Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes)."
+            ) % {
                 "nb": nb_existants,
             }
 
-        return render(request, "laboutik/partial/hx_messages.html", {
-            "msg_type": "success",
-            "msg_content": message,
-        })
+        return render(
+            request,
+            "laboutik/partial/hx_messages.html",
+            {
+                "msg_type": "success",
+                "msg_content": message,
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     #  Fond de caisse — lecture et modification du montant initial              #
     #  Cash float — read and update initial drawer amount                      #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get", "post"], url_path="fond-de-caisse", url_name="fond_de_caisse")
+    @action(
+        detail=False,
+        methods=["get", "post"],
+        url_path="fond-de-caisse",
+        url_name="fond_de_caisse",
+    )
     def fond_de_caisse(self, request):
         """
         GET /laboutik/caisse/fond-de-caisse/
@@ -1753,22 +2070,30 @@ class CaisseViewSet(viewsets.ViewSet):
             # Validation via serializer DRF (conversion euros → centimes incluse)
             # / Validation via DRF serializer (euros → cents conversion included)
             from laboutik.serializers import FondDeCaisseSerializer
+
             serializer = FondDeCaisseSerializer(data=request.POST)
             if not serializer.is_valid():
                 premiere_erreur = list(serializer.errors.values())[0][0]
-                return render(request, "laboutik/partial/hx_messages.html", {
-                    "msg_type": "warning",
-                    "msg_content": str(premiere_erreur),
-                }, status=400)
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    {
+                        "msg_type": "warning",
+                        "msg_content": str(premiere_erreur),
+                    },
+                    status=400,
+                )
 
-            montant_centimes = serializer.validated_data['montant_euros']
+            montant_centimes = serializer.validated_data["montant_euros"]
 
             # Trace du changement de fond de caisse avant modification
             # / Record cash float change before modification
-            uuid_pv = request.POST.get('uuid_pv') or request.GET.get('uuid_pv')
+            uuid_pv = request.POST.get("uuid_pv") or request.GET.get("uuid_pv")
             point_de_vente_pour_historique = None
             if uuid_pv:
-                point_de_vente_pour_historique = PointDeVente.objects.filter(uuid=uuid_pv).first()
+                point_de_vente_pour_historique = PointDeVente.objects.filter(
+                    uuid=uuid_pv
+                ).first()
 
             HistoriqueFondDeCaisse.objects.create(
                 ancien_montant=config.fond_de_caisse,
@@ -1811,7 +2136,12 @@ class CaisseViewSet(viewsets.ViewSet):
     #  Cash withdrawal — cash removal with denomination breakdown              #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get"], url_path="sortie-de-caisse", url_name="sortie_de_caisse")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="sortie-de-caisse",
+        url_name="sortie_de_caisse",
+    )
     def sortie_de_caisse(self, request):
         """
         GET /laboutik/caisse/sortie-de-caisse/
@@ -1855,13 +2185,22 @@ class CaisseViewSet(viewsets.ViewSet):
             "entrees_especes_centimes": entrees_especes_centimes,
             # Chaînes pré-formatées pour l'affichage dans le template
             # / Pre-formatted strings for display in the template
-            "fond_de_caisse_euros": f"{fond_de_caisse_centimes / 100:.2f}".replace('.', ','),
-            "entrees_especes_euros": f"{entrees_especes_centimes / 100:.2f}".replace('.', ','),
-            "solde_total_euros": f"{solde_total_centimes / 100:.2f}".replace('.', ','),
+            "fond_de_caisse_euros": f"{fond_de_caisse_centimes / 100:.2f}".replace(
+                ".", ","
+            ),
+            "entrees_especes_euros": f"{entrees_especes_centimes / 100:.2f}".replace(
+                ".", ","
+            ),
+            "solde_total_euros": f"{solde_total_centimes / 100:.2f}".replace(".", ","),
         }
         return render(request, "laboutik/partial/hx_sortie_de_caisse.html", context)
 
-    @action(detail=False, methods=["post"], url_path="creer-sortie-de-caisse", url_name="creer_sortie_de_caisse")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="creer-sortie-de-caisse",
+        url_name="creer_sortie_de_caisse",
+    )
     def creer_sortie_de_caisse(self, request):
         """
         POST /laboutik/caisse/creer-sortie-de-caisse/
@@ -1875,26 +2214,37 @@ class CaisseViewSet(viewsets.ViewSet):
         # Validation du PV et de la note via serializer DRF
         # / Validate POS and note via DRF serializer
         from laboutik.serializers import SortieDeCaisseSerializer
+
         serializer = SortieDeCaisseSerializer(data=request.POST)
         if not serializer.is_valid():
             premiere_erreur = list(serializer.errors.values())[0][0]
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": str(premiere_erreur),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": str(premiere_erreur),
+                },
+                status=400,
+            )
 
-        uuid_pv = serializer.validated_data['uuid_pv']
-        note = serializer.validated_data.get('note', '').strip()
+        uuid_pv = serializer.validated_data["uuid_pv"]
+        note = serializer.validated_data.get("note", "").strip()
 
         # Recuperer le point de vente
         # / Get the point of sale
         try:
             point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
         except PointDeVente.DoesNotExist:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Point de vente introuvable"),
-            }, status=404)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Point de vente introuvable"),
+                },
+                status=404,
+            )
 
         # Lire les quantites par coupure et recalculer le total cote serveur
         # / Read quantities per denomination and recalculate total server-side
@@ -1920,10 +2270,15 @@ class CaisseViewSet(viewsets.ViewSet):
         # Verifier qu'il y a au moins une coupure
         # / Check that at least one denomination is present
         if montant_total_centimes <= 0:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune coupure saisie"),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Aucune coupure saisie"),
+                },
+                status=400,
+            )
 
         # Creer la sortie de caisse
         # / Create the cash withdrawal
@@ -1946,17 +2301,26 @@ class CaisseViewSet(viewsets.ViewSet):
         params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
 
         montant_euros = f"{montant_total_centimes / 100:.2f}"
-        return render(request, "laboutik/partial/hx_sortie_succes.html", {
-            "montant_euros": montant_euros,
-            "params_ventes": params_ventes,
-        })
+        return render(
+            request,
+            "laboutik/partial/hx_sortie_succes.html",
+            {
+                "montant_euros": montant_euros,
+                "params_ventes": params_ventes,
+            },
+        )
 
     # ----------------------------------------------------------------------- #
     #  Menu Ventes — Ticket X + liste des ventes (Session 16)                  #
     #  Sales menu — Ticket X + sales list (Session 16)                         #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get"], url_path="recap-en-cours", url_name="recap_en_cours")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="recap-en-cours",
+        url_name="recap_en_cours",
+    )
     def recap_en_cours(self, request):
         """
         GET /laboutik/caisse/recap-en-cours/?vue=toutes|par_pv|par_moyen
@@ -1983,7 +2347,9 @@ class CaisseViewSet(viewsets.ViewSet):
                 "aucune_vente": True,
                 "vue": vue,
             }
-            return _rendre_vue_ventes(request, "laboutik/partial/hx_recap_en_cours.html", context)
+            return _rendre_vue_ventes(
+                request, "laboutik/partial/hx_recap_en_cours.html", context
+            )
 
         datetime_fin = dj_timezone.now()
         service = RapportComptableService(None, datetime_ouverture, datetime_fin)
@@ -2013,9 +2379,13 @@ class CaisseViewSet(viewsets.ViewSet):
             context["tva"] = service.calculer_tva()
             context["solde_caisse"] = service.calculer_solde_caisse()
 
-        return _rendre_vue_ventes(request, "laboutik/partial/hx_recap_en_cours.html", context)
+        return _rendre_vue_ventes(
+            request, "laboutik/partial/hx_recap_en_cours.html", context
+        )
 
-    @action(detail=False, methods=["get"], url_path="liste-ventes", url_name="liste_ventes")
+    @action(
+        detail=False, methods=["get"], url_path="liste-ventes", url_name="liste_ventes"
+    )
     def liste_ventes(self, request):
         """
         GET /laboutik/caisse/liste-ventes/?pv=uuid&moyen=CA&page=1
@@ -2035,7 +2405,9 @@ class CaisseViewSet(viewsets.ViewSet):
                 "page_courante": 1,
                 "a_page_suivante": False,
             }
-            return _rendre_vue_ventes(request, "laboutik/partial/hx_liste_ventes.html", context)
+            return _rendre_vue_ventes(
+                request, "laboutik/partial/hx_liste_ventes.html", context
+            )
 
         # Queryset de base : lignes valides du service en cours
         # / Base queryset: valid lines from current shift
@@ -2063,15 +2435,19 @@ class CaisseViewSet(viewsets.ViewSet):
         # / Group by uuid_transaction on the PostgreSQL side (GROUP BY).
         # Lines without uuid_transaction use their uuid as key.
         # All work done by the DB: no Python in-memory loading.
-        ventes_requete = lignes.values(
-            cle_vente=Coalesce('uuid_transaction', 'uuid'),
-        ).annotate(
-            derniere_datetime=Max('datetime'),
-            total=Sum('amount'),
-            nb_articles=Count('uuid'),
-            moyen_paiement=Max('payment_method'),
-            nom_pv=Max('point_de_vente__name'),
-        ).order_by('-derniere_datetime')
+        ventes_requete = (
+            lignes.values(
+                cle_vente=Coalesce("uuid_transaction", "uuid"),
+            )
+            .annotate(
+                derniere_datetime=Max("datetime"),
+                total=Sum("amount"),
+                nb_articles=Count("uuid"),
+                moyen_paiement=Max("payment_method"),
+                nom_pv=Max("point_de_vente__name"),
+            )
+            .order_by("-derniere_datetime")
+        )
 
         # Pagination SQL native via slicing Django (traduit en LIMIT/OFFSET)
         # / Native SQL pagination via Django slicing (translates to LIMIT/OFFSET)
@@ -2083,21 +2459,29 @@ class CaisseViewSet(viewsets.ViewSet):
             page = 1
         taille_page = 20
         offset = (page - 1) * taille_page
-        ventes_page = list(ventes_requete[offset:offset + taille_page])
-        a_page_suivante = ventes_requete[offset + taille_page:offset + taille_page + 1].exists()
+        ventes_page = list(ventes_requete[offset : offset + taille_page])
+        a_page_suivante = ventes_requete[
+            offset + taille_page : offset + taille_page + 1
+        ].exists()
 
         # Ajouter le label humain du moyen de paiement a chaque vente
         # (le queryset renvoie le code brut "CA", "CC", etc.)
         # / Add human-readable payment method label to each sale
         for vente in ventes_page:
-            code_moyen = vente.get('moyen_paiement', '')
-            vente['moyen_paiement_label'] = LABELS_MOYENS_PAIEMENT_DB.get(code_moyen, code_moyen)
+            code_moyen = vente.get("moyen_paiement", "")
+            vente["moyen_paiement_label"] = LABELS_MOYENS_PAIEMENT_DB.get(
+                code_moyen, code_moyen
+            )
 
         # Liste des PV pour le filtre (select)
         # / POS list for the filter (select)
-        points_de_vente = PointDeVente.objects.filter(
-            hidden=False,
-        ).order_by('poid_liste').values('uuid', 'name')
+        points_de_vente = (
+            PointDeVente.objects.filter(
+                hidden=False,
+            )
+            .order_by("poid_liste")
+            .values("uuid", "name")
+        )
 
         context = {
             "aucune_vente": False,
@@ -2116,10 +2500,13 @@ class CaisseViewSet(viewsets.ViewSet):
                 {"code": PaymentMethod.CHEQUE, "label": _("Chèque")},
             ],
         }
-        return _rendre_vue_ventes(request, "laboutik/partial/hx_liste_ventes.html", context)
+        return _rendre_vue_ventes(
+            request, "laboutik/partial/hx_liste_ventes.html", context
+        )
 
     @action(
-        detail=False, methods=["get"],
+        detail=False,
+        methods=["get"],
         url_path=r"detail-vente/(?P<uuid_transaction>[^/.]+)",
         url_name="detail_vente",
     )
@@ -2141,7 +2528,9 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg_content": _("Transaction introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context, status=404
+            )
 
         # Recuperer les lignes de cette transaction.
         # La cle peut etre un uuid_transaction (regroupement) ou un uuid de ligne
@@ -2151,26 +2540,34 @@ class CaisseViewSet(viewsets.ViewSet):
         # The key can be a uuid_transaction (grouped) or a line uuid
         # (sales without uuid_transaction, old data).
         # Try uuid_transaction first, then uuid (pk).
-        lignes = LigneArticle.objects.filter(
-            uuid_transaction=uuid_tx_valide,
-            sale_origin=SaleOrigin.LABOUTIK,
-        ).select_related(
-            'pricesold__productsold__product',
-            'pricesold__price',
-            'point_de_vente',
-        ).order_by('datetime')
+        lignes = (
+            LigneArticle.objects.filter(
+                uuid_transaction=uuid_tx_valide,
+                sale_origin=SaleOrigin.LABOUTIK,
+            )
+            .select_related(
+                "pricesold__productsold__product",
+                "pricesold__price",
+                "point_de_vente",
+            )
+            .order_by("datetime")
+        )
 
         # Si pas trouve par uuid_transaction, chercher par uuid (pk de la ligne)
         # / If not found by uuid_transaction, search by uuid (line pk)
         if not lignes.exists():
-            lignes = LigneArticle.objects.filter(
-                uuid=uuid_tx_valide,
-                sale_origin=SaleOrigin.LABOUTIK,
-            ).select_related(
-                'pricesold__productsold__product',
-                'pricesold__price',
-                'point_de_vente',
-            ).order_by('datetime')
+            lignes = (
+                LigneArticle.objects.filter(
+                    uuid=uuid_tx_valide,
+                    sale_origin=SaleOrigin.LABOUTIK,
+                )
+                .select_related(
+                    "pricesold__productsold__product",
+                    "pricesold__price",
+                    "point_de_vente",
+                )
+                .order_by("datetime")
+            )
 
         if not lignes.exists():
             context = {
@@ -2178,7 +2575,9 @@ class CaisseViewSet(viewsets.ViewSet):
                 "msg_content": _("Transaction introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context, status=404
+            )
 
         # Construire le detail des articles
         # / Build article details
@@ -2195,12 +2594,14 @@ class CaisseViewSet(viewsets.ViewSet):
                 if ligne.pricesold.price:
                     nom_tarif = ligne.pricesold.price.name
 
-            articles_detail.append({
-                "nom": nom_article,
-                "tarif": nom_tarif,
-                "qty": ligne.qty,
-                "montant": ligne.amount or 0,
-            })
+            articles_detail.append(
+                {
+                    "nom": nom_article,
+                    "tarif": nom_tarif,
+                    "qty": ligne.qty,
+                    "montant": ligne.amount or 0,
+                }
+            )
             total_transaction += ligne.amount or 0
 
         # La correction est possible si le moyen n'est pas NFC
@@ -2216,21 +2617,27 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Label humain du moyen de paiement (ex: "Espèces" au lieu de "CA")
         # / Human-readable payment method label (e.g. "Cash" instead of "CA")
-        moyen_paiement_label = LABELS_MOYENS_PAIEMENT_DB.get(moyen_de_la_ligne, moyen_de_la_ligne)
+        moyen_paiement_label = LABELS_MOYENS_PAIEMENT_DB.get(
+            moyen_de_la_ligne, moyen_de_la_ligne
+        )
 
         context = {
             "uuid_transaction": uuid_transaction,
             "datetime": premiere_ligne.datetime,
             "moyen_paiement": moyen_de_la_ligne,
             "moyen_paiement_label": moyen_paiement_label,
-            "nom_pv": premiere_ligne.point_de_vente.name if premiere_ligne.point_de_vente else "",
+            "nom_pv": premiere_ligne.point_de_vente.name
+            if premiere_ligne.point_de_vente
+            else "",
             "articles": articles_detail,
             "total": total_transaction,
             "nb_articles": len(articles_detail),
             "correction_possible": correction_est_possible,
             "premiere_ligne_uuid": str(premiere_ligne.uuid),
         }
-        return _rendre_vue_ventes(request, "laboutik/partial/hx_detail_vente.html", context)
+        return _rendre_vue_ventes(
+            request, "laboutik/partial/hx_detail_vente.html", context
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -2255,21 +2662,33 @@ def _calculer_datetime_ouverture_service():
     """
     # La cloture est globale au tenant (pas par PV)
     # / Closure is global to the tenant (not per POS)
-    derniere_cloture = ClotureCaisse.objects.filter(
-        niveau=ClotureCaisse.JOURNALIERE,
-    ).order_by('-datetime_cloture').first()
+    derniere_cloture = (
+        ClotureCaisse.objects.filter(
+            niveau=ClotureCaisse.JOURNALIERE,
+        )
+        .order_by("-datetime_cloture")
+        .first()
+    )
 
     if derniere_cloture:
-        premiere_vente = LigneArticle.objects.filter(
-            sale_origin=SaleOrigin.LABOUTIK,
-            status=LigneArticle.VALID,
-            datetime__gt=derniere_cloture.datetime_cloture,
-        ).order_by('datetime').first()
+        premiere_vente = (
+            LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                status=LigneArticle.VALID,
+                datetime__gt=derniere_cloture.datetime_cloture,
+            )
+            .order_by("datetime")
+            .first()
+        )
     else:
-        premiere_vente = LigneArticle.objects.filter(
-            sale_origin=SaleOrigin.LABOUTIK,
-            status=LigneArticle.VALID,
-        ).order_by('datetime').first()
+        premiere_vente = (
+            LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                status=LigneArticle.VALID,
+            )
+            .order_by("datetime")
+            .first()
+        )
 
     if not premiere_vente:
         return None
@@ -2313,19 +2732,23 @@ def _construire_contexte_ventes(request):
             )
             card_dict["mode_gerant"] = carte_primaire_obj.edit_mode
             pvs_list = list(
-                carte_primaire_obj.points_de_vente
-                .filter(hidden=False)
-                .order_by('poid_liste')
-                .values_list('uuid', 'name', 'poid_liste', 'icon')
+                carte_primaire_obj.points_de_vente.filter(hidden=False)
+                .order_by("poid_liste")
+                .values_list("uuid", "name", "poid_liste", "icon")
             )
             card_dict["pvs_list"] = [
-                {"uuid": str(uuid), "name": name, "poid_liste": poid, "icon": icon or ""}
+                {
+                    "uuid": str(uuid),
+                    "name": name,
+                    "poid_liste": poid,
+                    "icon": icon or "",
+                }
                 for uuid, name, poid, icon in pvs_list
             ]
 
     # URL de retour vers l'interface POS
     # / Return URL to the POS interface
-    url_retour_pv = reverse('laboutik-caisse-point_de_vente')
+    url_retour_pv = reverse("laboutik-caisse-point_de_vente")
     if uuid_pv:
         url_retour_pv += f"?uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}"
 
@@ -2384,7 +2807,7 @@ def _rendre_vue_ventes(request, template_partiel, context):
     # / <body> has id="contenu" in base.html — htmx sends "contenu" not "body".
     # We accept both + direct URL access without HTMX.
     est_navigation_complete = (
-        not hasattr(request, 'htmx')
+        not hasattr(request, "htmx")
         or not request.htmx
         or request.htmx.target in ("body", "contenu")
     )
@@ -2444,9 +2867,11 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
     # Charger tous les produits du PV en une seule requête (avec prix EUR préchargés)
     # Load all PV products in a single query (with EUR prices prefetched)
     prix_euros_prefetch = Prefetch(
-        'prices',
-        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by('order'),
-        to_attr='prix_euros',
+        "prices",
+        queryset=Price.objects.filter(publish=True, asset__isnull=True).order_by(
+            "order"
+        ),
+        to_attr="prix_euros",
     )
     # Produits du PV : ceux avec methode_caisse (articles POS) OU categorie_article=ADHESION
     # Les adhesions n'ont pas forcement de methode_caisse (elles sont identifiees par categorie_article).
@@ -2454,17 +2879,17 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
     # Memberships don't necessarily have methode_caisse (identified by categorie_article).
     produits_du_pv = {
         str(p.uuid): p
-        for p in point_de_vente.products
-        .filter(Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION))
-        .prefetch_related(prix_euros_prefetch)
+        for p in point_de_vente.products.filter(
+            Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION)
+        ).prefetch_related(prix_euros_prefetch)
     }
 
     articles_panier = []
     for article_data in articles_extraits:
-        uuid_str = article_data['uuid']
-        quantite = article_data['quantite']
-        price_uuid_str = article_data.get('price_uuid')
-        custom_amount_centimes = article_data.get('custom_amount_centimes')
+        uuid_str = article_data["uuid"]
+        quantite = article_data["quantite"]
+        price_uuid_str = article_data.get("price_uuid")
+        custom_amount_centimes = article_data.get("custom_amount_centimes")
 
         # --- Articles BILLETTERIE : ID composite "{event_uuid}__{price_uuid}" ---
         # Le JS envoie repid-{event_uuid}__{price_uuid} pour les tuiles billet.
@@ -2476,10 +2901,10 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         event_billet = None
         est_billet = False
 
-        if '__' in uuid_str and point_de_vente.comportement == PointDeVente.BILLETTERIE:
-            event_uuid_str, price_uuid_str_billet = uuid_str.split('__', 1)
+        if "__" in uuid_str and point_de_vente.comportement == PointDeVente.BILLETTERIE:
+            event_uuid_str, price_uuid_str_billet = uuid_str.split("__", 1)
             try:
-                prix_billet = Price.objects.select_related('product').get(
+                prix_billet = Price.objects.select_related("product").get(
                     uuid=price_uuid_str_billet,
                     publish=True,
                     asset__isnull=True,
@@ -2499,7 +2924,9 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             # Prefetch les prix EUR du produit (necessaire pour la validation)
             # / Prefetch product's EUR prices (needed for validation)
             produit.prix_euros = list(
-                produit.prices.filter(publish=True, asset__isnull=True).order_by('order')
+                produit.prices.filter(publish=True, asset__isnull=True).order_by(
+                    "order"
+                )
             )
 
         # --- Articles POS classiques : chercher par Product UUID ---
@@ -2508,7 +2935,9 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             produit = produits_du_pv.get(uuid_str)
 
         if produit is None:
-            logger.warning(f"Produit {uuid_str} non trouvé dans le PV {point_de_vente.name}")
+            logger.warning(
+                f"Produit {uuid_str} non trouvé dans le PV {point_de_vente.name}"
+            )
             continue
 
         if not produit.prix_euros:
@@ -2545,9 +2974,12 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
                 prix_minimum_centimes = int(round(prix_obj.prix * 100))
                 if custom_amount_centimes < prix_minimum_centimes:
                     raise ValueError(
-                        _("Montant libre (%(montant)s€) inférieur au minimum (%(minimum)s€)") % {
-                            'montant': f"{custom_amount_centimes / 100:.2f}",
-                            'minimum': f"{prix_minimum_centimes / 100:.2f}",
+                        _(
+                            "Montant libre (%(montant)s€) inférieur au minimum (%(minimum)s€)"
+                        )
+                        % {
+                            "montant": f"{custom_amount_centimes / 100:.2f}",
+                            "minimum": f"{prix_minimum_centimes / 100:.2f}",
                         }
                     )
 
@@ -2555,15 +2987,17 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         # Effective price: custom amount (free price) or standard price
         prix_en_centimes = custom_amount_centimes or int(round(prix_obj.prix * 100))
 
-        articles_panier.append({
-            'product': produit,
-            'price': prix_obj,
-            'quantite': quantite,
-            'prix_centimes': prix_en_centimes,
-            'custom_amount_centimes': custom_amount_centimes,
-            'est_billet': est_billet,
-            'event': event_billet,
-        })
+        articles_panier.append(
+            {
+                "product": produit,
+                "price": prix_obj,
+                "quantite": quantite,
+                "prix_centimes": prix_en_centimes,
+                "custom_amount_centimes": custom_amount_centimes,
+                "est_billet": est_billet,
+                "event": event_billet,
+            }
+        )
 
     return articles_panier
 
@@ -2578,7 +3012,7 @@ def _calculer_total_panier_centimes(articles_panier):
     """
     total_centimes = 0
     for article in articles_panier:
-        total_centimes += article['prix_centimes'] * article['quantite']
+        total_centimes += article["prix_centimes"] * article["quantite"]
     return total_centimes
 
 
@@ -2608,35 +3042,40 @@ def _construire_recapitulatif_articles(articles_panier, prenom_client, nom_clien
     articles_pour_recapitulatif = []
 
     for article in articles_panier:
-        produit = article['product']
-        prix_unitaire_euros = article['prix_centimes'] / 100
-        quantite = article['quantite']
+        produit = article["product"]
+        prix_unitaire_euros = article["prix_centimes"] / 100
+        quantite = article["quantite"]
         prix_total_euros = prix_unitaire_euros * quantite
 
-        if hasattr(produit, 'methode_caisse') and produit.methode_caisse in METHODES_RECHARGE:
+        if (
+            hasattr(produit, "methode_caisse")
+            and produit.methode_caisse in METHODES_RECHARGE
+        ):
             description = _("Recharge %(montant)s€ → carte de %(prenom)s") % {
-                'montant': f"{prix_unitaire_euros:.2f}",
-                'prenom': prenom_client,
+                "montant": f"{prix_unitaire_euros:.2f}",
+                "prenom": prenom_client,
             }
         elif produit.categorie_article == Product.ADHESION:
             description = _("%(nom_prix)s → rattachée à %(prenom)s %(nom)s") % {
-                'nom_prix': article['price'].name,
-                'prenom': prenom_client,
-                'nom': nom_client.upper() if nom_client else "",
+                "nom_prix": article["price"].name,
+                "prenom": prenom_client,
+                "nom": nom_client.upper() if nom_client else "",
             }
-        elif article.get('est_billet', False):
-            event_name = article['event'].name if article.get('event') else "?"
+        elif article.get("est_billet", False):
+            event_name = article["event"].name if article.get("event") else "?"
             description = _("Billet %(nom)s — %(event)s") % {
-                'nom': article['price'].name,
-                'event': event_name,
+                "nom": article["price"].name,
+                "event": event_name,
             }
         else:
             description = f"{produit.name} × {quantite}"
 
-        articles_pour_recapitulatif.append({
-            'description': description,
-            'prix_total_euros': prix_total_euros,
-        })
+        articles_pour_recapitulatif.append(
+            {
+                "description": description,
+                "prix_total_euros": prix_total_euros,
+            }
+        )
 
     return articles_pour_recapitulatif
 
@@ -2665,26 +3104,32 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     # Les recharges gratuites (RC/TM) ne bloquent pas le NFC — elles sont auto-creditees.
     # / NFC forbidden only if cart contains PAID top-ups (RE).
     # Free top-ups (RC/TM) don't block NFC — they are auto-credited.
-    panier_a_recharges_payantes = articles_panier and _panier_contient_recharges_payantes(articles_panier)
+    panier_a_recharges_payantes = (
+        articles_panier and _panier_contient_recharges_payantes(articles_panier)
+    )
     if not panier_a_recharges_payantes:
-        moyens.append('nfc')
+        moyens.append("nfc")
 
     if point_de_vente.accepte_especes:
-        moyens.append('espece')
+        moyens.append("espece")
 
     if point_de_vente.accepte_carte_bancaire:
-        moyens.append('carte_bancaire')
+        moyens.append("carte_bancaire")
 
     if point_de_vente.accepte_cheque:
-        moyens.append('CH')
+        moyens.append("CH")
 
     return moyens
 
 
 def _creer_lignes_articles(
-    articles_panier, code_methode_paiement,
-    asset_uuid=None, carte=None, wallet=None,
-    uuid_transaction=None, point_de_vente=None,
+    articles_panier,
+    code_methode_paiement,
+    asset_uuid=None,
+    carte=None,
+    wallet=None,
+    uuid_transaction=None,
+    point_de_vente=None,
 ):
     """
     Crée ProductSold, PriceSold et LigneArticle pour chaque article du panier.
@@ -2705,7 +3150,9 @@ def _creer_lignes_articles(
     :param point_de_vente: PointDeVente d'origine (nullable, pour ventilation CA par PV)
     :return: liste de LigneArticle créées
     """
-    methode_db = MAPPING_CODES_PAIEMENT.get(code_methode_paiement, PaymentMethod.UNKNOWN)
+    methode_db = MAPPING_CODES_PAIEMENT.get(
+        code_methode_paiement, PaymentMethod.UNKNOWN
+    )
 
     # Determiner l'origine de la vente selon le mode ecole (LNE exigence 5)
     # En mode ecole, les ventes sont marquees LABOUTIK_TEST et exclues des rapports.
@@ -2718,18 +3165,25 @@ def _creer_lignes_articles(
         sale_origin_pour_ligne = SaleOrigin.LABOUTIK
 
     lignes_creees = []
+
+    # Accumulateur des produits dont le stock a été décrémenté.
+    # On broadcastera la mise à jour via WebSocket après le commit.
+    # / Accumulator of products whose stock was decremented.
+    # We'll broadcast the update via WebSocket after commit.
+    produits_stock_mis_a_jour = []
+
     for article in articles_panier:
-        produit = article['product']
-        prix_obj = article['price']
-        quantite = article['quantite']
-        prix_centimes = article['prix_centimes']
+        produit = article["product"]
+        prix_obj = article["price"]
+        quantite = article["quantite"]
+        prix_centimes = article["prix_centimes"]
 
         # ProductSold : snapshot du produit au moment de la vente
         # ProductSold: product snapshot at the time of sale
         product_sold, _ = ProductSold.objects.get_or_create(
             product=produit,
             event=None,
-            defaults={'categorie_article': produit.categorie_article},
+            defaults={"categorie_article": produit.categorie_article},
         )
 
         # PriceSold : snapshot du prix au moment de la vente
@@ -2737,7 +3191,7 @@ def _creer_lignes_articles(
         price_sold, _ = PriceSold.objects.get_or_create(
             productsold=product_sold,
             price=prix_obj,
-            defaults={'prix': prix_obj.prix},
+            defaults={"prix": prix_obj.prix},
         )
 
         # LigneArticle : ligne comptable de la vente
@@ -2759,15 +3213,40 @@ def _creer_lignes_articles(
         )
         # --- Décrémentation stock inventaire ---
         # Si le produit a un Stock lié, on décrémente automatiquement.
+        # Après décrémentation, on relit le stock depuis la DB
+        # (F() ne met pas à jour l'instance en mémoire).
         # / If the product has a linked Stock, auto-decrement.
+        # After decrement, re-read stock from DB (F() doesn't update in-memory instance).
         try:
             stock_du_produit = produit.stock_inventaire
             from inventaire.services import StockService
+
             StockService.decrementer_pour_vente(
                 stock=stock_du_produit,
                 contenance=prix_obj.contenance,
                 qty=quantite,
                 ligne_article=ligne,
+            )
+
+            # Relire le stock depuis la DB pour avoir la quantité à jour
+            # / Re-read stock from DB to get updated quantity
+            stock_du_produit.refresh_from_db()
+
+            produits_stock_mis_a_jour.append(
+                {
+                    "product_uuid": str(produit.uuid),
+                    "quantite": stock_du_produit.quantite,
+                    "unite": stock_du_produit.unite,
+                    "en_alerte": stock_du_produit.est_en_alerte(),
+                    "en_rupture": stock_du_produit.est_en_rupture(),
+                    "bloquant": (
+                        stock_du_produit.est_en_rupture()
+                        and not stock_du_produit.autoriser_vente_hors_stock
+                    ),
+                    "quantite_lisible": _formater_stock_lisible(
+                        stock_du_produit.quantite, stock_du_produit.unite
+                    ),
+                }
             )
         except Exception:
             # Pas de stock géré pour ce produit — comportement normal
@@ -2805,14 +3284,30 @@ def _creer_lignes_articles(
         ligne_a_chainer.hmac_hash = calculer_hmac(
             ligne_a_chainer, cle_hmac, previous_hmac_value
         )
-        ligne_a_chainer.save(update_fields=['total_ht', 'hmac_hash', 'previous_hmac'])
+        ligne_a_chainer.save(update_fields=["total_ht", "hmac_hash", "previous_hmac"])
 
         previous_hmac_value = ligne_a_chainer.hmac_hash
+
+    # --- Broadcast WebSocket des badges stock mis à jour ---
+    # on_commit() : le broadcast ne s'exécute qu'après le commit de la transaction.
+    # Si la transaction rollback, le broadcast n'est jamais envoyé.
+    # / WebSocket broadcast of updated stock badges.
+    # on_commit(): broadcast only runs after transaction commit.
+    if produits_stock_mis_a_jour:
+        from django.db import transaction
+        from wsocket.broadcast import broadcast_stock_update
+
+        # Copie de la liste pour que la closure capture les données actuelles
+        # / Copy the list so the closure captures current data
+        donnees_a_broadcaster = list(produits_stock_mis_a_jour)
+        transaction.on_commit(lambda: broadcast_stock_update(donnees_a_broadcaster))
 
     return lignes_creees
 
 
-def _creer_ou_renouveler_adhesion(user, product, price, contribution_value=None, first_name=None, last_name=None):
+def _creer_ou_renouveler_adhesion(
+    user, product, price, contribution_value=None, first_name=None, last_name=None
+):
     """
     Crée ou renouvelle une adhésion (Membership) pour un utilisateur.
     Creates or renews a membership for a user.
@@ -2843,16 +3338,22 @@ def _creer_ou_renouveler_adhesion(user, product, price, contribution_value=None,
 
     from django.utils import timezone as tz
 
-    valeur_contribution = contribution_value if contribution_value is not None else price.prix
+    valeur_contribution = (
+        contribution_value if contribution_value is not None else price.prix
+    )
 
     # Chercher une Membership existante pour ce user + price
     # Find an existing Membership for this user + price
-    membership_existante = Membership.objects.filter(
-        user=user,
-        price=price,
-    ).exclude(
-        status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
-    ).first()
+    membership_existante = (
+        Membership.objects.filter(
+            user=user,
+            price=price,
+        )
+        .exclude(
+            status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
+        )
+        .first()
+    )
 
     if membership_existante is not None:
         # Renouveler : mettre à jour la date de contribution et recalculer la deadline
@@ -2860,13 +3361,13 @@ def _creer_ou_renouveler_adhesion(user, product, price, contribution_value=None,
         membership_existante.last_contribution = tz.now()
         membership_existante.status = Membership.LABOUTIK
         membership_existante.contribution_value = valeur_contribution
-        champs_a_mettre_a_jour = ['last_contribution', 'status', 'contribution_value']
+        champs_a_mettre_a_jour = ["last_contribution", "status", "contribution_value"]
         if first_name:
             membership_existante.first_name = first_name
-            champs_a_mettre_a_jour.append('first_name')
+            champs_a_mettre_a_jour.append("first_name")
         if last_name:
             membership_existante.last_name = last_name
-            champs_a_mettre_a_jour.append('last_name')
+            champs_a_mettre_a_jour.append("last_name")
         membership_existante.save(update_fields=champs_a_mettre_a_jour)
         membership_existante.set_deadline()
         return membership_existante
@@ -2908,8 +3409,7 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     from decimal import Decimal
 
     articles_adhesion = [
-        a for a in articles_panier
-        if a['product'].categorie_article == Product.ADHESION
+        a for a in articles_panier if a["product"].categorie_article == Product.ADHESION
     ]
     if not articles_adhesion:
         return []
@@ -2963,16 +3463,16 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
     for article in articles_adhesion:
         # Montant : prix libre (custom) ou prix standard
         # / Amount: free price (custom) or standard price
-        custom_centimes = article.get('custom_amount_centimes')
+        custom_centimes = article.get("custom_amount_centimes")
         if custom_centimes is not None:
             contribution = Decimal(custom_centimes) / 100
         else:
-            contribution = article['price'].prix
+            contribution = article["price"].prix
 
         membership = _creer_ou_renouveler_adhesion(
             user=user_adhesion,
-            product=article['product'],
-            price=article['price'],
+            product=article["product"],
+            price=article["price"],
             contribution_value=contribution,
             first_name=prenom,
             last_name=nom,
@@ -2982,11 +3482,11 @@ def _creer_adhesions_depuis_panier(request, articles_panier, lignes_articles=Non
         # / Link the Membership to its LigneArticle
         if membership:
             memberships_creees.append(membership)
-            product_uuid = str(article['product'].uuid)
+            product_uuid = str(article["product"].uuid)
             ligne_correspondante = lignes_par_product.get(product_uuid)
             if ligne_correspondante:
                 ligne_correspondante.membership = membership
-                ligne_correspondante.save(update_fields=['membership'])
+                ligne_correspondante.save(update_fields=["membership"])
 
     return memberships_creees
 
@@ -3063,7 +3563,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     # / Filter ticket articles from the cart
     articles_billet = []
     for article in articles_panier:
-        if article.get('est_billet', False):
+        if article.get("est_billet", False):
             articles_billet.append(article)
 
     if not articles_billet:
@@ -3075,7 +3575,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     uuid_pv = request.POST.get("uuid_pv", "")
     if uuid_pv:
         try:
-            pv = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+            pv = PointDeVente.objects.select_related("printer").get(uuid=uuid_pv)
         except (PointDeVente.DoesNotExist, ValueError):
             pass
 
@@ -3110,17 +3610,17 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     # / Group articles by event (1 Reservation per event)
     articles_par_event = {}
     for article in articles_billet:
-        event = article.get('event')
+        event = article.get("event")
         if event is None:
             logger.warning(f"Article billet sans event : {article['price'].name}")
             continue
         event_uuid = str(event.uuid)
         if event_uuid not in articles_par_event:
             articles_par_event[event_uuid] = {
-                'event': event,
-                'articles': [],
+                "event": event,
+                "articles": [],
             }
-        articles_par_event[event_uuid]['articles'].append(article)
+        articles_par_event[event_uuid]["articles"].append(article)
 
     # --- Construire un index LigneArticle par product_uuid pour le rattachement ---
     # / Build a LigneArticle index by product_uuid for linking
@@ -3133,8 +3633,8 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
     reservations_creees = []
 
     for event_uuid, groupe in articles_par_event.items():
-        event = groupe['event']
-        articles_event = groupe['articles']
+        event = groupe["event"]
+        articles_event = groupe["articles"]
 
         # --- Verification atomique de la jauge ---
         # Verrouiller l'event pour eviter les race conditions sur la jauge.
@@ -3148,20 +3648,18 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
         # / Total number of tickets requested for this event
         total_billets_demandes = 0
         for article_event in articles_event:
-            total_billets_demandes += article_event['quantite']
+            total_billets_demandes += article_event["quantite"]
 
         # Verifier la jauge globale de l'event
         # / Check the event's global gauge
         if jauge_max > 0 and places_vendues + total_billets_demandes > jauge_max:
-            raise ValueError(
-                _("Evenement %(event)s complet") % {'event': event.name}
-            )
+            raise ValueError(_("Evenement %(event)s complet") % {"event": event.name})
 
         # Verifier la jauge par tarif (Price.stock) si definie
         # / Check per-rate gauge (Price.stock) if defined
         for article in articles_event:
-            price = article['price']
-            quantite = article['quantite']
+            price = article["price"]
+            quantite = article["quantite"]
             if price.stock is not None and price.stock > 0:
                 places_vendues_prix = Ticket.objects.filter(
                     reservation__event__pk=event.pk,
@@ -3170,7 +3668,8 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
                 ).count()
                 if places_vendues_prix + quantite > price.stock:
                     raise ValueError(
-                        _("Plus de places pour le tarif %(tarif)s") % {'tarif': price.name}
+                        _("Plus de places pour le tarif %(tarif)s")
+                        % {"tarif": price.name}
                     )
 
         # --- Creer la Reservation ---
@@ -3186,23 +3685,23 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
         # --- Creer les Tickets (1 par unite de quantite) ---
         # / Create Tickets (1 per unit of quantity)
         for article in articles_event:
-            product = article['product']
-            price = article['price']
-            quantite = article['quantite']
+            product = article["product"]
+            price = article["price"]
+            quantite = article["quantite"]
 
             # ProductSold avec event renseigne (contrairement aux ventes classiques)
             # / ProductSold with event set (unlike standard sales)
             product_sold, _created = ProductSold.objects.get_or_create(
                 product=product,
                 event=event_locked,
-                defaults={'categorie_article': product.categorie_article},
+                defaults={"categorie_article": product.categorie_article},
             )
 
             # PriceSold
             price_sold, _created = PriceSold.objects.get_or_create(
                 productsold=product_sold,
                 price=price,
-                defaults={'prix': price.prix},
+                defaults={"prix": price.prix},
             )
 
             for _i in range(quantite):
@@ -3223,7 +3722,7 @@ def _creer_billets_depuis_panier(request, articles_panier, lignes_articles=None)
             ligne_correspondante = lignes_par_product.get(product_uuid)
             if ligne_correspondante:
                 ligne_correspondante.reservation = reservation
-                ligne_correspondante.save(update_fields=['reservation'])
+                ligne_correspondante.save(update_fields=["reservation"])
 
     return reservations_creees
 
@@ -3256,7 +3755,9 @@ def _envoyer_billets_par_email(reservations):
             ticket_celery_mailer.delay(str(reservation.pk))
 
 
-def _executer_recharges(articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client):
+def _executer_recharges(
+    articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client
+):
     """
     Exécute les recharges (RE/RC/TM) contenues dans le panier.
     Executes top-ups (RE/RC/TM) contained in the cart.
@@ -3292,7 +3793,7 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
     articles_tm = []  # Recharge temps (TIM)
 
     for article in articles_panier:
-        methode = article['product'].methode_caisse
+        methode = article["product"].methode_caisse
         if methode == Product.RECHARGE_EUROS:
             articles_re.append(article)
         elif methode == Product.RECHARGE_CADEAU:
@@ -3321,7 +3822,8 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
             ip=ip_client,
         )
         _creer_lignes_articles(
-            articles_re, code_methode_paiement,
+            articles_re,
+            code_methode_paiement,
             asset_uuid=asset_tlf.uuid,
             carte=carte_client,
             wallet=wallet_client,
@@ -3354,7 +3856,8 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
             ip=ip_client,
         )
         _creer_lignes_articles(
-            articles_rc, "gift",
+            articles_rc,
+            "gift",
             asset_uuid=asset_tnf.uuid,
             carte=carte_client,
             wallet=wallet_client,
@@ -3383,7 +3886,8 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
             ip=ip_client,
         )
         _creer_lignes_articles(
-            articles_tm, "gift",
+            articles_tm,
+            "gift",
             asset_uuid=asset_tim.uuid,
             carte=carte_client,
             wallet=wallet_client,
@@ -3393,6 +3897,7 @@ def _executer_recharges(articles_panier, wallet_client, carte_client, code_metho
 # --------------------------------------------------------------------------- #
 #  PaiementViewSet — HTMX partials du flux de paiement                        #
 # --------------------------------------------------------------------------- #
+
 
 class PaiementViewSet(viewsets.ViewSet):
     """
@@ -3410,6 +3915,7 @@ class PaiementViewSet(viewsets.ViewSet):
     - verifier_carte() → attente lecture carte NFC pour vérification solde / NFC card read for balance check
     - retour_carte()   → affiche le solde de la carte scannée / shows the scanned card balance
     """
+
     permission_classes = [HasLaBoutikAccess]
 
     # ----------------------------------------------------------------------- #
@@ -3417,7 +3923,12 @@ class PaiementViewSet(viewsets.ViewSet):
     #  Step 1: show available payment methods                                  #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="moyens_paiement", url_name="moyens_paiement")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="moyens_paiement",
+        url_name="moyens_paiement",
+    )
     def moyens_paiement(self, request):
         """
         POST /laboutik/paiement/moyens_paiement/
@@ -3437,7 +3948,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         # --- Vérifier que la carte primaire a accès au PV ---
         # --- Check that the primary card has access to the PV ---
@@ -3456,7 +3969,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 "msg_content": str(e),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # --- Calculer le total en centimes puis convertir en euros ---
         # --- Calculate total in centimes then convert to euros ---
@@ -3467,7 +3982,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # --- Determine available payment methods ---
         # Si le panier contient des recharges (RE/RC/TM), NFC est exclu
         # If the cart contains top-ups (RE/RC/TM), NFC is excluded
-        moyens_paiement_disponibles = _determiner_moyens_paiement(point_de_vente, articles_panier)
+        moyens_paiement_disponibles = _determiner_moyens_paiement(
+            point_de_vente, articles_panier
+        )
 
         # Si le panier contient des recharges, le template doit demander un scan NFC client
         # If the cart contains top-ups, the template must request a client NFC scan
@@ -3478,8 +3995,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # If the cart contains memberships, the template must request client identification
         # (NFC scan or email/name form)
         panier_a_adhesions = any(
-            a['product'].categorie_article == Product.ADHESION
-            for a in articles_panier
+            a["product"].categorie_article == Product.ADHESION for a in articles_panier
         )
 
         # Si le panier contient des billets, on demande aussi l'identification
@@ -3488,7 +4004,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # (for Reservation.user_commande). Email is optional (to_mail).
         panier_a_billets = False
         for article_panier in articles_panier:
-            if article_panier.get('est_billet', False):
+            if article_panier.get("est_billet", False):
                 panier_a_billets = True
                 break
 
@@ -3496,7 +4012,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # Dans ce cas, on demande une identification AVANT le choix du moyen de paiement.
         # / Cart requires a client if it contains top-ups, memberships or tickets.
         # In that case, we ask for identification BEFORE payment method choice.
-        panier_necessite_client = panier_a_recharges or panier_a_adhesions or panier_a_billets
+        panier_necessite_client = (
+            panier_a_recharges or panier_a_adhesions or panier_a_billets
+        )
 
         # Liste des moyens de paiement en CSV pour propagation via templates HTMX
         # / Payment methods as CSV for propagation through HTMX templates
@@ -3508,7 +4026,9 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Une consigne dans le panier déclenche un flux de remboursement
         # A deposit in the basket triggers a refund flow
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(request.POST)
+        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(
+            request.POST
+        )
         consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
         if consigne_dans_panier:
             total_en_euros = abs(total_en_euros)
@@ -3559,7 +4079,9 @@ class PaiementViewSet(viewsets.ViewSet):
         context = {
             "method": moyen_paiement_choisi,
             "total": total_a_payer,
-            "payment_translation": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_choisi, ""),
+            "payment_translation": PAYMENT_METHOD_TRANSLATIONS.get(
+                moyen_paiement_choisi, ""
+            ),
             "uuid_transaction": uuid_transaction,
             "currency_data": CURRENCY_DATA,
         }
@@ -3600,7 +4122,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         # --- Vérifier que la carte primaire a accès au PV ---
         # --- Check that the primary card has access to the PV ---
@@ -3629,11 +4153,15 @@ class PaiementViewSet(viewsets.ViewSet):
                 "msg_content": str(e),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # --- Calculer le total en centimes ---
         # --- Calculate total in centimes ---
-        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(request.POST)
+        uuids_articles_selectionnes = payment_method.extraire_uuids_articles(
+            request.POST
+        )
         consigne_dans_panier = UUID_ARTICLE_CONSIGNE in uuids_articles_selectionnes
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         total_en_euros = total_centimes / 100
@@ -3650,27 +4178,46 @@ class PaiementViewSet(viewsets.ViewSet):
         # --- Aiguillage vers le bon flux de paiement ---
         # --- Route to the correct payment flow ---
         moyen_paiement_code = donnees_paiement.get("moyen_paiement", "")
-        logger.info(f"payer: moyen={moyen_paiement_code}, total={total_centimes}cts, articles={len(articles_panier)}")
+        logger.info(
+            f"payer: moyen={moyen_paiement_code}, total={total_centimes}cts, articles={len(articles_panier)}"
+        )
 
         if moyen_paiement_code in ("carte_bancaire", "CH"):
             return self._payer_par_carte_ou_cheque(
-                request, state, donnees_paiement, articles_panier,
-                total_en_euros, total_centimes,
-                consigne_dans_panier, transaction_precedente, moyen_paiement_code,
+                request,
+                state,
+                donnees_paiement,
+                articles_panier,
+                total_en_euros,
+                total_centimes,
+                consigne_dans_panier,
+                transaction_precedente,
+                moyen_paiement_code,
             )
 
         if moyen_paiement_code == "espece":
             return self._payer_en_especes(
-                request, state, donnees_paiement, articles_panier,
-                total_en_euros, total_centimes,
-                consigne_dans_panier, transaction_precedente, moyen_paiement_code,
+                request,
+                state,
+                donnees_paiement,
+                articles_panier,
+                total_en_euros,
+                total_centimes,
+                consigne_dans_panier,
+                transaction_precedente,
+                moyen_paiement_code,
             )
 
         if moyen_paiement_code == "nfc":
             return self._payer_par_nfc(
-                request, state, donnees_paiement, articles_panier,
-                total_en_euros, total_centimes,
-                consigne_dans_panier, moyen_paiement_code,
+                request,
+                state,
+                donnees_paiement,
+                articles_panier,
+                total_en_euros,
+                total_centimes,
+                consigne_dans_panier,
+                moyen_paiement_code,
                 point_de_vente,
             )
 
@@ -3681,7 +4228,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "msg_content": _("Il y a une erreur !"),
             "selector_bt_retour": "#messages",
         }
-        return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+        return render(
+            request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+        )
 
     # ------------------------------------------------------------------ #
     #  Flux de paiement : carte bancaire ou chèque                        #
@@ -3689,9 +4238,16 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_par_carte_ou_cheque(
-        self, request, state, donnees_paiement, articles_panier,
-        total_en_euros, total_centimes,
-        consigne_dans_panier, transaction_precedente, moyen_paiement_code,
+        self,
+        request,
+        state,
+        donnees_paiement,
+        articles_panier,
+        total_en_euros,
+        total_centimes,
+        consigne_dans_panier,
+        transaction_precedente,
+        moyen_paiement_code,
     ):
         """
         Paiement par carte bancaire ("carte_bancaire") ou chèque ("CH").
@@ -3711,7 +4267,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # Recuperer le PV depuis les donnees de paiement (pour l'impression)
         # / Get the POS from payment data (for printing)
         uuid_pv = donnees_paiement.get("uuid_pv", "")
-        point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+        point_de_vente = PointDeVente.objects.select_related("printer").get(
+            uuid=uuid_pv
+        )
 
         # Identifiant unique de ce paiement — regroupe toutes les LigneArticle
         # / Unique ID for this payment — groups all LigneArticle records
@@ -3719,8 +4277,16 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Séparer articles normaux et recharges
         # Separate normal articles and top-ups
-        articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
-        articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
+        articles_normaux = [
+            a
+            for a in articles_panier
+            if a["product"].methode_caisse not in METHODES_RECHARGE
+        ]
+        articles_recharge = [
+            a
+            for a in articles_panier
+            if a["product"].methode_caisse in METHODES_RECHARGE
+        ]
         reservations_billets = []
 
         with db_transaction.atomic():
@@ -3729,19 +4295,24 @@ class PaiementViewSet(viewsets.ViewSet):
             lignes_normales = []
             if articles_normaux:
                 lignes_normales = _creer_lignes_articles(
-                    articles_normaux, moyen_paiement_code,
+                    articles_normaux,
+                    moyen_paiement_code,
                     uuid_transaction=uuid_transaction,
                     point_de_vente=point_de_vente,
                 )
 
             # Adhesions → creer les Memberships et les rattacher aux LigneArticle
             # Memberships → create Membership records and link them to LigneArticle
-            _creer_adhesions_depuis_panier(request, articles_normaux, lignes_articles=lignes_normales)
+            _creer_adhesions_depuis_panier(
+                request, articles_normaux, lignes_articles=lignes_normales
+            )
 
             # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
             # Tickets → create Reservation + Tickets and link them to LigneArticle
             reservations_billets = _creer_billets_depuis_panier(
-                request, articles_normaux, lignes_articles=lignes_normales,
+                request,
+                articles_normaux,
+                lignes_articles=lignes_normales,
             )
 
             # Recharges → TransactionService + LigneArticle avec carte et asset
@@ -3754,7 +4325,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
                 wallet_client = _obtenir_ou_creer_wallet(carte_client)
                 _executer_recharges(
-                    articles_recharge, wallet_client, carte_client,
+                    articles_recharge,
+                    wallet_client,
+                    carte_client,
                     code_methode_paiement=moyen_paiement_code,
                     ip_client=ip_client,
                 )
@@ -3768,17 +4341,22 @@ class PaiementViewSet(viewsets.ViewSet):
 
         # Impression automatique des billets pour le PV BILLETTERIE
         # / Auto-print tickets for ticketing POS
-        if (reservations_billets
-                and point_de_vente.comportement == PointDeVente.BILLETTERIE
-                and point_de_vente.printer
-                and point_de_vente.printer.active):
+        if (
+            reservations_billets
+            and point_de_vente.comportement == PointDeVente.BILLETTERIE
+            and point_de_vente.printer
+            and point_de_vente.printer.active
+        ):
             from BaseBillet.models import Ticket
+
             for reservation in reservations_billets:
                 tickets_reservation = Ticket.objects.filter(
                     reservation=reservation,
-                ).select_related('pricesold', 'reservation__event')
+                ).select_related("pricesold", "reservation__event")
                 for ticket_obj in tickets_reservation:
-                    imprimer_billet(ticket_obj, reservation, reservation.event, point_de_vente)
+                    imprimer_billet(
+                        ticket_obj, reservation, reservation.event, point_de_vente
+                    )
 
         context = {
             "currency_data": CURRENCY_DATA,
@@ -3792,7 +4370,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "uuid_transaction": str(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
         }
-        return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+        return render(
+            request, "laboutik/partial/hx_return_payment_success.html", context
+        )
 
     # ------------------------------------------------------------------ #
     #  Flux de paiement : espèces                                         #
@@ -3800,9 +4380,16 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_en_especes(
-        self, request, state, donnees_paiement, articles_panier,
-        total_en_euros, total_centimes,
-        consigne_dans_panier, transaction_precedente, moyen_paiement_code,
+        self,
+        request,
+        state,
+        donnees_paiement,
+        articles_panier,
+        total_en_euros,
+        total_centimes,
+        consigne_dans_panier,
+        transaction_precedente,
+        moyen_paiement_code,
     ):
         """
         Paiement en espèces.
@@ -3823,7 +4410,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # Recuperer le PV depuis les donnees de paiement (pour l'impression)
         # / Get the POS from payment data (for printing)
         uuid_pv = donnees_paiement.get("uuid_pv", "")
-        point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+        point_de_vente = PointDeVente.objects.select_related("printer").get(
+            uuid=uuid_pv
+        )
 
         # La somme est suffisante si :
         # - le caissier n'a rien saisi (= paiement exact, pas de monnaie à rendre)
@@ -3832,8 +4421,7 @@ class PaiementViewSet(viewsets.ViewSet):
         # - the cashier entered nothing (= exact payment, no change to give)
         # - or the given sum covers the total
         somme_est_suffisante = (
-            somme_donnee_en_centimes == 0
-            or somme_donnee_en_centimes >= total_centimes
+            somme_donnee_en_centimes == 0 or somme_donnee_en_centimes >= total_centimes
         )
 
         if somme_est_suffisante:
@@ -3845,8 +4433,16 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Séparer articles normaux et recharges
             # Separate normal articles and top-ups
-            articles_normaux = [a for a in articles_panier if a['product'].methode_caisse not in METHODES_RECHARGE]
-            articles_recharge = [a for a in articles_panier if a['product'].methode_caisse in METHODES_RECHARGE]
+            articles_normaux = [
+                a
+                for a in articles_panier
+                if a["product"].methode_caisse not in METHODES_RECHARGE
+            ]
+            articles_recharge = [
+                a
+                for a in articles_panier
+                if a["product"].methode_caisse in METHODES_RECHARGE
+            ]
             reservations_billets = []
 
             # Créer les lignes articles en base (atomique)
@@ -3857,19 +4453,24 @@ class PaiementViewSet(viewsets.ViewSet):
                 lignes_normales = []
                 if articles_normaux:
                     lignes_normales = _creer_lignes_articles(
-                        articles_normaux, moyen_paiement_code,
+                        articles_normaux,
+                        moyen_paiement_code,
                         uuid_transaction=uuid_transaction,
                         point_de_vente=point_de_vente,
                     )
 
                 # Adhesions → creer les Memberships et les rattacher aux LigneArticle
                 # Memberships → create Membership records and link them to LigneArticle
-                _creer_adhesions_depuis_panier(request, articles_normaux, lignes_articles=lignes_normales)
+                _creer_adhesions_depuis_panier(
+                    request, articles_normaux, lignes_articles=lignes_normales
+                )
 
                 # Billets → creer Reservation + Tickets et rattacher aux LigneArticle
                 # Tickets → create Reservation + Tickets and link them to LigneArticle
                 reservations_billets = _creer_billets_depuis_panier(
-                    request, articles_normaux, lignes_articles=lignes_normales,
+                    request,
+                    articles_normaux,
+                    lignes_articles=lignes_normales,
                 )
 
                 # Recharges → TransactionService + LigneArticle avec carte et asset
@@ -3882,7 +4483,9 @@ class PaiementViewSet(viewsets.ViewSet):
                     carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
                     wallet_client = _obtenir_ou_creer_wallet(carte_client)
                     _executer_recharges(
-                        articles_recharge, wallet_client, carte_client,
+                        articles_recharge,
+                        wallet_client,
+                        carte_client,
                         code_methode_paiement=moyen_paiement_code,
                         ip_client=ip_client,
                     )
@@ -3894,28 +4497,36 @@ class PaiementViewSet(viewsets.ViewSet):
 
             # Impression automatique des billets pour le PV BILLETTERIE
             # / Auto-print tickets for ticketing POS
-            if (reservations_billets
-                    and point_de_vente.comportement == PointDeVente.BILLETTERIE
-                    and point_de_vente.printer
-                    and point_de_vente.printer.active):
+            if (
+                reservations_billets
+                and point_de_vente.comportement == PointDeVente.BILLETTERIE
+                and point_de_vente.printer
+                and point_de_vente.printer.active
+            ):
                 for reservation in reservations_billets:
                     tickets_reservation = Ticket.objects.filter(
                         reservation=reservation,
-                    ).select_related('pricesold', 'reservation__event')
+                    ).select_related("pricesold", "reservation__event")
                     for ticket_obj in tickets_reservation:
-                        imprimer_billet(ticket_obj, reservation, reservation.event, point_de_vente)
+                        imprimer_billet(
+                            ticket_obj, reservation, reservation.event, point_de_vente
+                        )
 
             # Calculer la monnaie à rendre (en euros)
             # Calculate change to give back (in euros)
             donnees_paiement["give_back"] = 0
             if somme_donnee_en_centimes > total_centimes:
-                donnees_paiement["give_back"] = (somme_donnee_en_centimes - total_centimes) / 100
+                donnees_paiement["give_back"] = (
+                    somme_donnee_en_centimes - total_centimes
+                ) / 100
 
             context = {
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "monnaie_name": state["place"]["monnaie_name"],
-                "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
+                "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(
+                    moyen_paiement_code, ""
+                ),
                 "deposit_is_present": consigne_dans_panier,
                 "total": total_en_euros,
                 "state": state,
@@ -3923,7 +4534,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
             }
-            return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+            return render(
+                request, "laboutik/partial/hx_return_payment_success.html", context
+            )
 
         # Somme insuffisante → ne rien faire (le JS gère la validation côté client)
         # Insufficient amount → do nothing (JS handles client-side validation)
@@ -3940,9 +4553,15 @@ class PaiementViewSet(viewsets.ViewSet):
     # ------------------------------------------------------------------ #
 
     def _payer_par_nfc(
-        self, request, state, donnees_paiement, articles_panier,
-        total_en_euros, total_centimes,
-        consigne_dans_panier, moyen_paiement_code,
+        self,
+        request,
+        state,
+        donnees_paiement,
+        articles_panier,
+        total_en_euros,
+        total_centimes,
+        consigne_dans_panier,
+        moyen_paiement_code,
         point_de_vente,
     ):
         """
@@ -3967,10 +4586,14 @@ class PaiementViewSet(viewsets.ViewSet):
         if _panier_contient_recharges_payantes(articles_panier):
             context_erreur = {
                 "msg_type": "warning",
-                "msg_content": _("Les recharges ne peuvent pas être payées en cashless"),
+                "msg_content": _(
+                    "Les recharges ne peuvent pas être payées en cashless"
+                ),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         tag_id_client = request.POST.get("tag_id", "").upper().strip()
 
@@ -4023,8 +4646,8 @@ class PaiementViewSet(viewsets.ViewSet):
         articles_recharge_gratuite = []
 
         for article in articles_panier:
-            methode = article['product'].methode_caisse
-            if article['product'].categorie_article == Product.ADHESION:
+            methode = article["product"].methode_caisse
+            if article["product"].categorie_article == Product.ADHESION:
                 articles_adhesion.append(article)
             elif methode in METHODES_RECHARGE_GRATUITES:
                 # RC (cadeau) ou TM (temps) : credit gratuit, pas de debit
@@ -4049,7 +4672,9 @@ class PaiementViewSet(viewsets.ViewSet):
         # 5. Check balance BEFORE atomic block (fast reject, no lock)
         #    Only VT + AD debit the client. RE/RC/TM credit the client.
         if total_debit_client_centimes > 0:
-            solde_client = WalletService.obtenir_solde(wallet=wallet_client, asset=asset_tlf)
+            solde_client = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_tlf
+            )
             if solde_client < total_debit_client_centimes:
                 montant_manquant = total_debit_client_centimes - solde_client
                 donnees_paiement["missing"] = montant_manquant / 100
@@ -4064,7 +4689,11 @@ class PaiementViewSet(viewsets.ViewSet):
                     },
                     "uuid_transaction": "",
                 }
-                return render(request, "laboutik/partial/hx_funds_insufficient.html", context_insuffisant)
+                return render(
+                    request,
+                    "laboutik/partial/hx_funds_insufficient.html",
+                    context_insuffisant,
+                )
 
         # 6. Bloc atomic : ventes + adhésions (pas de recharges en NFC)
         # 6. Atomic block: sales + memberships (no top-ups in NFC)
@@ -4090,7 +4719,8 @@ class PaiementViewSet(viewsets.ViewSet):
                         ip=ip_client,
                     )
                     _creer_lignes_articles(
-                        articles_vente, moyen_paiement_code,
+                        articles_vente,
+                        moyen_paiement_code,
                         asset_uuid=asset_tlf.uuid,
                         carte=carte_client,
                         wallet=wallet_client,
@@ -4111,7 +4741,8 @@ class PaiementViewSet(viewsets.ViewSet):
                         ip=ip_client,
                     )
                     lignes_adhesion = _creer_lignes_articles(
-                        articles_adhesion, moyen_paiement_code,
+                        articles_adhesion,
+                        moyen_paiement_code,
                         asset_uuid=asset_tlf.uuid,
                         carte=carte_client,
                         wallet=wallet_client,
@@ -4127,7 +4758,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 #    with "gift" code → PaymentMethod.FREE.
                 if articles_recharge_gratuite:
                     _executer_recharges(
-                        articles_recharge_gratuite, wallet_client, carte_client,
+                        articles_recharge_gratuite,
+                        wallet_client,
+                        carte_client,
                         code_methode_paiement="gift",
                         ip_client=ip_client,
                     )
@@ -4145,23 +4778,24 @@ class PaiementViewSet(viewsets.ViewSet):
                     for article in articles_adhesion:
                         membership = _creer_ou_renouveler_adhesion(
                             carte_client.user,
-                            article['product'],
-                            article['price'],
+                            article["product"],
+                            article["price"],
                         )
                         # Rattacher la Membership a sa LigneArticle
                         # / Link the Membership to its LigneArticle
                         if membership:
-                            product_uuid = str(article['product'].uuid)
+                            product_uuid = str(article["product"].uuid)
                             ligne = lignes_par_product.get(product_uuid)
                             if ligne:
                                 ligne.membership = membership
-                                ligne.save(update_fields=['membership'])
+                                ligne.save(update_fields=["membership"])
 
         except SoldeInsuffisant:
             # Race condition : solde a changé entre le check et le débit
             # Race condition: balance changed between check and debit
             solde_restant = WalletService.obtenir_solde(
-                wallet=wallet_client, asset=asset_tlf,
+                wallet=wallet_client,
+                asset=asset_tlf,
             )
             montant_manquant = total_debit_client_centimes - solde_restant
             donnees_paiement["missing"] = montant_manquant / 100
@@ -4176,11 +4810,17 @@ class PaiementViewSet(viewsets.ViewSet):
                 },
                 "uuid_transaction": "",
             }
-            return render(request, "laboutik/partial/hx_funds_insufficient.html", context_insuffisant)
+            return render(
+                request,
+                "laboutik/partial/hx_funds_insufficient.html",
+                context_insuffisant,
+            )
 
         # 7. Succès : lire le nouveau solde et afficher
         # 7. Success: read new balance and display
-        nouveau_solde_centimes = WalletService.obtenir_solde(wallet=wallet_client, asset=asset_tlf)
+        nouveau_solde_centimes = WalletService.obtenir_solde(
+            wallet=wallet_client, asset=asset_tlf
+        )
         nouveau_solde_euros = nouveau_solde_centimes / 100
 
         context = {
@@ -4198,14 +4838,21 @@ class PaiementViewSet(viewsets.ViewSet):
             "uuid_transaction": str(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
         }
-        return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+        return render(
+            request, "laboutik/partial/hx_return_payment_success.html", context
+        )
 
     # ----------------------------------------------------------------------- #
     #  Flow identification client : identification obligatoire avant paiement  #
     #  Client identification flow: mandatory identification before payment     #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get"], url_path="lire_nfc_client", url_name="lire_nfc_client")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="lire_nfc_client",
+        url_name="lire_nfc_client",
+    )
     def lire_nfc_client(self, request):
         """
         GET /laboutik/paiement/lire_nfc_client/
@@ -4230,7 +4877,12 @@ class PaiementViewSet(viewsets.ViewSet):
         }
         return render(request, "laboutik/partial/hx_lire_nfc_client.html", context)
 
-    @action(detail=False, methods=["get"], url_path="formulaire_identification_client", url_name="formulaire_identification_client")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="formulaire_identification_client",
+        url_name="formulaire_identification_client",
+    )
     def formulaire_identification_client(self, request):
         """
         GET /laboutik/paiement/formulaire_identification_client/
@@ -4252,9 +4904,18 @@ class PaiementViewSet(viewsets.ViewSet):
             "panier_a_billets": panier_a_billets,
             "moyens_paiement_csv": moyens_paiement_csv,
         }
-        return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
+        return render(
+            request,
+            "laboutik/partial/hx_formulaire_identification_client.html",
+            context,
+        )
 
-    @action(detail=False, methods=["post"], url_path="identifier_client", url_name="identifier_client")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="identifier_client",
+        url_name="identifier_client",
+    )
     def identifier_client(self, request):
         """
         POST /laboutik/paiement/identifier_client/
@@ -4290,7 +4951,9 @@ class PaiementViewSet(viewsets.ViewSet):
         panier_a_adhesions = request.POST.get("panier_a_adhesions", "") == "True"
         panier_a_billets = request.POST.get("panier_a_billets", "") == "True"
         moyens_paiement_csv = request.POST.get("moyens_paiement", "")
-        moyens_paiement = [m.strip() for m in moyens_paiement_csv.split(",") if m.strip()]
+        moyens_paiement = [
+            m.strip() for m in moyens_paiement_csv.split(",") if m.strip()
+        ]
 
         # --- Reconstruire le panier depuis les repid-* du POST ---
         # Le #addition-form contient les articles (repid-*) et le PV (uuid_pv).
@@ -4304,7 +4967,9 @@ class PaiementViewSet(viewsets.ViewSet):
         if uuid_pv:
             try:
                 point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
-                articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+                articles_panier = _extraire_articles_du_panier(
+                    request.POST, point_de_vente
+                )
                 total_centimes = _calculer_total_panier_centimes(articles_panier)
                 total_en_euros = total_centimes / 100
             except (PointDeVente.DoesNotExist, ValueError):
@@ -4325,7 +4990,9 @@ class PaiementViewSet(viewsets.ViewSet):
                     "msg_content": _("Carte inconnue"),
                     "selector_bt_retour": "#messages",
                 }
-                return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
 
         # Option 2 : formulaire email — valider avec le serializer
         # / Option 2: email form — validate with serializer
@@ -4349,7 +5016,11 @@ class PaiementViewSet(viewsets.ViewSet):
                     "panier_a_billets": panier_a_billets,
                     "moyens_paiement_csv": moyens_paiement_csv,
                 }
-                return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
+                return render(
+                    request,
+                    "laboutik/partial/hx_formulaire_identification_client.html",
+                    context,
+                )
 
             email = serializer.validated_data["email_adhesion"]
             prenom = serializer.validated_data["prenom_adhesion"]
@@ -4378,14 +5049,18 @@ class PaiementViewSet(viewsets.ViewSet):
         # No payment needed → credit immediately and show success.
         # RC/TM are gifts: the cashier scans the card and that's it.
         # ------------------------------------------------------------------
-        panier_uniquement_gratuit = _panier_contient_uniquement_recharges_gratuites(articles_panier)
+        panier_uniquement_gratuit = _panier_contient_uniquement_recharges_gratuites(
+            articles_panier
+        )
         if carte and panier_uniquement_gratuit:
             ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
             wallet_client = _obtenir_ou_creer_wallet(carte)
 
             with db_transaction.atomic():
                 _executer_recharges(
-                    articles_panier, wallet_client, carte,
+                    articles_panier,
+                    wallet_client,
+                    carte,
                     code_methode_paiement="gift",
                     ip_client=ip_client,
                 )
@@ -4394,7 +5069,9 @@ class PaiementViewSet(viewsets.ViewSet):
             # / Compute balance after credit for the success screen
             solde_apres = 0
             try:
-                solde_apres = WalletService.obtenir_total_en_centimes(wallet_client) / 100
+                solde_apres = (
+                    WalletService.obtenir_total_en_centimes(wallet_client) / 100
+                )
             except Exception:
                 pass
 
@@ -4404,7 +5081,9 @@ class PaiementViewSet(viewsets.ViewSet):
             if user:
                 carte_label = user.first_name or carte.tag_id
             articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier, carte_label, "",
+                articles_panier,
+                carte_label,
+                "",
             )
 
             # Construire donnees_paiement minimal pour le template de succes
@@ -4431,13 +5110,15 @@ class PaiementViewSet(viewsets.ViewSet):
                 "solde_apres": solde_apres,
                 "articles_pour_recapitulatif": articles_pour_recapitulatif,
             }
-            return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+            return render(
+                request, "laboutik/partial/hx_return_payment_success.html", context
+            )
 
         # User identifie → ecran recapitulatif avec articles et boutons de paiement
         # / User identified → recap screen with articles and payment buttons
         if user:
             solde = 0
-            if hasattr(user, 'wallet') and user.wallet:
+            if hasattr(user, "wallet") and user.wallet:
                 try:
                     solde = WalletService.obtenir_total_en_centimes(user.wallet) / 100
                 except Exception:
@@ -4449,7 +5130,9 @@ class PaiementViewSet(viewsets.ViewSet):
             # Enrichir les articles avec un texte adaptatif par type
             # / Enrich articles with adaptive text per type
             articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier, user_prenom, user_nom,
+                articles_panier,
+                user_prenom,
+                user_nom,
             )
 
             context = {
@@ -4465,7 +5148,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 "articles_pour_recapitulatif": articles_pour_recapitulatif,
                 "total_en_euros": total_en_euros,
             }
-            return render(request, "laboutik/partial/hx_recapitulatif_client.html", context)
+            return render(
+                request, "laboutik/partial/hx_recapitulatif_client.html", context
+            )
 
         # ------------------------------------------------------------------
         # Carte anonyme (scan NFC, pas de user associe a la carte).
@@ -4506,7 +5191,11 @@ class PaiementViewSet(viewsets.ViewSet):
                     "panier_a_billets": panier_a_billets,
                     "moyens_paiement_csv": moyens_paiement_csv,
                 }
-                return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
+                return render(
+                    request,
+                    "laboutik/partial/hx_formulaire_identification_client.html",
+                    context,
+                )
 
             # Recharge seule sur carte anonyme → pas besoin de user.
             # On affiche le recapitulatif directement avec le tag_id de la carte.
@@ -4519,18 +5208,25 @@ class PaiementViewSet(viewsets.ViewSet):
             solde_carte = 0
             if carte.wallet_ephemere:
                 try:
-                    solde_carte = WalletService.obtenir_total_en_centimes(carte.wallet_ephemere) / 100
+                    solde_carte = (
+                        WalletService.obtenir_total_en_centimes(carte.wallet_ephemere)
+                        / 100
+                    )
                 except Exception:
                     solde_carte = 0
-            elif carte.user and hasattr(carte.user, 'wallet') and carte.user.wallet:
+            elif carte.user and hasattr(carte.user, "wallet") and carte.user.wallet:
                 try:
-                    solde_carte = WalletService.obtenir_total_en_centimes(carte.user.wallet) / 100
+                    solde_carte = (
+                        WalletService.obtenir_total_en_centimes(carte.user.wallet) / 100
+                    )
                 except Exception:
                     solde_carte = 0
 
             carte_label = carte.tag_id
             articles_pour_recapitulatif = _construire_recapitulatif_articles(
-                articles_panier, carte_label, "",
+                articles_panier,
+                carte_label,
+                "",
             )
 
             context = {
@@ -4546,7 +5242,9 @@ class PaiementViewSet(viewsets.ViewSet):
                 "articles_pour_recapitulatif": articles_pour_recapitulatif,
                 "total_en_euros": total_en_euros,
             }
-            return render(request, "laboutik/partial/hx_recapitulatif_client.html", context)
+            return render(
+                request, "laboutik/partial/hx_recapitulatif_client.html", context
+            )
 
         # Aucune info → formulaire vierge
         # / No info → blank form
@@ -4556,7 +5254,11 @@ class PaiementViewSet(viewsets.ViewSet):
             "panier_a_billets": panier_a_billets,
             "moyens_paiement_csv": moyens_paiement_csv,
         }
-        return render(request, "laboutik/partial/hx_formulaire_identification_client.html", context)
+        return render(
+            request,
+            "laboutik/partial/hx_formulaire_identification_client.html",
+            context,
+        )
 
     # ----------------------------------------------------------------------- #
     #  Annexes : lecture et vérification de carte NFC                           #
@@ -4572,7 +5274,12 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         return render(request, "laboutik/partial/hx_read_nfc.html", {})
 
-    @action(detail=False, methods=["get"], url_path="verifier_carte", url_name="verifier_carte")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="verifier_carte",
+        url_name="verifier_carte",
+    )
     def verifier_carte(self, request):
         """
         GET /laboutik/paiement/verifier_carte/
@@ -4581,7 +5288,9 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         return render(request, "laboutik/partial/hx_check_card.html", {})
 
-    @action(detail=False, methods=["post"], url_path="retour_carte", url_name="retour_carte")
+    @action(
+        detail=False, methods=["post"], url_path="retour_carte", url_name="retour_carte"
+    )
     def retour_carte(self, request):
         """
         POST /laboutik/paiement/retour_carte/
@@ -4625,12 +5334,14 @@ class PaiementViewSet(viewsets.ViewSet):
         solde_tlf_centimes = 0
         solde_tnf_centimes = 0
         for t in tokens_qs:
-            tokens.append({
-                'asset_name': t.asset.name,
-                'asset_category': t.asset.category,
-                'value_euros': t.value / 100,
-                'provenance': t.asset.tenant_origin.name,
-            })
+            tokens.append(
+                {
+                    "asset_name": t.asset.name,
+                    "asset_category": t.asset.category,
+                    "value_euros": t.value / 100,
+                    "provenance": t.asset.tenant_origin.name,
+                }
+            )
             total_centimes += t.value
             if t.asset.category == Asset.TLF:
                 solde_tlf_centimes += t.value
@@ -4641,11 +5352,15 @@ class PaiementViewSet(viewsets.ViewSet):
         # 4. Active memberships (if user known)
         adhesions = []
         if carte.user:
-            toutes_adhesions = list(Membership.objects.filter(
-                user=carte.user,
-            ).exclude(
-                status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
-            ).select_related('price__product'))
+            toutes_adhesions = list(
+                Membership.objects.filter(
+                    user=carte.user,
+                )
+                .exclude(
+                    status__in=[Membership.CANCELED, Membership.ADMIN_CANCELED],
+                )
+                .select_related("price__product")
+            )
             adhesions = [m for m in toutes_adhesions if m.is_valid()]
 
         # 5. Couleur de fond selon le type de carte
@@ -4672,7 +5387,12 @@ class PaiementViewSet(viewsets.ViewSet):
     #  Sale receipt printing (button on the success screen)                #
     # ------------------------------------------------------------------ #
 
-    @action(detail=False, methods=["post"], url_path="imprimer_ticket", url_name="imprimer_ticket")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="imprimer_ticket",
+        url_name="imprimer_ticket",
+    )
     def imprimer_ticket(self, request):
         """
         POST /laboutik/paiement/imprimer_ticket/
@@ -4696,42 +5416,62 @@ class PaiementViewSet(viewsets.ViewSet):
         uuid_pv = request.POST.get("uuid_pv")
 
         if not uuid_transaction_str or not uuid_pv:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Donnees manquantes pour l'impression"),
-                "selector_bt_retour": "#print-feedback",
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Donnees manquantes pour l'impression"),
+                    "selector_bt_retour": "#print-feedback",
+                },
+            )
 
         # Recuperer le PV et son imprimante
         # / Get the POS and its printer
         try:
-            point_de_vente = PointDeVente.objects.select_related('printer').get(uuid=uuid_pv)
+            point_de_vente = PointDeVente.objects.select_related("printer").get(
+                uuid=uuid_pv
+            )
         except (PointDeVente.DoesNotExist, ValueError):
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Point de vente introuvable"),
-                "selector_bt_retour": "#print-feedback",
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Point de vente introuvable"),
+                    "selector_bt_retour": "#print-feedback",
+                },
+            )
 
         if not point_de_vente.printer or not point_de_vente.printer.active:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune imprimante configuree pour ce point de vente"),
-                "selector_bt_retour": "#print-feedback",
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Aucune imprimante configuree pour ce point de vente"
+                    ),
+                    "selector_bt_retour": "#print-feedback",
+                },
+            )
 
         # Recuperer les lignes de cette transaction
         # / Get the lines for this transaction
         lignes_du_paiement = LigneArticle.objects.filter(
             uuid_transaction=uuid_transaction_str,
-        ).select_related('pricesold__productsold')
+        ).select_related("pricesold__productsold")
 
         if not lignes_du_paiement.exists():
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Aucune ligne trouvee pour cette transaction"),
-                "selector_bt_retour": "#print-feedback",
-            })
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Aucune ligne trouvee pour cette transaction"),
+                    "selector_bt_retour": "#print-feedback",
+                },
+            )
 
         # Construire le ticket et lancer l'impression async
         # / Build the ticket and launch async printing
@@ -4748,7 +5488,10 @@ class PaiementViewSet(viewsets.ViewSet):
         moyen_paiement = premiere_ligne.payment_method if premiere_ligne else ""
 
         ticket_data = formatter_ticket_vente(
-            lignes_du_paiement, point_de_vente, operateur, moyen_paiement,
+            lignes_du_paiement,
+            point_de_vente,
+            operateur,
+            moyen_paiement,
         )
 
         # Ajouter les metadonnees d'impression pour la tracabilite (LNE exigence 9)
@@ -4774,7 +5517,12 @@ class PaiementViewSet(viewsets.ViewSet):
     #  Payment method correction (LNE compliance requirement 4)                #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["get"], url_path="formulaire_correction", url_name="formulaire_correction")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="formulaire_correction",
+        url_name="formulaire_correction",
+    )
     def formulaire_correction(self, request):
         """
         GET /laboutik/paiement/formulaire_correction/?ligne_uuid=...
@@ -4785,32 +5533,50 @@ class PaiementViewSet(viewsets.ViewSet):
         """
         ligne_uuid = request.GET.get("ligne_uuid")
         if not ligne_uuid:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Ligne d'article introuvable"),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Ligne d'article introuvable"),
+                },
+                status=400,
+            )
 
         try:
             ligne = LigneArticle.objects.get(uuid=ligne_uuid)
         except (LigneArticle.DoesNotExist, ValueError):
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Ligne d'article introuvable"),
-            }, status=404)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Ligne d'article introuvable"),
+                },
+                status=404,
+            )
 
         # Liste des moyens corrigeables (ESP/CB/CHQ), sans le moyen actuel
         # / List of correctable methods (CASH/CC/CHECK), without the current one
         moyens_corrigeables = []
         if ligne.payment_method != PaymentMethod.CASH:
-            moyens_corrigeables.append({"code": PaymentMethod.CASH, "label": _("Especes")})
+            moyens_corrigeables.append(
+                {"code": PaymentMethod.CASH, "label": _("Especes")}
+            )
         if ligne.payment_method != PaymentMethod.CC:
-            moyens_corrigeables.append({"code": PaymentMethod.CC, "label": _("Carte bancaire")})
+            moyens_corrigeables.append(
+                {"code": PaymentMethod.CC, "label": _("Carte bancaire")}
+            )
         if ligne.payment_method != PaymentMethod.CHEQUE:
-            moyens_corrigeables.append({"code": PaymentMethod.CHEQUE, "label": _("Cheque")})
+            moyens_corrigeables.append(
+                {"code": PaymentMethod.CHEQUE, "label": _("Cheque")}
+            )
 
         # Label humain du moyen actuel + montant en euros pour l'affichage
         # / Human label of current method + amount in euros for display
-        moyen_actuel_label = LABELS_MOYENS_PAIEMENT_DB.get(ligne.payment_method, ligne.payment_method)
+        moyen_actuel_label = LABELS_MOYENS_PAIEMENT_DB.get(
+            ligne.payment_method, ligne.payment_method
+        )
         montant_euros = f"{(ligne.amount or 0) / 100:.2f}"
 
         # Nom de l'article pour le contexte
@@ -4826,9 +5592,16 @@ class PaiementViewSet(viewsets.ViewSet):
             "montant_euros": montant_euros,
             "nom_article": nom_article,
         }
-        return render(request, "laboutik/partial/hx_corriger_moyen_paiement.html", context)
+        return render(
+            request, "laboutik/partial/hx_corriger_moyen_paiement.html", context
+        )
 
-    @action(detail=False, methods=["post"], url_path="corriger_moyen_paiement", url_name="corriger_moyen_paiement")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="corriger_moyen_paiement",
+        url_name="corriger_moyen_paiement",
+    )
     def corriger_moyen_paiement(self, request):
         """
         POST /laboutik/paiement/corriger_moyen_paiement/
@@ -4855,27 +5628,38 @@ class PaiementViewSet(viewsets.ViewSet):
         # Business guards (NFC, post-closure, same method) remain in the view
         # because they depend on database state.
         from laboutik.serializers import CorrectionPaiementSerializer
+
         serializer = CorrectionPaiementSerializer(data=request.POST)
         if not serializer.is_valid():
             premiere_erreur = list(serializer.errors.values())[0][0]
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": str(premiere_erreur),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": str(premiere_erreur),
+                },
+                status=400,
+            )
 
-        ligne_uuid = serializer.validated_data['ligne_uuid']
-        nouveau_moyen = serializer.validated_data['nouveau_moyen']
-        raison = serializer.validated_data['raison']
+        ligne_uuid = serializer.validated_data["ligne_uuid"]
+        nouveau_moyen = serializer.validated_data["nouveau_moyen"]
+        raison = serializer.validated_data["raison"]
 
         # --- Recuperer la ligne d'article ---
         # / Get the article line
         try:
             ligne = LigneArticle.objects.get(uuid=ligne_uuid)
         except LigneArticle.DoesNotExist:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Ligne d'article introuvable"),
-            }, status=404)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Ligne d'article introuvable"),
+                },
+                status=404,
+            )
 
         # --- GARDE 1 : les paiements NFC (cashless) ne peuvent pas etre corriges ---
         # Les paiements cashless sont lies a des Transactions fedow_core.
@@ -4884,28 +5668,47 @@ class PaiementViewSet(viewsets.ViewSet):
         # Changing the method would break coherence with the fedow ledger.
         moyens_nfc = (PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT)
         if ligne.payment_method in moyens_nfc:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Les paiements cashless ne peuvent pas etre modifies"),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Les paiements cashless ne peuvent pas etre modifies"
+                    ),
+                },
+                status=400,
+            )
 
         # --- GARDE 2 : post-cloture interdit ---
         # Les lignes couvertes par une cloture journaliere sont immuables.
         # / Lines covered by a daily closure are immutable.
         cloture_existante = ligne_couverte_par_cloture(ligne)
         if cloture_existante:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Cette vente est couverte par une cloture. Modification interdite."),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Cette vente est couverte par une cloture. Modification interdite."
+                    ),
+                },
+                status=400,
+            )
 
         # --- GARDE 3 : meme moyen = pas de correction ---
         # / Same method = no correction needed
         if ligne.payment_method == nouveau_moyen:
-            return render(request, "laboutik/partial/hx_messages.html", {
-                "msg_type": "warning",
-                "msg_content": _("Le moyen de paiement est deja identique"),
-            }, status=400)
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _("Le moyen de paiement est deja identique"),
+                },
+                status=400,
+            )
 
         # --- Recuperer TOUTES les lignes de la transaction ---
         # Une transaction peut contenir plusieurs articles (ex: Biere + Coca).
@@ -4946,7 +5749,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 # pour distinguer correction tracee de falsification.
                 # / Note: HMAC chain is intentionally broken. This is expected.
                 ligne_a_corriger.payment_method = nouveau_moyen
-                ligne_a_corriger.save(update_fields=['payment_method'])
+                ligne_a_corriger.save(update_fields=["payment_method"])
                 nombre_lignes_corrigees += 1
 
         logger.info(
@@ -4960,20 +5763,29 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Re-render the full sale detail with the new method
         # so the row updates visually.
         ancien_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(ancien_moyen, ancien_moyen)
-        nouveau_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(nouveau_moyen, nouveau_moyen)
+        nouveau_moyen_label = LABELS_MOYENS_PAIEMENT_DB.get(
+            nouveau_moyen, nouveau_moyen
+        )
 
-        return render(request, "laboutik/partial/hx_correction_succes.html", {
-            "ancien_moyen_label": ancien_moyen_label,
-            "nouveau_moyen_label": nouveau_moyen_label,
-            "ligne_uuid": str(ligne.uuid),
-            "uuid_transaction": str(ligne.uuid_transaction) if ligne.uuid_transaction else str(ligne.uuid),
-        })
+        return render(
+            request,
+            "laboutik/partial/hx_correction_succes.html",
+            {
+                "ancien_moyen_label": ancien_moyen_label,
+                "nouveau_moyen_label": nouveau_moyen_label,
+                "ligne_uuid": str(ligne.uuid),
+                "uuid_transaction": str(ligne.uuid_transaction)
+                if ligne.uuid_transaction
+                else str(ligne.uuid),
+            },
+        )
 
 
 # --------------------------------------------------------------------------- #
 #  CommandeViewSet — commandes de restaurant (Phase 4)                        #
 #  CommandeViewSet — restaurant orders (Phase 4)                              #
 # --------------------------------------------------------------------------- #
+
 
 class CommandeViewSet(viewsets.ViewSet):
     """
@@ -4989,6 +5801,7 @@ class CommandeViewSet(viewsets.ViewSet):
     4. payer_commande()     → réutilise les méthodes de paiement existantes / reuses existing payment methods
     5. annuler_commande()   → annule la commande / cancels the order
     """
+
     permission_classes = [HasLaBoutikAccess]
 
     # ----------------------------------------------------------------------- #
@@ -5023,7 +5836,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": str(premiere_erreur),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         donnees = serializer.validated_data
         table_uuid = donnees.get("table_uuid")
@@ -5040,7 +5855,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         # Charger la table (si fournie)
         # Load the table (if provided)
@@ -5054,7 +5871,12 @@ class CommandeViewSet(viewsets.ViewSet):
                     "msg_content": _("Table introuvable"),
                     "selector_bt_retour": "#messages",
                 }
-                return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    context_erreur,
+                    status=404,
+                )
 
         # Charger les produits autorisés du PV (en une seule requête)
         # Load authorized PV products (single query)
@@ -5076,18 +5898,22 @@ class CommandeViewSet(viewsets.ViewSet):
                 continue
 
             try:
-                prix = Price.objects.get(uuid=article_data["price_uuid"], product=produit)
+                prix = Price.objects.get(
+                    uuid=article_data["price_uuid"], product=produit
+                )
             except Price.DoesNotExist:
                 logger.warning(
                     f"ouvrir_commande: prix {article_data['price_uuid']} non trouvé pour {produit.name}"
                 )
                 continue
 
-            articles_valides.append({
-                "product": produit,
-                "price": prix,
-                "qty": article_data["qty"],
-            })
+            articles_valides.append(
+                {
+                    "product": produit,
+                    "price": prix,
+                    "qty": article_data["qty"],
+                }
+            )
 
         if not articles_valides:
             context_erreur = {
@@ -5095,7 +5921,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Aucun article valide dans la commande"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # Bloc atomique : table → commande → articles
         # Atomic block: table → order → articles
@@ -5104,7 +5932,7 @@ class CommandeViewSet(viewsets.ViewSet):
             # Mark table as occupied
             if table_obj is not None:
                 table_obj.statut = Table.OCCUPEE
-                table_obj.save(update_fields=['statut'])
+                table_obj.save(update_fields=["statut"])
 
             # Créer la commande
             # Create the order
@@ -5112,7 +5940,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 table=table_obj,
                 statut=CommandeSauvegarde.OPEN,
                 responsable=request.user if request.user.is_authenticated else None,
-                commentaire='',
+                commentaire="",
             )
 
             # Créer les articles de la commande
@@ -5141,7 +5969,12 @@ class CommandeViewSet(viewsets.ViewSet):
     #  2. Add articles to an existing order                                    #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="ajouter/(?P<commande_uuid>[^/.]+)", url_name="ajouter")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="ajouter/(?P<commande_uuid>[^/.]+)",
+        url_name="ajouter",
+    )
     def ajouter_articles(self, request, commande_uuid=None):
         """
         POST /laboutik/commande/ajouter/<commande_uuid>/
@@ -5158,7 +5991,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Commande introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         # Vérifier que la commande est encore ouverte
         # Check that the order is still open
@@ -5168,7 +6003,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Cette commande n'est plus ouverte"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # Valider les articles
         # Validate articles
@@ -5180,7 +6017,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": str(premiere_erreur),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         articles_data = serializer.validated_data
 
@@ -5190,7 +6029,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Aucun article fourni"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # Créer les articles dans un bloc atomique
         # Create articles in an atomic block
@@ -5198,7 +6039,9 @@ class CommandeViewSet(viewsets.ViewSet):
             for article_data in articles_data:
                 try:
                     produit = Product.objects.get(uuid=article_data["product_uuid"])
-                    prix = Price.objects.get(uuid=article_data["price_uuid"], product=produit)
+                    prix = Price.objects.get(
+                        uuid=article_data["price_uuid"], product=produit
+                    )
                 except (Product.DoesNotExist, Price.DoesNotExist):
                     continue
 
@@ -5225,7 +6068,12 @@ class CommandeViewSet(viewsets.ViewSet):
     #  3. Mark an order as served                                              #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="servir/(?P<commande_uuid>[^/.]+)", url_name="servir")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="servir/(?P<commande_uuid>[^/.]+)",
+        url_name="servir",
+    )
     def marquer_servie(self, request, commande_uuid=None):
         """
         POST /laboutik/commande/servir/<commande_uuid>/
@@ -5240,15 +6088,21 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Commande introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         if commande.statut not in (CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED):
             context_erreur = {
                 "msg_type": "warning",
-                "msg_content": _("Cette commande ne peut pas être marquée comme servie"),
+                "msg_content": _(
+                    "Cette commande ne peut pas être marquée comme servie"
+                ),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         with db_transaction.atomic():
             # Marquer les articles PRET ou EN_ATTENTE comme SERVI
@@ -5265,13 +6119,13 @@ class CommandeViewSet(viewsets.ViewSet):
             )
 
             commande.statut = CommandeSauvegarde.SERVED
-            commande.save(update_fields=['statut'])
+            commande.save(update_fields=["statut"])
 
             # Mettre à jour le statut de la table
             # Update table status
             if commande.table is not None:
                 commande.table.statut = Table.SERVIE
-                commande.table.save(update_fields=['statut'])
+                commande.table.save(update_fields=["statut"])
 
         context = {
             "msg_type": "success",
@@ -5285,7 +6139,12 @@ class CommandeViewSet(viewsets.ViewSet):
     #  4. Pay for an order                                                     #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="payer/(?P<commande_uuid>[^/.]+)", url_name="payer")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="payer/(?P<commande_uuid>[^/.]+)",
+        url_name="payer",
+    )
     def payer_commande(self, request, commande_uuid=None):
         """
         POST /laboutik/commande/payer/<commande_uuid>/
@@ -5302,14 +6161,18 @@ class CommandeViewSet(viewsets.ViewSet):
         Articles are loaded from the order (not from POST).
         """
         try:
-            commande = CommandeSauvegarde.objects.select_related('table').get(uuid=commande_uuid)
+            commande = CommandeSauvegarde.objects.select_related("table").get(
+                uuid=commande_uuid
+            )
         except (CommandeSauvegarde.DoesNotExist, ValueError):
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Commande introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         if commande.statut not in (CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED):
             context_erreur = {
@@ -5317,7 +6180,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Cette commande ne peut pas être payée"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         # Charger le PV
         # Load the PV
@@ -5330,7 +6195,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Point de vente introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         # Construire articles_panier depuis les articles de la commande
         # Build articles_panier from order articles
@@ -5341,17 +6208,19 @@ class CommandeViewSet(viewsets.ViewSet):
                 ArticleCommandeSauvegarde.PRET,
                 ArticleCommandeSauvegarde.SERVI,
             ],
-        ).select_related('product', 'price')
+        ).select_related("product", "price")
 
         articles_panier = []
         for article_cmd in articles_commande:
             prix_centimes = int(round(article_cmd.price.prix * 100))
-            articles_panier.append({
-                'product': article_cmd.product,
-                'price': article_cmd.price,
-                'quantite': article_cmd.qty,
-                'prix_centimes': prix_centimes,
-            })
+            articles_panier.append(
+                {
+                    "product": article_cmd.product,
+                    "price": article_cmd.price,
+                    "quantite": article_cmd.qty,
+                    "prix_centimes": prix_centimes,
+                }
+            )
 
         if not articles_panier:
             context_erreur = {
@@ -5359,7 +6228,9 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Aucun article à payer dans cette commande"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         total_centimes = _calculer_total_panier_centimes(articles_panier)
         total_en_euros = total_centimes / 100
@@ -5399,15 +6270,20 @@ class CommandeViewSet(viewsets.ViewSet):
             with db_transaction.atomic():
                 paiement_vs = PaiementViewSet()
                 response_nfc = paiement_vs._payer_par_nfc(
-                    request, state, donnees_paiement, articles_panier,
-                    total_en_euros, total_centimes,
-                    False, moyen_paiement_code,
+                    request,
+                    state,
+                    donnees_paiement,
+                    articles_panier,
+                    total_en_euros,
+                    total_centimes,
+                    False,
+                    moyen_paiement_code,
                     point_de_vente,
                 )
 
                 # Détecter le succès NFC via le data-testid dans le HTML
                 # Detect NFC success via data-testid in the HTML
-                nfc_paiement_reussi = b'paiement-succes' in response_nfc.content
+                nfc_paiement_reussi = b"paiement-succes" in response_nfc.content
 
                 if not nfc_paiement_reussi:
                     # Fonds insuffisants, carte inconnue, etc.
@@ -5419,7 +6295,7 @@ class CommandeViewSet(viewsets.ViewSet):
                 # NFC réussi → mettre à jour commande + table
                 # NFC succeeded → update order + table
                 commande.statut = CommandeSauvegarde.PAID
-                commande.save(update_fields=['statut'])
+                commande.save(update_fields=["statut"])
 
                 commande.articles.exclude(
                     statut=ArticleCommandeSauvegarde.ANNULE,
@@ -5430,13 +6306,20 @@ class CommandeViewSet(viewsets.ViewSet):
                 )
 
                 if commande.table is not None:
-                    autres_commandes_ouvertes = CommandeSauvegarde.objects.filter(
-                        table=commande.table,
-                        statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
-                    ).exclude(uuid=commande.uuid).exists()
+                    autres_commandes_ouvertes = (
+                        CommandeSauvegarde.objects.filter(
+                            table=commande.table,
+                            statut__in=[
+                                CommandeSauvegarde.OPEN,
+                                CommandeSauvegarde.SERVED,
+                            ],
+                        )
+                        .exclude(uuid=commande.uuid)
+                        .exists()
+                    )
                     if not autres_commandes_ouvertes:
                         commande.table.statut = Table.LIBRE
-                        commande.table.save(update_fields=['statut'])
+                        commande.table.save(update_fields=["statut"])
 
             return response_nfc
 
@@ -5444,14 +6327,15 @@ class CommandeViewSet(viewsets.ViewSet):
         # --- Non-NFC payment (cash, CC, check) ---
         with db_transaction.atomic():
             _creer_lignes_articles(
-                articles_panier, moyen_paiement_code,
+                articles_panier,
+                moyen_paiement_code,
                 point_de_vente=point_de_vente,
             )
 
             # Marquer la commande comme payée
             # Mark order as paid
             commande.statut = CommandeSauvegarde.PAID
-            commande.save(update_fields=['statut'])
+            commande.save(update_fields=["statut"])
 
             # Marquer tous les articles comme servis
             # Mark all articles as served
@@ -5466,20 +6350,29 @@ class CommandeViewSet(viewsets.ViewSet):
             # Libérer la table si pas d'autre commande ouverte dessus
             # Free the table if no other open order on it
             if commande.table is not None:
-                autres_commandes_ouvertes = CommandeSauvegarde.objects.filter(
-                    table=commande.table,
-                    statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
-                ).exclude(uuid=commande.uuid).exists()
+                autres_commandes_ouvertes = (
+                    CommandeSauvegarde.objects.filter(
+                        table=commande.table,
+                        statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
+                    )
+                    .exclude(uuid=commande.uuid)
+                    .exists()
+                )
 
                 if not autres_commandes_ouvertes:
                     commande.table.statut = Table.LIBRE
-                    commande.table.save(update_fields=['statut'])
+                    commande.table.save(update_fields=["statut"])
 
         # Construire la réponse succès pour espèces/CB/chèque
         # Build success response for cash/CC/check
         donnees_paiement["give_back"] = 0
-        if moyen_paiement_code == "espece" and donnees_paiement["given_sum"] > total_centimes:
-            donnees_paiement["give_back"] = (donnees_paiement["given_sum"] - total_centimes) / 100
+        if (
+            moyen_paiement_code == "espece"
+            and donnees_paiement["given_sum"] > total_centimes
+        ):
+            donnees_paiement["give_back"] = (
+                donnees_paiement["given_sum"] - total_centimes
+            ) / 100
 
         context = {
             "currency_data": CURRENCY_DATA,
@@ -5491,14 +6384,21 @@ class CommandeViewSet(viewsets.ViewSet):
             "state": state,
             "original_payment": None,
         }
-        return render(request, "laboutik/partial/hx_return_payment_success.html", context)
+        return render(
+            request, "laboutik/partial/hx_return_payment_success.html", context
+        )
 
     # ----------------------------------------------------------------------- #
     #  5. Annuler une commande                                                 #
     #  5. Cancel an order                                                      #
     # ----------------------------------------------------------------------- #
 
-    @action(detail=False, methods=["post"], url_path="annuler/(?P<commande_uuid>[^/.]+)", url_name="annuler")
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="annuler/(?P<commande_uuid>[^/.]+)",
+        url_name="annuler",
+    )
     def annuler_commande(self, request, commande_uuid=None):
         """
         POST /laboutik/commande/annuler/<commande_uuid>/
@@ -5506,14 +6406,18 @@ class CommandeViewSet(viewsets.ViewSet):
         Cancels the order and frees the table if needed.
         """
         try:
-            commande = CommandeSauvegarde.objects.select_related('table').get(uuid=commande_uuid)
+            commande = CommandeSauvegarde.objects.select_related("table").get(
+                uuid=commande_uuid
+            )
         except (CommandeSauvegarde.DoesNotExist, ValueError):
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Commande introuvable"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=404)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
 
         if commande.statut == CommandeSauvegarde.PAID:
             context_erreur = {
@@ -5521,13 +6425,15 @@ class CommandeViewSet(viewsets.ViewSet):
                 "msg_content": _("Une commande payée ne peut pas être annulée"),
                 "selector_bt_retour": "#messages",
             }
-            return render(request, "laboutik/partial/hx_messages.html", context_erreur, status=400)
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
 
         with db_transaction.atomic():
             # Annuler la commande et ses articles
             # Cancel the order and its articles
             commande.statut = CommandeSauvegarde.CANCEL
-            commande.save(update_fields=['statut'])
+            commande.save(update_fields=["statut"])
 
             commande.articles.exclude(
                 statut=ArticleCommandeSauvegarde.ANNULE,
@@ -5536,14 +6442,18 @@ class CommandeViewSet(viewsets.ViewSet):
             # Libérer la table si pas d'autre commande ouverte dessus
             # Free the table if no other open order on it
             if commande.table is not None:
-                autres_commandes_ouvertes = CommandeSauvegarde.objects.filter(
-                    table=commande.table,
-                    statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
-                ).exclude(uuid=commande.uuid).exists()
+                autres_commandes_ouvertes = (
+                    CommandeSauvegarde.objects.filter(
+                        table=commande.table,
+                        statut__in=[CommandeSauvegarde.OPEN, CommandeSauvegarde.SERVED],
+                    )
+                    .exclude(uuid=commande.uuid)
+                    .exists()
+                )
 
                 if not autres_commandes_ouvertes:
                     commande.table.statut = Table.LIBRE
-                    commande.table.save(update_fields=['statut'])
+                    commande.table.save(update_fields=["statut"])
 
         context = {
             "msg_type": "success",

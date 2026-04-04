@@ -4,8 +4,6 @@ import re
 
 from django import forms
 from django.contrib import admin, messages
-from django.views.decorators.csrf import csrf_protect
-from django.views.decorators.http import require_POST
 from django.db import models, IntegrityError
 from django.forms import ModelForm
 from django.http import HttpRequest
@@ -18,14 +16,25 @@ from unfold.admin import ModelAdmin, TabularInline
 from unfold.components import register_component, BaseComponent
 from unfold.contrib.forms.widgets import WysiwygWidget
 from unfold.decorators import action
-from unfold.widgets import UnfoldAdminSelectWidget, UnfoldAdminTextInputWidget, UnfoldAdminColorInputWidget
+from unfold.widgets import (
+    UnfoldAdminSelectWidget,
+    UnfoldAdminTextInputWidget,
+    UnfoldAdminColorInputWidget,
+)
 
 from Administration.admin.site import staff_admin_site, sanitize_textfields
-from Administration.admin.inventaire import StockInline
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from BaseBillet.models import (
-    Configuration, Product, TicketProduct, MembershipProduct, POSProduct,
-    CategorieProduct, Price, FormbricksForms, ProductFormField, Tva
+    Configuration,
+    Product,
+    TicketProduct,
+    MembershipProduct,
+    POSProduct,
+    CategorieProduct,
+    Price,
+    FormbricksForms,
+    ProductFormField,
+    Tva,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,41 +50,45 @@ logger = logging.getLogger(__name__)
 PALETTE_POS = [
     # Classiques N&B / Classic B&W
     ("blanc_classique", _("Blanc classique"), "#000000", "#FFFFFF"),
-    ("nuit",            _("Nuit"),            "#FFFFFF", "#1F2937"),
+    ("nuit", _("Nuit"), "#FFFFFF", "#1F2937"),
     # Material — fonds satures, texte blanc (contraste > 4.5:1)
     # / Material — saturated backgrounds, white text (contrast > 4.5:1)
-    ("marine",    _("Marine"),    "#FFFFFF", "#1E40AF"),
-    ("emeraude",  _("Emeraude"),  "#FFFFFF", "#059669"),
-    ("violet",    _("Violet"),    "#FFFFFF", "#7C3AED"),
-    ("corail",    _("Corail"),    "#FFFFFF", "#EF4444"),
-    ("ambre",     _("Ambre"),     "#FFFFFF", "#B45309"),
-    ("ardoise",   _("Ardoise"),   "#FFFFFF", "#475569"),
+    ("marine", _("Marine"), "#FFFFFF", "#1E40AF"),
+    ("emeraude", _("Emeraude"), "#FFFFFF", "#059669"),
+    ("violet", _("Violet"), "#FFFFFF", "#7C3AED"),
+    ("corail", _("Corail"), "#FFFFFF", "#EF4444"),
+    ("ambre", _("Ambre"), "#FFFFFF", "#B45309"),
+    ("ardoise", _("Ardoise"), "#FFFFFF", "#475569"),
     # Nouvelles — fonds satures, fort contraste
     # / New — saturated backgrounds, high contrast
-    ("foret",     _("Foret"),     "#FFFFFF", "#166534"),  # Vert profond / Deep green
-    ("bordeaux",  _("Bordeaux"),  "#FFFFFF", "#881337"),  # Rouge vin / Wine red
-    ("indigo",    _("Indigo"),    "#FFFFFF", "#3730A3"),  # Bleu-violet / Blue-violet
-    ("ocean",     _("Ocean"),     "#FFFFFF", "#0E7490"),  # Cyan fonce / Dark cyan
-    ("brique",    _("Brique"),    "#FFFFFF", "#9A3412"),  # Orange brique / Brick orange
-    ("prune",     _("Prune"),     "#FFFFFF", "#6B21A8"),  # Violet fonce / Dark purple
-    ("charbon",   _("Charbon"),   "#F59E0B", "#18181B"),  # Ambre sur noir / Amber on black
-    ("neon",      _("Neon"),      "#10B981", "#0F172A"),  # Vert neon sur nuit / Neon green on dark
+    ("foret", _("Foret"), "#FFFFFF", "#166534"),  # Vert profond / Deep green
+    ("bordeaux", _("Bordeaux"), "#FFFFFF", "#881337"),  # Rouge vin / Wine red
+    ("indigo", _("Indigo"), "#FFFFFF", "#3730A3"),  # Bleu-violet / Blue-violet
+    ("ocean", _("Ocean"), "#FFFFFF", "#0E7490"),  # Cyan fonce / Dark cyan
+    ("brique", _("Brique"), "#FFFFFF", "#9A3412"),  # Orange brique / Brick orange
+    ("prune", _("Prune"), "#FFFFFF", "#6B21A8"),  # Violet fonce / Dark purple
+    ("charbon", _("Charbon"), "#F59E0B", "#18181B"),  # Ambre sur noir / Amber on black
+    (
+        "neon",
+        _("Neon"),
+        "#10B981",
+        "#0F172A",
+    ),  # Vert neon sur nuit / Neon green on dark
     # Pastels — fonds doux, texte sombre contraste (contraste > 7:1)
     # / Pastels — soft backgrounds, contrasted dark text (contrast > 7:1)
-    ("lavande",   _("Lavande"),   "#312E81", "#EDE9FE"),
-    ("menthe",    _("Menthe"),    "#064E3B", "#D1FAE5"),
-    ("peche",     _("Peche"),     "#78350F", "#FEF3C7"),
-    ("rose",      _("Rose"),      "#881337", "#FFE4E6"),
+    ("lavande", _("Lavande"), "#312E81", "#EDE9FE"),
+    ("menthe", _("Menthe"), "#064E3B", "#D1FAE5"),
+    ("peche", _("Peche"), "#78350F", "#FEF3C7"),
+    ("rose", _("Rose"), "#881337", "#FFE4E6"),
     # Nouveaux pastels / New pastels
-    ("ciel",      _("Ciel"),      "#1E3A5F", "#DBEAFE"),  # Bleu ciel / Sky blue
-    ("sable",     _("Sable"),     "#451A03", "#FEF9C3"),  # Jaune sable / Sand yellow
+    ("ciel", _("Ciel"), "#1E3A5F", "#DBEAFE"),  # Bleu ciel / Sky blue
+    ("sable", _("Sable"), "#451A03", "#FEF9C3"),  # Jaune sable / Sand yellow
 ]
 
 # Dictionnaire pour lookup rapide clé → (couleur_texte, couleur_fond)
 # Quick lookup dict: key → (text_color, bg_color)
 PALETTE_POS_MAP = {
-    key: (text_hex, bg_hex)
-    for key, _label, text_hex, bg_hex in PALETTE_POS
+    key: (text_hex, bg_hex) for key, _label, text_hex, bg_hex in PALETTE_POS
 }
 
 # ---------------------------------------------------------------------------
@@ -87,110 +100,110 @@ PALETTE_POS_MAP = {
 
 ICON_POS = [
     # Boissons / Drinks
-    ("fa-beer",              _("Biere")),
-    ("fa-wine-glass-alt",    _("Vin rouge / rose")),
-    ("fa-wine-glass",        _("Vin blanc")),
-    ("fa-wine-bottle",       _("Bouteille vin")),
-    ("fa-cocktail",          _("Cocktail / bar")),
-    ("fa-glass-whiskey",     _("Spiritueux / soda")),
-    ("fa-glass-cheers",      _("Champagne / fete")),
+    ("fa-beer", _("Biere")),
+    ("fa-wine-glass-alt", _("Vin rouge / rose")),
+    ("fa-wine-glass", _("Vin blanc")),
+    ("fa-wine-bottle", _("Bouteille vin")),
+    ("fa-cocktail", _("Cocktail / bar")),
+    ("fa-glass-whiskey", _("Spiritueux / soda")),
+    ("fa-glass-cheers", _("Champagne / fete")),
     ("fa-glass-martini-alt", _("Martini / apero")),
-    ("fa-coffee",            _("Cafe")),
-    ("fa-mug-hot",           _("The / boisson chaude")),
-    ("fa-tint",              _("Eau")),
-    ("fa-lemon",             _("Jus / limonade")),
-    ("fa-blender",           _("Smoothie / milkshake")),
-    ("fa-flask",             _("Biere artisanale")),
+    ("fa-coffee", _("Cafe")),
+    ("fa-mug-hot", _("The / boisson chaude")),
+    ("fa-tint", _("Eau")),
+    ("fa-lemon", _("Jus / limonade")),
+    ("fa-blender", _("Smoothie / milkshake")),
+    ("fa-flask", _("Biere artisanale")),
     ("fa-prescription-bottle", _("Shot / fiole")),
-    ("fa-water",             _("Eau minerale / source")),
+    ("fa-water", _("Eau minerale / source")),
     # Nourriture / Food
-    ("fa-utensils",          _("Restaurant / plat")),
-    ("fa-pizza-slice",       _("Pizza")),
-    ("fa-hamburger",         _("Burger")),
-    ("fa-hotdog",            _("Hot-dog / foodtruck")),
-    ("fa-bread-slice",       _("Sandwich / boulangerie")),
-    ("fa-cheese",            _("Fromage / plateau")),
-    ("fa-egg",               _("Brunch / petit-dej")),
-    ("fa-apple-alt",         _("Fruit / bio")),
-    ("fa-leaf",              _("Salade / vegetal")),
-    ("fa-seedling",          _("Bio / vegan")),
-    ("fa-cookie",            _("Dessert / gouter")),
-    ("fa-cookie-bite",       _("Snack")),
-    ("fa-ice-cream",         _("Glace")),
-    ("fa-drumstick-bite",    _("Grill / BBQ")),
-    ("fa-fish",              _("Poisson / fruits de mer")),
-    ("fa-carrot",            _("Legume / veggie")),
-    ("fa-pepper-hot",        _("Epice / piment")),
-    ("fa-candy-cane",        _("Confiserie / sucre")),
-    ("fa-stroopwafel",       _("Gaufre / crepe")),
-    ("fa-bacon",             _("Charcuterie / bacon")),
-    ("fa-birthday-cake",     _("Gateau d'anniversaire")),
+    ("fa-utensils", _("Restaurant / plat")),
+    ("fa-pizza-slice", _("Pizza")),
+    ("fa-hamburger", _("Burger")),
+    ("fa-hotdog", _("Hot-dog / foodtruck")),
+    ("fa-bread-slice", _("Sandwich / boulangerie")),
+    ("fa-cheese", _("Fromage / plateau")),
+    ("fa-egg", _("Brunch / petit-dej")),
+    ("fa-apple-alt", _("Fruit / bio")),
+    ("fa-leaf", _("Salade / vegetal")),
+    ("fa-seedling", _("Bio / vegan")),
+    ("fa-cookie", _("Dessert / gouter")),
+    ("fa-cookie-bite", _("Snack")),
+    ("fa-ice-cream", _("Glace")),
+    ("fa-drumstick-bite", _("Grill / BBQ")),
+    ("fa-fish", _("Poisson / fruits de mer")),
+    ("fa-carrot", _("Legume / veggie")),
+    ("fa-pepper-hot", _("Epice / piment")),
+    ("fa-candy-cane", _("Confiserie / sucre")),
+    ("fa-stroopwafel", _("Gaufre / crepe")),
+    ("fa-bacon", _("Charcuterie / bacon")),
+    ("fa-birthday-cake", _("Gateau d'anniversaire")),
     # Cashless / Monnaie
-    ("fa-coins",             _("Recharge euros")),
-    ("fa-wallet",            _("Wallet / solde")),
-    ("fa-money-bill-wave",   _("Especes")),
-    ("fa-credit-card",       _("Carte bancaire")),
-    ("fa-money-check",       _("Cheque")),
-    ("fa-euro-sign",         _("Euro")),
-    ("fa-dollar-sign",       _("Dollar")),
-    ("fa-pound-sign",        _("Livre sterling")),
-    ("fa-ruble-sign",        _("Rouble")),
-    ("fa-lira-sign",         _("Lire / livre turque")),
-    ("fa-rupee-sign",        _("Roupie")),
-    ("fa-yen-sign",          _("Yen / yuan")),
-    ("fa-shekel-sign",       _("Shekel")),
-    ("fa-won-sign",          _("Won")),
-    ("fa-gift",              _("Recharge cadeau")),
-    ("fa-gem",               _("Jeton premium")),
-    ("fa-clock",             _("Recharge temps")),
+    ("fa-coins", _("Recharge euros")),
+    ("fa-wallet", _("Wallet / solde")),
+    ("fa-money-bill-wave", _("Especes")),
+    ("fa-credit-card", _("Carte bancaire")),
+    ("fa-money-check", _("Cheque")),
+    ("fa-euro-sign", _("Euro")),
+    ("fa-dollar-sign", _("Dollar")),
+    ("fa-pound-sign", _("Livre sterling")),
+    ("fa-ruble-sign", _("Rouble")),
+    ("fa-lira-sign", _("Lire / livre turque")),
+    ("fa-rupee-sign", _("Roupie")),
+    ("fa-yen-sign", _("Yen / yuan")),
+    ("fa-shekel-sign", _("Shekel")),
+    ("fa-won-sign", _("Won")),
+    ("fa-gift", _("Recharge cadeau")),
+    ("fa-gem", _("Jeton premium")),
+    ("fa-clock", _("Recharge temps")),
     # Adhesion / Abonnement
-    ("fa-id-card",           _("Adhesion / membre")),
-    ("fa-user-plus",         _("Nouvel adherent")),
-    ("fa-users",             _("Communaute / asso")),
-    ("fa-handshake",         _("Partenariat / cooperative")),
-    ("fa-heart",             _("Don / soutien")),
-    ("fa-star",              _("Premium / fidelite")),
+    ("fa-id-card", _("Adhesion / membre")),
+    ("fa-user-plus", _("Nouvel adherent")),
+    ("fa-users", _("Communaute / asso")),
+    ("fa-handshake", _("Partenariat / cooperative")),
+    ("fa-heart", _("Don / soutien")),
+    ("fa-star", _("Premium / fidelite")),
     # Spectacle / Festival
-    ("fa-ticket-alt",        _("Billetterie")),
-    ("fa-music",             _("Concert / musique")),
-    ("fa-guitar",            _("Live / scene")),
-    ("fa-microphone-alt",    _("Spectacle / conference")),
-    ("fa-theater-masks",     _("Theatre")),
-    ("fa-campground",        _("Festival / camping")),
-    ("fa-bus",               _("Navette / transport")),
-    ("fa-tshirt",            _("T-shirt / vetement")),
-    ("fa-hat-wizard",        _("Chapeau / coiffe")),
-    ("fa-socks",             _("Chaussettes / accessoire")),
-    ("fa-shopping-bag",      _("Sac / tote bag")),
-    ("fa-book",              _("Livre / fanzine")),
-    ("fa-compact-disc",      _("CD / vinyle")),
-    ("fa-palette",           _("Art / serigraphie")),
-    ("fa-pen-fancy",         _("Stylo / papeterie")),
-    ("fa-box-open",          _("Coffret / lot")),
-    ("fa-tag",               _("Article / divers")),
+    ("fa-ticket-alt", _("Billetterie")),
+    ("fa-music", _("Concert / musique")),
+    ("fa-guitar", _("Live / scene")),
+    ("fa-microphone-alt", _("Spectacle / conference")),
+    ("fa-theater-masks", _("Theatre")),
+    ("fa-campground", _("Festival / camping")),
+    ("fa-bus", _("Navette / transport")),
+    ("fa-tshirt", _("T-shirt / vetement")),
+    ("fa-hat-wizard", _("Chapeau / coiffe")),
+    ("fa-socks", _("Chaussettes / accessoire")),
+    ("fa-shopping-bag", _("Sac / tote bag")),
+    ("fa-book", _("Livre / fanzine")),
+    ("fa-compact-disc", _("CD / vinyle")),
+    ("fa-palette", _("Art / serigraphie")),
+    ("fa-pen-fancy", _("Stylo / papeterie")),
+    ("fa-box-open", _("Coffret / lot")),
+    ("fa-tag", _("Article / divers")),
     # Lieux / Points de vente
-    ("fa-umbrella-beach",    _("Terrasse / plage")),
-    ("fa-store",             _("Boutique / stand")),
-    ("fa-store-alt",         _("Echoppe / marche")),
-    ("fa-door-open",         _("Entree / accueil")),
-    ("fa-map-marker-alt",    _("Lieu / emplacement")),
-    ("fa-home",              _("Maison / local")),
-    ("fa-warehouse",         _("Hangar / entrepot")),
-    ("fa-truck",             _("Foodtruck / camion")),
-    ("fa-shuttle-van",       _("Navette / van")),
-    ("fa-caravan",           _("Caravane / roulotte")),
-    ("fa-tree",              _("Jardin / exterieur")),
-    ("fa-fire",              _("Feu / barbecue")),
-    ("fa-sun",               _("Plein air / ete")),
+    ("fa-umbrella-beach", _("Terrasse / plage")),
+    ("fa-store", _("Boutique / stand")),
+    ("fa-store-alt", _("Echoppe / marche")),
+    ("fa-door-open", _("Entree / accueil")),
+    ("fa-map-marker-alt", _("Lieu / emplacement")),
+    ("fa-home", _("Maison / local")),
+    ("fa-warehouse", _("Hangar / entrepot")),
+    ("fa-truck", _("Foodtruck / camion")),
+    ("fa-shuttle-van", _("Navette / van")),
+    ("fa-caravan", _("Caravane / roulotte")),
+    ("fa-tree", _("Jardin / exterieur")),
+    ("fa-fire", _("Feu / barbecue")),
+    ("fa-sun", _("Plein air / ete")),
     # Actions / Danger
     ("fa-exclamation-triangle", _("Danger / attention")),
-    ("fa-trash-alt",         _("Vider / supprimer")),
-    ("fa-undo-alt",          _("Annuler / remboursement")),
-    ("fa-exchange-alt",      _("Consigne / echange")),
-    ("fa-recycle",           _("Consigne retour")),
-    ("fa-ban",               _("Bloquer / desactiver")),
-    ("fa-lock",              _("Verrouille")),
-    ("fa-check-circle",      _("Valide / succes")),
+    ("fa-trash-alt", _("Vider / supprimer")),
+    ("fa-undo-alt", _("Annuler / remboursement")),
+    ("fa-exchange-alt", _("Consigne / echange")),
+    ("fa-recycle", _("Consigne retour")),
+    ("fa-ban", _("Bloquer / desactiver")),
+    ("fa-lock", _("Verrouille")),
+    ("fa-check-circle", _("Valide / succes")),
 ]
 
 
@@ -198,6 +211,7 @@ ICON_POS = [
 # Widget visuel : sélecteur de palette de couleurs
 # Visual widget: color palette picker
 # ---------------------------------------------------------------------------
+
 
 class PalettePickerWidget(forms.Widget):
     """Widget radio visuel qui affiche des swatches de couleur cliquables.
@@ -211,7 +225,13 @@ class PalettePickerWidget(forms.Widget):
 
     LOCALISATION : Administration/admin/products.py"""
 
-    def __init__(self, *args, texte_field="couleur_texte_pos", fond_field="couleur_fond_pos", **kwargs):
+    def __init__(
+        self,
+        *args,
+        texte_field="couleur_texte_pos",
+        fond_field="couleur_fond_pos",
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         # Noms des champs couleur à piloter (différent selon le formulaire parent)
         # Names of the color fields to drive (differ depending on the parent form)
@@ -225,22 +245,25 @@ class PalettePickerWidget(forms.Widget):
 
         # Rendu via template dédié (résolu via APP_DIRS de Django)
         # Render via dedicated template (resolved via Django's APP_DIRS)
-        return mark_safe(render_to_string(
-            "admin/widgets/palette_picker.html",
-            {
-                "widget_name": name,
-                "current_value": valeur_actuelle,
-                "palettes": PALETTE_POS,
-                "texte_field": self.texte_field,
-                "fond_field": self.fond_field,
-            },
-        ))
+        return mark_safe(
+            render_to_string(
+                "admin/widgets/palette_picker.html",
+                {
+                    "widget_name": name,
+                    "current_value": valeur_actuelle,
+                    "palettes": PALETTE_POS,
+                    "texte_field": self.texte_field,
+                    "fond_field": self.fond_field,
+                },
+            )
+        )
 
 
 # ---------------------------------------------------------------------------
 # Widget visuel : sélecteur d'icône Material Symbols
 # Visual widget: Material Symbols icon picker
 # ---------------------------------------------------------------------------
+
 
 class IconPickerWidget(forms.Widget):
     """Widget radio visuel qui affiche une grille d'icônes cliquables.
@@ -254,14 +277,16 @@ class IconPickerWidget(forms.Widget):
 
         # Rendu via template dédié
         # Render via dedicated template
-        return mark_safe(render_to_string(
-            "admin/widgets/icon_picker.html",
-            {
-                "widget_name": name,
-                "current_value": valeur_actuelle,
-                "icons": ICON_POS,
-            },
-        ))
+        return mark_safe(
+            render_to_string(
+                "admin/widgets/icon_picker.html",
+                {
+                    "widget_name": name,
+                    "current_value": valeur_actuelle,
+                    "icons": ICON_POS,
+                },
+            )
+        )
 
 
 class PriceInlineChangeForm(ModelForm):
@@ -269,34 +294,38 @@ class PriceInlineChangeForm(ModelForm):
     class Meta:
         model = Price
         fields = (
-            'name',
-            'product',
-            'prix',
-            'free_price',
-            'subscription_type',
-            'publish',
+            "name",
+            "product",
+            "prix",
+            "free_price",
+            "subscription_type",
+            "publish",
         )
 
     def clean_prix(self):
         cleaned_data = self.cleaned_data
-        prix = cleaned_data.get('prix')
+        prix = cleaned_data.get("prix")
         if 0 < prix < 1:
-            raise forms.ValidationError(_("A rate cannot be between 0€ and 1€"), code="invalid")
+            raise forms.ValidationError(
+                _("A rate cannot be between 0€ and 1€"), code="invalid"
+            )
         return prix
 
     def clean_subscription_type(self):
         cleaned_data = self.cleaned_data
-        product: Product = cleaned_data.get('product')
-        subscription_type = cleaned_data.get('subscription_type')
+        product: Product = cleaned_data.get("product")
+        subscription_type = cleaned_data.get("subscription_type")
         if product.categorie_article == Product.ADHESION:
             if subscription_type == Price.NA:
-                raise forms.ValidationError(_("A subscription must have a duration"), code="invalid")
+                raise forms.ValidationError(
+                    _("A subscription must have a duration"), code="invalid"
+                )
         return subscription_type
 
 
 class PriceInline(TabularInline):
     model = Price
-    fk_name = 'product'
+    fk_name = "product"
     form = PriceInlineChangeForm
     # hide_title = True
     # collapsible = True # usefull for StackedInline
@@ -328,11 +357,13 @@ class ProductFormFieldInlineForm(ModelForm):
     RADIO_SELECT and MULTI_SELECT field types, while storing a JSON list
     in the underlying `options` JSONField.
     """
+
     options_csv = forms.CharField(
         required=False,
         label=_("Choices"),
         help_text=_(
-            'For Single select (menu), Radio or Multiple select, enter choices separated by commas. Example: Rock, Electro, Jazz'),
+            "For Single select (menu), Radio or Multiple select, enter choices separated by commas. Example: Rock, Electro, Jazz"
+        ),
         widget=UnfoldAdminTextInputWidget(attrs={"placeholder": "Rock, Electro, Jazz"}),
     )
 
@@ -346,7 +377,7 @@ class ProductFormFieldInlineForm(ModelForm):
         super().__init__(*args, **kwargs)
         # Initialize CSV proxy from existing JSON list
         try:
-            opts = self.instance.options if getattr(self, 'instance', None) else None
+            opts = self.instance.options if getattr(self, "instance", None) else None
             if isinstance(opts, list) and all(isinstance(x, str) for x in opts):
                 self.fields["options_csv"].initial = ", ".join(opts)
         except Exception:
@@ -393,9 +424,9 @@ class ProductFormFieldInlineForm(ModelForm):
         csv_val = cleaned.get("options_csv")
         # Manage options list for Single select, Radio and Multi select
         if ftype in (
-                ProductFormField.FieldType.SINGLE_SELECT,
-                ProductFormField.FieldType.RADIO_SELECT,
-                ProductFormField.FieldType.MULTI_SELECT,
+            ProductFormField.FieldType.SINGLE_SELECT,
+            ProductFormField.FieldType.RADIO_SELECT,
+            ProductFormField.FieldType.MULTI_SELECT,
         ):
             options_list = self._parse_csv_or_json(csv_val)
             cleaned["options"] = options_list if options_list else None
@@ -419,8 +450,9 @@ class ProductFormFieldInlineForm(ModelForm):
 
 class ProductFormFieldInline(TabularInline):
     """Sortable inline for dynamic membership form fields (ProductFormField)."""
+
     model = ProductFormField
-    fk_name = 'product'
+    fk_name = "product"
     extra = 0
     show_change_link = True
 
@@ -469,31 +501,31 @@ class ProductAdminCustomForm(ModelForm):
     class Meta:
         model = Product
         fields = (
-            'name',
-            'categorie_article',
-            'tva',
-            'short_description',
-            'long_description',
-            'img',
-            'poids',
+            "name",
+            "categorie_article",
+            "tva",
+            "short_description",
+            "long_description",
+            "img",
+            "poids",
             # "option_generale_radio",
             # "option_generale_checkbox",
             "validate_button_text",
             "legal_link",
-            'publish',
-            'archive',
+            "publish",
+            "archive",
         )
         help_texts = {
-            'img': _('Product image is displayed at a 16/9 ratio.'),
+            "img": _("Product image is displayed at a 16/9 ratio."),
         }
 
     categorie_article = forms.ChoiceField(
         required=False,
         choices=[
-            (Product.NONE, _('Select a category')),
-            (Product.BILLET, _('Ticket booking')),
-            (Product.FREERES, _('Free booking')),
-            (Product.ADHESION, _('Subscription or membership')),
+            (Product.NONE, _("Select a category")),
+            (Product.BILLET, _("Ticket booking")),
+            (Product.FREERES, _("Free booking")),
+            (Product.ADHESION, _("Subscription or membership")),
         ],
         widget=UnfoldAdminSelectWidget(),  # attrs={"placeholder": "Entrez l'adresse email"}
         label=_("Product type"),
@@ -501,28 +533,37 @@ class ProductAdminCustomForm(ModelForm):
 
     def clean_categorie_article(self):
         cleaned_data = self.cleaned_data
-        categorie = cleaned_data.get('categorie_article')
+        categorie = cleaned_data.get("categorie_article")
         if categorie == Product.NONE:
-            raise forms.ValidationError(_("Please add at least one category to this product."))
+            raise forms.ValidationError(
+                _("Please add at least one category to this product.")
+            )
 
         # Vérification que la clé Stripe est opérationnelle :
         if categorie != Product.FREERES:
             config = Configuration.get_solo()
             if not config.stripe_payouts_enabled:
                 raise forms.ValidationError(
-                    _("Your Stripe account is not activated. To create paid items, please go to Settings/Stripe/Onboard."))
+                    _(
+                        "Your Stripe account is not activated. To create paid items, please go to Settings/Stripe/Onboard."
+                    )
+                )
         return categorie
 
     def clean(self):
         # Vérification qu'il existe au moins un tarif si produit payant
-        if self.data.get('categorie_article') not in [Product.FREERES, Product.BADGE]:
+        if self.data.get("categorie_article") not in [Product.FREERES, Product.BADGE]:
             try:
                 # récupération du dictionnaire data pour vérifier qu'on a bien au moin un tarif dans le inline :
-                if int(self.data.getlist('prices-TOTAL_FORMS')[0]) > 0:
+                if int(self.data.getlist("prices-TOTAL_FORMS")[0]) > 0:
                     return super().clean()
-                raise forms.ValidationError(_("Please add at least one rate to this product."))
+                raise forms.ValidationError(
+                    _("Please add at least one rate to this product.")
+                )
             except Exception:
-                raise forms.ValidationError(_("Please add at least one rate to this product."))
+                raise forms.ValidationError(
+                    _("Please add at least one rate to this product.")
+                )
 
 
 @register_component
@@ -541,7 +582,6 @@ class CheckStripeComponent(BaseComponent):
 
 @admin.register(Tva, site=staff_admin_site)
 class TvaAdmin(ModelAdmin):
-
     def has_delete_permission(self, request, obj=None):
         return False
 
@@ -587,38 +627,47 @@ class ProductAdmin(ModelAdmin):
     form = ProductAdminCustomForm
 
     fieldsets = (
-        (_('General'), {
-            'fields': (
-                'name',
-                'categorie_article',
-                'tva',
-                'img',
-                'poids',
-                'short_description',
-                'long_description',
-                'max_per_user',
-                'validate_button_text',
-                'legal_link',
-                'publish',
-                'archive',
-            ),
-        }),
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "tva",
+                    "img",
+                    "poids",
+                    "short_description",
+                    "long_description",
+                    "max_per_user",
+                    "validate_button_text",
+                    "legal_link",
+                    "publish",
+                    "archive",
+                ),
+            },
+        ),
     )
 
     list_display = (
-        'name',
-        'categorie_article',
-        'publish',
-        'poids',
+        "name",
+        "categorie_article",
+        "publish",
+        "poids",
     )
 
-    ordering = ("categorie_article", "poids",)
-    list_filter = ['publish', 'categorie_article', ProductArchiveFilter]
-    search_fields = ['name']
+    ordering = (
+        "categorie_article",
+        "poids",
+    )
+    list_filter = ["publish", "categorie_article", ProductArchiveFilter]
+    search_fields = ["name"]
 
     # Pour les bouton en haut de la vue change
     # chaque decorateur @action génère une nouvelle route
-    actions_row = ["duplicate_product", "archive", ]
+    actions_row = [
+        "duplicate_product",
+        "archive",
+    ]
 
     formfield_overrides = {
         models.TextField: {
@@ -649,12 +698,16 @@ class ProductAdmin(ModelAdmin):
             # Success message to the user
             messages.success(
                 request,
-                _(f"Le produit '{produit_original.name}' a été dupliqué avec succès sous le nom '{produit_duplique.name}'")
+                _(
+                    f"Le produit '{produit_original.name}' a été dupliqué avec succès sous le nom '{produit_duplique.name}'"
+                ),
             )
         except Exception as erreur:
             # En cas d'erreur, on logue et on informe l'utilisateur
             # In case of error, log it and inform the user
-            logger.error(f"Erreur lors de la duplication du produit {object_id}: {str(erreur)}")
+            logger.error(
+                f"Erreur lors de la duplication du produit {object_id}: {str(erreur)}"
+            )
             messages.error(request, _(f"Erreur lors de la duplication : {str(erreur)}"))
 
         # Redirection vers la page précédente (la liste des produits)
@@ -714,11 +767,15 @@ class ProductAdmin(ModelAdmin):
 
         # Duplication des options générales (boutons radio)
         # Duplicate general options (radio buttons)
-        nouveau_produit.option_generale_radio.set(produit_source.option_generale_radio.all())
+        nouveau_produit.option_generale_radio.set(
+            produit_source.option_generale_radio.all()
+        )
 
         # Duplication des options générales (cases à cocher)
         # Duplicate general options (checkboxes)
-        nouveau_produit.option_generale_checkbox.set(produit_source.option_generale_checkbox.all())
+        nouveau_produit.option_generale_checkbox.set(
+            produit_source.option_generale_checkbox.all()
+        )
 
         # 3. DUPLICATION DES TARIFS (Price)
         # 3. DUPLICATION OF PRICES (Price)
@@ -729,8 +786,12 @@ class ProductAdmin(ModelAdmin):
             # Création d'une copie du tarif
             # Creating a copy of the price
             nouveau_tarif = Price.objects.get(pk=tarif_original.pk)
-            nouveau_tarif.pk = None  # Prêt pour une nouvelle insertion / Ready for new insertion
-            nouveau_tarif.product = nouveau_produit  # Liaison au nouveau produit / Link to new product
+            nouveau_tarif.pk = (
+                None  # Prêt pour une nouvelle insertion / Ready for new insertion
+            )
+            nouveau_tarif.product = (
+                nouveau_produit  # Liaison au nouveau produit / Link to new product
+            )
             nouveau_tarif.save()
 
         # 4. DUPLICATION DES FORMULAIRES DYNAMIQUES (ProductFormField)
@@ -750,7 +811,9 @@ class ProductAdmin(ModelAdmin):
         # Si le produit utilise des formulaires Formbricks, on les duplique aussi
         # If the product uses Formbricks forms, we duplicate them as well
         for formulaire_fb_original in produit_source.formbricksform.all():
-            nouveau_formulaire_fb = FormbricksForms.objects.get(pk=formulaire_fb_original.pk)
+            nouveau_formulaire_fb = FormbricksForms.objects.get(
+                pk=formulaire_fb_original.pk
+            )
             nouveau_formulaire_fb.pk = None
             nouveau_formulaire_fb.product = nouveau_produit
             nouveau_formulaire_fb.save()
@@ -775,7 +838,9 @@ class ProductAdmin(ModelAdmin):
         # On retire les recharges cashless et l'article Don
         # Pas besoin de les afficher, ils se créent automatiquement.
         qs = super().get_queryset(request)
-        return qs.exclude(categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON])
+        return qs.exclude(
+            categorie_article__in=[Product.RECHARGE_CASHLESS, Product.DON]
+        )
 
     def get_search_results(self, request, queryset, search_term):
         """
@@ -783,20 +848,32 @@ class ProductAdmin(ModelAdmin):
         On est sur un Many2Many, il faut bidouiller la réponde de ce coté
         Le but est que cela n'affiche dans le auto complete fields que les catégories Billets
         """
-        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
-        if request.headers.get('Referer') and "admin/autocomplete" in request.path:
-            referer = request.headers['Referer']
+        queryset, use_distinct = super().get_search_results(
+            request, queryset, search_term
+        )
+        if request.headers.get("Referer") and "admin/autocomplete" in request.path:
+            referer = request.headers["Referer"]
             logger.info(referer)
             if "event" in referer:
                 # Autocomplete depuis EventAdmin : uniquement billets
-                queryset = queryset.filter(categorie_article__in=[
-                    Product.BILLET,
-                    Product.FREERES,
-                ]).exclude(archive=True)
+                queryset = queryset.filter(
+                    categorie_article__in=[
+                        Product.BILLET,
+                        Product.FREERES,
+                    ]
+                ).exclude(archive=True)
             elif "price" in referer:
                 # Autocomplete depuis PriceAdmin (adhesions_obligatoires) : uniquement adhesions
                 queryset = queryset.filter(
                     categorie_article=Product.ADHESION,
+                    archive=False,
+                )
+            elif "inventaire/stock" in referer:
+                # Autocomplete depuis StockAdmin : uniquement articles de vente (VT)
+                # Pas les recharges, adhésions, consignes, etc.
+                # / Autocomplete from StockAdmin: only sale articles (VT)
+                queryset = queryset.filter(
+                    methode_caisse=Product.VENTE,
                     archive=False,
                 )
         return queryset, use_distinct
@@ -810,9 +887,10 @@ class ProductAdmin(ModelAdmin):
             err_str = str(err)
             # Handle unique_together = ("categorie_article", "name") on Product
             if (
-                    "BaseBillet_product_categorie_article_name" in err_str
-                    or "BaseBillet_product_categorie_article_name_" in err_str
-                    or "duplicate key value violates unique constraint" in err_str and "(categorie_article, name)" in err_str
+                "BaseBillet_product_categorie_article_name" in err_str
+                or "BaseBillet_product_categorie_article_name_" in err_str
+                or "duplicate key value violates unique constraint" in err_str
+                and "(categorie_article, name)" in err_str
             ):
                 messages.error(
                     request,
@@ -822,7 +900,9 @@ class ProductAdmin(ModelAdmin):
                     ),
                 )
                 # Stay on the same page
-                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
+                return redirect(
+                    request.META.get("HTTP_REFERER", reverse("admin:index"))
+                )
             # Unknown integrity error: log and re-raise
             logger.error(err)
             raise err
@@ -830,7 +910,9 @@ class ProductAdmin(ModelAdmin):
             logger.error(err)
             raise err
 
-    def has_changelist_row_action_permission(self, request: HttpRequest, *args, **kwargs):
+    def has_changelist_row_action_permission(
+        self, request: HttpRequest, *args, **kwargs
+    ):
         return TenantAdminPermissionWithRequest(request)
 
     def has_delete_permission(self, request, obj=None):
@@ -865,8 +947,8 @@ class TicketProductForm(ProductAdminCustomForm):
 
     categorie_article = forms.ChoiceField(
         choices=[
-            (Product.BILLET, _('Ticket booking')),
-            (Product.FREERES, _('Free booking')),
+            (Product.BILLET, _("Ticket booking")),
+            (Product.FREERES, _("Free booking")),
         ],
         widget=UnfoldAdminSelectWidget(),
         label=_("Product type"),
@@ -883,7 +965,7 @@ class MembershipProductForm(ProductAdminCustomForm):
 
     categorie_article = forms.ChoiceField(
         choices=[
-            (Product.ADHESION, _('Subscription or membership')),
+            (Product.ADHESION, _("Subscription or membership")),
         ],
         widget=forms.HiddenInput(),
         label=_("Product type"),
@@ -895,10 +977,13 @@ class MembershipProductForm(ProductAdminCustomForm):
 class TicketProductAdmin(ProductAdmin):
     """Vue admin filtree : uniquement les produits billetterie (Billet, Reservation gratuite).
     Filtered admin view: only ticket products (Ticket booking, Free booking)."""
-    form = TicketProductForm
-    inlines = [PriceInline]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
 
-    list_filter = ['publish']  # categorie_article inutile, deja filtre
+    form = TicketProductForm
+    inlines = [
+        PriceInline
+    ]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+
+    list_filter = ["publish"]  # categorie_article inutile, deja filtre
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -909,10 +994,11 @@ class TicketProductAdmin(ProductAdmin):
 class MembershipProductAdmin(ProductAdmin):
     """Vue admin filtree : uniquement les produits adhesion.
     Filtered admin view: only membership products."""
+
     form = MembershipProductForm
     inlines = [PriceInline, ProductFormFieldInline]
 
-    list_filter = ['publish']  # categorie_article inutile, deja filtre
+    list_filter = ["publish"]  # categorie_article inutile, deja filtre
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -940,7 +1026,7 @@ class POSProductForm(ProductAdminCustomForm):
     # / At POS, no ticket/membership category: hide the field, default to NONE.
     categorie_article = forms.ChoiceField(
         choices=[
-            (Product.NONE, _('Select a category')),
+            (Product.NONE, _("Select a category")),
         ],
         widget=forms.HiddenInput(),
         label=_("Product type"),
@@ -957,15 +1043,13 @@ class POSProductForm(ProductAdminCustomForm):
         help_text=_("Payment/action method at the cash register."),
     )
 
-
     # --- Champs d'affichage POS / POS display fields ---
 
     # Palette de couleurs prédéfinie (champ formulaire uniquement, non sauvegardé directement)
     # Pre-defined color palette (form-only field, not saved directly to the model)
     palette_pos = forms.ChoiceField(
-        choices=[("", _("— Aucune palette —"))] + [
-            (key, label) for key, label, _t, _b in PALETTE_POS
-        ],
+        choices=[("", _("— Aucune palette —"))]
+        + [(key, label) for key, label, _t, _b in PALETTE_POS],
         required=False,
         label=_("Color palette"),
         help_text=_(
@@ -1002,14 +1086,16 @@ class POSProductForm(ProductAdminCustomForm):
         choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
         required=False,
         label=_("POS icon"),
-        help_text=_("Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. / If a product image is set below, it will be displayed instead of this icon."),
+        help_text=_(
+            "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. / If a product image is set below, it will be displayed instead of this icon."
+        ),
         widget=IconPickerWidget(),
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        instance = kwargs.get('instance')
+        instance = kwargs.get("instance")
 
         # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
         # Pre-select the palette if the current colors match a preset
@@ -1020,26 +1106,30 @@ class POSProductForm(ProductAdminCustomForm):
                     and instance.couleur_fond_pos.upper() == bg_hex.upper()
                 )
                 if couleurs_correspondent:
-                    self.fields['palette_pos'].initial = key
+                    self.fields["palette_pos"].initial = key
                     break
 
         # Help_text TVA dynamique : affiche le taux de la catégorie si disponible
         # Dynamic VAT help_text: shows category rate if available
-        if instance and getattr(instance, 'categorie_pos', None) and getattr(instance.categorie_pos, 'tva', None):
+        if (
+            instance
+            and getattr(instance, "categorie_pos", None)
+            and getattr(instance.categorie_pos, "tva", None)
+        ):
             taux = instance.categorie_pos.tva.tva_rate
-            self.fields['tva'].help_text = _(
+            self.fields["tva"].help_text = _(
                 f"Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
                 f"/ Same VAT as category ({taux}%) if left empty. Can be overridden here."
             )
         else:
-            self.fields['tva'].help_text = _(
+            self.fields["tva"].help_text = _(
                 "Même TVA que la catégorie si laissé vide. / Same VAT as category if left empty."
             )
 
     def clean_categorie_article(self):
         """Pas de validation de categorie pour les produits POS.
         No category validation for POS products."""
-        return self.cleaned_data.get('categorie_article', Product.NONE)
+        return self.cleaned_data.get("categorie_article", Product.NONE)
 
     def clean(self):
         """Applique la palette sélectionnée sur les champs couleur, puis valide.
@@ -1051,11 +1141,11 @@ class POSProductForm(ProductAdminCustomForm):
 
         # Décodage de la palette : si une palette est choisie, elle écrase les couleurs
         # Decode palette: if a palette is chosen, it overrides the color fields
-        palette_key = cleaned.get('palette_pos')
+        palette_key = cleaned.get("palette_pos")
         if palette_key and palette_key in PALETTE_POS_MAP:
             text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-            cleaned['couleur_texte_pos'] = text_hex
-            cleaned['couleur_fond_pos'] = bg_hex
+            cleaned["couleur_texte_pos"] = text_hex
+            cleaned["couleur_fond_pos"] = bg_hex
 
         return cleaned
 
@@ -1065,110 +1155,81 @@ class POSProductAdmin(ProductAdmin):
     """Vue admin filtree : uniquement les produits de caisse (methode_caisse IS NOT NULL).
     Filtered admin view: only POS products (methode_caisse IS NOT NULL).
     LOCALISATION : Administration/admin/products.py"""
+
     form = POSProductForm
-    inlines = [StockInline, PriceInline]  # StockInline + prix, pas de ProductFormFieldInline (champs dynamiques = adhesions)
-    change_form_after_template = "admin/inventaire/ajustement_form.html"
+    inlines = [PriceInline]
 
     fieldsets = (
-        (_('General'), {
-            'fields': (
-                'name',
-                'categorie_article',
-                'methode_caisse',
-                'categorie_pos',
-                'tva',
-                'prix_achat',
-            ),
-        }),
-        (_('POS display'), {
-            'fields': (
-                'palette_pos',
-                'couleur_texte_pos',
-                'couleur_fond_pos',
-                'icon_pos',
-                'img',
-                'poids',
-            ),
-        }),
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "methode_caisse",
+                    "categorie_pos",
+                    "tva",
+                    "prix_achat",
+                ),
+            },
+        ),
+        (
+            _("POS display"),
+            {
+                "fields": (
+                    "palette_pos",
+                    "couleur_texte_pos",
+                    "couleur_fond_pos",
+                    "icon_pos",
+                    "img",
+                    "poids",
+                ),
+            },
+        ),
         # (_('POS options'), {
         #     'fields': (
         #         'fractionne',
         #         'besoin_tag_id',
         #     ),
         # }),
-        (_('Publication'), {
-            'fields': (
-                'publish',
-                'archive',
-            ),
-        }),
+        (
+            _("Publication"),
+            {
+                "fields": (
+                    "publish",
+                    "archive",
+                ),
+            },
+        ),
     )
 
     list_display = (
-        'name',
-        'methode_caisse',
-        'categorie_pos',
-        'publish',
-        'poids',
+        "name",
+        "methode_caisse",
+        "categorie_pos",
+        "publish",
+        "poids",
     )
 
-    list_filter = ['publish', 'methode_caisse', 'categorie_pos']
-    search_fields = ['name']
+    list_filter = ["publish", "methode_caisse", "categorie_pos"]
+    search_fields = ["name"]
+
+    def get_inlines(self, request, obj):
+        # En mode add (pas d'obj) : StockInline pour créer le stock initial
+        # En mode change : pas de StockInline (le stock se gère via admin/inventaire/stock/)
+        # / In add mode: StockInline for initial stock creation
+        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
+        if obj is None:
+            from Administration.admin.inventaire import StockInline
+
+            return [StockInline, PriceInline]
+        return [PriceInline]
 
     def get_queryset(self, request):
         # Uniquement les produits avec une methode de caisse definie
         # / Only products with a POS method set
         qs = super().get_queryset(request)
         return qs.filter(methode_caisse__isnull=False)
-
-    def get_urls(self):
-        from django.urls import path
-        urls = super().get_urls()
-        custom_urls = [
-            path(
-                '<path:object_id>/ajustement-stock/',
-                self.admin_site.admin_view(
-                    csrf_protect(require_POST(self._ajustement_stock_view))
-                ),
-                name='basebillet_posproduct_ajustement_stock',
-            ),
-        ]
-        return custom_urls + urls
-
-    def _ajustement_stock_view(self, request, object_id):
-        """
-        Traite un ajustement de stock depuis l'admin.
-        / Processes a stock adjustment from the admin.
-        """
-        from inventaire.models import Stock
-        from inventaire.serializers import AjustementSerializer
-        from inventaire.services import StockService
-
-        product = get_object_or_404(Product, pk=object_id)
-
-        try:
-            stock = product.stock_inventaire
-        except Stock.DoesNotExist:
-            messages.error(request, _("This product has no configured stock."))
-            return redirect(request.META.get("HTTP_REFERER", "/"))
-
-        serializer = AjustementSerializer(data=request.POST)
-        if not serializer.is_valid():
-            messages.error(request, str(serializer.errors))
-            return redirect(request.META.get("HTTP_REFERER", "/"))
-
-        StockService.ajuster_inventaire(
-            stock=stock,
-            stock_reel=serializer.validated_data['stock_reel'],
-            motif=serializer.validated_data.get('motif', ''),
-            utilisateur=request.user,
-        )
-
-        messages.success(
-            request,
-            _("Stock adjusted for %(product)s.") % {'product': product.name},
-        )
-        return redirect(request.META.get("HTTP_REFERER", "/"))
 
 
 # ---------------------------------------------------------------------------
@@ -1187,14 +1248,21 @@ class CategorieProductForm(forms.ModelForm):
 
     class Meta:
         model = CategorieProduct
-        fields = ('name', 'couleur_texte', 'couleur_fond', 'icon', 'poid_liste', 'tva', 'cashless')
+        fields = (
+            "name",
+            "couleur_texte",
+            "couleur_fond",
+            "icon",
+            "poid_liste",
+            "tva",
+            "cashless",
+        )
 
     # Palette de couleurs prédéfinie (form-only — pilote couleur_texte + couleur_fond)
     # Pre-defined color palette (form-only — drives couleur_texte + couleur_fond)
     palette = forms.ChoiceField(
-        choices=[("", _("— Aucune palette —"))] + [
-            (key, label) for key, label, _t, _b in PALETTE_POS
-        ],
+        choices=[("", _("— Aucune palette —"))]
+        + [(key, label) for key, label, _t, _b in PALETTE_POS],
         required=False,
         label=_("Color palette"),
         help_text=_(
@@ -1204,7 +1272,9 @@ class CategorieProductForm(forms.ModelForm):
         ),
         # texte_field / fond_field correspondent aux noms de champs du modèle CategorieProduct
         # texte_field / fond_field match the CategorieProduct model field names
-        widget=PalettePickerWidget(texte_field="couleur_texte", fond_field="couleur_fond"),
+        widget=PalettePickerWidget(
+            texte_field="couleur_texte", fond_field="couleur_fond"
+        ),
     )
 
     # Couleur du texte avec sélecteur natif
@@ -1233,13 +1303,15 @@ class CategorieProductForm(forms.ModelForm):
         choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
         required=False,
         label=_("Icon"),
-        help_text=_("Icône affichée sur le bouton de catégorie dans l'interface caisse. / Icon displayed on the category button in the POS interface."),
+        help_text=_(
+            "Icône affichée sur le bouton de catégorie dans l'interface caisse. / Icon displayed on the category button in the POS interface."
+        ),
         widget=IconPickerWidget(),
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        instance = kwargs.get('instance')
+        instance = kwargs.get("instance")
 
         # Pré-sélection de la palette si les couleurs actuelles correspondent à un preset
         # Pre-select palette if the current colors match a preset
@@ -1250,7 +1322,7 @@ class CategorieProductForm(forms.ModelForm):
                     and instance.couleur_fond.upper() == bg_hex.upper()
                 )
                 if couleurs_correspondent:
-                    self.fields['palette'].initial = key
+                    self.fields["palette"].initial = key
                     break
 
     def clean(self):
@@ -1260,11 +1332,11 @@ class CategorieProductForm(forms.ModelForm):
 
         # Si une palette est choisie, elle écrase les couleurs saisies manuellement
         # If a palette is chosen, it overrides manually entered colors
-        palette_key = cleaned.get('palette')
+        palette_key = cleaned.get("palette")
         if palette_key and palette_key in PALETTE_POS_MAP:
             text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
-            cleaned['couleur_texte'] = text_hex
-            cleaned['couleur_fond'] = bg_hex
+            cleaned["couleur_texte"] = text_hex
+            cleaned["couleur_fond"] = bg_hex
 
         return cleaned
 
@@ -1274,38 +1346,46 @@ class CategorieProductAdmin(ModelAdmin):
     """Admin pour les categories de produits POS.
     Admin for POS product categories.
     LOCALISATION : Administration/admin/products.py"""
+
     compressed_fields = True
     warn_unsaved_form = True
     form = CategorieProductForm
 
-    list_display = ('name', 'icon', 'tva', 'poid_liste', 'cashless')
-    search_fields = ['name']
-    ordering = ('poid_liste', 'name')
+    list_display = ("name", "icon", "tva", "poid_liste", "cashless")
+    search_fields = ["name"]
+    ordering = ("poid_liste", "name")
 
     fieldsets = (
-        (None, {
-            'fields': (
-                'name',
-                'poid_liste',
-                'tva',
-                'cashless',
-            ),
-        }),
-        (_('Apparence / Appearance'), {
-            'fields': (
-                'palette',
-                'couleur_texte',
-                'couleur_fond',
-                'icon',
-            ),
-        }),
-        (_('Accounting / Comptabilite'), {
-            'fields': (
-                'compte_comptable',
-            ),
-        }),
+        (
+            None,
+            {
+                "fields": (
+                    "name",
+                    "poid_liste",
+                    "tva",
+                    "cashless",
+                ),
+            },
+        ),
+        (
+            _("Apparence / Appearance"),
+            {
+                "fields": (
+                    "palette",
+                    "couleur_texte",
+                    "couleur_fond",
+                    "icon",
+                ),
+            },
+        ),
+        (
+            _("Accounting / Comptabilite"),
+            {
+                "fields": ("compte_comptable",),
+            },
+        ),
     )
-    autocomplete_fields = ['compte_comptable']
+    autocomplete_fields = ["compte_comptable"]
 
     def has_add_permission(self, request):
         return TenantAdminPermissionWithRequest(request)

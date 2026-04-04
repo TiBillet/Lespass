@@ -116,7 +116,10 @@ class TestStockModel(FastTenantTestCase):
             unite=UniteStock.GR,
         )
         assert stock.unite == UniteStock.GR
-        assert "Grammes" in str(stock) or "grammes" in str(stock).lower()
+        # Le label peut être FR ("Grammes") ou EN ("Grams") selon la locale active
+        # / Label can be FR or EN depending on active locale
+        stock_str = str(stock).lower()
+        assert "gramm" in stock_str or "grams" in stock_str
 
     def test_contenance_sur_price(self):
         """Le champ contenance est disponible sur Price. / contenance field on Price."""

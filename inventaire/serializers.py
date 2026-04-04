@@ -73,3 +73,39 @@ class DebitMetreSerializer(serializers.Serializer):
             "required": _("Sensor ID is required."),
         },
     )
+
+
+class StockActionSerializer(serializers.Serializer):
+    """
+    Validation pour les actions manuelles de stock depuis l'admin.
+    Couvre les 4 types manuels : réception, ajustement, offert, perte.
+    / Validation for manual stock actions from admin.
+
+    LOCALISATION : inventaire/serializers.py
+    """
+
+    TYPES_MANUELS_CHOICES = [
+        ("RE", _("Réception")),
+        ("AJ", _("Ajustement")),
+        ("OF", _("Offert")),
+        ("PE", _("Perte/casse")),
+    ]
+
+    type_mouvement = serializers.ChoiceField(
+        choices=TYPES_MANUELS_CHOICES,
+        error_messages={
+            "invalid_choice": _("Type de mouvement invalide."),
+        },
+    )
+    quantite = serializers.IntegerField(
+        min_value=0,
+        error_messages={
+            "min_value": _("La quantité doit être positive ou nulle."),
+            "required": _("La quantité est requise."),
+        },
+    )
+    motif = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=200,
+    )

@@ -8,6 +8,7 @@ Ce consumer gere la connexion WebSocket entre le serveur Django
 et l'interface caisse (navigateur). Il est utilise pour :
 - Repondre aux pings du navigateur (mesure de latence)
 - Pousser des mises a jour de jauge billetterie (jauge_update)
+- Pousser des mises a jour de badges stock (stock_update)
 - Envoyer des notifications aux caisses connectees (notification)
 
 FLUX :
@@ -23,6 +24,7 @@ DEPENDENCIES :
 - HTMX ws extension (cote navigateur)
 - WebSocketTenantMiddleware (wsocket/middlewares.py) pour le contexte tenant
 """
+
 import json
 import logging
 import time
@@ -51,9 +53,7 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
 
         # Rejoindre le group Redis du point de vente
         # / Join the Redis group for this point of sale
-        await self.channel_layer.group_add(
-            self.pv_group_name, self.channel_name
-        )
+        await self.channel_layer.group_add(self.pv_group_name, self.channel_name)
 
         # Rejoindre le group global jauges du tenant
         # Toutes les caisses du tenant recoivent les mises a jour de jauge
@@ -64,14 +64,11 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
         tenant = self.scope.get("tenant")
         tenant_schema = tenant.schema_name if tenant else "public"
         self.jauges_group_name = f"laboutik-jauges-{tenant_schema}"
-        await self.channel_layer.group_add(
-            self.jauges_group_name, self.channel_name
-        )
+        await self.channel_layer.group_add(self.jauges_group_name, self.channel_name)
 
         await self.accept()
         logger.info(
-            f"[WS] Caisse connectee au PV {self.pv_uuid} "
-            f"(tenant: {tenant_schema})"
+            f"[WS] Caisse connectee au PV {self.pv_uuid} (tenant: {tenant_schema})"
         )
 
     async def disconnect(self, close_code):
@@ -79,9 +76,7 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
         Deconnexion : quitte le group du PV et le group jauges.
         / Disconnection: leaves the PV group and the gauges group.
         """
-        await self.channel_layer.group_discard(
-            self.pv_group_name, self.channel_name
-        )
+        await self.channel_layer.group_discard(self.pv_group_name, self.channel_name)
         # Quitter le group jauges si il a ete rejoint
         # / Leave the gauges group if it was joined
         if hasattr(self, "jauges_group_name"):
@@ -111,11 +106,13 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
         if type_message == "ping":
             # Renvoyer le timestamp client + le timestamp serveur
             # / Send back the client timestamp + the server timestamp
-            reponse_pong = json.dumps({
-                "type": "pong",
-                "client_ts": message.get("client_ts", 0),
-                "server_ts": time.time() * 1000,
-            })
+            reponse_pong = json.dumps(
+                {
+                    "type": "pong",
+                    "client_ts": message.get("client_ts", 0),
+                    "server_ts": time.time() * 1000,
+                }
+            )
             await self.send(text_data=reponse_pong)
 
     async def jauge_update(self, event):
@@ -133,6 +130,14 @@ class LaboutikConsumer(AsyncWebsocketConsumer):
         Recoit une notification depuis le group Redis
         et la pousse au navigateur.
         / Receives a notification from the Redis group and pushes it to the browser.
+        """
+        await self.send(text_data=event["html"])
+
+    async def stock_update(self, event):
+        """
+        Reçoit une mise à jour de stock depuis le group Redis
+        et la pousse au navigateur (OOB swap des badges stock).
+        / Receives a stock update from the Redis group and pushes it to the browser.
         """
         await self.send(text_data=event["html"])
 
@@ -232,7 +237,11 @@ class PrinterConsumer(AsyncWebsocketConsumer):
         / Receives a print command from the Redis channel layer
         and forwards it to the Android app.
         """
-        await self.send(text_data=json.dumps({
-            "action": "print",
-            "commands": event["commands"],
-        }))
+        await self.send(
+            text_data=json.dumps(
+                {
+                    "action": "print",
+                    "commands": event["commands"],
+                }
+            )
+        )

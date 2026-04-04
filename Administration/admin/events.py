@@ -720,6 +720,539 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
 
         return response
 
+    def vue_bilan_excel(self, request, object_id):
+        """
+        Exporte le bilan de billetterie en Excel (.xlsx, openpyxl).
+        / Exports the ticketing report as Excel (.xlsx, openpyxl).
+        LOCALISATION : Administration/admin/events.py
+        """
+        import io
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+        from django.http import HttpResponse
+        from django.shortcuts import get_object_or_404
+        from BaseBillet.reports import RapportBilletterieService
+
+        event = get_object_or_404(Event, pk=object_id)
+        service = RapportBilletterieService(event)
+
+        def euros(centimes):
+            """Convertit centimes en float euros. / Converts cents to float euros."""
+            if centimes is None:
+                return 0.0
+            return centimes / 100
+
+        # Styles
+        section_font = Font(bold=True, size=11, color="FFFFFF")
+        section_fill = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
+        header_font = Font(bold=True, size=10)
+        header_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")
+        euro_format = '#,##0.00 "EUR"'
+        thin_border = Border(
+            left=Side(style='thin', color='DDDDDD'),
+            right=Side(style='thin', color='DDDDDD'),
+            top=Side(style='thin', color='DDDDDD'),
+            bottom=Side(style='thin', color='DDDDDD'),
+        )
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Bilan"
+
+        row = 1
+
+        # -- Fonction utilitaire pour ecrire une ligne de section --
+        def write_section(titre):
+            nonlocal row
+            cell = ws.cell(row=row, column=1, value=titre)
+            cell.font = section_font
+            cell.fill = section_fill
+            for col in range(2, 8):
+                ws.cell(row=row, column=col).fill = section_fill
+            row += 1
+
+        def write_header(colonnes):
+            nonlocal row
+            for i, col_name in enumerate(colonnes, 1):
+                cell = ws.cell(row=row, column=i, value=col_name)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+            row += 1
+
+        def write_row(valeurs, formats=None):
+            nonlocal row
+            for i, val in enumerate(valeurs, 1):
+                cell = ws.cell(row=row, column=i, value=val)
+                cell.border = thin_border
+                if formats and i <= len(formats) and formats[i - 1]:
+                    cell.number_format = formats[i - 1]
+            row += 1
+
+        # EN-TETE / HEADER
+        write_section("BILAN DE BILLETTERIE")
+        write_row(["Evenement", event.name])
+        write_row(["Date", str(event.datetime)])
+        write_row(["Jauge max", event.jauge_max])
+        row += 1
+
+        # SYNTHESE / SUMMARY
+        synthese = service.calculer_synthese()
+        write_section("SYNTHESE")
+        write_row(["Billets vendus", synthese["billets_vendus"]])
+        write_row(["Billets scannes", synthese["billets_scannes"]])
+        write_row(["No-show", synthese["no_show"]])
+        write_row(["CA TTC", euros(synthese["ca_ttc"])], [None, euro_format])
+        write_row(["Remboursements", euros(synthese["remboursements"])], [None, euro_format])
+        write_row(["CA net", euros(synthese["ca_net"])], [None, euro_format])
+        write_row(["Taux remplissage", f"{synthese['taux_remplissage']}%"])
+        row += 1
+
+        # VENTES PAR TARIF / SALES BY RATE
+        tarifs = service.calculer_ventes_par_tarif()
+        write_section("VENTES PAR TARIF")
+        write_header(["Tarif", "Vendus", "Offerts", "CA TTC", "HT", "TVA", "Rembourses"])
+        fmt_tarif = [None, None, None, euro_format, euro_format, euro_format, None]
+        for t in tarifs:
+            write_row([
+                t["nom"], t["vendus"], t["offerts"],
+                euros(t["ca_ttc"]), euros(t["ca_ht"]), euros(t["tva"]),
+                t["rembourses"],
+            ], fmt_tarif)
+        if tarifs:
+            write_row([
+                "TOTAL",
+                sum(t["vendus"] for t in tarifs),
+                sum(t["offerts"] for t in tarifs),
+                euros(sum(t["ca_ttc"] for t in tarifs)),
+                euros(sum(t["ca_ht"] for t in tarifs)),
+                euros(sum(t["tva"] for t in tarifs)),
+                sum(t["rembourses"] for t in tarifs),
+            ], fmt_tarif)
+        row += 1
+
+        # PAR MOYEN DE PAIEMENT / BY PAYMENT METHOD
+        moyens = service.calculer_par_moyen_paiement()
+        write_section("PAR MOYEN DE PAIEMENT")
+        write_header(["Moyen", "Montant", "Pourcentage", "Nb billets"])
+        for m in moyens:
+            write_row([
+                m["label"], euros(m["montant"]),
+                f"{m['pourcentage']}%", m["nb_billets"],
+            ], [None, euro_format, None, None])
+        row += 1
+
+        # PAR CANAL DE VENTE / BY SALES CHANNEL
+        canaux = service.calculer_par_canal()
+        if canaux:
+            write_section("PAR CANAL DE VENTE")
+            write_header(["Canal", "Nb billets", "Montant"])
+            for c in canaux:
+                write_row([c["label"], c["nb_billets"], euros(c["montant"])],
+                          [None, None, euro_format])
+            row += 1
+
+        # SCANS
+        scans = service.calculer_scans()
+        write_section("SCANS")
+        write_row(["Scannes", scans["scannes"]])
+        write_row(["Non scannes", scans["non_scannes"]])
+        write_row(["Annules", scans["annules"]])
+        row += 1
+
+        # CODES PROMO / PROMO CODES
+        promos = service.calculer_codes_promo()
+        if promos:
+            write_section("CODES PROMO")
+            write_header(["Code", "Utilisations", "Reduction", "Manque a gagner"])
+            for p in promos:
+                write_row([
+                    p["nom"], p["utilisations"],
+                    f"{p['taux_reduction']}%", euros(p["manque_a_gagner"]),
+                ], [None, None, None, euro_format])
+            row += 1
+
+        # REMBOURSEMENTS / REFUNDS
+        remb = service.calculer_remboursements()
+        write_section("REMBOURSEMENTS")
+        write_row(["Nombre", remb["nombre"]])
+        write_row(["Montant total", euros(remb["montant_total"])], [None, euro_format])
+        write_row(["Taux", f"{remb['taux']}%"])
+
+        # Ajuster la largeur des colonnes / Adjust column widths
+        ws.column_dimensions['A'].width = 22
+        ws.column_dimensions['B'].width = 16
+        ws.column_dimensions['C'].width = 14
+        ws.column_dimensions['D'].width = 14
+        ws.column_dimensions['E'].width = 14
+        ws.column_dimensions['F'].width = 14
+        ws.column_dimensions['G'].width = 14
+
+        # Generer la reponse HTTP / Generate HTTP response
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        nom_fichier = f"bilan-{event.slug or event.pk}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    # ------------------------------------------------------------------
+    # Export par periode / Period export
+    # ------------------------------------------------------------------
+
+    def _query_events_periode(self, date_debut, date_fin):
+        """
+        Query annotee des events pour une periode donnee (filtrage sur datetime__date).
+        Retourne un queryset d'Event avec annotations nb_vendus, nb_scannes, ca_ttc, ca_rembourse.
+        / Annotated query for events in a period (filter on datetime__date).
+        Returns an Event queryset with annotations nb_vendus, nb_scannes, ca_ttc, ca_rembourse.
+
+        LOCALISATION : Administration/admin/events.py
+        """
+        from django.db.models import Sum
+        from django.db.models.functions import Coalesce
+
+        return Event.objects.filter(
+            archived=False,
+            parent__isnull=True,
+            datetime__date__gte=date_debut,
+            datetime__date__lte=date_fin,
+        ).exclude(
+            categorie=Event.ACTION,
+        ).annotate(
+            nb_vendus=Count(
+                'reservation__tickets',
+                filter=Q(reservation__tickets__status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]),
+                distinct=True,
+            ),
+            nb_scannes=Count(
+                'reservation__tickets',
+                filter=Q(reservation__tickets__status=Ticket.SCANNED),
+                distinct=True,
+            ),
+            ca_ttc=Coalesce(
+                Sum('reservation__lignearticles__amount',
+                    filter=Q(reservation__lignearticles__status=LigneArticle.VALID)),
+                0,
+            ),
+            ca_rembourse=Coalesce(
+                Sum('reservation__lignearticles__amount',
+                    filter=Q(reservation__lignearticles__status=LigneArticle.REFUNDED)),
+                0,
+            ),
+        ).select_related('postal_address').order_by('datetime')
+
+    def _calculer_synthese_periode(self, events):
+        """
+        Calcule les totaux globaux a partir d'un queryset d'events annotes.
+        / Computes global totals from an annotated event queryset.
+
+        LOCALISATION : Administration/admin/events.py
+        """
+        billets_vendus = sum(e.nb_vendus for e in events)
+        billets_scannes = sum(e.nb_scannes for e in events)
+        ca_ttc = sum(e.ca_ttc for e in events)
+        ca_rembourse = sum(e.ca_rembourse for e in events)
+        ca_net = ca_ttc - ca_rembourse
+
+        return {
+            "billets_vendus": billets_vendus,
+            "billets_scannes": billets_scannes,
+            "ca_ttc": ca_ttc,
+            "ca_rembourse": ca_rembourse,
+            "ca_net": ca_net,
+        }
+
+    def vue_dashboard_export(self, request):
+        """
+        GET : retourne le formulaire partial (pour hx-get).
+        POST : valide les dates, genere CSV/PDF/Excel multi-events.
+        / GET: returns the partial form (for hx-get).
+        POST: validates dates, generates CSV/PDF/Excel multi-event export.
+
+        LOCALISATION : Administration/admin/events.py
+        """
+        from django.http import HttpResponse
+        from django.template.response import TemplateResponse
+
+        # GET : retourner le formulaire HTMX / GET: return the HTMX form
+        if request.method == 'GET':
+            contexte = {
+                "form_action_url": reverse('staff_admin:BaseBillet_event_dashboard_export'),
+            }
+            return TemplateResponse(
+                request,
+                "admin/event/partials/export_periode_form.html",
+                contexte,
+            )
+
+        # POST : valider et exporter / POST: validate and export
+        serializer = ExportPeriodeSerializer(data=request.POST)
+        if not serializer.is_valid():
+            from django.contrib import messages as django_messages
+            for field, erreurs in serializer.errors.items():
+                for erreur in erreurs:
+                    django_messages.error(request, f"{field}: {erreur}")
+            return redirect(reverse('staff_admin:BaseBillet_event_dashboard'))
+
+        date_debut = serializer.validated_data['date_debut']
+        date_fin = serializer.validated_data['date_fin']
+        format_export = serializer.validated_data['format_export']
+
+        # Query annotee fraiche (pas de cache) / Fresh annotated query (no cache)
+        events_qs = self._query_events_periode(date_debut, date_fin)
+        events_liste = list(events_qs)
+
+        # Enrichir chaque event avec ca_net / Enrich each event with ca_net
+        for event in events_liste:
+            event.ca_net = event.ca_ttc - event.ca_rembourse
+
+        synthese = self._calculer_synthese_periode(events_liste)
+
+        if format_export == 'csv':
+            return self._export_periode_csv(events_liste, synthese, date_debut, date_fin)
+        elif format_export == 'pdf':
+            return self._export_periode_pdf(events_liste, synthese, date_debut, date_fin)
+        elif format_export == 'excel':
+            return self._export_periode_excel(events_liste, synthese, date_debut, date_fin)
+
+    def _export_periode_csv(self, events, synthese, date_debut, date_fin):
+        """
+        Genere le CSV multi-events pour une periode.
+        / Generates the multi-event CSV for a period.
+        """
+        import csv
+        from django.http import HttpResponse
+
+        def euros(centimes):
+            if centimes is None:
+                return "0.00"
+            return f"{centimes / 100:.2f}"
+
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        nom_fichier = f"bilan-periode-{date_debut}-{date_fin}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        response.write('\ufeff')  # BOM UTF-8
+
+        writer = csv.writer(response, delimiter=';')
+
+        # EN-TETE / HEADER
+        writer.writerow(["BILAN BILLETTERIE — PERIODE"])
+        writer.writerow(["Du", str(date_debut)])
+        writer.writerow(["Au", str(date_fin)])
+        writer.writerow(["Nb evenements", len(events)])
+        writer.writerow([])
+
+        # SYNTHESE GLOBALE / GLOBAL SUMMARY
+        writer.writerow(["SYNTHESE GLOBALE"])
+        writer.writerow(["Billets vendus", synthese["billets_vendus"]])
+        writer.writerow(["Billets scannes", synthese["billets_scannes"]])
+        writer.writerow(["CA TTC", euros(synthese["ca_ttc"])])
+        writer.writerow(["Remboursements", euros(synthese["ca_rembourse"])])
+        writer.writerow(["CA net", euros(synthese["ca_net"])])
+        writer.writerow([])
+
+        # DETAIL PAR EVENEMENT / DETAIL BY EVENT
+        writer.writerow(["DETAIL PAR EVENEMENT"])
+        writer.writerow(["Evenement", "Date", "Vendus", "Scannes", "CA TTC", "Remboursements", "CA net"])
+        for e in events:
+            writer.writerow([
+                e.name,
+                str(e.datetime),
+                e.nb_vendus,
+                e.nb_scannes,
+                euros(e.ca_ttc),
+                euros(e.ca_rembourse),
+                euros(e.ca_net),
+            ])
+
+        # TOTAL
+        if events:
+            writer.writerow([
+                "TOTAL", "",
+                synthese["billets_vendus"],
+                synthese["billets_scannes"],
+                euros(synthese["ca_ttc"]),
+                euros(synthese["ca_rembourse"]),
+                euros(synthese["ca_net"]),
+            ])
+
+        return response
+
+    def _export_periode_pdf(self, events, synthese, date_debut, date_fin):
+        """
+        Genere le PDF multi-events pour une periode (WeasyPrint).
+        / Generates the multi-event PDF for a period (WeasyPrint).
+        """
+        from django.http import HttpResponse
+        from django.template.loader import render_to_string
+        from weasyprint import HTML
+
+        config = Configuration.get_solo()
+
+        contexte = {
+            "events": events,
+            "synthese": synthese,
+            "date_debut": date_debut,
+            "date_fin": date_fin,
+            "nb_events": len(events),
+            "config": config,
+            "date_generation": timezone.localtime(timezone.now()).strftime("%d/%m/%Y %H:%M"),
+        }
+
+        html_string = render_to_string("admin/event/bilan_periode_pdf.html", contexte)
+        pdf_bytes = HTML(string=html_string).write_pdf()
+
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        nom_fichier = f"bilan-periode-{date_debut}-{date_fin}.pdf"
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        return response
+
+    def _export_periode_excel(self, events, synthese, date_debut, date_fin):
+        """
+        Genere le Excel multi-events pour une periode (openpyxl, 2 onglets).
+        / Generates the multi-event Excel for a period (openpyxl, 2 sheets).
+        """
+        import io
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Border, Side
+        from django.http import HttpResponse
+
+        def euros(centimes):
+            if centimes is None:
+                return 0.0
+            return centimes / 100
+
+        euro_format = '#,##0.00 "EUR"'
+
+        # Styles
+        section_font = Font(bold=True, size=11, color="FFFFFF")
+        section_fill = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
+        header_font = Font(bold=True, size=10)
+        header_fill = PatternFill(start_color="F0F0F0", end_color="F0F0F0", fill_type="solid")
+        thin_border = Border(
+            left=Side(style='thin', color='DDDDDD'),
+            right=Side(style='thin', color='DDDDDD'),
+            top=Side(style='thin', color='DDDDDD'),
+            bottom=Side(style='thin', color='DDDDDD'),
+        )
+
+        wb = openpyxl.Workbook()
+
+        # --- Onglet 1 : Synthese / Sheet 1: Summary ---
+        ws_synthese = wb.active
+        ws_synthese.title = "Synthese"
+
+        row = 1
+
+        def write_section_s(titre):
+            nonlocal row
+            cell = ws_synthese.cell(row=row, column=1, value=titre)
+            cell.font = section_font
+            cell.fill = section_fill
+            for col in range(2, 8):
+                ws_synthese.cell(row=row, column=col).fill = section_fill
+            row += 1
+
+        def write_row_s(valeurs, formats=None):
+            nonlocal row
+            for i, val in enumerate(valeurs, 1):
+                cell = ws_synthese.cell(row=row, column=i, value=val)
+                cell.border = thin_border
+                if formats and i <= len(formats) and formats[i - 1]:
+                    cell.number_format = formats[i - 1]
+            row += 1
+
+        write_section_s("BILAN BILLETTERIE — PERIODE")
+        write_row_s(["Du", str(date_debut)])
+        write_row_s(["Au", str(date_fin)])
+        write_row_s(["Nb evenements", len(events)])
+        row += 1
+
+        write_section_s("SYNTHESE GLOBALE")
+        write_row_s(["Billets vendus", synthese["billets_vendus"]])
+        write_row_s(["Billets scannes", synthese["billets_scannes"]])
+        write_row_s(["CA TTC", euros(synthese["ca_ttc"])], [None, euro_format])
+        write_row_s(["Remboursements", euros(synthese["ca_rembourse"])], [None, euro_format])
+        write_row_s(["CA net", euros(synthese["ca_net"])], [None, euro_format])
+
+        ws_synthese.column_dimensions['A'].width = 22
+        ws_synthese.column_dimensions['B'].width = 18
+
+        # --- Onglet 2 : Detail par evenement / Sheet 2: Detail by event ---
+        ws_detail = wb.create_sheet("Detail par evenement")
+        row_d = 1
+
+        # En-tete / Header
+        colonnes = ["Evenement", "Date", "Vendus", "Scannes", "CA TTC", "Remboursements", "CA net"]
+        for i, col_name in enumerate(colonnes, 1):
+            cell = ws_detail.cell(row=row_d, column=i, value=col_name)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+        row_d += 1
+
+        fmt_detail = [None, None, None, None, euro_format, euro_format, euro_format]
+        for e in events:
+            valeurs = [
+                e.name,
+                e.datetime.strftime("%d/%m/%Y %H:%M") if e.datetime else "",
+                e.nb_vendus,
+                e.nb_scannes,
+                euros(e.ca_ttc),
+                euros(e.ca_rembourse),
+                euros(e.ca_net),
+            ]
+            for i, val in enumerate(valeurs, 1):
+                cell = ws_detail.cell(row=row_d, column=i, value=val)
+                cell.border = thin_border
+                if fmt_detail[i - 1]:
+                    cell.number_format = fmt_detail[i - 1]
+            row_d += 1
+
+        # Ligne TOTAL / TOTAL row
+        if events:
+            total_row = [
+                "TOTAL", "",
+                synthese["billets_vendus"],
+                synthese["billets_scannes"],
+                euros(synthese["ca_ttc"]),
+                euros(synthese["ca_rembourse"]),
+                euros(synthese["ca_net"]),
+            ]
+            for i, val in enumerate(total_row, 1):
+                cell = ws_detail.cell(row=row_d, column=i, value=val)
+                cell.font = Font(bold=True)
+                cell.border = thin_border
+                if fmt_detail[i - 1]:
+                    cell.number_format = fmt_detail[i - 1]
+
+        ws_detail.column_dimensions['A'].width = 30
+        ws_detail.column_dimensions['B'].width = 18
+        ws_detail.column_dimensions['C'].width = 12
+        ws_detail.column_dimensions['D'].width = 12
+        ws_detail.column_dimensions['E'].width = 14
+        ws_detail.column_dimensions['F'].width = 16
+        ws_detail.column_dimensions['G'].width = 14
+
+        # Generer la reponse / Generate response
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        nom_fichier = f"bilan-periode-{date_debut}-{date_fin}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{nom_fichier}"'
+        return response
+
     # ------------------------------------------------------------------
     # Dashboard billetterie / Ticketing dashboard
     # ------------------------------------------------------------------

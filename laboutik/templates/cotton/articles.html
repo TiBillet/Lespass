@@ -19,7 +19,8 @@
 		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
 		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
 		data-tarifs='{{ article.tarifs_json }}'
-		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}"
+		{% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}
+		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}{% if article.stock_bloquant %} article-bloquant{% endif %}"
 		style="background-color:{{ article.couleur_backgr }};"
 		data-testid="article-{{ article.id }}">
 		<!-- Icône catégorie — petit badge haut-gauche
@@ -35,6 +36,26 @@
 		   aria-hidden="true"
 		   style="color:{{ article.couleur_texte }};"></i>
 		{% endif %}
+
+		{% comment %}
+		PASTILLE STOCK — badge en haut à droite de la tuile
+		3 états : alerte (orange), rupture (rouge), pas de badge si stock normal ou pas géré
+		Mise à jour en temps réel via WebSocket OOB swap (hx_stock_badge.html)
+		/ STOCK BADGE — top-right badge on the tile
+		3 states: alert (orange), out of stock (red), no badge if normal or unmanaged
+		Real-time update via WebSocket OOB swap (hx_stock_badge.html)
+		{% endcomment %}
+		<div id="stock-badge-{{ article.id }}"
+		     aria-live="polite"
+		     data-testid="stock-badge-{{ article.id }}">
+			{% if article.stock_en_alerte %}
+			<span class="article-stock-badge article-stock-badge-alerte"
+			      data-testid="stock-badge-alerte">{{ article.stock_quantite_lisible }}</span>
+			{% elif article.stock_en_rupture %}
+			<span class="article-stock-badge article-stock-badge-rupture"
+			      data-testid="stock-badge-rupture">{% translate "Épuisé" %}</span>
+			{% endif %}
+		</div>
 
 		<!-- Zone visuelle produit : icône OU image, centrée dans la tuile
 		     Priorité : url_image > icone produit (MS ou FA) > fond uni

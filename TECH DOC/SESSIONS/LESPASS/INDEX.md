@@ -25,6 +25,7 @@
 > **Design spec :** [`specs/2026-04-03-dashboard-billetterie-design.md`](specs/2026-04-03-dashboard-billetterie-design.md)
 
 - [x] **Session 05** — Dashboard billetterie : page dédiée sidebar, cartes miniatures events, query annotée + cache 2min, 2 tests
+- [x] **Session 06** — Exports par période (CSV/PDF/Excel) via formulaire HTMX sur dashboard + Excel sur bilan event
 
 ---
 

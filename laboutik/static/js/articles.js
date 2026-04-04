@@ -74,6 +74,14 @@ function manageKey(event) {
 	const ele = event.target.parentNode
 
 	if (ele.classList.contains('article-container')) {
+		// Si le stock est bloquant (rupture + vente hors stock interdite),
+		// on ignore le clic — l'article est grisé visuellement.
+		// / If stock is blocking (out of stock + sales not allowed),
+		// ignore the click — the article is visually greyed out.
+		if (ele.dataset.stockBloquant === 'true') {
+			return
+		}
+
 		const articleUuid = ele.dataset.uuid
 		const articlePrice = ele.dataset.price
 		const articleName = ele.dataset.name
