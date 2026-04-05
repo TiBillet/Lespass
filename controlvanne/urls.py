@@ -1,34 +1,29 @@
-from django.urls import path
-from . import views
-from . import calibration_views
+"""
+URLs du module tireuse connectée (controlvanne).
+/ URLs for the connected tap module (controlvanne).
+
+LOCALISATION : controlvanne/urls.py
+
+Routes :
+- /controlvanne/api/tireuse/ping/       → TireuseViewSet.ping
+- /controlvanne/api/tireuse/authorize/  → TireuseViewSet.authorize
+- /controlvanne/api/tireuse/event/      → TireuseViewSet.event
+- /controlvanne/auth-kiosk/             → AuthKioskView (POST token → session cookie)
+"""
+
+from django.urls import path, include
+from rest_framework import routers
+
+from controlvanne.viewsets import TireuseViewSet, AuthKioskView
+
+router = routers.DefaultRouter()
+router.register(r"api/tireuse", TireuseViewSet, basename="controlvanne-tireuse")
 
 urlpatterns = [
-#    path("", views.index, name="index"),
-    path("api/rfid/event/", views.api_rfid_event, name="api_rfid_event"),
-    path("api/rfid/authorize", views.api_rfid_authorize, name="api_rfid_authorize"),
-    path("api/rfid/ping", views.ping, name="api_rfid_ping"),
-    path("api/rfid/register/", views.api_rfid_register, name="api_rfid_register"),
-    path("", views.panel_multi, name="panel"),
+    # Auth kiosk : POST token API → cookie session Django
+    # / Auth kiosk: POST API token → Django session cookie
+    path("auth-kiosk/", AuthKioskView.as_view(), name="controlvanne-auth-kiosk"),
 
-    # Calibration débitmètre
-    path(
-        "calibration/<uuid:uuid>/",
-        calibration_views.calibration_page,
-        name="calibration_page",
-    ),
-    path(
-        "calibration/<uuid:uuid>/mesure/<int:session_id>/",
-        calibration_views.calibration_soumettre,
-        name="calibration_soumettre",
-    ),
-    path(
-        "calibration/<uuid:uuid>/mesure/<int:session_id>/supprimer/",
-        calibration_views.calibration_supprimer,
-        name="calibration_supprimer",
-    ),
-    path(
-        "calibration/<uuid:uuid>/appliquer/",
-        calibration_views.calibration_appliquer,
-        name="calibration_appliquer",
-    ),
+    # ViewSet DRF : ping, authorize, event
+    path("", include(router.urls)),
 ]

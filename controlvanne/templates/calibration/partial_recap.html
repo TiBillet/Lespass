@@ -3,7 +3,7 @@
 {% load l10n %}
 
 {% if mesures_recap %}
-<div class="card mb-4">
+<div class="card mb-4" data-testid="calibration-recap">
   <div class="card-header" style="color:#111">
     <strong>Mesures effectuées ({{ mesures_recap|length }})</strong>
   </div>
@@ -58,7 +58,7 @@
               hx-swap="innerHTML">
           {% csrf_token %}
           <input type="hidden" name="facteur_moyen" value="{{ facteur_moyen|unlocalize }}">
-          <button type="submit" class="btn btn-success">✓ Appliquer ce facteur</button>
+          <button type="submit" class="btn btn-success" data-testid="btn-appliquer-facteur">✓ Appliquer ce facteur</button>
         </form>
       </div>
     </div>

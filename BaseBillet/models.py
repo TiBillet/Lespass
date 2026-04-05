@@ -617,6 +617,13 @@ class Configuration(SingletonModel):
         verbose_name=_("Inventory module"),
         help_text=_("Enable stock management for POS products."),
     )
+    # Module tireuse connectee (controlvanne) — gestion de tireuses a biere avec paiement NFC
+    # / Connected tap module (controlvanne) — beer tap management with NFC payment
+    module_tireuse = models.BooleanField(
+        default=False,
+        verbose_name=_("Connected tap module"),
+        help_text=_("Enable connected beer tap management (controlvanne)."),
+    )
 
     currency_code = models.CharField(max_length=3, default="EUR")
 
@@ -1178,6 +1185,9 @@ class Product(models.Model):
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = "S", "T", "M", "A", "G"
     DON, FREERES, NEED_VALIDATION = "D", "F", "V"
     QRCODE_MA = "Q"
+    # Fut de boisson pour tireuse connectee (controlvanne)
+    # / Beverage keg for connected tap (controlvanne)
+    FUT = "U"
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _("Select a category")),
@@ -1191,6 +1201,7 @@ class Product(models.Model):
         (ADHESION, _("Subscription or membership")),
         (BADGE, _("Punchclock")),
         (QRCODE_MA, _("QrCode paiement on my account")),
+        (FUT, _("Keg (connected tap)")),
         # (DON, _('Don')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]
@@ -1415,6 +1426,19 @@ class POSProduct(Product):
         proxy = True
         verbose_name = _("POS product")
         verbose_name_plural = _("POS products")
+
+
+class FutProduct(Product):
+    """Proxy pour afficher uniquement les produits fut (tireuses) dans l'admin.
+    Proxy to display only keg products in admin.
+    Les infos biere (brasseur, type, degre) vont dans long_description.
+    Beer info (brewer, type, ABV) goes in long_description.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Keg product")
+        verbose_name_plural = _("Keg products")
 
 
 class PromotionalCode(models.Model):

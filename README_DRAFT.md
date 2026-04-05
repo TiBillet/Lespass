@@ -31,45 +31,30 @@
 
 TiBillet est un ensemble d'outils libres pour les lieux culturels, les festivals, les associations et les tiers-lieux : billetterie en ligne, caisse enregistreuse, cashless par carte NFC, gestion d'adhésions, monnaie locale et monnaie temps.
 
-Mais TiBillet n'est pas qu'un logiciel. C'est un **commun numérique**, construit par et pour les gens qui s'en servent. Plusieurs centaines de lieux et organisations, plus d'une vingtaine en contribution active, une coopérative pensé comme un commun juridique, et l'idée simple que les outils qui font tourner nos lieux de vie ne devraient appartenir à personne d'autre qu'à ceux qui les utilisent.
+Mais TiBillet n'est pas qu'un logiciel. C'est un **commun numérique**, construit par et pour les gens qui s'en servent. Plusieurs centaines de lieux et organisations, plus d'une vingtaine en contribution active, une coopérative pensé comme un commun juridiqu e, et l'idée simple que les outils qui font tourner nos lieux de vie ne devraient appartenir à personne d'autre qu'à ceux qui les utilisent.
 
 **Le principe :** Un outil de création de fédération a travers des agendas et billetteries, une caisse enregistreuse et carte NFC unique, valable dans tout le réseau. Pas de frais d'activation, pas de date d'expiration, pas de case à décocher. Vous rechargez quand vous voulez, vous dépensez où vous voulez, vous vous faites rembourser quand vous voulez. Et la carte sert aussi de carte d'adhésion, de porte-monnaie local et/ou de monnaie temps.
 
-**Alternatives à :** Weezevent, HelloAsso, Cyclos, L'Addition, Ulule, Caisses et POS JVC... Mais qui va encore plus loin car pensé pour créer des fédérations : Une billetterie peut se fédérer à d'autres pour créer des agendas communs. Des caisses peuvent lires les mêmes cartes pour faire des monnaies locales. Des collectifs de sécurité sociales alimentaires peuvent fédérér des producteurs pour créer une SSA.
+**Alternatives à :** Weezevent, HelloAsso, Cyclos, L'Addition, Ulule, Caisses et POS JVC... Mais TiBillet va encore plus loin car pensé pour créer des fédérations : Une billetterie peut se fédérer à d'autres pour créer des agendas communs. Des caisses peuvent lire les mêmes cartes NFC pour faire des monnaies locales. Des collectifs peuvent fédérér des producteurs pour créer une caisse sociale alimentaire.
 
 > **🇬🇧 English speakers:** TiBillet is a federated, open-source toolkit for ticketing, POS, NFC cashless payments, memberships, and local currencies — built as a digital commons by the [Code Commun Cooperative](https://codecommun.coop). [Read more in English →](./README.en.md)
 
 ---
 
-## En production, pour de vrai
-
-TiBillet n'est pas un prototype. C'est un outil en production depuis 2018, né au [Manapany Festival](https://www.manapany-festival.re/) à La Réunion, aujourd'hui déployé sur une dizaine de lieux — des cafés associatifs aux festivals de 15 000 personnes.
-
-<!-- CAPTURE : photo_terrain.jpg — Une photo d'un vrai lieu ou festival avec TiBillet en action (caisse, carte, public). Si possible la Raffinerie ou un festival. C'est cette image qui dit "c'est réel". -->
-
-Quelques exemples de ce que TiBillet rend possible aujourd'hui :
-
-- **4 festivals à Montpellier** partagent la même carte NFC pour 15 000 festivaliers. Une carte, quatre lieux, zéro bracelet jetable.
-- **Un collectif citoyen en Normandie** distribue 100 cartes pour de l'aide alimentaire solidaire (Sécurité Sociale de l'Alimentation). Chaque carte est créditée de 100 €, peu importe ce que la personne a payé. Pas de contrôle, pas de case "précaire" à cocher — juste de la dignité.
-- **La Raffinerie à La Réunion**, une ancienne sucrière reconvertie en tiers-lieu, utilise une monnaie temps : les heures passées sur les chantiers participatifs du mercredi sont comptabilisées sur la carte, échangeables contre des services ou des boissons au bar associatif le soir.
-- **Des bars associatifs** vérifient l'adhésion automatiquement au scan NFC — fini le fichier Excel que personne ne consultait.
-
----
-
 ## Fonctionnalités
 
-| | Module | Description | Détails |
-|---|---|---|---|
-| 🎫 | **Billetterie & Agenda** | Événements, tarifs, réservations en ligne, QR codes, scan à l'entrée | [→ BaseBillet/](./BaseBillet/) |
-| 🏪 | **Caisse enregistreuse** | Point de vente tactile, grille d'articles, multi-moyens de paiement, conforme LNE | [→ laboutik/](./laboutik/) |
-| 💳 | **Cashless NFC** | Carte sans contact, rechargement en ligne ou sur place, paiement fédéré multi-lieux | [→ fedow_core/](./fedow_core/) |
-| 🤝 | **Adhésions** | Cotisations en ligne ou sur place, vérification au scan, tarifs préférentiels | [→ BaseBillet/](./BaseBillet/) |
-| 🪙 | **Monnaie locale & temps** | Euros, monnaie cadeau, monnaie temps — plusieurs devises sur une seule carte | [→ fedow_core/](./fedow_core/) |
-| 📊 | **Rapports & comptabilité** | Clôtures de caisse, export FEC, bilans billetterie, PDF et CSV | [→ laboutik/](./laboutik/) |
-| 📦 | **Inventaire** | Stock par produit, alertes, journal de mouvements, mise à jour temps réel | [→ inventaire/](./inventaire/) |
-| 🗳️ | **Budget contributif** | Initiatives, votes, financement participatif, co-rémunération transparente | [→ crowds/](./crowds/) |
-| 🖨️ | **Impression thermique** | Tickets, reçus, clôtures — Sunmi Cloud, LAN, imprimante interne | [→ laboutik/](./laboutik/) |
-| 🌐 | **API sémantique** | Schema.org / JSON-LD, clé API, endpoints REST | [→ api_v2/](./api_v2/) |
+|     | Module                      | Description                                                                                                 | Détails                        |
+| --- | --------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| 🎫  | **Billetterie & Agenda**    | Événements, tarifs, réservations en ligne, QR codes, scan à l'entrée                                        | [→ BaseBillet/](./BaseBillet/) |
+| 🏪  | **Caisse enregistreuse**    | Point de vente tactile, grille d'articles, multi-moyens de paiement, conforme LNE                           | [→ laboutik/](./laboutik/)     |
+| 💳  | **Cashless NFC**            | Carte sans contact, rechargement en ligne ou sur place, paiement fédéré multi-lieux : Cashless de festival. | [→ fedow_core/](./fedow_core/) |
+| 🤝  | **Adhésions**               | Cotisations en ligne ou sur place, vérification au scan, tarifs préférentiels                               | [→ BaseBillet/](./BaseBillet/) |
+| 🪙  | **Monnaie locale & temps**  | Euros, monnaie cadeau, monnaie temps — plusieurs devises sur une seule carte                                | [→ fedow_core/](./fedow_core/) |
+| 📊  | **Rapports & comptabilité** | Clôtures de caisse, export FEC, bilans billetterie, PDF et CSV                                              | [→ laboutik/](./laboutik/)     |
+| 📦  | **Inventaire**              | Stock par produit, alertes, journal de mouvements, mise à jour temps réel                                   | [→ inventaire/](./inventaire/) |
+| 🗳️ | **Budget contributif**      | Initiatives, votes, financement participatif, co-rémunération transparente, suivi d'engagement bénévoles.   | [→ crowds/](./crowds/)         |
+| 🖨️ | **Impression thermique**    | Tickets, reçus, clôtures — Sunmi Cloud, LAN, imprimante interne, impréssion de commande en cuisine          | [→ laboutik/](./laboutik/)     |
+| 🌐  | **API sémantique**          | Schema.org / JSON-LD, clé API, endpoints REST                                                               | [→ api_v2/](./api_v2/)         |
 
 <!-- CAPTURES : Pour chaque module, une capture dans le dossier Presentation/ ou docs/img/. Format suggéré : 800x500px, thème clair. Voici la liste :
 
@@ -87,6 +72,19 @@ Optionnels mais impactants :
 10. photo_terrain_festival.jpg — Photo de festival ou de lieu avec TiBillet en action
 11. schema_architecture.png — Schéma simple de la fédération (lieux + carte partagée + Fedow)
 -->
+
+---
+
+## En production, pour de vrai
+
+TiBillet n'est pas un prototype. C'est un outil en production depuis 2018, né au [Manapany Festival](https://www.manapany-festival.re/) à La Réunion, aujourd'hui déployé sur plusieurs dizaines de lieux — des cafés associatifs aux festivals de 15 000 personnes.
+
+Quelques exemples de ce que TiBillet rend possible aujourd'hui :
+
+- **4 festivals à Montpellier** partagent la même carte NFC pour 15 000 festivaliers. Une carte, quatre lieux, zéro bracelet jetable.
+- **Un collectif citoyen en Normandie** distribue 100 cartes pour de l'aide alimentaire solidaire (Sécurité Sociale de l'Alimentation). Chaque carte est créditée de 100 €, peu importe ce que la personne a payé. Pas de contrôle, pas de case "précaire" à cocher — juste de la dignité.
+- **La Raffinerie à La Réunion**, une ancienne sucrière reconvertie en tiers-lieu, utilise une monnaie temps : les heures passées sur les chantiers participatifs du mercredi sont comptabilisées sur la carte, échangeables contre des services ou des boissons au bar associatif le soir.
+- **Des bars associatifs** vérifient l'adhésion automatiquement au scan NFC — fini le fichier Excel que personne ne consultait.
 
 ---
 

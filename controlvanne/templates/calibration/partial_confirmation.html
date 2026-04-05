@@ -1,10 +1,11 @@
 {# Fragment HTMX — confirmation après application du facteur #}
+{% load i18n %}
 
 {% if erreur %}
 <div class="alert alert-danger mb-0">{{ erreur }}</div>
 
 {% else %}
-<div class="alert alert-success mb-2">
+<div class="alert alert-success mb-2" data-testid="calibration-confirmation-success">
   ✓ Facteur mis à jour avec succès !<br>
   <strong>{{ facteur_ancien }}</strong>
   &nbsp;→&nbsp;
@@ -12,7 +13,8 @@
   <span class="text-muted small">Hz·L⁻¹·min⁻¹</span>
 </div>
 <a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
-   class="btn btn-outline-primary btn-sm">
+   class="btn btn-outline-primary btn-sm"
+   data-testid="btn-nouvelle-serie">
   Faire une nouvelle série de mesures
 </a>
 {% endif %}

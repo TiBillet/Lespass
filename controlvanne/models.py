@@ -1,350 +1,459 @@
+"""
+Modeles du module tireuse connectee (controlvanne).
+/ Models for the connected tap module (controlvanne).
+
+LOCALISATION : controlvanne/models.py
+
+Modeles definis ici :
+- Configuration : singleton de configuration du module tireuse (django-solo)
+- Debimetre : modele et facteur de calibration du capteur de debit
+- CarteMaintenance : carte NFC dediee aux operations de maintenance (OneToOne CarteCashless)
+- TireuseBec : une tireuse physique avec son fut, son debimetre, son point de vente
+- RfidSession : session de service d'un liquide (de la pose a la depose de la carte NFC)
+- SessionCalibration : proxy RfidSession pour les sessions de calibration
+- HistoriqueMaintenance : proxy RfidSession pour les sessions de maintenance
+- HistoriqueTireuse : proxy RfidSession pour les debits par tireuse
+- HistoriqueCarte : proxy RfidSession pour les mouvements par carte
+
+Dependances externes :
+- QrcodeCashless.CarteCashless : carte NFC physique (SHARED_APPS)
+- BaseBillet.Product : produit unifie (categorie_article='U' pour les futs)
+- BaseBillet.LigneArticle : ligne de vente POS
+- laboutik.PointDeVente : point de vente physique ou virtuel
+- discovery.PairingDevice : appareil en attente d'appairage
+- inventaire.Stock : stock d'un produit (OneToOne Product)
+- solo.SingletonModel : singleton propre (pas de hack pk=1)
+"""
+
 from uuid import uuid4
+from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
-from decimal import Decimal
+from django.utils.translation import gettext_lazy as _
+
+from solo.models import SingletonModel
+from rest_framework_api_key.models import AbstractAPIKey
 
 
-class CarteMaintenance(models.Model):
-    uid = models.CharField("UID", max_length=32, unique=True,
-                           help_text="UID hex sans espaces")
-    label = models.CharField("Nom", max_length=100, blank=True)
-    is_active = models.BooleanField("Active", default=True)
-    produit = models.CharField(
-        "Produit de nettoyage", max_length=100, blank=True,
-        help_text="Ex : Eau, Désinfectant, Alcool isopropylique…",
-    )
-    notes = models.TextField("Notes", blank=True)
+# ──────────────────────────────────────────────────────────────────────
+# Configuration — singleton django-solo
+# ──────────────────────────────────────────────────────────────────────
 
-    class Meta:
-        verbose_name = "Carte maintenance"
-        verbose_name_plural = "Cartes maintenance"
-
-    def __str__(self):
-        return self.label or self.uid
-
-
-class Card(models.Model):
-    uid = models.CharField(max_length=32, unique=True, help_text="UID hex sans espaces")
-    label = models.CharField("Nom carte", max_length=100, blank=True)
-    is_active = models.BooleanField("Active", default=True)
-    valid_from = models.DateTimeField("Valide depuis", null=True, blank=True)
-    valid_to = models.DateTimeField("Fin de validité", null=True, blank=True)
-    balance = models.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        default=Decimal("0.00"),
-        help_text="Solde en unité (ex: patate)",
-    )
+class Configuration(SingletonModel):
+    """
+    Singleton de configuration du module tireuse.
+    / Singleton configuration for the connected tap module.
+    LOCALISATION : controlvanne/models.py
+    """
 
     class Meta:
-        verbose_name = "Carte"
-        verbose_name_plural = "Cartes"
-
-    def is_valid_now(self):
-        now = timezone.now()
-        return (
-            self.is_active
-            and (not self.valid_from or now >= self.valid_from)
-            and (not self.valid_to or now <= self.valid_to)
-        )
+        verbose_name = _("Tap module configuration")
+        verbose_name_plural = _("Tap module configuration")
 
     def __str__(self):
-        return self.label or self.uid
+        return str(_("Tap module configuration"))
 
+
+# ──────────────────────────────────────────────────────────────────────
+# TireuseAPIKey — clé API dédiée aux Raspberry Pi des tireuses
+# / TireuseAPIKey — API key dedicated to tap Raspberry Pi devices
+# ──────────────────────────────────────────────────────────────────────
+
+class TireuseAPIKey(AbstractAPIKey):
+    """
+    Clé API dédiée aux tireuses connectées (controlvanne).
+    Même pattern que LaBoutikAPIKey mais pour les tireuses.
+    Créée par discovery lors de l'appairage d'un Pi.
+    / API key dedicated to connected taps (controlvanne).
+    Same pattern as LaBoutikAPIKey but for taps.
+    Created by discovery when pairing a Pi.
+    LOCALISATION : controlvanne/models.py
+    """
+
+    class Meta:
+        ordering = ("-created",)
+        verbose_name = _("Tap API Key")
+        verbose_name_plural = _("Tap API Keys")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Debimetre — capteur de debit
+# ──────────────────────────────────────────────────────────────────────
 
 class Debimetre(models.Model):
+    """
+    Modele de debitmetre utilise sur les tireuses.
+    Le facteur de calibration convertit les impulsions du capteur en volume.
+    / Flow meter model used on taps.
+    The calibration factor converts sensor pulses to volume.
+    LOCALISATION : controlvanne/models.py
+    """
     name = models.CharField(
-        "Modèle",
         max_length=100,
-        help_text="Modèle du débitmètre (ex: YF-S201, FS300A)",
+        verbose_name=_("Model"),
+        help_text=_("Flow meter model (e.g. YF-S201, FS300A)"),
     )
     flow_calibration_factor = models.FloatField(
-        "Facteur de calibration",
         default=6.5,
-        help_text="Facteur de calibration (Hz par L/min) — 1 L = facteur × 60 impulsions",
+        verbose_name=_("Calibration factor"),
+        help_text=_("Calibration factor (Hz per L/min) — 1 L = factor × 60 pulses"),
     )
 
     class Meta:
-        verbose_name = "Débitmètre"
-        verbose_name_plural = "Débitmètres"
+        verbose_name = _("Flow meter")
+        verbose_name_plural = _("Flow meters")
 
     def __str__(self):
         return f"{self.name} (factor={self.flow_calibration_factor})"
 
 
-class Fut(models.Model):
-    TYPE_CHOICES = [
-        ("blonde", "Blonde"),
-        ("brune", "Brune"),
-        ("ambree", "Ambrée"),
-        ("blanche", "Blanche"),
-        ("ipa", "IPA"),
-        ("stout", "Stout"),
-        ("lager", "Lager"),
-        ("autre", "Autre"),
-    ]
+# ──────────────────────────────────────────────────────────────────────
+# CarteMaintenance — carte NFC de maintenance (OneToOne CarteCashless)
+# ──────────────────────────────────────────────────────────────────────
 
-    nom = models.CharField("Nom de la bière", max_length=100)
-    brasseur = models.CharField("Brasseur", max_length=100, blank=True)
-    type_biere = models.CharField(
-        "Type", max_length=20, choices=TYPE_CHOICES, default="blonde"
+class CarteMaintenance(models.Model):
+    """
+    Carte NFC dediee aux operations de maintenance et nettoyage des tireuses.
+    Meme patron que CartePrimaire dans laboutik : OneToOne vers CarteCashless.
+    / NFC card dedicated to tap maintenance and cleaning operations.
+    Same pattern as CartePrimaire in laboutik: OneToOne to CarteCashless.
+    LOCALISATION : controlvanne/models.py
+    """
+    carte = models.OneToOneField(
+        'QrcodeCashless.CarteCashless',
+        on_delete=models.CASCADE,
+        related_name='carte_maintenance',
+        verbose_name=_("NFC card"),
     )
-    degre_alcool = models.DecimalField(
-        "Degré d'alcool (%)", max_digits=4, decimal_places=1, default=Decimal("0.0")
-    )
-    volume_fut_l = models.DecimalField(
-        "Volume du fût (L)", max_digits=6, decimal_places=1, default=Decimal("30.0")
-    )
-    quantite_stock = models.PositiveIntegerField("Quantité en stock", default=0)
-    prix_achat = models.DecimalField(
-        "Prix d'achat (€)",
-        max_digits=8,
-        decimal_places=2,
-        null=True,
+    tireuses = models.ManyToManyField(
+        'controlvanne.TireuseBec',
         blank=True,
-        help_text="Prix d'achat du fût (facultatif)",
+        related_name='cartes_maintenance',
+        verbose_name=_("Authorized taps"),
+        help_text=_("Leave empty for all taps."),
     )
-    prix_litre = models.DecimalField(
-        "Prix au litre (€)",
-        max_digits=8,
-        decimal_places=2,
-        default=Decimal("10.00"),
-        help_text="Prix de vente par litre pour ce fût",
+    produit = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Cleaning product"),
+    )
+    notes = models.TextField(
+        blank=True,
+        verbose_name=_("Notes"),
     )
 
     class Meta:
-        verbose_name = "Fût"
-        verbose_name_plural = "Fûts"
-        ordering = ["nom"]
+        verbose_name = _("Maintenance card")
+        verbose_name_plural = _("Maintenance cards")
 
     def __str__(self):
-        return f"{self.nom} — {self.brasseur} ({self.volume_fut_l}L)"
+        return str(self.carte)
 
+
+# ──────────────────────────────────────────────────────────────────────
+# TireuseBec — tireuse physique
+# ──────────────────────────────────────────────────────────────────────
 
 class TireuseBec(models.Model):
+    """
+    Une tireuse physique (un bec) avec son fut actif, son debimetre, et son POS.
+    / A physical tap (one spout) with its active keg, flow meter, and POS.
+    LOCALISATION : controlvanne/models.py
+    """
     uuid = models.UUIDField(default=uuid4, primary_key=True, editable=False)
 
-    nom_tireuse = models.CharField(max_length=50, help_text="Nom affiché: ex. 'Bière', 'Soft'")
-
-    enabled = models.BooleanField("En service", default=True)
-    notes = models.CharField(max_length=200, blank=True)
-
-    @property
-    def liquid_label(self) -> str:
-        """Nom du liquide affiché sur le kiosk.
-        Déduit du fût actif ; retourne 'Liquide' si aucun fût n'est assigné."""
-        if self.fut_actif:
-            return self.fut_actif.nom
-        return "Liquide"
-
-    monnaie = models.CharField(
-        max_length=20,
-        default="patate",
-        help_text="Nom de l'unité de solde (ex: patate)",
+    nom_tireuse = models.CharField(
+        max_length=50,
+        verbose_name=_("Tap name"),
+        help_text=_("Display name: e.g. 'Beer', 'Soft drink'"),
     )
-
-    prix_litre_override = models.DecimalField(
-        "Prix au litre (override)",
-        max_digits=8,
-        decimal_places=2,
-        null=True,
+    enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("In service"),
+    )
+    notes = models.CharField(
+        max_length=200,
         blank=True,
-        help_text="Laisser vide pour utiliser le prix du fût. Renseigner pour forcer un prix sur cette tireuse (réservé admin).",
+        verbose_name=_("Notes"),
     )
 
-    @property
-    def prix_litre(self) -> Decimal:
-        """Prix effectif : override admin si défini ET non nul, sinon prix du fût, sinon 0.00.
-        Un override à zéro (ou vide) est ignoré : on remonte le prix du fût."""
-        if self.prix_litre_override is not None and self.prix_litre_override > 0:
-            return self.prix_litre_override
-        if self.fut_actif and self.fut_actif.prix_litre:
-            return self.fut_actif.prix_litre
-        return Decimal("0.00")
+    # --- Relations ---
 
-    @property
-    def reservoir_max_ml(self) -> float:
-        """Volume de référence (fût plein) en ml, pour calcul du % jauge."""
-        if self.fut_actif and self.fut_actif.volume_fut_l:
-            return float(self.fut_actif.volume_fut_l) * 1000
-        return float(self.reservoir_ml) if self.reservoir_ml else 1.0
-
-    @property
-    def unit_ml(self) -> Decimal:
-        """ml par unité de monnaie — calculé depuis prix_litre. Utilisé par le Pi.
-        Retourne 0.00 quand le prix est à zéro : signal « service gratuit »,
-        aucune facturation et volume limité par le stock (pas le solde)."""
-        if self.prix_litre and self.prix_litre > 0:
-            return (Decimal("1000") / self.prix_litre).quantize(Decimal("0.01"))
-        return Decimal("0.00")
-
-    fut_actif = models.ForeignKey(
-        "Fut",
+    point_de_vente = models.OneToOneField(
+        'laboutik.PointDeVente',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="tireuses_actives",
-        verbose_name="Fût en service",
+        related_name='tireuse',
+        verbose_name=_("Point of sale"),
+        help_text=_("POS linked to this tap (auto-created or manually assigned)."),
+    )
+
+    fut_actif = models.ForeignKey(
+        'BaseBillet.Product',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='tireuses_actives',
+        verbose_name=_("Active keg"),
+        limit_choices_to={'categorie_article': 'U'},
+        help_text=_("Product of type FUT currently on this tap."),
     )
 
     debimetre = models.ForeignKey(
-        "Debimetre",
+        'controlvanne.Debimetre',
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name="tireuses",
-        help_text="Débitmètre associé (détermine le facteur de calibration)",
+        related_name='tireuses',
+        verbose_name=_("Flow meter"),
+        help_text=_("Associated flow meter (determines calibration factor)."),
     )
 
+    pairing_device = models.ForeignKey(
+        'discovery.PairingDevice',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='tireuses',
+        verbose_name=_("Pairing device"),
+        help_text=_("Raspberry Pi or ESP32 controlling this tap."),
+    )
+
+    # --- Volume / jauge ---
 
     reservoir_ml = models.DecimalField(
-        "Volume restant",
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
-        help_text="Volume courant en ml (décrémenté en temps réel)",
+        verbose_name=_("Remaining volume"),
+        help_text=_("Current volume in ml (decremented in real time)."),
     )
     seuil_mini_ml = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
-        help_text="Seuil bas en ml (on réserve ce volume)",
+        verbose_name=_("Minimum threshold"),
+        help_text=_("Low threshold in ml (this volume is reserved)."),
     )
     appliquer_reserve = models.BooleanField(
-        default=True, help_text="Appliquer la réserve (stock - seuil)"
+        default=True,
+        verbose_name=_("Apply reserve"),
+        help_text=_("Apply reserve (stock - threshold)."),
     )
 
+    # --- Proprietes calculees ---
+
+    @property
+    def liquid_label(self) -> str:
+        """Nom du liquide affiche sur le kiosk.
+        Deduit du fut actif ; retourne 'Liquide' si aucun fut n'est assigne.
+        / Liquid name displayed on the kiosk.
+        Derived from the active keg; returns 'Liquide' if none assigned."""
+        if self.fut_actif:
+            return self.fut_actif.name
+        return "Liquide"
+
+    @property
+    def prix_litre(self) -> Decimal:
+        """Prix au litre depuis le premier Price poids_mesure du fut actif.
+        Retourne Decimal('0.00') si aucun prix n'est trouve.
+        / Per-liter price from the first poids_mesure Price of the active keg.
+        Returns Decimal('0.00') if no price found."""
+        if self.fut_actif:
+            price = self.fut_actif.prices.filter(poids_mesure=True).first()
+            if price and price.prix:
+                return price.prix
+        return Decimal("0.00")
+
+    @property
+    def reservoir_max_ml(self) -> float:
+        """Volume de reference (fut plein) en ml, pour calcul du % jauge.
+        Lit la quantite initiale depuis le Stock inventaire du fut actif.
+        / Reference volume (full keg) in ml, for gauge % calculation.
+        Reads initial quantity from the active keg's inventory Stock."""
+        if self.fut_actif:
+            try:
+                from inventaire.models import Stock
+                stock = Stock.objects.filter(product=self.fut_actif).first()
+                if stock and stock.quantite > 0:
+                    # Stock en centilitres → conversion en ml
+                    # / Stock in centiliters → convert to ml
+                    return float(stock.quantite) * 10
+            except Exception:
+                pass
+        return float(self.reservoir_ml) if self.reservoir_ml else 1.0
+
     class Meta:
-        verbose_name = "Tireuse"
-        verbose_name_plural = "Tireuses"
+        verbose_name = _("Tap")
+        verbose_name_plural = _("Taps")
 
     def __str__(self):
         return self.nom_tireuse
 
 
-class HistoriqueFut(models.Model):
-    tireuse_bec = models.ForeignKey(
-        TireuseBec,
-        on_delete=models.CASCADE,
-        related_name="historique_futs",
-        verbose_name="Tireuse",
-    )
-    fut = models.ForeignKey(
-        Fut,
-        on_delete=models.CASCADE,
-        related_name="historique",
-        verbose_name="Fût",
-    )
-    mis_en_service_le = models.DateTimeField("Mis en service le", default=timezone.now)
-    retire_le = models.DateTimeField("Retiré le", null=True, blank=True)
-    volume_initial_ml = models.DecimalField(
-        "Volume initial (ml)", max_digits=10, decimal_places=2, default=Decimal("0.00")
-    )
-    volume_final_ml = models.DecimalField(
-        "Volume final (ml)", max_digits=10, decimal_places=2, null=True, blank=True
-    )
-
-    class Meta:
-        verbose_name = "Historique fût"
-        verbose_name_plural = "Historique fûts"
-        ordering = ["-mis_en_service_le"]
-
-    @property
-    def volume_consomme_l(self):
-        if self.volume_final_ml is not None:
-            return float((self.volume_initial_ml - self.volume_final_ml) / 1000)
-        return None
-
-    def __str__(self):
-        return f"{self.tireuse_bec} ← {self.fut} ({self.mis_en_service_le:%Y-%m-%d})"
-
+# ──────────────────────────────────────────────────────────────────────
+# RfidSession — session de service (pose → depose de la carte NFC)
+# ──────────────────────────────────────────────────────────────────────
 
 class RfidSession(models.Model):
-    # presence continue d'une carte (de present=True a present=False)
-    uid = models.CharField(max_length=32, db_index=True)
-    card = models.ForeignKey(
-        Card, null=True, blank=True, on_delete=models.SET_NULL, related_name="sessions"
+    """
+    Presence continue d'une carte NFC sur une tireuse (de present=True a present=False).
+    Chaque session enregistre le volume servi, la tireuse, et la carte utilisee.
+    / Continuous presence of an NFC card on a tap (from present=True to present=False).
+    Each session records the volume served, the tap, and the card used.
+    LOCALISATION : controlvanne/models.py
+    """
+    uid = models.CharField(
+        max_length=32,
+        db_index=True,
+        verbose_name=_("Card UID"),
     )
-    label_snapshot = models.CharField(
-        "Nom carte", max_length=100, blank=True, help_text="Copie du label au début"
-    )
-    authorized = models.BooleanField("En service", default=False)
-    tireuse_bec = models.ForeignKey(
-        TireuseBec,
-        on_delete=models.CASCADE,
-        related_name="sessions",
+    carte = models.ForeignKey(
+        'QrcodeCashless.CarteCashless',
         null=True,
         blank=True,
-        verbose_name="Nom tireuse",
+        on_delete=models.SET_NULL,
+        related_name='rfid_sessions',
+        verbose_name=_("NFC card"),
+    )
+    label_snapshot = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Card name"),
+        help_text=_("Copy of the card label at session start."),
+    )
+    authorized = models.BooleanField(
+        default=False,
+        verbose_name=_("Authorized"),
+    )
+    tireuse_bec = models.ForeignKey(
+        'controlvanne.TireuseBec',
+        on_delete=models.CASCADE,
+        related_name='sessions',
+        null=True,
+        blank=True,
+        verbose_name=_("Tap"),
     )
     liquid_label_snapshot = models.CharField(
-        "Nom boisson", max_length=100, blank=True, help_text="Copie du nom du liquide au début"
-    )
-    unit_label_snapshot = models.CharField(max_length=20, blank=True, default="")
-    unit_ml_snapshot = models.DecimalField(
-        max_digits=8, decimal_places=2, default=Decimal("100.00")
+        max_length=100,
+        blank=True,
+        verbose_name=_("Beverage name"),
+        help_text=_("Copy of the liquid name at session start."),
     )
     allowed_ml_session = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0.00")
-    )
-    charged_units = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0.00")
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        verbose_name=_("Allowed ml"),
+        help_text=_("Maximum volume allowed for this session (ml)."),
     )
 
-    started_at = models.DateTimeField("Début", default=timezone.now, db_index=True)
-    ended_at = models.DateTimeField("Fin", null=True, blank=True, db_index=True)
-    volume_start_ml = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-    volume_end_ml = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-    volume_delta_ml = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-    dernier_volume_ml = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0.00")
+    # --- Lien vers la ligne de vente POS ---
+
+    ligne_article = models.ForeignKey(
+        'BaseBillet.LigneArticle',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='rfid_sessions',
+        verbose_name=_("Sale line"),
+        help_text=_("POS sale line created for this session."),
     )
-    is_maintenance = models.BooleanField("Session maintenance", default=False)
-    is_calibration = models.BooleanField("Session calibration", default=False)
+
+    # --- Temps ---
+
+    started_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name=_("Start"),
+    )
+    ended_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=_("End"),
+    )
+
+    # --- Volume ---
+
+    volume_start_ml = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        verbose_name=_("Volume start (ml)"),
+    )
+    volume_end_ml = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        verbose_name=_("Volume end (ml)"),
+    )
+    volume_delta_ml = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        verbose_name=_("Volume served (ml)"),
+    )
+    dernier_volume_ml = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        verbose_name=_("Last volume (ml)"),
+    )
+
+    # --- Maintenance / calibration ---
+
+    is_maintenance = models.BooleanField(
+        default=False,
+        verbose_name=_("Maintenance session"),
+    )
+    is_calibration = models.BooleanField(
+        default=False,
+        verbose_name=_("Calibration session"),
+    )
     volume_reel_ml = models.DecimalField(
-        "Volume réel (ml)",
-        max_digits=10, decimal_places=2,
-        null=True, blank=True,
-        help_text="Volume mesuré physiquement dans un verre gradué",
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Actual volume (ml)"),
+        help_text=_("Volume physically measured in a graduated glass."),
     )
     carte_maintenance = models.ForeignKey(
-        "CarteMaintenance", null=True, blank=True,
-        on_delete=models.SET_NULL, related_name="sessions",
-        verbose_name="Carte maintenance",
+        'controlvanne.CarteMaintenance',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='sessions',
+        verbose_name=_("Maintenance card"),
     )
     produit_maintenance_snapshot = models.CharField(
-        "Produit utilisé", max_length=100, blank=True,
+        max_length=100,
+        blank=True,
+        verbose_name=_("Cleaning product used"),
     )
 
-    balance_avant = models.DecimalField(
-        "Solde avant",
-        max_digits=12, decimal_places=2, null=True, blank=True,
-        help_text="Solde de la carte au début de la session",
+    # --- Divers ---
+
+    last_message = models.TextField(
+        blank=True,
+        default="",
+        verbose_name=_("Last message"),
     )
-    balance_apres = models.DecimalField(
-        "Solde après",
-        max_digits=12, decimal_places=2, null=True, blank=True,
-        help_text="Solde de la carte après facturation",
-    )
-    last_message = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["-started_at"]
-        verbose_name = "Session"
-        verbose_name_plural = "Sessions"
+        verbose_name = _("Session")
+        verbose_name_plural = _("Sessions")
 
     @property
     def duration_seconds(self):
+        """Duree de la session en secondes. None si la session est encore ouverte.
+        / Session duration in seconds. None if session is still open."""
         if not self.ended_at:
             return None
         return (self.ended_at - self.started_at).total_seconds()
 
     def close_with_volume(self, served_volume_ml: float):
         """
-        Clôt la session avec le volume cumulatif servi depuis le début de la session.
-        `served_volume_ml` est le volume total versé (Pi: flow_meter.volume_l()*1000 - session_start_vol),
-        cohérent avec ce que views.py stocke dans volume_delta_ml.
+        Clot la session avec le volume cumulatif servi depuis le debut de la session.
+        `served_volume_ml` est le volume total verse (Pi: flow_meter.volume_l()*1000 - session_start_vol),
+        coherent avec ce que views.py stocke dans volume_delta_ml.
+        / Close the session with the cumulative volume served since session start.
         """
         self.ended_at = timezone.now()
         vol = Decimal(str(float(served_volume_ml or 0))).quantize(Decimal("0.01"))
@@ -357,66 +466,41 @@ class RfidSession(models.Model):
         return f"{self.tireuse_bec.nom_tireuse}:{self.uid} [{status}] {self.started_at:%Y-%m-%d %H:%M:%S}"
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Proxy models — vues filtrees de RfidSession pour l'admin
+# ──────────────────────────────────────────────────────────────────────
+
 class SessionCalibration(RfidSession):
-    """Vue proxy de RfidSession filtrée sur les sessions de calibration débitmètre."""
+    """Vue proxy de RfidSession filtree sur les sessions de calibration debitmetre.
+    / Proxy view of RfidSession filtered on flow meter calibration sessions."""
     class Meta:
         proxy = True
-        verbose_name = "Session calibration"
-        verbose_name_plural = "Sessions calibration"
+        verbose_name = _("Calibration session")
+        verbose_name_plural = _("Calibration sessions")
 
 
 class HistoriqueMaintenance(RfidSession):
-    """Vue proxy de RfidSession filtrée sur les sessions maintenance."""
+    """Vue proxy de RfidSession filtree sur les sessions maintenance.
+    / Proxy view of RfidSession filtered on maintenance sessions."""
     class Meta:
         proxy = True
-        verbose_name = "Historique maintenance"
-        verbose_name_plural = "Historique maintenances"
+        verbose_name = _("Maintenance history")
+        verbose_name_plural = _("Maintenance history")
 
 
 class HistoriqueTireuse(RfidSession):
-    """Vue proxy de RfidSession centrée sur les débits par tireuse."""
+    """Vue proxy de RfidSession centree sur les debits par tireuse.
+    / Proxy view of RfidSession focused on volumes per tap."""
     class Meta:
         proxy = True
-        verbose_name = "Historique tireuse"
-        verbose_name_plural = "Historique tireuses"
+        verbose_name = _("Tap history")
+        verbose_name_plural = _("Tap history")
 
 
 class HistoriqueCarte(RfidSession):
-    """Vue proxy de RfidSession centrée sur les mouvements par carte."""
+    """Vue proxy de RfidSession centree sur les mouvements par carte.
+    / Proxy view of RfidSession focused on movements per card."""
     class Meta:
         proxy = True
-        verbose_name = "Historique carte"
-        verbose_name_plural = "Historique cartes"
-
-
-class Configuration(models.Model):
-    """
-    Singleton de configuration globale du serveur.
-    Un seul objet possible (pk=1 forcé dans save()).
-    """
-    allow_self_register = models.BooleanField(
-        "Autoriser l'auto-enregistrement des Pi",
-        default=False,
-        help_text=(
-            "Activez temporairement pour qu'un nouveau Pi puisse s'enregistrer "
-            "automatiquement au démarrage. Désactivez après l'enregistrement."
-        ),
-    )
-
-    class Meta:
-        verbose_name = "Configuration serveur"
-        verbose_name_plural = "Configuration serveur"
-
-    def save(self, *args, **kwargs):
-        # Singleton : on force toujours pk=1 pour qu'il n'existe qu'un seul objet
-        self.pk = 1
-        super().save(*args, **kwargs)
-
-    @classmethod
-    def get(cls):
-        """Retourne l'objet de configuration (le crée avec les defaults si absent)."""
-        obj, _ = cls.objects.get_or_create(pk=1)
-        return obj
-
-    def __str__(self):
-        return "Configuration serveur"
+        verbose_name = _("Card history")
+        verbose_name_plural = _("Card history")

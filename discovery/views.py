@@ -50,16 +50,36 @@ class ClaimPinView(APIView):
 
         server_url = f"https://{primary_domain.domain}"
 
-        # Basculer dans le schéma du tenant pour créer la clé API LaBoutik
-        # Switch to tenant schema to create the LaBoutik API key
+        # Basculer dans le schéma du tenant pour créer la clé API
+        # Le type de clé dépend de l'association du device :
+        # - TireuseAPIKey si le PairingDevice est lié à une TireuseBec
+        # - LaBoutikAPIKey sinon (terminal de caisse)
+        # / Switch to tenant schema to create the API key
+        # Key type depends on device association:
+        # - TireuseAPIKey if PairingDevice is linked to a TireuseBec
+        # - LaBoutikAPIKey otherwise (cash register terminal)
+        tireuse_uuid = None
         try:
             with tenant_context(tenant_for_this_device):
-                laboutik_key, api_key_string = LaBoutikAPIKey.objects.create_key(
-                    name=f"discovery-{pairing_device.uuid}"
-                )
+                # Vérifier si une tireuse est liée à ce PairingDevice
+                # / Check if a tap is linked to this PairingDevice
+                from controlvanne.models import TireuseBec, TireuseAPIKey
+                tireuse = TireuseBec.objects.filter(
+                    pairing_device=pairing_device
+                ).first()
+
+                if tireuse:
+                    _key_obj, api_key_string = TireuseAPIKey.objects.create_key(
+                        name=f"discovery-tireuse-{pairing_device.uuid}"
+                    )
+                    tireuse_uuid = str(tireuse.uuid)
+                else:
+                    _key_obj, api_key_string = LaBoutikAPIKey.objects.create_key(
+                        name=f"discovery-{pairing_device.uuid}"
+                    )
         except Exception as error:
             logger.error(
-                f"Discovery claim: failed to create LaBoutikAPIKey "
+                f"Discovery claim: failed to create API key "
                 f"for tenant {tenant_for_this_device.name}: {error}"
             )
             return Response(
@@ -75,8 +95,14 @@ class ClaimPinView(APIView):
             f"paired to tenant '{tenant_for_this_device.name}'"
         )
 
-        return Response({
+        response_data = {
             "server_url": server_url,
             "api_key": api_key_string,
             "device_name": pairing_device.name,
-        }, status=status.HTTP_200_OK)
+        }
+        # Si le device est lié à une tireuse, inclure l'UUID
+        # / If the device is linked to a tap, include the UUID
+        if tireuse_uuid:
+            response_data["tireuse_uuid"] = tireuse_uuid
+
+        return Response(response_data, status=status.HTTP_200_OK)

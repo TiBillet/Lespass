@@ -8,7 +8,7 @@ FLUX des connexions WebSocket :
 1. AllowedHostsOriginValidator — verifie que l'origine est autorisee
 2. WebSocketTenantMiddleware — resout le tenant depuis le hostname, set connection.tenant
 3. AuthMiddlewareStack — resout la session Django (scope["user"])
-4. URLRouter — route vers le consumer (wsocket/routing.py)
+4. URLRouter — route vers le consumer (wsocket/routing.py + controlvanne/routing.py)
 
 FLUX des connexions HTTP :
 1. django_asgi_app — traite par le middleware WSGI classique (TenantMainMiddleware inclus)
@@ -22,6 +22,7 @@ from django.core.asgi import get_asgi_application
 
 from wsocket.middlewares import WebSocketTenantMiddleware
 from wsocket.routing import websocket_urlpatterns
+from controlvanne.routing import websocket_urlpatterns as controlvanne_ws_urlpatterns
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "TiBillet.settings")
 
@@ -32,7 +33,7 @@ application = ProtocolTypeRouter(
         "http": django_asgi_app,
         "websocket": AllowedHostsOriginValidator(
             WebSocketTenantMiddleware(
-                AuthMiddlewareStack(URLRouter(websocket_urlpatterns))
+                AuthMiddlewareStack(URLRouter(websocket_urlpatterns + controlvanne_ws_urlpatterns))
             )
         ),
     }

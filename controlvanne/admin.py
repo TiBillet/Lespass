@@ -1,587 +1,662 @@
+"""
+Admin du module tireuse connectee (controlvanne).
+/ Admin for the connected tap module (controlvanne).
+
+LOCALISATION : controlvanne/admin.py
+
+Admins enregistres sur staff_admin_site :
+- DebitmetreAdmin
+- CarteMaintenanceAdmin
+- TireuseBecAdmin
+- RfidSessionAdmin
+- HistoriqueTireuseAdmin
+- HistoriqueCarteAdmin
+- HistoriqueMaintenanceAdmin
+- SessionCalibrationAdmin
+- ConfigurationAdmin
+"""
+
 import csv
 import datetime
-from django.contrib import admin, messages
+
+from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.http import HttpResponse
-from django.utils import timezone
-from django.utils.html import format_html
-from unfold.admin import ModelAdmin, TabularInline
-from .models import (Card, CarteMaintenance, Configuration, Debimetre, Fut, HistoriqueCarte,
-                     HistoriqueFut, HistoriqueMaintenance, HistoriqueTireuse,
-                     RfidSession, SessionCalibration, TireuseBec)
-from .forms import TireuseBecForm
+from django.utils.translation import gettext_lazy as _
+from unfold.admin import ModelAdmin
+
+from Administration.admin.site import staff_admin_site
+from ApiBillet.permissions import TenantAdminPermissionWithRequest
+from .models import (
+    CarteMaintenance,
+    Configuration,
+    Debimetre,
+    HistoriqueCarte,
+    HistoriqueMaintenance,
+    HistoriqueTireuse,
+    RfidSession,
+    SessionCalibration,
+    TireuseBec,
+)
 
 
-# ---------------------------------------------------------------------------
+# ──────────────────────────────────────────────────────────────────────
 # Filtre plage de dates (inputs Du / Au)
-# ---------------------------------------------------------------------------
+# / Date range filter (From / To inputs)
+# ──────────────────────────────────────────────────────────────────────
+
 class DateRangeFilter(SimpleListFilter):
-    title = "Période"
+    """
+    Filtre plage de dates avec inputs HTML date_from / date_to.
+    Le template est dans controlvanne/templates/admin/date_range_filter.html.
+    / Date range filter with HTML date_from / date_to inputs.
+    Template is in controlvanne/templates/admin/date_range_filter.html.
+    """
+    title = _("Period")
     parameter_name = "date_from"
     template = "admin/date_range_filter.html"
 
     def expected_parameters(self):
+        # Les deux parametres geres par ce filtre
+        # / Both parameters managed by this filter
         return ["date_from", "date_to"]
 
     def lookups(self, request, model_admin):
-        return (("_", "—"),)  # requis par SimpleListFilter
+        # Requis par SimpleListFilter meme si on ne l'utilise pas
+        # / Required by SimpleListFilter even if unused
+        return (("_", "—"),)
 
     def choices(self, changelist):
         yield {
-            "selected": not (changelist.params.get("date_from") or changelist.params.get("date_to")),
-            "query_string": changelist.get_query_string(remove=["date_from", "date_to"]),
-            "display": "Toutes",
+            "selected": not (
+                changelist.params.get("date_from") or changelist.params.get("date_to")
+            ),
+            "query_string": changelist.get_query_string(
+                remove=["date_from", "date_to"]
+            ),
+            "display": _("All"),
         }
 
     def queryset(self, request, queryset):
         date_from = request.GET.get("date_from")
-        date_to   = request.GET.get("date_to")
+        date_to = request.GET.get("date_to")
         try:
             if date_from:
-                queryset = queryset.filter(started_at__date__gte=datetime.date.fromisoformat(date_from))
+                queryset = queryset.filter(
+                    started_at__date__gte=datetime.date.fromisoformat(date_from)
+                )
             if date_to:
-                queryset = queryset.filter(started_at__date__lte=datetime.date.fromisoformat(date_to))
+                queryset = queryset.filter(
+                    started_at__date__lte=datetime.date.fromisoformat(date_to)
+                )
         except ValueError:
             pass
         return queryset
 
 
-@admin.register(Fut)
-class FutAdmin(ModelAdmin):
-    list_display = (
-        "nom",
-        "brasseur",
-        "type_biere",
-        "degre_alcool",
-        "volume_fut_l",
-        "quantite_stock",
-        "prix_litre",
-        "prix_achat",
-    )
-    list_editable = ("quantite_stock", "prix_litre", "prix_achat")
-    list_filter = ("type_biere", "brasseur")
-    search_fields = ("nom", "brasseur")
+# ──────────────────────────────────────────────────────────────────────
+# DebitmetreAdmin — gestion des capteurs de debit
+# / DebitmetreAdmin — flow meter management
+# ──────────────────────────────────────────────────────────────────────
 
+@admin.register(Debimetre, site=staff_admin_site)
+class DebitmetreAdmin(ModelAdmin):
+    """
+    Admin pour les debitmetres (capteurs de debit).
+    La colonne flow_calibration_factor est editable directement dans la liste.
+    / Admin for flow meters (flow sensors).
+    The flow_calibration_factor column is editable directly in the list.
+    """
+    list_display = ("name", "flow_calibration_factor")
+    list_editable = ("flow_calibration_factor",)
 
-class HistoriqueFutInline(TabularInline):
-    model = HistoriqueFut
-    extra = 0
-    readonly_fields = (
-        "fut",
-        "mis_en_service_le",
-        "retire_le",
-        "volume_initial_l",
-        "volume_final_l",
-        "volume_consomme",
-    )
-    fields = readonly_fields
-    ordering = ("-mis_en_service_le",)
-    can_delete = False
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return TenantAdminPermissionWithRequest(request)
 
-    @admin.display(description="Volume initial (L)")
-    def volume_initial_l(self, obj):
-        return f"{float(obj.volume_initial_ml) / 1000:.1f} L"
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
-    @admin.display(description="Volume final (L)")
-    def volume_final_l(self, obj):
-        if obj.volume_final_ml is not None:
-            return f"{float(obj.volume_final_ml) / 1000:.1f} L"
-        return "En service"
-
-    @admin.display(description="Consommé (L)")
-    def volume_consomme(self, obj):
-        v = obj.volume_consomme_l
-        if v is not None:
-            return f"{v:.1f} L"
-        return "—"
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
-@admin.register(HistoriqueFut)
-class HistoriqueFutAdmin(ModelAdmin):
-    list_display = (
-        "tireuse_bec",
-        "fut",
-        "mis_en_service_le",
-        "retire_le",
-        "volume_initial_l",
-        "volume_final_l",
-        "volume_consomme",
-    )
-    list_filter = ("tireuse_bec", "fut__type_biere")
-    date_hierarchy = "mis_en_service_le"
-    readonly_fields = (
-        "tireuse_bec",
-        "fut",
-        "mis_en_service_le",
-        "retire_le",
-        "volume_initial_ml",
-        "volume_final_ml",
-    )
+# ──────────────────────────────────────────────────────────────────────
+# CarteMaintenanceAdmin — cartes NFC de maintenance
+# / CarteMaintenanceAdmin — maintenance NFC cards
+# ──────────────────────────────────────────────────────────────────────
 
-    @admin.display(description="Volume initial (L)")
-    def volume_initial_l(self, obj):
-        return f"{float(obj.volume_initial_ml) / 1000:.1f} L"
+@admin.register(CarteMaintenance, site=staff_admin_site)
+class CarteMaintenanceAdmin(ModelAdmin):
+    """
+    Admin pour les cartes NFC de maintenance des tireuses.
+    autocomplete_fields sur carte pour choisir une CarteCashless existante.
+    / Admin for tap maintenance NFC cards.
+    autocomplete_fields on carte to select an existing CarteCashless.
+    """
+    list_display = ("carte_tag_id", "produit", "notes")
+    raw_id_fields = ("carte",)
+    search_fields = ("carte__tag_id", "produit", "notes")
 
-    @admin.display(description="Volume final (L)")
-    def volume_final_l(self, obj):
-        if obj.volume_final_ml is not None:
-            return f"{float(obj.volume_final_ml) / 1000:.1f} L"
-        return "En service"
+    @admin.display(description=_("Card (tag_id)"))
+    def carte_tag_id(self, obj):
+        # Afficher le tag_id de la carte associee
+        # / Display the tag_id of the linked card
+        return obj.carte.tag_id if obj.carte else "—"
 
-    @admin.display(description="Consommé (L)")
-    def volume_consomme(self, obj):
-        v = obj.volume_consomme_l
-        if v is not None:
-            return f"{v:.1f} L"
-        return "—"
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
-@admin.register(TireuseBec)
+# ──────────────────────────────────────────────────────────────────────
+# TireuseBecAdmin — tireuse physique (admin principal)
+# / TireuseBecAdmin — physical tap (main admin)
+# ──────────────────────────────────────────────────────────────────────
+
+@admin.register(TireuseBec, site=staff_admin_site)
 class TireuseBecAdmin(ModelAdmin):
-    inlines = [HistoriqueFutInline]
-    form = TireuseBecForm
-    actions = ["calibrer_debimetre"]
+    """
+    Admin principal pour les tireuses physiques.
+    list_editable sur fut_actif, debimetre, enabled pour modifier rapidement depuis la liste.
+    / Main admin for physical taps.
+    list_editable on fut_actif, debimetre, enabled for quick updates from the list.
+    """
     list_display = (
-        "name_with_uuid",
+        "nom_tireuse",
         "fut_actif",
         "debimetre",
-        "monnaie",
         "prix_effectif_display",
-        "col_25cl",
-        "col_33cl",
-        "col_50cl",
         "volume_restant_cl",
-        "seuil_mini_cl",
+        "enabled",
+    )
+    list_editable = ("fut_actif", "debimetre", "enabled")
+    readonly_fields = ("uuid",)
+    fields = (
+        "nom_tireuse",
+        "fut_actif",
+        "debimetre",
+        "point_de_vente",
+        "pairing_device",
+        "seuil_mini_ml",
         "appliquer_reserve",
         "enabled",
         "notes",
     )
-    list_editable = (
-        "fut_actif",
-        "debimetre",
-        "monnaie",
-        "enabled",
-    )
     search_fields = ("nom_tireuse", "notes")
 
-    @admin.display(description="Name")
-    def name_with_uuid(self, obj):
-        return format_html('<span title="UUID: {}">{}</span>', obj.uuid, obj.nom_tireuse)
-
-    @admin.display(description="UUID")
-    def uuid_readonly(self, obj):
-        return format_html(
-            '<code class="uuid-copy" style="cursor:pointer;padding:4px 8px;background:#f0f0f0;border-radius:4px;font-size:12px;" onclick="navigator.clipboard.writeText(\'{}\');alert(\'UUID copié!\')" title="Cliquer pour copier">{}</code>',
-            obj.uuid,
-            obj.uuid,
-        )
-
-    def get_readonly_fields(self, request, obj=None):
-        base = ("uuid", "col_25cl", "col_33cl", "col_50cl", "volume_restant_cl", "seuil_mini_cl", "prix_effectif_display")
-        # prix_litre_override réservé aux superusers
-        if not request.user.is_superuser:
-            base += ("prix_litre_override",)
-        return base + super().get_readonly_fields(request, obj)
-
-    @admin.display(description="Volume restant (cl)", ordering="reservoir_ml")
-    def volume_restant_cl(self, obj):
-        return f"{float(obj.reservoir_ml) / 10:.0f} cl"
-
-    @admin.display(description="Seuil mini (cl)", ordering="seuil_mini_ml")
-    def seuil_mini_cl(self, obj):
-        return f"{float(obj.seuil_mini_ml) / 10:.0f} cl"
-
-    @admin.display(description="Prix/Litre")
+    @admin.display(description=_("Price/Liter"))
     def prix_effectif_display(self, obj):
-        pL = obj.prix_litre  # propriété calculée
-        label = f"{pL} {obj.monnaie}"
-        if obj.prix_litre_override is not None and obj.prix_litre_override > 0:
-            return format_html('<span title="Override actif">{} ✎</span>', label)
-        return label
-
-    def _prix_volume(self, obj, cl):
-        from decimal import Decimal
-        pL = obj.prix_litre  # propriété calculée
-        if pL and pL > 0:
-            val = (pL * Decimal(str(cl)) / 100).quantize(Decimal("0.01"))
-            return f"{val} {obj.monnaie}"
+        """Prix au litre depuis le fut actif.
+        / Per-liter price from the active keg."""
+        prix = obj.prix_litre  # propriete calculee / computed property
+        if prix and prix > 0:
+            return f"{prix}"
         return "—"
 
-    @admin.display(description="25 cl")
-    def col_25cl(self, obj):
-        return self._prix_volume(obj, 25)
+    @admin.display(description=_("Remaining (cl)"), ordering="reservoir_ml")
+    def volume_restant_cl(self, obj):
+        """Volume restant en centilitres.
+        / Remaining volume in centiliters."""
+        return f"{float(obj.reservoir_ml) / 10:.0f} cl"
 
-    @admin.display(description="33 cl")
-    def col_33cl(self, obj):
-        return self._prix_volume(obj, 33)
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
-    @admin.display(description="50 cl")
-    def col_50cl(self, obj):
-        return self._prix_volume(obj, 50)
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
-    # def push_kiosk_url(self, request, queryset):
-    #     ch = get_channel_layer()
-    #     n = 0
-    #     for tb in queryset:
-    #         url = f"{request.scheme}://{request.get_host()}/?tireuse_bec={tb.uuid}"
-    #         async_to_sync(ch.group_send)(
-    #             f"rfid_state.{tb.uuid}",
-    #             {"type": "state_update", "payload": {"kiosk_url": url}},
-    #         )
-    #         n += 1
-    #     self.message_user(request, f"Nouvelle URL envoyée à {n} kiosque(s) via WebSocket.")
-    #
-    # push_kiosk_url.short_description = "Envoyer la bonne URL au kiosque (WebSocket)"
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
-    def calibrer_debimetre(self, request, queryset):
-        """Redirige vers le wizard de calibration pour la tireuse sélectionnée."""
-        from django.urls import reverse
-        from django.http import HttpResponseRedirect
-        if queryset.count() != 1:
-            self.message_user(
-                request,
-                "Sélectionnez une seule tireuse pour lancer la calibration.",
-                messages.WARNING,
-            )
-            return
-        tireuse = queryset.first()
-        return HttpResponseRedirect(
-            reverse("calibration_page", kwargs={"uuid": tireuse.uuid})
-        )
-
-    calibrer_debimetre.short_description = "Calibrer le débitmètre"
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
 
+# ──────────────────────────────────────────────────────────────────────
+# RfidSessionAdmin — toutes les sessions RFID
+# / RfidSessionAdmin — all RFID sessions
+# ──────────────────────────────────────────────────────────────────────
 
-@admin.register(Debimetre)
-class DebitmetreAdmin(ModelAdmin):
-    list_display = ("name", "flow_calibration_factor")
-    list_editable = ("flow_calibration_factor",)
-
-
-@admin.register(Card)
-class CardAdmin(ModelAdmin):
-    list_display = ("label", "uid", "solde_colore", "is_active", "valid_from", "valid_to")
-    list_editable = ("is_active",)
-    search_fields = ("uid", "label")
-    list_filter = ("is_active",)
-    ordering = ("-balance",)
-
-    @admin.display(description="Solde", ordering="balance")
-    def solde_colore(self, obj):
-        if obj.balance <= 0:
-            color = "#e74c3c"
-        elif obj.balance < 5:
-            color = "#f39c12"
-        else:
-            color = "#27ae60"
-        return format_html(
-            '<b style="color:{}">{} {}</b>',
-            color, obj.balance, "€",
-        )
-
-    actions = ["afficher_total", "export_cartes_csv"]
-
-    @admin.action(description="Afficher le solde total de la sélection")
-    def afficher_total(self, request, queryset):
-        from django.db.models import Sum
-        total = queryset.aggregate(t=Sum("balance"))["t"] or 0
-        nb = queryset.count()
-        self.message_user(
-            request,
-            f"Solde total ({nb} carte(s) sélectionnée(s)) : {total:.2f} €",
-            messages.INFO,
-        )
-
-    @admin.action(description="Exporter en CSV")
-    def export_cartes_csv(self, request, queryset):
-        from django.db.models import Sum
-        resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
-        resp["Content-Disposition"] = 'attachment; filename="cartes_soldes.csv"'
-        w = csv.writer(resp, delimiter=";")
-        w.writerow(["UID", "Nom carte", "Solde (€)", "Active", "Valide depuis", "Fin validité"])
-        for c in queryset.order_by("-balance"):
-            w.writerow([
-                c.uid, c.label, f"{c.balance:.2f}",
-                "Oui" if c.is_active else "Non",
-                c.valid_from.strftime("%Y-%m-%d") if c.valid_from else "",
-                c.valid_to.strftime("%Y-%m-%d") if c.valid_to else "",
-            ])
-        total = queryset.aggregate(t=Sum("balance"))["t"] or 0
-        w.writerow([])
-        w.writerow(["TOTAL", "", f"{total:.2f}", "", "", ""])
-        return resp
-
-
-@admin.register(RfidSession)
+@admin.register(RfidSession, site=staff_admin_site)
 class RfidSessionAdmin(ModelAdmin):
-    list_display = ("tireuse_bec", "liquid_label_snapshot", "uid", "authorized",
-                    "started_at", "ended_at", "volume_servi_cl", "label_snapshot")
+    """
+    Vue en lecture seule de toutes les sessions RFID.
+    / Read-only view of all RFID sessions.
+    """
+    list_display = (
+        "tireuse_bec",
+        "liquid_label_snapshot",
+        "uid",
+        "authorized",
+        "started_at",
+        "ended_at",
+        "volume_servi_cl",
+    )
     list_filter = ("authorized", "tireuse_bec")
-    search_fields = ("uid", "label_snapshot", "liquid_label_snapshot")
+    search_fields = ("uid", "label_snapshot")
     date_hierarchy = "started_at"
 
-    @admin.display(description="Volume servi (cl)", ordering="volume_delta_ml")
-    def volume_servi_cl(self, obj):
-        return f"{obj.volume_delta_ml / 10:.1f}"
-
-
-# ---------------------------------------------------------------------------
-# Historique tireuses
-# ---------------------------------------------------------------------------
-def _export_tireuses_csv(modeladmin, request, queryset):
-    resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
-    resp["Content-Disposition"] = 'attachment; filename="historique_tireuses.csv"'
-    w = csv.writer(resp, delimiter=";")
-    w.writerow(["Date", "Tireuse", "Boisson", "UID carte", "Nom carte",
-                "Volume servi (cl)", "Unités débitées", "Durée (s)", "Autorisé"])
-    total_vol = 0
-    total_units = 0
-    for s in queryset.order_by("started_at"):
-        vol_cl = float(s.volume_delta_ml / 10)
-        total_vol += vol_cl
-        total_units += float(s.charged_units or 0)
-        w.writerow([
-            s.started_at.strftime("%Y-%m-%d %H:%M"),
-            s.tireuse_bec.nom_tireuse if s.tireuse_bec else "",
-            s.liquid_label_snapshot,
-            s.uid,
-            s.label_snapshot,
-            f"{vol_cl:.1f}",
-            f"{float(s.charged_units or 0):.2f}",
-            s.duration_seconds or "",
-            "Oui" if s.authorized else "Non",
-        ])
-    w.writerow([])
-    w.writerow(["TOTAL", "", "", "", "", f"{total_vol:.1f}", f"{total_units:.2f}", "", ""])
-    return resp
-
-_export_tireuses_csv.short_description = "Exporter en CSV"
-
-
-@admin.register(HistoriqueTireuse)
-class HistoriqueTireuseAdmin(ModelAdmin):
-    list_display = ("started_at", "tireuse_bec", "liquid_label_snapshot",
-                    "uid", "label_snapshot", "volume_servi_cl",
-                    "montant", "duree_s")
-    list_filter = (DateRangeFilter, "tireuse_bec")
-    search_fields = ("uid", "label_snapshot", "liquid_label_snapshot")
-    date_hierarchy = "started_at"
-    actions = [_export_tireuses_csv]
-
-    def has_add_permission(self, request):
+    # Lecture seule — pas de creation ni de modification
+    # / Read-only — no creation or modification
+    def has_add_permission(self, request, obj=None):
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
 
-    @admin.display(description="Volume (cl)", ordering="volume_delta_ml")
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):
+        """Volume servi en centilitres.
+        / Volume served in centiliters."""
         return f"{obj.volume_delta_ml / 10:.1f}"
 
-    @admin.display(description="Montant", ordering="charged_units")
-    def montant(self, obj):
-        if obj.charged_units:
-            return f"{obj.charged_units:.2f} {obj.unit_label_snapshot}"
-        return "—"
 
-    @admin.display(description="Durée (s)", ordering="ended_at")
-    def duree_s(self, obj):
-        d = obj.duration_seconds
-        return int(d) if d is not None else "—"
+# ──────────────────────────────────────────────────────────────────────
+# Export CSV — fonctions partagees entre historiques
+# / CSV export — shared functions between histories
+# ──────────────────────────────────────────────────────────────────────
 
-
-# ---------------------------------------------------------------------------
-# Historique cartes
-# ---------------------------------------------------------------------------
-def _export_cartes_csv(modeladmin, request, queryset):
+def _export_tireuse_csv(modeladmin, request, queryset):
+    """
+    Exporte les sessions de debit par tireuse au format CSV.
+    / Exports tap volume sessions as CSV.
+    """
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
-    resp["Content-Disposition"] = 'attachment; filename="historique_cartes.csv"'
-    w = csv.writer(resp, delimiter=";")
-    w.writerow(["Date", "UID", "Nom carte", "Tireuse", "Boisson",
-                "Volume servi (cl)", "Unités débitées",
-                "Solde avant", "Solde après", "Durée (s)"])
-    for s in queryset.order_by("started_at"):
-        w.writerow([
-            s.started_at.strftime("%Y-%m-%d %H:%M"),
-            s.uid,
-            s.label_snapshot,
-            s.tireuse_bec.nom_tireuse if s.tireuse_bec else "",
-            s.liquid_label_snapshot,
-            f"{float(s.volume_delta_ml / 10):.1f}",
-            f"{float(s.charged_units or 0):.2f}",
-            f"{s.balance_avant:.2f}" if s.balance_avant is not None else "",
-            f"{s.balance_apres:.2f}" if s.balance_apres is not None else "",
-            s.duration_seconds or "",
+    resp["Content-Disposition"] = 'attachment; filename="historique_tireuse.csv"'
+    writer = csv.writer(resp, delimiter=";")
+    writer.writerow([
+        _("Date"),
+        _("Tap"),
+        _("Card UID"),
+        _("Card name"),
+        _("Beverage"),
+        _("Volume (cl)"),
+        _("Duration (s)"),
+        _("Sale line"),
+    ])
+    for session in queryset.order_by("started_at"):
+        writer.writerow([
+            session.started_at.strftime("%Y-%m-%d %H:%M"),
+            session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
+            session.uid,
+            session.label_snapshot,
+            session.liquid_label_snapshot,
+            f"{float(session.volume_delta_ml / 10):.1f}",
+            session.duration_seconds or "",
+            session.ligne_article_id or "",
         ])
     return resp
 
-_export_cartes_csv.short_description = "Exporter en CSV"
+
+_export_tireuse_csv.short_description = _("Export CSV")
 
 
-@admin.register(HistoriqueCarte)
+def _export_cartes_csv(modeladmin, request, queryset):
+    """
+    Exporte les sessions par carte au format CSV.
+    / Exports card sessions as CSV.
+    """
+    resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
+    resp["Content-Disposition"] = 'attachment; filename="historique_cartes.csv"'
+    writer = csv.writer(resp, delimiter=";")
+    writer.writerow([
+        _("Date"),
+        _("Card UID"),
+        _("Card name"),
+        _("Tap"),
+        _("Beverage"),
+        _("Volume (cl)"),
+        _("Duration (s)"),
+        _("Sale line"),
+    ])
+    for session in queryset.order_by("started_at"):
+        writer.writerow([
+            session.started_at.strftime("%Y-%m-%d %H:%M"),
+            session.uid,
+            session.label_snapshot,
+            session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
+            session.liquid_label_snapshot,
+            f"{float(session.volume_delta_ml / 10):.1f}",
+            session.duration_seconds or "",
+            session.ligne_article_id or "",
+        ])
+    return resp
+
+
+_export_cartes_csv.short_description = _("Export CSV")
+
+
+# ──────────────────────────────────────────────────────────────────────
+# HistoriqueTireuseAdmin — debits normaux par tireuse
+# / HistoriqueTireuseAdmin — normal volumes per tap
+# ──────────────────────────────────────────────────────────────────────
+
+@admin.register(HistoriqueTireuse, site=staff_admin_site)
+class HistoriqueTireuseAdmin(ModelAdmin):
+    """
+    Historique des sessions de service normales (ni maintenance ni calibration).
+    Inclut un filtre plage de dates et un export CSV.
+    / History of normal service sessions (not maintenance or calibration).
+    Includes date range filter and CSV export.
+    """
+    list_display = (
+        "started_at",
+        "tireuse_bec",
+        "liquid_label_snapshot",
+        "uid",
+        "label_snapshot",
+        "authorized",
+        "volume_servi_cl",
+    )
+    list_filter = (DateRangeFilter, "tireuse_bec", "authorized")
+    search_fields = ("uid", "label_snapshot", "liquid_label_snapshot")
+    date_hierarchy = "started_at"
+    actions = [_export_tireuse_csv]
+
+    def get_queryset(self, request):
+        # Exclure les sessions de maintenance et de calibration
+        # / Exclude maintenance and calibration sessions
+        return (
+            super()
+            .get_queryset(request)
+            .filter(is_maintenance=False, is_calibration=False)
+        )
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
+    def volume_servi_cl(self, obj):
+        """Volume servi en centilitres.
+        / Volume served in centiliters."""
+        return f"{obj.volume_delta_ml / 10:.1f}"
+
+
+# ──────────────────────────────────────────────────────────────────────
+# HistoriqueCarteAdmin — mouvements par carte NFC
+# / HistoriqueCarteAdmin — movements per NFC card
+# ──────────────────────────────────────────────────────────────────────
+
+@admin.register(HistoriqueCarte, site=staff_admin_site)
 class HistoriqueCarteAdmin(ModelAdmin):
-    list_display = ("started_at", "label_snapshot", "uid", "tireuse_bec",
-                    "liquid_label_snapshot", "volume_servi_cl",
-                    "montant", "balance_avant", "balance_apres")
-    list_filter = (DateRangeFilter, "tireuse_bec")
+    """
+    Historique des sessions centrees sur la carte NFC utilisee.
+    Inclut un filtre plage de dates et un export CSV.
+    / History of sessions focused on the NFC card used.
+    Includes date range filter and CSV export.
+    """
+    list_display = (
+        "started_at",
+        "label_snapshot",
+        "uid",
+        "tireuse_bec",
+        "liquid_label_snapshot",
+        "authorized",
+        "volume_servi_cl",
+    )
+    list_filter = (DateRangeFilter, "tireuse_bec", "authorized")
     search_fields = ("uid", "label_snapshot")
     date_hierarchy = "started_at"
     actions = [_export_cartes_csv]
 
-    def has_add_permission(self, request):
+    def has_add_permission(self, request, obj=None):
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
 
-    @admin.display(description="Volume (cl)", ordering="volume_delta_ml")
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):
+        """Volume servi en centilitres.
+        / Volume served in centiliters."""
         return f"{obj.volume_delta_ml / 10:.1f}"
 
-    @admin.display(description="Montant", ordering="charged_units")
-    def montant(self, obj):
-        if obj.charged_units:
-            return f"{obj.charged_units:.2f} {obj.unit_label_snapshot}"
-        return "—"
 
+# ──────────────────────────────────────────────────────────────────────
+# HistoriqueMaintenanceAdmin — sessions de maintenance
+# / HistoriqueMaintenanceAdmin — maintenance sessions
+# ──────────────────────────────────────────────────────────────────────
 
-# ---------------------------------------------------------------------------
-# Cartes maintenance
-# ---------------------------------------------------------------------------
-@admin.register(CarteMaintenance)
-class CarteMaintenanceAdmin(ModelAdmin):
-    list_display = ("label", "uid", "is_active", "produit", "notes")
-    list_editable = ("is_active",)
-    search_fields = ("uid", "label", "produit")
-    list_filter = ("is_active",)
-
-
-# ---------------------------------------------------------------------------
-# Historique maintenance
-# ---------------------------------------------------------------------------
 def _export_maintenance_csv(modeladmin, request, queryset):
+    """
+    Exporte les sessions de maintenance au format CSV.
+    / Exports maintenance sessions as CSV.
+    """
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
     resp["Content-Disposition"] = 'attachment; filename="historique_maintenance.csv"'
-    w = csv.writer(resp, delimiter=";")
-    w.writerow(["Date", "Tireuse", "UID carte", "Carte maintenance", "Produit", "Volume (cl)", "Durée (s)"])
+    writer = csv.writer(resp, delimiter=";")
+    writer.writerow([
+        _("Date"),
+        _("Tap"),
+        _("Card UID"),
+        _("Maintenance card"),
+        _("Cleaning product"),
+        _("Volume (cl)"),
+        _("Duration (s)"),
+    ])
     total_vol = 0
-    for s in queryset.order_by("started_at"):
-        vol_cl = float(s.volume_delta_ml / 10)
+    for session in queryset.order_by("started_at"):
+        vol_cl = float(session.volume_delta_ml / 10)
         total_vol += vol_cl
-        w.writerow([
-            s.started_at.strftime("%Y-%m-%d %H:%M"),
-            s.tireuse_bec.nom_tireuse if s.tireuse_bec else "",
-            s.uid,
-            str(s.carte_maintenance) if s.carte_maintenance else "",
-            s.produit_maintenance_snapshot,
+        writer.writerow([
+            session.started_at.strftime("%Y-%m-%d %H:%M"),
+            session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
+            session.uid,
+            str(session.carte_maintenance) if session.carte_maintenance else "",
+            session.produit_maintenance_snapshot,
             f"{vol_cl:.1f}",
-            s.duration_seconds or "",
+            session.duration_seconds or "",
         ])
-    w.writerow([])
-    w.writerow(["TOTAL", "", "", "", "", f"{total_vol:.1f}", ""])
+    # Ligne de total en bas du CSV / Total row at the bottom
+    writer.writerow([])
+    writer.writerow([_("TOTAL"), "", "", "", "", f"{total_vol:.1f}", ""])
     return resp
 
-_export_maintenance_csv.short_description = "Exporter en CSV"
+
+_export_maintenance_csv.short_description = _("Export CSV")
 
 
-@admin.register(HistoriqueMaintenance)
+@admin.register(HistoriqueMaintenance, site=staff_admin_site)
 class HistoriqueMaintenanceAdmin(ModelAdmin):
-    list_display = ("started_at", "tireuse_bec", "uid", "carte_maintenance",
-                    "produit_maintenance_snapshot", "volume_servi_cl", "duree_s")
+    """
+    Historique filtre sur les sessions de maintenance (is_maintenance=True).
+    / History filtered on maintenance sessions (is_maintenance=True).
+    """
+    list_display = (
+        "started_at",
+        "tireuse_bec",
+        "uid",
+        "carte_maintenance",
+        "produit_maintenance_snapshot",
+        "volume_servi_cl",
+        "duree_s",
+    )
     list_filter = (DateRangeFilter, "tireuse_bec")
     search_fields = ("uid", "produit_maintenance_snapshot")
     date_hierarchy = "started_at"
     actions = [_export_maintenance_csv]
 
     def get_queryset(self, request):
+        # Filtrer uniquement les sessions de maintenance
+        # / Filter only maintenance sessions
         return super().get_queryset(request).filter(is_maintenance=True)
 
-    def has_add_permission(self, request):
+    def has_add_permission(self, request, obj=None):
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
 
-    @admin.display(description="Volume (cl)", ordering="volume_delta_ml")
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @admin.display(description=_("Volume (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):
+        """Volume servi en centilitres.
+        / Volume served in centiliters."""
         return f"{obj.volume_delta_ml / 10:.1f}"
 
-    @admin.display(description="Durée (s)", ordering="ended_at")
+    @admin.display(description=_("Duration (s)"), ordering="ended_at")
     def duree_s(self, obj):
-        d = obj.duration_seconds
-        return int(d) if d is not None else "—"
+        """Duree de la session en secondes.
+        / Session duration in seconds."""
+        duree = obj.duration_seconds
+        return int(duree) if duree is not None else "—"
 
 
-# ---------------------------------------------------------------------------
-# Sessions calibration
-# ---------------------------------------------------------------------------
-@admin.register(SessionCalibration)
+# ──────────────────────────────────────────────────────────────────────
+# SessionCalibrationAdmin — sessions de calibration du debitmetre
+# / SessionCalibrationAdmin — flow meter calibration sessions
+# ──────────────────────────────────────────────────────────────────────
+
+@admin.register(SessionCalibration, site=staff_admin_site)
 class SessionCalibrationAdmin(ModelAdmin):
-    list_display = ("started_at", "tireuse_bec", "uid",
-                    "volume_servi_cl", "volume_reel_cl", "ecart_pct", "duree_s_cal")
+    """
+    Historique filtre sur les sessions de calibration (is_calibration=True).
+    Affiche le volume mesure par Django vs le volume reel verse dans un verre gradue,
+    et calcule l'ecart en pourcentage.
+    / History filtered on calibration sessions (is_calibration=True).
+    Shows the volume measured by Django vs the actual volume poured in a graduated glass,
+    and calculates the percentage difference.
+    """
+    list_display = (
+        "started_at",
+        "tireuse_bec",
+        "uid",
+        "volume_servi_cl",
+        "volume_reel_cl",
+        "ecart_pct",
+        "duree_s",
+    )
     list_filter = (DateRangeFilter, "tireuse_bec")
     search_fields = ("uid",)
     date_hierarchy = "started_at"
 
     def get_queryset(self, request):
+        # Filtrer uniquement les sessions de calibration
+        # / Filter only calibration sessions
         return super().get_queryset(request).filter(is_calibration=True)
 
-    def has_add_permission(self, request):
+    def has_add_permission(self, request, obj=None):
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
 
-    @admin.display(description="Django (cl)", ordering="volume_delta_ml")
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @admin.display(description=_("Django (cl)"), ordering="volume_delta_ml")
     def volume_servi_cl(self, obj):
+        """Volume mesure par le debitmetre en centilitres.
+        / Volume measured by the flow meter in centiliters."""
         return f"{obj.volume_delta_ml / 10:.1f}"
 
-    @admin.display(description="Verre (cl)", ordering="volume_reel_ml")
+    @admin.display(description=_("Glass (cl)"), ordering="volume_reel_ml")
     def volume_reel_cl(self, obj):
+        """Volume reel verse dans un verre gradue en centilitres.
+        / Actual volume poured in a graduated glass in centiliters."""
         if obj.volume_reel_ml:
             return f"{obj.volume_reel_ml / 10:.1f}"
         return "—"
 
-    @admin.display(description="Écart")
+    @admin.display(description=_("Deviation"))
     def ecart_pct(self, obj):
+        """Ecart entre le volume Django et le volume reel en pourcentage.
+        / Deviation between Django volume and actual volume as a percentage."""
         if obj.volume_reel_ml and obj.volume_delta_ml:
             ecart = (
                 (float(obj.volume_delta_ml) - float(obj.volume_reel_ml))
-                / float(obj.volume_reel_ml) * 100
+                / float(obj.volume_reel_ml)
+                * 100
             )
             return f"{ecart:+.1f}%"
         return "—"
 
-    @admin.display(description="Durée (s)", ordering="ended_at")
-    def duree_s_cal(self, obj):
-        d = obj.duration_seconds
-        return int(d) if d is not None else "—"
+    @admin.display(description=_("Duration (s)"), ordering="ended_at")
+    def duree_s(self, obj):
+        """Duree de la session en secondes.
+        / Session duration in seconds."""
+        duree = obj.duration_seconds
+        return int(duree) if duree is not None else "—"
 
 
-# ---------------------------------------------------------------------------
-# Configuration serveur (singleton)
-# ---------------------------------------------------------------------------
-@admin.register(Configuration)
+# ──────────────────────────────────────────────────────────────────────
+# ConfigurationAdmin — singleton de configuration
+# / ConfigurationAdmin — configuration singleton
+# ──────────────────────────────────────────────────────────────────────
+
+@admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(ModelAdmin):
     """
-    Singleton : un seul objet possible.
-    La liste redirige directement vers le formulaire de cet objet.
+    Admin singleton : un seul objet possible (django-solo).
+    La vue liste redirige directement vers le formulaire unique.
+    / Singleton admin: only one object possible (django-solo).
+    The list view redirects directly to the single form.
     """
 
-    def has_add_permission(self, request):
-        # On bloque l'ajout si l'objet existe déjà
+    def has_add_permission(self, request, obj=None):
+        # Bloquer l'ajout si l'objet existe deja
+        # / Block addition if object already exists
         return not Configuration.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
+        # Le singleton ne doit pas etre supprime
+        # / The singleton must not be deleted
         return False
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
     def changelist_view(self, request, extra_context=None):
-        # Redirige la vue liste directement vers le formulaire unique
+        """
+        Redirige la vue liste directement vers le formulaire de configuration unique.
+        / Redirect the list view directly to the single configuration form.
+        """
         from django.shortcuts import redirect
         from django.urls import reverse
-        obj = Configuration.get()
-        return redirect(reverse("admin:controlvanne_configuration_change", args=[obj.pk]))
+        obj = Configuration.get_solo()
+        return redirect(
+            reverse("staff_admin:controlvanne_configuration_change", args=[obj.pk])
+        )

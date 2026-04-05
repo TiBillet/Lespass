@@ -398,12 +398,16 @@ class PointDeVente(models.Model):
     CASHLESS = 'C'
     BILLETTERIE = 'T'
     AVANCE = 'V'
+    # Tireuse connectee — accepte uniquement le paiement cashless NFC
+    # / Connected tap — accepts only NFC cashless payment
+    TIREUSE = 'I'
     COMPORTEMENT_CHOICES = [
         (DIRECT, _('Direct')),
         (ADHESION, _('Memberships')),
         (CASHLESS, _('Cashless')),
         (BILLETTERIE, _('Ticketing')),
         (AVANCE, _('Advanced')),
+        (TIREUSE, _('Connected tap')),
     ]
     comportement = models.CharField(
         max_length=1, choices=COMPORTEMENT_CHOICES, default=DIRECT,

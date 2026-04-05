@@ -21,7 +21,7 @@ class WsPayload(TypedDict, total=False):
     liquid_label: str          # Nom de la boisson affichée
     balance: str               # Solde de la carte (Decimal sérialisé en str)
     prix_litre: str            # Prix effectif au litre (Decimal sérialisé en str)
-    monnaie: str               # Unité monétaire (ex: "patate", "€")
+    currency: str              # Symbole monétaire, toujours "€" (ex-champ monnaie, supprimé en Phase 1)
 
     # --- Niveau du réservoir ---
     reservoir_ml: float        # Volume restant estimé (ml)

@@ -20,14 +20,17 @@
       <div style="margin-bottom:5px;">
         <label style="display:block; font-size:11px; color:#666; margin-bottom:2px;">Du :</label>
         <input type="date" name="date_from" value="{{ request.GET.date_from }}"
+               data-testid="filter-date-from"
                style="width:100%; box-sizing:border-box; border:1px solid #ccc; border-radius:3px; padding:3px 5px; font-size:12px;">
       </div>
       <div style="margin-bottom:6px;">
         <label style="display:block; font-size:11px; color:#666; margin-bottom:2px;">Au :</label>
         <input type="date" name="date_to" value="{{ request.GET.date_to }}"
+               data-testid="filter-date-to"
                style="width:100%; box-sizing:border-box; border:1px solid #ccc; border-radius:3px; padding:3px 5px; font-size:12px;">
       </div>
       <input type="submit" value="Filtrer"
+             data-testid="btn-filtrer-dates"
              style="width:100%; background:#417690; color:white; border:none; border-radius:3px; padding:5px; cursor:pointer; font-size:12px;">
     </form>
   </li>

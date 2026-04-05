@@ -48,6 +48,10 @@ urlpatterns = [
 
     path('laboutik/', include('laboutik.urls')),
 
+    # Tireuses connectees (controlvanne) — API Pi + kiosk + calibration
+    # / Connected beer taps (controlvanne) — Pi API + kiosk + calibration
+    path('controlvanne/', include('controlvanne.urls')),
+
     # Endpoints inventaire (stock + debit metre) / Inventory endpoints
     path('api/inventaire/', include('inventaire.urls')),
 

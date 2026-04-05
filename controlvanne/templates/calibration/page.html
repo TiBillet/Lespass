@@ -1,17 +1,13 @@
-{% extends "base.html" %}
+{% extends "admin/base_site.html" %}
+{% load i18n %}
 {% block title %}Calibration — {{ tireuse.nom_tireuse }}{% endblock %}
 
-{% block head %}
-<script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
-{% endblock %}
-
 {% block content %}
-<div class="row justify-content-center">
+<div class="row justify-content-center" data-testid="calibration-page">
   <div class="col-12 col-md-10 col-lg-8">
 
     {# En-tête #}
     <div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
-      <a href="/admin/controlvanne/tireusebec/" class="btn btn-sm btn-outline-secondary">← Admin</a>
       <h2 class="mb-0 text-white">Calibration — {{ tireuse.nom_tireuse }}</h2>
     </div>
 
@@ -36,7 +32,7 @@
         {% else %}
           <div class="alert alert-danger mt-2 mb-0">
             ⚠️ La tireuse doit être <strong>désactivée</strong> (mode maintenance) pour pouvoir calibrer.
-            <a href="/admin/controlvanne/tireusebec/{{ tireuse.uuid }}/change/" class="alert-link ms-1">
+            <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}" class="alert-link ms-1">
               Désactiver dans l'admin →
             </a>
           </div>
@@ -45,8 +41,8 @@
     </div>
 
     {# Mode opératoire #}
-    <div class="card mb-4">
-      <div class="card-header" style="color:#111"><strong>Mode opératoire</strong></div>
+    <div class="card mb-4" data-testid="calibration-procedure">
+      <div class="card-header" style="color:#111"><strong>{% translate "Operating procedure" %}</strong></div>
       <div class="card-body" style="color:#111">
         <ol class="mb-0">
           <li>Désactivez la tireuse dans l'admin <em>(si pas déjà fait)</em></li>
@@ -64,10 +60,10 @@
     {% if sessions_en_attente %}
     <div class="card mb-4 border-warning">
       <div class="card-header bg-warning text-dark">
-        <strong>Mesures en attente de saisie ({{ sessions_en_attente|length }})</strong>
+        <strong>{% translate "Measurements awaiting input" %} ({{ sessions_en_attente|length }})</strong>
       </div>
       <div class="card-body p-0">
-        <table class="table table-sm mb-0" style="color:#111">
+        <table class="table table-sm mb-0" style="color:#111" data-testid="calibration-sessions">
           <thead class="table-light">
             <tr>
               <th>Date</th>
@@ -113,7 +109,7 @@
     </div>
     {% else %}
     <div class="alert alert-info mb-4">
-      Aucune mesure en attente.
+      {% translate "No measurements pending." %}
       {% if tireuse.enabled %}
         Désactivez d'abord la tireuse puis passez une carte maintenance pour verser du liquide.
       {% else %}

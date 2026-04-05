@@ -82,7 +82,7 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
             "reservoir_ml": float(tb.reservoir_ml),
             "reservoir_max_ml": tb.reservoir_max_ml,
             "prix_litre": str(tb.prix_litre),
-            "monnaie": tb.monnaie,
+            "currency": "€",
             "message": open_s.last_message if open_s else "",
             "uid": open_s.uid if open_s else None,
         }

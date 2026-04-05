@@ -1,7 +1,8 @@
 {# Fragment HTMX — remplace la ligne <tr id="mesure-X"> après soumission du volume réel #}
+{% load i18n %}
 
 {% if erreur %}
-<tr id="mesure-{{ session.pk }}" class="table-danger">
+<tr id="mesure-{{ session.pk }}" class="table-danger" data-testid="calibration-mesure-{{ session.pk }}">
   <td>{{ session.started_at|date:"d/m H:i" }}</td>
   <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
   <td>{{ session.volume_delta_ml|floatformat:0 }} ml</td>
@@ -15,14 +16,15 @@
       <input type="number" name="volume_reel_ml"
              min="1" max="2000" step="1"
              placeholder="ex : 487"
-             class="form-control form-control-sm" style="width:110px" required>
-      <button type="submit" class="btn btn-sm btn-primary">Calculer</button>
+             class="form-control form-control-sm" style="width:110px" required
+             data-testid="input-volume-reel">
+      <button type="submit" class="btn btn-sm btn-primary" data-testid="btn-calculer">{% translate "Calculate" %}</button>
     </form>
   </td>
 </tr>
 
 {% else %}
-<tr id="mesure-{{ session.pk }}" class="table-success">
+<tr id="mesure-{{ session.pk }}" class="table-success" data-testid="calibration-mesure-{{ session.pk }}">
   <td>{{ session.started_at|date:"d/m H:i" }}</td>
   <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
   <td>{{ session.volume_delta_ml|floatformat:0 }} ml</td>

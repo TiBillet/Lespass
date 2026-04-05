@@ -336,6 +336,91 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- module_tireuse : Tireuses connectees ---
+    # / --- module_tireuse: Connected beer taps ---
+    if configuration.module_tireuse:
+        navigation.append(
+            {
+                "title": _("Tireuses"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Taps"),
+                        "icon": "local_bar",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_tireusebec_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Flow meters"),
+                        "icon": "speed",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_debimetre_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Maintenance cards"),
+                        "icon": "build",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_cartemaintenance_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Sessions"),
+                        "icon": "history",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_rfidsession_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Tap history"),
+                        "icon": "timeline",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_historiquetireuse_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Card history"),
+                        "icon": "manage_search",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_historiquecarte_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Maintenance history"),
+                        "icon": "plumbing",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_historiquemaintenance_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Calibration"),
+                        "icon": "tune",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_sessioncalibration_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Server configuration"),
+                        "icon": "settings",
+                        "link": reverse_lazy(
+                            "staff_admin:controlvanne_configuration_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
     # --- Toujours visible : Ventes & comptabilite ---
     # / --- Always visible: Sales & accounting ---
     navigation.append(
@@ -552,6 +637,15 @@ MODULE_FIELDS = {
             "Stock management for POS products: tracking, alerts, movements."
         ),
         "testid": "dashboard-card-inventaire",
+    },
+    # Tireuses connectees avec paiement NFC (controlvanne)
+    # / Connected beer taps with NFC payment (controlvanne)
+    "module_tireuse": {
+        "name": _("Connected taps"),
+        "description": _(
+            "Connected beer tap management: RFID authorization, flow metering, kiosk display."
+        ),
+        "testid": "dashboard-card-tireuse",
     },
 }
 
