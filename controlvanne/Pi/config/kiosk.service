@@ -1,0 +1,28 @@
+[Unit]
+Description=Chromium Kiosk
+After=systemd-user-sessions.service network-online.target
+Wants=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+User=sysop
+WorkingDirectory=/home/sysop
+StandardInput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+PAMName=login
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/sysop/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+ExecStartPre=/bin/sh -c 'setterm -blank 0 -powersave off -powerdown 0 </dev/tty1; \
+                         mkdir -p /run/user/1000; chown 1000:1000 /run/user/1000; \
+                         chvt 1 || true; sleep 0.2'
+# Log Xorg dédié verbeux
+
+ExecStart=/usr/bin/xinit /home/sysop/xinitrc.bash -- /usr/lib/xorg/Xorg :0 -nolisten tcp -logverbose 6 -verbose 6 -logfile /home/sysop/Xorg.kiosk.log vt1 -keeptty
+Restart=on-failure
+RestartSec=8
+
+[Install]
+WantedBy=multi-user.target
