@@ -19,12 +19,13 @@ L'utilisateur final (le lieu/association) n'a jamais acces a la cle.
 / The HMAC key is per tenant, Fernet-encrypted in LaboutikConfiguration.
 The end user (venue/association) never has access to the key.
 """
+
 import hmac
 import hashlib
 import json
 
 
-def calculer_hmac(ligne, cle_secrete, previous_hmac=''):
+def calculer_hmac(ligne, cle_secrete, previous_hmac=""):
     """
     Calcule le HMAC-SHA256 d'une LigneArticle chainee avec la precedente.
     Les champs hashes sont ceux qui impactent le rapport comptable.
@@ -38,26 +39,33 @@ def calculer_hmac(ligne, cle_secrete, previous_hmac=''):
     :param previous_hmac: str — HMAC de la ligne precedente ('' si premiere)
     :return: str — empreinte HMAC-SHA256 de 64 caracteres hex
     """
-    donnees = json.dumps([
-        str(ligne.uuid),
-        str(ligne.datetime.isoformat()) if ligne.datetime else '',
-        ligne.amount,
-        ligne.total_ht,
-        # Normaliser qty et vat en string avec 6 decimales pour que le hash
-        # soit identique que l'objet vienne de la memoire (int/float)
-        # ou de la DB (Decimal avec 6 decimales).
-        # / Normalize qty and vat to 6-decimal strings so the hash is
-        # identical whether the object comes from memory or from DB.
-        f"{float(ligne.qty):.6f}",
-        f"{float(ligne.vat):.2f}",
-        ligne.payment_method or '',
-        ligne.status or '',
-        ligne.sale_origin or '',
-        previous_hmac,
-    ])
+    donnees = json.dumps(
+        [
+            str(ligne.uuid),
+            str(ligne.datetime.isoformat()) if ligne.datetime else "",
+            ligne.amount,
+            ligne.total_ht,
+            # Normaliser qty et vat en string avec 6 decimales pour que le hash
+            # soit identique que l'objet vienne de la memoire (int/float)
+            # ou de la DB (Decimal avec 6 decimales).
+            # / Normalize qty and vat to 6-decimal strings so the hash is
+            # identical whether the object comes from memory or from DB.
+            f"{float(ligne.qty):.6f}",
+            f"{float(ligne.vat):.2f}",
+            ligne.payment_method or "",
+            ligne.status or "",
+            ligne.sale_origin or "",
+            # Quantite poids/volume saisie par le caissier (donnee elementaire LNE exigence 3).
+            # None → '' pour retrocompatibilite avec les lignes existantes.
+            # / Weight/volume quantity entered by cashier (LNE elementary data requirement 3).
+            # None → '' for backward compatibility with existing lines.
+            str(ligne.weight_quantity) if ligne.weight_quantity is not None else "",
+            previous_hmac,
+        ]
+    )
     return hmac.new(
-        cle_secrete.encode('utf-8'),
-        donnees.encode('utf-8'),
+        cle_secrete.encode("utf-8"),
+        donnees.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
 
@@ -72,13 +80,19 @@ def obtenir_previous_hmac(sale_origin=None):
     LOCALISATION : laboutik/integrity.py
     """
     from BaseBillet.models import LigneArticle, SaleOrigin
+
     if sale_origin is None:
         sale_origin = SaleOrigin.LABOUTIK
-    derniere_hmac = LigneArticle.objects.filter(
-        sale_origin=sale_origin,
-        hmac_hash__gt='',
-    ).order_by('-datetime', '-pk').values_list('hmac_hash', flat=True).first()
-    return derniere_hmac or ''
+    derniere_hmac = (
+        LigneArticle.objects.filter(
+            sale_origin=sale_origin,
+            hmac_hash__gt="",
+        )
+        .order_by("-datetime", "-pk")
+        .values_list("hmac_hash", flat=True)
+        .first()
+    )
+    return derniere_hmac or ""
 
 
 def verifier_chaine(lignes_queryset, cle_secrete):
@@ -96,9 +110,9 @@ def verifier_chaine(lignes_queryset, cle_secrete):
     """
     erreurs = []
     corrections_tracees = []
-    previous = ''
+    previous = ""
 
-    for ligne in lignes_queryset.order_by('datetime', 'pk'):
+    for ligne in lignes_queryset.order_by("datetime", "pk"):
         # Les lignes pre-migration n'ont pas de HMAC — on les ignore
         # / Pre-migration lines have no HMAC — skip them
         if not ligne.hmac_hash:
@@ -114,30 +128,35 @@ def verifier_chaine(lignes_queryset, cle_secrete):
             correction_trouvee = False
             try:
                 from laboutik.models import CorrectionPaiement
+
                 correction = CorrectionPaiement.objects.filter(
                     ligne_article=ligne,
                 ).first()
                 if correction:
                     correction_trouvee = True
-                    corrections_tracees.append({
-                        'uuid': str(ligne.uuid),
-                        'correction_uuid': str(correction.uuid),
-                        'ancien_moyen': correction.ancien_moyen,
-                        'nouveau_moyen': correction.nouveau_moyen,
-                        'raison': correction.raison,
-                    })
+                    corrections_tracees.append(
+                        {
+                            "uuid": str(ligne.uuid),
+                            "correction_uuid": str(correction.uuid),
+                            "ancien_moyen": correction.ancien_moyen,
+                            "nouveau_moyen": correction.nouveau_moyen,
+                            "raison": correction.raison,
+                        }
+                    )
             except (ImportError, LookupError):
                 # Le modele CorrectionPaiement n'existe pas encore
                 # / CorrectionPaiement model doesn't exist yet
                 pass
 
             if not correction_trouvee:
-                erreurs.append({
-                    'uuid': str(ligne.uuid),
-                    'datetime': str(ligne.datetime),
-                    'attendu': attendu,
-                    'trouve': ligne.hmac_hash,
-                })
+                erreurs.append(
+                    {
+                        "uuid": str(ligne.uuid),
+                        "datetime": str(ligne.datetime),
+                        "attendu": attendu,
+                        "trouve": ligne.hmac_hash,
+                    }
+                )
 
         previous = ligne.hmac_hash
 
@@ -178,6 +197,7 @@ def ligne_couverte_par_cloture(ligne):
     LOCALISATION : laboutik/integrity.py
     """
     from laboutik.models import ClotureCaisse
+
     return ClotureCaisse.objects.filter(
         niveau=ClotureCaisse.JOURNALIERE,
         datetime_ouverture__lte=ligne.datetime,

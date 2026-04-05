@@ -19,6 +19,7 @@
 	<link rel="stylesheet" href="{% static 'css/ventes.css' %}" />
 	<link rel="stylesheet" href="{% static 'css/ws_indicator.css' %}" />
 	<link rel="stylesheet" href="{% static 'css/sortie_de_caisse.css' %}" />
+	<link rel="stylesheet" href="{% static 'css/tarif.css' %}" />
 	<!-- Material Symbols Outlined — icônes de l'interface caisse / POS interface icons -->
 	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" />
 	<link rel="icon" href="{% static 'images/favicon.ico' %}" />
@@ -95,11 +96,11 @@
 	#confirm  (layer 2) : confirmation NFC, lecture carte paiement.
 
 	Les partials sont injectes via innerHTML (pas outerHTML) pour preserver
-	les event listeners sur ces elements (ex: tarif.js attache 'tarifSelection'
-	sur #messages au DOMContentLoaded).
+	les event listeners sur ces elements.
+	Note : tarif.js attache 'tarifSelection' sur #articles-zone (pas #messages).
 	/ Partials are injected via innerHTML (not outerHTML) to preserve
-	event listeners on these elements (e.g. tarif.js attaches 'tarifSelection'
-	on #messages at DOMContentLoaded).
+	event listeners on these elements.
+	Note: tarif.js attaches 'tarifSelection' on #articles-zone (not #messages).
 
 	DEUX MECANISMES pour que innerHTML fonctionne comme outerHTML :
 

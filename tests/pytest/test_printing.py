@@ -474,6 +474,40 @@ def test_escpos_article_cuisine_sans_prix():
     assert "EUR" not in texte
 
 
+def test_escpos_article_avec_weight_detail():
+    """Un article avec weight_detail affiche la sous-ligne de poids/volume."""
+    from laboutik.printing.escpos_builder import build_escpos_from_ticket_data
+
+    ticket_data = {
+        "header": {"title": "Point de vente", "subtitle": "", "date": ""},
+        "articles": [
+            {
+                "name": "Comte AOP",
+                "qty": 1,
+                "price": 980,
+                "total": 980,
+                "weight_detail": "  350g x 28.00E/kg"
+            },
+        ],
+        "total": {"amount": 980, "label": "Especes"},
+        "qrcode": None,
+        "footer": [],
+    }
+    escpos_bytes = build_escpos_from_ticket_data(576, ticket_data)
+    texte = escpos_bytes.decode('utf-8', errors='ignore')
+
+    # L'article doit afficher le format vente SANS qty (puisqu'on a weight_detail)
+    # / Article should show sale format WITHOUT qty (since we have weight_detail)
+    assert "Comte AOP" in texte
+    assert "9.80EUR" in texte
+    # La sous-ligne doit etre presente
+    # / Sub-line should be present
+    assert "350g x 28.00E/kg" in texte
+    # On ne doit PAS afficher "x1" puisqu'on a weight_detail
+    # / Should NOT show "x1" since we have weight_detail
+    assert "Comte AOP x1" not in texte
+
+
 # --- Tests SunmiLanBackend ---
 
 

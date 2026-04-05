@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-03 (session 22 terminée)
+> Dernière mise à jour : 2026-04-05 (session 28 terminée)
 
 ---
 
@@ -349,23 +349,53 @@ Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS
 
 Voir sessions 16 et 17 ci-dessus.
 
-### Inventaire et stock POS ← PROCHAIN
+### Admin PriceInline refactoring ✅
+
+Remplacement du PriceInline unique (TabularInline conditionnel) par 4 StackedInline
+spécifiques par proxy product. Session 26.
+Spec : `Session 04 - PriceInline refactoring/DESIGN_PRICEINLINE_REFACTORING.md`.
+
+- [x] **Session 26 — 4 StackedInline par proxy + champs conditionnels JS** :
+  - [x] `BasePriceInline` (name, prix, free_price, publish, order)
+  - [x] `TicketPriceInline` (+ stock, max_per_user, adhesions_obligatoires) — labels contextuels billetterie
+  - [x] `MembershipPriceInline` (+ subscription_type, recurring_payment, iteration, commitment, stock, max_per_user) — labels contextuels adhesion
+  - [x] `POSPriceInline` (+ contenance)
+  - [x] Champs conditionnels JS generique (`inline_conditional_fields.js`) : regles definies en Python (`inline_conditional_fields`), injectees en JSON via template, lues par JS (meme syntaxe que Unfold `conditional_fields`). Cascade : source cachee = condition fausse.
+  - [x] Animation apparition/disparition (slide + fade 200ms) + fond colore + bordure gauche sur la rangee parente
+  - [x] Labels et help_text contextuels par proxy (stock = "Event capacity" pour tickets, "Maximum total quantity" pour adhesions)
+  - [x] Dark mode supporte (CSS `[data-conditional-styled]`)
+  - [x] 12 tests pytest (4 smoke change pages + 8 champs presents/absents)
+  - [x] Zero migration, zero changement modele
+
+### Inventaire et stock POS ✅
 
 Gestion de stock optionnelle par produit POS. App `inventaire` (TENANT_APP).
 Spec : `Session 03 - Inventaire et stock/SPEC_INVENTAIRE.md`.
 
-- [x] **Session 23 — Modèles + services + fondation** : app `inventaire`, modèles Stock + MouvementStock, `contenance` sur Price, `module_inventaire` sur Configuration, service décrémentation atomique `F()`, branchement dans `_creer_lignes_articles()`
+- [x] **Session 23 — Modèles + services + fondation** : app `inventaire`, mod��les Stock + MouvementStock, `contenance` sur Price, `module_inventaire` sur Configuration, service décrémentation atomique `F()`, branchement dans `_creer_lignes_articles()`
 - [x] **Session 24 — Admin Unfold + API + actions rapides** : StockInline (quantité read-only), MouvementStockAdmin avec ajout (réception/ajustement/perte/offert/DM), sidebar conditionnelle, ajustement admin, StockViewSet, DebitMetreViewSet, résumé stock clôture, templates HTMX, 27 tests pytest, 427 total, 0 régression
-- [ ] **Session 25 — Affichage visuel stock dans le POS** : enrichir données articles POS avec état stock (`select_related('stock_inventaire')`), adapter templates tuiles (3 états : normal, alerte orange, rupture rouge), grisage produit bloquant, pastille quantité restante, `aria-live` accessibilité, tests E2E Playwright
+- [x] **Session 25 — Affichage visuel stock dans le POS** : enrichissement données articles (`select_related('stock_inventaire')`, 6 clés stock), templates tuiles 3 états (normal, alerte orange, rupture rouge), grisage bloquant (`opacity: 0.4` + `pointer-events: none` + grayscale), pastille quantité restante, `aria-live="polite"` sur badge, OOB swap WebSocket temps réel (multi-onglet), 13+ tests pytest + test E2E WebSocket
 
-### 8. Multi-Tarif UX
+### 8. Multi-Tarif UX + Poids/Mesure ⏳ EN COURS
 
-Overlay non-bloquant avec quantités multiples. À discuter avec Nicolas (son code JS).
+Refonte overlay tarif + vente au poids/volume.
+Spec : `Session 05 - Multi-tarif et poids-mesure/DESIGN_MULTI_TARIF_POIDS_MESURE.md`
 
-- [ ] Overlay dans `#articles-zone` — panier reste visible
-- [ ] Clic tarif = incrément sans fermer
-- [ ] Prix libre : mémorisation du dernier montant
-- [ ] Badge quantité sur chaque bouton tarif
+- [x] **Session 28 — Backend + admin + overlay multi-clic + pavé numérique** :
+  - [x] `Price.poids_mesure` BooleanField + `LigneArticle.weight_quantity` IntegerField (migration 0214)
+  - [x] HMAC inclut `weight_quantity` (conformité LNE exigence 3 + 8)
+  - [x] Admin `POSPriceInline` : champ `poids_mesure`, conditional fields JS (`contenance` caché si `poids_mesure`), validation `clean()` (exclusion prix libre / contenance)
+  - [x] Création auto Stock (save_related) si `poids_mesure=True` sans Stock
+  - [x] Backend : parser `weight-*` dans le panier, `LigneArticle.weight_quantity`, décrémentation stock par quantité variable
+  - [x] Tuile article : icône balance + prix /kg ou /L pour les tarifs poids_mesure
+  - [x] Refonte `tarif.js` : overlay dans `#products` (pas plein écran), multi-clic (pas de fermeture), pavé numérique entier, CSS responsive V2s
+  - [x] Lignes panier à montant variable : suffixe `--N` unique (prix libre 25€ + prix libre 10€ = 2 lignes)
+  - [x] Ticket imprimé : format "350g x 28,00€/kg"
+  - [x] Rapports comptables : `poids_total` dans `calculer_detail_ventes()`
+  - [x] Admin LigneArticle : colonne "Weight/Vol." (remplace "user email")
+  - [x] Fixtures : Blonde Pression (Pinte/Demi, stock CL), Cacahuètes en vrac (12€/kg, stock GR), Affiche A4 (fixe + libre), Vin en vrac (8€/L, stock CL)
+  - [x] 474 pytest PASS, 0 régression
+- [ ] **Polish UX** : mémorisation dernier montant prix libre, badge quantité sur boutons tarif
 
 ### 9. Multi-Asset
 

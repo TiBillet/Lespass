@@ -309,6 +309,33 @@ class BasePriceInlineForm(ModelForm):
             )
         return prix
 
+    def clean(self):
+        cleaned = super().clean()
+        poids_mesure = cleaned.get("poids_mesure", False)
+        free_price = cleaned.get("free_price", False)
+        contenance = cleaned.get("contenance")
+
+        # Exclusion prix libre / poids_mesure : mutuellement exclusifs
+        # / Mutual exclusion: free price and weight-based sales
+        if poids_mesure and free_price:
+            raise forms.ValidationError(
+                _("A price cannot be both free price and weight/volume-based."),
+                code="invalid",
+            )
+
+        # Exclusion contenance / poids_mesure : mutuellement exclusifs
+        # / Mutual exclusion: contenance and weight-based sales
+        if poids_mesure and contenance:
+            raise forms.ValidationError(
+                _(
+                    "Contenance is incompatible with weight/volume sales "
+                    "(quantity is entered at each sale)."
+                ),
+                code="invalid",
+            )
+
+        return cleaned
+
 
 class BasePriceInline(StackedInline):
     """Inline de base pour les tarifs (StackedInline Unfold).
@@ -337,7 +364,6 @@ class BasePriceInline(StackedInline):
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
 
 
 class MembershipPriceInlineForm(BasePriceInlineForm):
@@ -403,12 +429,13 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
             Price.YEAR,
         ]:
             raise forms.ValidationError(
-                _("A recurring payment must have a membership term. Re-enter the term just above."),
+                _(
+                    "A recurring payment must have a membership term. Re-enter the term just above."
+                ),
                 code="invalid",
             )
 
         return recurring_payment
-
 
 
 class TicketPriceInlineForm(BasePriceInlineForm):
@@ -447,7 +474,13 @@ class TicketPriceInline(BasePriceInline):
 
     form = TicketPriceInlineForm
     autocomplete_fields = ["adhesions_obligatoires"]
-    fields = ("name", ("prix", "free_price"), ("stock", "max_per_user"), "adhesions_obligatoires", ("publish", "order"))
+    fields = (
+        "name",
+        ("prix", "free_price"),
+        ("stock", "max_per_user"),
+        "adhesions_obligatoires",
+        ("publish", "order"),
+    )
 
 
 class MembershipPriceInline(BasePriceInline):
@@ -485,11 +518,26 @@ class MembershipPriceInline(BasePriceInline):
 
 class POSPriceInline(BasePriceInline):
     """Inline tarifs pour les produits de caisse (POS).
-    Ajoute contenance (volume par vente). Le stock POS est gere par l'app inventaire.
+    Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
+    Le stock POS est gere par l'app inventaire.
+    Champs conditionnels : contenance cache si poids_mesure coche.
     / Price inline for POS products.
-    Adds contenance (volume per sale). POS stock managed by inventaire app."""
+    Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
+    POS stock managed by inventaire app.
+    Conditional fields: contenance hidden if poids_mesure checked."""
 
-    fields = ("name", "prix", "contenance", ("publish", "order"))
+    fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
+
+    # Champs conditionnels : contenance cache si poids_mesure coche
+    # (la quantite est saisie a chaque vente, pas fixe).
+    # / Conditional fields: contenance hidden if poids_mesure checked
+    # (quantity is entered at each sale, not fixed).
+    inline_conditional_fields = {
+        "contenance": "poids_mesure == false",
+    }
+
+    class Media:
+        js = ("admin/js/inline_conditional_fields.js",)
 
 
 class ProductFormFieldInlineForm(ModelForm):
@@ -1120,7 +1168,9 @@ class TicketProductAdmin(ProductAdmin):
     Filtered admin view: only ticket products (Ticket booking, Free booking)."""
 
     form = TicketProductForm
-    inlines = [TicketPriceInline]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
+    inlines = [
+        TicketPriceInline
+    ]  # Pas de ProductFormFieldInline (champs dynamiques = adhesions)
 
     list_filter = ["publish"]  # categorie_article inutile, deja filtre
 
@@ -1157,7 +1207,9 @@ class MembershipProductAdmin(ProductAdmin):
                 prefixe = inline_class.model._meta.model_name + "s"
                 regles_conditionnelles[prefixe] = regles_inline
         if regles_conditionnelles:
-            extra_context["inline_conditional_rules"] = json.dumps(regles_conditionnelles)
+            extra_context["inline_conditional_rules"] = json.dumps(
+                regles_conditionnelles
+            )
         return super().changeform_view(request, object_id, form_url, extra_context)
 
 
@@ -1314,6 +1366,74 @@ class POSProductAdmin(ProductAdmin):
 
     form = POSProductForm
     inlines = [POSPriceInline]
+    change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Collecte les regles conditionnelles de chaque inline qui en declare
+        # / Collect conditional rules from each inline that declares them
+        extra_context = extra_context or {}
+        regles_conditionnelles = {}
+        for inline_class in self.get_inlines(request, None):
+            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
+            if regles_inline:
+                prefixe = inline_class.model._meta.model_name + "s"
+                regles_conditionnelles[prefixe] = regles_inline
+        if regles_conditionnelles:
+            extra_context["inline_conditional_rules"] = json.dumps(
+                regles_conditionnelles
+            )
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_related(self, request, form, formsets, change):
+        """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
+        et que le produit n'a pas de Stock, en creer un vide.
+        Si le Stock existe mais est en unite UN (pieces), avertir.
+        / After saving inlines: if a price has poids_mesure=True
+        and the product has no Stock, create an empty one.
+        If Stock exists but uses UN (pieces), warn."""
+        super().save_related(request, form, formsets, change)
+        produit = form.instance
+
+        # Verifier si un tarif poids_mesure existe pour ce produit
+        # / Check if a weight-based price exists for this product
+        a_tarif_poids = produit.prices.filter(poids_mesure=True).exists()
+        if not a_tarif_poids:
+            return
+
+        # Verifier si le produit a deja un Stock
+        # / Check if the product already has a Stock
+        from inventaire.models import Stock, UniteStock
+
+        try:
+            stock_existant = produit.stock_inventaire
+            # Verifier que l'unite n'est pas UN (pieces)
+            # / Check that the unit is not UN (pieces)
+            if stock_existant.unite == UniteStock.UN:
+                messages.warning(
+                    request,
+                    _(
+                        "Warning: the stock unit is 'Pieces' (UN). "
+                        "Weight/volume sales require grams (GR) or centiliters (CL). "
+                        "Please change the unit in the stock settings."
+                    ),
+                )
+        except Exception:
+            # Pas de stock → en creer un vide en grammes
+            # / No stock → create an empty one in grams
+            Stock.objects.create(
+                product=produit,
+                quantite=0,
+                unite=UniteStock.GR,
+                seuil_alerte=0,
+                autoriser_vente_hors_stock=True,
+            )
+            messages.info(
+                request,
+                _(
+                    "Stock automatically created in grams (quantity=0). "
+                    "Remember to add stock via a reception."
+                ),
+            )
 
     fieldsets = (
         (

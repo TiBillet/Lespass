@@ -7,11 +7,11 @@ Type de carte (anonyme / prenom / carte liee), soldes par asset, adhesions.
 LOCALISATION : laboutik/templates/laboutik/partial/hx_card_feedback.html
 
 Injecte dans #messages via innerHTML (pas outerHTML).
-Pas de id="messages" ici : l'element #messages existe dans base.html
-et porte un listener 'tarifSelection' (tarif.js) qu'on ne doit pas detruire.
+Pas de id="messages" ici : l'element #messages existe dans base.html.
+Note : le listener 'tarifSelection' est sur #articles-zone (tarif.js), pas #messages.
 / Injected into #messages via innerHTML (not outerHTML).
-No id="messages" here: the element is in base.html and carries
-a 'tarifSelection' listener (tarif.js) that must not be destroyed.
+No id="messages" here: the element is in base.html.
+Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
 -->
 <div class="cf-wrapper" aria-live="polite">
 

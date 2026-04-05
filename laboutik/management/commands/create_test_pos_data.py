@@ -369,6 +369,158 @@ class Command(BaseCommand):
                     product.save(update_fields=list(pos_fields_to_update.keys()))
                     self.stdout.write(f"  Produit mis a jour : {product.name}")
 
+            # --- Produits speciaux pour tester multi-tarif, poids/mesure, prix libre ---
+            # Ces produits ont des configurations speciales qui ne rentrent pas dans la boucle generique.
+            # / Special products for testing multi-rate, weight/volume, free price.
+            # These products have special configurations that don't fit the generic loop.
+
+            # 1. Blonde Pression — 2 tarifs (Pinte/Demi), stock en CL avec contenance
+            # Teste le multi-clic overlay + decrementation stock classique.
+            # / Tests multi-click overlay + classic stock decrement.
+            blonde_pression, created_blonde = Product.objects.get_or_create(
+                name="Blonde Pression",
+                defaults={
+                    "methode_caisse": Product.VENTE,
+                    "categorie_pos": categorie_bar,
+                    "couleur_fond_pos": "#D97706",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-beer",
+                },
+            )
+            if created_blonde:
+                Price.objects.create(
+                    product=blonde_pression,
+                    name="Pinte",
+                    prix=Decimal("7.00"),
+                    contenance=50,  # 50 cl par pinte
+                    order=1,
+                )
+                Price.objects.create(
+                    product=blonde_pression,
+                    name="Demi",
+                    prix=Decimal("4.00"),
+                    contenance=25,  # 25 cl par demi
+                    order=2,
+                )
+                # Stock en centilitres : un fut de 3000 cl (30 litres)
+                # / Stock in centiliters: a 3000 cl keg (30 liters)
+                from inventaire.models import Stock, UniteStock
+                Stock.objects.get_or_create(
+                    product=blonde_pression,
+                    defaults={
+                        "quantite": 3000,
+                        "unite": UniteStock.CL,
+                        "seuil_alerte": 500,
+                        "autoriser_vente_hors_stock": False,
+                    },
+                )
+                self.stdout.write("  Produit cree : Blonde Pression (Pinte 7€ + Demi 4€, stock 3000cl)")
+            else:
+                self.stdout.write("  Produit existant : Blonde Pression")
+
+            # 2. Cacahuetes en vrac — poids_mesure, prix au kg, stock en GR
+            # Teste le pave numerique poids/mesure + decrementation stock par weight_quantity.
+            # / Tests numpad weight/volume + stock decrement by weight_quantity.
+            cacahuetes_vrac, created_caca = Product.objects.get_or_create(
+                name="Cacahuetes en vrac",
+                defaults={
+                    "methode_caisse": Product.VENTE,
+                    "categorie_pos": categorie_snacks,
+                    "couleur_fond_pos": "#84CC16",
+                    "couleur_texte_pos": "#000000",
+                    "icon_pos": "fa-seedling",
+                },
+            )
+            if created_caca:
+                Price.objects.create(
+                    product=cacahuetes_vrac,
+                    name="Au poids",
+                    prix=Decimal("12.00"),  # 12 EUR/kg
+                    poids_mesure=True,
+                    order=1,
+                )
+                from inventaire.models import Stock, UniteStock
+                Stock.objects.get_or_create(
+                    product=cacahuetes_vrac,
+                    defaults={
+                        "quantite": 5000,  # 5 kg en grammes
+                        "unite": UniteStock.GR,
+                        "seuil_alerte": 500,
+                        "autoriser_vente_hors_stock": False,
+                    },
+                )
+                self.stdout.write("  Produit cree : Cacahuetes en vrac (12€/kg, stock 5000g)")
+            else:
+                self.stdout.write("  Produit existant : Cacahuetes en vrac")
+
+            # 3. Affiche A4 — 2 tarifs : prix fixe + prix libre (merchandising)
+            # Teste le prix libre dans l'overlay qui reste ouvert apres chaque ajout.
+            # / Tests free price in the overlay that stays open after each add.
+            affiche_a4, created_affiche = Product.objects.get_or_create(
+                name="Affiche A4",
+                defaults={
+                    "methode_caisse": Product.VENTE,
+                    "categorie_pos": categorie_snacks,
+                    "couleur_fond_pos": "#6366F1",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-image",
+                },
+            )
+            if created_affiche:
+                Price.objects.create(
+                    product=affiche_a4,
+                    name="Standard",
+                    prix=Decimal("5.00"),
+                    order=1,
+                )
+                Price.objects.create(
+                    product=affiche_a4,
+                    name="Prix libre",
+                    prix=Decimal("2.00"),  # minimum 2€
+                    free_price=True,
+                    order=2,
+                )
+                self.stdout.write("  Produit cree : Affiche A4 (Standard 5€ + Prix libre min 2€)")
+            else:
+                self.stdout.write("  Produit existant : Affiche A4")
+
+            # 4. Vin en vrac — mono-tarif poids_mesure en CL, stock en CL
+            # Teste que multi_tarif=True est force meme avec 1 seul tarif si poids_mesure=True.
+            # Teste aussi l'unite CL (vs GR pour les cacahuetes).
+            # / Tests that multi_tarif=True is forced even with 1 price if poids_mesure=True.
+            # Also tests CL unit (vs GR for peanuts).
+            vin_vrac, created_vin = Product.objects.get_or_create(
+                name="Vin en vrac",
+                defaults={
+                    "methode_caisse": Product.VENTE,
+                    "categorie_pos": categorie_vins,
+                    "couleur_fond_pos": "#881337",
+                    "couleur_texte_pos": "#FFFFFF",
+                    "icon_pos": "fa-wine-bottle",
+                },
+            )
+            if created_vin:
+                Price.objects.create(
+                    product=vin_vrac,
+                    name="Au litre",
+                    prix=Decimal("8.00"),  # 8 EUR/L
+                    poids_mesure=True,
+                    order=1,
+                )
+                from inventaire.models import Stock, UniteStock
+                Stock.objects.get_or_create(
+                    product=vin_vrac,
+                    defaults={
+                        "quantite": 2000,  # 20 litres en centilitres
+                        "unite": UniteStock.CL,
+                        "seuil_alerte": 200,
+                        "autoriser_vente_hors_stock": False,
+                    },
+                )
+                self.stdout.write("  Produit cree : Vin en vrac (8€/L, stock 2000cl)")
+            else:
+                self.stdout.write("  Produit existant : Vin en vrac")
+
             # --- Produits adhesion ---
             # Les produits adhesion ne sont PAS crees ici.
             # Ils sont crees par demo_data_v2.py (ou par l'admin dans l'interface).

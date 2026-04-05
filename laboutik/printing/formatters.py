@@ -17,6 +17,7 @@ Chaque formatter retourne un dict avec la structure suivante :
 
 Les montants sont en centimes (int). Le builder ESC/POS les convertit en euros.
 """
+
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -60,8 +61,10 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
 
     # TVA : numero ou mention d'exoneration
     # / VAT: number or exemption notice
-    tva_display = config.tva_number if config.tva_number else _(
-        "TVA non applicable, art. 293 B du CGI"
+    tva_display = (
+        config.tva_number
+        if config.tva_number
+        else _("TVA non applicable, art. 293 B du CGI")
     )
 
     # Numero sequentiel du ticket (incremente atomiquement avec verrou)
@@ -69,10 +72,11 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     # la meme valeur entre l'UPDATE et le refresh_from_db().
     # / Sequential receipt number (atomically incremented with lock)
     from django.db import transaction
+
     with transaction.atomic():
         LaboutikConfiguration.objects.select_for_update().filter(
             pk=laboutik_config.pk,
-        ).update(compteur_tickets=F('compteur_tickets') + 1)
+        ).update(compteur_tickets=F("compteur_tickets") + 1)
         laboutik_config.refresh_from_db()
     numero_ticket = laboutik_config.compteur_tickets
 
@@ -107,13 +111,49 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         # / VAT rate of the line
         taux_tva = float(ligne.vat or 0)
 
-        articles.append({
+        article_dict = {
             "name": product_name,
             "qty": qty,
             "price": amount_centimes,
             "total": article_total,
             "vat_rate": f"{taux_tva:.2f}",
-        })
+        }
+
+        # Si c'est une vente au poids/volume, ajouter une sous-ligne avec le détail
+        # / If weight/volume sale, add a sub-line with details
+        if ligne.weight_quantity:
+            try:
+                price_obj = ligne.pricesold.price if ligne.pricesold else None
+                if price_obj and price_obj.poids_mesure:
+                    # Accéder à l'unité de stock
+                    # / Access stock unit
+                    stock = price_obj.product.stock_inventaire
+                    unite = stock.unite if stock else "GR"
+
+                    # Déterminer le symbole d'unité et le prix de référence
+                    # / Determine unit symbol and reference price
+                    if unite == "GR":
+                        unite_display = "g"
+                        prix_reference = price_obj.prix
+                        sous_ligne = f"  {ligne.weight_quantity}{unite_display} x {prix_reference}E/kg"
+                    elif unite == "CL":
+                        unite_display = "cl"
+                        prix_reference = price_obj.prix
+                        sous_ligne = f"  {ligne.weight_quantity}{unite_display} x {prix_reference}E/L"
+                    else:
+                        # Unité par défaut (pièces) - ne pas afficher de sous-ligne
+                        sous_ligne = None
+
+                    if sous_ligne:
+                        # Ajouter la sous-ligne au dictionnaire article
+                        # / Add sub-line to article dict
+                        article_dict["weight_detail"] = sous_ligne
+            except (AttributeError, TypeError):
+                # Si on ne peut pas accéder au stock, on ignore la sous-ligne
+                # / If we can't access stock, ignore sub-line
+                pass
+
+        articles.append(article_dict)
 
         # Accumuler la TVA par taux
         # / Accumulate VAT by rate
@@ -142,12 +182,14 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         total_ht_global += ht
         total_tva_global += tva_montant
 
-        tva_breakdown.append({
-            "rate": cle_tva,
-            "ht": ht,
-            "tva": tva_montant,
-            "ttc": ttc,
-        })
+        tva_breakdown.append(
+            {
+                "rate": cle_tva,
+                "ht": ht,
+                "tva": tva_montant,
+                "ttc": ttc,
+            }
+        )
 
     # Nom de l'operateur
     # / Operator name
@@ -212,7 +254,7 @@ def formatter_ticket_billet(ticket, reservation, event):
     # Nom du tarif (via le ticket ou la reservation)
     # / Price name (via the ticket or the reservation)
     tarif_name = ""
-    if hasattr(ticket, 'pricesold') and ticket.pricesold:
+    if hasattr(ticket, "pricesold") and ticket.pricesold:
         tarif_name = str(ticket.pricesold)
 
     # Nom du client
@@ -273,12 +315,14 @@ def formatter_ticket_commande(commande, articles_groupe, printer):
     # / Build articles list (no price for kitchen)
     articles = []
     for article in articles_groupe:
-        articles.append({
-            "name": article.product.name if article.product else _("Article"),
-            "qty": article.qty,
-            "price": 0,
-            "total": 0,
-        })
+        articles.append(
+            {
+                "name": article.product.name if article.product else _("Article"),
+                "qty": article.qty,
+                "price": 0,
+                "total": 0,
+            }
+        )
 
     # Titre = nom de l'imprimante (ex: "CUISINE", "BAR")
     # / Title = printer name (e.g. "KITCHEN", "BAR")
@@ -297,7 +341,9 @@ def formatter_ticket_commande(commande, articles_groupe, printer):
     }
 
 
-def formatter_ticket_x(totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions):
+def formatter_ticket_x(
+    totaux_par_moyen, solde_caisse, datetime_ouverture, nb_transactions
+):
     """
     Formate un Ticket X temporaire (consultation du service en cours, pas de cloture).
     Le Ticket X est un instantane : il n'est pas persiste en base.
@@ -315,38 +361,48 @@ def formatter_ticket_x(totaux_par_moyen, solde_caisse, datetime_ouverture, nb_tr
     now = timezone.localtime(timezone.now())
     date_ouverture = ""
     if datetime_ouverture:
-        date_ouverture = timezone.localtime(datetime_ouverture).strftime("%d/%m/%Y %H:%M")
+        date_ouverture = timezone.localtime(datetime_ouverture).strftime(
+            "%d/%m/%Y %H:%M"
+        )
 
     # Lignes par moyen de paiement / Lines by payment method
     articles = []
-    if totaux_par_moyen.get('especes'):
-        articles.append({
-            "name": _("Especes"),
-            "qty": 1,
-            "price": totaux_par_moyen['especes'],
-            "total": totaux_par_moyen['especes'],
-        })
-    if totaux_par_moyen.get('carte_bancaire'):
-        articles.append({
-            "name": _("Carte bancaire"),
-            "qty": 1,
-            "price": totaux_par_moyen['carte_bancaire'],
-            "total": totaux_par_moyen['carte_bancaire'],
-        })
-    if totaux_par_moyen.get('cashless'):
-        articles.append({
-            "name": _("Cashless"),
-            "qty": 1,
-            "price": totaux_par_moyen['cashless'],
-            "total": totaux_par_moyen['cashless'],
-        })
-    if totaux_par_moyen.get('cheque'):
-        articles.append({
-            "name": _("Cheque"),
-            "qty": 1,
-            "price": totaux_par_moyen['cheque'],
-            "total": totaux_par_moyen['cheque'],
-        })
+    if totaux_par_moyen.get("especes"):
+        articles.append(
+            {
+                "name": _("Especes"),
+                "qty": 1,
+                "price": totaux_par_moyen["especes"],
+                "total": totaux_par_moyen["especes"],
+            }
+        )
+    if totaux_par_moyen.get("carte_bancaire"):
+        articles.append(
+            {
+                "name": _("Carte bancaire"),
+                "qty": 1,
+                "price": totaux_par_moyen["carte_bancaire"],
+                "total": totaux_par_moyen["carte_bancaire"],
+            }
+        )
+    if totaux_par_moyen.get("cashless"):
+        articles.append(
+            {
+                "name": _("Cashless"),
+                "qty": 1,
+                "price": totaux_par_moyen["cashless"],
+                "total": totaux_par_moyen["cashless"],
+            }
+        )
+    if totaux_par_moyen.get("cheque"):
+        articles.append(
+            {
+                "name": _("Cheque"),
+                "qty": 1,
+                "price": totaux_par_moyen["cheque"],
+                "total": totaux_par_moyen["cheque"],
+            }
+        )
 
     # Lignes solde caisse / Cash drawer balance lines
     footer = [
@@ -355,10 +411,10 @@ def formatter_ticket_x(totaux_par_moyen, solde_caisse, datetime_ouverture, nb_tr
         "",
     ]
     if solde_caisse:
-        fond = solde_caisse.get('fond_de_caisse', 0)
-        entrees = solde_caisse.get('entrees_especes', 0)
-        sorties = solde_caisse.get('sorties_especes', 0)
-        solde = solde_caisse.get('solde', 0)
+        fond = solde_caisse.get("fond_de_caisse", 0)
+        entrees = solde_caisse.get("entrees_especes", 0)
+        sorties = solde_caisse.get("sorties_especes", 0)
+        solde = solde_caisse.get("solde", 0)
         footer.append(f"{_('Fond de caisse')}: {fond / 100:.2f} EUR")
         footer.append(f"{_('Entrees especes')}: {entrees / 100:.2f} EUR")
         if sorties:
@@ -373,7 +429,7 @@ def formatter_ticket_x(totaux_par_moyen, solde_caisse, datetime_ouverture, nb_tr
         },
         "articles": articles,
         "total": {
-            "amount": totaux_par_moyen.get('total', 0),
+            "amount": totaux_par_moyen.get("total", 0),
             "label": f"{nb_transactions} {_('transactions')}",
         },
         "qrcode": None,
@@ -395,40 +451,46 @@ def formatter_ticket_cloture(cloture):
     # / Service dates
     date_ouverture = ""
     if cloture.datetime_ouverture:
-        date_ouverture = timezone.localtime(
-            cloture.datetime_ouverture
-        ).strftime("%d/%m/%Y %H:%M")
+        date_ouverture = timezone.localtime(cloture.datetime_ouverture).strftime(
+            "%d/%m/%Y %H:%M"
+        )
 
     date_cloture = ""
     if cloture.datetime_cloture:
-        date_cloture = timezone.localtime(
-            cloture.datetime_cloture
-        ).strftime("%d/%m/%Y %H:%M")
+        date_cloture = timezone.localtime(cloture.datetime_cloture).strftime(
+            "%d/%m/%Y %H:%M"
+        )
 
     # Totaux par moyen de paiement (en centimes → articles pour affichage)
     # / Totals by payment method (in cents → articles for display)
     articles = []
     if cloture.total_especes:
-        articles.append({
-            "name": _("Especes"),
-            "qty": 1,
-            "price": cloture.total_especes,
-            "total": cloture.total_especes,
-        })
+        articles.append(
+            {
+                "name": _("Especes"),
+                "qty": 1,
+                "price": cloture.total_especes,
+                "total": cloture.total_especes,
+            }
+        )
     if cloture.total_carte_bancaire:
-        articles.append({
-            "name": _("Carte bancaire"),
-            "qty": 1,
-            "price": cloture.total_carte_bancaire,
-            "total": cloture.total_carte_bancaire,
-        })
+        articles.append(
+            {
+                "name": _("Carte bancaire"),
+                "qty": 1,
+                "price": cloture.total_carte_bancaire,
+                "total": cloture.total_carte_bancaire,
+            }
+        )
     if cloture.total_cashless:
-        articles.append({
-            "name": _("Cashless"),
-            "qty": 1,
-            "price": cloture.total_cashless,
-            "total": cloture.total_cashless,
-        })
+        articles.append(
+            {
+                "name": _("Cashless"),
+                "qty": 1,
+                "price": cloture.total_cashless,
+                "total": cloture.total_cashless,
+            }
+        )
 
     pv_name = cloture.point_de_vente.name if cloture.point_de_vente else ""
 

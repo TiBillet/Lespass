@@ -11,6 +11,7 @@ Tous les montants sont en centimes (int). Jamais de float pour les montants.
 
 LOCALISATION : laboutik/reports.py
 """
+
 import hashlib
 import logging
 
@@ -65,8 +66,8 @@ class RapportComptableService:
             datetime__lte=self.fin,
             status=LigneArticle.VALID,
         ).select_related(
-            'pricesold__productsold__product__categorie_pos',
-            'carte',
+            "pricesold__productsold__product__categorie_pos",
+            "carte",
         )
 
     # ------------------------------------------------------------------
@@ -79,25 +80,39 @@ class RapportComptableService:
         / Cash, credit card, cashless, check, total.
         Enriched with cashless detail by asset and currency code.
         """
-        total_especes = self.lignes.filter(
-            payment_method=PaymentMethod.CASH,
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        total_especes = (
+            self.lignes.filter(
+                payment_method=PaymentMethod.CASH,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
-        total_carte_bancaire = self.lignes.filter(
-            payment_method=PaymentMethod.CC,
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        total_carte_bancaire = (
+            self.lignes.filter(
+                payment_method=PaymentMethod.CC,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
         # NFC / cashless : LOCAL_EURO (monnaie fiduciaire) + LOCAL_GIFT (cadeau)
         # / NFC / cashless: LOCAL_EURO (fiat) + LOCAL_GIFT (gift)
-        total_cashless = self.lignes.filter(
-            payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        total_cashless = (
+            self.lignes.filter(
+                payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
-        total_cheque = self.lignes.filter(
-            payment_method=PaymentMethod.CHEQUE,
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        total_cheque = (
+            self.lignes.filter(
+                payment_method=PaymentMethod.CHEQUE,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
-        total_general = total_especes + total_carte_bancaire + total_cashless + total_cheque
+        total_general = (
+            total_especes + total_carte_bancaire + total_cashless + total_cheque
+        )
 
         # Detail cashless par nom de monnaie (pas par UUID d'asset).
         # En test, il peut y avoir des dizaines d'assets avec le meme nom.
@@ -106,17 +121,23 @@ class RapportComptableService:
         # In test, there can be dozens of assets with the same name.
         # We group by name to get one line per currency.
         cashless_detail = []
-        lignes_cashless_par_asset = self.lignes.filter(
-            payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
-            asset__isnull=False,
-        ).values('asset').annotate(
-            montant=Sum('amount'),
-        ).order_by('-montant')
+        lignes_cashless_par_asset = (
+            self.lignes.filter(
+                payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT],
+                asset__isnull=False,
+            )
+            .values("asset")
+            .annotate(
+                montant=Sum("amount"),
+            )
+            .order_by("-montant")
+        )
 
         # Prefetch tous les assets en une seule requete (evite N+1)
         # / Prefetch all assets in one query (avoids N+1)
         from fedow_core.models import Asset as FedowAsset
-        asset_uuids = [ligne['asset'] for ligne in lignes_cashless_par_asset]
+
+        asset_uuids = [ligne["asset"] for ligne in lignes_cashless_par_asset]
         assets_par_uuid = {
             a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
         }
@@ -125,8 +146,8 @@ class RapportComptableService:
         # / Group by currency name (not by UUID)
         totaux_par_nom_monnaie = {}
         for ligne in lignes_cashless_par_asset:
-            asset_uuid = ligne['asset']
-            montant = ligne['montant'] or 0
+            asset_uuid = ligne["asset"]
+            montant = ligne["montant"] or 0
             asset_obj = assets_par_uuid.get(asset_uuid)
             nom_asset = asset_obj.name if asset_obj else str(_("Inconnu"))
             code_asset = asset_obj.currency_code if asset_obj else ""
@@ -166,36 +187,44 @@ class RapportComptableService:
         / By article with sold/gifted qty, revenue incl./excl. tax, VAT, cost, profit.
         Grouped by category.
         """
-        produits_agreg = self.lignes.values(
-            'pricesold__productsold__product__name',
-            'pricesold__productsold__product__categorie_pos__name',
-            'pricesold__productsold__product__prix_achat',
-            'vat',
-            'payment_method',
-        ).annotate(
-            total_ttc=Sum('amount'),
-            total_qty=Sum('qty'),
-        ).order_by(
-            'pricesold__productsold__product__categorie_pos__name',
-            'pricesold__productsold__product__name',
+        produits_agreg = (
+            self.lignes.values(
+                "pricesold__productsold__product__name",
+                "pricesold__productsold__product__categorie_pos__name",
+                "pricesold__productsold__product__prix_achat",
+                "vat",
+                "payment_method",
+            )
+            .annotate(
+                total_ttc=Sum("amount"),
+                total_qty=Sum("qty"),
+            )
+            .order_by(
+                "pricesold__productsold__product__categorie_pos__name",
+                "pricesold__productsold__product__name",
+            )
         )
 
         # Methodes de paiement "cadeau" / Gift payment methods
         methodes_cadeau = [PaymentMethod.LOCAL_GIFT]
-        if hasattr(PaymentMethod, 'EXTERIEUR_GIFT'):
+        if hasattr(PaymentMethod, "EXTERIEUR_GIFT"):
             methodes_cadeau.append(PaymentMethod.EXTERIEUR_GIFT)
 
         # Regrouper par (categorie, produit, taux_tva) en separant vendus/offerts
         # / Group by (category, product, vat_rate) separating sold/gifted
         cle_articles = {}
         for ligne in produits_agreg:
-            nom_categorie = ligne['pricesold__productsold__product__categorie_pos__name'] or str(_("Sans catégorie"))
-            nom_produit = ligne['pricesold__productsold__product__name'] or str(_("Inconnu"))
-            prix_achat_unit = ligne['pricesold__productsold__product__prix_achat'] or 0
-            total_ttc = ligne['total_ttc'] or 0
-            total_qty = float(ligne['total_qty'] or 0)
-            taux_tva = float(ligne['vat'] or 0)
-            moyen_paiement = ligne['payment_method']
+            nom_categorie = ligne[
+                "pricesold__productsold__product__categorie_pos__name"
+            ] or str(_("Sans catégorie"))
+            nom_produit = ligne["pricesold__productsold__product__name"] or str(
+                _("Inconnu")
+            )
+            prix_achat_unit = ligne["pricesold__productsold__product__prix_achat"] or 0
+            total_ttc = ligne["total_ttc"] or 0
+            total_qty = float(ligne["total_qty"] or 0)
+            taux_tva = float(ligne["vat"] or 0)
+            moyen_paiement = ligne["payment_method"]
 
             cle = f"{nom_categorie}|{nom_produit}|{taux_tva}"
             if cle not in cle_articles:
@@ -237,22 +266,36 @@ class RapportComptableService:
             cout_total = article["prix_achat_unit"] * int(qty_total)
             benefice = total_ht - cout_total
 
+            # Poids/volume total vendu pour cet article (somme des weight_quantity)
+            # Null si l'article ne se vend pas au poids.
+            # / Total weight/volume sold for this article (sum of weight_quantity)
+            # Null if the article is not sold by weight.
+            poids_total_agreg = self.lignes.filter(
+                pricesold__productsold__product__name=article["nom"],
+                vat=taux_tva,
+                weight_quantity__isnull=False,
+            ).aggregate(total=Sum("weight_quantity"))
+            poids_total = poids_total_agreg["total"]
+
             if nom_categorie not in categories:
                 categories[nom_categorie] = {"articles": [], "total_ttc": 0}
 
-            categories[nom_categorie]["articles"].append({
-                "nom": article["nom"],
-                "qty_vendus": article["qty_vendus"],
-                "qty_offerts": article["qty_offerts"],
-                "qty_total": qty_total,
-                "total_ttc": total_ttc,
-                "total_ht": total_ht,
-                "total_tva": total_tva,
-                "taux_tva": taux_tva,
-                "prix_achat_unit": article["prix_achat_unit"],
-                "cout_total": cout_total,
-                "benefice": benefice,
-            })
+            categories[nom_categorie]["articles"].append(
+                {
+                    "nom": article["nom"],
+                    "qty_vendus": article["qty_vendus"],
+                    "qty_offerts": article["qty_offerts"],
+                    "qty_total": qty_total,
+                    "total_ttc": total_ttc,
+                    "total_ht": total_ht,
+                    "total_tva": total_tva,
+                    "taux_tva": taux_tva,
+                    "prix_achat_unit": article["prix_achat_unit"],
+                    "cout_total": cout_total,
+                    "benefice": benefice,
+                    "poids_total": poids_total,  # int en g ou cl, ou None si pas de vente au poids
+                }
+            )
             categories[nom_categorie]["total_ttc"] += total_ttc
 
         # Trier les categories : alphabetique, "Sans catégorie" en dernier.
@@ -278,19 +321,25 @@ class RapportComptableService:
         Logique identique a views.py:1020-1043.
         / By VAT rate: total incl., excl., VAT amount.
         """
-        tva_agreg = self.lignes.values('vat').annotate(
-            total_ttc=Sum('amount'),
-        ).order_by('vat')
+        tva_agreg = (
+            self.lignes.values("vat")
+            .annotate(
+                total_ttc=Sum("amount"),
+            )
+            .order_by("vat")
+        )
 
         rapport_par_tva = {}
         for ligne in tva_agreg:
-            taux_tva = float(ligne['vat'] or 0)
-            total_ttc_centimes = ligne['total_ttc'] or 0
+            taux_tva = float(ligne["vat"] or 0)
+            total_ttc_centimes = ligne["total_ttc"] or 0
 
             # Calcul HT depuis TTC : HT = TTC / (1 + taux/100)
             # / Compute HT from TTC: HT = TTC / (1 + rate/100)
             if taux_tva > 0:
-                total_ht_centimes = int(round(total_ttc_centimes / (1 + taux_tva / 100)))
+                total_ht_centimes = int(
+                    round(total_ttc_centimes / (1 + taux_tva / 100))
+                )
                 total_tva_centimes = total_ttc_centimes - total_ht_centimes
             else:
                 total_ht_centimes = total_ttc_centimes
@@ -321,9 +370,12 @@ class RapportComptableService:
         config = LaboutikConfiguration.get_solo()
         fond_de_caisse = config.fond_de_caisse or 0
 
-        entrees_especes = self.lignes.filter(
-            payment_method=PaymentMethod.CASH,
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        entrees_especes = (
+            self.lignes.filter(
+                payment_method=PaymentMethod.CASH,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
 
         # Soustraire les sorties de caisse effectuees pendant la periode.
         # Pas de filtre par point de vente : la caisse est globale au tenant
@@ -331,10 +383,13 @@ class RapportComptableService:
         # / Subtract cash withdrawals made during the period.
         # No point_de_vente filter: the cash drawer is global per tenant
         # (same logic as ClotureCaisse closure).
-        sorties_especes = SortieCaisse.objects.filter(
-            datetime__gte=self.debut,
-            datetime__lte=self.fin,
-        ).aggregate(total=Sum('montant_total'))['total'] or 0
+        sorties_especes = (
+            SortieCaisse.objects.filter(
+                datetime__gte=self.debut,
+                datetime__lte=self.fin,
+            ).aggregate(total=Sum("montant_total"))["total"]
+            or 0
+        )
 
         return {
             "fond_de_caisse": fond_de_caisse,
@@ -353,24 +408,34 @@ class RapportComptableService:
         / Filter lines whose product has methode_caisse in (RE, RC, TM).
         Aggregate by currency name (asset) and payment method.
         """
-        methodes_recharge = [Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS]
+        methodes_recharge = [
+            Product.RECHARGE_EUROS,
+            Product.RECHARGE_CADEAU,
+            Product.RECHARGE_TEMPS,
+        ]
 
-        recharges = self.lignes.filter(
-            pricesold__productsold__product__methode_caisse__in=methodes_recharge,
-        ).values(
-            'pricesold__productsold__product__name',
-            'pricesold__productsold__product__methode_caisse',
-            'payment_method',
-            'asset',
-        ).annotate(
-            total=Sum('amount'),
-            nb=Count('uuid'),
-        ).order_by('pricesold__productsold__product__name')
+        recharges = (
+            self.lignes.filter(
+                pricesold__productsold__product__methode_caisse__in=methodes_recharge,
+            )
+            .values(
+                "pricesold__productsold__product__name",
+                "pricesold__productsold__product__methode_caisse",
+                "payment_method",
+                "asset",
+            )
+            .annotate(
+                total=Sum("amount"),
+                nb=Count("uuid"),
+            )
+            .order_by("pricesold__productsold__product__name")
+        )
 
         # Prefetch les noms des assets pour afficher le nom de la monnaie
         # / Prefetch asset names to display the currency name
         from fedow_core.models import Asset as FedowAsset
-        asset_uuids = [l['asset'] for l in recharges if l.get('asset')]
+
+        asset_uuids = [l["asset"] for l in recharges if l.get("asset")]
         assets_par_uuid = {}
         if asset_uuids:
             assets_par_uuid = {
@@ -379,13 +444,13 @@ class RapportComptableService:
 
         resultat = {}
         for ligne in recharges:
-            nom_produit = ligne['pricesold__productsold__product__name'] or "?"
-            methode = ligne['pricesold__productsold__product__methode_caisse']
-            moyen = ligne['payment_method'] or 'UK'
+            nom_produit = ligne["pricesold__productsold__product__name"] or "?"
+            methode = ligne["pricesold__productsold__product__methode_caisse"]
+            moyen = ligne["payment_method"] or "UK"
 
             # Nom de la monnaie depuis l'asset (si disponible)
             # / Currency name from asset (if available)
-            asset_uuid = ligne.get('asset')
+            asset_uuid = ligne.get("asset")
             asset_obj = assets_par_uuid.get(asset_uuid) if asset_uuid else None
             nom_monnaie = asset_obj.name if asset_obj else ""
 
@@ -395,12 +460,12 @@ class RapportComptableService:
                 "nom_monnaie": nom_monnaie,
                 "methode_caisse": methode,
                 "moyen_paiement": moyen,
-                "total": ligne['total'] or 0,
-                "nb": ligne['nb'] or 0,
+                "total": ligne["total"] or 0,
+                "nb": ligne["nb"] or 0,
             }
 
         # Total general des recharges / Overall top-up total
-        total_recharges = sum(v['total'] for v in resultat.values())
+        total_recharges = sum(v["total"] for v in resultat.values())
         return {
             "detail": resultat,
             "total": total_recharges,
@@ -414,22 +479,29 @@ class RapportComptableService:
         Lignes avec membership non null. Classe par produit, tarif et moyen de paiement.
         / Lines with non-null membership. Grouped by product, price tier and payment method.
         """
-        adhesions = self.lignes.filter(
-            membership__isnull=False,
-        ).values(
-            'pricesold__productsold__product__name',
-            'pricesold__price__name',
-            'payment_method',
-        ).annotate(
-            total=Sum('amount'),
-            nb=Count('uuid'),
-        ).order_by('pricesold__productsold__product__name', 'pricesold__price__name')
+        adhesions = (
+            self.lignes.filter(
+                membership__isnull=False,
+            )
+            .values(
+                "pricesold__productsold__product__name",
+                "pricesold__price__name",
+                "payment_method",
+            )
+            .annotate(
+                total=Sum("amount"),
+                nb=Count("uuid"),
+            )
+            .order_by("pricesold__productsold__product__name", "pricesold__price__name")
+        )
 
         detail = {}
         for ligne in adhesions:
-            nom_produit = ligne['pricesold__productsold__product__name'] or str(_("Inconnu"))
-            nom_tarif = ligne['pricesold__price__name'] or ""
-            moyen = ligne['payment_method'] or 'UK'
+            nom_produit = ligne["pricesold__productsold__product__name"] or str(
+                _("Inconnu")
+            )
+            nom_tarif = ligne["pricesold__price__name"] or ""
+            moyen = ligne["payment_method"] or "UK"
 
             # Cle : "Produit — Tarif (moyen)" pour regroupement unique
             # / Key: "Product — Price tier (method)" for unique grouping
@@ -439,12 +511,12 @@ class RapportComptableService:
                 "nom_produit": nom_produit,
                 "nom_tarif": nom_tarif,
                 "moyen_paiement": moyen,
-                "total": ligne['total'] or 0,
-                "nb": ligne['nb'] or 0,
+                "total": ligne["total"] or 0,
+                "nb": ligne["nb"] or 0,
             }
 
-        total_adhesions = sum(v['total'] for v in detail.values())
-        nb_adhesions = sum(v['nb'] for v in detail.values())
+        total_adhesions = sum(v["total"] for v in detail.values())
+        nb_adhesions = sum(v["nb"] for v in detail.values())
         return {
             "detail": detail,
             "total": total_adhesions,
@@ -465,20 +537,24 @@ class RapportComptableService:
         # On fait une requete separee.
         # / Credit notes are not in self.lignes (VALID filter).
         # We make a separate query.
-        remboursements = LigneArticle.objects.filter(
-            sale_origin=SaleOrigin.LABOUTIK,
-            datetime__gte=self.debut,
-            datetime__lte=self.fin,
-        ).filter(
-            Q(status=LigneArticle.CREDIT_NOTE) | Q(amount__lt=0),
-        ).aggregate(
-            total=Sum('amount'),
-            nb=Count('uuid'),
+        remboursements = (
+            LigneArticle.objects.filter(
+                sale_origin=SaleOrigin.LABOUTIK,
+                datetime__gte=self.debut,
+                datetime__lte=self.fin,
+            )
+            .filter(
+                Q(status=LigneArticle.CREDIT_NOTE) | Q(amount__lt=0),
+            )
+            .aggregate(
+                total=Sum("amount"),
+                nb=Count("uuid"),
+            )
         )
 
         return {
-            "total": remboursements['total'] or 0,
-            "nb": remboursements['nb'] or 0,
+            "total": remboursements["total"] or 0,
+            "nb": remboursements["nb"] or 0,
         }
 
     # ------------------------------------------------------------------
@@ -495,9 +571,12 @@ class RapportComptableService:
         depenses_par_carte = list(
             self.lignes.filter(
                 carte__isnull=False,
-            ).values('carte').annotate(
-                total=Sum('amount'),
-            ).values_list('total', flat=True)
+            )
+            .values("carte")
+            .annotate(
+                total=Sum("amount"),
+            )
+            .values_list("total", flat=True)
         )
 
         nb_cartes = len(depenses_par_carte)
@@ -513,11 +592,16 @@ class RapportComptableService:
             self.lignes.filter(
                 carte__isnull=False,
                 pricesold__productsold__product__methode_caisse__in=[
-                    Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS,
+                    Product.RECHARGE_EUROS,
+                    Product.RECHARGE_CADEAU,
+                    Product.RECHARGE_TEMPS,
                 ],
-            ).values('carte').annotate(
-                total=Sum('amount'),
-            ).values_list('total', flat=True)
+            )
+            .values("carte")
+            .annotate(
+                total=Sum("amount"),
+            )
+            .values_list("total", flat=True)
         )
 
         recharge_mediane = 0
@@ -532,9 +616,13 @@ class RapportComptableService:
             from fedow_core.models import Token as FedowToken, Asset as FedowAsset
             from QrcodeCashless.models import CarteCashless
 
-            cartes_actives_ids = self.lignes.filter(
-                carte__isnull=False,
-            ).values_list('carte', flat=True).distinct()
+            cartes_actives_ids = (
+                self.lignes.filter(
+                    carte__isnull=False,
+                )
+                .values_list("carte", flat=True)
+                .distinct()
+            )
 
             # Recuperer les wallets via CarteCashless.user.wallet
             # / Get wallets via CarteCashless.user.wallet
@@ -542,14 +630,14 @@ class RapportComptableService:
                 pk__in=cartes_actives_ids,
                 user__isnull=False,
                 user__wallet__isnull=False,
-            ).values_list('user__wallet', flat=True)
+            ).values_list("user__wallet", flat=True)
 
             # Soldes en monnaie locale (TLF) / Balances in local currency (TLF)
             soldes = list(
                 FedowToken.objects.filter(
                     wallet__in=wallets_ids,
                     asset__category=FedowAsset.TLF,
-                ).values_list('value', flat=True)
+                ).values_list("value", flat=True)
             )
 
             if soldes:
@@ -563,6 +651,7 @@ class RapportComptableService:
 
         # Nouveaux membres dans la periode / New members in period
         from BaseBillet.models import Membership
+
         nouveaux_membres = Membership.objects.filter(
             date_added__gte=self.debut,
             date_added__lte=self.fin,
@@ -589,30 +678,36 @@ class RapportComptableService:
         / Lines with non-null reservation.
         Grouped by event (date + name) and by price tier (product + price name).
         """
-        billets = self.lignes.filter(
-            reservation__isnull=False,
-        ).values(
-            'reservation__event__name',
-            'reservation__event__datetime',
-            'pricesold__productsold__product__name',
-            'pricesold__price__name',
-        ).annotate(
-            nb=Count('uuid'),
-            total=Sum('amount'),
-        ).order_by('reservation__event__datetime', 'reservation__event__name')
+        billets = (
+            self.lignes.filter(
+                reservation__isnull=False,
+            )
+            .values(
+                "reservation__event__name",
+                "reservation__event__datetime",
+                "pricesold__productsold__product__name",
+                "pricesold__price__name",
+            )
+            .annotate(
+                nb=Count("uuid"),
+                total=Sum("amount"),
+            )
+            .order_by("reservation__event__datetime", "reservation__event__name")
+        )
 
         detail = {}
         for ligne in billets:
-            nom_event = ligne['reservation__event__name'] or str(_("Inconnu"))
-            datetime_event = ligne['reservation__event__datetime']
-            nom_produit = ligne['pricesold__productsold__product__name'] or ""
-            nom_tarif = ligne['pricesold__price__name'] or ""
+            nom_event = ligne["reservation__event__name"] or str(_("Inconnu"))
+            datetime_event = ligne["reservation__event__datetime"]
+            nom_produit = ligne["pricesold__productsold__product__name"] or ""
+            nom_tarif = ligne["pricesold__price__name"] or ""
 
             # Formater la date de l'event si disponible
             # / Format event date if available
             date_str = ""
             if datetime_event:
                 from django.utils import timezone as tz
+
                 date_str = tz.localtime(datetime_event).strftime("%d/%m/%Y %H:%M")
 
             # Cle : "Event (date) — Produit / Tarif"
@@ -626,12 +721,12 @@ class RapportComptableService:
                 "date_event": date_str,
                 "nom_produit": nom_produit,
                 "nom_tarif": nom_tarif,
-                "nb": ligne['nb'] or 0,
-                "total": ligne['total'] or 0,
+                "nb": ligne["nb"] or 0,
+                "total": ligne["total"] or 0,
             }
 
-        nb_total = sum(v['nb'] for v in detail.values())
-        total_montant = sum(v['total'] for v in detail.values())
+        nb_total = sum(v["nb"] for v in detail.values())
+        total_montant = sum(v["total"] for v in detail.values())
         return {
             "detail": detail,
             "nb": nb_total,
@@ -650,9 +745,13 @@ class RapportComptableService:
         # / Define filters by operation type
         types_operations = {
             "ventes": Q(pricesold__productsold__product__methode_caisse=Product.VENTE),
-            "recharges": Q(pricesold__productsold__product__methode_caisse__in=[
-                Product.RECHARGE_EUROS, Product.RECHARGE_CADEAU, Product.RECHARGE_TEMPS,
-            ]),
+            "recharges": Q(
+                pricesold__productsold__product__methode_caisse__in=[
+                    Product.RECHARGE_EUROS,
+                    Product.RECHARGE_CADEAU,
+                    Product.RECHARGE_TEMPS,
+                ]
+            ),
             "adhesions": Q(membership__isnull=False),
             "billets": Q(reservation__isnull=False),
         }
@@ -661,7 +760,9 @@ class RapportComptableService:
         moyens = {
             "especes": Q(payment_method=PaymentMethod.CASH),
             "carte_bancaire": Q(payment_method=PaymentMethod.CC),
-            "cashless": Q(payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT]),
+            "cashless": Q(
+                payment_method__in=[PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT]
+            ),
             "cheque": Q(payment_method=PaymentMethod.CHEQUE),
         }
 
@@ -669,9 +770,12 @@ class RapportComptableService:
         for nom_type, filtre_type in types_operations.items():
             ligne = {}
             for nom_moyen, filtre_moyen in moyens.items():
-                montant = self.lignes.filter(filtre_type & filtre_moyen).aggregate(
-                    total=Sum('amount'),
-                )['total'] or 0
+                montant = (
+                    self.lignes.filter(filtre_type & filtre_moyen).aggregate(
+                        total=Sum("amount"),
+                    )["total"]
+                    or 0
+                )
                 ligne[nom_moyen] = montant
             ligne["total"] = sum(ligne.values())
             synthese[nom_type] = ligne
@@ -702,34 +806,46 @@ class RapportComptableService:
 
         LOCALISATION : laboutik/reports.py
         """
-        resultats = self.lignes.filter(
-            point_de_vente__isnull=False,
-        ).values(
-            'point_de_vente__name',
-            'point_de_vente__uuid',
-        ).annotate(
-            total_ttc=Sum('amount'),
-        ).order_by('-total_ttc')
+        resultats = (
+            self.lignes.filter(
+                point_de_vente__isnull=False,
+            )
+            .values(
+                "point_de_vente__name",
+                "point_de_vente__uuid",
+            )
+            .annotate(
+                total_ttc=Sum("amount"),
+            )
+            .order_by("-total_ttc")
+        )
 
         ventilation = []
         for ligne in resultats:
-            ventilation.append({
-                'nom': ligne['point_de_vente__name'],
-                'uuid': str(ligne['point_de_vente__uuid']),
-                'total_ttc': ligne['total_ttc'] or 0,
-            })
+            ventilation.append(
+                {
+                    "nom": ligne["point_de_vente__name"],
+                    "uuid": str(ligne["point_de_vente__uuid"]),
+                    "total_ttc": ligne["total_ttc"] or 0,
+                }
+            )
 
         # Lignes sans PV (anciennes donnees avant la FK)
         # / Lines without PV (old data before FK was added)
-        total_sans_pv = self.lignes.filter(
-            point_de_vente__isnull=True,
-        ).aggregate(total=Sum('amount'))['total'] or 0
+        total_sans_pv = (
+            self.lignes.filter(
+                point_de_vente__isnull=True,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
         if total_sans_pv > 0:
-            ventilation.append({
-                'nom': str(_("Non attribué")),
-                'uuid': '',
-                'total_ttc': total_sans_pv,
-            })
+            ventilation.append(
+                {
+                    "nom": str(_("Non attribué")),
+                    "uuid": "",
+                    "total_ttc": total_sans_pv,
+                }
+            )
 
         return ventilation
 
@@ -791,14 +907,16 @@ class RapportComptableService:
         """
         # Ordonner par uuid pour un hash deterministe
         # / Order by uuid for a deterministic hash
-        lignes_ordonnees = self.lignes.order_by('uuid').values_list(
-            'uuid', 'amount', 'status',
+        lignes_ordonnees = self.lignes.order_by("uuid").values_list(
+            "uuid",
+            "amount",
+            "status",
         )
 
         hasher = hashlib.sha256()
         for uuid_val, montant, statut in lignes_ordonnees:
             # Chaque ligne contribue : uuid|montant|statut
             # / Each line contributes: uuid|amount|status
-            hasher.update(f"{uuid_val}|{montant}|{statut}".encode('utf-8'))
+            hasher.update(f"{uuid_val}|{montant}|{statut}".encode("utf-8"))
 
         return hasher.hexdigest()

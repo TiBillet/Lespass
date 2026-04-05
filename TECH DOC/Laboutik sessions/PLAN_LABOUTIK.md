@@ -56,8 +56,10 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **② Billetterie + Refonte typage** | Typage par article (pas PV), flow identification unifié, tuiles BI dans la grille, jauge, panier mixte | ✅ FAIT |
 | **③ WebSocket** | Push serveur HTMX 2 ws, Daphne, badge test, broadcast jauge | ✅ FAIT |
 | **④ Impression** | 4 backends (Cloud/LAN/Inner/Mock), ESC/POS builder, formatters, Celery async, bouton Imprimer, auto-print billets, MockBackend decode ESC/POS | ✅ FAIT |
-| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ⏳ **EN COURS** — sessions 12-17 FAIT, sessions 18-19 à faire |
+| **⑤ Conformité LNE + Rapports** | Chaînage HMAC-SHA256, service de calcul, clôtures J/M/A, total perpétuel, mentions légales tickets, mode école, archivage fiscal, accès admin fiscale | ✅ FAIT (sessions 12-21) |
 | **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ✅ FAIT (sessions 16-17) |
+| **Inventaire** | Stock POS optionnel, décrémentation atomique, admin Unfold, MouvementStock, contenance, affichage visuel tuiles (3 états), OOB WebSocket | ✅ FAIT (sessions 23-25) |
+| **Admin PriceInline** | 4 StackedInline par proxy (Ticket/Membership/POS/Base), champs conditionnels JS, labels contextuels | ✅ FAIT (session 26) |
 | **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑤⑥ |
 | **⑧ Multi-Asset** | Paniers mixtes EUR + tokens (à détailler avec le mainteneur) | ⏳ À DÉTAILLER |
 | **⑨ Stress test (3.3)** | `verify_transactions` + `verify_integrity` (HMAC chain) + 2000 tx concurrentes | ⏳ À FAIRE |

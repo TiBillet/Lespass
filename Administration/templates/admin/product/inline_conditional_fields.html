@@ -1,0 +1,14 @@
+{% load i18n %}
+<!--
+Injection des regles de champs conditionnels pour les inlines Price.
+Lit l'attribut inline_conditional_fields depuis chaque inline du ModelAdmin,
+et l'injecte en JSON pour que le JS generique puisse les appliquer.
+/ Injects conditional field rules for Price inlines.
+Reads inline_conditional_fields from each ModelAdmin inline,
+and injects them as JSON for the generic JS to apply.
+
+LOCALISATION : Administration/templates/admin/product/inline_conditional_fields.html
+-->
+{% if inline_conditional_rules %}
+<script id="inline-conditional-rules" type="application/json">{{ inline_conditional_rules|safe }}</script>
+{% endif %}

@@ -1,7 +1,6 @@
 import logging
 
 from django.contrib import admin, messages
-from django.http import HttpRequest
 from django.shortcuts import redirect, get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from import_export.admin import ExportActionModelAdmin
@@ -13,9 +12,7 @@ from unfold.decorators import display, action
 from Administration.admin.site import staff_admin_site
 from Administration.importers.lignearticle_exporter import LigneArticleExportResource
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
-from BaseBillet.models import (
-    Paiement_stripe, LigneArticle, PostalAddress, SaleOrigin
-)
+from BaseBillet.models import Paiement_stripe, LigneArticle, PostalAddress, SaleOrigin
 from fedow_connect.utils import dround
 
 logger = logging.getLogger(__name__)
@@ -27,20 +24,23 @@ class PaiementStripeAdmin(ModelAdmin):
     warn_unsaved_form = True  # Default: False
 
     list_display = (
-        'user',
-        'order_date',
-        'status',
+        "user",
+        "order_date",
+        "status",
         # 'traitement_en_cours',
-        'source_traitement',
-        'source',
-        'articles',
-        'total',
-        'uuid_8',
+        "source_traitement",
+        "source",
+        "articles",
+        "total",
+        "uuid_8",
     )
     readonly_fields = list_display
-    ordering = ('-order_date',)
-    search_fields = ('user__email', 'order_date')
-    list_filter = ('status', 'order_date',)
+    ordering = ("-order_date",)
+    search_fields = ("user__email", "order_date")
+    list_filter = (
+        "status",
+        "order_date",
+    )
 
     def has_delete_permission(self, request, obj=None):
         # return request.user.is_superuser
@@ -61,27 +61,33 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
-    list_filter = ('status',
-                   'pricesold__productsold',
-                   ('datetime', RangeDateTimeFilter),
-                   )
+    list_filter = (
+        "status",
+        "pricesold__productsold",
+        ("datetime", RangeDateTimeFilter),
+    )
 
     list_display = [
-        'productsold',
-        'user_email',
-        'datetime',
-        'amount_decimal',
-        '_qty',
-        'vat',
-        'total_decimal',
-        'display_status',
-        'payment_method',
-        'sale_origin',
+        "productsold",
+        "datetime",
+        "amount_decimal",
+        "_qty",
+        "display_weight",
+        "vat",
+        "total_decimal",
+        "display_status",
+        "payment_method",
+        "sale_origin",
     ]
-    search_fields = ('datetime', 'pricesold__productsold__product__name', 'pricesold__price__name',
-                     'paiement_stripe__user__email', 'membership__user__email',
-                     'reservation__user_commande__email')
-    ordering = ('-datetime',)
+    search_fields = (
+        "datetime",
+        "pricesold__productsold__product__name",
+        "pricesold__price__name",
+        "paiement_stripe__user__email",
+        "membership__user__email",
+        "reservation__user_commande__email",
+    )
+    ordering = ("-datetime",)
 
     resource_classes = [LigneArticleExportResource]
     export_form_class = ExportForm
@@ -89,15 +95,16 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
     def get_queryset(self, request):
         # Utiliser select_related pour précharger pricesold et productsold
         queryset = super().get_queryset(request)
-        return queryset.select_related('pricesold__productsold',
-                                       'pricesold__price',
-                                       'paiement_stripe',
-                                       'paiement_stripe__user',
-                                       'membership',
-                                       'membership__user',
-                                       'reservation',
-                                       'reservation__user_commande',
-                                       )
+        return queryset.select_related(
+            "pricesold__productsold",
+            "pricesold__price",
+            "paiement_stripe",
+            "paiement_stripe__user",
+            "membership",
+            "membership__user",
+            "reservation",
+            "reservation__user_commande",
+        )
 
     @display(description=_("Value"))
     def amount_decimal(self, obj):
@@ -115,8 +122,28 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
     def productsold(self, obj):
         return f"{obj.pricesold.productsold} - {obj.pricesold}"
 
+    @display(description=_("Weight/Vol."))
+    def display_weight(self, obj):
+        """Affiche la quantite poids/volume saisie par le caissier (ex: 350g, 25cl).
+        Vide si vente classique (pas au poids).
+        / Displays weight/volume entered by cashier (e.g. 350g, 25cl).
+        Empty for standard sales (not weight-based)."""
+        if not obj.weight_quantity:
+            return ""
+        # Determiner l'unite depuis le stock du produit
+        # / Determine unit from product stock
+        try:
+            unite = obj.pricesold.productsold.product.stock_inventaire.unite
+            label = "g" if unite == "GR" else "cl" if unite == "CL" else ""
+        except Exception:
+            label = "g"
+        return f"{obj.weight_quantity}{label}"
+
     # noinspection PyTypeChecker
-    @display(description=_("Status"), label={None: "danger", True: "success", "warning": "warning"})
+    @display(
+        description=_("Status"),
+        label={None: "danger", True: "success", "warning": "warning"},
+    )
     def display_status(self, instance: LigneArticle):
         status = instance.status
         if status in [LigneArticle.VALID, LigneArticle.FREERES]:
@@ -140,7 +167,7 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
         / Creates a credit note (negative line) to cancel this sale.
         """
         ligne_originale = get_object_or_404(
-            LigneArticle.objects.select_related('pricesold', 'pricesold__productsold'),
+            LigneArticle.objects.select_related("pricesold", "pricesold__productsold"),
             pk=object_id,
         )
 
@@ -148,7 +175,10 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
 
         # Garde : uniquement sur les lignes VALID ou PAID
         if ligne_originale.status not in [LigneArticle.VALID, LigneArticle.PAID]:
-            messages.error(request, _("A credit note can only be issued for a confirmed or paid entry."))
+            messages.error(
+                request,
+                _("A credit note can only be issued for a confirmed or paid entry."),
+            )
             return redirect(redirect_url)
 
         # Garde : pas d'avoir si un avoir existe deja

@@ -12,14 +12,12 @@
 			<span>{% translate "Panier vide" %}</span>
 		</div>
 	</div>
-	<!-- IMPORTANT — innerHTML et non outerHTML sur #messages :
-	L'element #messages porte un listener 'tarifSelection' (tarif.js)
-	attache au DOMContentLoaded. outerHTML remplacerait l'element DOM
-	et le listener serait perdu (les articles multi-tarif ne repondent plus).
-	/ IMPORTANT — innerHTML not outerHTML on #messages:
-	The #messages element has a 'tarifSelection' listener (tarif.js)
-	attached on DOMContentLoaded. outerHTML would replace the DOM element
-	and lose the listener (multi-rate articles would stop responding). -->
+	<!-- NOTE : le listener 'tarifSelection' est sur #articles-zone (tarif.js),
+	pas sur #messages. Les partials HTMX continuent d'utiliser innerHTML
+	sur #messages pour d'autres raisons (preservation des listeners HTMX).
+	/ NOTE: 'tarifSelection' listener is on #articles-zone (tarif.js),
+	not #messages. HTMX partials still use innerHTML on #messages
+	for other reasons (preserving HTMX listeners). -->
 	<form id="addition-form" class="hide"
 		hx-post="{% url 'laboutik-paiement-moyens_paiement' %}"
 		hx-trigger="validerPaiement"

@@ -15,6 +15,7 @@ FLUX :
 4. Construit le ticket section par section
 5. Retourne les octets ESC/POS bruts (bytes)
 """
+
 import logging
 
 from laboutik.printing.sunmi_cloud_printer import (
@@ -139,20 +140,31 @@ def build_escpos_from_ticket_data(dots_per_line, ticket_data):
             article_qty = article.get("qty", 1)
             article_price = article.get("price", 0)
             article_total = article.get("total", 0)
+            weight_detail = article.get("weight_detail")
 
             # Distinguer ticket vente (avec prix) et ticket commande cuisine (sans prix).
             # / Distinguish sale ticket (with price) from kitchen order (no price).
-            article_a_un_prix = (article_price is not None and article_price > 0)
+            article_a_un_prix = article_price is not None and article_price > 0
 
             if article_a_un_prix:
                 total_euros = f"{article_total / 100:.2f}"
-                line = f"{article_name} x{article_qty}  {total_euros}EUR\n"
+                # Pour les ventes au poids, ne pas afficher qty; pour les autres, l'afficher
+                # / For weight sales, don't show qty; for others, show it
+                if weight_detail:
+                    line = f"{article_name}  {total_euros}EUR\n"
+                else:
+                    line = f"{article_name} x{article_qty}  {total_euros}EUR\n"
             else:
                 # Ticket commande cuisine : juste qty x nom, pas de prix
                 # / Kitchen order ticket: just qty x name, no price
                 line = f"{article_qty} x {article_name}\n"
 
             builder.appendText(line)
+
+            # Si c'est une vente au poids/volume, ajouter une sous-ligne avec le détail
+            # / If weight/volume sale, add a sub-line with details
+            if weight_detail:
+                builder.appendText(weight_detail + "\n")
 
         builder.appendText("--------------------------------\n")
 

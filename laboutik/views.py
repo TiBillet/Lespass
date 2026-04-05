@@ -528,7 +528,12 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         # Include all rates in data for client-side JS.
         est_adhesion = product.categorie_article == Product.ADHESION
         a_prix_libre = any(p.free_price for p in product.prix_euros)
-        multi_tarif = len(product.prix_euros) > 1 or a_prix_libre
+        # Poids/mesure : au moins un tarif nécessite la saisie d'une quantité (vente au poids/volume).
+        # On force l'ouverture de l'overlay (multi_tarif=True) même si un seul tarif.
+        # / Weight-based: at least one price requires quantity input (sold by weight/volume).
+        # Force overlay opening (multi_tarif=True) even with a single price.
+        a_poids_mesure = any(p.poids_mesure for p in product.prix_euros)
+        multi_tarif = len(product.prix_euros) > 1 or a_prix_libre or a_poids_mesure
 
         tarifs = []
         if multi_tarif:
@@ -539,11 +544,44 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                         "name": p.name,
                         "prix_centimes": int(round(p.prix * 100)),
                         "free_price": p.free_price,
+                        "poids_mesure": p.poids_mesure,
+                        "unite_saisie_label": "",  # sera enrichi ci-dessous / will be enriched below
+                        "prix_reference_label": "",  # sera enrichi ci-dessous / will be enriched below
                         "subscription_label": p.get_subscription_type_display()
                         if hasattr(p, "get_subscription_type_display")
                         else "",
                     }
                 )
+
+        # --- Enrichissement poids/mesure : unités de saisie et labels de prix de référence ---
+        # Déterminé à partir du Stock lié (unite GR → grammes/kg, CL → centilitres/litres).
+        # / Weight-based enrichment: input units and reference price labels.
+        # Determined from linked Stock (unite GR → grams/kg, CL → centilitres/litres).
+        unite_saisie_label = "g"
+        prix_reference_label = "/kg"
+        if a_poids_mesure:
+            try:
+                stock_du_produit_pm = product.stock_inventaire
+                if stock_du_produit_pm.unite == "GR":
+                    unite_saisie_label = "g"
+                    prix_reference_label = "/kg"
+                elif stock_du_produit_pm.unite == "CL":
+                    unite_saisie_label = "cl"
+                    prix_reference_label = "/L"
+                else:
+                    unite_saisie_label = "g"
+                    prix_reference_label = "/kg"
+            except Exception:
+                # Pas de stock (ne devrait pas arriver, save_related en crée un)
+                # / No stock (should not happen, save_related creates one)
+                unite_saisie_label = "g"
+                prix_reference_label = "/kg"
+            # Enrichir les tarifs poids_mesure avec l'unité de saisie
+            # / Enrich weight-based prices with input unit
+            for t in tarifs:
+                if t.get("poids_mesure"):
+                    t["unite_saisie_label"] = unite_saisie_label
+                    t["prix_reference_label"] = prix_reference_label
 
         # Couleurs : override produit si défini, sinon catégorie
         # Colors: product override if set, otherwise category
@@ -594,6 +632,9 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
             "est_adhesion": est_adhesion,
             "multi_tarif": multi_tarif,
             "a_prix_libre": a_prix_libre,
+            "a_poids_mesure": a_poids_mesure,
+            "unite_saisie_label": unite_saisie_label if a_poids_mesure else "",
+            "prix_reference_label": prix_reference_label if a_poids_mesure else "",
             "tarifs": tarifs,
             "tarifs_json": dumps(tarifs) if tarifs else "[]",
             "methode_caisse": product.methode_caisse or "",
@@ -3013,7 +3054,7 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
 
     :param donnees_post: QueryDict ou dict des données POST
     :param point_de_vente: instance PointDeVente (pour filtrer les produits autorisés)
-    :return: liste de dicts {'product', 'price', 'quantite', 'prix_centimes', 'custom_amount_centimes'}
+    :return: liste de dicts {'product', 'price', 'quantite', 'prix_centimes', 'custom_amount_centimes', 'weight_amount'}
     """
     articles_extraits = PanierSerializer.extraire_articles_du_post(donnees_post)
     if not articles_extraits:
@@ -3045,6 +3086,7 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
         quantite = article_data["quantite"]
         price_uuid_str = article_data.get("price_uuid")
         custom_amount_centimes = article_data.get("custom_amount_centimes")
+        weight_amount = article_data.get("weight_amount")
 
         # --- Articles BILLETTERIE : ID composite "{event_uuid}__{price_uuid}" ---
         # Le JS envoie repid-{event_uuid}__{price_uuid} pour les tuiles billet.
@@ -3115,17 +3157,31 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
             # Old format: first EUR price
             prix_obj = produit.prix_euros[0]
 
-        # Valider le prix libre (custom_amount_centimes)
-        # Sécurité : rejeter les montants invalides au lieu de corriger silencieusement.
-        # Un montant sous le minimum venant du front est soit un bug soit une tentative de fraude.
-        # Validate free price (custom_amount_centimes)
-        # Security: reject invalid amounts instead of silently correcting.
-        # An amount below minimum from the frontend is either a bug or a fraud attempt.
+        # Valider le prix libre ou poids/mesure (custom_amount_centimes)
+        # Le custom_amount est accepte pour : prix libre (free_price) ET poids/mesure (poids_mesure).
+        # Pour le prix libre : le montant doit etre >= au minimum (prix de base).
+        # Pour le poids/mesure : le montant est calcule cote JS (quantite x prix unitaire), pas de minimum.
+        # Securite : rejeter les montants invalides pour les prix libres.
+        # / Validate free price or weight/volume (custom_amount_centimes)
+        # custom_amount accepted for: free price (free_price) AND weight/volume (poids_mesure).
+        # Free price: amount must be >= minimum (base price).
+        # Weight/volume: amount computed by JS (quantity x unit price), no minimum check.
+        # Security: reject invalid amounts for free prices.
         if custom_amount_centimes is not None:
-            if not prix_obj.free_price:
-                logger.warning(f"Prix {prix_obj.name} n'est pas un prix libre")
-                custom_amount_centimes = None
-            else:
+            if prix_obj.poids_mesure:
+                # Poids/mesure : le montant est calcule par le JS, on l'accepte tel quel.
+                # Verification de coherence : le montant doit etre > 0.
+                # / Weight/volume: amount computed by JS, accepted as-is.
+                # Sanity check: amount must be > 0.
+                if custom_amount_centimes <= 0:
+                    logger.warning(
+                        f"Montant poids/mesure invalide ({custom_amount_centimes}) "
+                        f"pour {prix_obj.name}"
+                    )
+                    custom_amount_centimes = None
+            elif prix_obj.free_price:
+                # Prix libre : le montant doit etre >= au minimum
+                # / Free price: amount must be >= minimum
                 prix_minimum_centimes = int(round(prix_obj.prix * 100))
                 if custom_amount_centimes < prix_minimum_centimes:
                     raise ValueError(
@@ -3137,6 +3193,11 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
                             "minimum": f"{prix_minimum_centimes / 100:.2f}",
                         }
                     )
+            else:
+                # Ni prix libre ni poids/mesure : rejeter le custom_amount
+                # / Neither free price nor weight/volume: reject custom_amount
+                logger.warning(f"Prix {prix_obj.name} n'accepte pas de montant custom")
+                custom_amount_centimes = None
 
         # Le prix effectif : montant custom (prix libre) ou prix standard
         # Effective price: custom amount (free price) or standard price
@@ -3149,6 +3210,7 @@ def _extraire_articles_du_panier(donnees_post, point_de_vente):
                 "quantite": quantite,
                 "prix_centimes": prix_en_centimes,
                 "custom_amount_centimes": custom_amount_centimes,
+                "weight_amount": weight_amount,
                 "est_billet": est_billet,
                 "event": event_billet,
             }
@@ -3332,6 +3394,7 @@ def _creer_lignes_articles(
         prix_obj = article["price"]
         quantite = article["quantite"]
         prix_centimes = article["prix_centimes"]
+        weight_amount = article.get("weight_amount")
 
         # ProductSold : snapshot du produit au moment de la vente
         # ProductSold: product snapshot at the time of sale
@@ -3365,6 +3428,7 @@ def _creer_lignes_articles(
             asset=asset_uuid,
             carte=carte,
             wallet=wallet,
+            weight_quantity=weight_amount,
         )
         # --- Décrémentation stock inventaire ---
         # Si le produit a un Stock lié, on décrémente automatiquement.
@@ -3376,12 +3440,26 @@ def _creer_lignes_articles(
             stock_du_produit = produit.stock_inventaire
             from inventaire.services import StockService
 
-            StockService.decrementer_pour_vente(
-                stock=stock_du_produit,
-                contenance=prix_obj.contenance,
-                qty=quantite,
-                ligne_article=ligne,
-            )
+            if weight_amount:
+                # Poids/mesure : la quantite saisie par le caissier remplace contenance x qty.
+                # On décrémente la quantité saisie (ex: 350g), pas la contenance fixe.
+                # / Weight/volume: cashier's entered quantity replaces contenance x qty.
+                # We decrement the entered quantity (e.g. 350g), not the fixed contenance.
+                StockService.decrementer_pour_vente(
+                    stock=stock_du_produit,
+                    contenance=weight_amount,
+                    qty=1,
+                    ligne_article=ligne,
+                )
+            else:
+                # Tarif classique : contenance fixe x quantite
+                # / Standard price: fixed contenance x quantity
+                StockService.decrementer_pour_vente(
+                    stock=stock_du_produit,
+                    contenance=prix_obj.contenance,
+                    qty=quantite,
+                    ligne_article=ligne,
+                )
 
             # Relire le stock depuis la DB pour avoir la quantité à jour
             # / Re-read stock from DB to get updated quantity

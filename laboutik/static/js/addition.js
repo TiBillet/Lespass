@@ -75,15 +75,18 @@ function additionInsertArticle({ detail }) {
 	// / priceUuid and customAmount are optional (absent for single-rate articles)
 	const priceUuid = detail.priceUuid || null
 	const customAmount = detail.customAmount || null
+	const weightAmount = detail.weightAmount || null
+	const weightUnit = detail.weightUnit || null
 
-	// Clé du formulaire : repid-<product_uuid>--<price_uuid> ou repid-<product_uuid>
-	// Le séparateur '--' permet de distinguer product et price UUID côté backend.
-	// / Form key: repid-<product_uuid>--<price_uuid> or repid-<product_uuid>
-	// The '--' separator lets the backend distinguish product and price UUIDs.
-	const inputKey = priceUuid ? `repid-${uuid}--${priceUuid}` : `repid-${uuid}`
-	// ID unique pour la ligne d'affichage (uuid seul si mono-tarif, uuid--priceUuid si multi)
-	// / Unique ID for display line
-	const lineId = priceUuid ? `${uuid}--${priceUuid}` : uuid
+	// lineId : identifiant unique de la ligne panier.
+	// Pour les tarifs fixes : uuid--priceUuid (partage entre clics, qty incremente).
+	// Pour les montants variables (prix libre, poids/mesure) : uuid--priceUuid--N (unique par saisie).
+	// Si lineId est fourni par tarif.js, on l'utilise. Sinon on le construit (mono-tarif classique).
+	// / lineId: unique cart line identifier.
+	// Fixed prices: uuid--priceUuid (shared, qty increments).
+	// Variable amounts (free, weight): uuid--priceUuid--N (unique per entry).
+	const lineId = detail.lineId || (priceUuid ? `${uuid}--${priceUuid}` : uuid)
+	const inputKey = `repid-${lineId}`
 
 	// Supprime le placeholder "Panier vide" si le panier etait vide
 	// / Removes "Empty cart" placeholder if cart was empty
@@ -103,12 +106,21 @@ function additionInsertArticle({ detail }) {
 			<input type="number" name="${inputKey}" value="1" />
 		`)
 
-		// Si prix libre, ajouter un input caché pour le montant custom
-		// / If free price, add hidden input for custom amount
+		// Si prix libre ou poids/mesure, ajouter un input cache pour le montant custom.
+		// La cle utilise le meme lineId que le repid (avec suffixe --N si variable).
+		// / If free price or weight-based, add hidden input for custom amount.
+		// Key uses the same lineId as repid (with --N suffix if variable).
 		if (customAmount) {
-			const customKey = priceUuid ? `custom-${uuid}--${priceUuid}` : `custom-${uuid}`
 			formEl.insertAdjacentHTML('beforeend', `
-				<input type="hidden" name="${customKey}" value="${customAmount}" />
+				<input type="hidden" name="custom-${lineId}" value="${customAmount}" />
+			`)
+		}
+
+		// Si vente au poids/mesure, ajouter un input cache pour la quantite saisie
+		// / If weight-based sale, add hidden input for entered quantity
+		if (weightAmount) {
+			formEl.insertAdjacentHTML('beforeend', `
+				<input type="hidden" name="weight-${lineId}" value="${weightAmount}" />
 			`)
 		}
 

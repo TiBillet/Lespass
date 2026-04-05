@@ -19,6 +19,9 @@
 		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
 		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
 		data-tarifs='{{ article.tarifs_json }}'
+		data-poids-mesure="{{ article.a_poids_mesure|yesno:'true,false' }}"
+		{% if article.unite_saisie_label %}data-unite-saisie="{{ article.unite_saisie_label }}"{% endif %}
+		{% if article.prix_reference_label %}data-prix-reference="{{ article.prix_reference_label }}"{% endif %}
 		{% if article.stock_bloquant %}data-stock-bloquant="true"{% endif %}
 		class="article-container cat-{{ article.categorie.id}}{% if article.est_adhesion %} article-adhesion{% endif %}{% if article.stock_bloquant %} article-bloquant{% endif %}"
 		style="background-color:{{ article.couleur_backgr }};"
@@ -93,7 +96,13 @@
 			<!-- pills tarifs : un badge par tarif disponible / one badge per available rate -->
 			<div class="article-tarifs-pills">
 				{% for tarif in article.tarifs %}
-					{% if tarif.free_price %}
+					{% if tarif.poids_mesure %}
+					<span class="article-tarif-pill article-tarif-pill-poids"
+					      aria-label="{% translate 'au poids' %}">
+						<i class="fas fa-balance-scale" aria-hidden="true"></i>
+						{{ tarif.prix_centimes|divide_by:100|floatformat:"-2" }}{{ tarif.prix_reference_label }}
+					</span>
+					{% elif tarif.free_price %}
 					<span class="article-tarif-pill article-tarif-pill-libre"
 					      aria-label="{% translate 'prix libre' %}">? {{ currency_data.symbol }}</span>
 					{% else %}
@@ -104,6 +113,17 @@
 					</span>
 					{% endif %}
 				{% endfor %}
+			</div>
+
+			{% elif article.a_poids_mesure and pv.afficher_les_prix %}
+			<!-- prix au poids unique — affiche l'icône balance et le prix de référence
+			     / single weight price — shows scale icon and reference price -->
+			<div class="article-tarifs-pills">
+				<span class="article-tarif-pill article-tarif-pill-poids"
+				      aria-label="{% translate 'au poids' %}">
+					<i class="fas fa-balance-scale" aria-hidden="true"></i>
+					{{ article.prix|divide_by:100|floatformat:"-2" }}{{ article.prix_reference_label }}
+				</span>
 			</div>
 
 			{% elif pv.afficher_les_prix %}

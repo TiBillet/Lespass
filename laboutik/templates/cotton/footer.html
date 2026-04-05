@@ -45,16 +45,12 @@ Les événements click sont attachés par la vue parente (common_user_interface.
 	/ Uses HTMX to load the card check view.
 	Target: injects content into #messages (innerHTML, not outerHTML).
 
-	IMPORTANT — innerHTML et non outerHTML :
-	L'element #messages porte un listener 'tarifSelection' (tarif.js ligne 230)
-	attache au DOMContentLoaded. Si on utilise outerHTML, l'element DOM est
-	remplace par un nouveau et le listener est perdu.
-	Consequence : apres un check carte, les articles multi-tarif ne repondent plus.
-	Avec innerHTML, l'element #messages d'origine est conserve avec ses listeners.
-	/ IMPORTANT — innerHTML not outerHTML:
-	The #messages element carries a 'tarifSelection' listener (tarif.js line 230)
-	attached on DOMContentLoaded. outerHTML replaces the DOM element and loses
-	the listener. With innerHTML, the original #messages element is preserved.
+	NOTE : le listener 'tarifSelection' est desormais sur #articles-zone (tarif.js),
+	pas sur #messages. On conserve innerHTML sur #messages pour preserver les
+	autres listeners eventuels sur cet element.
+	/ NOTE: 'tarifSelection' listener is now on #articles-zone (tarif.js),
+	not #messages. We keep innerHTML on #messages to preserve any other
+	listeners on that element.
 	-->
 	<div id="bt-check-card" class="BF-ligne footer-bt fond-normal test-check-carte" data-testid="footer-check-carte" hx-get="{% url 'laboutik-paiement-verifier_carte' %}"
 		hx-target="#messages" hx-swap="innerHTML" data-loading-disable>

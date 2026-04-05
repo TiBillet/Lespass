@@ -7,6 +7,8 @@
   - Talk : https://2025.djangocon.us/talks/high-performance-django-at-ten-old-tricks-new-picks/
   - Livre gratuit : https://highperformancedjango.com/
 - "Designing Data-Intensive Applications" — Martin Kleppmann : https://dataintensive.net/
+- "Django Scalability Best Practices" — codezup.com : https://codezup.com/django-scalability-best-practices/
+  - Confirme `@cache_page` sur les vues publiques + audit N+1 comme leviers prioritaires
 
 ## Constat actuel sur Lespass
 
