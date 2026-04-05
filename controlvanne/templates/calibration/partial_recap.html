@@ -1,0 +1,69 @@
+{# Fragment HTMX — récap de toutes les mesures calibrées + bouton Appliquer #}
+{# Inclus dans page.html ET mis à jour hors-bande depuis partial_mesure.html #}
+{% load l10n %}
+
+{% if mesures_recap %}
+<div class="card mb-4">
+  <div class="card-header" style="color:#111">
+    <strong>Mesures effectuées ({{ mesures_recap|length }})</strong>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm mb-0" style="color:#111">
+      <thead class="table-light">
+        <tr>
+          <th>Date</th>
+          <th>Django (ml)</th>
+          <th>Verre (ml)</th>
+          <th>Écart</th>
+          <th>Facteur calculé</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in mesures_recap %}
+        <tr>
+          <td>{{ m.session.started_at|date:"d/m H:i" }}</td>
+          <td>{{ m.session.volume_delta_ml|floatformat:0 }}</td>
+          <td>{{ m.session.volume_reel_ml|floatformat:0 }}</td>
+          <td>
+            <span class="badge
+              {% if m.ecart_pct == 0 %}bg-success
+              {% elif m.ecart_pct > 0 %}bg-danger
+              {% else %}bg-warning text-dark{% endif %}">
+              {% if m.ecart_pct > 0 %}+{% endif %}{{ m.ecart_pct }}%
+            </span>
+          </td>
+          <td><strong>{{ m.facteur_calcule }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if facteur_moyen and tireuse.debimetre %}
+  <div class="card-footer" style="background:#f8f9fa">
+    <div id="zone-confirmation">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div>
+          <span class="text-muted small">Facteur actuel :</span>
+          <strong>{{ tireuse.debimetre.flow_calibration_factor }}</strong>
+          &nbsp;→&nbsp;
+          <span class="text-muted small">Facteur proposé :</span>
+          <span class="badge bg-primary fs-6">{{ facteur_moyen }}</span>
+          {% if mesures_recap|length > 1 %}
+            <span class="text-muted small ms-1">(moyenne sur {{ mesures_recap|length }} mesures)</span>
+          {% endif %}
+        </div>
+        <form hx-post="{% url 'calibration_appliquer' uuid=tireuse.uuid %}"
+              hx-target="#zone-confirmation"
+              hx-swap="innerHTML">
+          {% csrf_token %}
+          <input type="hidden" name="facteur_moyen" value="{{ facteur_moyen|unlocalize }}">
+          <button type="submit" class="btn btn-success">✓ Appliquer ce facteur</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endif %}

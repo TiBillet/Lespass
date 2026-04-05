@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Calibration — {{ tireuse.nom_tireuse }}{% endblock %}
+
+{% block head %}
+<script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-10 col-lg-8">
+
+    {# En-tête #}
+    <div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
+      <a href="/admin/controlvanne/tireusebec/" class="btn btn-sm btn-outline-secondary">← Admin</a>
+      <h2 class="mb-0 text-white">Calibration — {{ tireuse.nom_tireuse }}</h2>
+    </div>
+
+    {# Info débitmètre + état de la tireuse #}
+    <div class="card mb-4">
+      <div class="card-body" style="color:#111">
+        {% if tireuse.debimetre %}
+          <p class="mb-1"><strong>Débitmètre :</strong> {{ tireuse.debimetre.name }}</p>
+          <p class="mb-0">
+            <strong>Facteur actuel :</strong>
+            <span class="badge bg-secondary fs-6">{{ tireuse.debimetre.flow_calibration_factor }}</span>
+            <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹ &nbsp;(1 L = facteur × 60 impulsions)</span>
+          </p>
+        {% else %}
+          <div class="alert alert-warning mb-0">
+            Aucun débitmètre associé à cette tireuse. Veuillez en affecter un dans l'admin avant de calibrer.
+          </div>
+        {% endif %}
+
+        {% if not tireuse.enabled %}
+          <span class="badge bg-warning text-dark mt-2">✓ Mode maintenance actif</span>
+        {% else %}
+          <div class="alert alert-danger mt-2 mb-0">
+            ⚠️ La tireuse doit être <strong>désactivée</strong> (mode maintenance) pour pouvoir calibrer.
+            <a href="/admin/controlvanne/tireusebec/{{ tireuse.uuid }}/change/" class="alert-link ms-1">
+              Désactiver dans l'admin →
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Mode opératoire #}
+    <div class="card mb-4">
+      <div class="card-header" style="color:#111"><strong>Mode opératoire</strong></div>
+      <div class="card-body" style="color:#111">
+        <ol class="mb-0">
+          <li>Désactivez la tireuse dans l'admin <em>(si pas déjà fait)</em></li>
+          <li>Connectez un tuyau propre sur la tireuse</li>
+          <li>Présentez une <strong>carte maintenance</strong> → la vanne s'ouvre</li>
+          <li>Versez dans un <strong>verre gradué</strong> jusqu'à ~50 cl</li>
+          <li>Retirez la carte → la vanne se ferme</li>
+          <li>Revenez sur cette page et saisissez le volume lu sur le verre ci-dessous</li>
+          <li>Répétez 2 à 3 fois puis cliquez <strong>Appliquer le facteur</strong></li>
+        </ol>
+      </div>
+    </div>
+
+    {# Sessions en attente de saisie #}
+    {% if sessions_en_attente %}
+    <div class="card mb-4 border-warning">
+      <div class="card-header bg-warning text-dark">
+        <strong>Mesures en attente de saisie ({{ sessions_en_attente|length }})</strong>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="color:#111">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Carte</th>
+              <th>Mesuré par Django</th>
+              <th>Volume réel dans le verre</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for session in sessions_en_attente %}
+            <tr id="mesure-{{ session.pk }}">
+              <td>{{ session.started_at|date:"d/m H:i" }}</td>
+              <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
+              <td><strong>{{ session.volume_delta_ml|floatformat:0 }} ml</strong></td>
+              <td>
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                  <form hx-post="{% url 'calibration_soumettre' uuid=tireuse.uuid session_id=session.pk %}"
+                        hx-target="#mesure-{{ session.pk }}"
+                        hx-swap="outerHTML"
+                        class="d-flex gap-2 align-items-center">
+                    {% csrf_token %}
+                    <input type="number" name="volume_reel_ml"
+                           min="1" max="2000" step="1"
+                           placeholder="ex : 487"
+                           class="form-control form-control-sm" style="width:110px" required>
+                    <button type="submit" class="btn btn-sm btn-primary">Calculer</button>
+                  </form>
+                  <form hx-post="{% url 'calibration_supprimer' uuid=tireuse.uuid session_id=session.pk %}"
+                        hx-target="#mesure-{{ session.pk }}"
+                        hx-swap="outerHTML"
+                        hx-confirm="Supprimer cette mesure ?"
+                        class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">✕</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info mb-4">
+      Aucune mesure en attente.
+      {% if tireuse.enabled %}
+        Désactivez d'abord la tireuse puis passez une carte maintenance pour verser du liquide.
+      {% else %}
+        Passez une carte maintenance pour verser du liquide dans un verre gradué, puis revenez ici.
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# Récap des mesures calibrées + bouton Appliquer #}
+    <div id="recap">
+      {% include "calibration/partial_recap.html" %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{# Fragment HTMX — remplace la ligne <tr id="mesure-X"> après soumission du volume réel #}
+
+{% if erreur %}
+<tr id="mesure-{{ session.pk }}" class="table-danger">
+  <td>{{ session.started_at|date:"d/m H:i" }}</td>
+  <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
+  <td>{{ session.volume_delta_ml|floatformat:0 }} ml</td>
+  <td>
+    <span class="text-danger">{{ erreur }}</span>
+    <form hx-post="{% url 'calibration_soumettre' uuid=tireuse.uuid session_id=session.pk %}"
+          hx-target="#mesure-{{ session.pk }}"
+          hx-swap="outerHTML"
+          class="d-flex gap-2 align-items-center mt-1">
+      {% csrf_token %}
+      <input type="number" name="volume_reel_ml"
+             min="1" max="2000" step="1"
+             placeholder="ex : 487"
+             class="form-control form-control-sm" style="width:110px" required>
+      <button type="submit" class="btn btn-sm btn-primary">Calculer</button>
+    </form>
+  </td>
+</tr>
+
+{% else %}
+<tr id="mesure-{{ session.pk }}" class="table-success">
+  <td>{{ session.started_at|date:"d/m H:i" }}</td>
+  <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
+  <td>{{ session.volume_delta_ml|floatformat:0 }} ml</td>
+  <td>
+    {{ session.volume_reel_ml|floatformat:0 }} ml
+    {% if ecart_pct is not None %}
+      <span class="badge {% if ecart_pct|floatformat:0 == '0' %}bg-success{% elif ecart_pct > 0 %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">
+        {% if ecart_pct > 0 %}+{% endif %}{{ ecart_pct }}%
+      </span>
+    {% endif %}
+    {% if facteur_corrige %}
+      <div class="small text-muted mt-1">→ facteur corrigé : <strong>{{ facteur_corrige }}</strong></div>
+    {% endif %}
+  </td>
+</tr>
+{% endif %}
+
+{# Mise à jour hors-bande du bloc récap (facteur moyen + bouton Appliquer) #}
+<div id="recap" hx-swap-oob="true">
+  {% include "calibration/partial_recap.html" %}
+</div>

@@ -1,0 +1,34 @@
+<h3>{{ title }}</h3>
+<ul class="admin-filter-daterange">
+  <li>
+    {% with qs=spec.choices %}
+      {% for choice in qs %}
+        {% if forloop.first %}
+        <a href="{{ choice.query_string }}"
+           style="display:inline-block; margin-bottom:8px; font-size:11px; color:{% if choice.selected %}#417690{% else %}#ccc{% endif %}">
+          ✕ Effacer les dates
+        </a>
+        {% endif %}
+      {% endfor %}
+    {% endwith %}
+    <form method="get" style="padding:4px 0;">
+      {% for k, v in request.GET.items %}
+        {% if k != "date_from" and k != "date_to" %}
+          <input type="hidden" name="{{ k }}" value="{{ v }}">
+        {% endif %}
+      {% endfor %}
+      <div style="margin-bottom:5px;">
+        <label style="display:block; font-size:11px; color:#666; margin-bottom:2px;">Du :</label>
+        <input type="date" name="date_from" value="{{ request.GET.date_from }}"
+               style="width:100%; box-sizing:border-box; border:1px solid #ccc; border-radius:3px; padding:3px 5px; font-size:12px;">
+      </div>
+      <div style="margin-bottom:6px;">
+        <label style="display:block; font-size:11px; color:#666; margin-bottom:2px;">Au :</label>
+        <input type="date" name="date_to" value="{{ request.GET.date_to }}"
+               style="width:100%; box-sizing:border-box; border:1px solid #ccc; border-radius:3px; padding:3px 5px; font-size:12px;">
+      </div>
+      <input type="submit" value="Filtrer"
+             style="width:100%; background:#417690; color:white; border:none; border-radius:3px; padding:5px; cursor:pointer; font-size:12px;">
+    </form>
+  </li>
+</ul>
