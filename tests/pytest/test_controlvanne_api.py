@@ -27,15 +27,15 @@ from django_tenants.utils import schema_context
 # Fixtures
 # ──────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def tireuse_api_key(tenant):
     """Crée une TireuseAPIKey pour les tests.
     / Creates a TireuseAPIKey for tests."""
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseAPIKey
-        _key_obj, key_string = TireuseAPIKey.objects.create_key(
-            name="test-tireuse-key"
-        )
+
+        _key_obj, key_string = TireuseAPIKey.objects.create_key(name="test-tireuse-key")
         yield key_string
         # Nettoyage / Cleanup
         TireuseAPIKey.objects.filter(name="test-tireuse-key").delete()
@@ -64,14 +64,21 @@ def test_asset_tlf_api(tenant):
         from AuthBillet.models import Wallet
 
         asset = Asset.objects.filter(
-            tenant_origin=tenant, category=Asset.TLF, active=True,
+            tenant_origin=tenant,
+            category=Asset.TLF,
+            active=True,
         ).first()
         if not asset:
-            wallet_lieu = Wallet.objects.create(origin=tenant, name="Wallet lieu test API")
+            wallet_lieu = Wallet.objects.create(
+                origin=tenant, name="Wallet lieu test API"
+            )
             asset = Asset.objects.create(
                 name="Monnaie locale test API",
-                category=Asset.TLF, currency_code="EUR",
-                wallet_origin=wallet_lieu, tenant_origin=tenant, active=True,
+                category=Asset.TLF,
+                currency_code="EUR",
+                wallet_origin=wallet_lieu,
+                tenant_origin=tenant,
+                active=True,
             )
         yield asset
 
@@ -88,15 +95,19 @@ def test_tireuse(tenant, test_asset_tlf_api):
         # / get_or_create with first() to avoid duplicates from previous runs
         debimetre = Debimetre.objects.filter(name="Test YF-S201").first()
         if not debimetre:
-            debimetre = Debimetre.objects.create(name="Test YF-S201", flow_calibration_factor=6.5)
+            debimetre = Debimetre.objects.create(
+                name="Test YF-S201", flow_calibration_factor=6.5
+            )
 
         # Fut avec prix au litre / Keg with per-liter price
         fut, _ = Product.objects.get_or_create(
-            name="Test Fut API", categorie_article=Product.FUT,
+            name="Test Fut API",
+            categorie_article=Product.FUT,
             defaults={"publish": True},
         )
         Price.objects.get_or_create(
-            product=fut, name="Litre",
+            product=fut,
+            name="Litre",
             defaults={"prix": Decimal("5.00"), "poids_mesure": True},
         )
         tireuse = TireuseBec.objects.create(
@@ -130,18 +141,23 @@ def test_carte(tenant, test_asset_tlf_api):
         carte = CarteCashless.objects.filter(tag_id="TSTCV01").first()
         if not carte:
             carte = CarteCashless(
-                tag_id="TSTCV01", number="TSTCV01", uuid=uuid.uuid4(),
+                tag_id="TSTCV01",
+                number="TSTCV01",
+                uuid=uuid.uuid4(),
             )
             carte.save()
 
         # Ajouter un wallet avec du solde / Add a wallet with balance
         if not carte.wallet_ephemere:
-            wallet = Wallet.objects.create(origin=tenant, name="Wallet test API TSTCV01")
+            wallet = Wallet.objects.create(
+                origin=tenant, name="Wallet test API TSTCV01"
+            )
             carte.wallet_ephemere = wallet
             carte.save(update_fields=["wallet_ephemere"])
 
         Token.objects.update_or_create(
-            wallet=carte.wallet_ephemere, asset=test_asset_tlf_api,
+            wallet=carte.wallet_ephemere,
+            asset=test_asset_tlf_api,
             defaults={"value": 500},
         )
 
@@ -151,6 +167,7 @@ def test_carte(tenant, test_asset_tlf_api):
 # ──────────────────────────────────────────────────────────────────────
 # Tests : TireuseAPIKey
 # ──────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 class TestTireuseAPIKey:
@@ -162,6 +179,7 @@ class TestTireuseAPIKey:
         / Can create a key and validate it."""
         with schema_context(tenant.schema_name):
             from controlvanne.models import TireuseAPIKey
+
             _obj, key_string = TireuseAPIKey.objects.create_key(name="test-create")
             assert key_string is not None
             assert len(key_string) > 0
@@ -174,6 +192,7 @@ class TestTireuseAPIKey:
 # ──────────────────────────────────────────────────────────────────────
 # Tests : Permission HasTireuseAccess
 # ──────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 class TestPermission:
@@ -227,6 +246,7 @@ class TestPermission:
 # Tests : TireuseViewSet
 # ──────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestTireuseViewSet:
     """Tests du ViewSet tireuse.
@@ -271,32 +291,40 @@ class TestTireuseViewSet:
         )
         assert response.status_code == 404
 
-    def test_09_authorize_carte_inconnue(self, tireuse_client, tireuse_headers, test_tireuse):
+    def test_09_authorize_carte_inconnue(
+        self, tireuse_client, tireuse_headers, test_tireuse
+    ):
         """Authorize avec UID inconnu → non autorisé.
         / Authorize with unknown UID → not authorized."""
         response = tireuse_client.post(
             "/controlvanne/api/tireuse/authorize/",
             content_type="application/json",
-            data=json.dumps({
-                "tireuse_uuid": str(test_tireuse.uuid),
-                "uid": "XXXXXXXX",
-            }),
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": "XXXXXXXX",
+                }
+            ),
             **tireuse_headers,
         )
         data = response.json()
         assert data["authorized"] is False
         assert "Unknown card" in data["message"]
 
-    def test_10_authorize_carte_valide(self, tireuse_client, tireuse_headers, test_tireuse, test_carte):
+    def test_10_authorize_carte_valide(
+        self, tireuse_client, tireuse_headers, test_tireuse, test_carte
+    ):
         """Authorize avec carte valide → autorisé + session créée.
         / Authorize with valid card → authorized + session created."""
         response = tireuse_client.post(
             "/controlvanne/api/tireuse/authorize/",
             content_type="application/json",
-            data=json.dumps({
-                "tireuse_uuid": str(test_tireuse.uuid),
-                "uid": test_carte.tag_id,
-            }),
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                }
+            ),
             **tireuse_headers,
         )
         data = response.json()
@@ -304,7 +332,9 @@ class TestTireuseViewSet:
         assert data["is_maintenance"] is False
         assert "session_id" in data
 
-    def test_11_event_pour_end(self, tireuse_client, tireuse_headers, test_tireuse, test_carte, tenant):
+    def test_11_event_pour_end(
+        self, tireuse_client, tireuse_headers, test_tireuse, test_carte, tenant
+    ):
         """Event pour_end → session fermée.
         / Event pour_end → session closed."""
         # D'abord autoriser pour créer une session ouverte
@@ -312,10 +342,12 @@ class TestTireuseViewSet:
         tireuse_client.post(
             "/controlvanne/api/tireuse/authorize/",
             content_type="application/json",
-            data=json.dumps({
-                "tireuse_uuid": str(test_tireuse.uuid),
-                "uid": test_carte.tag_id,
-            }),
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                }
+            ),
             **tireuse_headers,
         )
 
@@ -323,12 +355,14 @@ class TestTireuseViewSet:
         response = tireuse_client.post(
             "/controlvanne/api/tireuse/event/",
             content_type="application/json",
-            data=json.dumps({
-                "tireuse_uuid": str(test_tireuse.uuid),
-                "uid": test_carte.tag_id,
-                "event_type": "pour_end",
-                "volume_ml": "250.00",
-            }),
+            data=json.dumps(
+                {
+                    "tireuse_uuid": str(test_tireuse.uuid),
+                    "uid": test_carte.tag_id,
+                    "event_type": "pour_end",
+                    "volume_ml": "250.00",
+                }
+            ),
             **tireuse_headers,
         )
         data = response.json()
@@ -338,9 +372,14 @@ class TestTireuseViewSet:
         # Vérifier que la session est fermée / Check session is closed
         with schema_context(tenant.schema_name):
             from controlvanne.models import RfidSession
-            session = RfidSession.objects.filter(
-                tireuse_bec=test_tireuse, uid=test_carte.tag_id
-            ).order_by("-started_at").first()
+
+            session = (
+                RfidSession.objects.filter(
+                    tireuse_bec=test_tireuse, uid=test_carte.tag_id
+                )
+                .order_by("-started_at")
+                .first()
+            )
             assert session.ended_at is not None
             assert session.volume_delta_ml == Decimal("250.00")
 
@@ -348,6 +387,7 @@ class TestTireuseViewSet:
 # ──────────────────────────────────────────────────────────────────────
 # Tests : AuthKioskView
 # ──────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.django_db
 class TestAuthKiosk:
@@ -378,3 +418,62 @@ class TestAuthKiosk:
         assert data["status"] == "ok"
         assert "session_key" in data
         assert len(data["session_key"]) > 0
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Tests : Vue kiosk
+# ──────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestKioskView:
+    """Tests de la vue kiosk (GET /controlvanne/kiosk/<uuid>/).
+    / Tests for the kiosk view."""
+
+    def test_14_kiosk_sans_auth(self, tireuse_client, test_tireuse):
+        """Kiosk sans session → 403.
+        / Kiosk without session → 403."""
+        response = tireuse_client.get(
+            f"/controlvanne/kiosk/{test_tireuse.uuid}/",
+        )
+        assert response.status_code == 403
+
+    def test_15_kiosk_avec_admin_session(self, admin_client, test_tireuse):
+        """Kiosk avec admin session → 200.
+        / Kiosk with admin session → 200."""
+        response = admin_client.get(
+            f"/controlvanne/kiosk/{test_tireuse.uuid}/",
+        )
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'data-testid="kiosk-cards-grid"' in content
+
+    def test_16_kiosk_uuid_inexistant(self, admin_client):
+        """Kiosk avec UUID inexistant → 404.
+        / Kiosk with nonexistent UUID → 404."""
+        import uuid as uuid_module
+
+        response = admin_client.get(
+            f"/controlvanne/kiosk/{uuid_module.uuid4()}/",
+        )
+        assert response.status_code == 404
+
+    def test_17_kiosk_avec_session_auth_kiosk(
+        self, tireuse_client, tireuse_headers, test_tireuse
+    ):
+        """Auth kiosk puis kiosk → 200.
+        / Auth kiosk then kiosk → 200."""
+        # D'abord auth-kiosk pour obtenir le cookie
+        # / First auth-kiosk to get the cookie
+        tireuse_client.post(
+            "/controlvanne/auth-kiosk/",
+            content_type="application/json",
+            data="{}",
+            **tireuse_headers,
+        )
+        # Puis kiosk (meme client = meme cookie)
+        # / Then kiosk (same client = same cookie)
+        response = tireuse_client.get(
+            f"/controlvanne/kiosk/{test_tireuse.uuid}/",
+        )
+        assert response.status_code == 200

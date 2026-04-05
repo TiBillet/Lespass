@@ -21,12 +21,14 @@ from django_tenants.utils import schema_context
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def tireuse_api_key_billing(tenant):
     """Cree une TireuseAPIKey pour les tests billing. Nettoie apres.
     / Creates a TireuseAPIKey for billing tests. Cleans up after."""
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseAPIKey
+
         api_key_obj, key_string = TireuseAPIKey.objects.create_key(
             name="test-billing-key"
         )
@@ -170,6 +172,7 @@ def tireuse_billing(tenant):
 # TestCalculVolume — tests unitaires
 # ─────────────────────────────────────────────────────────────────────
 
+
 class TestCalculVolume:
     """Tests unitaires de calculer_volume_autorise_ml."""
 
@@ -222,11 +225,18 @@ class TestCalculVolume:
 # TestBillingIntegration — tests via API
 # ─────────────────────────────────────────────────────────────────────
 
+
 class TestBillingIntegration:
     """Tests integration : authorize + pour_end via les endpoints API."""
 
     def test_05_authorize_avec_solde(
-        self, billing_client, billing_headers, tireuse_billing, carte_avec_solde, tenant, asset_tlf
+        self,
+        billing_client,
+        billing_headers,
+        tireuse_billing,
+        carte_avec_solde,
+        tenant,
+        asset_tlf,
     ):
         """Authorize retourne authorized=True, solde_centimes et allowed_ml calcule."""
         response = billing_client.post(
@@ -238,16 +248,28 @@ class TestBillingIntegration:
             content_type="application/json",
             **billing_headers,
         )
-        assert response.status_code == 200, f"Status {response.status_code}: {response.json()}"
+        assert response.status_code == 200, (
+            f"Status {response.status_code}: {response.json()}"
+        )
         data = response.json()
 
         assert data["authorized"] is True, f"authorized devrait etre True: {data}"
-        assert data["solde_centimes"] == 1000, f"solde attendu 1000, obtenu {data.get('solde_centimes')}"
+        assert data["solde_centimes"] == 1000, (
+            f"solde attendu 1000, obtenu {data.get('solde_centimes')}"
+        )
         # 1000cts / 5EUR/L → 2000ml (reservoir 30L ne limite pas)
-        assert data["allowed_ml"] == 2000.0, f"allowed_ml attendu 2000.0, obtenu {data.get('allowed_ml')}"
+        assert data["allowed_ml"] == 2000.0, (
+            f"allowed_ml attendu 2000.0, obtenu {data.get('allowed_ml')}"
+        )
 
     def test_06_pour_end_cree_transaction(
-        self, billing_client, billing_headers, tireuse_billing, carte_avec_solde, tenant, asset_tlf
+        self,
+        billing_client,
+        billing_headers,
+        tireuse_billing,
+        carte_avec_solde,
+        tenant,
+        asset_tlf,
     ):
         """pour_end avec 500ml cree une Transaction, debite le wallet de 250cts."""
         # D'abord authorize pour creer une session ouverte
@@ -275,7 +297,9 @@ class TestBillingIntegration:
             content_type="application/json",
             **billing_headers,
         )
-        assert resp_event.status_code == 200, f"Status {resp_event.status_code}: {resp_event.json()}"
+        assert resp_event.status_code == 200, (
+            f"Status {resp_event.status_code}: {resp_event.json()}"
+        )
         data = resp_event.json()
 
         # 500ml a 5EUR/L = 0.5L * 5EUR = 2.50 EUR = 250 centimes
@@ -329,11 +353,15 @@ class TestBillingIntegration:
             content_type="application/json",
             **billing_headers,
         )
-        assert response.status_code == 200, f"Status {response.status_code}: {response.json()}"
+        assert response.status_code == 200, (
+            f"Status {response.status_code}: {response.json()}"
+        )
         data = response.json()
 
         assert data["authorized"] is False, f"authorized devrait etre False: {data}"
-        assert data["solde_centimes"] == 0, f"solde attendu 0, obtenu {data.get('solde_centimes')}"
+        assert data["solde_centimes"] == 0, (
+            f"solde attendu 0, obtenu {data.get('solde_centimes')}"
+        )
 
         # Nettoyage
         with schema_context(tenant.schema_name):

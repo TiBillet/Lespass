@@ -31,6 +31,7 @@ class HasTireuseAccess(BaseHasAPIKey):
     2. Session admin tenant (cookie sessionid) → accès navigateur pour debug/admin
        Tenant admin session (sessionid cookie) → browser access for debug/admin
     """
+
     model = TireuseAPIKey
 
     def has_permission(self, request: HttpRequest, view: typing.Any) -> bool:

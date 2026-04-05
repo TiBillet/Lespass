@@ -18,10 +18,9 @@ VENV_DIR="$TARGET_DIR/.venv"
 # ==========================================
 # Valeurs exemple par defaut
 # ==========================================
-DEFAULT_DJANGO_SERVER="http://192.168.1.10:8000"
+DEFAULT_PUBLIC_URL="https://tibillet.mondomaine.tld"
 DEFAULT_GIT_REPO="https://github.com/TiBillet/tiheureuse.git"
 DEFAULT_GIT_BRANCH="master"
-DEFAULT_TIREUSE_ID="b7100a7b-a1ff-4664-b2a0-e5b47d992d8a"
 
 
 echo "🍻 INSTALLATION TIBEER "
@@ -50,24 +49,32 @@ sudo locale-gen || true
 # ==========================================
 echo "[2/10] 📝 Configuration..."
 
-echo "🔹 Adresse IP du serveur Django"
-read -p "   (Défaut: $DEFAULT_DJANGO_SERVER) : " DJANGO_SERVER
-DJANGO_SERVER=${DJANGO_SERVER:-$DEFAULT_DJANGO_SERVER}
-DJANGO_SERVER=${DJANGO_SERVER%/}
-echo "   -> Utilisation de : $DJANGO_SERVER"
+echo "🔹 URL publique TiBillet (ex: https://tibillet.mondomaine.tld)"
+read -p "   (Défaut: $DEFAULT_PUBLIC_URL) : " PUBLIC_URL
+PUBLIC_URL=${PUBLIC_URL:-$DEFAULT_PUBLIC_URL}
+PUBLIC_URL=${PUBLIC_URL%/}
+echo "   -> Utilisation de : $PUBLIC_URL"
 
-read -p "🔹 Nom de la tireuse (ex: Bière Blonde, Bar principal) : " NOM_TIREUSE
-while [ -z "$NOM_TIREUSE" ]; do
-    echo "   ⚠️  Le nom ne peut pas être vide."
-    read -p "🔹 Nom de la tireuse : " NOM_TIREUSE
+read -p "🔹 Code PIN à 6 chiffres (affiché dans l'admin TiBillet) : " PIN_CODE
+while [ -z "$PIN_CODE" ]; do
+    echo "   ⚠️  Le PIN ne peut pas être vide."
+    read -p "🔹 Code PIN : " PIN_CODE
 done
 
-# Génération de l'UUID depuis l'adresse MAC (stable et reproductible à chaque réinstall)
-MAC=$(cat /sys/class/net/eth0/address 2>/dev/null \
-    || cat /sys/class/net/wlan0/address 2>/dev/null \
-    || echo "00:00:00:00:00:00")
-TIREUSE_BEC=$(python3 -c "import uuid; print(uuid.uuid5(uuid.NAMESPACE_DNS, '${MAC}'))")
-echo "   -> UUID généré depuis MAC ($MAC) : $TIREUSE_BEC"
+echo "Appairage en cours..."
+CLAIM_RESPONSE=$(curl -s -X POST "${PUBLIC_URL}/api/discovery/claim/" \
+  -H "Content-Type: application/json" \
+  -d "{\"pin_code\": \"${PIN_CODE}\"}")
+
+SERVER_URL=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['server_url'])")
+API_KEY=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['api_key'])")
+TIREUSE_UUID=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['tireuse_uuid'])")
+
+if [ -z "$SERVER_URL" ] || [ -z "$API_KEY" ]; then
+  echo "ERREUR: Appairage echoue. Verifiez le PIN et l'URL."
+  exit 1
+fi
+echo "Appairage reussi ! Tenant: $SERVER_URL, Tireuse: $TIREUSE_UUID"
 
 read -p "🔹 Branche Git [Défaut: $DEFAULT_GIT_BRANCH] : " GIT_BRANCH
 GIT_BRANCH=${GIT_BRANCH:-$DEFAULT_GIT_BRANCH}
@@ -186,7 +193,7 @@ echo "Installation des dépendances Python..."
 source "$VENV_DIR/bin/activate"
 pip install --upgrade pip
 # LES LIBS DEMANDÉES EXPLICITEMENT :
-pip install pyserial flask requests pigpio mfrc522 python-dotenv systemd-python
+pip install pyserial requests pigpio mfrc522 python-dotenv systemd-python
 
 # pyscard uniquement pour ACR122U (nécessite libpcsclite-dev pour compiler)
 if [ "$RFID_TYPE" = "ACR122U" ]; then
@@ -204,26 +211,12 @@ deactivate
 # ==========================================
 echo ""
 echo "[6/10] ⚙️ Création fichier .env..."
-# Extraction BACKEND_HOST et BACKEND_PORT depuis l'URL saisie
-BACKEND_HOST_PARSED=$(echo "$DJANGO_SERVER" | sed 's~https\?://~~' | sed 's~:[0-9]*$~~')
-BACKEND_PORT_PARSED=$(echo "$DJANGO_SERVER" | grep -oE ':[0-9]+$' | tr -d ':')
-BACKEND_PORT_PARSED=${BACKEND_PORT_PARSED:-8000}
-
-# Clé API partagée (doit correspondre à AGENT_SHARED_KEY dans Django settings.py)
-read -p "🔹 Clé API partagée (AGENT_SHARED_KEY dans Django) : " BACKEND_API_KEY
-while [ -z "$BACKEND_API_KEY" ]; do
-    echo "   ⚠️  La clé ne peut pas être vide."
-    read -p "🔹 Clé API partagée : " BACKEND_API_KEY
-done
 
 cat << EOF > "$TARGET_DIR/.env"
 # Généré par le script d'installation
-TIREUSE_BEC=$TIREUSE_BEC
-NOM_TIREUSE="$NOM_TIREUSE"
-API_URL=$DJANGO_SERVER
-BACKEND_HOST=$BACKEND_HOST_PARSED
-BACKEND_PORT=$BACKEND_PORT_PARSED
-BACKEND_API_KEY=$BACKEND_API_KEY
+SERVER_URL=$SERVER_URL
+API_KEY=$API_KEY
+TIREUSE_UUID=$TIREUSE_UUID
 DEBUG=False
 # Lecteur RFID
 RFID_TYPE=$RFID_TYPE
@@ -286,12 +279,10 @@ export LC_ALL=fr_FR.UTF-8
 
 # URL kiosque - lit directement depuis .env
 set -a; [ -f /home/sysop/tibeer/.env ] && . /home/sysop/tibeer/.env; set +a
-DJANGO_SERVER="${API_URL:-http://192.168.1.10:8000}"
-TIREUSE_ID="${TIREUSE_BEC:-}"
-if [ -n "$TIREUSE_ID" ]; then
-    URL="${DJANGO_SERVER}/?tireuse_bec=${TIREUSE_ID}"
+if [ -n "$TIREUSE_UUID" ]; then
+    URL="${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
 else
-    URL="${DJANGO_SERVER}/"
+    URL="${SERVER_URL}/"
 fi
 
 # Trouver Chromium
@@ -424,7 +415,7 @@ echo ""
 echo "---------------------------------------"
 echo "✅ INSTALLATION TERMINÉE"
 echo "---------------------------------------"
-echo "👉 Kiosk URL : $DJANGO_SERVER/?tireuse_bec=$TIREUSE_BEC"
+echo "👉 Kiosk URL : ${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
 echo "⚠️  REDÉMARRAGE NÉCESSAIRE (Prise en compte GPU Legacy)"
 echo ""
 read -p "Redémarrer maintenant ? (o/n) " REBOOT_NOW

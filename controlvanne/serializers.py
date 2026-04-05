@@ -22,6 +22,7 @@ class PingSerializer(serializers.Serializer):
     Le Pi envoie son UUID de tireuse pour confirmer l'association.
     / The Pi sends its tap UUID to confirm the association.
     """
+
     tireuse_uuid = serializers.UUIDField(
         required=False,
         help_text=_("UUID of the tap (optional, for association check)."),
@@ -33,6 +34,7 @@ class AuthorizeSerializer(serializers.Serializer):
     Données d'autorisation NFC : le Pi badge une carte et demande l'autorisation.
     / NFC authorization data: the Pi scans a card and requests authorization.
     """
+
     tireuse_uuid = serializers.UUIDField(
         help_text=_("UUID of the tap where the card was scanned."),
     )
@@ -60,6 +62,7 @@ class EventSerializer(serializers.Serializer):
     Le Pi envoie des mises à jour de volume et de statut.
     / The Pi sends volume and status updates.
     """
+
     tireuse_uuid = serializers.UUIDField(
         help_text=_("UUID of the tap."),
     )

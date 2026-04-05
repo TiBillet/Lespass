@@ -1,130 +1,147 @@
+"""
+Client HTTP vers le serveur Django Lespass.
+/ HTTP client for the Django Lespass server.
+
+LOCALISATION : controlvanne/Pi/network/backend_client.py
+
+Endpoints appeles :
+- POST /controlvanne/api/tireuse/ping/       → test connexion + config tireuse
+- POST /controlvanne/api/tireuse/authorize/  → badge NFC → autorisation
+- POST /controlvanne/api/tireuse/event/      → evenement temps reel
+- POST /controlvanne/auth-kiosk/             → token API → cookie session
+"""
+
 import requests
-import json
-import socket
-from config.settings import BACKEND_HOST, BACKEND_PORT, BACKEND_API_KEY, NOM_TIREUSE, TIREUSE_BEC
+from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID
 from utils.logger import logger
 from utils.exceptions import BackendError
 
-# --- CONFIGURATION ---
-API_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
-TIMEOUT = 2.0
-
 
 class BackendClient:
-    def __init__(self, tireuse_id=TIREUSE_BEC):
+    """
+    Client HTTP pour communiquer avec le ViewSet DRF de controlvanne.
+    Auth : header Authorization: Api-Key <cle_unique> (TireuseAPIKey via discovery).
+    / HTTP client for the controlvanne DRF ViewSet.
+    Auth: Authorization: Api-Key <unique_key> (TireuseAPIKey via discovery).
+    """
+
+    def __init__(self):
+        self.server_url = SERVER_URL.rstrip("/")
+        self.tireuse_uuid = TIREUSE_UUID
         self.headers = {
             "Content-Type": "application/json",
-            "X-API-Key": BACKEND_API_KEY,
+            "Authorization": f"Api-Key {API_KEY}",
         }
-        self.base_url = API_URL.rstrip("/") + "/api/rfid"
-        self.tireuse_id = tireuse_id
 
-    def register(self) -> dict:
+    def ping(self):
         """
-        Auto-enregistre cette tireuse sur Django au démarrage.
-        Django crée la TireuseBec si elle n'existe pas (enabled=False).
-        Nécessite que 'allow_self_register' soit activé dans l'admin Django.
-        Silencieux si le serveur refuse (mode désactivé) : on continue quand même.
-        """
-        url = f"{self.base_url}/register/"
-        payload = {
-            "uuid": self.tireuse_id,
-            "nom_tireuse": NOM_TIREUSE,
-            "hostname": socket.gethostname(),
-        }
-        try:
-            r = requests.post(url, json=payload, headers=self.headers, timeout=5.0)
-            if r.status_code == 200:
-                return r.json()
-            elif r.status_code == 403:
-                # Mode désactivé côté Django — pas bloquant
-                logger.info("Auto-enregistrement désactivé sur le serveur (normal en prod).")
-                return {"error": "disabled"}
-            else:
-                logger.warning(f"Réponse inattendue lors du register : {r.status_code}")
-                return {"error": f"HTTP {r.status_code}"}
-        except Exception as e:
-            # Erreur réseau non bloquante — le Pi peut fonctionner s'il est déjà connu
-            logger.warning(f"Auto-enregistrement impossible (réseau?) : {e}")
-            return {"error": str(e)}
+        POST /controlvanne/api/tireuse/ping/
+        Test de connectivite + recuperation de la config tireuse.
+        / Connectivity test + tap config retrieval.
 
-    def authorize(self, uid: str) -> dict:
+        :return: dict avec status, tireuse (nom, prix, calibration, reservoir)
+        :raises BackendError: si le serveur est injoignable
         """
-        Interroge Django.
-        Renvoie un dictionnaire avec 'authorized': True/False et le reste des infos.
-        """
-        url = f"{self.base_url}/authorize"
-        payload = {"uid": uid, "tireuse_bec": self.tireuse_id}
+        url = f"{self.server_url}/controlvanne/api/tireuse/ping/"
+        payload = {"tireuse_uuid": self.tireuse_uuid}
 
         try:
-            logger.debug(f"Demande autorisation pour {uid}...")
-            r = requests.post(url, json=payload, headers=self.headers, timeout=TIMEOUT)
-
-            if r.status_code == 200:
-                data = r.json()
-                if isinstance(data, dict):
-                    # Si le serveur dit OK ou renvoie une session
-                    if "session_id" in data or data.get("authorized") is True:
-                        data["authorized"] = True
-                        return data
-                return {"authorized": False, "error": "Pas de session_id"}
-
-            elif r.status_code == 403:
-                # On retourne juste l'info, c'est le Controller qui décidera de l'affichage
-                return {
-                    "authorized": False,
-                    "error": "Badge refusé ou solde insuffisant",
-                }
-
+            response = requests.post(url, json=payload, headers=self.headers, timeout=5.0, verify=True)
+            if response.status_code == 200:
+                return response.json()
             else:
-                return {"authorized": False, "error": f"Erreur HTTP {r.status_code}"}
-
+                logger.warning(f"Ping: HTTP {response.status_code} — {response.text[:200]}")
+                return {"status": "error", "message": f"HTTP {response.status_code}"}
         except Exception as e:
-            logger.error(f"Erreur réseau authorize: {e}")
-            raise BackendError(
-                f"Impossible de joindre le backend pour l'autorisation : {e}"
-            ) from e
+            logger.error(f"Ping impossible: {e}")
+            raise BackendError(f"Serveur injoignable: {e}") from e
 
-    def send_event(self, event_type, uid, session_id=None, data=None):
+    def authorize(self, uid):
         """
-        Envoie un événement (start, update, end, auth_fail).
-        Retourne la réponse du serveur (dict) ou None en cas d'erreur.
+        POST /controlvanne/api/tireuse/authorize/
+        Badge NFC pose → verification solde wallet → autorisation.
+        / NFC badge placed → wallet balance check → authorization.
+
+        :param uid: str — UID hex de la carte NFC (ex: "741ECC2A")
+        :return: dict avec authorized, session_id, allowed_ml, solde_centimes, etc.
+        :raises BackendError: si le serveur est injoignable
         """
-        # 1. Préparation des données data/inner
-        inner_data = {}
-
-        if session_id:
-            inner_data["session_id"] = session_id
-
-        if data is not None:
-            if isinstance(data, dict):
-                inner_data.update(data)
-            else:
-                inner_data["volume_ml"] = data
-
-        # 2. Payload complet
+        url = f"{self.server_url}/controlvanne/api/tireuse/authorize/"
         payload = {
-            "event_type": event_type,
+            "tireuse_uuid": self.tireuse_uuid,
             "uid": uid,
-            "tireuse_bec": self.tireuse_id,
-            "data": inner_data,
         }
 
         try:
-            # Timeout court pour le débit, un peu plus long pour les autres events
-            to = 1.0 if event_type == "pour_update" else 3.0
+            response = requests.post(url, json=payload, headers=self.headers, timeout=2.0, verify=True)
+            data = response.json()
 
-            url = f"{self.base_url}/event/"
-            res = requests.post(url, json=payload, headers=self.headers, timeout=to)
-
-            if res.status_code == 200:
-                return res.json()
+            if response.status_code == 200:
+                return data
             else:
-                logger.error(f"Erreur API Event ({res.status_code}): {res.text}")
-                return None
+                # 403, 404, etc. — le serveur a repondu, on retourne les infos
+                # / Server responded, return the info
+                return data
 
         except Exception as e:
-            logger.error(f"Echec envoi event {event_type}: {e}")
-            raise BackendError(
-                f"Impossible d'envoyer l'event '{event_type}' : {e}"
-            ) from e
+            logger.error(f"Authorize impossible: {e}")
+            raise BackendError(f"Erreur reseau authorize: {e}") from e
+
+    def send_event(self, event_type, uid, volume_ml=0):
+        """
+        POST /controlvanne/api/tireuse/event/
+        Envoie un evenement temps reel (pour_start, pour_update, pour_end, card_removed).
+        / Sends a real-time event.
+
+        :param event_type: str — "pour_start", "pour_update", "pour_end", "card_removed"
+        :param uid: str — UID hex de la carte NFC
+        :param volume_ml: float — volume cumule depuis le debut de la session (ml)
+        :return: dict avec status, event_type, session_id, volume_ml (+ montant_centimes pour pour_end)
+        """
+        url = f"{self.server_url}/controlvanne/api/tireuse/event/"
+        payload = {
+            "tireuse_uuid": self.tireuse_uuid,
+            "uid": uid,
+            "event_type": event_type,
+            "volume_ml": str(round(volume_ml, 2)),
+        }
+
+        # Timeout court pour pour_update (non bloquant), plus long pour les autres
+        # / Short timeout for pour_update (non-blocking), longer for others
+        timeout = 1.0 if event_type == "pour_update" else 3.0
+
+        try:
+            response = requests.post(url, json=payload, headers=self.headers, timeout=timeout, verify=True)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logger.error(f"Event {event_type}: HTTP {response.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Event {event_type} impossible: {e}")
+            raise BackendError(f"Erreur reseau event: {e}") from e
+
+    def auth_kiosk(self):
+        """
+        POST /controlvanne/auth-kiosk/
+        Obtient un cookie session Django pour le kiosk Chromium.
+        / Gets a Django session cookie for the Chromium kiosk.
+
+        :return: str — session_key
+        :raises BackendError: si le serveur est injoignable
+        """
+        url = f"{self.server_url}/controlvanne/auth-kiosk/"
+
+        try:
+            response = requests.post(url, json={}, headers=self.headers, timeout=5.0, verify=True)
+            if response.status_code == 200:
+                data = response.json()
+                session_key = data.get("session_key", "")
+                logger.info(f"Auth kiosk OK — session_key obtenue")
+                return session_key
+            else:
+                logger.error(f"Auth kiosk: HTTP {response.status_code}")
+                raise BackendError(f"Auth kiosk echoue: HTTP {response.status_code}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Auth kiosk impossible: {e}")
+            raise BackendError(f"Auth kiosk impossible: {e}") from e

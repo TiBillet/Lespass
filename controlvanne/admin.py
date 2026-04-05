@@ -45,6 +45,7 @@ from .models import (
 # / Date range filter (From / To inputs)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class DateRangeFilter(SimpleListFilter):
     """
     Filtre plage de dates avec inputs HTML date_from / date_to.
@@ -52,6 +53,7 @@ class DateRangeFilter(SimpleListFilter):
     / Date range filter with HTML date_from / date_to inputs.
     Template is in controlvanne/templates/admin/date_range_filter.html.
     """
+
     title = _("Period")
     parameter_name = "date_from"
     template = "admin/date_range_filter.html"
@@ -99,6 +101,7 @@ class DateRangeFilter(SimpleListFilter):
 # / DebitmetreAdmin — flow meter management
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(Debimetre, site=staff_admin_site)
 class DebitmetreAdmin(ModelAdmin):
     """
@@ -107,6 +110,7 @@ class DebitmetreAdmin(ModelAdmin):
     / Admin for flow meters (flow sensors).
     The flow_calibration_factor column is editable directly in the list.
     """
+
     list_display = ("name", "flow_calibration_factor")
     list_editable = ("flow_calibration_factor",)
 
@@ -128,6 +132,7 @@ class DebitmetreAdmin(ModelAdmin):
 # / CarteMaintenanceAdmin — maintenance NFC cards
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(CarteMaintenance, site=staff_admin_site)
 class CarteMaintenanceAdmin(ModelAdmin):
     """
@@ -136,6 +141,7 @@ class CarteMaintenanceAdmin(ModelAdmin):
     / Admin for tap maintenance NFC cards.
     autocomplete_fields on carte to select an existing CarteCashless.
     """
+
     list_display = ("carte_tag_id", "produit", "notes")
     raw_id_fields = ("carte",)
     search_fields = ("carte__tag_id", "produit", "notes")
@@ -164,6 +170,7 @@ class CarteMaintenanceAdmin(ModelAdmin):
 # / TireuseBecAdmin — physical tap (main admin)
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(TireuseBec, site=staff_admin_site)
 class TireuseBecAdmin(ModelAdmin):
     """
@@ -172,6 +179,7 @@ class TireuseBecAdmin(ModelAdmin):
     / Main admin for physical taps.
     list_editable on fut_actif, debimetre, enabled for quick updates from the list.
     """
+
     list_display = (
         "nom_tireuse",
         "fut_actif",
@@ -228,12 +236,14 @@ class TireuseBecAdmin(ModelAdmin):
 # / RfidSessionAdmin — all RFID sessions
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(RfidSession, site=staff_admin_site)
 class RfidSessionAdmin(ModelAdmin):
     """
     Vue en lecture seule de toutes les sessions RFID.
     / Read-only view of all RFID sessions.
     """
+
     list_display = (
         "tireuse_bec",
         "liquid_label_snapshot",
@@ -273,6 +283,7 @@ class RfidSessionAdmin(ModelAdmin):
 # / CSV export — shared functions between histories
 # ──────────────────────────────────────────────────────────────────────
 
+
 def _export_tireuse_csv(modeladmin, request, queryset):
     """
     Exporte les sessions de debit par tireuse au format CSV.
@@ -281,27 +292,31 @@ def _export_tireuse_csv(modeladmin, request, queryset):
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
     resp["Content-Disposition"] = 'attachment; filename="historique_tireuse.csv"'
     writer = csv.writer(resp, delimiter=";")
-    writer.writerow([
-        _("Date"),
-        _("Tap"),
-        _("Card UID"),
-        _("Card name"),
-        _("Beverage"),
-        _("Volume (cl)"),
-        _("Duration (s)"),
-        _("Sale line"),
-    ])
+    writer.writerow(
+        [
+            _("Date"),
+            _("Tap"),
+            _("Card UID"),
+            _("Card name"),
+            _("Beverage"),
+            _("Volume (cl)"),
+            _("Duration (s)"),
+            _("Sale line"),
+        ]
+    )
     for session in queryset.order_by("started_at"):
-        writer.writerow([
-            session.started_at.strftime("%Y-%m-%d %H:%M"),
-            session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
-            session.uid,
-            session.label_snapshot,
-            session.liquid_label_snapshot,
-            f"{float(session.volume_delta_ml / 10):.1f}",
-            session.duration_seconds or "",
-            session.ligne_article_id or "",
-        ])
+        writer.writerow(
+            [
+                session.started_at.strftime("%Y-%m-%d %H:%M"),
+                session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
+                session.uid,
+                session.label_snapshot,
+                session.liquid_label_snapshot,
+                f"{float(session.volume_delta_ml / 10):.1f}",
+                session.duration_seconds or "",
+                session.ligne_article_id or "",
+            ]
+        )
     return resp
 
 
@@ -316,27 +331,31 @@ def _export_cartes_csv(modeladmin, request, queryset):
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
     resp["Content-Disposition"] = 'attachment; filename="historique_cartes.csv"'
     writer = csv.writer(resp, delimiter=";")
-    writer.writerow([
-        _("Date"),
-        _("Card UID"),
-        _("Card name"),
-        _("Tap"),
-        _("Beverage"),
-        _("Volume (cl)"),
-        _("Duration (s)"),
-        _("Sale line"),
-    ])
+    writer.writerow(
+        [
+            _("Date"),
+            _("Card UID"),
+            _("Card name"),
+            _("Tap"),
+            _("Beverage"),
+            _("Volume (cl)"),
+            _("Duration (s)"),
+            _("Sale line"),
+        ]
+    )
     for session in queryset.order_by("started_at"):
-        writer.writerow([
-            session.started_at.strftime("%Y-%m-%d %H:%M"),
-            session.uid,
-            session.label_snapshot,
-            session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
-            session.liquid_label_snapshot,
-            f"{float(session.volume_delta_ml / 10):.1f}",
-            session.duration_seconds or "",
-            session.ligne_article_id or "",
-        ])
+        writer.writerow(
+            [
+                session.started_at.strftime("%Y-%m-%d %H:%M"),
+                session.uid,
+                session.label_snapshot,
+                session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
+                session.liquid_label_snapshot,
+                f"{float(session.volume_delta_ml / 10):.1f}",
+                session.duration_seconds or "",
+                session.ligne_article_id or "",
+            ]
+        )
     return resp
 
 
@@ -348,6 +367,7 @@ _export_cartes_csv.short_description = _("Export CSV")
 # / HistoriqueTireuseAdmin — normal volumes per tap
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(HistoriqueTireuse, site=staff_admin_site)
 class HistoriqueTireuseAdmin(ModelAdmin):
     """
@@ -356,6 +376,7 @@ class HistoriqueTireuseAdmin(ModelAdmin):
     / History of normal service sessions (not maintenance or calibration).
     Includes date range filter and CSV export.
     """
+
     list_display = (
         "started_at",
         "tireuse_bec",
@@ -403,6 +424,7 @@ class HistoriqueTireuseAdmin(ModelAdmin):
 # / HistoriqueCarteAdmin — movements per NFC card
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(HistoriqueCarte, site=staff_admin_site)
 class HistoriqueCarteAdmin(ModelAdmin):
     """
@@ -411,6 +433,7 @@ class HistoriqueCarteAdmin(ModelAdmin):
     / History of sessions focused on the NFC card used.
     Includes date range filter and CSV export.
     """
+
     list_display = (
         "started_at",
         "label_snapshot",
@@ -449,6 +472,7 @@ class HistoriqueCarteAdmin(ModelAdmin):
 # / HistoriqueMaintenanceAdmin — maintenance sessions
 # ──────────────────────────────────────────────────────────────────────
 
+
 def _export_maintenance_csv(modeladmin, request, queryset):
     """
     Exporte les sessions de maintenance au format CSV.
@@ -457,28 +481,32 @@ def _export_maintenance_csv(modeladmin, request, queryset):
     resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
     resp["Content-Disposition"] = 'attachment; filename="historique_maintenance.csv"'
     writer = csv.writer(resp, delimiter=";")
-    writer.writerow([
-        _("Date"),
-        _("Tap"),
-        _("Card UID"),
-        _("Maintenance card"),
-        _("Cleaning product"),
-        _("Volume (cl)"),
-        _("Duration (s)"),
-    ])
+    writer.writerow(
+        [
+            _("Date"),
+            _("Tap"),
+            _("Card UID"),
+            _("Maintenance card"),
+            _("Cleaning product"),
+            _("Volume (cl)"),
+            _("Duration (s)"),
+        ]
+    )
     total_vol = 0
     for session in queryset.order_by("started_at"):
         vol_cl = float(session.volume_delta_ml / 10)
         total_vol += vol_cl
-        writer.writerow([
-            session.started_at.strftime("%Y-%m-%d %H:%M"),
-            session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
-            session.uid,
-            str(session.carte_maintenance) if session.carte_maintenance else "",
-            session.produit_maintenance_snapshot,
-            f"{vol_cl:.1f}",
-            session.duration_seconds or "",
-        ])
+        writer.writerow(
+            [
+                session.started_at.strftime("%Y-%m-%d %H:%M"),
+                session.tireuse_bec.nom_tireuse if session.tireuse_bec else "",
+                session.uid,
+                str(session.carte_maintenance) if session.carte_maintenance else "",
+                session.produit_maintenance_snapshot,
+                f"{vol_cl:.1f}",
+                session.duration_seconds or "",
+            ]
+        )
     # Ligne de total en bas du CSV / Total row at the bottom
     writer.writerow([])
     writer.writerow([_("TOTAL"), "", "", "", "", f"{total_vol:.1f}", ""])
@@ -494,6 +522,7 @@ class HistoriqueMaintenanceAdmin(ModelAdmin):
     Historique filtre sur les sessions de maintenance (is_maintenance=True).
     / History filtered on maintenance sessions (is_maintenance=True).
     """
+
     list_display = (
         "started_at",
         "tireuse_bec",
@@ -544,6 +573,7 @@ class HistoriqueMaintenanceAdmin(ModelAdmin):
 # / SessionCalibrationAdmin — flow meter calibration sessions
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(SessionCalibration, site=staff_admin_site)
 class SessionCalibrationAdmin(ModelAdmin):
     """
@@ -554,6 +584,7 @@ class SessionCalibrationAdmin(ModelAdmin):
     Shows the volume measured by Django vs the actual volume poured in a graduated glass,
     and calculates the percentage difference.
     """
+
     list_display = (
         "started_at",
         "tireuse_bec",
@@ -624,6 +655,7 @@ class SessionCalibrationAdmin(ModelAdmin):
 # / ConfigurationAdmin — configuration singleton
 # ──────────────────────────────────────────────────────────────────────
 
+
 @admin.register(Configuration, site=staff_admin_site)
 class ConfigurationAdmin(ModelAdmin):
     """
@@ -656,6 +688,7 @@ class ConfigurationAdmin(ModelAdmin):
         """
         from django.shortcuts import redirect
         from django.urls import reverse
+
         obj = Configuration.get_solo()
         return redirect(
             reverse("staff_admin:controlvanne_configuration_change", args=[obj.pk])

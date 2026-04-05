@@ -1,43 +1,46 @@
-import os
-from dotenv import load_dotenv
-from pathlib import Path
+"""
+Configuration du client Pi — charge les variables depuis .env.
+/ Pi client configuration — loads variables from .env.
 
-# --- Chargement des variables d'environnement ---
+LOCALISATION : controlvanne/Pi/config/settings.py
+
+Variables recues de discovery (generees par install.sh) :
+- SERVER_URL : URL du tenant Django (ex: https://lespass.mondomaine.tld)
+- API_KEY : TireuseAPIKey unique (ex: xxxxxxx.yyyyyyy)
+- TIREUSE_UUID : UUID de la TireuseBec (ex: abc123-...)
+
+Variables hardware (configurees par install.sh) :
+- RFID_TYPE, GPIO_VANNE, GPIO_FLOW_SENSOR, FLOW_CALIBRATION_FACTOR, etc.
+"""
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
 load_dotenv()
 
-BACKEND_API_KEY = os.getenv("BACKEND_API_KEY", "changeme")
-TIREUSE_BEC = os.getenv("TIREUSE_BEC", "CHANGER_CI")
-NOM_TIREUSE = os.getenv("NOM_TIREUSE", "Tireuse")
-# --- Chemins et répertoires ---
-BASE_DIR = Path(__file__).resolve().parent.parent
-LOG_DIR = Path("~/tibeer/logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)  # Crée le répertoire si inexistant
+# --- Discovery (recus de POST /api/discovery/claim/) ---
+SERVER_URL = os.getenv("SERVER_URL", "https://localhost")
+API_KEY = os.getenv("API_KEY", "changeme")
+TIREUSE_UUID = os.getenv("TIREUSE_UUID", "")
 
-# --- Configuration RFID ---
-RFID_DEVICE = os.getenv("RFID_DEVICE", "serial0")  # Port série pour VMA405
-RFID_TIMEOUT = float(os.getenv("RFID_TIMEOUT", "1.0"))  # Timeout en secondes
-# RC522 uniquement : bus SPI (0 = SPI0, 1 = SPI1) et vitesse en Hz
+# --- RFID ---
+RFID_TYPE = os.getenv("RFID_TYPE", "RC522")
 RC522_SPI_DEVICE = int(os.getenv("RC522_SPI_DEVICE", "0"))
-RC522_SPI_SPEED  = int(os.getenv("RC522_SPI_SPEED", "1000000"))
+RC522_SPI_SPEED = int(os.getenv("RC522_SPI_SPEED", "1000000"))
+RFID_SERIAL_PORT = os.getenv("RFID_SERIAL_PORT", "/dev/ttyUSB0")
+RFID_BAUDRATE = int(os.getenv("RFID_BAUDRATE", "9600"))
 
-# --- Configuration Vanne ---
-# Utilise GPIO_VANNE pour correspondre au nom lu par hardware/valve.py
-GPIO_VANNE = int(os.getenv("GPIO_VANNE", "12"))
+# --- Hardware ---
+GPIO_VANNE = int(os.getenv("GPIO_VANNE", "18"))
+GPIO_FLOW_SENSOR = int(os.getenv("GPIO_FLOW_SENSOR", "23"))
+FLOW_CALIBRATION_FACTOR = float(os.getenv("FLOW_CALIBRATION_FACTOR", "6.5"))
 VALVE_ACTIVE_HIGH = os.getenv("VALVE_ACTIVE_HIGH", "False").lower() == "true"
 
-# --- Configuration Débitmètre ---
-FLOW_CALIBRATION_FACTOR = float(
-    os.getenv("FLOW_CALIBRATION_FACTOR", "6.5")
-)  # Impulsions/L
-# Utilise GPIO_FLOW_SENSOR pour correspondre au nom lu par hardware/flow_meter.py
-GPIO_FLOW_SENSOR = int(os.getenv("GPIO_FLOW_SENSOR", "16"))
+# --- Logs ---
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = Path(os.getenv("LOG_DIR", "~/tibeer/logs")).expanduser()
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-# --- Configuration Backend ---
-BACKEND_HOST = os.getenv("BACKEND_HOST", "localhost")
-BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
-BACKEND_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}/api/rfid/event/"
-NETWORK_TIMEOUT = float(os.getenv("NETWORK_TIMEOUT", "5.0"))
-MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
-
-# --- Configuration Systemd ---
+# --- Systemd ---
 SYSTEMD_NOTIFY = os.getenv("SYSTEMD_NOTIFY", "False").lower() == "true"

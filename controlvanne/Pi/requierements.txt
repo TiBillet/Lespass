@@ -1,8 +1,0 @@
-pyserial>=3.5
-requests>=2.31.0
-python-dotenv>=1.0.0
-systemd-python>=234
-mfrc522-python>=0.0.7
-pigpio>=1.78
-# RPi.GPIO et spidev : dépendances de mfrc522, installées automatiquement
-# pyscard>=2.0.0 : ACR122U uniquement — installé conditionnellement par install.sh

@@ -1453,5 +1453,24 @@ Decouvert par le test E2E test_09 (session 28, avril 2026).
 
 ---
 
+### Controlvanne / Tireuses connectees (session controlvanne, avril 2026)
+
+**9.40 — Fixtures controlvanne : `get_or_create` obligatoire pour Product.**
+Product a une contrainte unique `(categorie_article, name)`. Les fixtures session-scoped ne nettoient pas la DB (dev DB partagee). Utiliser `get_or_create` au lieu de `create`, sinon `UniqueViolation` au 2e run.
+
+**9.41 — `PointDeVente` de test : toujours `hidden=True`.**
+Les tests `test_menu_ventes` cherchent le premier PV visible (`hidden=False, order_by poid_liste`). Un PV de test sans produits POS casse ces tests si son `poid_liste` est bas. Toujours creer les PV de test avec `hidden=True`.
+
+**9.42 — `Price.archived` n'existe pas.**
+Le champ `archived` est sur `Product` et `Event`, pas sur `Price`. Les filtres `prices.filter(poids_mesure=True, archived=False)` lèvent un `FieldError`. Utiliser `prices.filter(poids_mesure=True)`.
+
+**9.43 — `TireuseAPIKey` vs `LaBoutikAPIKey` : isolation des cles.**
+`HasTireuseAccess` n'accepte que `TireuseAPIKey`. Un test avec `auth_headers` (LaBoutikAPIKey du conftest) recevra un 403 sur les endpoints controlvanne. Creer une fixture dediee `tireuse_api_key`.
+
+**9.44 — Authorize controlvanne necessite un asset TLF + wallet + token.**
+Depuis la Phase 3, `authorize` verifie le solde wallet. Une carte sans wallet ou un tenant sans asset TLF → `authorized: False`. Les fixtures de test doivent creer le wallet ephemere, l'asset TLF, et un Token avec du solde.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

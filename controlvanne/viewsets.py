@@ -19,7 +19,6 @@ Conformité djc : ViewSet (pas ModelViewSet), serializers DRF, pas de @csrf_exem
 import logging
 from decimal import Decimal
 
-from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -29,7 +28,6 @@ from controlvanne.models import (
     CarteMaintenance,
     RfidSession,
     TireuseBec,
-    TireuseAPIKey,
 )
 from controlvanne.permissions import HasTireuseAccess
 from controlvanne.serializers import (
@@ -78,23 +76,26 @@ class TireuseViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response({
-            "status": "pong",
-            "tireuse": {
-                "uuid": str(tireuse.uuid),
-                "nom": tireuse.nom_tireuse,
-                "enabled": tireuse.enabled,
-                "liquid_label": tireuse.liquid_label,
-                "prix_litre": str(tireuse.prix_litre),
-                "reservoir_ml": float(tireuse.reservoir_ml),
-                "reservoir_max_ml": tireuse.reservoir_max_ml,
-                "seuil_mini_ml": float(tireuse.seuil_mini_ml),
-                "calibration_factor": (
-                    tireuse.debimetre.flow_calibration_factor
-                    if tireuse.debimetre else None
-                ),
-            },
-        })
+        return Response(
+            {
+                "status": "pong",
+                "tireuse": {
+                    "uuid": str(tireuse.uuid),
+                    "nom": tireuse.nom_tireuse,
+                    "enabled": tireuse.enabled,
+                    "liquid_label": tireuse.liquid_label,
+                    "prix_litre": str(tireuse.prix_litre),
+                    "reservoir_ml": float(tireuse.reservoir_ml),
+                    "reservoir_max_ml": tireuse.reservoir_max_ml,
+                    "seuil_mini_ml": float(tireuse.seuil_mini_ml),
+                    "calibration_factor": (
+                        tireuse.debimetre.flow_calibration_factor
+                        if tireuse.debimetre
+                        else None
+                    ),
+                },
+            }
+        )
 
     # ─── authorize ────────────────────────────────────────────────────
 
@@ -130,6 +131,7 @@ class TireuseViewSet(viewsets.ViewSet):
 
         # Chercher la carte NFC / Find the NFC card
         from QrcodeCashless.models import CarteCashless
+
         carte = CarteCashless.objects.filter(tag_id=uid).first()
         if not carte:
             return Response({"authorized": False, "message": "Unknown card."})
@@ -154,31 +156,40 @@ class TireuseViewSet(viewsets.ViewSet):
                 liquid_label_snapshot=tireuse.liquid_label,
                 is_maintenance=True,
                 carte_maintenance=carte_maintenance,
-                produit_maintenance_snapshot=carte_maintenance.produit if carte_maintenance else "",
+                produit_maintenance_snapshot=carte_maintenance.produit
+                if carte_maintenance
+                else "",
                 authorized=True,
                 allowed_ml_session=tireuse.reservoir_ml,
                 volume_start_ml=Decimal("0.00"),
             )
-            return Response({
-                "authorized": True,
-                "session_id": session.pk,
-                "is_maintenance": True,
-                "allowed_ml": float(session.allowed_ml_session),
-                "liquid_label": tireuse.liquid_label,
-                "message": "Maintenance mode",
-            })
+            return Response(
+                {
+                    "authorized": True,
+                    "session_id": session.pk,
+                    "is_maintenance": True,
+                    "allowed_ml": float(session.allowed_ml_session),
+                    "liquid_label": tireuse.liquid_label,
+                    "message": "Maintenance mode",
+                }
+            )
 
         # --- Service normal : vérifier le solde wallet ---
         # / Normal service: check wallet balance
-        from controlvanne.billing import obtenir_contexte_cashless, calculer_volume_autorise_ml
+        from controlvanne.billing import (
+            obtenir_contexte_cashless,
+            calculer_volume_autorise_ml,
+        )
         from fedow_core.services import WalletService
 
         contexte = obtenir_contexte_cashless(carte)
         if not contexte:
-            return Response({
-                "authorized": False,
-                "message": "No cashless asset configured for this venue.",
-            })
+            return Response(
+                {
+                    "authorized": False,
+                    "message": "No cashless asset configured for this venue.",
+                }
+            )
 
         solde_centimes = WalletService.obtenir_solde(
             contexte["wallet_client"], contexte["asset_tlf"]
@@ -186,27 +197,33 @@ class TireuseViewSet(viewsets.ViewSet):
 
         prix_litre = tireuse.prix_litre
         if prix_litre <= 0:
-            return Response({
-                "authorized": False,
-                "message": "No price configured for the active keg.",
-            })
+            return Response(
+                {
+                    "authorized": False,
+                    "message": "No price configured for the active keg.",
+                }
+            )
 
         # Réservoir disponible (avec ou sans réserve)
         # / Available reservoir (with or without reserve)
         reservoir_disponible = float(tireuse.reservoir_ml)
         if tireuse.appliquer_reserve:
-            reservoir_disponible = max(0, reservoir_disponible - float(tireuse.seuil_mini_ml))
+            reservoir_disponible = max(
+                0, reservoir_disponible - float(tireuse.seuil_mini_ml)
+            )
 
         allowed_ml = calculer_volume_autorise_ml(
             solde_centimes, prix_litre, reservoir_disponible
         )
 
         if allowed_ml <= 0:
-            return Response({
-                "authorized": False,
-                "message": "Insufficient funds.",
-                "solde_centimes": solde_centimes,
-            })
+            return Response(
+                {
+                    "authorized": False,
+                    "message": "Insufficient funds.",
+                    "solde_centimes": solde_centimes,
+                }
+            )
 
         session = RfidSession.objects.create(
             uid=uid,
@@ -225,15 +242,17 @@ class TireuseViewSet(viewsets.ViewSet):
             f"solde={solde_centimes}cts allowed={float(allowed_ml):.0f}ml"
         )
 
-        return Response({
-            "authorized": True,
-            "session_id": session.pk,
-            "is_maintenance": False,
-            "allowed_ml": float(allowed_ml),
-            "liquid_label": tireuse.liquid_label,
-            "solde_centimes": solde_centimes,
-            "message": "OK",
-        })
+        return Response(
+            {
+                "authorized": True,
+                "session_id": session.pk,
+                "is_maintenance": False,
+                "allowed_ml": float(allowed_ml),
+                "liquid_label": tireuse.liquid_label,
+                "solde_centimes": solde_centimes,
+                "message": "OK",
+            }
+        )
 
     # ─── event ────────────────────────────────────────────────────────
 
@@ -269,8 +288,9 @@ class TireuseViewSet(viewsets.ViewSet):
         # Chercher la session ouverte pour cette carte sur cette tireuse
         # / Find the open session for this card on this tap
         session = (
-            RfidSession.objects
-            .filter(tireuse_bec=tireuse, uid=uid, ended_at__isnull=True)
+            RfidSession.objects.filter(
+                tireuse_bec=tireuse, uid=uid, ended_at__isnull=True
+            )
             .order_by("-started_at")
             .first()
         )
@@ -289,9 +309,13 @@ class TireuseViewSet(viewsets.ViewSet):
             session.volume_end_ml = volume_ml
             session.volume_delta_ml = volume_ml
             session.dernier_volume_ml = volume_ml
-            session.save(update_fields=[
-                "volume_end_ml", "volume_delta_ml", "dernier_volume_ml",
-            ])
+            session.save(
+                update_fields=[
+                    "volume_end_ml",
+                    "volume_delta_ml",
+                    "dernier_volume_ml",
+                ]
+            )
 
         elif event_type == "pour_start":
             session.volume_start_ml = volume_ml
@@ -311,7 +335,10 @@ class TireuseViewSet(viewsets.ViewSet):
             # --- Facturation (sauf maintenance) ---
             # / Billing (except maintenance)
             if not session.is_maintenance and volume_ml > 0 and tireuse.fut_actif:
-                from controlvanne.billing import obtenir_contexte_cashless, facturer_tirage
+                from controlvanne.billing import (
+                    obtenir_contexte_cashless,
+                    facturer_tirage,
+                )
                 from fedow_core.exceptions import SoldeInsuffisant
 
                 contexte = obtenir_contexte_cashless(session.carte)
@@ -361,6 +388,7 @@ class TireuseViewSet(viewsets.ViewSet):
 # AuthKioskView — POST token API → cookie session Django
 # ──────────────────────────────────────────────────────────────────────
 
+
 class AuthKioskView(APIView):
     """
     POST /controlvanne/auth-kiosk/
@@ -376,6 +404,7 @@ class AuthKioskView(APIView):
     Le token ne doit pas fuiter en query string (logs, referer, historique navigateur).
     / The token must not leak in query string (logs, referer, browser history).
     """
+
     permission_classes = [HasTireuseAccess]
 
     def post(self, request):
@@ -396,8 +425,56 @@ class AuthKioskView(APIView):
         request.session["controlvanne_authenticated"] = True
         request.session.save()
 
-        return Response({
-            "status": "ok",
-            "message": "Session created. Use the sessionid cookie for kiosk.",
-            "session_key": request.session.session_key,
-        })
+        return Response(
+            {
+                "status": "ok",
+                "message": "Session created. Use the sessionid cookie for kiosk.",
+                "session_key": request.session.session_key,
+            }
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# kiosk_view — page kiosk temps réel pour l'écran du Pi
+# ──────────────────────────────────────────────────────────────────────
+
+
+def kiosk_view(request, uuid):
+    """
+    GET /controlvanne/kiosk/<uuid>/
+    Affiche le kiosk (panel_bootstrap.html) pour une tireuse.
+    Protégé par session cookie (obtenue via POST /controlvanne/auth-kiosk/)
+    ou par session admin tenant.
+    / Displays the kiosk (panel_bootstrap.html) for a tap.
+    Protected by session cookie (from POST /controlvanne/auth-kiosk/)
+    or tenant admin session.
+
+    LOCALISATION : controlvanne/viewsets.py
+    """
+    from django.shortcuts import render, get_object_or_404
+    from django.http import HttpResponseForbidden
+    from django.db import connection
+    from BaseBillet.models import Configuration
+
+    # Vérifier l'authentification kiosk ou admin
+    # / Check kiosk or admin authentication
+    est_kiosk = request.session.get("controlvanne_authenticated")
+    est_admin = False
+    utilisateur = request.user
+    if utilisateur and utilisateur.is_authenticated:
+        est_admin = utilisateur.is_tenant_admin(connection.tenant)
+
+    if not est_kiosk and not est_admin:
+        return HttpResponseForbidden("Not authenticated for kiosk.")
+
+    tireuse = get_object_or_404(TireuseBec, uuid=uuid)
+    becs = TireuseBec.objects.filter(enabled=True).order_by("nom_tireuse")
+    config = Configuration.get_solo()
+
+    context = {
+        "tireuse": tireuse,
+        "becs": becs,
+        "config": config,
+        "slug_focus": str(uuid),
+    }
+    return render(request, "controlvanne/panel_bootstrap.html", context)

@@ -40,6 +40,7 @@ from rest_framework_api_key.models import AbstractAPIKey
 # Configuration — singleton django-solo
 # ──────────────────────────────────────────────────────────────────────
 
+
 class Configuration(SingletonModel):
     """
     Singleton de configuration du module tireuse.
@@ -59,6 +60,7 @@ class Configuration(SingletonModel):
 # TireuseAPIKey — clé API dédiée aux Raspberry Pi des tireuses
 # / TireuseAPIKey — API key dedicated to tap Raspberry Pi devices
 # ──────────────────────────────────────────────────────────────────────
+
 
 class TireuseAPIKey(AbstractAPIKey):
     """
@@ -81,6 +83,7 @@ class TireuseAPIKey(AbstractAPIKey):
 # Debimetre — capteur de debit
 # ──────────────────────────────────────────────────────────────────────
 
+
 class Debimetre(models.Model):
     """
     Modele de debitmetre utilise sur les tireuses.
@@ -89,6 +92,7 @@ class Debimetre(models.Model):
     The calibration factor converts sensor pulses to volume.
     LOCALISATION : controlvanne/models.py
     """
+
     name = models.CharField(
         max_length=100,
         verbose_name=_("Model"),
@@ -112,6 +116,7 @@ class Debimetre(models.Model):
 # CarteMaintenance — carte NFC de maintenance (OneToOne CarteCashless)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class CarteMaintenance(models.Model):
     """
     Carte NFC dediee aux operations de maintenance et nettoyage des tireuses.
@@ -120,16 +125,17 @@ class CarteMaintenance(models.Model):
     Same pattern as CartePrimaire in laboutik: OneToOne to CarteCashless.
     LOCALISATION : controlvanne/models.py
     """
+
     carte = models.OneToOneField(
-        'QrcodeCashless.CarteCashless',
+        "QrcodeCashless.CarteCashless",
         on_delete=models.CASCADE,
-        related_name='carte_maintenance',
+        related_name="carte_maintenance",
         verbose_name=_("NFC card"),
     )
     tireuses = models.ManyToManyField(
-        'controlvanne.TireuseBec',
+        "controlvanne.TireuseBec",
         blank=True,
-        related_name='cartes_maintenance',
+        related_name="cartes_maintenance",
         verbose_name=_("Authorized taps"),
         help_text=_("Leave empty for all taps."),
     )
@@ -155,12 +161,14 @@ class CarteMaintenance(models.Model):
 # TireuseBec — tireuse physique
 # ──────────────────────────────────────────────────────────────────────
 
+
 class TireuseBec(models.Model):
     """
     Une tireuse physique (un bec) avec son fut actif, son debimetre, et son POS.
     / A physical tap (one spout) with its active keg, flow meter, and POS.
     LOCALISATION : controlvanne/models.py
     """
+
     uuid = models.UUIDField(default=uuid4, primary_key=True, editable=False)
 
     nom_tireuse = models.CharField(
@@ -181,42 +189,42 @@ class TireuseBec(models.Model):
     # --- Relations ---
 
     point_de_vente = models.OneToOneField(
-        'laboutik.PointDeVente',
+        "laboutik.PointDeVente",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='tireuse',
+        related_name="tireuse",
         verbose_name=_("Point of sale"),
         help_text=_("POS linked to this tap (auto-created or manually assigned)."),
     )
 
     fut_actif = models.ForeignKey(
-        'BaseBillet.Product',
+        "BaseBillet.Product",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='tireuses_actives',
+        related_name="tireuses_actives",
         verbose_name=_("Active keg"),
-        limit_choices_to={'categorie_article': 'U'},
+        limit_choices_to={"categorie_article": "U"},
         help_text=_("Product of type FUT currently on this tap."),
     )
 
     debimetre = models.ForeignKey(
-        'controlvanne.Debimetre',
+        "controlvanne.Debimetre",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='tireuses',
+        related_name="tireuses",
         verbose_name=_("Flow meter"),
         help_text=_("Associated flow meter (determines calibration factor)."),
     )
 
     pairing_device = models.ForeignKey(
-        'discovery.PairingDevice',
+        "discovery.PairingDevice",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='tireuses',
+        related_name="tireuses",
         verbose_name=_("Pairing device"),
         help_text=_("Raspberry Pi or ESP32 controlling this tap."),
     )
@@ -276,6 +284,7 @@ class TireuseBec(models.Model):
         if self.fut_actif:
             try:
                 from inventaire.models import Stock
+
                 stock = Stock.objects.filter(product=self.fut_actif).first()
                 if stock and stock.quantite > 0:
                     # Stock en centilitres → conversion en ml
@@ -297,6 +306,7 @@ class TireuseBec(models.Model):
 # RfidSession — session de service (pose → depose de la carte NFC)
 # ──────────────────────────────────────────────────────────────────────
 
+
 class RfidSession(models.Model):
     """
     Presence continue d'une carte NFC sur une tireuse (de present=True a present=False).
@@ -305,17 +315,18 @@ class RfidSession(models.Model):
     Each session records the volume served, the tap, and the card used.
     LOCALISATION : controlvanne/models.py
     """
+
     uid = models.CharField(
         max_length=32,
         db_index=True,
         verbose_name=_("Card UID"),
     )
     carte = models.ForeignKey(
-        'QrcodeCashless.CarteCashless',
+        "QrcodeCashless.CarteCashless",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='rfid_sessions',
+        related_name="rfid_sessions",
         verbose_name=_("NFC card"),
     )
     label_snapshot = models.CharField(
@@ -329,9 +340,9 @@ class RfidSession(models.Model):
         verbose_name=_("Authorized"),
     )
     tireuse_bec = models.ForeignKey(
-        'controlvanne.TireuseBec',
+        "controlvanne.TireuseBec",
         on_delete=models.CASCADE,
-        related_name='sessions',
+        related_name="sessions",
         null=True,
         blank=True,
         verbose_name=_("Tap"),
@@ -353,11 +364,11 @@ class RfidSession(models.Model):
     # --- Lien vers la ligne de vente POS ---
 
     ligne_article = models.ForeignKey(
-        'BaseBillet.LigneArticle',
+        "BaseBillet.LigneArticle",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='rfid_sessions',
+        related_name="rfid_sessions",
         verbose_name=_("Sale line"),
         help_text=_("POS sale line created for this session."),
     )
@@ -379,19 +390,27 @@ class RfidSession(models.Model):
     # --- Volume ---
 
     volume_start_ml = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
         verbose_name=_("Volume start (ml)"),
     )
     volume_end_ml = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
         verbose_name=_("Volume end (ml)"),
     )
     volume_delta_ml = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
         verbose_name=_("Volume served (ml)"),
     )
     dernier_volume_ml = models.DecimalField(
-        max_digits=10, decimal_places=2, default=Decimal("0.00"),
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
         verbose_name=_("Last volume (ml)"),
     )
 
@@ -414,11 +433,11 @@ class RfidSession(models.Model):
         help_text=_("Volume physically measured in a graduated glass."),
     )
     carte_maintenance = models.ForeignKey(
-        'controlvanne.CarteMaintenance',
+        "controlvanne.CarteMaintenance",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='sessions',
+        related_name="sessions",
         verbose_name=_("Maintenance card"),
     )
     produit_maintenance_snapshot = models.CharField(
@@ -470,9 +489,11 @@ class RfidSession(models.Model):
 # Proxy models — vues filtrees de RfidSession pour l'admin
 # ──────────────────────────────────────────────────────────────────────
 
+
 class SessionCalibration(RfidSession):
     """Vue proxy de RfidSession filtree sur les sessions de calibration debitmetre.
     / Proxy view of RfidSession filtered on flow meter calibration sessions."""
+
     class Meta:
         proxy = True
         verbose_name = _("Calibration session")
@@ -482,6 +503,7 @@ class SessionCalibration(RfidSession):
 class HistoriqueMaintenance(RfidSession):
     """Vue proxy de RfidSession filtree sur les sessions maintenance.
     / Proxy view of RfidSession filtered on maintenance sessions."""
+
     class Meta:
         proxy = True
         verbose_name = _("Maintenance history")
@@ -491,6 +513,7 @@ class HistoriqueMaintenance(RfidSession):
 class HistoriqueTireuse(RfidSession):
     """Vue proxy de RfidSession centree sur les debits par tireuse.
     / Proxy view of RfidSession focused on volumes per tap."""
+
     class Meta:
         proxy = True
         verbose_name = _("Tap history")
@@ -500,6 +523,7 @@ class HistoriqueTireuse(RfidSession):
 class HistoriqueCarte(RfidSession):
     """Vue proxy de RfidSession centree sur les mouvements par carte.
     / Proxy view of RfidSession focused on movements per card."""
+
     class Meta:
         proxy = True
         verbose_name = _("Card history")

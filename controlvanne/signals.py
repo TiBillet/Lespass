@@ -29,6 +29,7 @@ from .models import TireuseBec
 # Helper : snapshot WebSocket
 # ──────────────────────────────────────────────────────────────────────
 
+
 def _snapshot_for_bec(tb):
     """Construit le payload WebSocket pour une tireuse.
     / Builds the WebSocket payload for a tap."""
@@ -74,6 +75,7 @@ def _snapshot_for_bec(tb):
 # Signal 1 : pre_save — init reservoir_ml quand fut_actif change
 # ──────────────────────────────────────────────────────────────────────
 
+
 @receiver(pre_save, sender=TireuseBec)
 def tireusebec_pre_save(sender, instance, **kwargs):
     """Memorise l'etat precedent pour detecter le changement de fut.
@@ -98,7 +100,10 @@ def tireusebec_pre_save(sender, instance, **kwargs):
 
     # Si le fut actif change, initialiser reservoir_ml depuis le Stock inventaire
     # / If the active keg changes, init reservoir_ml from the inventory Stock
-    if instance.fut_actif_id != instance._old_fut_id and instance.fut_actif_id is not None:
+    if (
+        instance.fut_actif_id != instance._old_fut_id
+        and instance.fut_actif_id is not None
+    ):
         try:
             from inventaire.models import Stock
 
@@ -114,6 +119,7 @@ def tireusebec_pre_save(sender, instance, **kwargs):
 # ──────────────────────────────────────────────────────────────────────
 # Signal 2 : post_save — push WebSocket apres modification
 # ──────────────────────────────────────────────────────────────────────
+
 
 @receiver(post_save, sender=TireuseBec)
 def tireusebec_post_save(sender, instance, created, **kwargs):

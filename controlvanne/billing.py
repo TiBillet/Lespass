@@ -49,7 +49,7 @@ def obtenir_contexte_cashless(carte):
     # / Priority: user.wallet > wallet_ephemere > create ephemeral
     wallet_client = None
 
-    if carte.user and hasattr(carte.user, 'wallet') and carte.user.wallet:
+    if carte.user and hasattr(carte.user, "wallet") and carte.user.wallet:
         wallet_client = carte.user.wallet
     elif carte.wallet_ephemere:
         wallet_client = carte.wallet_ephemere
@@ -84,7 +84,9 @@ def obtenir_contexte_cashless(carte):
     }
 
 
-def calculer_volume_autorise_ml(solde_centimes, prix_litre_decimal, reservoir_disponible_ml):
+def calculer_volume_autorise_ml(
+    solde_centimes, prix_litre_decimal, reservoir_disponible_ml
+):
     """
     Calcule le volume maximum autorisé en ml depuis le solde wallet.
     / Computes the maximum allowed volume in ml from wallet balance.
@@ -106,7 +108,9 @@ def calculer_volume_autorise_ml(solde_centimes, prix_litre_decimal, reservoir_di
         return Decimal("0.00")
 
     # Volume max selon le solde / Max volume based on balance
-    volume_max_solde_ml = Decimal(str(solde_centimes)) / Decimal(str(prix_centimes_par_litre)) * 1000
+    volume_max_solde_ml = (
+        Decimal(str(solde_centimes)) / Decimal(str(prix_centimes_par_litre)) * 1000
+    )
 
     # Limiter au réservoir disponible / Cap at available reservoir
     volume_max_ml = min(volume_max_solde_ml, Decimal(str(reservoir_disponible_ml)))
@@ -114,7 +118,9 @@ def calculer_volume_autorise_ml(solde_centimes, prix_litre_decimal, reservoir_di
     return max(Decimal("0.00"), volume_max_ml.quantize(Decimal("0.01")))
 
 
-def facturer_tirage(session, tireuse, carte, volume_ml, contexte_cashless, ip="0.0.0.0"):
+def facturer_tirage(
+    session, tireuse, carte, volume_ml, contexte_cashless, ip="0.0.0.0"
+):
     """
     Facture un tirage de bière : Transaction + LigneArticle + MouvementStock.
     / Bills a beer pour: Transaction + LigneArticle + MouvementStock.
@@ -132,8 +138,11 @@ def facturer_tirage(session, tireuse, carte, volume_ml, contexte_cashless, ip="0
     """
     from fedow_core.services import TransactionService
     from BaseBillet.models import (
-        LigneArticle, ProductSold, PriceSold,
-        PaymentMethod, SaleOrigin,
+        LigneArticle,
+        ProductSold,
+        PriceSold,
+        PaymentMethod,
+        SaleOrigin,
     )
 
     if volume_ml <= 0:
@@ -141,7 +150,9 @@ def facturer_tirage(session, tireuse, carte, volume_ml, contexte_cashless, ip="0
 
     prix_litre = tireuse.prix_litre  # Decimal, EUR
     if prix_litre <= 0:
-        logger.warning(f"Tireuse {tireuse.nom_tireuse} : prix_litre=0, pas de facturation")
+        logger.warning(
+            f"Tireuse {tireuse.nom_tireuse} : prix_litre=0, pas de facturation"
+        )
         return None
 
     # Calculer le montant en centimes / Calculate amount in cents
@@ -223,6 +234,7 @@ def facturer_tirage(session, tireuse, carte, volume_ml, contexte_cashless, ip="0
         try:
             stock_du_produit = produit.stock_inventaire
             from inventaire.services import StockService
+
             StockService.decrementer_pour_vente(
                 stock=stock_du_produit,
                 contenance=volume_cl,
