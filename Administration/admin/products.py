@@ -342,9 +342,26 @@ class BasePriceInline(StackedInline):
 
 class MembershipPriceInlineForm(BasePriceInlineForm):
     """Formulaire inline specifique aux tarifs adhesion.
-    Ajoute la validation : duree obligatoire + coherence paiement recurrent.
+    Labels adaptes au contexte adhesion + validation duree et paiement recurrent.
     / Inline form specific to membership prices.
-    Adds validation: duration required + recurring payment coherence."""
+    Labels adapted to membership context + duration and recurring payment validation."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Labels et help_text adaptes au contexte adhesion
+        # / Labels and help_text adapted to membership context
+        if "stock" in self.fields:
+            self.fields["stock"].label = _("Maximum total quantity")
+            self.fields["stock"].help_text = _(
+                "Maximum number of valid memberships allowed simultaneously for this price. "
+                "Leave blank for unlimited."
+            )
+        if "max_per_user" in self.fields:
+            self.fields["max_per_user"].label = _("Max per member")
+            self.fields["max_per_user"].help_text = _(
+                "Maximum number of active memberships a single user can hold for this price. "
+                "Leave blank for unlimited."
+            )
 
     def clean_subscription_type(self):
         product = self.cleaned_data.get("product")
@@ -396,12 +413,26 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
 
 class TicketPriceInlineForm(BasePriceInlineForm):
     """Formulaire inline specifique aux tarifs billetterie.
-    Retire le bouton "+" sur adhesions_obligatoires.
+    Labels adaptes au contexte evenementiel + retire le bouton "+" sur adhesions_obligatoires.
     / Inline form specific to ticket prices.
-    Removes the "add" button on adhesions_obligatoires."""
+    Labels adapted to event context + removes "add" button on adhesions_obligatoires."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Labels et help_text adaptes au contexte billetterie
+        # / Labels and help_text adapted to ticketing context
+        if "stock" in self.fields:
+            self.fields["stock"].label = _("Event capacity")
+            self.fields["stock"].help_text = _(
+                "Maximum number of tickets available per event for this price. "
+                "Leave blank for unlimited."
+            )
+        if "max_per_user" in self.fields:
+            self.fields["max_per_user"].label = _("Max tickets per user")
+            self.fields["max_per_user"].help_text = _(
+                "Maximum number of tickets a single user can book for this price. "
+                "Leave blank for unlimited."
+            )
         # Pas de bouton "+" pour creer un produit depuis ce champ
         # / No "add" button to create a product from this field
         if "adhesions_obligatoires" in self.fields:
