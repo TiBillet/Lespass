@@ -60,7 +60,7 @@ TiBillet devient un **Groupware coopératif** : chaque tenant active les modules
 | **⑥ Menu Ventes** | Ticket X, liste ventes, corrections, fond de caisse, sortie espèces, ré-impression | ✅ FAIT (sessions 16-17) |
 | **Inventaire** | Stock POS optionnel, décrémentation atomique, admin Unfold, MouvementStock, contenance, affichage visuel tuiles (3 états), OOB WebSocket | ✅ FAIT (sessions 23-25) |
 | **Admin PriceInline** | 4 StackedInline par proxy (Ticket/Membership/POS/Base), champs conditionnels JS, labels contextuels | ✅ FAIT (session 26) |
-| **⑦ Multi-Tarif UX** | Overlay non-bloquant, quantités multiples (à discuter avec Nicolas) | ⏳ Après ⑤⑥ |
+| **⑦ Multi-Tarif + Poids/Mesure** | Overlay multi-clic dans `#products`, pavé numérique poids/mesure (GR/CL), `Price.poids_mesure`, `LigneArticle.weight_quantity`, HMAC LNE, suffixe `--N` montants variables, 9 E2E | ✅ FAIT (session 28) |
 | **⑧ Multi-Asset** | Paniers mixtes EUR + tokens (à détailler avec le mainteneur) | ⏳ À DÉTAILLER |
 | **⑨ Stress test (3.3)** | `verify_transactions` + `verify_integrity` (HMAC chain) + 2000 tx concurrentes | ⏳ À FAIRE |
 | **⑩ Migration (6)** | Import données anciens tenants Fedow + LaBoutik | ⏳ À FAIRE |

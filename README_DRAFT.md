@@ -21,8 +21,6 @@
   <img alt="Licence" src="https://img.shields.io/badge/licence-AGPLv3-blue">
   <img alt="Django" src="https://img.shields.io/badge/Django-4.2-green">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11-blue">
-  <img alt="Contributeurs" src="https://img.shields.io/badge/contributeur·ices-20-orange">
-  <img alt="Lieux" src="https://img.shields.io/badge/lieux%20%26%20orgas-14-purple">
 </p>
 
 <!-- CAPTURE : screenshot_hero.png — La capture la plus parlante du projet. Je suggère l'agenda public d'un lieu avec des événements, ou un montage de 2-3 écrans (agenda + caisse + carte NFC). Format large, 1200px minimum. -->
@@ -33,9 +31,11 @@
 
 TiBillet est un ensemble d'outils libres pour les lieux culturels, les festivals, les associations et les tiers-lieux : billetterie en ligne, caisse enregistreuse, cashless par carte NFC, gestion d'adhésions, monnaie locale et monnaie temps.
 
-Mais TiBillet n'est pas qu'un logiciel. C'est un **commun numérique**, construit par et pour les gens qui s'en servent. 14 lieux et organisations, 20 contributeur·ices, une coopérative — et l'idée simple que les outils qui font tourner nos lieux de vie ne devraient appartenir à personne d'autre qu'à ceux qui les utilisent.
+Mais TiBillet n'est pas qu'un logiciel. C'est un **commun numérique**, construit par et pour les gens qui s'en servent. Plusieurs centaines de lieux et organisations, plus d'une vingtaine en contribution active, une coopérative pensé comme un commun juridique, et l'idée simple que les outils qui font tourner nos lieux de vie ne devraient appartenir à personne d'autre qu'à ceux qui les utilisent.
 
-**Le principe :** une carte NFC unique, valable dans tout le réseau. Pas de frais d'activation, pas de date d'expiration, pas de case à décocher. Vous rechargez quand vous voulez, vous dépensez où vous voulez, vous vous faites rembourser quand vous voulez. Et la carte sert aussi de carte d'adhésion, de porte-monnaie local et de monnaie temps.
+**Le principe :** Un outil de création de fédération a travers des agendas et billetteries, une caisse enregistreuse et carte NFC unique, valable dans tout le réseau. Pas de frais d'activation, pas de date d'expiration, pas de case à décocher. Vous rechargez quand vous voulez, vous dépensez où vous voulez, vous vous faites rembourser quand vous voulez. Et la carte sert aussi de carte d'adhésion, de porte-monnaie local et/ou de monnaie temps.
+
+**Alternatives à :** Weezevent, HelloAsso, Cyclos, L'Addition, Ulule, Caisses et POS JVC... Mais qui va encore plus loin car pensé pour créer des fédérations : Une billetterie peut se fédérer à d'autres pour créer des agendas communs. Des caisses peuvent lires les mêmes cartes pour faire des monnaies locales. Des collectifs de sécurité sociales alimentaires peuvent fédérér des producteurs pour créer une SSA.
 
 > **🇬🇧 English speakers:** TiBillet is a federated, open-source toolkit for ticketing, POS, NFC cashless payments, memberships, and local currencies — built as a digital commons by the [Code Commun Cooperative](https://codecommun.coop). [Read more in English →](./README.en.md)
 
@@ -51,7 +51,7 @@ Quelques exemples de ce que TiBillet rend possible aujourd'hui :
 
 - **4 festivals à Montpellier** partagent la même carte NFC pour 15 000 festivaliers. Une carte, quatre lieux, zéro bracelet jetable.
 - **Un collectif citoyen en Normandie** distribue 100 cartes pour de l'aide alimentaire solidaire (Sécurité Sociale de l'Alimentation). Chaque carte est créditée de 100 €, peu importe ce que la personne a payé. Pas de contrôle, pas de case "précaire" à cocher — juste de la dignité.
-- **La Raffinerie à La Réunion**, une ancienne sucrière reconvertie en tiers-lieu, utilise une monnaie temps : les heures passées sur les chantiers participatifs du mercredi sont comptabilisées sur la carte, échangeables contre des bières au bar associatif le soir.
+- **La Raffinerie à La Réunion**, une ancienne sucrière reconvertie en tiers-lieu, utilise une monnaie temps : les heures passées sur les chantiers participatifs du mercredi sont comptabilisées sur la carte, échangeables contre des services ou des boissons au bar associatif le soir.
 - **Des bars associatifs** vérifient l'adhésion automatiquement au scan NFC — fini le fichier Excel que personne ne consultait.
 
 ---
