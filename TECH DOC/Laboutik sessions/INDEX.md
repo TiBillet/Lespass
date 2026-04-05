@@ -394,7 +394,10 @@ Spec : `Session 05 - Multi-tarif et poids-mesure/DESIGN_MULTI_TARIF_POIDS_MESURE
   - [x] Rapports comptables : `poids_total` dans `calculer_detail_ventes()`
   - [x] Admin LigneArticle : colonne "Weight/Vol." (remplace "user email")
   - [x] Fixtures : Blonde Pression (Pinte/Demi, stock CL), Cacahuètes en vrac (12€/kg, stock GR), Affiche A4 (fixe + libre), Vin en vrac (8€/L, stock CL)
-  - [x] 474 pytest PASS, 0 régression
+  - [x] Fix bug : backend rejetait `custom_amount` pour `poids_mesure` (vérifiait `free_price` uniquement)
+  - [x] 9 tests E2E Playwright (multi-clic, prix libre montants différents, pavé numérique GR/CL, paiement complet avec vérification DB)
+  - [x] 474 pytest PASS, 9 E2E PASS, 0 régression
+  - [x] 4 pièges documentés dans TESTS_README (64-67)
 - [ ] **Polish UX** : mémorisation dernier montant prix libre, badge quantité sur boutons tarif
 
 ### 9. Multi-Asset

@@ -1398,7 +1398,7 @@ redemarre. Les logs montrent le broadcast mais rien n'arrive aux navigateurs.
 
 Decouvert lors du debug WebSocket (Session 25, avril 2026).
 
-### Piege 59 : `#articles-zone` n'existe pas — le conteneur est `#products`
+### Piege 64 : `#articles-zone` n'existe pas — le conteneur est `#products`
 
 L'element qui contient la grille d'articles POS s'appelle `#products`
 (defini dans `cotton/articles.html`). Il n'y a pas de `#articles-zone` dans le DOM.
@@ -1407,20 +1407,49 @@ Si un subagent ou un dev utilise `document.querySelector('#articles-zone')`, il 
 
 Toujours verifier les IDs reels dans les templates avant de les utiliser dans le JS.
 
-### Piege 60 : `conditional_fields` Unfold ne fonctionne PAS dans les inlines
+Decouvert en session 28 (avril 2026) — refonte overlay tarif.
+
+### Piege 65 : `conditional_fields` Unfold ne fonctionne PAS dans les inlines
 
 L'attribut `conditional_fields` d'Unfold (Alpine.js) est reserve au `ModelAdmin` principal.
 Les templates inline (`stacked.html`, `tabular.html`) n'ont pas de support `x-show`.
 Pour des champs conditionnels dans un inline, utiliser le mecanisme custom
 `inline_conditional_fields` + `inline_conditional_fields.js` (cree en session 26).
 
-### Piege 61 : lignes panier a montant variable — suffixe `--N` obligatoire
+Decouvert en session 26 (avril 2026) — refactoring PriceInline.
+
+### Piege 66 : lignes panier a montant variable — suffixe `--N` obligatoire
 
 Les tarifs a montant variable (prix libre, poids/mesure) doivent creer une ligne panier
 unique a chaque saisie : `repid-{uuid}--{priceUuid}--{N}`. Sans le suffixe `--N`,
 la 2e saisie ecrase la 1re (meme cle = increment qty au lieu de nouvelle ligne).
 Le backend (`extraire_articles_du_post`) ignore le 3e segment `--N` lors du parsing.
 Les tarifs fixes n'ont PAS de suffixe (clic = increment qty sur la meme ligne).
+
+Decouvert en session 28 (avril 2026) — overlay multi-clic.
+
+### Piege 67 : `custom_amount` rejete si `free_price=False` — aussi valide pour `poids_mesure`
+
+Le backend (`_extraire_articles_du_panier`) rejetait le `custom_amount_centimes`
+quand `prix_obj.free_price` etait False. Mais pour les tarifs `poids_mesure`, le JS
+envoie aussi un `custom_amount` (le prix calcule : quantite x prix unitaire).
+Il faut accepter le `custom_amount` quand `prix_obj.poids_mesure` est True.
+
+```python
+# MAUVAIS : rejette le custom_amount pour les tarifs poids/mesure
+if not prix_obj.free_price:
+    custom_amount_centimes = None
+
+# BON : accepter aussi pour poids_mesure
+if prix_obj.poids_mesure:
+    pass  # accepter le montant calcule par le JS
+elif prix_obj.free_price:
+    # verifier minimum
+else:
+    custom_amount_centimes = None  # rejeter
+```
+
+Decouvert par le test E2E test_09 (session 28, avril 2026).
 
 ---
 
