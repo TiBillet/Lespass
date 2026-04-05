@@ -1,0 +1,17 @@
+[Unit]
+Description=Agent RFID + Vanne (tibeer)
+After=network-online.target pigpiod.service
+Wants=network-online.target pigpiod.service
+Requires=pigpiod.service
+
+[Service]
+Type=simple
+User=sysop
+WorkingDirectory=/home/sysop
+EnvironmentFile=-/etc/default/tibeer.env
+ExecStart=/home/sysop/tibeer/venv/bin/python /home/sysop/tibeer/main.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

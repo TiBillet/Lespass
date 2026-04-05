@@ -1,0 +1,17 @@
+# Configuration TiBeer - Exemple
+
+# === IDENTIFICATION ===
+# UUID de la tireuse (généré automatiquement par Django admin)
+TIREUSE_BEC=CHANGER_CI
+
+# === CONNEXION BACKEND ===
+API_URL=http://192.168.1.10:8000
+BACKEND_API_KEY=changeme
+
+# === GPIO ===
+PIN_VANNE=18
+PIN_COMPTEUR=23
+PIN_RFID_RST=25
+
+# === OPTIONS ===
+DEBUG=False
