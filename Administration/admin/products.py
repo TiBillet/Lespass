@@ -310,6 +310,36 @@ class BasePriceInlineForm(ModelForm):
         return prix
 
 
+class BasePriceInline(StackedInline):
+    """Inline de base pour les tarifs (StackedInline Unfold).
+    Champs communs a tous les types de produit. Chaque tarif = un bloc vertical.
+    / Base inline for prices (Unfold StackedInline).
+    Common fields for all product types. Each price = a vertical block."""
+
+    model = Price
+    fk_name = "product"
+    form = BasePriceInlineForm
+    extra = 0
+    show_change_link = False
+    fields = ("name", ("prix", "free_price"), ("publish", "order"))
+
+    class Media:
+        css = {"all": ("admin/css/price_inline.css",)}
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+
+
 class MembershipPriceInlineForm(BasePriceInlineForm):
     """Formulaire inline specifique aux tarifs adhesion.
     Ajoute la validation : duree obligatoire + coherence paiement recurrent.
@@ -363,34 +393,6 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
         return recurring_payment
 
 
-class BasePriceInline(StackedInline):
-    """Inline de base pour les tarifs (StackedInline Unfold).
-    Champs communs a tous les types de produit. Chaque tarif = un bloc vertical.
-    / Base inline for prices (Unfold StackedInline).
-    Common fields for all product types. Each price = a vertical block."""
-
-    model = Price
-    fk_name = "product"
-    form = BasePriceInlineForm
-    extra = 0
-    show_change_link = False
-    fields = ("name", ("prix", "free_price"), ("publish", "order"))
-
-    class Media:
-        css = {"all": ("admin/css/price_inline.css",)}
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-    def has_add_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_change_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
-    def has_view_permission(self, request, obj=None):
-        return TenantAdminPermissionWithRequest(request)
-
 
 class TicketPriceInlineForm(BasePriceInlineForm):
     """Formulaire inline specifique aux tarifs billetterie.
@@ -420,8 +422,12 @@ class TicketPriceInline(BasePriceInline):
 class MembershipPriceInline(BasePriceInline):
     """Inline tarifs pour les produits adhesion.
     Ajoute les champs abonnement : duree, recurrence, engagement, jauge, max par user.
+    Champs conditionnels via JS (Unfold ne supporte pas conditional_fields dans les inlines) :
+      - iteration visible si recurring_payment coche
+      - commitment visible si iteration > 0
     / Price inline for membership products.
-    Adds subscription fields: duration, recurrence, commitment, capacity, max per user."""
+    Adds subscription fields: duration, recurrence, commitment, capacity, max per user.
+    Conditional fields via JS (Unfold doesn't support conditional_fields in inlines)."""
 
     form = MembershipPriceInlineForm
     fields = (
@@ -432,6 +438,18 @@ class MembershipPriceInline(BasePriceInline):
         ("stock", "max_per_user"),
         ("publish", "order"),
     )
+
+    # Regles de visibilite conditionnelle, meme syntaxe que Unfold conditional_fields.
+    # Injectees en JSON dans le template, lues par le JS generique.
+    # / Conditional visibility rules, same syntax as Unfold conditional_fields.
+    # Injected as JSON in the template, read by the generic JS.
+    inline_conditional_fields = {
+        "iteration": "recurring_payment == true",
+        "commitment": "iteration > 0",
+    }
+
+    class Media:
+        js = ("admin/js/inline_conditional_fields.js",)
 
 
 class POSPriceInline(BasePriceInline):
@@ -1087,12 +1105,29 @@ class MembershipProductAdmin(ProductAdmin):
 
     form = MembershipProductForm
     inlines = [MembershipPriceInline, ProductFormFieldInline]
+    change_form_after_template = "admin/product/inline_conditional_fields.html"
 
     list_filter = ["publish"]  # categorie_article inutile, deja filtre
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.filter(categorie_article=Product.ADHESION)
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Collecte les regles conditionnelles de chaque inline qui en declare
+        # / Collect conditional rules from each inline that declares them
+        extra_context = extra_context or {}
+        regles_conditionnelles = {}
+        for inline_class in self.inlines:
+            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
+            if regles_inline:
+                # Cle = prefixe du formset inline (model._meta.model_name + "s" = "prices")
+                # / Key = inline formset prefix
+                prefixe = inline_class.model._meta.model_name + "s"
+                regles_conditionnelles[prefixe] = regles_inline
+        if regles_conditionnelles:
+            extra_context["inline_conditional_rules"] = json.dumps(regles_conditionnelles)
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
 
 # ---------------------------------------------------------------------------

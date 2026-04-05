@@ -23,3 +23,13 @@
 #prices-group h3.group\/title strong {
     font-size: 0.95rem;
 }
+
+/* --- Champs conditionnels : style visuel applique par le JS --- */
+/* --- Conditional fields: visual style applied by JS --- */
+
+/* En dark mode, ajuster le fond et la bordure pour rester lisible */
+/* In dark mode, adjust background and border for readability */
+.dark [data-conditional-styled="true"] {
+    background-color: rgba(129, 140, 248, 0.08) !important;
+    border-left-color: var(--color-primary-400, #818cf8) !important;
+}
