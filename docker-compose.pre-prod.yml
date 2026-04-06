@@ -104,7 +104,7 @@ services:
       - backend
     extra_hosts:
       - fedow.${DOMAIN}:172.17.0.1
-    command: "bash start.sh"
+    command: "bash start_dev.sh"
 
   lespass_celery:
     image: tibillet/lespass:latest
@@ -136,7 +136,7 @@ services:
     links:
       - lespass_django:lespass_django
     volumes:
-      - ./nginx/lespass_prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/lespass_dev.conf:/etc/nginx/conf.d/default.conf:ro
       - ./www:/www
       - ./logs:/logs
     labels:
