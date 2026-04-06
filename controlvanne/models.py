@@ -41,7 +41,7 @@ from rest_framework_api_key.models import AbstractAPIKey
 # ──────────────────────────────────────────────────────────────────────
 
 
-class Configuration(SingletonModel):
+class ConfigurationTireuse(SingletonModel):
     """
     Singleton de configuration du module tireuse.
     / Singleton configuration for the connected tap module.

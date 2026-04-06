@@ -413,7 +413,7 @@ def get_sidebar_navigation(request):
                         "title": _("Server configuration"),
                         "icon": "settings",
                         "link": reverse_lazy(
-                            "staff_admin:controlvanne_configuration_changelist"
+                            "staff_admin:controlvanne_configurationtireuse_changelist"
                         ),
                         "permission": admin_permission,
                     },

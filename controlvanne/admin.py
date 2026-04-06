@@ -29,7 +29,7 @@ from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest
 from .models import (
     CarteMaintenance,
-    Configuration,
+    ConfigurationTireuse,
     Debimetre,
     HistoriqueCarte,
     HistoriqueMaintenance,
@@ -656,8 +656,8 @@ class SessionCalibrationAdmin(ModelAdmin):
 # ──────────────────────────────────────────────────────────────────────
 
 
-@admin.register(Configuration, site=staff_admin_site)
-class ConfigurationAdmin(ModelAdmin):
+@admin.register(ConfigurationTireuse, site=staff_admin_site)
+class ConfigurationTireuseAdmin(ModelAdmin):
     """
     Admin singleton : un seul objet possible (django-solo).
     La vue liste redirige directement vers le formulaire unique.
@@ -668,7 +668,7 @@ class ConfigurationAdmin(ModelAdmin):
     def has_add_permission(self, request, obj=None):
         # Bloquer l'ajout si l'objet existe deja
         # / Block addition if object already exists
-        return not Configuration.objects.exists()
+        return not ConfigurationTireuse.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
         # Le singleton ne doit pas etre supprime
@@ -689,7 +689,7 @@ class ConfigurationAdmin(ModelAdmin):
         from django.shortcuts import redirect
         from django.urls import reverse
 
-        obj = Configuration.get_solo()
+        obj = ConfigurationTireuse.get_solo()
         return redirect(
-            reverse("staff_admin:controlvanne_configuration_change", args=[obj.pk])
+            reverse("staff_admin:controlvanne_configurationtireuse_change", args=[obj.pk])
         )
