@@ -395,26 +395,17 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
         # Sanitize all TextField inputs to avoid XSS via WysiwYG/TextField
         sanitize_textfields(obj)
 
+        super().save_model(request, obj, form, change)
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        obj = form.instance
         # Fabrication des pricesold event/prix pour pouvoir être selectionné sur le + billet
+        # Doit être dans save_related (pas save_model) car les M2M products
+        # ne sont disponibles qu'après que Django les a sauvées.
         for product in obj.products.all():
             for price in product.prices.all():
                 get_or_create_price_sold(price=price, event=obj)
-
-        try:
-            super().save_model(request, obj, form, change)
-        except IntegrityError as err:
-            err_str = str(err)
-            if (
-                "BaseBillet_event_name_datetime" in err_str
-                or ("duplicate key value violates unique constraint" in err_str and "(name, datetime)" in err_str)
-            ):
-                messages.error(request, _("event existe déja"))
-                return redirect(request.META.get("HTTP_REFERER", reverse("admin:index")))
-            logger.error(err)
-            raise err
-        except Exception as err:
-            logger.error(err)
-            raise err
 
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
