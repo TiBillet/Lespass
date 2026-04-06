@@ -23,7 +23,7 @@ services:
     links:
       - fedow_memcached:memcached
     volumes:
-      - fedow_database:/home/fedow/Fedow/database
+      - ./data/fedow:/home/fedow/Fedow/database
     networks:
       - backend
     command: "bash start.sh"
@@ -63,7 +63,7 @@ services:
     container_name: lespass_postgres
     hostname: lespass_postgres
     volumes:
-      - lespass_db:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
     env_file: .env
     networks:
       - backend
@@ -178,6 +178,6 @@ networks:
     external: true
   backend:
 
-volumes:
-  lespass_db:
-  fedow_database:
+# Données persistantes dans ./data/ (bind mounts)
+# - ./data/postgres   : base PostgreSQL Lespass
+# - ./data/fedow      : base Fedow
