@@ -116,6 +116,12 @@ class AssetAdmin(ModelAdmin):
 
     # --- Permissions par role / Role-based permissions ---
 
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
     def has_change_permission(self, request, obj=None):
         """
         Seul le createur peut modifier l'asset.
@@ -466,6 +472,9 @@ class TokenAdmin(ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
     def has_change_permission(self, request, obj=None):
         return False
 
@@ -544,6 +553,9 @@ class TransactionAdmin(ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         return False
@@ -632,6 +644,12 @@ class FederationAdmin(ModelAdmin):
     nombre_de_membres.short_description = _('Membres')
 
     # --- Permissions par role / Role-based permissions ---
+
+    def has_add_permission(self, request):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
         """

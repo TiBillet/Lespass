@@ -47,6 +47,11 @@ class CrowdConfigAdmin(SingletonModelAdmin, ModelAdmin):
         sanitize_textfields(obj)
         super().save_model(request, obj, form, change)
 
+    def has_add_permission(self, request):
+        # Singleton : pas de creation manuelle
+        # Singleton: no manual creation
+        return False
+
     def has_view_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
 
