@@ -206,7 +206,13 @@ class Command(BaseCommand):
                "stripe_mode_test": True,
                "stripe_connect_account_test": os.environ.get('TEST_STRIPE_CONNECT_ACCOUNT'),
                "stripe_payouts_enabled": True,
+               "module_billetterie": True,
+               "module_adhesion": True,
+               "module_crowdfunding": True,
+               "module_monnaie_locale": True,
                "module_caisse": True,
+               "module_inventaire": True,
+               "module_tireuse": True,
                "site_web": "https://tibillet.org",
                "legal_documents": "https://tibillet.org/cgucgv",
                "adresse": {
@@ -1199,11 +1205,15 @@ class Command(BaseCommand):
                     config.stripe_connect_account_test = fx.get('stripe_connect_account_test')
                     config.stripe_payouts_enabled = bool(fx.get('stripe_payouts_enabled'))
 
-                    # Modules activés (caisse, monnaie locale, etc.)
-                    if fx.get('module_caisse'):
-                        config.module_caisse = True
-                        # La caisse requiert la monnaie locale
-                        config.module_monnaie_locale = True
+                    # Modules activés depuis la fixture
+                    # / Enabled modules from fixture
+                    for module_field in [
+                        'module_billetterie', 'module_adhesion', 'module_crowdfunding',
+                        'module_monnaie_locale', 'module_caisse',
+                        'module_inventaire', 'module_tireuse',
+                    ]:
+                        if fx.get(module_field):
+                            setattr(config, module_field, True)
 
                     # Adresse principale liée à la config
                     if addr_obj:
