@@ -199,7 +199,6 @@ networks:
 volumes:
   lespass_dev_db:
   fedow_database:
-  fedow_dev_db:
 
 
 # Pour test stripe :
