@@ -1,0 +1,94 @@
+{% load static i18n tibitags %}
+
+<!-- =============================================================
+      GRILLE D'ÉVÉNEMENTS (APPEND - pour pagination infinie)
+     ============================================================= -->
+{% for date_key, events in dated_events.items %}
+    {% for event in events %}
+
+        <!-- CARTE ÉVÉNEMENT -->
+        <div class="col-12 col-md-6 col-lg-3">
+            <div class="carte-evenement flex">
+                <div>
+                    <!-- IMAGE -->
+                    <div class="image-evenement ratio ratio-4x3"
+                         role="img" aria-label="{{ event.name }}"
+                         style="background-image: url('{% if event.sticker_img %}{{ event.sticker_img.med.url }}{% else %}{{ ""|randCardImg }}{% endif %}');"></div>
+
+                    <!-- TAGS -->
+                    <div class="mb-2">
+                        {% for tag in event.tag.all %}
+                            <span class="etiquette-categorie">{{ tag.name|lower }}</span>
+                        {% endfor %}
+                    </div>
+
+                    <!-- TITRE -->
+                    <h3 class="titre-evenement">{{ event.name|upper|truncatewords:6 }}</h3>
+
+                    <!-- DESCRIPTION -->
+                    {% if event.short_description %}
+                        <p class="description-evenement mb-2">
+                            {{ event.short_description|striptags|truncatewords:15 }}
+                        </p>
+                    {% endif %}
+
+                    <!-- INFOS : Date et heure -->
+                    <!-- Dans les cards, on affiche un format compact -->
+                    <div class="infos-evenement d-flex justify-content-between">
+                        <span>→
+                            {% if event.end_datetime %}
+                                {% if event.datetime|date:"Y-m-d" == event.end_datetime|date:"Y-m-d" %}
+                                    {{ event.datetime|date:"l d F" }}
+                                {% else %}
+                                    {% translate "Du" %} {{ event.datetime|date:"l d" }} {% translate "au" %} {{ event.end_datetime|date:"l d" }}
+                                {% endif %}
+                            {% else %}
+                                {{ event.datetime|date:"l d F" }}
+                            {% endif %}
+                        </span>
+                        <span>→ {{ event.datetime|date:"H:i" }}h{% if event.end_datetime %} - {{ event.end_datetime|date:"H:i" }}h{% endif %}</span>
+                    </div>
+                </div>
+
+                <!-- ACTIONS -->
+                <div class="pied-carte">
+                    <a href="/event/{{ event.slug }}/"
+                       class="bouton-petit-jaune"
+                       hx-get="/event/{{ event.slug }}/"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate 'En voir +' %}
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    {% endfor %}
+{% empty %}
+
+    <!-- AUCUN ÉVÉNEMENT -->
+    <div class="col-12">
+        <div class="bordure-epaisse p-5 text-center bg-white">
+            <h3 class="texte-bleu police-titre mb-3">{% translate 'No results for this search.' %}</h3>
+            <p class="texte-bleu police-mono">{% translate 'No events match your search criteria.' %}</p>
+            <a href="{% url 'event-list' %}" class="btn bouton-pilule fond-bleu text-white mt-3">
+                {% translate 'Effacer le filtre' %}
+            </a>
+        </div>
+    </div>
+
+{% endfor %}
+
+<!-- BOUTON CHARGER PLUS -->
+{% if paginated_info.has_next %}
+    <div class="col-12" id="paginator">
+        <div class="text-center py-5">
+            <button class="bouton-charger-plus"
+                    hx-get="/event/partial_list/?page={{ paginated_info.page|add:1 }}{% if tags %}&tag={{ tags.0 }}{% endif %}"
+                    hx-target="#paginator"
+                    hx-swap="outerHTML">
+                {% translate 'CHARGER PLUS' %}
+            </button>
+        </div>
+    </div>
+{% endif %}

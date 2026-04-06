@@ -19,8 +19,18 @@
                        hx-get="/my_account/resend_activation_email/">
                         {% translate "Resend validation email" %}
                     </a>
-                {% elif profile.admin_this_tenant %}
-                    <p><a href="/admin">{% translate "Administration" %}</a></p>
+                {% endif %}
+                {% if tenants_admin %}
+                    <p><strong>{% translate "Administration" %}</strong></p>
+                    {% for tenant in tenants_admin %}
+                    <p>
+                        <a href="https://{{ tenant.get_primary_domain.domain }}/admin/"
+                           target="_blank">
+                            {{ tenant.name }}
+                            <small class="text-muted">({{ tenant.get_primary_domain.domain }})</small>
+                        </a>
+                    </p>
+                    {% endfor %}
                 {% endif %}
                 <p class="mt-2"><a href="/deconnexion">{% translate "Se deconnecter" %}</a></p>
 

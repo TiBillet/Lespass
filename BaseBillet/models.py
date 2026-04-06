@@ -719,18 +719,16 @@ class Configuration(SingletonModel):
     def check_serveur_cashless(self):
         logger.info(f"Checking cashless server... URL: {self.server_cashless}")
         if self.server_cashless and self.key_cashless:
-            sess = requests.Session()
             try:
-                r = sess.get(
-                    f"{self.server_cashless}/api/check_apikey",
+                r = requests.get(
+                    f'{self.server_cashless}/api/check_apikey',
                     headers={
                         "Authorization": f"Api-Key {self.key_cashless}",
                         "Origin": self.domain(),
                     },
-                    timeout=1,
+                    timeout=10,
                     verify=bool(not settings.DEBUG),
                 )
-                sess.close()
                 logger.info(f"    check_serveur_cashless : {r.status_code} {r.text}")
                 if r.status_code == 200:
                     # TODO: Check cashless signature avec laboutik_public_pem
@@ -738,9 +736,7 @@ class Configuration(SingletonModel):
                 else:
                     logger.error(f"{r.status_code} {r.content}")
                     return False
-                    # raise Exception(f"{r.status_code} {r.content}")
             except Exception as e:
-                # import ipdb; ipdb.set_trace()
                 logger.error(f"    ERROR check_serveur_cashless : {e}")
                 raise e
         return False
@@ -1788,6 +1784,7 @@ class Price(models.Model):
         help_text=_("Raw token amount."),
     )
 
+    #TODO: JONAS CHECK !
     # Tarification multi-asset : si null → prix en EUR, si set → prix en unites de l'asset.
     # Permet de definir des tarifs en tokens (monnaie locale, temps, fidelite, etc.).
     # Precedent : fedow_reward_asset fait deja une FK tenant → shared (meme pattern).
@@ -2362,6 +2359,11 @@ class Event(models.Model):
         cache.delete(f"event_get_sticker_img_{self.pk}")
         cache.delete(f"event_get_social_card_{self.pk}")
 
+        # Supprime le cache de la page principale des events de ce tenant
+        # La clé est construite avec l'uuid du tenant (voir EventMVT.federated_events_filter)
+        # / Delete the main event list cache for this tenant
+        cache.delete(f'event_list_{connection.tenant.uuid}')
+
     # def get_absolute_url(self):
     #     return reverse("event-detail", args=[self.slug])
 
@@ -2806,6 +2808,8 @@ class Reservation(models.Model):
         Cree un avoir (credit note) pour une LigneArticle hors-Stripe.
         / Creates a credit note for a non-Stripe LigneArticle.
         """
+        metadata = ligne.metadata if ligne.metadata else {}
+        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
         avoir = LigneArticle.objects.create(
             pricesold=ligne.pricesold,
             qty=-ligne.qty,
@@ -2818,6 +2822,7 @@ class Reservation(models.Model):
             wallet=ligne.wallet,
             sale_origin=SaleOrigin.ADMIN,
             credit_note_for=ligne,
+            metadata=metadata,
             status=LigneArticle.CREATED,
         )
         avoir.status = LigneArticle.CREDIT_NOTE

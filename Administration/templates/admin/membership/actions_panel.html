@@ -146,7 +146,9 @@ CONTEXTE REQUIS (injecté par MembershipAdmin.changeform_view) :
         <div style="display:flex;align-items:flex-start;gap:.5rem;flex:1;min-width:0">
           <svg style="width:1rem;height:1rem;color:#1d4ed8;flex-shrink:0;margin-top:.125rem" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           <p style="font-size:.8125rem;color:#1e40af;margin:0;line-height:1.5625">
-            {% if membership.price %}
+            {% if membership.contribution_value %}
+              {% blocktrans with amount=membership.contribution_value %}Cette adhésion demande une validation manuelle. La personne concernée recevra un email pour régler la somme de {{ amount }} €.{% endblocktrans %}
+            {% elif membership.price %}
               {% blocktrans with amount=membership.price.prix %}Cette adhésion demande une validation manuelle. La personne concernée recevra un email pour régler la somme de {{ amount }} €.{% endblocktrans %}
             {% else %}
               {% translate "Cette adhésion demande une validation manuelle. La personne concernée recevra un email avec le lien de paiement." %}

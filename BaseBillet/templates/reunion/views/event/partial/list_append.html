@@ -1,19 +1,13 @@
 {% load i18n %}
 {% load tibitags %}
 
-<p class="text-end mb-5">
-    <a href="/rss/latest/feed/" target="_blank" rel="noopener noreferrer" aria-label="{% trans 'Event feed' %}">
-        <i class="bi bi-rss-fill"></i> {% trans "Event feed" %}
-    </a>
-</p>
-
 {% for date_key, events in dated_events.items %}
     <h2 class="fs-5 p-3 text-dark" style="background: var(--mayaj-pons);">
         {{ date_key|date:'l j F'|capfirst }}
     </h2>
     {% for event in events %}
         <div class="row align-items-center mb-3">
-            {% if event.show_time %} 
+            {% if event.show_time %}
             <div class="col-md-auto">
                 <h3 class="mb-0 mt-2 mt-md-0">{{ event.datetime|time:'H\hi' }}</h3>
             </div>
@@ -23,10 +17,10 @@
             </div>
             {#  <a href="{{ event.full_url }}" hx-get="{{ event.full_url }}" hx-target="body" hx-push-url="true" class="col fs-5">#}
             <div class="col">
-                
+
                 {% with event_domain=event.full_url|cut:"https://"|cut:"http://"|cut:"/event/"|cut:event.slug|cut:"/" %}
                 {% with current_domain=request.build_absolute_uri|cut:"https://"|cut:"http://"|cut:"/event/" %}
-                
+
                 {% if event_domain != current_domain %}
                 <a href="{{ event.full_url }}" class="fs-5" target="_blank">
                     {{ event.name }}
@@ -39,12 +33,12 @@
                 </a>
                 {% endif %}
 
-                {% if event.short_description %} 
-                <div class="text-muted"> 
-                    {{ event.short_description }} 
-                </div> 
+                {% if event.short_description %}
+                <div class="text-muted">
+                    {{ event.short_description }}
+                </div>
                 {% endif %}
-                
+
                 <div class="small text-muted mb-2">
                     {% if event_domain != current_domain %}
                         <i class="bi bi-globe"></i>

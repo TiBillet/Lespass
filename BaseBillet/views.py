@@ -725,6 +725,24 @@ class MyAccount(viewsets.ViewSet):
         template_context['header'] = False
         template_context['account_tab'] = 'index'
 
+        # Liste des tenants que l'utilisateur peut administrer
+        # / List of tenants the user can administer
+        user = request.user
+        current_tenant = connection.tenant
+
+        if user.is_superuser:
+            # Superuser : ses client_admin + le tenant courant (toujours present)
+            # / Superuser: their client_admin + current tenant (always included)
+            admin_pks = set(user.client_admin.values_list('pk', flat=True))
+            admin_pks.add(current_tenant.pk)
+            tenants_admin = Client.objects.filter(
+                pk__in=admin_pks
+            ).prefetch_related('domains')
+        else:
+            tenants_admin = user.client_admin.prefetch_related('domains').all()
+
+        template_context['tenants_admin'] = tenants_admin
+
         if not request.user.email_valid:
             logger.warning("User email not active")
             messages.add_message(request, messages.WARNING,
@@ -1698,7 +1716,25 @@ class EventMVT(viewsets.ViewSet):
         return None
 
     def federated_events_filter(self, tags=None, search=None, page=1, thematique=None):
+        # Cache simple : on cache uniquement la page principale (sans filtres, page 1)
+        # Les requêtes avec filtres (tags, recherche, thématique) ne sont pas cachées
+        # car elles sont rares et rapides à exécuter
+        # Clé = uuid du tenant. Invalidé dans Event.save()
+        # / Simple cache: only cache the main page (no filters, page 1)
+        # / Filtered requests are not cached (rare and fast)
+        # / Key = tenant uuid. Invalidated in Event.save()
+        page_sans_filtres = (page == 1 and not tags and not search and not thematique)
+        cache_key = None
+        if page_sans_filtres:
+            cache_key = f'event_list_{connection.tenant.uuid}'
+            cached = cache.get(cache_key)
+            if cached:
+                return cached
+
         dated_events = {}
+        all_dates_set = set()       # Toutes les dates disponibles (avant pagination)
+        all_tags_by_slug = {}       # slug -> Tag object (dédupliqué par slug entre tenants)
+        all_thematiques_by_slug = {}  # slug -> Tag object (thématiques des events visibles)
         paginated_info = {
             'page': page,
             'has_next': False,
@@ -1769,8 +1805,23 @@ class EventMVT(viewsets.ViewSet):
                 if thematique:
                     events = events.filter(thematique__slug=thematique)
 
-                # Mécanisme de pagination : 10 évènements max par lieux ? À définir dans la config' ?
-                paginator = Paginator(events.order_by('datetime').distinct(), 50)
+                # Collecte de TOUTES les dates et tags avant pagination
+                # Requêtes légères : dates() et values_list() évitent les subqueries lourdes
+                # / Collect ALL dates and tags before pagination (lightweight queries)
+                all_dates_set.update(events.dates('datetime', 'day'))
+                tag_pks = set(events.order_by().values_list('tag__pk', flat=True))
+                tag_pks.discard(None)
+                for tag in Tag.objects.filter(pk__in=tag_pks):
+                    if tag.slug not in all_tags_by_slug:
+                        all_tags_by_slug[tag.slug] = tag
+                thematique_pks = set(events.order_by().values_list('thematique__pk', flat=True))
+                thematique_pks.discard(None)
+                for th in Tag.objects.filter(pk__in=thematique_pks):
+                    if th.slug not in all_thematiques_by_slug:
+                        all_thematiques_by_slug[th.slug] = th
+
+                # Pagination : 100 évènements par page par tenant
+                paginator = Paginator(events.order_by('datetime').distinct(), 100)
                 paginated_events = paginator.get_page(page)
                 paginated_info['page'] = page
                 paginated_info['has_next'] = paginated_events.has_next()
@@ -1790,8 +1841,27 @@ class EventMVT(viewsets.ViewSet):
             k: sorted(v, key=lambda obj: obj.datetime) for k, v in sorted(dated_events.items())
         }
 
-        # Retourn les évènements classés par date et les infos de pagination
-        return sorted_dict_by_date, paginated_info
+        # Toutes les dates triées (pour le dropdown filtre)
+        # / All dates sorted (for filter dropdown)
+        sorted_all_dates = sorted(all_dates_set)
+
+        # Tous les tags triés par nom (pour le dropdown filtre)
+        # / All tags sorted by name (for filter dropdown)
+        sorted_all_tags = sorted(all_tags_by_slug.values(), key=lambda t: t.name.lower())
+
+        # Toutes les thématiques triées par nom (pour le dropdown filtre)
+        # / All thematiques sorted by name (for filter dropdown)
+        sorted_all_thematiques = sorted(all_thematiques_by_slug.values(), key=lambda t: t.name.lower())
+
+        result = (sorted_dict_by_date, paginated_info, sorted_all_dates, sorted_all_tags, sorted_all_thematiques)
+
+        # On met en cache seulement la page principale (sans filtres)
+        # Durée : 1 heure. Invalidé dans Event.save()
+        # / Only cache the main page (no filters). Duration: 1 hour.
+        if cache_key:
+            cache.set(cache_key, result, 3600)
+
+        return result
 
     @action(detail=False, methods=['POST', 'GET'])
     def partial_list(self, request):
@@ -1805,19 +1875,23 @@ class EventMVT(viewsets.ViewSet):
             search = str(search)
 
         tags = request.GET.getlist('tag')
-        page = request.GET.get('page', 1)
+        page = int(request.GET.get('page') or 1)
 
         logger.info(f"request.GET : {request.GET}")
 
         thematique_slug = request.GET.get('thematique')
         ctx = {}  # le dict de context pour template
-        ctx['dated_events'], ctx['paginated_info'] = self.federated_events_filter(
+        ctx['dated_events'], ctx['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
 
         # Résolution du template avec fallback vers reunion
+        # Si page > 1, on utilise le template append (sans header RSS)
         config = Configuration.get_solo()
-        template_path = get_skin_template(config, "views/event/partial/list.html")
+        if page > 1:
+            template_path = get_skin_template(config, "views/event/partial/list_append.html")
+        else:
+            template_path = get_skin_template(config, "views/event/partial/list.html")
 
         return render(request, template_path, context=ctx)
 
@@ -1839,22 +1913,29 @@ class EventMVT(viewsets.ViewSet):
 
         # Données pour les filtres (tags, thématiques, recherche)
         # / Data for filter UI (tags, thematiques, search)
-        context['all_tags'] = Tag.objects.filter(events__isnull=False).distinct()
         context['active_tag'] = Tag.objects.filter(slug=tags[0]).first() if tags else None
         context['tags'] = tags
         context['search'] = search
-        context['all_thematiques'] = Tag.objects.filter(events_thematique__isnull=False).distinct()
         context['active_thematique'] = thematique_slug
         context['active_date'] = date_filter
-        context['dated_events'], context['paginated_info'] = self.federated_events_filter(
+
+        # federated_events_filter retourne aussi TOUTES les dates et tags (avant pagination)
+        # / federated_events_filter also returns ALL dates and tags (before pagination)
+        context['dated_events'], context['paginated_info'], all_dates_list, all_tags_list, all_thematiques_list = self.federated_events_filter(
             tags=tags, search=search, page=page, thematique=thematique_slug
         )
 
-        # Le dropdown des dates doit toujours montrer toutes les dates disponibles
-        # On copie le dict AVANT filtrage, sinon la référence pointe vers le même objet
-        # / The date dropdown must always show all available dates
-        # / Copy the dict BEFORE filtering, otherwise reference points to same object
-        context['all_dates'] = dict(context['dated_events'])
+        # Toutes les dates disponibles pour le dropdown filtre (pas limité à la pagination)
+        # / All available dates for filter dropdown (not limited to pagination)
+        context['all_dates'] = all_dates_list
+
+        # Tous les tags des events visibles (publiés, futurs) pour le dropdown filtre
+        # / All tags from visible events (published, future) for filter dropdown
+        context['all_tags'] = all_tags_list
+
+        # Toutes les thématiques des events visibles
+        # / All thematiques from visible events
+        context['all_thematiques'] = all_thematiques_list
 
         # Filtre par date : on ne garde que la date sélectionnée pour l'affichage des cartes
         # / Date filter: keep only the selected date for card display
@@ -1882,7 +1963,7 @@ class EventMVT(viewsets.ViewSet):
     @action(detail=False, methods=['GET'])
     def embed(self, request):
         template_context = get_context(request)
-        template_context['dated_events'], template_context['paginated_info'] = self.federated_events_filter()
+        template_context['dated_events'], template_context['paginated_info'], _dates, _tags, _thematiques = self.federated_events_filter()
         template_context['embed'] = True
         response = render(
             request, "reunion/views/event/list.html",
@@ -1892,7 +1973,7 @@ class EventMVT(viewsets.ViewSet):
         response['X-Frame-Options'] = ''
         return response
 
-    def retrieve(self, request, pk=None):
+    def retrieve(self, request, pk=None, **kwargs):
         slug = pk
         hex8 = None
         match = re.search(r'([0-9a-fA-F]{8})(?:/)?$', pk)
@@ -2367,7 +2448,7 @@ class MembershipMVT(viewsets.ViewSet):
         logger.info(f"new membership : {request.data}")
         membership_validator = MembershipValidator(data=request.data, context={'request': request})
         if not membership_validator.is_valid():
-            logger.error(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
+            logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
             return HttpResponseClientRedirect(request.headers['Referer'])

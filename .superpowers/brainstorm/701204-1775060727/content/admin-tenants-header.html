@@ -1,0 +1,75 @@
+<h2>Comment afficher les tenants administrables ?</h2>
+<p class="subtitle">L'utilisateur admin de plusieurs tenants doit voir clairement lesquels il peut administrer, même s'il n'est pas admin du tenant courant.</p>
+
+<div class="section">
+  <p class="label">Contexte actuel</p>
+  <p>Un gros bouton rouge "Panneau d'administration" qui n'apparaît QUE si l'utilisateur est admin du tenant en cours. Sinon, rien.</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Header compact sous l'email</h3>
+      <p>Une barre discrète sous l'email de l'utilisateur, listant tous les tenants administrables sous forme de badges cliquables. Le tenant courant est mis en évidence (ou barré s'il n'est pas admin). Remplace le gros bouton rouge.</p>
+      <div style="margin-top: 12px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-family: system-ui;">
+        <div style="font-size: 14px; color: #6c757d; margin-bottom: 6px;">Administration :</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+          <a href="#" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #dc3545; color: white; border-radius: 20px; font-size: 13px; text-decoration: none;">
+            <span style="font-size: 11px;">&#x1f511;</span> Festival Raffinerie
+          </a>
+          <a href="#" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #6c757d; color: white; border-radius: 20px; font-size: 13px; text-decoration: none;">
+            <span style="font-size: 11px;">&#x1f511;</span> Café associatif
+          </a>
+          <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #e9ecef; color: #adb5bd; border-radius: 20px; font-size: 13px; text-decoration: line-through;">
+            TiBillet Meta (non admin)
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Section dédiée avec cartes</h3>
+      <p>Une section "Mes espaces d'administration" avec une petite carte par tenant. Chaque carte montre le nom du tenant, sa catégorie (Festival, Salle...), et un lien vers son admin. Le tenant courant est marqué "Vous êtes ici".</p>
+      <div style="margin-top: 12px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-family: system-ui;">
+        <div style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">Mes espaces d'administration</div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 160px; padding: 12px; background: white; border: 2px solid #dc3545; border-radius: 8px;">
+            <div style="font-size: 13px; font-weight: 600;">Festival Raffinerie</div>
+            <div style="font-size: 11px; color: #6c757d;">Festival &middot; <span style="color: #dc3545;">Vous &ecirc;tes ici</span></div>
+            <a href="#" style="font-size: 12px; color: #dc3545; margin-top: 6px; display: block;">Administrer &rarr;</a>
+          </div>
+          <div style="flex: 1; min-width: 160px; padding: 12px; background: white; border: 1px solid #dee2e6; border-radius: 8px;">
+            <div style="font-size: 13px; font-weight: 600;">Café associatif</div>
+            <div style="font-size: 11px; color: #6c757d;">Salle de spectacle</div>
+            <a href="#" style="font-size: 12px; color: #0d6efd; margin-top: 6px; display: block;">Administrer &rarr;</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Dropdown / accordéon</h3>
+      <p>Un bouton "Administration" qui, au clic, déplie une liste des tenants administrables. Compact par défaut, détaillé au besoin. Moins visible mais ne prend pas de place.</p>
+      <div style="margin-top: 12px; padding: 16px; background: #f8f9fa; border-radius: 8px; font-family: system-ui;">
+        <div style="padding: 10px 16px; background: #dc3545; color: white; border-radius: 8px 8px 0 0; font-size: 14px; cursor: pointer;">
+          &#x1f511; Administration (2 espaces) &#x25BC;
+        </div>
+        <div style="border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 8px 8px; overflow: hidden;">
+          <a href="#" style="display: block; padding: 10px 16px; font-size: 13px; text-decoration: none; color: #212529; background: #fff3cd; border-bottom: 1px solid #dee2e6;">
+            <strong>Festival Raffinerie</strong> <span style="font-size: 11px; color: #dc3545;">(tenant actuel)</span>
+          </a>
+          <a href="#" style="display: block; padding: 10px 16px; font-size: 13px; text-decoration: none; color: #212529;">
+            Café associatif
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
