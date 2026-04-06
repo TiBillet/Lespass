@@ -1148,12 +1148,12 @@ class Command(BaseCommand):
                 # Admin de test pour les tests E2E (mot de passe connu).
                 # Test admin for E2E tests (known password).
                 if tenant.name == "Lespass":
-                    test_admin = get_or_create_user('admin@lespass.localhost', send_mail=False)
+                    test_admin = get_or_create_user('admin@admin.com', send_mail=False)
                     test_admin.client_admin.add(tenant)
                     test_admin.is_staff = True
                     test_admin.set_password('admin')
                     test_admin.save()
-                    logger.info("E2E test admin created: admin@lespass.localhost")
+                    logger.info("E2E test admin created: admin@admin.com")
 
 
                 addr_data = fx.get('adresse') or {}
