@@ -1,0 +1,19 @@
+{% comment %}
+JSON-LD Organization pour inclusion dans les base templates tenant.
+Necessite `config` dans le contexte (Configuration singleton).
+/ JSON-LD Organization partial for tenant base templates.
+Requires `config` in context (Configuration singleton).
+{% endcomment %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "{{ config.organisation }}",
+    "url": "https://{{ request.get_host }}/",
+    {% if config.get_social_card %}"logo": "{{ config.get_social_card }}",{% endif %}
+    {% if config.short_description %}"description": "{{ config.short_description|striptags }}",{% endif %}
+    {% if config.email %}"email": "{{ config.email }}",{% endif %}
+    {% if config.phone %}"telephone": "{{ config.phone }}",{% endif %}
+    "sameAs": [{% if config.facebook %}"{{ config.facebook }}"{% endif %}{% if config.facebook and config.instagram %}, {% endif %}{% if config.instagram %}"{{ config.instagram }}"{% endif %}{% if config.twitter %}{% if config.facebook or config.instagram %}, {% endif %}"{{ config.twitter }}"{% endif %}]
+}
+</script>

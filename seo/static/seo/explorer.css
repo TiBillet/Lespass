@@ -1,0 +1,393 @@
+/*
+ * Styles pour la page Explorer (carte Leaflet + liste + barre de recherche).
+ * / Styles for the Explorer page (Leaflet map + list + search toolbar).
+ *
+ * LOCALISATION: seo/static/seo/explorer.css
+ */
+
+/* ============================================================
+ * 1. Forcer le theme clair / Force light theme
+ * ============================================================ */
+.explorer-toolbar,
+.explorer-container,
+.explorer-fab {
+    color-scheme: light;
+    --bs-body-bg: #fff;
+    --bs-body-color: #222;
+}
+
+/* ============================================================
+ * 2. Barre d'outils (recherche + pills + compteur)
+ *    / Toolbar (search + pills + counter)
+ * ============================================================ */
+.explorer-toolbar {
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    padding: 12px 24px;
+}
+
+.explorer-search-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.explorer-search {
+    flex: 1;
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 150ms, box-shadow 150ms;
+}
+
+.explorer-search:focus {
+    border-color: #222;
+    box-shadow: 0 0 0 3px rgba(34, 34, 34, 0.1);
+}
+
+.explorer-pills {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.explorer-pill {
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 150ms, color 150ms, border-color 150ms;
+}
+
+.explorer-pill:hover {
+    background: #f5f5f5;
+}
+
+.explorer-pill.active {
+    background: #222;
+    color: #fff;
+    border-color: #222;
+    font-weight: 600;
+}
+
+.explorer-counter {
+    font-size: 13px;
+    color: #666;
+    margin-top: 8px;
+}
+
+/* ============================================================
+ * 3. Vue split desktop (>= 992px)
+ *    / Desktop split view (>= 992px)
+ * ============================================================ */
+.explorer-container {
+    display: flex;
+    height: calc(100vh - 160px);
+}
+
+.explorer-list {
+    width: 55%;
+    overflow-y: auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.explorer-map {
+    width: 45%;
+    position: sticky;
+    top: 0;
+    height: calc(100vh - 160px);
+    border-left: 1px solid #eee;
+}
+
+/* ============================================================
+ * 4. Cartes / Cards
+ * ============================================================ */
+.explorer-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    gap: 16px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: box-shadow 150ms, border-color 150ms;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    text-decoration: none;
+    color: inherit;
+}
+
+.explorer-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+    color: inherit;
+    text-decoration: none;
+}
+
+.explorer-card[data-highlighted="true"] {
+    border-color: #222;
+}
+
+/* Icone de carte / Card icon */
+.explorer-card-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.explorer-card-icon.lieu {
+    background: #e9ecef;
+    color: #666;
+}
+
+.explorer-card-icon.event {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.explorer-card-icon.membership {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+/* Corps de carte / Card body */
+.explorer-card-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.explorer-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.explorer-card-title {
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0;
+}
+
+/* Badges */
+.explorer-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.explorer-badge.lieu {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.explorer-badge.event {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.explorer-badge.membership {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.explorer-card-meta {
+    font-size: 13px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.explorer-card-desc {
+    font-size: 13px;
+    color: #888;
+    margin-top: 4px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.explorer-card-stats {
+    font-size: 12px;
+    color: #999;
+    margin-top: 6px;
+}
+
+/* ============================================================
+ * 5. Marqueurs carte Leaflet (DivIcon)
+ *    / Leaflet map pins (DivIcon)
+ * ============================================================ */
+.explorer-pin {
+    background: #fff;
+    color: #222;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+    transition: background 150ms, color 150ms, transform 150ms;
+}
+
+.explorer-pin.selected {
+    background: #222;
+    color: #fff;
+    transform: scale(1.08);
+}
+
+/* ============================================================
+ * 6. Surcharge popup Leaflet
+ *    / Leaflet popup overrides
+ * ============================================================ */
+.leaflet-popup-content-wrapper {
+    border-radius: 12px !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15) !important;
+}
+
+.explorer-popup-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0;
+}
+
+.explorer-popup-desc {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}
+
+.explorer-popup-stats {
+    font-size: 11px;
+    color: #999;
+    margin-top: 6px;
+}
+
+.explorer-popup-events {
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.explorer-popup-events li {
+    margin-bottom: 2px;
+}
+
+.explorer-popup-link {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0d6efd;
+    text-decoration: none;
+}
+
+.explorer-popup-link:hover {
+    text-decoration: underline;
+}
+
+/* ============================================================
+ * 7. FAB toggle mobile (bouton carte/liste)
+ *    / Mobile FAB toggle (map/list button)
+ * ============================================================ */
+.explorer-fab {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #222;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* ============================================================
+ * 8. Mobile (< 992px)
+ * ============================================================ */
+@media (max-width: 991.98px) {
+    /* Barre de recherche en colonne / Search bar stacked */
+    .explorer-search-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Pills defilantes horizontalement / Horizontally scrollable pills */
+    .explorer-pills {
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    /* Conteneur en bloc / Container becomes block */
+    .explorer-container {
+        display: block;
+        height: auto;
+    }
+
+    /* Liste pleine largeur avec marge basse pour le FAB */
+    /* / Full-width list with bottom padding for FAB */
+    .explorer-list {
+        width: 100%;
+        height: auto;
+        padding: 12px 16px 80px;
+    }
+
+    /* Carte pleine largeur, masquee par defaut / Full-width map, hidden by default */
+    .explorer-map {
+        width: 100%;
+        height: calc(100vh - 120px);
+        position: relative;
+        border-left: none;
+        display: none;
+    }
+
+    /* Icone plus petite sur mobile / Smaller icon on mobile */
+    .explorer-card-icon {
+        width: 64px;
+        height: 64px;
+        font-size: 20px;
+    }
+
+    .explorer-card {
+        padding: 12px;
+        gap: 12px;
+    }
+
+    .explorer-card-title {
+        font-size: 14px;
+    }
+
+    /* FAB visible sur mobile / FAB visible on mobile */
+    .explorer-fab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Mode carte : masquer liste et pills, afficher carte */
+    /* / Map mode: hide list + pills, show map */
+    .explorer-view-map .explorer-list {
+        display: none;
+    }
+
+    .explorer-view-map .explorer-map {
+        display: block;
+    }
+
+    .explorer-view-map .explorer-pills {
+        display: none;
+    }
+}

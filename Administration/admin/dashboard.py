@@ -354,6 +354,14 @@ def get_sidebar_navigation(request):
                         "permission": admin_permission,
                     },
                     {
+                        "title": _("Keg products"),
+                        "icon": "sports_bar",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_futproduct_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
                         "title": _("Flow meters"),
                         "icon": "speed",
                         "link": reverse_lazy(

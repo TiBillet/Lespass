@@ -542,7 +542,10 @@ with tenant_context(tenant):
 ```
 
 **9.5 — Routes publiques et `HTTP_HOST`.**
-Les routes `/api/discovery/` sont dans `urls_public.py`. Utiliser `HTTP_HOST='tibillet.localhost'` (schema public), pas `lespass.tibillet.localhost` (tenant).
+Les routes `/api/discovery/` et les vues SEO ROOT (`/`, `/lieux/`, `/evenements/`, `/adhesions/`, `/recherche/`) sont dans `urls_public.py`. Utiliser `HTTP_HOST='tibillet.localhost'` (schema public), pas `lespass.tibillet.localhost` (tenant). Les tests SEO ROOT utilisent un `root_client` avec `HTTP_HOST='www.tibillet.localhost'`.
+
+**9.6 — Templatetags custom et restart serveur.**
+Les templatetags d'une nouvelle app Django (ex: `seo/templatetags/seo_tags.py`) ne sont decouvertes qu'au demarrage du serveur. Si `TemplateSyntaxError: 'xxx_tags' is not a registered tag library` apparait apres creation de templatetags, redemarrer le serveur Django (pas juste attendre le hot-reload).
 
 ### Modeles et signaux
 

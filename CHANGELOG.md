@@ -1,5 +1,6 @@
 # Changelog / Journal des modifications
 
+<<<<<<< HEAD
 ## Rapport temps reel — Session en cours / Real-time report — Current shift
 
 **Date :** Avril 2026
@@ -8,14 +9,87 @@
 **Quoi / What:** Bouton "Rapport en cours" sur la liste des clotures de caisse (`/admin/laboutik/cloturecaisse/`). Ouvre dans un nouvel onglet un rapport comptable complet calcule en temps reel depuis la derniere cloture via `RapportComptableService.generer_rapport_complet()`.
 
 **Pourquoi / Why:** Permettre aux operateurs de consulter l'etat comptable du service en cours sans creer de cloture.
+=======
+## Page Explorer — Carte Leaflet + recherche fusionnee / Explorer page — Leaflet map + merged search
+
+**Date :** 7 avril 2026
+**Migration :** Non
+
+**Quoi / What:** Nouvelle page `/explorer/` sur le ROOT avec :
+- Carte interactive Leaflet + tuiles OpenStreetMap (CDN, pas de dependance npm)
+- Liste filtree de lieux, evenements et adhesions synchronisee avec la carte
+- Barre de recherche (filtre live debounce 300ms) + pills categorie (Tous/Lieux/Evenements/Adhesions)
+- Cross-highlighting bidirectionnel desktop (hover card → highlight marqueur, clic marqueur → scroll liste)
+- Toggle Carte/Liste mobile (FAB flottant, lazy loading Leaflet au premier tap)
+- Popup Leaflet enrichi par lieu (description, prochains events, adhesions, lien "Visiter")
+- Enrichissement du SEOCache avec coordonnees GPS (latitude/longitude depuis PostalAddress)
+
+**Pourquoi / Why:** Offrir un outil de decouverte interactif pour le reseau TiBillet, inspire du pattern Airbnb (split view desktop, toggle mobile). Les pages SEO statiques (`/lieux/`, `/recherche/`) restent en place pour le referencement.
+
+### Fichiers crees / Created files
+| Fichier / File | Role |
+|---|---|
+| `seo/templates/seo/explorer.html` | Template full-width, CDN Leaflet, json_script |
+| `seo/static/seo/explorer.js` | Carte + liste + filtres + toggle mobile (~520 lignes) |
+| `seo/static/seo/explorer.css` | Layout split/mobile, cards, pins, FAB (~394 lignes) |
+| `tests/pytest/test_explorer.py` | 10 tests pytest |
+
+### Fichiers modifies / Modified files
+| Fichier / File | Modification |
+|---|---|
+| `seo/services.py` | +latitude/longitude dans `build_tenant_config_data()`, +`build_explorer_data()` |
+| `seo/tasks.py` | +latitude/longitude dans aggregate_lieux |
+| `seo/views.py` | +vue `explorer()` |
+| `seo/urls.py` | +route `/explorer/` |
+| `seo/templates/seo/base.html` | +lien "Explorer" navbar, +block `main_wrapper` |
+
+---
+
+## App SEO — Cache cross-tenant, pages ROOT, ameliorations meta / SEO app — Cross-tenant cache, ROOT pages, meta improvements
+
+**Date :** Avril 2026
+**Migration :** Oui (`seo/migrations/0001_initial.py` — modele `SEOCache` dans le schema public)
+
+**Quoi / What:** Nouvelle app `seo` (SHARED_APPS) qui fournit :
+- Un cache SEO pre-calcule par Celery task toutes les 4h (requetes SQL cross-schema optimisees)
+- Pages ROOT (`tibillet.coop`) : landing vitrine, `/lieux/`, `/evenements/`, `/adhesions/`, `/recherche/`, `/sitemap.xml` (index cross-tenant)
+- Ameliorations templates tenant : `<link rel="canonical">`, JSON-LD Organization sur toutes les pages, partials JSON-LD Product
+- Remplacement de `BaseBillet/sitemap.py` et `BaseBillet/views_robots.py` par les equivalents dans `seo/`
+- Suppression du code mort : `test_jinja`, `old_create_product.html`
+
+**Pourquoi / Why:** Doter le reseau TiBillet d'une couche SEO complete pour ameliorer la visibilite des lieux, evenements et adhesions dans les moteurs de recherche. Le ROOT tenant sert de hub SEO pour tout le reseau.
+
+### Fichiers crees / Created files
+| Fichier / File | Role |
+|---|---|
+| `seo/` (app complete) | App SEO : models, services, tasks, views, urls, templates, templatetags |
+| `seo/models.py` | `SEOCache` — cache JSON en schema public |
+| `seo/services.py` | Requetes SQL cross-schema + helpers Memcached |
+| `seo/tasks.py` | Celery task `refresh_seo_cache` (toutes les 4h) |
+| `seo/views.py` | Vues ROOT (landing, lieux, evenements, adhesions, recherche, sitemap index) |
+| `seo/views_common.py` | Helpers JSON-LD, cache reader, robots.txt |
+| `seo/sitemap.py` | Sitemaps tenant enrichis (remplace BaseBillet/sitemap.py) |
+| `seo/templatetags/seo_tags.py` | Filtre `format_iso_date` |
+| `seo/templates/seo/` | 6 templates ROOT + 2 partials JSON-LD |
+| `tests/pytest/test_seo.py` | 24 tests pytest |
+>>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
+<<<<<<< HEAD
 | `laboutik/views.py` | Nouvelle action `rapport_temps_reel` sur CaisseViewSet |
 | `Administration/templates/admin/cloture/rapport_temps_reel.html` | Template standalone du rapport temps reel (13 sections) |
 | `Administration/templates/admin/cloture/changelist_before.html` | Bouton vert "Rapport en cours" avec `target="_blank"` |
 | `Administration/admin/laboutik.py` | URL du rapport injectee dans `changelist_view()` |
+=======
+| `TiBillet/settings.py` | `seo` dans SHARED_APPS + `CELERY_BEAT_SCHEDULE` |
+| `TiBillet/urls_tenants.py` | Import sitemap depuis `seo.sitemap` |
+| `TiBillet/urls_public.py` | Routes ROOT via `seo.urls` |
+| `BaseBillet/urls.py` | Import `robots_txt` depuis `seo.views_common` |
+| `BaseBillet/templates/reunion/base.html` | Canonical + JSON-LD Organization |
+| `BaseBillet/templates/faire_festival/base.html` | Idem |
+>>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 
 ---
 

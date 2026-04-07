@@ -1,0 +1,44 @@
+/*
+ * Styles communs pour les pages SEO ROOT.
+ * / Common styles for ROOT SEO pages.
+ *
+ * LOCALISATION: seo/static/seo/seo.css
+ */
+
+/* Equilibrer les titres (pas de mot orphelin sur la derniere ligne) */
+/* / Balance headings (no orphan word on last line) */
+h1, h2, h3, .lead {
+    text-wrap: balance;
+}
+
+/* Chiffres tabulaires pour les compteurs (largeur egale, pas de "saut") */
+/* / Tabular numbers for counters (equal width, no "jump") */
+.stat-number {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Cartes avec ombres douces plutot que bordures */
+/* / Cards with soft shadows instead of borders */
+.seo-card {
+    border: none;
+    box-shadow:
+        0px 0px 0px 1px rgba(0, 0, 0, 0.06),
+        0px 1px 2px -1px rgba(0, 0, 0, 0.06),
+        0px 2px 4px 0px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.seo-card:hover {
+    box-shadow:
+        0px 0px 0px 1px rgba(0, 0, 0, 0.08),
+        0px 2px 6px -1px rgba(0, 0, 0, 0.10),
+        0px 4px 8px 0px rgba(0, 0, 0, 0.06);
+    transform: translateY(-2px);
+}
+
+/* Outline discret sur les images dans les cartes */
+/* / Subtle outline on images inside cards */
+.seo-card .card-img-top {
+    outline: 1px solid rgba(0, 0, 0, 0.10);
+    outline-offset: -1px;
+}

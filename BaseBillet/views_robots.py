@@ -1,6 +1,9 @@
-from django.db import connection
+# DEPRECATED: Ce fichier est remplace par seo/views_common.py (robots_txt).
+# Conserve temporairement pour reference.
+# / DEPRECATED: This file is replaced by seo/views_common.py (robots_txt).
+# Kept temporarily for reference.
+
 from django.http import HttpResponse
-from django.contrib.sites.shortcuts import get_current_site
 
 
 # The robots.txt file is accessible at: https://yourdomain.com/robots.txt

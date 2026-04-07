@@ -1,0 +1,39 @@
+{% extends "seo/base.html" %}
+{% load i18n %}
+
+{% block content %}
+
+<h1 class="mb-4">{% translate "Adhésions disponibles" %}</h1>
+
+{% if memberships %}
+<div class="row">
+    {% for membership in memberships %}
+    <div class="col-md-4 col-lg-3 mb-4">
+        <div class="card seo-card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ membership.name }}</h5>
+                {% if membership.tenant_name %}
+                <p class="card-text text-muted small mb-1">
+                    <i class="bi bi-geo-alt"></i> {{ membership.tenant_name }}
+                </p>
+                {% endif %}
+                {% if membership.short_description %}
+                <p class="card-text small">{{ membership.short_description|truncatewords:30 }}</p>
+                {% endif %}
+            </div>
+            {% if membership.canonical_url %}
+            <div class="card-footer bg-transparent border-0">
+                <a href="{{ membership.canonical_url }}" class="btn btn-sm btn-outline-primary w-100">
+                    {% translate "En savoir plus" %}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted">{% translate "Aucune adhésion disponible pour le moment." %}</p>
+{% endif %}
+
+{% endblock %}

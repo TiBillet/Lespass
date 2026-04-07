@@ -51,6 +51,12 @@
 
     {% block extra_meta %}{% endblock %}
 
+    <link rel="canonical" href="{% block canonical %}{{ request.build_absolute_uri }}{% endblock %}">
+
+    {% block json_ld_org %}
+    {% include "seo/partials/json_ld_organization.html" %}
+    {% endblock %}
+
     <!-- ================================================================
          PRELOAD / PRECONNECT : Optimisation du chargement des ressources
          ================================================================ -->

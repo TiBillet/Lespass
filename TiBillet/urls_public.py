@@ -12,7 +12,7 @@ urlpatterns = [
 
     re_path(r'api/user/', include('AuthBillet.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
-    path('', include('MetaBillet.urls')),
+    path('', include('seo.urls')),
 ]
 
 if settings.DEBUG:

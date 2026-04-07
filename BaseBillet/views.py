@@ -24,7 +24,6 @@ from django.db.models import Count, Q, Sum
 from django.http import HttpResponse, HttpRequest, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
@@ -54,7 +53,7 @@ from BaseBillet.tasks import create_membership_invoice_pdf, send_membership_invo
     contact_mailer, new_tenant_after_stripe_mailer, send_to_ghost_email, send_sale_to_laboutik, \
     send_payment_success_admin, send_payment_success_user, send_reservation_cancellation_user, \
     send_ticket_cancellation_user, send_email_generique, \
-    send_membership_pending_admin, send_membership_pending_user, send_membership_payment_link_user
+    send_membership_payment_link_user
 from BaseBillet.validators import LoginEmailValidator, MembershipValidator, LinkQrCodeValidator, TenantCreateValidator, \
     ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
     PaiementHorsLigneSerializer
@@ -209,7 +208,7 @@ def get_context(request):
 
     if crowd_config.active and Initiative.objects.exists():
         navbar.append(
-            {'name': f'crowd-list', 'url': '/contrib/',
+            {'name': 'crowd-list', 'url': '/contrib/',
              'label': f'{crowd_config.title}', 'icon': 'people-fill'}
         )
 
@@ -325,16 +324,6 @@ class Ticket_html_view(APIView):
         # return render(request, 'ticket/qrtest.html', context=context)
 
 
-def test_jinja(request):
-    context = {
-        "list": [1, 2, 3, 4, 5, 6],
-        "var1": "",
-        "var2": "",
-        "var3": "",
-        "var4": "hello",
-    }
-    return TemplateResponse(request, "htmx/views/test_jinja.html", context=context)
-
 
 def deconnexion(request):
     # un logout peut-il mal se passer ?
@@ -426,7 +415,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
             domain = get_object_or_404(Domain, domain=lespass_domain)
             primary_domain = domain.tenant.get_primary_domain()
-            if not primary_domain.domain in request.build_absolute_uri():
+            if primary_domain.domain not in request.build_absolute_uri():
                 return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
 
             if not serialized_qrcode_card:
@@ -915,7 +904,7 @@ class MyAccount(viewsets.ViewSet):
         value = token_fed[0]['value']
         if value < 1:
             messages.add_message(request, messages.ERROR,
-                                 _(f"Your wallet is already empty."))
+                                 _("Your wallet is already empty."))
             return HttpResponseClientRedirect('/my_account/')
 
         status_code, result = fedowAPI.wallet.refund_fed_by_signature(user)
@@ -931,7 +920,7 @@ class MyAccount(viewsets.ViewSet):
                 'title': f"Remboursement de {amount_eur} € initié",
                 'sub_title': "TiBillet",
                 'main_text': f"La demande de remboursement de la somme {amount_eur} € a été envoyée à notre prestataire bancaire (Stripe).",
-                'main_text_2': f"Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
+                'main_text_2': "Il apparaitra sur votre relevé sous 10 jours. Passé ce délai sans remboursement, veuillez nous contacter sur contact@tibillet.re, nous pourrons vérifier ensemble.",
                 'table_info': {'Montant remboursé': f'{amount_eur} €'},
                 'end_text': "À bientôt !",
                 'signature': "Marvin, le robot TiBillet",
@@ -940,13 +929,13 @@ class MyAccount(viewsets.ViewSet):
             return HttpResponseClientRedirect('/my_account/')
         else:
             messages.add_message(request, messages.WARNING,
-                                 _(f"Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
+                                 _("Apologies, it seems you need to manually request a refund. You can go to one of the collective's register, or send ar email to: contact@tibillet.re ."))
             return HttpResponseClientRedirect('/my_account/')
 
     @staticmethod
     def get_place_cached_info(place_uuid):
         # Recherche des infos dans le cache :
-        place_info = cache.get(f"place_uuid")
+        place_info = cache.get("place_uuid")
         if place_info:
             logger.info("place info from cache GET")
             return place_info.get(place_uuid)
@@ -964,7 +953,7 @@ class MyAccount(viewsets.ViewSet):
                     }
 
             logger.info("place info to cache SET")
-            cache.set(f"place_uuid", place_info, 3600)
+            cache.set("place_uuid", place_info, 3600)
         return place_info.get(place_uuid)
 
     @action(detail=False, methods=['GET'])
@@ -1101,7 +1090,7 @@ class MyAccount(viewsets.ViewSet):
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
             else:
                 messages.add_message(request, messages.ERROR, _("Payment verification error"))
-        except Exception as e:
+        except Exception:
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
 
         return redirect('/my_account/')
@@ -2182,11 +2171,11 @@ class EventMVT(viewsets.ViewSet):
                                  _('Payment confirmed. Tickets sent to your email. You can also view your tickets through "My account > Bookings".'))
             # Déja traité et validé.
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+                messages.add_message(request, messages.WARNING, _("Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
+                                     _("An error has occurred, please contact the administrator."))
+        except MessageFailure:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
         except Exception as e:
@@ -2422,7 +2411,7 @@ class Badge(viewsets.ViewSet):
         fedowAPI = FedowAPI()
         transaction = fedowAPI.badge.badge_in(user, product)
 
-        messages.add_message(request, messages.SUCCESS, _(f"Check in registered!"))
+        messages.add_message(request, messages.SUCCESS, _("Check in registered!"))
 
         return render(request, "reunion/partials/account/badge_switch.html", context={})
 
@@ -2430,7 +2419,7 @@ class Badge(viewsets.ViewSet):
     def check_out(self, request: HttpRequest):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
-        messages.add_message(request, messages.SUCCESS, _(f"Check out registered!"))
+        messages.add_message(request, messages.SUCCESS, _("Check out registered!"))
         return HttpResponseClientRedirect(request.headers['Referer'])
 
     def get_permissions(self):
@@ -2615,11 +2604,11 @@ class MembershipMVT(viewsets.ViewSet):
                     # Si le produit n'existe pas dans les tenants fédérés, on affiche la page 404 personnalisée
                     context = get_context(request)
                     return render(request, "reunion/views/membership/404.html", context=context, status=404)
-            except Exception as e:
+            except Exception:
                 # En cas d'erreur lors de la recherche dans les tenants fédérés, on affiche la page 404 personnalisée
                 context = get_context(request)
                 return render(request, "reunion/views/membership/404.html", context=context, status=404)
-        except Exception as e:
+        except Exception:
             # Pour toute autre erreur, on affiche la page 404 personnalisée
             context = get_context(request)
             return render(request, "reunion/views/membership/404.html", context=context, status=404)
@@ -2797,16 +2786,16 @@ class MembershipMVT(viewsets.ViewSet):
         try:
             if paiement_stripe.traitement_en_cours:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your payment has been validated and is being processed. Thank you very much!"))
+                                     _("Your payment has been validated and is being processed. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.VALID:
                 messages.add_message(request, messages.SUCCESS,
-                                     _(f"Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
+                                     _("Your subscription has been validated. You will receive a confirmation email. Thank you very much!"))
             elif paiement_stripe.status == Paiement_stripe.PENDING:
-                messages.add_message(request, messages.WARNING, _(f"Your payment is awaiting validation."))
+                messages.add_message(request, messages.WARNING, _("Your payment is awaiting validation."))
             else:
                 messages.add_message(request, messages.WARNING,
-                                     _(f"An error has occurred, please contact the administrator."))
-        except MessageFailure as e:
+                                     _("An error has occurred, please contact the administrator."))
+        except MessageFailure:
             # Surement un test unitaire, les messages plantent a travers la Factory Request
             pass
         except Exception as e:
@@ -2826,7 +2815,7 @@ class MembershipMVT(viewsets.ViewSet):
             return HttpResponse(_('PDF generation error'), status=500)
 
         response = HttpResponse(pdf_binary, content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="facture.pdf"'
+        response['Content-Disposition'] = 'inline; filename="facture.pdf"'
         return response
 
     @action(detail=True, methods=['GET'])
@@ -3641,7 +3630,7 @@ class Tenant(viewsets.ViewSet):
                 context = get_context(request)
                 return render(request, "reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html",
                               context=context)
-        except UnicodeDecodeError as e:
+        except UnicodeDecodeError:
             messages.error(request, _("Invalid token. Please request a new confirmation email."))
             return redirect('/')
 

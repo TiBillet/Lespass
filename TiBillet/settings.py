@@ -10,16 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 import os
-from datetime import timedelta
 from pathlib import Path
 
 from celery.schedules import crontab
 
-from django.db import connection
 from django.utils.translation import gettext_lazy as _
-from django.templatetags.static import static
 from django.urls import reverse_lazy
-from faker.utils.text import slugify
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent
@@ -152,6 +148,7 @@ SHARED_APPS = (
     'wsocket',
     'fedow_core',
     'fedow_public',
+    'seo',
     'discovery',
 
     'django_cotton',
@@ -428,6 +425,12 @@ CELERY_BEAT_SCHEDULE = {
     'envoi-rapports-clotures': {
         'task': 'laboutik.tasks.envoyer_rapports_clotures_recentes',
         'schedule': crontab(minute=0),
+    },
+    # Rafraichissement du cache SEO cross-tenant — toutes les 4 heures
+    # / Cross-tenant SEO cache refresh — every 4 hours
+    'refresh-seo-cache': {
+        'task': 'seo.tasks.refresh_seo_cache',
+        'schedule': crontab(minute=0, hour='*/4'),
     },
 }
 

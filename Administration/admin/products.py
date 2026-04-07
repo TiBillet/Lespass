@@ -30,6 +30,7 @@ from BaseBillet.models import (
     TicketProduct,
     MembershipProduct,
     POSProduct,
+    FutProduct,
     CategorieProduct,
     Price,
     FormbricksForms,
@@ -1479,6 +1480,291 @@ class POSProductAdmin(ProductAdmin):
         # / Only products with a POS method set
         qs = super().get_queryset(request)
         return qs.filter(methode_caisse__isnull=False)
+
+
+# ---------------------------------------------------------------------------
+# FutProduct — proxy pour les produits de type fut (tireuses connectees)
+# Meme pattern que POSProductAdmin avec couleurs, icone, image.
+# / Keg products proxy admin. Same pattern as POS proxy admin.
+# ---------------------------------------------------------------------------
+
+
+class FutProductForm(ProductAdminCustomForm):
+    """Formulaire produit pour les futs de tireuse.
+    Le champ categorie_article est cache et force a FUT.
+    Memes champs visuels que POSProductForm (palette, couleurs, icone).
+    / Product form for beer kegs.
+    categorie_article is hidden and forced to FUT.
+    Same visual fields as POSProductForm (palette, colors, icon).
+    LOCALISATION : Administration/admin/products.py"""
+
+    class Meta(ProductAdminCustomForm.Meta):
+        model = FutProduct
+
+    # Categorie forcee a FUT — cachee dans le formulaire
+    # / Category forced to FUT — hidden in the form
+    categorie_article = forms.ChoiceField(
+        choices=[
+            (Product.FUT, _("Keg (connected tap)")),
+        ],
+        widget=forms.HiddenInput(),
+        label=_("Product type"),
+        initial=Product.FUT,
+    )
+
+    # --- Champs d'affichage POS / POS display fields ---
+
+    # Palette de couleurs predefinie (champ formulaire uniquement, non sauvegarde directement)
+    # / Pre-defined color palette (form-only field, not saved directly to the model)
+    palette_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune palette —"))]
+        + [(key, label) for key, label, _t, _b in PALETTE_POS],
+        required=False,
+        label=_("Color palette"),
+        help_text=_(
+            "Choisissez une combinaison de couleurs prête à l'emploi. "
+            "Elle remplacera les champs couleur ci-dessous. "
+            "/ Choose a ready-to-use color combination. It will override the color fields below."
+        ),
+        widget=PalettePickerWidget(),
+    )
+
+    # Couleur du texte avec selecteur natif
+    # / Text color with native picker
+    couleur_texte_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS text color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Couleur du fond avec selecteur natif
+    # / Background color with native picker
+    couleur_fond_pos = forms.CharField(
+        max_length=7,
+        required=False,
+        label=_("POS background color"),
+        help_text=_("Par défaut, couleur de la catégorie. / Default: category color."),
+        widget=UnfoldAdminColorInputWidget(),
+    )
+
+    # Icone avec selecteur visuel Material Symbols
+    # / Icon with visual Material Symbols picker
+    icon_pos = forms.ChoiceField(
+        choices=[("", _("— Aucune icône —"))] + list(ICON_POS),
+        required=False,
+        label=_("POS icon"),
+        help_text=_(
+            "Si une image produit est définie ci-dessous, elle sera affichée à la place de cette icône. "
+            "/ If a product image is set below, it will be displayed instead of this icon."
+        ),
+        widget=IconPickerWidget(),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        instance = kwargs.get("instance")
+
+        # Pre-selection de la palette si les couleurs actuelles correspondent a un preset
+        # / Pre-select the palette if the current colors match a preset
+        if instance and instance.couleur_texte_pos and instance.couleur_fond_pos:
+            for key, _label, text_hex, bg_hex in PALETTE_POS:
+                couleurs_correspondent = (
+                    instance.couleur_texte_pos.upper() == text_hex.upper()
+                    and instance.couleur_fond_pos.upper() == bg_hex.upper()
+                )
+                if couleurs_correspondent:
+                    self.fields["palette_pos"].initial = key
+                    break
+
+    def clean_categorie_article(self):
+        """Pas de validation de categorie pour les futs.
+        No category validation for keg products."""
+        return self.cleaned_data.get("categorie_article", Product.FUT)
+
+    def clean(self):
+        """Applique la palette selectionnee sur les champs couleur, puis valide.
+        Applies the selected palette to the color fields, then validates."""
+
+        # On saute la validation de ProductAdminCustomForm (pas de tarif obligatoire)
+        # / Skip ProductAdminCustomForm validation (no mandatory price)
+        cleaned = super(ProductAdminCustomForm, self).clean()
+
+        # Decodage de la palette : si une palette est choisie, elle ecrase les couleurs
+        # / Decode palette: if a palette is chosen, it overrides the color fields
+        palette_key = cleaned.get("palette_pos")
+        if palette_key and palette_key in PALETTE_POS_MAP:
+            text_hex, bg_hex = PALETTE_POS_MAP[palette_key]
+            cleaned["couleur_texte_pos"] = text_hex
+            cleaned["couleur_fond_pos"] = bg_hex
+
+        return cleaned
+
+
+class FutPriceInline(BasePriceInline):
+    """Inline tarifs pour les produits fut.
+    Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
+    Champs conditionnels : contenance cache si poids_mesure coche.
+    / Price inline for keg products.
+    Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
+    Conditional fields: contenance hidden if poids_mesure checked.
+    LOCALISATION : Administration/admin/products.py"""
+
+    fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
+
+    # Champs conditionnels : contenance cache si poids_mesure coche
+    # (la quantite est saisie a chaque vente, pas fixe).
+    # / Conditional fields: contenance hidden if poids_mesure checked
+    # (quantity is entered at each sale, not fixed).
+    inline_conditional_fields = {
+        "contenance": "poids_mesure == false",
+    }
+
+    class Media:
+        js = ("admin/js/inline_conditional_fields.js",)
+
+
+@admin.register(FutProduct, site=staff_admin_site)
+class FutProductAdmin(ProductAdmin):
+    """Vue admin filtree : uniquement les produits de type fut (tireuses).
+    Filtered admin view: only keg products (connected taps).
+    LOCALISATION : Administration/admin/products.py"""
+
+    compressed_fields = True
+    warn_unsaved_form = True
+    form = FutProductForm
+    inlines = [FutPriceInline]
+    change_form_after_template = "admin/product/inline_conditional_fields.html"
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        # Collecte les regles conditionnelles de chaque inline qui en declare
+        # / Collect conditional rules from each inline that declares them
+        extra_context = extra_context or {}
+        regles_conditionnelles = {}
+        for inline_class in self.get_inlines(request, None):
+            regles_inline = getattr(inline_class, "inline_conditional_fields", None)
+            if regles_inline:
+                prefixe = inline_class.model._meta.model_name + "s"
+                regles_conditionnelles[prefixe] = regles_inline
+        if regles_conditionnelles:
+            extra_context["inline_conditional_rules"] = json.dumps(
+                regles_conditionnelles
+            )
+        return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def save_related(self, request, form, formsets, change):
+        """Apres sauvegarde des inlines : si un tarif a poids_mesure=True
+        et que le produit n'a pas de Stock, en creer un vide en centilitres.
+        Si le Stock existe mais est en unite UN (pieces), avertir.
+        / After saving inlines: if a price has poids_mesure=True
+        and the product has no Stock, create an empty one in centiliters.
+        If Stock exists but uses UN (pieces), warn."""
+        super().save_related(request, form, formsets, change)
+        produit = form.instance
+
+        # Verifier si un tarif poids_mesure existe pour ce produit
+        # / Check if a weight-based price exists for this product
+        a_tarif_poids = produit.prices.filter(poids_mesure=True).exists()
+        if not a_tarif_poids:
+            return
+
+        # Verifier si le produit a deja un Stock
+        # / Check if the product already has a Stock
+        from inventaire.models import Stock, UniteStock
+
+        try:
+            stock_existant = produit.stock_inventaire
+            # Verifier que l'unite n'est pas UN (pieces)
+            # / Check that the unit is not UN (pieces)
+            if stock_existant.unite == UniteStock.UN:
+                messages.warning(
+                    request,
+                    _(
+                        "Warning: the stock unit is 'Pieces' (UN). "
+                        "Weight/volume sales require grams (GR) or centiliters (CL). "
+                        "Please change the unit in the stock settings."
+                    ),
+                )
+        except Exception:
+            # Pas de stock → en creer un vide en centilitres (futs = liquides)
+            # / No stock → create an empty one in centiliters (kegs = liquids)
+            Stock.objects.create(
+                product=produit,
+                quantite=0,
+                unite=UniteStock.CL,
+                seuil_alerte=0,
+                autoriser_vente_hors_stock=True,
+            )
+            messages.info(
+                request,
+                _(
+                    "Stock automatically created in centiliters (quantity=0). "
+                    "Remember to add stock via a reception."
+                ),
+            )
+
+    fieldsets = (
+        (
+            _("General"),
+            {
+                "fields": (
+                    "name",
+                    "categorie_article",
+                    "short_description",
+                    "long_description",
+                ),
+            },
+        ),
+        (
+            _("POS display"),
+            {
+                "fields": (
+                    "palette_pos",
+                    "couleur_texte_pos",
+                    "couleur_fond_pos",
+                    "icon_pos",
+                    "img",
+                ),
+            },
+        ),
+        (
+            _("Publication"),
+            {
+                "fields": (
+                    "publish",
+                    "archive",
+                ),
+            },
+        ),
+    )
+
+    list_display = (
+        "name",
+        "short_description",
+        "publish",
+    )
+
+    list_filter = ["publish"]
+    search_fields = ["name"]
+
+    def get_inlines(self, request, obj):
+        # En mode add (pas d'obj) : StockInline pour creer le stock initial
+        # En mode change : pas de StockInline (le stock se gere via admin/inventaire/stock/)
+        # / In add mode: StockInline for initial stock creation
+        # In change mode: no StockInline (stock managed via admin/inventaire/stock/)
+        if obj is None:
+            from Administration.admin.inventaire import StockInline
+
+            return [StockInline, FutPriceInline]
+        return [FutPriceInline]
+
+    def get_queryset(self, request):
+        # Uniquement les produits de type FUT
+        # / Only keg products
+        qs = super().get_queryset(request)
+        return qs.filter(categorie_article=Product.FUT)
 
 
 # ---------------------------------------------------------------------------

@@ -80,13 +80,22 @@ class StockInline(TabularInline):
     extra = 0
     max_num = 1
     fields = ("quantite", "unite", "seuil_alerte", "autoriser_vente_hors_stock")
-    readonly_fields = ("quantite",)
+
+    def get_readonly_fields(self, request, obj=None):
+        # En mode add (obj=None) : quantite editable pour saisir le stock initial
+        # En mode change : quantite readonly (modifiable via mouvements de stock)
+        # / In add mode: quantite editable for initial stock entry
+        # In change mode: quantite read-only (modified via stock movements)
+        if obj is None:
+            return []
+        return ("quantite",)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         field = super().formfield_for_dbfield(db_field, request, **kwargs)
         if db_field.name == "quantite" and field is not None:
             field.help_text = _(
-                "Read-only. To add stock, go to Inventory > Stock movements > Add."
+                "Initial stock quantity (in stock unit). "
+                "After creation, modify via Inventory > Stock movements."
             )
         return field
 
@@ -225,12 +234,14 @@ class StockAdmin(ModelAdmin):
         ]
 
     def get_readonly_fields(self, request, obj=None):
-        # En mode change : article (lien), quantité et unité sont en lecture seule
-        # En mode add : tout est éditable
-        # / In change mode: article (link), quantity and unit are read-only
-        # In add mode: everything is editable
+        # En mode change : article (lien) et quantité sont en lecture seule.
+        # L'unité reste éditable (correction d'une erreur de saisie initiale).
+        # En mode add : tout est éditable.
+        # / In change mode: article (link) and quantity are read-only.
+        # Unit remains editable (to correct an initial input error).
+        # In add mode: everything is editable.
         if obj is not None:
-            return ["lien_vers_pos_product", "quantite", "unite"]
+            return ["lien_vers_pos_product", "quantite"]
         return []
 
     change_form_after_template = "admin/inventaire/stock_actions.html"

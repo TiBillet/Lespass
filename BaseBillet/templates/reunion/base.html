@@ -42,6 +42,12 @@
 
     {% block extra_meta %}{% endblock %}
 
+    <link rel="canonical" href="{% block canonical %}{{ request.build_absolute_uri }}{% endblock %}">
+
+    {% block json_ld_org %}
+    {% include "seo/partials/json_ld_organization.html" %}
+    {% endblock %}
+
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/language-switcher.mjs' %}">
