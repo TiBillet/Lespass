@@ -1,0 +1,19 @@
+{
+  "name": "cordova-plugin-nfc-reader",
+  "version": "1.0.0",
+  "description": "Plugin Cordova pour lire des tags NFC",
+  "cordova": {
+    "id": "cordova-plugin-nfc-reader",
+    "platforms": [
+      "android"
+    ]
+  },
+  "author": "filaos",
+  "keywords": [
+    "cordova",
+    "plugin",
+    "nfc",
+    "reader"
+  ],
+  "license": "Apache-2.0"
+}

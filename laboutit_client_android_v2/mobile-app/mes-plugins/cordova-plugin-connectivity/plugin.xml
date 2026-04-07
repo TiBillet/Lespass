@@ -1,0 +1,46 @@
+<plugin id="cordova-plugin-connectivity" version="1.0.0"
+        xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <name>ConnectivityPlugin</name>
+    <description>Plugin Cordova obtenit et configurer le wiwi, nfc et bluetooth</description>
+    <author>filaos</author>
+    <license>Apache 2.0</license>
+
+    <js-module src="www/connectivity.js" name="ConnectivityPlugin">
+        <clobbers target="ConnectivityPlugin" />
+    </js-module>
+
+    <platform name="android">
+
+        <config-file target="AndroidManifest.xml" parent="/manifest">
+          <!-- Permissions -->
+          <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+          <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+          <uses-permission android:name="android.permission.NFC" />
+          <uses-permission android:name="android.permission.BLUETOOTH" />
+          <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+          <!-- Déclaration d'une fonctionnalité matérielle -->
+          <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
+        </config-file>
+
+        <!-- Déclaration du fichier source Kotlin -->
+         <source-file src="src/android/ConnectivityPlugin.kt" 
+          target-dir="app/src/main/kotlin/re/filaos/connectivityplugin" />
+
+          <!-- Configuration du plugin Kotlin dans Gradle -->
+         <config-file target="config.xml" parent="/*">
+            <preference name="GradlePluginKotlinEnabled" value="true" />
+            <preference name="GradlePluginKotlinCodeStyle" value="official" />
+        </config-file>
+
+         <!-- Association de la classe Kotlin/Java à la fonctionnalité du plugin -->
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="ConnectivityPlugin">
+                <param name="android-package" value="re.filaos.connectivityplugin.ConnectivityPlugin" />
+            </feature>
+        </config-file>
+
+    </platform>
+
+</plugin>

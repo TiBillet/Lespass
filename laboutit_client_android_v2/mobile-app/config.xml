@@ -1,0 +1,43 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="coop.tibillet.laboutik" version="2.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>TibilletLaBoutik V2</name>
+    <description>Cordova LaBoutik launcher</description>
+    <author email="contact@codecommun.coop" href="https://codecommun.coop/">
+        Coopérative Code Commun
+    </author>
+    <content src="http://localhost/index.html" />
+	  <access origin="*" />
+	  <allow-intent href="*" />
+    <allow-navigation href="*" />
+    <icon src="res/android/icon.png" />
+    <splash src="res/screen/android/splash-512x512.png" />
+    <platform name="android">
+        <preference name="fullscreen" value="true" />
+        <preference name="android-minSdkVersion" value="24" />
+        <preference name="android-targetSdkVersion" value="35" />
+        <icon density="ldpi" src="res/android/ldpi.png" />
+        <icon density="mdpi" src="res/android/mdpi.png" />
+        <icon density="hdpi" src="res/android/hdpi.png" />
+        <icon density="xhdpi" src="res/android/xhdpi.png" />
+        <icon density="xxhdpi" src="res/android/xxhdpi.png" />
+        <icon density="xxxhdpi" src="res/android/xxxhdpi.png" />
+        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/screen/android/splash-square.png" />
+        <preference name="SplashMaintainAspectRatio" value="true" />
+        <preference name="AndroidWindowSplashScreenBackground" value="#1B1B1D" />
+        <preference name="AndroidPersistentFileLocation" value="Internal" />
+        <preference name="AndroidLaunchMode" value="singleInstance" />
+        <edit-config xmlns:android="http://schemas.android.com/apk/res/android" file="app/src/main/AndroidManifest.xml" mode="merge" target="/manifest/application">
+            <!-- <application android:networkSecurityConfig="@xml/network_security_config" /> -->
+        </edit-config>
+        <!-- <resource-file src="res/xml/network_security_config.xml" target="app/src/main/res/xml/network_security_config.xml" /> -->
+    </platform>
+    <config-file parent="/*" target="AndroidManifest.xml" xmlns:android="http://schemas.android.com/apk/res/android">
+        <uses-permission android:name="android.permission.NFC" />
+        <uses-permission android:name="android.permission.INTERNET" />
+        <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+        <uses-permission android:maxSdkVersion="33" android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+        <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+        <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    </config-file>
+</widget>
