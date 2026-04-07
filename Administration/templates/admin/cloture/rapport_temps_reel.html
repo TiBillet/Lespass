@@ -1,0 +1,615 @@
+{% load i18n laboutik_filters %}
+{# Page standalone : rapport comptable temps reel du service en cours.          #}
+{# Ouverte dans un nouvel onglet depuis le changelist des clotures.             #}
+{# Pas de ClotureCaisse creee — lecture seule, donnees ephemeres.               #}
+{# / Standalone page: real-time accounting report for the current shift.        #}
+{# Opened in a new tab from the closures changelist.                            #}
+{# No ClotureCaisse created — read-only, ephemeral data.                        #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% translate "Current shift report" %}</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" />
+    <style>
+        /* Reset et base / Reset and base */
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #fafafa;
+            color: #333;
+        }
+
+        /* Bandeau d'avertissement jaune / Yellow warning banner */
+        .banner {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9em;
+            color: #92400e;
+        }
+
+        /* En-tete du rapport / Report header */
+        .header {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .header h1 {
+            margin: 0 0 12px;
+            font-size: 1.4em;
+        }
+        .header p {
+            margin: 4px 0;
+            color: #666;
+        }
+
+        /* Section generique / Generic section */
+        .section {
+            margin-bottom: 20px;
+        }
+        .section h3 {
+            border-bottom: 2px solid #333;
+            padding-bottom: 4px;
+        }
+
+        /* Tableaux / Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+        }
+        thead tr {
+            background: #f0f0f0;
+        }
+        th {
+            text-align: left;
+        }
+        .text-right {
+            text-align: right;
+        }
+
+        /* Ligne total en vert / Green total row */
+        .total-row {
+            background: #e8f5e9;
+            font-weight: bold;
+        }
+
+        /* Label en gras dans les tableaux simples / Bold label in simple tables */
+        .label-bold {
+            font-weight: bold;
+        }
+
+        /* Indentation pour sous-details / Indentation for sub-details */
+        .indent {
+            padding-left: 24px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Message quand aucune vente / Message when no sales */
+        .empty-msg {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 1.2em;
+        }
+
+        /* Couleur rouge pour les sorties / Red color for withdrawals */
+        .text-red { color: #c62828; }
+        .text-muted { color: #999; font-style: italic; }
+    </style>
+</head>
+<body>
+
+{% if aucune_vente %}
+    {# Aucune vente depuis la derniere cloture / No sales since last closure #}
+    <div class="empty-msg" data-testid="aucune-vente">
+        <span class="material-symbols-outlined" style="font-size: 48px; display: block; margin-bottom: 12px;">info</span>
+        {% translate "No sales since the last closure." %}
+    </div>
+{% else %}
+
+    {# Bandeau d'avertissement / Warning banner #}
+    <div class="banner" data-testid="banner-temporaire">
+        <span class="material-symbols-outlined" style="font-size: 22px;">warning</span>
+        <span>
+            <strong>{% translate "Temporary report" %}</strong> —
+            {% translate "This report is computed in real time and is not an accounting document. It does not create a closure." %}
+        </span>
+    </div>
+
+    {# En-tete / Header #}
+    <div class="header" data-testid="section-header">
+        <h1>{% translate "Current shift report" %}</h1>
+        <p>
+            <strong>{% translate "Period" %} :</strong>
+            {{ datetime_ouverture }} &rarr; {{ datetime_fin }}
+        </p>
+        <p>
+            <strong>{% translate "Transactions" %} :</strong>
+            {{ nb_transactions }}
+        </p>
+    </div>
+
+    {# ── Section 1 : Totaux par moyen de paiement / Totals by payment method ── #}
+    {% with section=rapport.totaux_par_moyen %}
+    {% if section %}
+    <div class="section" data-testid="section-totaux-par-moyen">
+        <h3>{% translate "Totals by payment method" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Payment method" %}</th>
+                    <th class="text-right">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{% translate "Cash" %}</td>
+                    <td class="text-right">{{ section.especes|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Credit card" %}</td>
+                    <td class="text-right">{{ section.carte_bancaire|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Cashless" %}</td>
+                    <td class="text-right">{{ section.cashless|euros }}</td>
+                </tr>
+                {# Sous-detail cashless par monnaie / Cashless detail per currency #}
+                {% if section.cashless_detail %}
+                {% for asset in section.cashless_detail %}
+                <tr>
+                    <td class="indent">&darr; {{ asset.nom }} ({{ asset.code }})</td>
+                    <td class="text-right" style="color: #666;">{{ asset.montant|euros }}</td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+                <tr>
+                    <td>{% translate "Check" %}</td>
+                    <td class="text-right">{{ section.cheque|euros }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td>{% translate "Total" %}</td>
+                    <td class="text-right">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 2 : Detail des ventes par categorie / Sales detail by category ── #}
+    {% with section=rapport.detail_ventes %}
+    {% if section %}
+    <div class="section" data-testid="section-detail-ventes">
+        <h3>{% translate "Sales detail" %}</h3>
+        {% for categorie_nom, categorie_data in section.items %}
+        <h4 style="margin: 12px 0 4px; color: #555;">{{ categorie_nom }}</h4>
+        <table style="margin-bottom: 8px;">
+            <thead>
+                <tr>
+                    <th>{% translate "Product" %}</th>
+                    <th class="text-right">{% translate "Sold" %}</th>
+                    <th class="text-right">{% translate "Free" %}</th>
+                    <th class="text-right">{% translate "Total qty" %}</th>
+                    <th class="text-right">{% translate "HT" %}</th>
+                    <th class="text-right">{% translate "VAT" %}</th>
+                    <th class="text-right">{% translate "TTC" %}</th>
+                    <th class="text-right">{% translate "Cost" %}</th>
+                    <th class="text-right">{% translate "Profit" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for article in categorie_data.articles %}
+                <tr>
+                    <td>{{ article.nom|default:"—" }}</td>
+                    <td class="text-right">{{ article.qty_vendus|default:0 }}</td>
+                    <td class="text-right">{{ article.qty_offerts|default:0 }}</td>
+                    <td class="text-right">{{ article.qty_total|default:0 }}</td>
+                    <td class="text-right">{{ article.total_ht|euros }}</td>
+                    <td class="text-right">{{ article.total_tva|euros }}</td>
+                    <td class="text-right">{{ article.total_ttc|euros }}</td>
+                    <td class="text-right">{{ article.cout_total|euros }}</td>
+                    <td class="text-right">{{ article.benefice|euros }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="6">{% translate "Total" %} {{ categorie_nom }}</td>
+                    <td class="text-right">{{ categorie_data.total_ttc|euros }}</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tbody>
+        </table>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 3 : TVA / VAT breakdown ── #}
+    {% with section=rapport.tva %}
+    {% if section %}
+    <div class="section" data-testid="section-tva">
+        <h3>{% translate "VAT breakdown" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Rate" %}</th>
+                    <th class="text-right">{% translate "HT" %}</th>
+                    <th class="text-right">{% translate "VAT" %}</th>
+                    <th class="text-right">{% translate "TTC" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for taux_label, tva_data in section.items %}
+                <tr>
+                    <td>{{ taux_label }}</td>
+                    <td class="text-right">{{ tva_data.total_ht|euros }}</td>
+                    <td class="text-right">{{ tva_data.total_tva|euros }}</td>
+                    <td class="text-right">{{ tva_data.total_ttc|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 4 : Solde caisse / Cash register balance ── #}
+    {% with section=rapport.solde_caisse %}
+    {% if section %}
+    <div class="section" data-testid="section-solde-caisse">
+        <h3>{% translate "Cash register balance" %}</h3>
+        <table>
+            <tbody>
+                <tr>
+                    <td class="label-bold">{% translate "Opening float" %}</td>
+                    <td class="text-right">{{ section.fond_de_caisse|euros }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "Cash income" %}</td>
+                    <td class="text-right">{{ section.entrees_especes|euros }}</td>
+                </tr>
+                {% if section.sorties_especes %}
+                <tr>
+                    <td class="label-bold">{% translate "Cash withdrawals" %}</td>
+                    <td class="text-right text-red">
+                        &minus; {{ section.sorties_especes|euros }}
+                    </td>
+                </tr>
+                {% endif %}
+                <tr class="total-row">
+                    <td>{% translate "Balance" %}</td>
+                    <td class="text-right">{{ section.solde|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 5 : Recharges cashless / Cashless top-ups ── #}
+    {% with section=rapport.recharges %}
+    {% if section %}
+    <div class="section" data-testid="section-recharges">
+        <h3>{% translate "Cashless top-ups" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Product" %}</th>
+                    <th>{% translate "Currency" %}</th>
+                    <th>{% translate "Payment method" %}</th>
+                    <th class="text-right">{% translate "Amount" %}</th>
+                    <th class="text-right">{% translate "Count" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code, rec in section.detail.items %}
+                <tr>
+                    <td>{{ rec.nom_produit|default:code }}</td>
+                    <td>{{ rec.nom_monnaie|default:"—" }}</td>
+                    <td>{{ rec.moyen_paiement|default:"—" }}</td>
+                    <td class="text-right">{{ rec.total|euros }}</td>
+                    <td class="text-right">{{ rec.nb }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3">{% translate "Total" %}</td>
+                    <td class="text-right">{{ section.total|euros }}</td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 6 : Adhesions / Memberships ── #}
+    {% with section=rapport.adhesions %}
+    {% if section %}
+    <div class="section" data-testid="section-adhesions">
+        <h3>{% translate "Memberships" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Product" %}</th>
+                    <th>{% translate "Price tier" %}</th>
+                    <th>{% translate "Payment method" %}</th>
+                    <th class="text-right">{% translate "Count" %}</th>
+                    <th class="text-right">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code, adh in section.detail.items %}
+                <tr>
+                    <td>{{ adh.nom_produit }}</td>
+                    <td>{{ adh.nom_tarif|default:"—" }}</td>
+                    <td>{{ adh.moyen_paiement }}</td>
+                    <td class="text-right">{{ adh.nb }}</td>
+                    <td class="text-right">{{ adh.total|euros }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3">{% translate "Total" %}</td>
+                    <td class="text-right">{{ section.nb }}</td>
+                    <td class="text-right">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 7 : Remboursements / Refunds ── #}
+    {% with section=rapport.remboursements %}
+    {% if section %}
+    <div class="section" data-testid="section-remboursements">
+        <h3>{% translate "Refunds" %}</h3>
+        <table>
+            <tbody>
+                <tr>
+                    <td class="label-bold">{% translate "Count" %}</td>
+                    <td class="text-right">{{ section.nb }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "Total" %}</td>
+                    <td class="text-right">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 8 : Habitus (statistiques clientele) / Customer statistics ── #}
+    {% with section=rapport.habitus %}
+    {% if section %}
+    <div class="section" data-testid="section-habitus">
+        <h3>{% translate "Customer statistics" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Statistic" %}</th>
+                    <th class="text-right">{% translate "Value" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{% translate "Cards used" %}</td>
+                    <td class="text-right">{{ section.nb_cartes }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Total spent" %}</td>
+                    <td class="text-right">{{ section.total|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Average basket" %}</td>
+                    <td class="text-right">{{ section.panier_moyen|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Median spend" %}</td>
+                    <td class="text-right">{{ section.depense_mediane|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Median top-up" %}</td>
+                    <td class="text-right">{{ section.recharge_mediane|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Average remaining on card" %}</td>
+                    <td class="text-right">{{ section.reste_moyenne|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "Median remaining on card" %}</td>
+                    <td class="text-right">{{ section.med_on_card|euros }}</td>
+                </tr>
+                <tr>
+                    <td>{% translate "New members" %}</td>
+                    <td class="text-right">{{ section.nouveaux_membres }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 9 : Billets / Tickets ── #}
+    {% with section=rapport.billets %}
+    {% if section %}
+    <div class="section" data-testid="section-billets">
+        <h3>{% translate "Tickets" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Event" %}</th>
+                    <th>{% translate "Date" %}</th>
+                    <th>{% translate "Product / Price tier" %}</th>
+                    <th class="text-right">{% translate "Count" %}</th>
+                    <th class="text-right">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cle, billet_data in section.detail.items %}
+                <tr>
+                    <td>{{ billet_data.nom_event }}</td>
+                    <td>{{ billet_data.date_event|default:"—" }}</td>
+                    <td>{{ billet_data.nom_produit }}{% if billet_data.nom_tarif %} / {{ billet_data.nom_tarif }}{% endif %}</td>
+                    <td class="text-right">{{ billet_data.nb }}</td>
+                    <td class="text-right">{{ billet_data.total|euros }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3">{% translate "Total" %}</td>
+                    <td class="text-right">{{ section.nb }}</td>
+                    <td class="text-right">{{ section.total|euros }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 10 : Synthese des operations / Operations summary ── #}
+    {% with section=rapport.synthese_operations %}
+    {% if section %}
+    <div class="section" data-testid="section-synthese-operations">
+        <h3>{% translate "Operations summary" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Operation" %}</th>
+                    <th class="text-right">{% translate "Cash" %}</th>
+                    <th class="text-right">{% translate "Credit card" %}</th>
+                    <th class="text-right">{% translate "Cashless" %}</th>
+                    <th class="text-right">{% translate "Total" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for op_nom, op_data in section.items %}
+                <tr>
+                    <td class="label-bold">{{ op_nom|title }}</td>
+                    <td class="text-right">{{ op_data.especes|euros }}</td>
+                    <td class="text-right">{{ op_data.carte_bancaire|euros }}</td>
+                    <td class="text-right">{{ op_data.cashless|euros }}</td>
+                    <td class="text-right label-bold">{{ op_data.total|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 11 : Operateurs / Operators ── #}
+    <div class="section" data-testid="section-operateurs">
+        <h3>{% translate "Operators" %}</h3>
+        {% with section=rapport.operateurs %}
+        {% if section %}
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Operator" %}</th>
+                    <th class="text-right">{% translate "Amount" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for op_nom, op_montant in section.items %}
+                <tr>
+                    <td>{{ op_nom }}</td>
+                    <td class="text-right">{{ op_montant|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">{% translate "Not yet available" %}</p>
+        {% endif %}
+        {% endwith %}
+    </div>
+
+    {# ── Section 12 : Ventilation par point de vente / Breakdown by point of sale ── #}
+    {% with section=rapport.ventilation_par_pv %}
+    {% if section %}
+    <div class="section" data-testid="section-ventilation-par-pv">
+        <h3>{% translate "Breakdown by point of sale" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Point of sale" %}</th>
+                    <th class="text-right">{% translate "Revenue incl. tax" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pv in section %}
+                <tr>
+                    <td>{{ pv.nom }}</td>
+                    <td class="text-right">{{ pv.total_ttc|euros }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {# ── Section 13 : Informations legales / Legal information ── #}
+    {% with section=rapport.infos_legales %}
+    {% if section %}
+    <div class="section" data-testid="section-infos-legales">
+        <h3>{% translate "Legal information" %}</h3>
+        <table>
+            <tbody>
+                <tr>
+                    <td class="label-bold">{% translate "Organisation" %}</td>
+                    <td>{{ section.organisation|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "Address" %}</td>
+                    <td>{{ section.adresse|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "Postal code" %}</td>
+                    <td>{{ section.code_postal|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "City" %}</td>
+                    <td>{{ section.ville|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "SIREN" %}</td>
+                    <td>{{ section.siren|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "VAT number" %}</td>
+                    <td>{{ section.tva_number|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "Email" %}</td>
+                    <td>{{ section.email|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-bold">{% translate "Phone" %}</td>
+                    <td>{{ section.phone|default:"—" }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+{% endif %}
+
+</body>
+</html>

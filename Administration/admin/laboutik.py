@@ -564,6 +564,7 @@ class ClotureCaisseAdmin(ModelAdmin):
         extra_context['export_fiscal_url'] = '/laboutik/caisse/export-fiscal/'
         extra_context['export_fec_url'] = '/laboutik/caisse/export-fec/'
         extra_context['export_csv_comptable_url'] = '/laboutik/caisse/export-csv-comptable/'
+        extra_context['rapport_temps_reel_url'] = '/laboutik/caisse/rapport-temps-reel/'
         return super().changelist_view(request, extra_context)
 
     list_before_template = "admin/cloture/changelist_before.html"
@@ -837,7 +838,6 @@ class ClotureCaisseAdmin(ModelAdmin):
         """
         from django.db import connection
         from django.http import HttpResponse
-        from django.template.response import TemplateResponse
 
         from laboutik.csv_comptable import generer_csv_comptable
         from laboutik.profils_csv import PROFILS

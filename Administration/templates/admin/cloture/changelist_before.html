@@ -26,6 +26,17 @@
                 </div>
 
                 <div class="flex items-center gap-3 flex-shrink-0">
+                    {% if rapport_temps_reel_url %}
+                    <a href="{{ rapport_temps_reel_url }}"
+                       target="_blank"
+                       rel="noopener"
+                       style="background-color: #16a34a; color: white;"
+                       class="font-medium flex items-center gap-2 px-5 py-2.5 rounded-default justify-center whitespace-nowrap cursor-pointer hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-base-900 transition-colors"
+                       data-testid="btn-rapport-temps-reel">
+                        <span class="material-symbols-outlined" style="font-size: 18px;" aria-hidden="true">monitoring</span>
+                        {% translate "Current shift report" %}
+                    </a>
+                    {% endif %}
                     <button type="button"
                             hx-get="{{ export_fiscal_url }}"
                             hx-target="#export-fiscal-zone"

@@ -2580,6 +2580,59 @@ class CaisseViewSet(viewsets.ViewSet):
         )
 
     @action(
+        detail=False,
+        methods=["get"],
+        url_path="rapport-temps-reel",
+        url_name="rapport_temps_reel",
+    )
+    def rapport_temps_reel(self, request):
+        """
+        GET /laboutik/caisse/rapport-temps-reel/
+        Rapport comptable complet du service en cours (lecture seule).
+        Calcule en temps reel depuis la derniere cloture journaliere.
+        Pas de creation de ClotureCaisse. Page standalone (nouvel onglet).
+        / Full accounting report of the current shift (read-only).
+        Computed in real time since the last daily closure.
+        No ClotureCaisse created. Standalone page (new tab).
+
+        LOCALISATION : laboutik/views.py
+
+        FLUX :
+        1. Calcule datetime_ouverture via _calculer_datetime_ouverture_service()
+        2. Instancie RapportComptableService(pv=None, debut, fin=now())
+        3. Appelle generer_rapport_complet() (13 sections)
+        4. Rend rapport_temps_reel.html (page complete, pas un partial)
+        """
+        datetime_ouverture = _calculer_datetime_ouverture_service()
+
+        # Si aucune vente depuis la derniere cloture, afficher un message
+        # / If no sales since last closure, show a message
+        if datetime_ouverture is None:
+            return render(
+                request,
+                "admin/cloture/rapport_temps_reel.html",
+                {"aucune_vente": True},
+            )
+
+        datetime_fin = dj_timezone.now()
+        service = RapportComptableService(None, datetime_ouverture, datetime_fin)
+        rapport = service.generer_rapport_complet()
+        nombre_de_transactions = service.lignes.count()
+
+        context = {
+            "aucune_vente": False,
+            "rapport": rapport,
+            "datetime_ouverture": datetime_ouverture,
+            "datetime_fin": datetime_fin,
+            "nb_transactions": nombre_de_transactions,
+        }
+        return render(
+            request,
+            "admin/cloture/rapport_temps_reel.html",
+            context,
+        )
+
+    @action(
         detail=False, methods=["get"], url_path="liste-ventes", url_name="liste_ventes"
     )
     def liste_ventes(self, request):
