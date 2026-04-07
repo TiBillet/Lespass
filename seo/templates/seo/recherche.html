@@ -1,0 +1,117 @@
+{% extends "seo/base.html" %}
+{% load i18n seo_tags %}
+
+{% block content %}
+
+<h1 class="mb-4">{% translate "Recherche" %}</h1>
+
+{# Formulaire de recherche / Search form #}
+<form action="/recherche/" method="get" class="mb-4">
+    <div class="input-group">
+        <input type="search" class="form-control form-control-lg" name="q"
+               placeholder="{% translate 'Rechercher un lieu, événement, adhésion...' %}"
+               value="{{ query|default:'' }}" aria-label="{% translate 'Rechercher' %}">
+        <button class="btn btn-primary" type="submit">{% translate "Rechercher" %}</button>
+    </div>
+</form>
+
+{% if query %}
+<p class="text-muted mb-4">
+    {{ total_results }} {% translate "résultat(s) pour" %} &laquo; {{ query }} &raquo;
+</p>
+
+{# Resultats : Lieux / Results: Venues #}
+{% if results_lieux %}
+<section class="mb-4">
+    <h2><i class="bi bi-geo-alt"></i> {% translate "Lieux" %} ({{ results_lieux|length }})</h2>
+    <div class="row">
+        {% for lieu in results_lieux %}
+        <div class="col-md-4 mb-3">
+            <div class="card seo-card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ lieu.name }}</h5>
+                    {% if lieu.locality %}
+                    <p class="card-text text-muted small">{{ lieu.locality }}</p>
+                    {% endif %}
+                </div>
+                {% if lieu.domain %}
+                <div class="card-footer bg-transparent border-0">
+                    <a href="https://{{ lieu.domain }}/" class="btn btn-sm btn-outline-primary w-100">{% translate "Visiter" %}</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Resultats : Evenements / Results: Events #}
+{% if results_events %}
+<section class="mb-4">
+    <h2><i class="bi bi-calendar-event"></i> {% translate "Événements" %} ({{ results_events|length }})</h2>
+    <div class="row">
+        {% for event in results_events %}
+        <div class="col-md-6 mb-3">
+            <div class="card seo-card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ event.name }}</h5>
+                    <p class="card-text text-muted small mb-1">
+                        <i class="bi bi-calendar-event"></i> {{ event.datetime|format_iso_date }}
+                    </p>
+                    {% if event.tenant_name %}
+                    <p class="card-text text-muted small">
+                        <i class="bi bi-geo-alt"></i> {{ event.tenant_name }}
+                    </p>
+                    {% endif %}
+                </div>
+                {% if event.canonical_url %}
+                <div class="card-footer bg-transparent border-0">
+                    <a href="{{ event.canonical_url }}" class="btn btn-sm btn-outline-primary">{% translate "Voir" %}</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Resultats : Adhesions / Results: Memberships #}
+{% if results_memberships %}
+<section class="mb-4">
+    <h2><i class="bi bi-people"></i> {% translate "Adhésions" %} ({{ results_memberships|length }})</h2>
+    <div class="row">
+        {% for membership in results_memberships %}
+        <div class="col-md-4 mb-3">
+            <div class="card seo-card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ membership.name }}</h5>
+                    {% if membership.tenant_name %}
+                    <p class="card-text text-muted small">
+                        <i class="bi bi-geo-alt"></i> {{ membership.tenant_name }}
+                    </p>
+                    {% endif %}
+                </div>
+                {% if membership.canonical_url %}
+                <div class="card-footer bg-transparent border-0">
+                    <a href="{{ membership.canonical_url }}" class="btn btn-sm btn-outline-primary w-100">{% translate "En savoir plus" %}</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Aucun resultat / No results #}
+{% if not results_lieux and not results_events and not results_memberships %}
+<p class="text-muted">{% translate "Aucun résultat pour cette recherche." %}</p>
+{% endif %}
+
+{% elif not query %}
+<p class="text-muted">{% translate "Saisissez un terme pour lancer la recherche." %}</p>
+{% endif %}
+
+{% endblock %}

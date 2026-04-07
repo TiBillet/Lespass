@@ -1,0 +1,57 @@
+{% extends "seo/base.html" %}
+{% load static i18n %}
+
+{% block extra_head %}
+{# Pas d'indexation : outil interactif, pas une page SEO / No indexing: interactive tool, not a SEO page #}
+<meta name="robots" content="noindex, nofollow">
+{# Leaflet CSS (CDN) / Leaflet CSS (CDN) #}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5/dist/MarkerCluster.Default.css" />
+<link rel="stylesheet" href="{% static 'seo/explorer.css' %}" />
+{% endblock %}
+
+{% block main_wrapper %}
+<main>
+
+{# Barre de recherche + pills / Search bar + category pills #}
+<div class="explorer-toolbar">
+    <div class="explorer-search-row">
+        <input type="search" class="explorer-search" id="explorer-search"
+               placeholder="{% translate 'Rechercher un lieu, événement, adhésion...' %}"
+               aria-label="{% translate 'Rechercher' %}">
+        <div class="explorer-pills" id="explorer-pills">
+            <button class="explorer-pill active" data-category="all">{% translate "Tous" %}</button>
+            <button class="explorer-pill" data-category="lieu">{% translate "Lieux" %}</button>
+            <button class="explorer-pill" data-category="event">{% translate "Événements" %}</button>
+            <button class="explorer-pill" data-category="membership">{% translate "Adhésions" %}</button>
+        </div>
+    </div>
+    <div class="explorer-counter" id="explorer-counter"></div>
+</div>
+
+{# Split view : liste + carte / Split view: list + map #}
+<div class="explorer-container">
+    {# Liste des resultats / Results list #}
+    <div class="explorer-list" id="explorer-list"></div>
+
+    {# Carte Leaflet / Leaflet map #}
+    <div class="explorer-map" id="explorer-map"></div>
+</div>
+
+{# Bouton toggle mobile / Mobile toggle FAB #}
+<button class="explorer-fab" id="explorer-fab" aria-label="{% translate 'Basculer carte/liste' %}">
+    &#128506; {% translate "Carte" %}
+</button>
+
+{# Donnees JSON pour le JS / JSON data for JS #}
+{{ explorer_data|json_script:"explorer-data" }}
+
+</main>
+{% endblock main_wrapper %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5/dist/leaflet.markercluster.js"></script>
+<script src="{% static 'seo/explorer.js' %}"></script>
+{% endblock %}

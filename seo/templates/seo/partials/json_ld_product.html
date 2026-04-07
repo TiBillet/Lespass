@@ -1,0 +1,21 @@
+{% comment %}
+JSON-LD Product pour les pages detail adhesion.
+Necessite `product` dans le contexte.
+/ JSON-LD Product partial for membership detail pages.
+Requires `product` in context.
+{% endcomment %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "{{ product.name }}",
+    {% if product.short_description %}"description": "{{ product.short_description|striptags }}",{% endif %}
+    {% if product.get_social_card %}"image": "{{ product.get_social_card }}",{% endif %}
+    "offers": {
+        "@type": "Offer",
+        "priceCurrency": "EUR",
+        "availability": "https://schema.org/InStock",
+        "url": "{{ request.build_absolute_uri }}"
+    }
+}
+</script>

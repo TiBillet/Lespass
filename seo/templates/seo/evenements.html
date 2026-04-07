@@ -1,0 +1,68 @@
+{% extends "seo/base.html" %}
+{% load i18n seo_tags %}
+
+{% block content %}
+
+<h1 class="mb-4">{% translate "Événements à venir" %}</h1>
+
+{% if page_obj %}
+<div class="row">
+    {% for event in page_obj %}
+    <div class="col-md-6 mb-4">
+        <div class="card seo-card h-100">
+            <div class="card-body">
+                <h5 class="card-title">{{ event.name }}</h5>
+                <p class="card-text text-muted small mb-1">
+                    <i class="bi bi-calendar-event"></i> {{ event.datetime|format_iso_date }}
+                </p>
+                {% if event.tenant_name %}
+                <p class="card-text text-muted small mb-1">
+                    <i class="bi bi-geo-alt"></i> {{ event.tenant_name }}
+                </p>
+                {% endif %}
+                {% if event.short_description %}
+                <p class="card-text small">{{ event.short_description|truncatewords:30 }}</p>
+                {% endif %}
+            </div>
+            {% if event.canonical_url %}
+            <div class="card-footer bg-transparent border-0">
+                <a href="{{ event.canonical_url }}" class="btn btn-sm btn-outline-primary">
+                    {% translate "Voir l'événement" %}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# Pagination #}
+{% if page_obj.has_other_pages %}
+<nav aria-label="{% translate 'Pagination' %}" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">{% translate "Précédent" %}</a>
+        </li>
+        {% endif %}
+
+        {% for num in page_obj.paginator.page_range %}
+        <li class="page-item {% if page_obj.number == num %}active{% endif %}">
+            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+        </li>
+        {% endfor %}
+
+        {% if page_obj.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}">{% translate "Suivant" %}</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% else %}
+<p class="text-muted">{% translate "Aucun événement à venir pour le moment." %}</p>
+{% endif %}
+
+{% endblock %}

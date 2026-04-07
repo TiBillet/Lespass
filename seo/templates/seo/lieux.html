@@ -1,0 +1,48 @@
+{% extends "seo/base.html" %}
+{% load i18n %}
+
+{% block content %}
+
+<h1 class="mb-4">{% translate "Lieux du réseau" %}</h1>
+
+{% if lieux %}
+<div class="row">
+    {% for lieu in lieux %}
+    <div class="col-md-4 col-lg-3 mb-4">
+        <div class="card seo-card h-100">
+            {% if lieu.logo_url %}
+            <img src="{{ lieu.logo_url }}" class="card-img-top" alt="{{ lieu.name }}"
+                 style="height: 120px; object-fit: contain; padding: 10px;">
+            {% endif %}
+            <div class="card-body">
+                <h5 class="card-title">{{ lieu.name }}</h5>
+                {% if lieu.locality %}
+                <p class="card-text text-muted small mb-1">
+                    <i class="bi bi-geo-alt"></i> {{ lieu.locality }}{% if lieu.country %}, {{ lieu.country }}{% endif %}
+                </p>
+                {% endif %}
+                {% if lieu.short_description %}
+                <p class="card-text small">{{ lieu.short_description|truncatewords:30 }}</p>
+                {% endif %}
+                <p class="card-text small text-muted">
+                    <i class="bi bi-calendar-event"></i> {{ lieu.event_count }} {% translate "événement(s)" %}
+                    &middot;
+                    <i class="bi bi-people"></i> {{ lieu.membership_count }} {% translate "adhésion(s)" %}
+                </p>
+            </div>
+            {% if lieu.domain %}
+            <div class="card-footer bg-transparent border-0">
+                <a href="https://{{ lieu.domain }}/" class="btn btn-sm btn-outline-primary w-100">
+                    {% translate "Visiter le lieu" %}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-muted">{% translate "Aucun lieu référencé pour le moment." %}</p>
+{% endif %}
+
+{% endblock %}

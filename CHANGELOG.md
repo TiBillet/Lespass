@@ -1,5 +1,40 @@
 # Changelog / Journal des modifications
 
+## Page Explorer — Carte Leaflet + recherche fusionnee / Explorer page — Leaflet map + merged search
+
+**Date :** 7 avril 2026
+**Migration :** Non
+
+**Quoi / What:** Nouvelle page `/explorer/` sur le ROOT avec :
+- Carte interactive Leaflet + tuiles OpenStreetMap (CDN, pas de dependance npm)
+- Liste filtree de lieux, evenements et adhesions synchronisee avec la carte
+- Barre de recherche (filtre live debounce 300ms) + pills categorie (Tous/Lieux/Evenements/Adhesions)
+- Cross-highlighting bidirectionnel desktop (hover card → highlight marqueur, clic marqueur → scroll liste)
+- Toggle Carte/Liste mobile (FAB flottant, lazy loading Leaflet au premier tap)
+- Popup Leaflet enrichi par lieu (description, prochains events, adhesions, lien "Visiter")
+- Enrichissement du SEOCache avec coordonnees GPS (latitude/longitude depuis PostalAddress)
+
+**Pourquoi / Why:** Offrir un outil de decouverte interactif pour le reseau TiBillet, inspire du pattern Airbnb (split view desktop, toggle mobile). Les pages SEO statiques (`/lieux/`, `/recherche/`) restent en place pour le referencement.
+
+### Fichiers crees / Created files
+| Fichier / File | Role |
+|---|---|
+| `seo/templates/seo/explorer.html` | Template full-width, CDN Leaflet, json_script |
+| `seo/static/seo/explorer.js` | Carte + liste + filtres + toggle mobile (~520 lignes) |
+| `seo/static/seo/explorer.css` | Layout split/mobile, cards, pins, FAB (~394 lignes) |
+| `tests/pytest/test_explorer.py` | 10 tests pytest |
+
+### Fichiers modifies / Modified files
+| Fichier / File | Modification |
+|---|---|
+| `seo/services.py` | +latitude/longitude dans `build_tenant_config_data()`, +`build_explorer_data()` |
+| `seo/tasks.py` | +latitude/longitude dans aggregate_lieux |
+| `seo/views.py` | +vue `explorer()` |
+| `seo/urls.py` | +route `/explorer/` |
+| `seo/templates/seo/base.html` | +lien "Explorer" navbar, +block `main_wrapper` |
+
+---
+
 ## App SEO — Cache cross-tenant, pages ROOT, ameliorations meta / SEO app — Cross-tenant cache, ROOT pages, meta improvements
 
 **Date :** Avril 2026

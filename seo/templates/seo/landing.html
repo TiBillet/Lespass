@@ -1,0 +1,113 @@
+{% extends "seo/base.html" %}
+{% load i18n seo_tags %}
+
+{% block content %}
+
+{# Chiffres cles / Key figures #}
+<div class="row mb-5 text-center">
+    <div class="col-md-4 mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <h2 class="card-title display-6 stat-number">{{ lieux_count }}</h2>
+                <p class="card-text text-muted">{% translate "Lieux" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <h2 class="card-title display-6 stat-number">{{ events_count }}</h2>
+                <p class="card-text text-muted">{% translate "Événements à venir" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <h2 class="card-title display-6 stat-number">{{ memberships_count }}</h2>
+                <p class="card-text text-muted">{% translate "Adhésions disponibles" %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Top 12 lieux / Top 12 venues #}
+{% if top_lieux %}
+<section class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{% translate "Lieux" %}</h2>
+        <a href="/lieux/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
+    </div>
+    <div class="row">
+        {% for lieu in top_lieux %}
+        <div class="col-md-4 col-lg-3 mb-3">
+            <div class="card seo-card h-100">
+                {% if lieu.logo_url %}
+                <img src="{{ lieu.logo_url }}" class="card-img-top" alt="{{ lieu.name }}"
+                     style="height: 120px; object-fit: contain; padding: 10px;">
+                {% endif %}
+                <div class="card-body">
+                    <h5 class="card-title">{{ lieu.name }}</h5>
+                    {% if lieu.locality %}
+                    <p class="card-text text-muted small mb-1">
+                        <i class="bi bi-geo-alt"></i> {{ lieu.locality }}
+                    </p>
+                    {% endif %}
+                    {% if lieu.short_description %}
+                    <p class="card-text small">{{ lieu.short_description|truncatewords:20 }}</p>
+                    {% endif %}
+                </div>
+                {% if lieu.domain %}
+                <div class="card-footer bg-transparent border-0">
+                    <a href="https://{{ lieu.domain }}/" class="btn btn-sm btn-outline-primary w-100">
+                        {% translate "Visiter" %}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{# Top 6 evenements / Top 6 events #}
+{% if top_events %}
+<section class="mb-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>{% translate "Prochains événements" %}</h2>
+        <a href="/evenements/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
+    </div>
+    <div class="row">
+        {% for event in top_events %}
+        <div class="col-md-6 mb-3">
+            <div class="card seo-card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">{{ event.name }}</h5>
+                    <p class="card-text text-muted small mb-1">
+                        <i class="bi bi-calendar-event"></i> {{ event.datetime|format_iso_date }}
+                    </p>
+                    {% if event.tenant_name %}
+                    <p class="card-text text-muted small mb-1">
+                        <i class="bi bi-geo-alt"></i> {{ event.tenant_name }}
+                    </p>
+                    {% endif %}
+                    {% if event.short_description %}
+                    <p class="card-text small">{{ event.short_description|truncatewords:30 }}</p>
+                    {% endif %}
+                </div>
+                {% if event.canonical_url %}
+                <div class="card-footer bg-transparent border-0">
+                    <a href="{{ event.canonical_url }}" class="btn btn-sm btn-outline-primary">
+                        {% translate "Voir l'événement" %}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% endblock %}
