@@ -184,6 +184,7 @@ TENANT_APPS = (
     'laboutik',
     'inventaire',
     'controlvanne',
+    'booking',
 )
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
