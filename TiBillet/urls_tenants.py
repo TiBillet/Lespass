@@ -6,7 +6,7 @@ from django.urls import path, include, re_path
 from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
-from BaseBillet.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
+from seo.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS

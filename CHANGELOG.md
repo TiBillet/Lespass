@@ -1,5 +1,45 @@
 # Changelog / Journal des modifications
 
+## App SEO — Cache cross-tenant, pages ROOT, ameliorations meta / SEO app — Cross-tenant cache, ROOT pages, meta improvements
+
+**Date :** Avril 2026
+**Migration :** Oui (`seo/migrations/0001_initial.py` — modele `SEOCache` dans le schema public)
+
+**Quoi / What:** Nouvelle app `seo` (SHARED_APPS) qui fournit :
+- Un cache SEO pre-calcule par Celery task toutes les 4h (requetes SQL cross-schema optimisees)
+- Pages ROOT (`tibillet.coop`) : landing vitrine, `/lieux/`, `/evenements/`, `/adhesions/`, `/recherche/`, `/sitemap.xml` (index cross-tenant)
+- Ameliorations templates tenant : `<link rel="canonical">`, JSON-LD Organization sur toutes les pages, partials JSON-LD Product
+- Remplacement de `BaseBillet/sitemap.py` et `BaseBillet/views_robots.py` par les equivalents dans `seo/`
+- Suppression du code mort : `test_jinja`, `old_create_product.html`
+
+**Pourquoi / Why:** Doter le reseau TiBillet d'une couche SEO complete pour ameliorer la visibilite des lieux, evenements et adhesions dans les moteurs de recherche. Le ROOT tenant sert de hub SEO pour tout le reseau.
+
+### Fichiers crees / Created files
+| Fichier / File | Role |
+|---|---|
+| `seo/` (app complete) | App SEO : models, services, tasks, views, urls, templates, templatetags |
+| `seo/models.py` | `SEOCache` — cache JSON en schema public |
+| `seo/services.py` | Requetes SQL cross-schema + helpers Memcached |
+| `seo/tasks.py` | Celery task `refresh_seo_cache` (toutes les 4h) |
+| `seo/views.py` | Vues ROOT (landing, lieux, evenements, adhesions, recherche, sitemap index) |
+| `seo/views_common.py` | Helpers JSON-LD, cache reader, robots.txt |
+| `seo/sitemap.py` | Sitemaps tenant enrichis (remplace BaseBillet/sitemap.py) |
+| `seo/templatetags/seo_tags.py` | Filtre `format_iso_date` |
+| `seo/templates/seo/` | 6 templates ROOT + 2 partials JSON-LD |
+| `tests/pytest/test_seo.py` | 24 tests pytest |
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `TiBillet/settings.py` | `seo` dans SHARED_APPS + `CELERY_BEAT_SCHEDULE` |
+| `TiBillet/urls_tenants.py` | Import sitemap depuis `seo.sitemap` |
+| `TiBillet/urls_public.py` | Routes ROOT via `seo.urls` |
+| `BaseBillet/urls.py` | Import `robots_txt` depuis `seo.views_common` |
+| `BaseBillet/templates/reunion/base.html` | Canonical + JSON-LD Organization |
+| `BaseBillet/templates/faire_festival/base.html` | Idem |
+
+---
+
 ## Formulaire d'actions stock dans l'admin / Stock actions form in admin
 
 **Date :** Avril 2026

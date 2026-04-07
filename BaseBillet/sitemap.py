@@ -1,3 +1,8 @@
+# DEPRECATED: Ce fichier est remplace par seo/sitemap.py.
+# Conserve temporairement pour reference. Ne pas importer depuis ce fichier.
+# / DEPRECATED: This file is replaced by seo/sitemap.py.
+# Kept temporarily for reference. Do not import from this file.
+
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 from django.db import connection

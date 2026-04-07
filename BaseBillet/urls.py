@@ -1,7 +1,7 @@
-from django.urls import path, include
+from django.urls import path
 from rest_framework import routers
 from BaseBillet import views as base_view
-from BaseBillet.views_robots import robots_txt
+from seo.views_common import robots_txt
 from BaseBillet.test_error_views import test_404, test_500
 import BaseBillet.views_scan as views_scan
 
@@ -67,7 +67,6 @@ urlpatterns = [
     # path("tenant/areas/", base_view.tenant_areas, name='tenant_areas'),
     # path("tenant/informations/", base_view.tenant_informations, name='tenant_informations'),
     # path("tenant/summary/", base_view.tenant_summary, name='tenant_summary'),
-    # path('test_jinja/', base_view.test_jinja, name='test_jinja'),
     path('', base_view.index, name="index"),
 ]
 
