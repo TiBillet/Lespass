@@ -1569,7 +1569,8 @@ class Price(models.Model):
         verbose_name=_("Sale by weight/volume"),
         help_text=_(
             "If checked, the cashier enters the weight or volume at each sale. "
-            "The price is per kg (for grams) or per liter (for centiliters)."
+            "The price is per kg (grams) or per liter (centiliters). "
+            "Stock is decremented by the exact quantity entered."
         ),
     )
 
@@ -1605,9 +1606,11 @@ class Price(models.Model):
         blank=True,
         verbose_name=_("Contenance"),
         help_text=_(
-            "Quantité consommée par unité vendue, dans l'unité du stock. "
-            "Ex : pinte=50 (cl), demi=25 (cl), portion=150 (g). "
-            "Vide = 1 unité par défaut."
+            "Stock quantity consumed per unit sold (in stock unit). "
+            "Use this when selling by unit but decrementing stock by weight/volume. "
+            "E.g.: pint=50 (cl), half=25 (cl), portion=150 (g). "
+            "Empty = 1 unit. Incompatible with 'Sale by weight/volume' "
+            "(where the cashier enters the exact quantity)."
         ),
     )
 
