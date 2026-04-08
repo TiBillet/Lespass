@@ -6,11 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-<<<<<<< HEAD
-"POT-Creation-Date: 2026-04-07 16:27+0000\n"
-=======
-"POT-Creation-Date: 2026-04-07 09:39+0000\n"
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
+"POT-Creation-Date: 2026-04-08 14:23+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -54,9 +50,9 @@ msgid "Affichage"
 msgstr ""
 
 #: Administration/admin/crowds.py:99
-#: Administration/importers/lignearticle_exporter.py:24 BaseBillet/tasks.py:453
-#: BaseBillet/tasks.py:580 BaseBillet/tasks.py:696 BaseBillet/tasks.py:769
-#: BaseBillet/tasks.py:836
+#: Administration/importers/lignearticle_exporter.py:24
+#: BaseBillet/tasks.py:453 BaseBillet/tasks.py:580 BaseBillet/tasks.py:696
+#: BaseBillet/tasks.py:769 BaseBillet/tasks.py:836
 #: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:54
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:21
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:26
@@ -462,11 +458,7 @@ msgstr ""
 msgid "Connected taps"
 msgstr "Tireuses connectées"
 
-<<<<<<< HEAD
-#: Administration/admin/dashboard.py:646
-=======
 #: Administration/admin/dashboard.py:654
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Connected beer tap management: RFID authorization, flow metering, kiosk "
 "display."
@@ -602,21 +594,13 @@ msgstr ""
 msgid "Remise en banque OK."
 msgstr ""
 
-<<<<<<< HEAD
-#: Administration/admin/inventaire.py:89
-msgid "Read-only. To add stock, go to Inventory > Stock movements > Add."
-msgstr ""
-"Lecture seule. Pour ajouter du stock, allez dans Inventaire > Mouvements de "
-"stock > Ajouter."
-=======
 #: Administration/admin/inventaire.py:97
 msgid ""
-"Initial stock quantity (in stock unit). After creation, modify via Inventory "
-"> Stock movements."
+"Initial stock quantity (in stock unit). After creation, modify via Inventory"
+" > Stock movements."
 msgstr ""
-"Quantité initiale du stock (dans l'unité du stock). Après création, modifier "
-"via Inventaire > Mouvements de stock."
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
+"Quantité initiale du stock (dans l'unité du stock). Après création, modifier"
+" via Inventaire > Mouvements de stock."
 
 #: Administration/admin/inventaire.py:125
 #: Administration/admin/inventaire.py:213 laboutik/printing/formatters.py:108
@@ -711,41 +695,41 @@ msgstr "Tout afficher"
 
 #: Administration/admin/laboutik.py:49
 msgid "Interface caisse / POS interface"
-msgstr ""
+msgstr "Interface caisse"
 
 #: Administration/admin/laboutik.py:55 Administration/admin/laboutik.py:198
 #: laboutik/models.py:287
 msgid "Sunmi Cloud"
-msgstr ""
+msgstr "Sunmi Cloud"
 
 #: Administration/admin/laboutik.py:61
 msgid ""
 "Identifiants Sunmi Cloud (stockes chiffres). / Sunmi Cloud credentials "
 "(stored encrypted)."
-msgstr ""
+msgstr "Identifiants Sunmi Cloud (stockés chiffrés)."
 
 #: Administration/admin/laboutik.py:65
 msgid "Ticket de vente / Sale receipt"
-msgstr ""
+msgstr "Ticket de vente"
 
 #: Administration/admin/laboutik.py:71
 msgid "Personnalisation des tickets de vente. / Sale receipt customization."
-msgstr ""
+msgstr "Personnalisation des tickets de vente."
 
 #: Administration/admin/laboutik.py:75
 msgid "Rapports automatiques / Automatic reports"
-msgstr ""
+msgstr "Rapports automatiques"
 
 #: Administration/admin/laboutik.py:81
 msgid ""
-"Envoi automatique des rapports de cloture par email (7h locale). / Automatic "
-"closure report email sending (7am local time)."
-msgstr ""
+"Envoi automatique des rapports de cloture par email (7h locale). / Automatic"
+" closure report email sending (7am local time)."
+msgstr "Envoi automatique des rapports de clôture par email (7h locale)."
 
 #: Administration/admin/laboutik.py:108 Administration/admin/products.py:1268
 #: Administration/admin/products.py:1555 Administration/admin/products.py:1838
 msgid "— Aucune icône —"
-msgstr ""
+msgstr "— Aucune icône —"
 
 #: Administration/admin/laboutik.py:110 Administration/admin/products.py:1840
 #: BaseBillet/models.py:1012 laboutik/models.py:378 laboutik/models.py:570
@@ -779,6 +763,7 @@ msgstr "Sunmi LAN"
 #: Administration/admin/laboutik.py:211
 msgid "IP address required for LAN printers only (same subnet)."
 msgstr ""
+"Adresse IP requise uniquement pour les imprimantes LAN (même sous-réseau)."
 
 #: Administration/admin/laboutik.py:379 laboutik/excel_export.py:108
 #: laboutik/models.py:1112
@@ -847,7 +832,7 @@ msgid "Totals by payment method"
 msgstr "Totaux par mode de paiement"
 
 #: Administration/admin/laboutik.py:391 Administration/admin/laboutik.py:446
-#: Administration/admin/laboutik.py:456 Administration/admin/laboutik.py:1088
+#: Administration/admin/laboutik.py:456 Administration/admin/laboutik.py:1087
 #: Administration/admin/membership.py:86
 #: Administration/admin/reservations.py:105
 #: Administration/importers/lignearticle_exporter.py:25
@@ -1084,7 +1069,7 @@ msgstr "Quantité totale"
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:100
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:141
 msgid "HT"
-msgstr ""
+msgstr "HT"
 
 #: Administration/admin/laboutik.py:408 Administration/admin/laboutik.py:428
 #: Administration/importers/lignearticle_exporter.py:23
@@ -1116,7 +1101,7 @@ msgstr "TVA"
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:102
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:143
 msgid "TTC"
-msgstr ""
+msgstr "TTC"
 
 #: Administration/admin/laboutik.py:409
 #: Administration/templates/admin/cloture/rapport_before.html:138
@@ -1141,9 +1126,10 @@ msgstr "Bénéfice"
 #: laboutik/excel_export.py:142
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:136
 msgid "VAT breakdown"
-msgstr ""
+msgstr "Ventilation TVA"
 
-#: Administration/admin/laboutik.py:428 Administration/admin/reservations.py:98
+#: Administration/admin/laboutik.py:428
+#: Administration/admin/reservations.py:98
 #: Administration/templates/admin/cloture/rapport_before.html:177
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:250
 #: Administration/templates/admin/cloture_detail.html:159
@@ -1338,18 +1324,18 @@ msgstr "Opération"
 msgid "Revenue incl. tax"
 msgstr "CA TTC"
 
-#: Administration/admin/laboutik.py:902
+#: Administration/admin/laboutik.py:901
 #: Administration/templates/admin/cloture/rapport_before.html:541
 #: Administration/templates/admin/cloture_detail.html:525
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:483
 msgid "Integrity"
 msgstr "Intégrité"
 
-#: Administration/admin/laboutik.py:1001
+#: Administration/admin/laboutik.py:1000
 msgid "Previous amount"
 msgstr "Montant précédent"
 
-#: Administration/admin/laboutik.py:1008
+#: Administration/admin/laboutik.py:1007
 msgid "New amount"
 msgstr "Nouveau montant"
 
@@ -1363,10 +1349,13 @@ msgid ""
 "l'enregistrement du paiement. Une ligne comptable sera aussi créée dans les "
 "Ventes."
 msgstr ""
+"Si un déclencheur de tokens est configuré sur le tarif, il sera activé à "
+"l'enregistrement du paiement. Une ligne comptable sera aussi créée dans les "
+"Ventes."
 
 #: Administration/admin/membership.py:79
 msgid "Contribution (€)"
-msgstr ""
+msgstr "Contribution (€)"
 
 #: Administration/admin/membership.py:93
 #: BaseBillet/templates/reunion/partials/account/card_table.html:8
@@ -1410,7 +1399,7 @@ msgstr "Merci d'indiquer une valeur positive pour la contribution."
 
 #: Administration/admin/membership.py:213
 msgid "Statut d'adhésion (par défaut filtré)"
-msgstr ""
+msgstr "Statut d'adhésion (par défaut filtré)"
 
 #: Administration/admin/membership.py:218
 msgid "Valids"
@@ -1418,11 +1407,11 @@ msgstr "Valides"
 
 #: Administration/admin/membership.py:219
 msgid "Attente de validation"
-msgstr ""
+msgstr "Attente de validation"
 
 #: Administration/admin/membership.py:220
 msgid "Attente de paiement"
-msgstr ""
+msgstr "Attente de paiement"
 
 #: Administration/admin/membership.py:221 BaseBillet/models.py:3107
 msgid "Canceled"
@@ -1430,7 +1419,7 @@ msgstr "Annulé"
 
 #: Administration/admin/membership.py:222
 msgid "Sans distinction"
-msgstr ""
+msgstr "Sans distinction"
 
 #: Administration/admin/membership.py:282
 #: Administration/admin/reservations.py:190
@@ -1445,7 +1434,7 @@ msgstr "Réponses de formulaire sur mesure"
 #: Administration/admin/membership.py:291
 #: Administration/admin/membership.py:292
 msgid "Ventes / Ligne comptables"
-msgstr ""
+msgstr "Ventes / Lignes comptables"
 
 #: Administration/admin/membership.py:306 Administration/admin/sales.py:109
 #: Administration/templates/admin/cloture/rapport_before.html:333
@@ -1480,7 +1469,7 @@ msgstr "Utilisateur·ice"
 
 #: Administration/admin/membership.py:398
 msgid "Produit / Tarif"
-msgstr ""
+msgstr "Produit / Tarif"
 
 #: Administration/admin/membership.py:501
 msgid "Payment"
@@ -1498,7 +1487,7 @@ msgstr "Valide"
 
 #: Administration/admin/membership.py:517
 msgid "Recurence"
-msgstr ""
+msgstr "Récurrence"
 
 #: Administration/admin/prices.py:65
 msgid "Remaining uses"
@@ -1515,19 +1504,16 @@ msgstr "Aucun produit ?"
 #: Administration/admin/prices.py:126 Administration/admin/products.py:419
 msgid "A recurring payment plan must have a membership-type product."
 msgstr ""
-"Un paiement récurrent doit inclure un produit de type adhésion ou abonnement."
+"Un paiement récurrent doit inclure un produit de type adhésion ou "
+"abonnement."
 
-<<<<<<< HEAD
-#: Administration/admin/prices.py:140 Administration/admin/products.py:433
-=======
 #: Administration/admin/prices.py:140 Administration/admin/products.py:434
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "A recurring payment must have a membership term. Re-enter the term just "
 "above."
 msgstr ""
-"Un paiement récurrent doit avoir une durée d'adhésion. Saisissez la durée ci-"
-"dessus."
+"Un paiement récurrent doit avoir une durée d'adhésion. Saisissez la durée "
+"ci-dessus."
 
 #: Administration/admin/prices.py:152 Administration/admin/products.py:309
 msgid "A rate cannot be between 0€ and 1€"
@@ -1668,7 +1654,7 @@ msgstr ""
 
 #: Administration/admin/products.py:113
 msgid "The / boisson chaude"
-msgstr ""
+msgstr "Thé / boisson chaude"
 
 #: Administration/admin/products.py:114
 msgid "Eau"
@@ -1802,13 +1788,8 @@ msgstr ""
 msgid "Carte bancaire"
 msgstr ""
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:146 laboutik/printing/formatters.py:400
-#: laboutik/serializers.py:360 laboutik/views.py:5864
-=======
 #: Administration/admin/products.py:147 laboutik/printing/formatters.py:400
-#: laboutik/serializers.py:360 laboutik/views.py:5811
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
+#: laboutik/serializers.py:360 laboutik/views.py:5864
 msgid "Cheque"
 msgstr ""
 
@@ -2041,26 +2022,21 @@ msgstr "Valide / succès"
 #: Administration/admin/products.py:323
 msgid "A price cannot be both free price and weight/volume-based."
 msgstr ""
+"Un tarif ne peut pas être à la fois prix libre et vente au poids/volume."
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:331
-=======
 #: Administration/admin/products.py:332
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Contenance is incompatible with weight/volume sales (quantity is entered at "
 "each sale)."
 msgstr ""
+"La contenance est incompatible avec la vente au poids/volume (la quantité "
+"est saisie à chaque vente)."
 
 #: Administration/admin/products.py:381
 msgid "Maximum total quantity"
 msgstr "Quantité totale maximale"
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:382
-=======
 #: Administration/admin/products.py:383
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Maximum number of valid memberships allowed simultaneously for this price. "
 "Leave blank for unlimited."
@@ -2072,17 +2048,13 @@ msgstr ""
 msgid "Max per member"
 msgstr "Maximum par adhérent·e"
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:388
-=======
 #: Administration/admin/products.py:389
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Maximum number of active memberships a single user can hold for this price. "
 "Leave blank for unlimited."
 msgstr ""
-"Nombre maximal d'adhésions actives qu'un·e utilisateur·ice peut détenir pour "
-"ce tarif. Laissez vide pour illimité."
+"Nombre maximal d'adhésions actives qu'un·e utilisateur·ice peut détenir pour"
+" ce tarif. Laissez vide pour illimité."
 
 #: Administration/admin/products.py:399
 msgid "A subscription must have a duration"
@@ -2092,11 +2064,7 @@ msgstr "Une adhésion doit avoir une durée"
 msgid "Event capacity"
 msgstr "Capacité de l'événement"
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:454
-=======
 #: Administration/admin/products.py:455
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Maximum number of tickets available per event for this price. Leave blank "
 "for unlimited."
@@ -2108,14 +2076,10 @@ msgstr ""
 msgid "Max tickets per user"
 msgstr "Maximum de billets par utilisateur·ice"
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:460
-=======
 #: Administration/admin/products.py:461
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"Maximum number of tickets a single user can book for this price. Leave blank "
-"for unlimited."
+"Maximum number of tickets a single user can book for this price. Leave blank"
+" for unlimited."
 msgstr ""
 "Nombre maximal de billets qu'un·e utilisateur·ice peut réserver pour ce "
 "tarif. Laissez vide pour illimité."
@@ -2124,11 +2088,7 @@ msgstr ""
 msgid "Choices"
 msgstr "Choix"
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:554
-=======
 #: Administration/admin/products.py:555
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "For Single select (menu), Radio or Multiple select, enter choices separated "
 "by commas. Example: Rock, Electro, Jazz"
@@ -2173,11 +2133,7 @@ msgstr "Catégorie de produit"
 msgid "Please add at least one category to this product."
 msgstr "Merci d'ajouter au moins une catégorie à ce produit."
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:737
-=======
 #: Administration/admin/products.py:738
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Your Stripe account is not activated. To create paid items, please go to "
 "Settings/Stripe/Onboard."
@@ -2213,6 +2169,8 @@ msgid ""
 "Le produit '{produit_original.name}' a été dupliqué avec succès sous le nom "
 "'{produit_duplique.name}'"
 msgstr ""
+"Le produit '{produit_original.name}' a été dupliqué avec succès sous le nom "
+"'{produit_duplique.name}'"
 
 #: Administration/admin/products.py:901
 msgid "Erreur lors de la duplication : {str(erreur)}"
@@ -2229,7 +2187,7 @@ msgstr "Mode de caisse"
 
 #: Administration/admin/products.py:1225
 msgid "Payment/action method at the cash register."
-msgstr ""
+msgstr "Méthode de paiement/action en caisse."
 
 #: Administration/admin/products.py:1233 Administration/admin/products.py:1520
 #: Administration/admin/products.py:1799
@@ -2241,16 +2199,14 @@ msgstr ""
 msgid "Color palette"
 msgstr ""
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1237
-=======
 #: Administration/admin/products.py:1238 Administration/admin/products.py:1525
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"Choisissez une combinaison de couleurs prête à l'emploi. Elle remplacera les "
-"champs couleur ci-dessous. / Choose a ready-to-use color combination. It "
+"Choisissez une combinaison de couleurs prête à l'emploi. Elle remplacera les"
+" champs couleur ci-dessous. / Choose a ready-to-use color combination. It "
 "will override the color fields below."
 msgstr ""
+"Choisissez une combinaison de couleurs prête à l'emploi. Elle remplacera les"
+" champs couleur ci-dessous."
 
 #: Administration/admin/products.py:1250 Administration/admin/products.py:1537
 #: BaseBillet/models.py:1320
@@ -2272,51 +2228,43 @@ msgstr "Couleur de fond de la caisse"
 msgid "POS icon"
 msgstr ""
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1271
-=======
 #: Administration/admin/products.py:1272 Administration/admin/products.py:1559
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Si une image produit est définie ci-dessous, elle sera affichée à la place "
 "de cette icône. / If a product image is set below, it will be displayed "
 "instead of this icon."
 msgstr ""
+"Si une image produit est définie ci-dessous, elle sera affichée à la place "
+"de cette icône."
 
 #: Administration/admin/products.py:1303
 #, python-brace-format
-msgid "Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
+msgid ""
+"Même TVA que la catégorie ({taux}%) si laissé vide. Surchargeable ici. "
 msgstr ""
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1307
-=======
 #: Administration/admin/products.py:1308
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Même TVA que la catégorie si laissé vide. / Same VAT as category if left "
 "empty."
-msgstr ""
+msgstr "Même TVA que la catégorie si laissé vide."
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1388
-=======
 #: Administration/admin/products.py:1389 Administration/admin/products.py:1685
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Warning: the stock unit is 'Pieces' (UN). Weight/volume sales require grams "
 "(GR) or centiliters (CL). Please change the unit in the stock settings."
 msgstr ""
+"Attention : l'unité de stock est « Pièces » (UN). La vente au poids/volume "
+"nécessite des grammes (GR) ou centilitres (CL). Veuillez changer l'unité "
+"dans les paramètres de stock."
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1406
-=======
 #: Administration/admin/products.py:1407
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"Stock automatically created in grams (quantity=0). Remember to add stock via "
-"a reception."
+"Stock automatically created in grams (quantity=0). Remember to add stock via"
+" a reception."
 msgstr ""
+"Stock créé automatiquement en grammes (quantité=0). Pensez à ajouter du "
+"stock via une réception."
 
 #: Administration/admin/products.py:1427 Administration/admin/products.py:1721
 msgid "POS display"
@@ -2326,9 +2274,6 @@ msgstr ""
 msgid "Publication"
 msgstr "Publication"
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1518
-=======
 #: Administration/admin/products.py:1508 BaseBillet/models.py:1200
 msgid "Keg (connected tap)"
 msgstr "Fût (tireuse connectée)"
@@ -2342,12 +2287,13 @@ msgstr ""
 "stock via une réception."
 
 #: Administration/admin/products.py:1804
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Choisissez une combinaison prête à l'emploi. Elle remplacera les champs "
 "couleur ci-dessous. / Choose a ready-to-use color combination. It will "
 "override the color fields below."
 msgstr ""
+"Choisissez une combinaison prête à l'emploi. Elle remplacera les champs "
+"couleur ci-dessous."
 
 #: Administration/admin/products.py:1820 BaseBillet/models.py:1019
 msgid "Text color"
@@ -2355,7 +2301,7 @@ msgstr "Couleur du texte"
 
 #: Administration/admin/products.py:1821
 msgid "Hexadecimal color for the button text (e.g. #FFFFFF)."
-msgstr ""
+msgstr "Couleur hexadécimale du texte du bouton (ex. #FFFFFF)."
 
 #: Administration/admin/products.py:1830 BaseBillet/models.py:1026
 msgid "Background color"
@@ -2363,17 +2309,13 @@ msgstr "Couleur de fond"
 
 #: Administration/admin/products.py:1831
 msgid "Hexadecimal color for the button background (e.g. #1E40AF)."
-msgstr ""
+msgstr "Couleur hexadécimale du fond du bouton (ex. #1E40AF)."
 
-<<<<<<< HEAD
-#: Administration/admin/products.py:1556
-=======
 #: Administration/admin/products.py:1842
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Icône affichée sur le bouton de catégorie dans l'interface caisse. / Icon "
 "displayed on the category button in the POS interface."
-msgstr ""
+msgstr "Icône affichée sur le bouton de catégorie dans l'interface caisse."
 
 #: Administration/admin/products.py:1906
 msgid "Apparence / Appearance"
@@ -2574,7 +2516,8 @@ msgstr "Clé API insérée"
 #: Administration/admin/settings_apps.py:243
 #: Administration/admin/settings_apps.py:272
 #, python-brace-format
-msgid "Ghost API connection failed: {response.status_code} - {response.reason}"
+msgid ""
+"Ghost API connection failed: {response.status_code} - {response.reason}"
 msgstr ""
 
 #: Administration/admin/settings_apps.py:245
@@ -2590,7 +2533,7 @@ msgstr "Tester l'API"
 
 #: Administration/admin/settings_apps.py:260
 msgid "Ghost URL or API key is missing"
-msgstr ""
+msgstr "L'URL Ghost ou la clé API est manquante"
 
 #: Administration/admin/settings_apps.py:270
 msgid "Ghost API connection successful"
@@ -2598,7 +2541,7 @@ msgstr ""
 
 #: Administration/admin/settings_apps.py:277
 msgid "Error testing Ghost API: {type(e).__name__} - {str(e)}"
-msgstr ""
+msgstr "Erreur lors du test de l'API Ghost : {type(e).__name__} - {str(e)}"
 
 #: Administration/admin/settings_apps.py:321 BaseBillet/models.py:4250
 msgid "Api key"
@@ -2626,7 +2569,7 @@ msgstr "Erreur de création de label"
 #: Administration/admin/settings_apps.py:455
 #, python-brace-format
 msgid "{wc.organisation} tenant create error : {e} not confirmed"
-msgstr ""
+msgstr "Erreur de création du tenant {wc.organisation} : {e} non confirmé"
 
 #: Administration/admin/settings_apps.py:461
 msgid "Email not confirmed"
@@ -2700,11 +2643,11 @@ msgstr "Aucun"
 
 #: Administration/admin/users.py:223
 msgid "Login as this user"
-msgstr ""
+msgstr "Se connecter en tant que cet utilisateur"
 
 #: Administration/admin/users.py:229
 msgid "You do not have permission to perform this action."
-msgstr ""
+msgstr "Vous n'avez pas la permission d'effectuer cette action."
 
 #: Administration/importers/lignearticle_exporter.py:18
 msgid "Référence paiement"
@@ -2842,6 +2785,8 @@ msgstr ""
 msgid ""
 "Generate a signed archive (ZIP) of all POS data for the tax administration."
 msgstr ""
+"Générer une archive signée (ZIP) de toutes les données de caisse pour "
+"l'administration fiscale."
 
 #: Administration/templates/admin/cloture/changelist_before.html:24
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:87
@@ -2851,8 +2796,10 @@ msgstr ""
 #: Administration/templates/admin/cloture/changelist_before.html:37
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:13
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:136
+#, fuzzy
+#| msgid "Closure report"
 msgid "Current shift report"
-msgstr "Rapport en cours"
+msgstr "Rapport de fermeture de caisse"
 
 #: Administration/templates/admin/cloture/changelist_before.html:47
 msgid "Export fiscal"
@@ -2878,6 +2825,8 @@ msgid ""
 "Choose the accounting software format, then download the CSV file for this "
 "closure."
 msgstr ""
+"Choisissez le format du logiciel comptable, puis téléchargez le fichier CSV "
+"pour cette clôture."
 
 #: Administration/templates/admin/cloture/export_csv_comptable_detail_form.html:20
 #: Administration/templates/admin/cloture/export_csv_comptable_form.html:60
@@ -2938,6 +2887,8 @@ msgid ""
 "Generates a CSV file formatted for the chosen accounting software (columns, "
 "separator, encoding)."
 msgstr ""
+"Génère un fichier CSV formaté pour le logiciel comptable choisi (colonnes, "
+"séparateur, encodage)."
 
 #: Administration/templates/admin/cloture/export_fec_form.html:18
 msgid "FEC export"
@@ -2958,6 +2909,8 @@ msgid ""
 "Leave empty to export all data. The archive contains CSV, JSON, and HMAC-"
 "SHA256 integrity hashes."
 msgstr ""
+"Laisser vide pour exporter toutes les données. L'archive contient des "
+"fichiers CSV, JSON et des empreintes d'intégrité HMAC-SHA256."
 
 #: Administration/templates/admin/cloture/export_fiscal_form.html:71
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:73
@@ -3113,15 +3066,17 @@ msgid "No sales since the last closure."
 msgstr "Aucune vente depuis la dernière clôture."
 
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:129
+#, fuzzy
+#| msgid "Export report"
 msgid "Temporary report"
-msgstr "Rapport temporaire"
+msgstr "Exporter le bilan"
 
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:130
 msgid ""
 "This report is computed in real time and is not an accounting document. It "
 "does not create a closure."
 msgstr ""
-"Ce rapport est calculé en temps réel. Ce n'est pas un document comptable. Il "
+"Ce rapport est calculé en temps réel et n'est pas un document comptable. Il "
 "ne crée pas de clôture."
 
 #: Administration/templates/admin/cloture_detail.html:533
@@ -3134,9 +3089,11 @@ msgstr ""
 
 #: Administration/templates/admin/comptable/changelist_before.html:16
 msgid ""
-"Pre-fill accounting codes for your activity type. Existing accounts will not "
-"be overwritten."
+"Pre-fill accounting codes for your activity type. Existing accounts will not"
+" be overwritten."
 msgstr ""
+"Pré-remplir les codes comptables pour votre type d'activité. Les comptes "
+"existants ne seront pas écrasés."
 
 #: Administration/templates/admin/comptable/changelist_before.html:30
 msgid "Bar / Restaurant"
@@ -3160,21 +3117,21 @@ msgstr "Cashless V1 actif — migration nécessaire"
 
 #: Administration/templates/admin/dashboard_module_modal.html:10
 msgid "Disable module"
-msgstr ""
+msgstr "Désactiver le module"
 
 #: Administration/templates/admin/dashboard_module_modal.html:12
 msgid "Enable module"
-msgstr ""
+msgstr "Activer le module"
 
 #: Administration/templates/admin/dashboard_module_modal.html:18
 #, python-format
 msgid "Are you sure you want to disable \"%(name)s\"?"
-msgstr ""
+msgstr "Êtes-vous sûr·e de vouloir désactiver « %(name)s » ?"
 
 #: Administration/templates/admin/dashboard_module_modal.html:20
 #, python-format
 msgid "Are you sure you want to enable \"%(name)s\"?"
-msgstr ""
+msgstr "Êtes-vous sûr·e de vouloir activer « %(name)s » ?"
 
 #: Administration/templates/admin/dashboard_module_modal.html:37
 msgid "Confirm"
@@ -3425,13 +3382,13 @@ msgstr "Par défaut, seuls les mouvements manuels sont affichés"
 
 #: Administration/templates/admin/inventaire/mouvements_list_before.html:13
 msgid ""
-"Les ventes et débits mètre (automatiques) sont masqués. Utilisez le filtre « "
-"Type de mouvement » → « Tout afficher » pour voir l'historique complet. Ce "
+"Les ventes et débits mètre (automatiques) sont masqués. Utilisez le filtre «"
+" Type de mouvement » → « Tout afficher » pour voir l'historique complet. Ce "
 "journal est en lecture seule : chaque mouvement est créé automatiquement "
 "lors d'une opération de stock."
 msgstr ""
-"Les ventes et débits mètre (automatiques) sont masqués. Utilisez le filtre « "
-"Type de mouvement » → « Tout afficher » pour voir l'historique complet. Ce "
+"Les ventes et débits mètre (automatiques) sont masqués. Utilisez le filtre «"
+" Type de mouvement » → « Tout afficher » pour voir l'historique complet. Ce "
 "journal est en lecture seule : chaque mouvement est créé automatiquement "
 "lors d'une opération de stock."
 
@@ -3455,11 +3412,11 @@ msgstr "Réception"
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:36
 msgid ""
-"Ajoute du stock après une livraison. La quantité saisie est ajoutée au stock "
-"actuel."
+"Ajoute du stock après une livraison. La quantité saisie est ajoutée au stock"
+" actuel."
 msgstr ""
-"Ajoute du stock après une livraison. La quantité saisie est ajoutée au stock "
-"actuel."
+"Ajoute du stock après une livraison. La quantité saisie est ajoutée au stock"
+" actuel."
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:39
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:105
@@ -3537,8 +3494,8 @@ msgstr ""
 #: Administration/templates/admin/inventaire/stock_add_help.html:22
 msgid ""
 "Sélectionnez l'article, indiquez la quantité initiale et l'unité de mesure. "
-"Un mouvement de type « Réception » sera automatiquement créé dans le journal "
-"des mouvements pour tracer cette entrée de stock initiale."
+"Un mouvement de type « Réception » sera automatiquement créé dans le journal"
+" des mouvements pour tracer cette entrée de stock initiale."
 msgstr ""
 
 #: Administration/templates/admin/inventaire/stock_list_before.html:10
@@ -3547,8 +3504,8 @@ msgstr ""
 
 #: Administration/templates/admin/inventaire/stock_list_before.html:13
 msgid ""
-"Réception (livraison), ajustement (inventaire physique), offert, perte/"
-"casse. Le seuil d'alerte et l'autorisation de vente hors stock sont "
+"Réception (livraison), ajustement (inventaire physique), offert, "
+"perte/casse. Le seuil d'alerte et l'autorisation de vente hors stock sont "
 "modifiables directement dans cette liste."
 msgstr ""
 
@@ -3590,12 +3547,16 @@ msgid ""
 "Cette adhésion demande une validation manuelle. La personne concernée "
 "recevra un email pour régler la somme de %(amount)s €."
 msgstr ""
+"Cette adhésion demande une validation manuelle. La personne concernée "
+"recevra un email pour régler la somme de %(amount)s €."
 
 #: Administration/templates/admin/membership/actions_panel.html:154
 msgid ""
 "Cette adhésion demande une validation manuelle. La personne concernée "
 "recevra un email avec le lien de paiement."
 msgstr ""
+"Cette adhésion demande une validation manuelle. La personne concernée "
+"recevra un email avec le lien de paiement."
 
 #: Administration/templates/admin/membership/actions_panel.html:167
 msgid "Valider l'adhésion"
@@ -3659,7 +3620,7 @@ msgstr "Afficher uniquement les adhésions à valider"
 
 #: Administration/templates/admin/membership/partials/admin_accept_success.html:21
 msgid "Email envoyé."
-msgstr ""
+msgstr "Email envoyé."
 
 #: Administration/templates/admin/membership/partials/admin_accept_success.html:23
 #: Administration/templates/admin/membership/partials/admin_accept_success.html:25
@@ -3709,8 +3670,8 @@ msgstr "Information"
 
 #: Administration/templates/admin/membership/partials/ajouter_paiement_form.html:96
 msgid ""
-"L'enregistrement du paiement créera automatiquement une ligne comptable dans "
-"les"
+"L'enregistrement du paiement créera automatiquement une ligne comptable dans"
+" les"
 msgstr ""
 
 #: Administration/templates/admin/membership/partials/ajouter_paiement_form.html:99
@@ -3725,6 +3686,8 @@ msgid ""
 "Ce tarif possède un déclencheur : %(amount)s %(asset_name)s seront ajoutés "
 "au portefeuille de l'adhérent·e."
 msgstr ""
+"Ce tarif possède un déclencheur : %(amount)s %(asset_name)s seront ajoutés "
+"au portefeuille de l'adhérent·e."
 
 #: Administration/templates/admin/membership/partials/ajouter_paiement_form.html:118
 #: Administration/templates/admin/membership/partials/custom_form_add_field.html:62
@@ -3760,8 +3723,10 @@ msgstr ""
 
 #: Administration/templates/admin/membership/partials/ajouter_paiement_success.html:27
 #, python-format
-msgid "Déclencheur activé : %(amount)s %(asset_name)s ajoutés au portefeuille."
+msgid ""
+"Déclencheur activé : %(amount)s %(asset_name)s ajoutés au portefeuille."
 msgstr ""
+"Déclencheur activé : %(amount)s %(asset_name)s ajoutés au portefeuille."
 
 #: Administration/templates/admin/membership/partials/cancel_form.html:21
 msgid "Confirmer l'annulation ?"
@@ -3978,8 +3943,8 @@ msgstr ""
 
 #: Administration/templates/admin/product/checkstripe_component.html:12
 msgid ""
-"Votre compte Stripe ne semble pas activé : vous ne pourrez créer ici que des "
-"produits de type réservation gratuite. Pour recevoir des paiements : "
+"Votre compte Stripe ne semble pas activé : vous ne pourrez créer ici que des"
+" produits de type réservation gratuite. Pour recevoir des paiements : "
 msgstr ""
 
 #: Administration/templates/admin/product/checkstripe_component.html:25
@@ -4009,12 +3974,12 @@ msgstr "Souhaitez-vous un tableau de bord personnalisé ?"
 #: Administration/templates/admin/service.html:10
 msgid ""
 "Did you decide to start using TiBillet but you need help? Feel free to get "
-"in touch for consulting, priority support on specific tickets or development "
-"services."
+"in touch for consulting, priority support on specific tickets or development"
+" services."
 msgstr ""
 "Vous avez décidé de passer à TiBillet mais vous avez besoin d'aide ? "
-"N'hésitez pas à nous contacter pour une consultation, un support prioritaire "
-"pour des demandes spécifiques ou des services de développement."
+"N'hésitez pas à nous contacter pour une consultation, un support prioritaire"
+" pour des demandes spécifiques ou des services de développement."
 
 #: Administration/templates/admin/service.html:17
 msgid "Book a call with the Team"
@@ -4222,8 +4187,8 @@ msgstr "Erreur inattendue"
 
 #: ApiBillet/views.py:585
 msgid ""
-"Automatic renewal turned off. Your subscription remains active until the end "
-"of the current period."
+"Automatic renewal turned off. Your subscription remains active until the end"
+" of the current period."
 msgstr ""
 "Le renouvellement automatique est désactivé. Votre abonnement reste actif "
 "jusqu'à la fin de la période en cours."
@@ -4286,7 +4251,8 @@ msgstr "Échec d'envoi du mail de confirmation si True"
 msgid "Email confirmed"
 msgstr "Adresse mail confirmée"
 
-#: AuthBillet/models.py:135 BaseBillet/models.py:3087 BaseBillet/models.py:3893
+#: AuthBillet/models.py:135 BaseBillet/models.py:3087
+#: BaseBillet/models.py:3893
 #: BaseBillet/templates/reunion/views/account/preferences.html:43
 #: BaseBillet/templates/reunion/views/membership/form.html:270
 #: BaseBillet/templates/reunion/views/register.html:41
@@ -4294,7 +4260,8 @@ msgstr "Adresse mail confirmée"
 msgid "First name"
 msgstr "Prénom"
 
-#: AuthBillet/models.py:136 BaseBillet/models.py:3090 BaseBillet/models.py:3899
+#: AuthBillet/models.py:136 BaseBillet/models.py:3090
+#: BaseBillet/models.py:3899
 #: BaseBillet/templates/reunion/views/account/preferences.html:51
 #: BaseBillet/templates/reunion/views/register.html:48
 #: BaseBillet/templates/reunion/views/register.html:50
@@ -4694,15 +4661,16 @@ msgstr "URL du lien"
 msgid "Collective name"
 msgstr "Nom du collectif"
 
-#: BaseBillet/models.py:366 BaseBillet/models.py:1117 BaseBillet/models.py:1874
+#: BaseBillet/models.py:366 BaseBillet/models.py:1117
+#: BaseBillet/models.py:1874
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:69
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:73
 #: MetaBillet/models.py:49 crowds/models.py:75
 msgid "Short description"
 msgstr "Description courte"
 
-#: BaseBillet/models.py:369 BaseBillet/models.py:1123 BaseBillet/models.py:1877
-#: MetaBillet/models.py:50
+#: BaseBillet/models.py:369 BaseBillet/models.py:1123
+#: BaseBillet/models.py:1877 MetaBillet/models.py:50
 msgid "Long description"
 msgstr "Description longue"
 
@@ -4896,17 +4864,18 @@ msgstr "Accepter les prélèvements bancaires SEPA"
 #: BaseBillet/models.py:782
 msgid ""
 "SEPA Direct Debit is a deferred payment method. Please check the current "
-"rates on the Stripe website and activate it at https://dashboard.stripe.com/"
-"settings/payment_methods. Payment validation may take between 3 and 4 "
-"business days. Currently available only for subscriptions and memberships. "
-"Contact the team if you wish to extend this option."
+"rates on the Stripe website and activate it at "
+"https://dashboard.stripe.com/settings/payment_methods. Payment validation "
+"may take between 3 and 4 business days. Currently available only for "
+"subscriptions and memberships. Contact the team if you wish to extend this "
+"option."
 msgstr ""
 "Le prélèvement SEPA est un mode de paiement différé. Veuillez consulter les "
-"tarifs actuels sur le site Web de Stripe et l'activer ici : https://"
-"dashboard.stripe.com/settings/payment_methods. La validation du paiement "
-"peut prendre entre 3 et 4 jours ouvrables. Actuellement disponible "
-"uniquement pour les abonnements et les adhésions. Contactez l'équipe si vous "
-"souhaitez l'étendre."
+"tarifs actuels sur le site Web de Stripe et l'activer ici : "
+"https://dashboard.stripe.com/settings/payment_methods. La validation du "
+"paiement peut prendre entre 3 et 4 jours ouvrables. Actuellement disponible "
+"uniquement pour les abonnements et les adhésions. Contactez l'équipe si vous"
+" souhaitez l'étendre."
 
 #: BaseBillet/models.py:820
 msgid "Link your stripe account to accept payment"
@@ -4922,7 +4891,7 @@ msgstr "Erreur Stripe, vérifiez l'administration"
 
 #: BaseBillet/models.py:835
 msgid "Hide refill button"
-msgstr ""
+msgstr "Masquer le bouton de recharge"
 
 #: BaseBillet/models.py:838
 msgid "Force show refill button"
@@ -4947,12 +4916,17 @@ msgid ""
 "POS V2 cannot be activated while a V1 cashless server is configured. "
 "Migration to V2 is required first."
 msgstr ""
+"La caisse V2 ne peut pas être activée tant qu'un serveur cashless V1 est "
+"configuré. La migration vers la V2 est nécessaire."
 
 #: BaseBillet/models.py:945
 msgid ""
 "SEPA Direct Debit is not activated on your Stripe account. Please enable it "
 "at https://dashboard.stripe.com/settings/payment_methods then try again."
 msgstr ""
+"Le prélèvement SEPA n'est pas activé sur votre compte Stripe. Veuillez "
+"l'activer sur https://dashboard.stripe.com/settings/payment_methods puis "
+"réessayer."
 
 #: BaseBillet/models.py:959
 msgid "Settings for "
@@ -4971,7 +4945,7 @@ msgstr "Nom"
 
 #: BaseBillet/models.py:1006
 msgid "Category name displayed on the POS interface."
-msgstr ""
+msgstr "Nom de la catégorie affiché sur l'interface caisse."
 
 #: BaseBillet/models.py:1013 laboutik/models.py:379 laboutik/models.py:571
 msgid "Icon name (e.g. Bootstrap Icons class)."
@@ -5000,11 +4974,11 @@ msgstr "Taux TVA par défaut"
 
 #: BaseBillet/models.py:1042
 msgid "Default VAT rate applied to products in this category."
-msgstr ""
+msgstr "Taux de TVA par défaut appliqué aux produits de cette catégorie."
 
 #: BaseBillet/models.py:1049
 msgid "Check if this category is for cashless token items."
-msgstr ""
+msgstr "Cocher si cette catégorie concerne des articles en tokens cashless."
 
 #: BaseBillet/models.py:1062
 msgid "Order printer"
@@ -5015,6 +4989,9 @@ msgid ""
 "Printer for order tickets (kitchen, bar). When an order contains products "
 "from this category, the ticket is sent to this printer."
 msgstr ""
+"Imprimante pour les bons de commande (cuisine, bar). Quand une commande "
+"contient des produits de cette catégorie, le bon est envoyé à cette "
+"imprimante."
 
 #: BaseBillet/models.py:1080 laboutik/models.py:1688
 msgid "Accounting code"
@@ -5026,6 +5003,8 @@ msgid ""
 "FEC et CSV comptable. / Sales accounting code for this category. Used for "
 "FEC and CSV accounting export."
 msgstr ""
+"Compte comptable de vente associé à cette catégorie. Utilisé pour l'export "
+"FEC et CSV comptable."
 
 #: BaseBillet/models.py:1094
 msgid "Product category"
@@ -5100,11 +5079,7 @@ msgstr "Nom et prénom des destinataires des billets requis."
 msgid "Maximum per user"
 msgstr "Maximum par utilisateur·ice"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1227 BaseBillet/models.py:1641
-=======
 #: BaseBillet/models.py:1227 BaseBillet/models.py:1644
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Limit the quantity per user. Leave this field blank if the number is "
 "unlimited."
@@ -5137,7 +5112,7 @@ msgstr ""
 
 #: BaseBillet/models.py:1288
 msgid "Time top-up"
-msgstr ""
+msgstr "Recharge temps"
 
 #: BaseBillet/models.py:1290
 msgid "Deposit return"
@@ -5166,6 +5141,8 @@ msgid ""
 "Payment/action method at the cash register. Leave empty if this product is "
 "not sold at the POS."
 msgstr ""
+"Méthode de paiement/action en caisse. Laisser vide si ce produit n'est pas "
+"vendu au point de vente."
 
 #: BaseBillet/models.py:1313
 msgid "POS category"
@@ -5173,23 +5150,23 @@ msgstr "Catégorie caisse"
 
 #: BaseBillet/models.py:1314
 msgid "Display category on the POS interface."
-msgstr ""
+msgstr "Catégorie d'affichage sur l'interface caisse."
 
 #: BaseBillet/models.py:1321
 msgid "Hexadecimal color for the product button text (e.g. #FFFFFF)."
-msgstr ""
+msgstr "Couleur hexadécimale du texte du bouton produit (ex. #FFFFFF)."
 
 #: BaseBillet/models.py:1329
 msgid "Hexadecimal color for the product button background (e.g. #3B82F6)."
-msgstr ""
+msgstr "Couleur hexadécimale du fond du bouton produit (ex. #3B82F6)."
 
 #: BaseBillet/models.py:1336
 msgid "Split payment allowed"
-msgstr ""
+msgstr "Paiement fractionné autorisé"
 
 #: BaseBillet/models.py:1337
 msgid "Allow partial/split payment for this product at the POS."
-msgstr ""
+msgstr "Autoriser le paiement partiel/fractionné pour ce produit en caisse."
 
 #: BaseBillet/models.py:1343
 msgid "Requires NFC tag"
@@ -5198,15 +5175,15 @@ msgstr ""
 #: BaseBillet/models.py:1345
 msgid ""
 "An NFC card must be scanned before this product can be added to the cart."
-msgstr ""
+msgstr "Une carte NFC doit être scannée avant d'ajouter ce produit au panier."
 
 #: BaseBillet/models.py:1353
 msgid "Icon name for the POS button (e.g. Bootstrap Icons class)."
-msgstr ""
+msgstr "Nom de l'icône pour le bouton caisse (ex. classe Bootstrap Icons)."
 
 #: BaseBillet/models.py:1362
 msgid "Purchase price (cents)"
-msgstr ""
+msgstr "Prix d'achat (centimes)"
 
 #: BaseBillet/models.py:1364
 msgid ""
@@ -5214,6 +5191,8 @@ msgid ""
 "estime. / Unit purchase price in cents. Used for estimated profit "
 "calculation."
 msgstr ""
+"Prix d'achat unitaire en centimes. Utilisé pour le calcul du bénéfice "
+"estimé."
 
 #: BaseBillet/models.py:1388 BaseBillet/models.py:1896
 #: BaseBillet/models.py:4221 laboutik/models.py:482
@@ -5313,16 +5292,12 @@ msgstr "Vente au poids/volume"
 #: BaseBillet/models.py:1571
 msgid ""
 "If checked, the cashier enters the weight or volume at each sale. The price "
-<<<<<<< HEAD
-"is per kg (for grams) or per liter (for centiliters)."
-=======
 "is per kg (grams) or per liter (centiliters). Stock is decremented by the "
 "exact quantity entered."
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgstr ""
 "Si coché, le caissier saisit le poids ou le volume à chaque vente. Le prix "
-"est au kg (grammes) ou au litre (centilitres). Le stock est décrémenté de la "
-"quantité exacte saisie."
+"est au kg (grammes) ou au litre (centilitres). Le stock est décrémenté de la"
+" quantité exacte saisie."
 
 #: BaseBillet/models.py:1581 BaseBillet/models.py:1704
 msgid "Non applicable"
@@ -5352,35 +5327,24 @@ msgstr "Taux TVA"
 msgid "Maximum capacity"
 msgstr "Jauge maximale"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1599
-=======
 #: BaseBillet/models.py:1600
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Number of valid memberships possible simultaneously or maximum capacity for "
 "this price per event. Leave this field blank if the quantity is unlimited."
 msgstr ""
-"Nombre d'adhésions valides possibles simultanément ou capacité maximale pour "
-"ce prix par événement. Laissez ce champ vide si la quantité est illimité."
+"Nombre d'adhésions valides possibles simultanément ou capacité maximale pour"
+" ce prix par événement. Laissez ce champ vide si la quantité est illimité."
 
 #: BaseBillet/models.py:1607
 msgid "Contenance"
 msgstr "Contenance"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1608
-msgid ""
-"Quantité consommée par unité vendue, dans l'unité du stock. Ex : pinte=50 "
-"(cl), demi=25 (cl), portion=150 (g). Vide = 1 unité par défaut."
-=======
 #: BaseBillet/models.py:1609
 msgid ""
-"Stock quantity consumed per unit sold (in stock unit). Use this when selling "
-"by unit but decrementing stock by weight/volume. E.g.: pint=50 (cl), half=25 "
-"(cl), portion=150 (g). Empty = 1 unit. Incompatible with 'Sale by weight/"
-"volume' (where the cashier enters the exact quantity)."
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
+"Stock quantity consumed per unit sold (in stock unit). Use this when selling"
+" by unit but decrementing stock by weight/volume. E.g.: pint=50 (cl), "
+"half=25 (cl), portion=150 (g). Empty = 1 unit. Incompatible with 'Sale by "
+"weight/volume' (where the cashier enters the exact quantity)."
 msgstr ""
 "Quantité de stock consommée par unité vendue (dans l'unité du stock). "
 "Utilisez ce champ quand on vend à l'unité mais qu'on décrémente le stock en "
@@ -5392,19 +5356,15 @@ msgstr ""
 msgid "Subscriptions required"
 msgstr "Abonnements requis"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1689
-=======
 #: BaseBillet/models.py:1692
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Rate available to subscribers only (OR logic: having at least one of the "
-"selected subscriptions is enough). Only works for reservation-type products. "
-"The rate will be visible if the user is logged in AND has paid at least one "
-"of these membership fees."
+"selected subscriptions is enough). Only works for reservation-type products."
+" The rate will be visible if the user is logged in AND has paid at least one"
+" of these membership fees."
 msgstr ""
-"Tarif réservé aux adhérent·es (logique OU : avoir au moins une des adhésions "
-"sélectionnées suffit). Ne fonctionne que pour les produits de type "
+"Tarif réservé aux adhérent·es (logique OU : avoir au moins une des adhésions"
+" sélectionnées suffit). Ne fonctionne que pour les produits de type "
 "réservation. Le tarif sera visible si l'utilisateur·ice est connecté·e ET a "
 "payé au moins une de ces adhésions."
 
@@ -5442,7 +5402,7 @@ msgstr "Année scolaire : 1er septembre"
 
 #: BaseBillet/models.py:1713
 msgid "valid for life"
-msgstr ""
+msgstr "valable à vie"
 
 #: BaseBillet/models.py:1720
 msgid "Subscription duration"
@@ -5468,11 +5428,7 @@ msgstr ""
 msgid "Max number of recurrences"
 msgstr "Nombre de récurences maximales"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1733
-=======
 #: BaseBillet/models.py:1736
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "A rate with a monthly period and iterations=2 will last two months with two "
 "payments: one on day D and another the following month."
@@ -5485,29 +5441,21 @@ msgstr ""
 msgid "Commitment to the duration of the iteration."
 msgstr "Engagement sur la durée de l'itération."
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1740
-=======
 #: BaseBillet/models.py:1743
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "If checked, the user will not be able to cancel the automatic debit from "
 "their account. You will always be able to interrupt the automatic debit on "
 "the Stripe interface."
 msgstr ""
 "Si cette option est cochée, l'utilisateur ne pourra pas annuler le "
-"prélèvement automatique sur son compte. Vous pourrez toujours interrompre le "
-"prélèvement automatique depuis l'interface Stripe."
+"prélèvement automatique sur son compte. Vous pourrez toujours interrompre le"
+" prélèvement automatique depuis l'interface Stripe."
 
 #: BaseBillet/models.py:1749
 msgid "Need manual validation"
 msgstr "Validation manuelle requise"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1748
-=======
 #: BaseBillet/models.py:1751
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "If selected, an administrator will have to manually approve the membership "
 "before sending the payment link by email. An email will be sent to the "
@@ -5521,11 +5469,7 @@ msgstr ""
 msgid "Top-up user wallet on payment (Fedow)"
 msgstr "Charger le portefeuille de l'utilisateur.ice après le paiement."
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1757
-=======
 #: BaseBillet/models.py:1760
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "If enabled, after a successful payment, the user wallet will receive tokens."
 msgstr ""
@@ -5536,11 +5480,7 @@ msgstr ""
 msgid "Reward user wallet on ticket scanning"
 msgstr "Charger le portefeuille de l'utilisateur.ice après le scan du billet"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1765
-=======
 #: BaseBillet/models.py:1768
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "If enabled, after scanning a ticket, the user wallet will receive tokens."
 msgstr ""
@@ -5568,15 +5508,13 @@ msgstr "Montant en décimale"
 msgid "Asset"
 msgstr "Type d'actif"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1800
-=======
 #: BaseBillet/models.py:1803
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "If set, the price is in asset units (tokens). If empty, the price is in "
 "euros."
 msgstr ""
+"Si renseigné, le prix est en unités d'actif (tokens). Si vide, le prix est "
+"en euros."
 
 #: BaseBillet/models.py:1822
 msgid "Rates"
@@ -5621,7 +5559,8 @@ msgstr "Évènement externe"
 #: BaseBillet/models.py:1883
 msgid "The event is handled outside of this platform (ex: Facebook event)."
 msgstr ""
-"L'évènement est géré en-dehors de cette plateforme (ex : évènement Facebook)."
+"L'évènement est géré en-dehors de cette plateforme (ex : évènement "
+"Facebook)."
 
 #: BaseBillet/models.py:1892
 msgid "Non-federable event"
@@ -5663,23 +5602,15 @@ msgstr "Nom du bouton pour la réservation"
 msgid "If empty : I want to reserve one or more seats."
 msgstr "Si vide : Je veux réserver une ou plusieurs places."
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1956
-=======
 #: BaseBillet/models.py:1959
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"The main image of the event, displayed in the head of the event page and for "
-"social shares. If empty, the address image is displayed."
+"The main image of the event, displayed in the head of the event page and for"
+" social shares. If empty, the address image is displayed."
 msgstr ""
 "L'image principale de l'événement, affichée tout en haut de la page de "
 "l'événement. Si vide, l'image de l'adresse s'affiche."
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:1975 crowds/models.py:182
-=======
 #: BaseBillet/models.py:1978 crowds/models.py:182
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "The small image displayed in the events list. If None, img will be "
 "displayed. 4x3 ratio."
@@ -5758,11 +5689,7 @@ msgstr ""
 msgid "Restaurant mode / scheduler"
 msgstr "Mode restaurant / booking"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:2120
-=======
 #: BaseBillet/models.py:2123
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "The event will be visible at the top of the home page, allowing the user to "
 "book a specific date."
@@ -5811,15 +5738,6 @@ msgstr "Statut de réservation"
 msgid "Custom Form"
 msgstr "Formulaire sur mesure"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:2752
-msgid "You will be refunded to the credit card used to make the reservation."
-msgstr ""
-"Le remboursement sera effectué sur la carte de crédit utilisée pour "
-"effectuer la réservation."
-
-=======
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 #: BaseBillet/models.py:2755
 msgid "You will be refunded to the credit card used to make the reservation."
 msgstr ""
@@ -5876,7 +5794,7 @@ msgstr "Origine du paiement"
 
 #: BaseBillet/models.py:3142
 msgid "Date et heure du scan / Date and time of scan"
-msgstr ""
+msgstr "Date et heure du scan"
 
 #: BaseBillet/models.py:3147
 msgid "Metadata"
@@ -5953,7 +5871,7 @@ msgstr "Depuis la billetterie"
 
 #: BaseBillet/models.py:3350
 msgid "From Crowds app"
-msgstr ""
+msgstr "Depuis l'application Crowds"
 
 #: BaseBillet/models.py:3351
 msgid "From invoice"
@@ -5979,15 +5897,11 @@ msgstr "Réservation"
 msgid "Linked subscription"
 msgstr "Abonnement lié"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:3595
-=======
 #: BaseBillet/models.py:3598
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Point de vente ou cette vente a ete realisee. / Point of sale where this "
 "sale was made."
-msgstr ""
+msgstr "Point de vente où cette vente a été réalisée."
 
 #: BaseBillet/models.py:3616
 msgid "Not sent to payment"
@@ -6011,7 +5925,7 @@ msgstr "Numéro de transaction"
 
 #: BaseBillet/models.py:3648
 msgid "Groups all lines from the same payment for reprinting."
-msgstr ""
+msgstr "Regroupe toutes les lignes d'un même paiement pour la réimpression."
 
 #: BaseBillet/models.py:3658
 msgid "Credit note for"
@@ -6021,56 +5935,42 @@ msgstr "Avoir pour"
 msgid "HMAC hash"
 msgstr ""
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:3670
-=======
 #: BaseBillet/models.py:3673
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "HMAC-SHA256 de cette ligne, chainee avec la precedente. / HMAC-SHA256 of "
 "this line, chained with the previous one."
-msgstr ""
+msgstr "HMAC-SHA256 de cette ligne, chaînée avec la précédente."
 
 #: BaseBillet/models.py:3681
 msgid "Previous HMAC"
 msgstr "HMAC précédent"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:3680
-=======
 #: BaseBillet/models.py:3683
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "HMAC de la LigneArticle precedente dans la chaine. / HMAC of the previous "
 "LigneArticle in the chain."
-msgstr ""
+msgstr "HMAC de la LigneArticle précédente dans la chaîne."
 
 #: BaseBillet/models.py:3695
 msgid "Total HT (cents)"
-msgstr ""
+msgstr "Total HT (centimes)"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:3694
-=======
 #: BaseBillet/models.py:3697
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Total hors taxes en centimes. Calcule : TTC / (1 + taux_tva/100). / Total "
 "excluding tax in cents. Computed: TTC / (1 + vat_rate/100)."
-msgstr ""
+msgstr "Total hors taxes en centimes. Calculé : TTC / (1 + taux_tva/100)."
 
 #: BaseBillet/models.py:3713
 msgid "Quantity by weight/volume"
 msgstr ""
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:3712
-=======
 #: BaseBillet/models.py:3715
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Amount entered by cashier in stock unit (g or cl). Null for standard sales."
 msgstr ""
+"Quantité saisie par le caissier en unité de stock (g ou cl). Nul pour les "
+"ventes standard."
 
 #: BaseBillet/models.py:3798
 msgid "No Stripe send"
@@ -6205,15 +6105,11 @@ msgstr ""
 msgid "Api keys"
 msgstr "Clés API"
 
-<<<<<<< HEAD
-#: BaseBillet/models.py:4258
-=======
 #: BaseBillet/models.py:4261
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Astuce Dev' : pour tester un webhook, lancez un petit serveur HTTP qui "
-"affiche le contenu de la requete : https://gist.github.com/"
-"mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
+"affiche le contenu de la requete : "
+"https://gist.github.com/mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
 msgstr ""
 
 #: BaseBillet/models.py:4267
@@ -6343,8 +6239,8 @@ msgid ""
 "The event is almost full, only %(remains)d seat(s) left. Please make a new "
 "reservation."
 msgstr ""
-"L'évènement est presque complet, il ne reste que %(remains)d place(s). Merci "
-"de relancer votre réservation."
+"L'évènement est presque complet, il ne reste que %(remains)d place(s). Merci"
+" de relancer votre réservation."
 
 #: BaseBillet/signals.py:241
 msgid "The event is now full."
@@ -6391,7 +6287,8 @@ msgid "REQUEST RECEIPT"
 msgstr "RÉCUPÉRER UN REÇU"
 
 #: BaseBillet/tasks.py:256
-msgid "If you receive this email by mistake, please contact the TiBillet team."
+msgid ""
+"If you receive this email by mistake, please contact the TiBillet team."
 msgstr ""
 "Si vous recevez ce mail par erreur, merci de contacter l'équipe TiBillet."
 
@@ -6427,7 +6324,7 @@ msgstr ""
 #: BaseBillet/tasks.py:360 BaseBillet/tasks.py:454 BaseBillet/tasks.py:770
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:31
 msgid "Date de demande"
-msgstr ""
+msgstr "Date de demande"
 
 #: BaseBillet/tasks.py:364
 msgid "Ouvrir l’administration"
@@ -6464,7 +6361,7 @@ msgstr ""
 
 #: BaseBillet/tasks.py:436
 msgid "Valider mon email"
-msgstr ""
+msgstr "Valider mon email"
 
 #: BaseBillet/tasks.py:447 BaseBillet/tasks.py:570 BaseBillet/tasks.py:687
 #: BaseBillet/tasks.py:768 BaseBillet/tasks.py:778 BaseBillet/tasks.py:832
@@ -6481,8 +6378,8 @@ msgstr ""
 
 #: BaseBillet/tasks.py:458
 msgid ""
-"Si vous n'êtes pas à l'origine de cette demande, merci de contacter l'équipe "
-"TiBillet."
+"Si vous n'êtes pas à l'origine de cette demande, merci de contacter l'équipe"
+" TiBillet."
 msgstr ""
 
 #: BaseBillet/tasks.py:459
@@ -6705,7 +6602,7 @@ msgstr "Accueil"
 
 #: BaseBillet/templates/500.html:4
 msgid "Server Error"
-msgstr ""
+msgstr "Erreur serveur"
 
 #: BaseBillet/templates/500.html:11
 #: BaseBillet/templates/reunion/partials/toasts.html:27
@@ -6729,8 +6626,8 @@ msgstr ""
 #: BaseBillet/templates/500.html:33
 msgid "If this problem persists, please contact our support team."
 msgstr ""
-"Si ce problème persiste, veuillez contacter notre équipe : contact@tibillet."
-"re"
+"Si ce problème persiste, veuillez contacter notre équipe : "
+"contact@tibillet.re"
 
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:16
 msgid "Rappel d'adhésion"
@@ -6765,7 +6662,7 @@ msgstr ""
 
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:50
 msgid "Date d'expiration"
-msgstr ""
+msgstr "Date d'expiration"
 
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:66
 msgid "Pourquoi renouveler votre adhésion ?"
@@ -6918,7 +6815,7 @@ msgstr ""
 
 #: BaseBillet/templates/faire_festival/views/event/list.html:38
 msgid "Trier par date"
-msgstr ""
+msgstr "Trier par date"
 
 #: BaseBillet/templates/faire_festival/views/event/list.html:41
 msgid "Toutes les dates"
@@ -6991,7 +6888,7 @@ msgstr "Aucun résultat pour cette recherche."
 #: BaseBillet/templates/faire_festival/views/event/list.html:228
 #: BaseBillet/templates/faire_festival/views/event/partial/list_append.html:73
 msgid "No events match your search criteria."
-msgstr ""
+msgstr "Aucun évènement ne correspond à vos critères de recherche."
 
 #: BaseBillet/templates/faire_festival/views/event/list.html:230
 #: BaseBillet/templates/faire_festival/views/event/partial/list_append.html:75
@@ -7228,9 +7125,9 @@ msgstr ""
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:190
 msgid ""
 "Le Faire Festival est un festival pour FAIRE ensemble. Autour de la matière "
-"et de la matérialité, les FabLabs, Espaces et Communautés du Faire, le grand "
-"public se retrouvent pour partager des savoir-faire, découvrir des machines "
-"et outils, expérimenter des techniques, rencontrer des partenaires et "
+"et de la matérialité, les FabLabs, Espaces et Communautés du Faire, le grand"
+" public se retrouvent pour partager des savoir-faire, découvrir des machines"
+" et outils, expérimenter des techniques, rencontrer des partenaires et "
 "d'autres lieux de fabrication..."
 msgstr ""
 
@@ -7273,8 +7170,8 @@ msgstr ""
 msgid ""
 "Un Espace du Faire est un FabLab (Laboratoire de fabrication), une "
 "Manufacture, un HackerSpace, un Atelier de bricoleurs, un MakerSpace, un "
-"Espace de couture partagé, un Tiers-Lieu de fabrication... c'est un lieu qui "
-"partage des outils, machines et savoir-faire ouvert à tous les publics "
+"Espace de couture partagé, un Tiers-Lieu de fabrication... c'est un lieu qui"
+" partage des outils, machines et savoir-faire ouvert à tous les publics "
 "(artisans, citoyen.ne.s, salarié.e.s, étudiant.e.s...) pour fabriquer "
 "localement tout en étant globalement connecté."
 msgstr ""
@@ -7283,8 +7180,8 @@ msgstr ""
 msgid ""
 "Il mutualise des outils et savoir-faire de la fabrication artisanale, "
 "conventionnelle, industrielle et numérique pour passer rapidement de l'idée "
-"à l'objet et pour presque tout concevoir, fabriquer et réparer. Il permet de "
-"produire des communs par la documentation et le faire ensemble."
+"à l'objet et pour presque tout concevoir, fabriquer et réparer. Il permet de"
+" produire des communs par la documentation et le faire ensemble."
 msgstr ""
 
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:225
@@ -7316,8 +7213,8 @@ msgstr ""
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:251
 msgid ""
 "Le Faire Festival est un événement open source et collectif coporté par le "
-"RedLab (Réseau des Labs d'Occitanie), le RoseLab et le Laboratoire Organique "
-"de Lustar (deux Espaces du Faire occitans) regroupés dans la Manufacture "
+"RedLab (Réseau des Labs d'Occitanie), le RoseLab et le Laboratoire Organique"
+" de Lustar (deux Espaces du Faire occitans) regroupés dans la Manufacture "
 "Distribuée."
 msgstr ""
 
@@ -7326,8 +7223,8 @@ msgid ""
 "Il a lieu à Toulouse à La Cité, cœur de l'innovation collaborative et "
 "durable, avec la collaboration des réseaux Tiers-Lieux/Makers comme la "
 "Rosée, le RFFLabs, l'Association Nationale des Tiers-Lieux et avec le "
-"soutien de La Région Occitanie et de Toulouse Métropole. Plus que des acteur."
-"rice.s, c'est un commun qui appartient à toutes et à tous."
+"soutien de La Région Occitanie et de Toulouse Métropole. Plus que des "
+"acteur.rice.s, c'est un commun qui appartient à toutes et à tous."
 msgstr ""
 
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:262
@@ -7336,9 +7233,9 @@ msgstr ""
 
 #: BaseBillet/templates/faire_festival/views/infos_pratiques.html:266
 msgid ""
-"Littéralement, tout le monde. La Fabrication, le Faire Ensemble, Les Espaces "
-"du Faire sont partout et touchent tout le monde. Ce Festival de 3 jours est "
-"à la fois un salon professionnel pour ceux.celles qui ont fait de la "
+"Littéralement, tout le monde. La Fabrication, le Faire Ensemble, Les Espaces"
+" du Faire sont partout et touchent tout le monde. Ce Festival de 3 jours est"
+" à la fois un salon professionnel pour ceux.celles qui ont fait de la "
 "fabrication leurs métiers (jeudi, vendredi) et à la fois un moment de "
 "partage pour le grand public pour découvrir, expérimenter et presque tout "
 "fabriquer (samedi)."
@@ -7418,7 +7315,8 @@ msgstr "Aucune adhésion disponible"
 msgid ""
 "There are currently no subscription products available. Please check back "
 "later."
-msgstr "Aucun produit d'adhésion disponible pour le moment. Revenez plus tard."
+msgstr ""
+"Aucun produit d'adhésion disponible pour le moment. Revenez plus tard."
 
 #: BaseBillet/templates/faire_festival/views/membership/list.html:187
 msgid "View events"
@@ -7531,6 +7429,10 @@ msgid ""
 "deleted, and you will keep your tokens and memberships. You can request and "
 "scan a new blank card at the front desk of your favorite venue :)"
 msgstr ""
+"Si vous avez perdu votre carte, veuillez le signaler. Votre compte ne sera "
+"pas supprimé et vous conserverez vos tokens et adhésions. Vous pouvez "
+"demander et scanner une nouvelle carte vierge à l'accueil de votre lieu "
+"favori."
 
 #: BaseBillet/templates/htmx/views/my_account/cards.html:21
 msgid "I LOST MY CARD NUMBER"
@@ -7700,7 +7602,8 @@ msgstr "Combien font"
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:133
 msgid "Please answer this simple question to prove you are human."
 msgstr ""
-"Veuillez répondre à cette question pour prouver que vous êtes un être humain."
+"Veuillez répondre à cette question pour prouver que vous êtes un être "
+"humain."
 
 #: BaseBillet/templates/reunion/forms/contact.html:31
 msgid "Send"
@@ -7724,7 +7627,8 @@ msgstr "Adresse mail"
 
 #: BaseBillet/templates/reunion/forms/login.html:9
 msgid "No need for a password, a login link will be sent by email."
-msgstr "Pas besoin de mot de passe, un lien de connexion sera envoyé par mail."
+msgstr ""
+"Pas besoin de mot de passe, un lien de connexion sera envoyé par mail."
 
 #: BaseBillet/templates/reunion/forms/login.html:10
 msgid "Request login"
@@ -7898,8 +7802,8 @@ msgstr "Initier un paiement"
 
 #: BaseBillet/templates/reunion/views/account/balance.html:30
 msgid ""
-"Here I can review my currencies, access my transaction history and see which "
-"currencies are accepted by this collective."
+"Here I can review my currencies, access my transaction history and see which"
+" currencies are accepted by this collective."
 msgstr ""
 "Ici je peux voir mes monnaies, accéder à mon historique de transactions et "
 "voir quelles monnaies sont acceptées par ce collectif."
@@ -7915,11 +7819,13 @@ msgstr "Pas de panique ! Il vous reste du temps…"
 
 #: BaseBillet/templates/reunion/views/account/balance.html:49
 msgid ""
-"TiBillet works on a <a href=\"https://tibillet.org/docs/presentation/"
-"philosophy/\">melting funds</a> principle."
+"TiBillet works on a <a "
+"href=\"https://tibillet.org/docs/presentation/philosophy/\">melting "
+"funds</a> principle."
 msgstr ""
-"TiBillet fonctionne sur un principe de <a href=\"https://tibillet.org/fr/"
-"docs/presentation/philosophie/\"> monnaie fondante</a>"
+"TiBillet fonctionne sur un principe de <a "
+"href=\"https://tibillet.org/fr/docs/presentation/philosophie/\"> monnaie "
+"fondante</a>"
 
 #: BaseBillet/templates/reunion/views/account/balance.html:50
 msgid ""
@@ -7938,8 +7844,8 @@ msgid ""
 "You will also soon be able to donate the leftover balance to the collective "
 "that issued this card."
 msgstr ""
-"Vous pourrez aussi bientôt faire don de votre solde restant au collectif qui "
-"vous a fourni votre carte."
+"Vous pourrez aussi bientôt faire don de votre solde restant au collectif qui"
+" vous a fourni votre carte."
 
 #: BaseBillet/templates/reunion/views/account/balance.html:57
 msgid ""
@@ -8013,8 +7919,8 @@ msgstr "Ma carte TiBillet"
 #: BaseBillet/templates/reunion/views/account/card.html:13
 msgid "Here I can find my Pass card information and signal a lost card."
 msgstr ""
-"Ici je peux voir les informations de ma carte TiBillet et signaler une carte "
-"perdue."
+"Ici je peux voir les informations de ma carte TiBillet et signaler une carte"
+" perdue."
 
 #: BaseBillet/templates/reunion/views/account/card.html:17
 msgid "Loading Pass card info"
@@ -8094,7 +8000,7 @@ msgstr "Thème sombre"
 #: BaseBillet/templates/reunion/views/account/preferences.html:27
 #: BaseBillet/templates/reunion/views/account/preferences.html:37
 msgid "This setting is synced with the button in the navigation bar."
-msgstr ""
+msgstr "Ce réglage est synchronisé avec le bouton de la barre de navigation."
 
 #: BaseBillet/templates/reunion/views/account/preferences.html:40
 msgid "Data"
@@ -8121,8 +8027,8 @@ msgid ""
 "Here I can list my bookings, detail ticket information and display tickets "
 "for scanning."
 msgstr ""
-"Ici je peux lister mes réservations, lire les informations détaillées de mes "
-"billets et les afficher pour le scan."
+"Ici je peux lister mes réservations, lire les informations détaillées de mes"
+" billets et les afficher pour le scan."
 
 #: BaseBillet/templates/reunion/views/account/reservations.html:65
 msgid "Event page"
@@ -8278,8 +8184,8 @@ msgstr ""
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:77
 msgid "Your email is not confirmed. Please check your spam folder :)"
 msgstr ""
-"Votre adresse mail n'est pas confirmée. Merci de vérifier votre dossier "
-"spam :)"
+"Votre adresse mail n'est pas confirmée. Merci de vérifier votre dossier spam"
+" :)"
 
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:88
 msgid "at an open price"
@@ -8469,7 +8375,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:87
 msgid "Date et heure de début"
-msgstr ""
+msgstr "Date et heure de début"
 
 #: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:95
 msgid "Date et heure de fin (optionnel)"
@@ -8546,8 +8452,8 @@ msgid ""
 "condition that makes you uneasy."
 msgstr ""
 "Le collectif n'est ni votre patron·ne, ni votre ami·e ! Pour le confort de "
-"toustes, proposez-vous seulement sur des postes qui vous plaisent d'assurer, "
-"et n'hésitez pas à refuser des conditions qui vous déplaisent."
+"toustes, proposez-vous seulement sur des postes qui vous plaisent d'assurer,"
+" et n'hésitez pas à refuser des conditions qui vous déplaisent."
 
 #: BaseBillet/templates/reunion/views/event/partial/volunteers.html:60
 msgid ""
@@ -8573,8 +8479,8 @@ msgid ""
 "Your reservation is blocked for 15 minutes. After this time, places will be "
 "made available again."
 msgstr ""
-"Votre réservation est bloquée pendant 15 minutes. Passé ce délai, les places "
-"seront de nouveau remise à disposition."
+"Votre réservation est bloquée pendant 15 minutes. Passé ce délai, les places"
+" seront de nouveau remise à disposition."
 
 #: BaseBillet/templates/reunion/views/event/reservation_ok.html:14
 msgid "Don't forget to check the spam folder!"
@@ -8678,7 +8584,8 @@ msgid "Adhésion déjà active"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/already_has_membership.html:9
-msgid "Vous possédez déjà une adhésion ou un abonnement actif pour ce produit."
+msgid ""
+"Vous possédez déjà une adhésion ou un abonnement actif pour ce produit."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/already_has_membership.html:30
@@ -8808,8 +8715,8 @@ msgstr "Les adresses e-mail ne correspondent pas."
 
 #: BaseBillet/templates/reunion/views/membership/form.html:265
 msgid ""
-"You have not confirmed your email address. Please check your inbox (and just "
-"in case, your spam folder!)."
+"You have not confirmed your email address. Please check your inbox (and just"
+" in case, your spam folder!)."
 msgstr ""
 "Vous n'avez pas confirmé votre adresse mail. Merci de vérifier votre boîte "
 "de réception (et au cas où, votre dossier spam !)."
@@ -8879,11 +8786,11 @@ msgstr "Votre paiement a déjà été enregistré et est en cours de traitement.
 
 #: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:39
 msgid ""
-"Le prelevement bancaire (SEPA) peut prendre jusqu'a 14 jours ouvrables. Vous "
-"recevrez un email de confirmation des que le paiement sera valide."
+"Le prelevement bancaire (SEPA) peut prendre jusqu'a 14 jours ouvrables. Vous"
+" recevrez un email de confirmation des que le paiement sera valide."
 msgstr ""
-"Le prélèvement bancaire (SEPA) peut prendre jusqu'à 14 jours ouvrables. Vous "
-"recevrez un email de confirmation dès que le paiement sera validé."
+"Le prélèvement bancaire (SEPA) peut prendre jusqu'à 14 jours ouvrables. Vous"
+" recevrez un email de confirmation dès que le paiement sera validé."
 
 #: BaseBillet/templates/reunion/views/membership/payment_already_pending.html:46
 msgid "Recapitulatif"
@@ -8912,8 +8819,8 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:8
 msgid ""
-"Votre demande d'adhésion a bien été enregistrée et est maintenant en attente "
-"de validation par un administrateur."
+"Votre demande d'adhésion a bien été enregistrée et est maintenant en attente"
+" de validation par un administrateur."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/membership/pending_manual_validation.html:46
@@ -9161,17 +9068,13 @@ msgstr "Liaison de ma carte TiBillet"
 #: BaseBillet/templates/reunion/views/register.html:12
 msgid ""
 "\n"
-"                            In order to use my Lèspass account, refill my "
-"card and as a way\n"
-"                            to recover my credits if I lose my card, I need "
-"to link my TiBillet card\n"
+"                            In order to use my Lèspass account, refill my card and as a way\n"
+"                            to recover my credits if I lose my card, I need to link my TiBillet card\n"
 "                            to an email address.\n"
 "                        "
 msgstr ""
 "\n"
-"Pour utiliser mon compte Lèspass, recharger ma carte en ligne et pour "
-"pouvoir récupérer ma tirelire si je perds ma carte, je lie ma carte TiBillet "
-"à une adresse mail."
+"Pour utiliser mon compte Lèspass, recharger ma carte en ligne et pour pouvoir récupérer ma tirelire si je perds ma carte, je lie ma carte TiBillet à une adresse mail."
 
 #: BaseBillet/templates/reunion/views/register.html:54
 msgid "Registering your name is required by this collective."
@@ -9185,13 +9088,11 @@ msgstr "Je veux recevoir la newsletter TiBillet"
 msgid ""
 "\n"
 "                                    I agree to\n"
-"                                    <a href=\"https://tibillet.org/cgucgv/\" "
-"target=\"_blank\">the terms and conditions</a>\n"
+"                                    <a href=\"https://tibillet.org/cgucgv/\" target=\"_blank\">the terms and conditions</a>\n"
 "                                "
 msgstr ""
 "\n"
-"J'accepte <a href=\"https://tibillet.org/cgucgv/\" target=\"_blank\">les "
-"cgu / cgv</a>"
+"J'accepte <a href=\"https://tibillet.org/cgucgv/\" target=\"_blank\">les cgu / cgv</a>"
 
 #: BaseBillet/templates/reunion/views/register.html:79
 msgid "Register"
@@ -9202,8 +9103,8 @@ msgid ""
 "You do not seem to have completed your Stripe registration. Please contact "
 "us if you need help."
 msgstr ""
-"Vous ne semblez pas avoir terminé votre enregistrement Stripe. N'hésitez pas "
-"à nous contacter si vous avez besoin d'aide."
+"Vous ne semblez pas avoir terminé votre enregistrement Stripe. N'hésitez pas"
+" à nous contacter si vous avez besoin d'aide."
 
 #: BaseBillet/templates/reunion/views/tenant/after_onboard_stripe.html:10
 msgid "Your stripe account has been registered. Thank you very much!"
@@ -9225,8 +9126,8 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html:20
 msgid ""
-"Nous allons confirmer la création de votre instance manuellement. Comptez un "
-"ou deux jours ouvrable."
+"Nous allons confirmer la création de votre instance manuellement. Comptez un"
+" ou deux jours ouvrable."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html:29
@@ -9237,8 +9138,8 @@ msgstr ""
 msgid ""
 "En attendant que votre instance soit créée, pourquoi ne pas venir faire "
 "connaissance avec notre communauté de passionnés ? Venez nous dire ce que "
-"vous souhaitez faire avec TiBillet, nous adorons papoter, échanger des idées "
-"et répondre à vos questions !"
+"vous souhaitez faire avec TiBillet, nous adorons papoter, échanger des idées"
+" et répondre à vos questions !"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/create_waiting_configuration_MAIL_CONFIRMED.html:36
@@ -9288,42 +9189,34 @@ msgstr ""
 "    </div>\n"
 "    <div>\n"
 "    <p>\n"
-"        Vous voulez créer une nouvelle instance Lèspass pour passer votre "
-"collectif <strong>%(orga_name)s</strong> à TiBillet, merci !    </p>\n"
+"        Vous voulez créer une nouvelle instance Lèspass pour passer votre collectif <strong>%(orga_name)s</strong> à TiBillet, merci !    </p>\n"
 
 #: BaseBillet/templates/reunion/views/tenant/emails/onboard_stripe.html:13
 msgid ""
 "\n"
 "    <p>\n"
-"        If you'd like to raise money through ticketing, memberships or "
-"donations, we need you to create a stripe\n"
+"        If you'd like to raise money through ticketing, memberships or donations, we need you to create a stripe\n"
 "        account. (so we can transfer the money from your sales ☺️).\n"
 "    </p>\n"
 "    <p>\n"
-"        If you only wish to create free events, you can activate your stripe "
-"account later.\n"
+"        If you only wish to create free events, you can activate your stripe account later.\n"
 "    </p>\n"
 msgstr ""
 "\n"
 "    <p>\n"
-"        Si vous souhaitez collecter des fonds par le biais de la "
-"billetterie, des adhésions ou des dons, vous devez créer un compte Stripe "
-"(pour que nous puissions transférer l'argent de vos ventes ☺️).\n"
+"        Si vous souhaitez collecter des fonds par le biais de la billetterie, des adhésions ou des dons, vous devez créer un compte Stripe (pour que nous puissions transférer l'argent de vos ventes ☺️).\n"
 "    </p>\n"
 "    <p>\n"
-"        Si vous ne souhaitez créer que des événements gratuits, vous pourrez "
-"activer votre compte stripe ultérieurement.\n"
+"        Si vous ne souhaitez créer que des événements gratuits, vous pourrez activer votre compte stripe ultérieurement.\n"
 "    </p>\n"
 
 #: BaseBillet/templates/reunion/views/tenant/emails/onboard_stripe.html:23
 msgid ""
 "\n"
-"    <p>We'll look into your request. You should receive a confirmation e-"
-"mail shortly.</p>\n"
+"    <p>We'll look into your request. You should receive a confirmation e-mail shortly.</p>\n"
 msgstr ""
 "\n"
-"<p>Nous allons étudier votre demande. Vous devriez recevoir un mail de "
-"confirmation bientôt.</p>\n"
+"<p>Nous allons étudier votre demande. Vous devriez recevoir un mail de confirmation bientôt.</p>\n"
 
 #: BaseBillet/templates/reunion/views/tenant/emails/onboard_stripe.html:27
 #, python-format
@@ -9331,12 +9224,9 @@ msgid ""
 "\n"
 "    <p>\n"
 "        Until then, you can get in touch through our\n"
-"        <a href=\"mailto:contact@tibillet.re\">support email</a> or with "
-"our\n"
-"        community hubs on <a href=\"https://discord.gg/7FJvtYx\">Discord</"
-"a>,\n"
-"        <a href=\"https://matrix.to/#/#tibillet:tiers-lieux.org\">Matrix</a> "
-"or\n"
+"        <a href=\"mailto:contact@tibillet.re\">support email</a> or with our\n"
+"        community hubs on <a href=\"https://discord.gg/7FJvtYx\">Discord</a>,\n"
+"        <a href=\"https://matrix.to/#/#tibillet:tiers-lieux.org\">Matrix</a> or\n"
 "        <a href=\"https://pouet.chapril.org/@tibillet\">Mastodon</a>.\n"
 "    </p>\n"
 "    <p>We hope you enjoy your time with us!</p>\n"
@@ -9349,10 +9239,8 @@ msgstr ""
 "\n"
 "    <p>\n"
 "        D'ici-là, vous pouvez nous contacter en passant par\n"
-"        <a href=\"mailto:contact@tibillet.re\">notre mail de support</a> ou "
-"sur <a  href=\"https://discord.gg/7FJvtYx\">Discord</a>,\n"
-"        <a href=\"https://matrix.to/#/#tibillet:tiers-lieux.org\">Matrix</a> "
-"ou\n"
+"        <a href=\"mailto:contact@tibillet.re\">notre mail de support</a> ou sur <a  href=\"https://discord.gg/7FJvtYx\">Discord</a>,\n"
+"        <a href=\"https://matrix.to/#/#tibillet:tiers-lieux.org\">Matrix</a> ou\n"
 "        <a href=\"https://pouet.chapril.org/@tibillet\">Mastodon</a>.\n"
 "    </p>\n"
 "    <p>Nour espérons que vous apprécierez TiBillet autant que nous !</p>\n"
@@ -9408,7 +9296,7 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/emails/welcome_email.html:63
 msgid "Email de support"
-msgstr ""
+msgstr "Email de support"
 
 #: BaseBillet/templates/reunion/views/tenant/emails/welcome_email.html:78
 msgid "Voici ce que vous pouvez faire avec TiBillet :"
@@ -9436,8 +9324,8 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/emails/welcome_email.html:91
 msgid ""
-"Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système "
-"de paiement sans espèces pour vos événements, avec des cartes d'adhésions "
+"Utilisez une caisse enregistreuse (bientôt) certifiée et proposez un système"
+" de paiement sans espèces pour vos événements, avec des cartes d'adhésions "
 "rechargeables en monnaie temps pour valoriser l'engagement bénévole."
 msgstr ""
 
@@ -9468,8 +9356,8 @@ msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/emails/welcome_email.html:125
 msgid ""
-"L'équipe de la Coopérative Code Commun : Axel, Adrienne, Nicolas, Kaya, Mike "
-"et Jonas."
+"L'équipe de la Coopérative Code Commun : Axel, Adrienne, Nicolas, Kaya, Mike"
+" et Jonas."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:12
@@ -9498,8 +9386,7 @@ msgstr "Nom de votre collectif"
 msgid ""
 "\n"
 "                                I agree to\n"
-"                                <a href=\"https://tibillet.org/cgucgv/\" "
-"target=\"_blank\">\n"
+"                                <a href=\"https://tibillet.org/cgucgv/\" target=\"_blank\">\n"
 "                                    the terms and conditions\n"
 "                                </a>\n"
 "                            "
@@ -9612,7 +9499,8 @@ msgstr "Aucun produit."
 
 #: BaseBillet/validators.py:547
 msgid "The promotional code is not valid for the selected products."
-msgstr "Le code promotionnel n'est pas valable pour les produits sélectionnés."
+msgstr ""
+"Le code promotionnel n'est pas valable pour les produits sélectionnés."
 
 #: BaseBillet/validators.py:557
 msgid "Maximum capacity reached for this product."
@@ -9680,7 +9568,8 @@ msgstr ""
 #: BaseBillet/validators.py:1079
 msgid ""
 "Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à "
-"la personne propriétaire de la lier en flashant le qrcode au dos de la carte."
+"la personne propriétaire de la lier en flashant le qrcode au dos de la "
+"carte."
 msgstr ""
 
 #: BaseBillet/validators.py:1090
@@ -9706,17 +9595,14 @@ msgstr ""
 
 #: BaseBillet/views.py:229
 msgid "Payment confirmed. Tickets are being generated and sent to your email."
-msgstr "Paiement confirmé. Les billets vont être envoyés à votre adresse mail."
+msgstr ""
+"Paiement confirmé. Les billets vont être envoyés à votre adresse mail."
 
 #: BaseBillet/views.py:234
 msgid "Payment rejected."
 msgstr "Paiement rejeté."
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:242 BaseBillet/views.py:287 BaseBillet/views.py:2182
-=======
 #: BaseBillet/views.py:241 BaseBillet/views.py:286 BaseBillet/views.py:2171
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Payment confirmed. Tickets sent to your email. You can also view your "
 "tickets through \"My account > Bookings\"."
@@ -9746,11 +9632,7 @@ msgstr ""
 "Pour accéder à votre espace, merci de valider votre adresse mail. Pensez à "
 "vérifier les spams !"
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:521
-=======
 #: BaseBillet/views.py:510
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "You seem to already have a TiBillet card linked to your wallet. Please "
 "revoke it first in your profile area to link a new one."
@@ -9816,11 +9698,7 @@ msgstr "Impossible de rediriger vers la page de login"
 msgid "Unable to prepare redirection"
 msgstr "Impossible de rediriger"
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:749
-=======
 #: BaseBillet/views.py:738
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
@@ -9836,20 +9714,6 @@ msgid "An error occurred while cancelling your reservation."
 msgstr ""
 "Une erreur s'est produite pendant l'annulation de votre réservation, merci "
 "de contacter un·e administrateur·ice."
-<<<<<<< HEAD
-
-#: BaseBillet/views.py:847
-msgid "An error occurred while cancelling your ticket."
-msgstr ""
-"Une erreur s'est produite pendant l'annulation de votre réservation, merci "
-"de contacter un·e administrateur·ice."
-
-#: BaseBillet/views.py:858
-msgid "Mail sent, please check spam too!"
-msgstr "Mail envoyé, vérifiez également les spams !"
-
-#: BaseBillet/views.py:873 BaseBillet/views.py:891
-=======
 
 #: BaseBillet/views.py:836
 msgid "An error occurred while cancelling your ticket."
@@ -9862,13 +9726,12 @@ msgid "Mail sent, please check spam too!"
 msgstr "Mail envoyé, vérifiez également les spams !"
 
 #: BaseBillet/views.py:862 BaseBillet/views.py:880
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"Your wallet has been detached from this card. You can scan a new one to link "
-"it again."
+"Your wallet has been detached from this card. You can scan a new one to link"
+" it again."
 msgstr ""
-"Votre compte a été dissocié de cette carte. Vous pouvez scanner une nouvelle "
-"carte TiBillet et la lier à votre compte."
+"Votre compte a été dissocié de cette carte. Vous pouvez scanner une nouvelle"
+" carte TiBillet et la lier à votre compte."
 
 #: BaseBillet/views.py:865 BaseBillet/views.py:869 BaseBillet/views.py:883
 #: BaseBillet/views.py:887
@@ -9881,11 +9744,7 @@ msgstr ""
 msgid "User email not active"
 msgstr "Adresse mail inactive"
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:912
-=======
 #: BaseBillet/views.py:901
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "You do not have a federated wallet. Maybe you loaded money directly at a "
 "register?"
@@ -9903,17 +9762,13 @@ msgstr ""
 "Un remboursement a été réalisé sur la carte bancaire utilisée pour la "
 "recharge. Merci !"
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:943
-=======
 #: BaseBillet/views.py:932
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"Apologies, it seems you need to manually request a refund. You can go to one "
-"of the collective's register, or send ar email to: contact@tibillet.re ."
+"Apologies, it seems you need to manually request a refund. You can go to one"
+" of the collective's register, or send ar email to: contact@tibillet.re ."
 msgstr ""
-"Toutes nos excuses, vous allez devoir demander un remboursement manuel. Vous "
-"pouvez vous rendre à une des caisses du collectif, ou adresser un mail à : "
+"Toutes nos excuses, vous allez devoir demander un remboursement manuel. Vous"
+" pouvez vous rendre à une des caisses du collectif, ou adresser un mail à : "
 "contact@tibillet.re ."
 
 #: BaseBillet/views.py:1076
@@ -9986,7 +9841,8 @@ msgstr "Votre paiement est en attente de validation."
 
 #: BaseBillet/views.py:2177 BaseBillet/views.py:2797
 msgid "An error has occurred, please contact the administrator."
-msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
+msgstr ""
+"Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
 #: BaseBillet/views.py:2263
 msgid "Évènement créé !"
@@ -10012,23 +9868,15 @@ msgstr ""
 msgid "L'adhésion a été acceptée. Un email de paiement a été envoyé."
 msgstr ""
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:2800
-=======
 #: BaseBillet/views.py:2789
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
 "Your payment has been validated and is being processed. Thank you very much!"
 msgstr "Votre paiement a été validé et est en cours de traitement. Merci !"
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:2803
-=======
 #: BaseBillet/views.py:2792
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"Your subscription has been validated. You will receive a confirmation email. "
-"Thank you very much!"
+"Your subscription has been validated. You will receive a confirmation email."
+" Thank you very much!"
 msgstr ""
 "Votre adhésion a été validé. Vous allez recevoir un mail de confirmation. "
 "Merci !"
@@ -10079,21 +9927,21 @@ msgstr ""
 
 #: BaseBillet/views.py:3532
 msgid "An error occurred. Please try again."
-msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
+msgstr ""
+"Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
 #: BaseBillet/views.py:3614
 msgid "This space already exists. Redirecting you to it."
-msgstr ""
+msgstr "Cet espace existe déjà. Vous allez être redirigé·e."
 
-<<<<<<< HEAD
-#: BaseBillet/views.py:3631
-=======
 #: BaseBillet/views.py:3620
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 msgid ""
-"An error occurred while creating your space. It might be because the name is "
-"already taken or no free slot is available. Please contact us."
+"An error occurred while creating your space. It might be because the name is"
+" already taken or no free slot is available. Please contact us."
 msgstr ""
+"Une erreur est survenue lors de la création de votre espace. Le nom est "
+"peut-être déjà pris ou aucun emplacement n'est disponible. Veuillez nous "
+"contacter."
 
 #: BaseBillet/views.py:3634
 msgid "Invalid token. Please request a new confirmation email."
@@ -10288,7 +10136,8 @@ msgstr "Facteur de calibration (Hz par L/min) — 1 L = facteur × 60 impulsions
 msgid "Flow meter"
 msgstr "Débitmètre"
 
-#: controlvanne/models.py:133 controlvanne/models.py:330 laboutik/models.py:522
+#: controlvanne/models.py:133 controlvanne/models.py:330
+#: laboutik/models.py:522
 msgid "NFC card"
 msgstr "Carte NFC"
 
@@ -10446,15 +10295,15 @@ msgstr "Sessions de calibration"
 
 #: controlvanne/serializers.py:28
 msgid "UUID of the tap (optional, for association check)."
-msgstr ""
+msgstr "UUID de la tireuse (optionnel, pour vérification d'association)."
 
 #: controlvanne/serializers.py:39
 msgid "UUID of the tap where the card was scanned."
-msgstr ""
+msgstr "UUID de la tireuse où la carte a été scannée."
 
 #: controlvanne/serializers.py:43
 msgid "NFC card UID (hex string from the reader)."
-msgstr ""
+msgstr "UID de la carte NFC (chaîne hexadécimale du lecteur)."
 
 #: controlvanne/serializers.py:50
 msgid "Pour started"
@@ -10475,11 +10324,11 @@ msgstr "Carte retirée"
 
 #: controlvanne/serializers.py:67
 msgid "UUID of the tap."
-msgstr ""
+msgstr "UUID de la tireuse."
 
 #: controlvanne/serializers.py:71
 msgid "NFC card UID of the active session."
-msgstr ""
+msgstr "UID de la carte NFC de la session active."
 
 #: controlvanne/serializers.py:75
 msgid "Type of event."
@@ -10574,7 +10423,8 @@ msgid "Lien vers le code de contribution à valider à chaque participation"
 msgstr ""
 
 #: crowds/models.py:44
-msgid "Si vide : https://movilab.org/wiki/Coremuneration_et_budget_contributif"
+msgid ""
+"Si vide : https://movilab.org/wiki/Coremuneration_et_budget_contributif"
 msgstr ""
 
 #: crowds/models.py:46
@@ -10583,8 +10433,8 @@ msgstr ""
 
 #: crowds/models.py:48
 msgid ""
-"Si vide : Pro-bono. C'est le nom par defaut que vous pouvez changer ici. "
-"Ex : Bénévolat, Mécénat de compétence..."
+"Si vide : Pro-bono. C'est le nom par defaut que vous pouvez changer ici. Ex "
+": Bénévolat, Mécénat de compétence..."
 msgstr ""
 
 #: crowds/models.py:50
@@ -10619,7 +10469,7 @@ msgstr "Nom du projet ou de l'initiative contributrice."
 
 #: crowds/models.py:76
 msgid "Short description for the cards view and social card."
-msgstr ""
+msgstr "Description courte pour la vue en cartes et le partage social."
 
 #: crowds/models.py:78 discovery/models.py:49
 msgid "Created at"
@@ -10638,6 +10488,7 @@ msgstr ""
 #: crowds/models.py:82
 msgid "Archived initiatives are not displayed in the main page."
 msgstr ""
+"Les initiatives archivées ne sont pas affichées sur la page principale."
 
 #: crowds/models.py:84
 msgid "Activer les votes"
@@ -10654,8 +10505,8 @@ msgstr ""
 #: crowds/models.py:88
 msgid ""
 "Permettez a votre communauté de proposer des actions qui s'inscrivent dans "
-"un budget contributif : https://movilab.org/wiki/"
-"Coremuneration_et_budget_contributif"
+"un budget contributif : "
+"https://movilab.org/wiki/Coremuneration_et_budget_contributif"
 msgstr ""
 
 #: crowds/models.py:90
@@ -10672,8 +10523,8 @@ msgstr ""
 #: crowds/models.py:108
 msgid ""
 "C'est le nom par defaut que vous pouvez changer ici uniquement pour cet "
-"initiative. Vous pouvez aussi le changer celui par default pour tous dans la "
-"configuration."
+"initiative. Vous pouvez aussi le changer celui par default pour tous dans la"
+" configuration."
 msgstr ""
 
 #: crowds/models.py:113
@@ -10685,8 +10536,8 @@ msgstr ""
 
 #: crowds/models.py:126
 msgid ""
-"Changez la valeur de la contribution : Comptez en €, monnaie locale, monnaie "
-"temps, bonbons ?"
+"Changez la valeur de la contribution : Comptez en €, monnaie locale, monnaie"
+" temps, bonbons ?"
 msgstr ""
 
 #: crowds/models.py:127
@@ -10695,8 +10546,8 @@ msgstr ""
 
 #: crowds/models.py:128
 msgid ""
-"Réclamer le paiement de la contribution financière en ligne. Cela redirigera "
-"la personne sur Stripe pour un paiement."
+"Réclamer le paiement de la contribution financière en ligne. Cela redirigera"
+" la personne sur Stripe pour un paiement."
 msgstr ""
 
 #: crowds/models.py:144
@@ -10705,8 +10556,8 @@ msgid ""
 "social shares. If empty, the config image is displayed."
 msgstr ""
 "Image principale de l'initiative, affichée en haut de la page et pour les "
-"partages sur les réseaux sociaux. Si elle est vide, l'image de configuration "
-"s'affiche."
+"partages sur les réseaux sociaux. Si elle est vide, l'image de configuration"
+" s'affiche."
 
 #: crowds/models.py:307
 msgid "Qui porte"
@@ -10823,8 +10674,8 @@ msgstr ""
 
 #: crowds/tasks.py:172
 msgid ""
-"Vous avez contribué au projet ci-dessous. Votre contribution aide à le faire "
-"avancer."
+"Vous avez contribué au projet ci-dessous. Votre contribution aide à le faire"
+" avancer."
 msgstr ""
 
 #: crowds/tasks.py:181
@@ -10916,8 +10767,7 @@ msgstr ""
 #, python-format
 msgid ""
 "\n"
-"                        Avancement du financement : %(percent)s pour cent "
-"sur un objectif de %(goal)s %(currency)s\n"
+"                        Avancement du financement : %(percent)s pour cent sur un objectif de %(goal)s %(currency)s\n"
 "                        .\n"
 "                    "
 msgstr ""
@@ -10930,8 +10780,7 @@ msgstr ""
 #, python-format
 msgid ""
 "\n"
-"                        Budget contributif : %(requested)s %(currency)s soit "
-"%(percent)s pour cent du financé.\n"
+"                        Budget contributif : %(requested)s %(currency)s soit %(percent)s pour cent du financé.\n"
 "                    "
 msgstr ""
 
@@ -11046,8 +10895,7 @@ msgstr ""
 #, python-format
 msgid ""
 "\n"
-"                            Il reste <strong>%(amount)s %(currency)s</"
-"strong> financés qui n'ont pas encore été attribués à des participations.\n"
+"                            Il reste <strong>%(amount)s %(currency)s</strong> financés qui n'ont pas encore été attribués à des participations.\n"
 "                        "
 msgstr ""
 
@@ -11073,7 +10921,7 @@ msgstr ""
 
 #: crowds/templates/crowds/partial/summary.html:165
 msgid "Objectif total"
-msgstr ""
+msgstr "Objectif total"
 
 #: crowds/templates/crowds/partial/summary.html:174
 #: crowds/templates/crowds/partial/summary.html:280
@@ -11234,7 +11082,7 @@ msgstr ""
 
 #: crowds/templates/crowds/views/detail.html:180
 msgid "Total à financer"
-msgstr ""
+msgstr "Total à financer"
 
 #: crowds/templates/crowds/views/detail.html:195
 #: crowds/templates/crowds/views/detail.html:197
@@ -11437,10 +11285,11 @@ msgstr ""
 #, python-format
 msgid ""
 "\n"
-"        Votre contribution de <strong>%(amount)s €</strong> a bien été "
-"enregistrée pour le projet <strong>%(name)s</strong>.\n"
+"        Votre contribution de <strong>%(amount)s €</strong> a bien été enregistrée pour le projet <strong>%(name)s</strong>.\n"
 "        "
 msgstr ""
+"Votre contribution de <strong>%(amount)s €</strong> a bien été enregistrée "
+"pour le projet <strong>%(name)s</strong>."
 
 #: crowds/templates/success.html:15
 msgid "Retour aux projets"
@@ -11481,11 +11330,13 @@ msgstr ""
 
 #: discovery/admin.py:39
 msgid "PIN already used"
-msgstr ""
+msgstr "Code PIN déjà utilisé"
 
 #: discovery/admin.py:48
 msgid "Save to generate a PIN code. (Use 'Save and continue editing')"
 msgstr ""
+"Enregistrez pour générer un code PIN. (Utilisez « Enregistrer et continuer "
+"les modifications »)"
 
 #: discovery/admin.py:50 discovery/admin.py:59 discovery/models.py:43
 msgid "PIN code"
@@ -11501,7 +11352,7 @@ msgstr "Nom de l'appareil"
 
 #: discovery/models.py:29
 msgid "Name of the device to pair, e.g. 'Cash register 1'"
-msgstr ""
+msgstr "Nom de l'appareil à associer, ex. « Caisse 1 »"
 
 #: discovery/models.py:44
 msgid "6-digit pairing code, cleared after claim"
@@ -11525,11 +11376,11 @@ msgstr ""
 
 #: discovery/serializers.py:23
 msgid "PIN must contain only digits."
-msgstr ""
+msgstr "Le code PIN ne doit contenir que des chiffres."
 
 #: discovery/serializers.py:39
 msgid "Invalid or already used PIN code."
-msgstr ""
+msgstr "Code PIN invalide ou déjà utilisé."
 
 #: fedow_connect/models.py:27
 msgid "Dernière modification des informations de l'asset"
@@ -11578,7 +11429,8 @@ msgstr ""
 msgid "Fiduciaire fédérée"
 msgstr ""
 
-#: fedow_connect/models.py:66 fedow_core/models.py:94 fedow_public/models.py:37
+#: fedow_connect/models.py:66 fedow_core/models.py:94
+#: fedow_public/models.py:37
 msgid "Monnaie temps"
 msgstr ""
 
@@ -11674,8 +11526,8 @@ msgstr ""
 #: fedow_core/exceptions.py:29
 #, python-format
 msgid ""
-"Solde insuffisant pour '%(asset_name)s' : solde=%(solde)s centimes, demande="
-"%(demande)s centimes."
+"Solde insuffisant pour '%(asset_name)s' : solde=%(solde)s centimes, "
+"demande=%(demande)s centimes."
 msgstr ""
 
 #: fedow_core/models.py:76
@@ -11745,8 +11597,8 @@ msgstr ""
 
 #: fedow_core/models.py:195
 msgid ""
-"Lieux invites a partager cet asset. Ils verront l'invitation dans leur admin "
-"et pourront accepter."
+"Lieux invites a partager cet asset. Ils verront l'invitation dans leur admin"
+" et pourront accepter."
 msgstr ""
 
 #: fedow_core/models.py:208
@@ -11863,7 +11715,7 @@ msgstr ""
 
 #: fedow_core/models.py:533
 msgid "Date et heure"
-msgstr ""
+msgstr "Date et heure"
 
 #: fedow_core/models.py:542
 msgid "Commentaire"
@@ -11937,8 +11789,8 @@ msgstr ""
 #: fedow_public/models.py:52
 msgid ""
 "Invitez une organisation à partager cet actif, il recevra un mail de "
-"confirmation. Une fois validé, l'actif disparaitra de cette liste pour aller "
-"dans celle ci dessous"
+"confirmation. Une fois validé, l'actif disparaitra de cette liste pour aller"
+" dans celle ci dessous"
 msgstr ""
 
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:34
@@ -12305,7 +12157,7 @@ msgstr ""
 msgid ""
 "Taille de la police des noms d'articles sur l'interface caisse. / Font size "
 "for article names on the POS interface."
-msgstr ""
+msgstr "Taille de la police des noms d'articles sur l'interface caisse."
 
 #: laboutik/models.py:60
 msgid "Sunmi App ID (encrypted)"
@@ -12346,17 +12198,17 @@ msgstr "Fonds de caisse (centimes)"
 msgid ""
 "Montant initial du tiroir-caisse en centimes. / Initial cash drawer amount "
 "in cents."
-msgstr ""
+msgstr "Montant initial du tiroir-caisse en centimes."
 
 #: laboutik/models.py:102
 msgid "Report email recipients"
-msgstr ""
+msgstr "Destinataires des rapports par email"
 
 #: laboutik/models.py:104
 msgid ""
 "Liste d'adresses email pour l'envoi automatique des rapports. / List of "
 "email addresses for automatic report sending."
-msgstr ""
+msgstr "Liste d'adresses email pour l'envoi automatique des rapports."
 
 #: laboutik/models.py:109 laboutik/models.py:930
 msgid "Daily"
@@ -12392,7 +12244,7 @@ msgstr "Texte de pied de reçu"
 msgid ""
 "Texte libre imprime en bas de chaque ticket de vente. / Custom text printed "
 "at the bottom of every receipt."
-msgstr ""
+msgstr "Texte libre imprimé en bas de chaque ticket de vente."
 
 #: laboutik/models.py:136 laboutik/models.py:961
 msgid "Perpetual total (cents)"
@@ -12404,6 +12256,8 @@ msgid ""
 "jamais etre remis a zero. / Cumulative total of all closures since first "
 "use. Must never be reset to zero."
 msgstr ""
+"Total cumulé de toutes les clôtures depuis la mise en service. Ne doit "
+"jamais être remis à zéro."
 
 #: laboutik/models.py:150
 msgid "Receipt counter"
@@ -12411,8 +12265,8 @@ msgstr "Compteur de reçu"
 
 #: laboutik/models.py:152
 msgid ""
-"Compteur sequentiel de tickets de vente. Incremente automatiquement a chaque "
-"impression. / Sequential receipt counter. Auto-incremented on each print."
+"Compteur sequentiel de tickets de vente. Incremente automatiquement a chaque"
+" impression. / Sequential receipt counter. Auto-incremented on each print."
 msgstr ""
 
 #: laboutik/models.py:169
@@ -12421,10 +12275,12 @@ msgstr "Mode d'entraînement"
 
 #: laboutik/models.py:171
 msgid ""
-"Active le mode ecole. Les ventes sont marquees comme fictives et exclues des "
-"rapports de production. / Enables training mode. Sales are marked as "
+"Active le mode ecole. Les ventes sont marquees comme fictives et exclues des"
+" rapports de production. / Enables training mode. Sales are marked as "
 "fictitious and excluded from production reports."
 msgstr ""
+"Active le mode école. Les ventes sont marquées comme fictives et exclues des"
+" rapports de production."
 
 #: laboutik/models.py:246
 msgid "LaBoutik Configuration"
@@ -12452,6 +12308,9 @@ msgid ""
 "Sunmi tablet via WebSocket. Sunmi LAN: direct printing on local network "
 "(same subnet)."
 msgstr ""
+"Sunmi Cloud : imprimante distante via HTTPS. Sunmi Inner : imprimante "
+"intégrée à la tablette Sunmi via WebSocket. Sunmi LAN : impression directe "
+"sur le réseau local (même sous-réseau)."
 
 #: laboutik/models.py:309
 msgid "Dots per line"
@@ -12462,15 +12321,19 @@ msgid ""
 "Number of dots per line. 576 for 80mm NT31x (kitchen cloud), 384 for 58mm "
 "NT21x, 240 for 57mm."
 msgstr ""
+"Nombre de points par ligne. 576 pour 80mm NT31x (cuisine cloud), 384 pour "
+"58mm NT21x, 240 pour 57mm."
 
 #: laboutik/models.py:322
 msgid "Sunmi serial number"
-msgstr ""
+msgstr "Numéro de série Sunmi"
 
 #: laboutik/models.py:323
 msgid ""
 "Serial number (SN) of the Sunmi Cloud printer. Not needed for Sunmi Inner."
 msgstr ""
+"Numéro de série (SN) de l'imprimante Sunmi Cloud. Non requis pour Sunmi "
+"Inner."
 
 #: laboutik/models.py:332
 msgid "IP address"
@@ -12480,10 +12343,12 @@ msgstr "Adresse IP"
 msgid ""
 "IP address for LAN printing (same subnet). Not needed for Cloud or Inner."
 msgstr ""
+"Adresse IP pour l'impression LAN (même sous-réseau). Non requis pour Cloud "
+"ou Inner."
 
 #: laboutik/models.py:342
 msgid "Uncheck to disable printing on this printer."
-msgstr ""
+msgstr "Décocher pour désactiver l'impression sur cette imprimante."
 
 #: laboutik/models.py:350 laboutik/models.py:1088
 msgid "Printer"
@@ -12491,7 +12356,7 @@ msgstr ""
 
 #: laboutik/models.py:374
 msgid "Point of sale name. Must be unique."
-msgstr ""
+msgstr "Nom du point de vente. Doit être unique."
 
 #: laboutik/models.py:405
 msgid "Direct"
@@ -12515,6 +12380,10 @@ msgid ""
 "loads membership products. Cashless: auto-loads top-ups. Ticketing: builds "
 "from future events. Advanced: restaurant order mode."
 msgstr ""
+"Détermine le chargement des articles. Direct : M2M uniquement. Adhésions : "
+"charge les produits d'adhésion. Cashless : charge les recharges. Billetterie"
+" : construit depuis les évènements futurs. Avancé : mode commande "
+"restaurant."
 
 #: laboutik/models.py:427
 msgid "Direct service"
@@ -12523,6 +12392,7 @@ msgstr ""
 #: laboutik/models.py:428
 msgid "If checked, orders are served immediately (no table service)."
 msgstr ""
+"Si coché, les commandes sont servies immédiatement (pas de service à table)."
 
 #: laboutik/models.py:432
 msgid "Show prices"
@@ -12530,7 +12400,7 @@ msgstr "Afficher les prix"
 
 #: laboutik/models.py:433
 msgid "Display prices on the POS interface."
-msgstr ""
+msgstr "Afficher les prix sur l'interface caisse."
 
 #: laboutik/models.py:440
 msgid "Accepts cash"
@@ -12550,7 +12420,7 @@ msgstr "Accepte les commandes"
 
 #: laboutik/models.py:453
 msgid "Enable table order management for this point of sale."
-msgstr ""
+msgstr "Activer la gestion des commandes par table pour ce point de vente."
 
 #: laboutik/models.py:463
 msgid "Hidden"
@@ -12558,7 +12428,7 @@ msgstr ""
 
 #: laboutik/models.py:464
 msgid "Hide this point of sale from the selection screen."
-msgstr ""
+msgstr "Masquer ce point de vente de l'écran de sélection."
 
 #: laboutik/models.py:473
 msgid "Ticket printer"
@@ -12566,11 +12436,11 @@ msgstr "Imprimante de tickets"
 
 #: laboutik/models.py:474
 msgid "Printer used for sale tickets at this point of sale."
-msgstr ""
+msgstr "Imprimante utilisée pour les tickets de vente à ce point de vente."
 
 #: laboutik/models.py:483
 msgid "Products available at this point of sale."
-msgstr ""
+msgstr "Produits disponibles à ce point de vente."
 
 #: laboutik/models.py:488
 msgid "Categories"
@@ -12578,15 +12448,15 @@ msgstr "Catégories"
 
 #: laboutik/models.py:489
 msgid "Product categories available at this point of sale."
-msgstr ""
+msgstr "Catégories de produits disponibles à ce point de vente."
 
 #: laboutik/models.py:523
 msgid "Physical NFC card associated with this primary card."
-msgstr ""
+msgstr "Carte NFC physique associée à cette carte primaire."
 
 #: laboutik/models.py:531
 msgid "Points of sale this operator can access."
-msgstr ""
+msgstr "Points de vente auxquels cet opérateur a accès."
 
 #: laboutik/models.py:537
 msgid "Edit mode"
@@ -12596,6 +12466,8 @@ msgstr "Mode édition"
 msgid ""
 "Allow this operator to modify products and prices from the POS interface."
 msgstr ""
+"Autoriser cet opérateur à modifier les produits et prix depuis l'interface "
+"caisse."
 
 #: laboutik/models.py:549
 msgid "Primary card"
@@ -12615,7 +12487,7 @@ msgstr "Catégories de table"
 
 #: laboutik/models.py:596
 msgid "Table name or number (e.g. Table 1, Bar 3)."
-msgstr ""
+msgstr "Nom ou numéro de table (ex. Table 1, Bar 3)."
 
 #: laboutik/models.py:617
 msgid "Occupied"
@@ -12639,7 +12511,7 @@ msgstr ""
 
 #: laboutik/models.py:642
 msgid "Vertical position in pixels on the floor plan."
-msgstr ""
+msgstr "Position verticale en pixels sur le plan de salle."
 
 #: laboutik/models.py:646
 msgid "Left position"
@@ -12647,7 +12519,7 @@ msgstr ""
 
 #: laboutik/models.py:647
 msgid "Horizontal position in pixels on the floor plan."
-msgstr ""
+msgstr "Position horizontale en pixels sur le plan de salle."
 
 #: laboutik/models.py:655 laboutik/models.py:703
 msgid "Table"
@@ -12672,6 +12544,7 @@ msgstr "Caissier·ère ou serveur·euse qui a créé cette commande."
 #: laboutik/models.py:704
 msgid "Restaurant table for this order. Null for takeaway."
 msgstr ""
+"Table de restaurant pour cette commande. Nul pour la vente à emporter."
 
 #: laboutik/models.py:719
 msgid "Open"
@@ -12703,7 +12576,7 @@ msgstr "Restant à payer (centimes)"
 
 #: laboutik/models.py:789
 msgid "Remaining amount in cents. 0 = not yet billed."
-msgstr ""
+msgstr "Montant restant en centimes. 0 = pas encore facturé."
 
 #: laboutik/models.py:796
 msgid "Remaining to serve"
@@ -12715,7 +12588,7 @@ msgstr "En attente"
 
 #: laboutik/models.py:808
 msgid "In progress"
-msgstr ""
+msgstr "En cours"
 
 #: laboutik/models.py:809
 msgid "Ready"
@@ -12739,6 +12612,8 @@ msgid ""
 "cloture couvre tout le tenant. / POS from which closure was triggered "
 "(informational). Closure covers the entire tenant."
 msgstr ""
+"Point de vente depuis lequel la clôture a été déclenchée (informatif). La "
+"clôture couvre tout le tenant."
 
 #: laboutik/models.py:873
 msgid "Cashier who performed the closure."
@@ -12750,7 +12625,7 @@ msgstr "Début du service"
 
 #: laboutik/models.py:880
 msgid "Start of the service period covered by this closure."
-msgstr ""
+msgstr "Début de la période de service couverte par cette clôture."
 
 #: laboutik/models.py:887
 msgid "Closure datetime"
@@ -12758,15 +12633,15 @@ msgstr ""
 
 #: laboutik/models.py:888
 msgid "Moment of the closure. Set explicitly, not auto_now_add."
-msgstr ""
+msgstr "Moment de la clôture. Défini explicitement, pas auto_now_add."
 
 #: laboutik/models.py:895
 msgid "Cash total (cents)"
-msgstr ""
+msgstr "Total espèces (centimes)"
 
 #: laboutik/models.py:896
 msgid "Total cash amount in cents."
-msgstr ""
+msgstr "Montant total en espèces en centimes."
 
 #: laboutik/models.py:900
 msgid "Credit card total (cents)"
@@ -12774,23 +12649,23 @@ msgstr "Total par carte de crédit (centimes)"
 
 #: laboutik/models.py:901
 msgid "Total credit card amount in cents."
-msgstr ""
+msgstr "Montant total en carte bancaire en centimes."
 
 #: laboutik/models.py:905
 msgid "Cashless total (cents)"
-msgstr ""
+msgstr "Total cashless (centimes)"
 
 #: laboutik/models.py:906
 msgid "Total cashless/NFC amount in cents."
-msgstr ""
+msgstr "Montant total cashless/NFC en centimes."
 
 #: laboutik/models.py:910
 msgid "Grand total (cents)"
-msgstr ""
+msgstr "Total général (centimes)"
 
 #: laboutik/models.py:911
 msgid "Grand total in cents (cash + card + cashless)."
-msgstr ""
+msgstr "Total général en centimes (espèces + carte + cashless)."
 
 #: laboutik/models.py:916
 msgid "Transaction count"
@@ -12810,25 +12685,26 @@ msgstr "Niveau de fermeture"
 
 #: laboutik/models.py:939
 msgid ""
-"J = journaliere (caissier), M = mensuelle (auto), A = annuelle (auto). / J = "
-"daily (cashier), M = monthly (auto), A = annual (auto)."
+"J = journaliere (caissier), M = mensuelle (auto), A = annuelle (auto). / J ="
+" daily (cashier), M = monthly (auto), A = annual (auto)."
 msgstr ""
 
 #: laboutik/models.py:950
 msgid "Sequential number"
-msgstr ""
+msgstr "Numéro séquentiel"
 
 #: laboutik/models.py:952
 msgid ""
 "Numero sequentiel par niveau de cloture. Sans trou. Global au tenant. / "
 "Sequential number per closure level. No gap. Global to tenant."
-msgstr ""
+msgstr "Numéro séquentiel par niveau de clôture. Sans trou. Global au tenant."
 
 #: laboutik/models.py:963
 msgid ""
-"Total cumule depuis la mise en service, snapshot au moment de cette "
-"cloture. / Cumulative total since first use, snapshot at this closure time."
+"Total cumule depuis la mise en service, snapshot au moment de cette cloture."
+" / Cumulative total since first use, snapshot at this closure time."
 msgstr ""
+"Total cumulé depuis la mise en service, snapshot au moment de cette clôture."
 
 #: laboutik/models.py:972
 msgid "Lines integrity hash"
@@ -12870,6 +12746,8 @@ msgid ""
 "Ligne d'article concernee par cette impression. Null pour les clotures et "
 "billets. / Article line for this print. Null for closures and tickets."
 msgstr ""
+"Ligne d'article concernée par cette impression. Nul pour les clôtures et "
+"billets."
 
 #: laboutik/models.py:1045
 msgid "Transaction UUID"
@@ -12880,6 +12758,7 @@ msgid ""
 "Identifiant de transaction pour regrouper les lignes d'un meme ticket. / "
 "Transaction identifier to group lines of the same receipt."
 msgstr ""
+"Identifiant de transaction pour regrouper les lignes d'un même ticket."
 
 #: laboutik/models.py:1059
 msgid "Closure"
@@ -12891,6 +12770,8 @@ msgid ""
 "vente et billets. / Cash register closure for this print. Null for sale "
 "tickets and event tickets."
 msgstr ""
+"Clôture de caisse concernée par cette impression. Nul pour les tickets de "
+"vente et billets."
 
 #: laboutik/models.py:1076
 msgid ""
@@ -12904,6 +12785,8 @@ msgid ""
 "electroniques. / Physical printer used for this print. Null for electronic "
 "receipts."
 msgstr ""
+"Imprimante physique utilisée pour cette impression. Nul pour les émissions "
+"électroniques."
 
 #: laboutik/models.py:1111
 msgid "Sale receipt"
@@ -12925,7 +12808,7 @@ msgstr "Type de reçu"
 msgid ""
 "Type de justificatif imprime : VENTE, CLOT, COMM ou BILL. / Type of printed "
 "receipt: VENTE, CLOT, COMM or BILL."
-msgstr ""
+msgstr "Type de justificatif imprimé : VENTE, CLOT, COMM ou BILL."
 
 #: laboutik/models.py:1131
 msgid "Duplicate"
@@ -12933,9 +12816,9 @@ msgstr "Dupliquer"
 
 #: laboutik/models.py:1133
 msgid ""
-"Cocher si cette impression est un duplicata (re-impression). / Check if this "
-"print is a duplicate (re-print)."
-msgstr ""
+"Cocher si cette impression est un duplicata (re-impression). / Check if this"
+" print is a duplicate (re-print)."
+msgstr "Cocher si cette impression est un duplicata (ré-impression)."
 
 #: laboutik/models.py:1143
 msgid "Paper"
@@ -12951,9 +12834,9 @@ msgstr "Format d'émission"
 
 #: laboutik/models.py:1150
 msgid ""
-"P = papier (imprimante thermique), E = electronique (email/PDF). / P = paper "
-"(thermal printer), E = electronic (email/PDF)."
-msgstr ""
+"P = papier (imprimante thermique), E = electronique (email/PDF). / P = paper"
+" (thermal printer), E = electronic (email/PDF)."
+msgstr "P = papier (imprimante thermique), E = électronique (email/PDF)."
 
 #: laboutik/models.py:1161
 msgid "Print log"
@@ -12967,7 +12850,7 @@ msgstr "Journaux d'impression"
 msgid ""
 "Ligne d'article dont le moyen de paiement a ete corrige. / Article line "
 "whose payment method was corrected."
-msgstr ""
+msgstr "Ligne d'article dont le moyen de paiement a été corrigé."
 
 #: laboutik/models.py:1210
 msgid "Previous payment method"
@@ -12977,7 +12860,7 @@ msgstr "Mode de paiement précédent"
 msgid ""
 "Code du moyen de paiement avant correction (ex: CA, CC, CH). / Payment "
 "method code before correction."
-msgstr ""
+msgstr "Code du moyen de paiement avant correction (ex : CA, CC, CH)."
 
 #: laboutik/models.py:1221
 msgid "New payment method"
@@ -12987,7 +12870,7 @@ msgstr "Nouveau mode de paiement"
 msgid ""
 "Code du moyen de paiement apres correction. / Payment method code after "
 "correction."
-msgstr ""
+msgstr "Code du moyen de paiement après correction."
 
 #: laboutik/models.py:1231 laboutik/models.py:1544
 msgid "Reason"
@@ -13021,7 +12904,7 @@ msgstr "Corrections de paiement"
 msgid ""
 "Point de vente depuis lequel le retrait d'especes est effectue. / Point of "
 "sale from which cash is withdrawn."
-msgstr ""
+msgstr "Point de vente depuis lequel le retrait d'espèces est effectué."
 
 #: laboutik/models.py:1311
 msgid ""
@@ -13031,7 +12914,7 @@ msgstr ""
 
 #: laboutik/models.py:1320
 msgid "Withdrawal date"
-msgstr ""
+msgstr "Date de retrait"
 
 #: laboutik/models.py:1326
 msgid "Total amount (cents)"
@@ -13041,7 +12924,7 @@ msgstr "Montant total (centimes)"
 msgid ""
 "Montant total retire en centimes. Recalcule cote serveur. / Total withdrawn "
 "amount in cents. Recalculated server-side."
-msgstr ""
+msgstr "Montant total retiré en centimes. Recalculé côté serveur."
 
 #: laboutik/models.py:1340
 msgid "Denomination breakdown"
@@ -13061,7 +12944,7 @@ msgstr ""
 msgid ""
 "Note libre sur le retrait d'especes. / Optional note about the cash "
 "withdrawal."
-msgstr ""
+msgstr "Note libre sur le retrait d'espèces."
 
 #: laboutik/models.py:1364
 msgid "Cash withdrawal"
@@ -13093,7 +12976,7 @@ msgstr "Date de l'opération"
 msgid ""
 "Utilisateur qui a declenche l'operation technique. / User who triggered the "
 "technical operation."
-msgstr ""
+msgstr "Utilisateur qui a déclenché l'opération technique."
 
 #: laboutik/models.py:1436
 msgid "Details"
@@ -13122,13 +13005,13 @@ msgstr "Journaux des opérations"
 msgid ""
 "Point de vente dont le fond de caisse a ete modifie. / Point of sale whose "
 "cash float was modified."
-msgstr ""
+msgstr "Point de vente dont le fond de caisse a été modifié."
 
 #: laboutik/models.py:1508
 msgid ""
 "Utilisateur qui a modifie le fond de caisse. / User who modified the cash "
 "float."
-msgstr ""
+msgstr "Utilisateur qui a modifié le fond de caisse."
 
 #: laboutik/models.py:1517
 msgid "Modification date"
@@ -13142,7 +13025,7 @@ msgstr "Montant précédent (centimes)"
 msgid ""
 "Ancien montant du fond de caisse en centimes. / Previous cash float amount "
 "in cents."
-msgstr ""
+msgstr "Ancien montant du fond de caisse en centimes."
 
 #: laboutik/models.py:1533
 msgid "New amount (cents)"
@@ -13152,12 +13035,12 @@ msgstr "Nouveau montant (centimes)"
 msgid ""
 "Nouveau montant du fond de caisse en centimes. / New cash float amount in "
 "cents."
-msgstr ""
+msgstr "Nouveau montant du fond de caisse en centimes."
 
 #: laboutik/models.py:1546
 msgid ""
 "Raison du changement de fond de caisse. / Reason for the cash float change."
-msgstr ""
+msgstr "Raison du changement de fond de caisse."
 
 #: laboutik/models.py:1559
 msgid "Cash float histories"
@@ -13198,11 +13081,11 @@ msgstr "Numéro de compte"
 #: laboutik/models.py:1628
 msgid ""
 "Numero du compte PCG (ex: 7072000). / PCG account number (e.g. 7072000)."
-msgstr ""
+msgstr "Numéro du compte PCG (ex : 7072000)."
 
 #: laboutik/models.py:1637
 msgid "Account label"
-msgstr ""
+msgstr "Libellé du compte"
 
 #: laboutik/models.py:1639
 msgid ""
@@ -13212,7 +13095,7 @@ msgstr ""
 
 #: laboutik/models.py:1649
 msgid "Account nature"
-msgstr ""
+msgstr "Nature du compte"
 
 #: laboutik/models.py:1651
 msgid ""
@@ -13230,12 +13113,14 @@ msgid ""
 "pour les comptes VENTE et TVA. / VAT rate as percentage (e.g. 20.00, 10.00, "
 "5.50). Only fill for SALES and VAT accounts."
 msgstr ""
+"Taux de TVA en pourcentage (ex : 20.00, 10.00, 5.50). Renseigner uniquement "
+"pour les comptes VENTE et TVA."
 
 #: laboutik/models.py:1678
 msgid ""
 "Decocher pour desactiver le compte sans le supprimer. / Uncheck to "
 "deactivate the account without deleting it."
-msgstr ""
+msgstr "Décocher pour désactiver le compte sans le supprimer."
 
 #: laboutik/models.py:1736
 msgid "Payment method code"
@@ -13244,9 +13129,12 @@ msgstr "Code du moyen de paiement"
 #: laboutik/models.py:1738
 msgid ""
 "Code du moyen de paiement (ex: CA = especes, CC = carte bancaire, CH = "
-"cheque). Doit correspondre aux codes PaymentMethod. / Payment method code (e."
-"g. CA = cash, CC = credit card, CH = check). Must match PaymentMethod codes."
+"cheque). Doit correspondre aux codes PaymentMethod. / Payment method code "
+"(e.g. CA = cash, CC = credit card, CH = check). Must match PaymentMethod "
+"codes."
 msgstr ""
+"Code du moyen de paiement (ex : CA = espèces, CC = carte bancaire, CH = "
+"chèque). Doit correspondre aux codes PaymentMethod."
 
 #: laboutik/models.py:1749
 msgid "Payment method label"
@@ -13254,8 +13142,8 @@ msgstr "Libellé du moyen de paiement"
 
 #: laboutik/models.py:1751
 msgid ""
-"Libelle lisible (ex: Especes, Carte bancaire, Cheque). / Readable label (e."
-"g. Cash, Credit card, Check)."
+"Libelle lisible (ex: Especes, Carte bancaire, Cheque). / Readable label "
+"(e.g. Cash, Credit card, Check)."
 msgstr ""
 
 #: laboutik/models.py:1764
@@ -13270,6 +13158,9 @@ msgid ""
 "cash). Leave blank to ignore this method in accounting export (e.g. NFC "
 "cashless payments, already collected at top-up)."
 msgstr ""
+"Compte de trésorerie PCG associé (ex : 5311000 pour espèces). Laisser vide "
+"pour ignorer ce moyen dans l'export comptable (ex : paiements NFC cashless, "
+"déjà encaissés à la recharge)."
 
 #: laboutik/models.py:1781
 msgid "Payment method mappings"
@@ -13429,12 +13320,12 @@ msgstr "Adresse email invalide"
 #: laboutik/tasks.py:88
 #, python-format
 msgid "Rapport de clôture — %(pv)s — Total : %(total).2f EUR"
-msgstr ""
+msgstr "Rapport de clôture — %(pv)s — Total : %(total).2f EUR"
 
 #: laboutik/tasks.py:99
 #, python-format
 msgid "Rapport de clôture — %(pv)s"
-msgstr ""
+msgstr "Rapport de clôture — %(pv)s"
 
 #: laboutik/tasks.py:234
 msgid "Journalière"
@@ -13755,7 +13646,7 @@ msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:70
 msgid "Envoyer par email"
-msgstr ""
+msgstr "Envoyer par email"
 
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:89
 msgid "Fermer la caisse"
@@ -13865,7 +13756,7 @@ msgstr ""
 #: laboutik/templates/laboutik/partial/hx_display_type_payment.html:111
 #: laboutik/templates/laboutik/partial/hx_display_type_payment.html:113
 msgid "Saisir email / nom"
-msgstr ""
+msgstr "Saisir email / nom"
 
 #: laboutik/templates/laboutik/partial/hx_display_type_payment.html:122
 msgid "Types de paiement"
@@ -13893,6 +13784,8 @@ msgstr "Aucun moyen de paiement"
 #: laboutik/templates/laboutik/partial/hx_export_fiscal.html:26
 msgid "Dates are optional. Without dates, all data will be exported."
 msgstr ""
+"Les dates sont optionnelles. Sans dates, toutes les données seront "
+"exportées."
 
 #: laboutik/templates/laboutik/partial/hx_fond_de_caisse.html:34
 #: laboutik/templates/laboutik/partial/hx_fond_de_caisse.html:61
@@ -14076,7 +13969,7 @@ msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:279
 msgid "Imprimer Ticket X"
-msgstr ""
+msgstr "Imprimer Ticket X"
 
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:299
 msgid "Clôturer toutes les caisses"
@@ -14166,7 +14059,7 @@ msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html:82
 msgid "Total sortie"
-msgstr ""
+msgstr "Total sortie"
 
 #: laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html:99
 msgid "Fond"
@@ -14526,15 +14419,13 @@ msgstr ""
 msgid "bloquée"
 msgstr ""
 
-<<<<<<< HEAD
-=======
 #: seo/models.py:24
 msgid "Tenant summary (config, stats, domain)"
-msgstr ""
+msgstr "Résumé du tenant (configuration, statistiques, domaine)"
 
 #: seo/models.py:25
 msgid "Published events for tenant"
-msgstr ""
+msgstr "Évènements publiés pour le tenant"
 
 #: seo/models.py:26
 #, fuzzy
@@ -14723,42 +14614,34 @@ msgstr ""
 
 #~ msgid "Read-only. To add stock, go to Inventory > Stock movements > Add."
 #~ msgstr ""
-#~ "Lecture seule. Pour ajouter du stock, allez dans Inventaire > Mouvements "
-#~ "de stock > Ajouter."
+#~ "Lecture seule. Pour ajouter du stock, allez dans Inventaire > Mouvements de "
+#~ "stock > Ajouter."
 
->>>>>>> d58f5c9c9c6a2969a505de03e6ce83896955cf35
 #~ msgid ""
-#~ "Pour un ajustement : stock réel compté. Pour les autres types : quantité "
-#~ "à ajouter ou retirer."
+#~ "Pour un ajustement : stock réel compté. Pour les autres types : quantité à "
+#~ "ajouter ou retirer."
 #~ msgstr ""
-#~ "Pour un ajustement : stock réel compté. Pour les autres types : quantité "
-#~ "à ajouter ou retirer."
+#~ "Pour un ajustement : stock réel compté. Pour les autres types : quantité à "
+#~ "ajouter ou retirer."
 
-#~| msgid "Comment"
 #~ msgid "Inventaire physique"
 #~ msgstr "Commentaire"
 
-#~| msgid "Offered"
 #~ msgid "Offert / Offered"
 #~ msgstr "Offert"
 
-#~| msgid "Cash register"
 #~ msgid "Clôture de caisse / Cash register closure"
 #~ msgstr "Caisse enregistreuse"
 
-#~| msgid "Created by"
 #~ msgid "Créé par / Created by"
 #~ msgstr "Créé par"
 
-#~| msgid "Created at"
 #~ msgid "Créé le / Created at"
 #~ msgstr "Créé le"
 
-#~| msgid "Options"
 #~ msgid "POS options"
 #~ msgstr "Options"
 
-#~| msgid "Order status"
 #~ msgid "Orders"
 #~ msgstr "Statut de réservation"
 
@@ -14803,38 +14686,26 @@ msgstr ""
 #~ msgid "Provenance"
 #~ msgstr "Provenance"
 
-#~| msgid "Transaction history"
 #~ msgid "Transaction ok"
 #~ msgstr "Historique des transactions"
 
 #~ msgid "Users"
 #~ msgstr "Utilisateur·ices"
 
-#~| msgid "Location"
 #~ msgid "Location:"
 #~ msgstr "Lieu"
 
-#~| msgid "Time and place"
 #~ msgid "Tickets and prices"
 #~ msgstr "Heure et lieu"
 
-#~| msgid ""
-#~| "\n"
-#~| "                                    I agree to\n"
-#~| "                                    <a href=\"https://tibillet.org/"
-#~| "cgucgv/\" target=\"_blank\">the terms and conditions</a>\n"
-#~| "                                "
 #~ msgid ""
 #~ "\n"
-#~ "                                    Welcome to %(org)s. Discover our "
-#~ "program of events,\n"
-#~ "                                    workshops, conferences and meetings "
-#~ "throughout the year.\n"
+#~ "                                    Welcome to %(org)s. Discover our program of events,\n"
+#~ "                                    workshops, conferences and meetings throughout the year.\n"
 #~ "                                    "
 #~ msgstr ""
 #~ "\n"
-#~ "J'accepte <a href=\"https://tibillet.org/cgucgv/\" target=\"_blank\">les "
-#~ "cgu / cgv</a>"
+#~ "J'accepte <a href=\"https://tibillet.org/cgucgv/\" target=\"_blank\">les cgu / cgv</a>"
 
 #~ msgid "Suscribe to access this rate."
 #~ msgstr "Abonnez-vous pour accéder à ce tarif."

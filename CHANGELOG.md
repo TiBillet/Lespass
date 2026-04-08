@@ -1,6 +1,5 @@
 # Changelog / Journal des modifications
 
-<<<<<<< HEAD
 ## Rapport temps reel — Session en cours / Real-time report — Current shift
 
 **Date :** Avril 2026
@@ -9,7 +8,6 @@
 **Quoi / What:** Bouton "Rapport en cours" sur la liste des clotures de caisse (`/admin/laboutik/cloturecaisse/`). Ouvre dans un nouvel onglet un rapport comptable complet calcule en temps reel depuis la derniere cloture via `RapportComptableService.generer_rapport_complet()`.
 
 **Pourquoi / Why:** Permettre aux operateurs de consulter l'etat comptable du service en cours sans creer de cloture.
-=======
 ## Page Explorer — Carte Leaflet + recherche fusionnee / Explorer page — Leaflet map + merged search
 
 **Date :** 7 avril 2026
@@ -77,12 +75,10 @@
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-<<<<<<< HEAD
 | `laboutik/views.py` | Nouvelle action `rapport_temps_reel` sur CaisseViewSet |
 | `Administration/templates/admin/cloture/rapport_temps_reel.html` | Template standalone du rapport temps reel (13 sections) |
 | `Administration/templates/admin/cloture/changelist_before.html` | Bouton vert "Rapport en cours" avec `target="_blank"` |
 | `Administration/admin/laboutik.py` | URL du rapport injectee dans `changelist_view()` |
-=======
 | `TiBillet/settings.py` | `seo` dans SHARED_APPS + `CELERY_BEAT_SCHEDULE` |
 | `TiBillet/urls_tenants.py` | Import sitemap depuis `seo.sitemap` |
 | `TiBillet/urls_public.py` | Routes ROOT via `seo.urls` |
