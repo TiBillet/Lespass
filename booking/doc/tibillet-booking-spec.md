@@ -1,10 +1,15 @@
 # TiBillet — Booking Module Specification
 
-**Version:** v0.3
+**Version:** v0.4
 **Status:**  Ready for review by TiBillet core team
 **Date:**    2026-04-07
 **Author:**  Joris REHM
 **Note:**    This version was produced in a pair specification session with Claude AI (Anthropic)
+
+Changes:
+
+  - 0.4 Rename SlotTemplate to WeeklyOpening
+    and SlotEntry to OpeningEntry
 
 ---
 
@@ -47,7 +52,7 @@ optional payment via the existing TiBillet payment system.
 |                    | within the deadline.                                         |
 +--------------------+--------------------------------------------------------------+
 | **Volunteer**      | A trusted member with elevated rights. Manages resources,    |
-|                    | slot templates, calendars, and cancellation policies via the |
+|                    | weekly openings, calendars, and cancellation policies via the |
 |                    | Django admin panel. Can view and cancel any booking.         |
 +--------------------+--------------------------------------------------------------+
 | **Public visitor** | An anonymous user who can view the public booking page but   |
@@ -80,7 +85,7 @@ not by an active flag.
 | `booking_horizon_days`        | integer         | How far ahead a member can book             |
 |                               |                 | (e.g. 28 = no booking beyond 28 days)       |
 +-------------------------------+-----------------+---------------------------------------------+
-| `slot_template`               | FK              | Weekly opening schedule applied to this     |
+| `weekly_opening`               | FK              | Weekly opening schedule applied to this     |
 |                               |                 | resource                                    |
 +-------------------------------+-----------------+---------------------------------------------+
 | `pricing_rule`                | FK              | TiBillet Price object applied to bookings   |
@@ -180,27 +185,27 @@ A Calendar contains a set of **ClosedPeriod** entries:
 - A single day off is modelled as a ClosedPeriod where `start_date == end_date`.
 
 
-### 3.4 Slot Template
+### 3.4 Weekly Opening
 
 A reusable weekly opening schedule. It defines which time slots are open on which
 days of the week. A template can be shared across multiple resources. Temporal
 exceptions (holidays, closures) are handled exclusively by the Calendar.
 
-**v1 constraint:** a resource has exactly one slot template at a time. Multiple
+**v1 constraint:** a resource has exactly one weekly opening at a time. Multiple
 templates per resource (e.g. a summer vs. winter schedule) are out of scope for v1
 and would require a date-ranged assignment model.
 
-**Non-overlap constraint:** within a given Slot Template, SlotEntries must not
-overlap each other. The system must reject any SlotEntry whose generated time window
+**Non-overlap constraint:** within a given Weekly Opening, SlotEntries must not
+overlap each other. The system must reject any OpeningEntry whose generated time window
 intersects with an existing one. This check is non-trivial because:
 
-- A SlotEntry can bleed into the next day if
+- A OpeningEntry can bleed into the next day if
   `start_time + slot_count × slot_duration_minutes > 24h`.
-- The last SlotEntry of the week (e.g. Sunday) can bleed into the first SlotEntry
+- The last OpeningEntry of the week (e.g. Sunday) can bleed into the first OpeningEntry
   of the week (Monday), creating a wrap-around overlap.
 
 The overlap check must therefore treat the weekly schedule as a circular 7-day
-timeline and compare all SlotEntry windows modulo 7 days.
+timeline and compare all OpeningEntry windows modulo 7 days.
 
 **Attributes:**
 
@@ -210,13 +215,13 @@ timeline and compare all SlotEntry windows modulo 7 days.
 | `name` | string | e.g. "Horaires standard", "Horaires été" |
 +--------+--------+------------------------------------------+
 
-A Slot Template contains a set of **SlotEntry** rows, each defining one recurring
+A Weekly Opening contains a set of **OpeningEntry** rows, each defining one recurring
 slot:
 
 +-------------------------+---------+------------------------------------------+
 | Field                   | Type    | Description                              |
 +=========================+=========+==========================================+
-| `template`              | FK      | Parent slot template                     |
+| `template`              | FK      | Parent weekly opening                     |
 +-------------------------+---------+------------------------------------------+
 | `weekday`               | enum    | `mon`, `tue`, `wed`, `thu`,              |
 |                         |         | `fri`, `sat`, `sun`                      |
@@ -239,7 +244,7 @@ generates: 10:00–11:00, 11:00–12:00, 12:00–13:00, 13:00–14:00, 14:00–1
 A Slot is a virtual, non-persisted concept. Slots are computed on the fly by the
 application from three inputs:
 
-- The resource's **SlotTemplate** (weekdays, start time, duration, count).
+- The resource's **WeeklyOpening** (weekdays, start time, duration, count).
 - The resource's **Calendar** (ClosedPeriods are excluded).
 - The resource's **`booking_horizon_days`** (slots beyond the horizon are not
   surfaced).
@@ -256,7 +261,7 @@ dynamically when a client requests availability.
 +-------------------------+---------+-------------------------------------------+
 | `date`                  | date    | Concrete date of the slot                 |
 +-------------------------+---------+-------------------------------------------+
-| `start_time`            | time    | Derived from SlotEntry                    |
+| `start_time`            | time    | Derived from OpeningEntry                    |
 +-------------------------+---------+-------------------------------------------+
 | `end_time`              | time    | Derived from                              |
 |                         |         | `start_time + slot_duration_minutes`      |
@@ -294,9 +299,9 @@ object, not a custom model.
 ### 3.7 Booking
 
 A Booking is a fully self-contained record. It stores the actual agreed time
-explicitly, independently of the resource's current Slot Template. This means:
+explicitly, independently of the resource's current Weekly Opening. This means:
 
-- If the Slot Template changes after a booking is made, existing bookings are
+- If the Weekly Opening changes after a booking is made, existing bookings are
   unaffected.
 - Volunteers can create bookings that do not correspond to any slot in the template
   (e.g. exceptional one-off reservations).
@@ -370,7 +375,7 @@ stored.
 ### 4.3 Volunteer — Manage Resources
 
 1. Volunteer accesses the booking admin panel within TiBillet backoffice.
-2. Volunteer creates/edits Resources, assigns a Slot Template, a Calendar, and a
+2. Volunteer creates/edits Resources, assigns a Weekly Opening, a Calendar, and a
    Price.
 3. Volunteer manages Calendars: creates ClosedPeriods for holidays or extended
    closures.
@@ -379,7 +384,7 @@ stored.
 5. Volunteer can delete any booking on behalf of a member. Refund is handled
    manually.
 6. Volunteer can create an ad-hoc booking for any resource, date, and time,
-   regardless of the Slot Template.
+   regardless of the Weekly Opening.
 
 ### 4.4 Public Booking Page
 
@@ -396,7 +401,7 @@ stored.
 
 ### Availability
 
-- Slots are computed on the fly from the resource's Slot Template and Calendar;
+- Slots are computed on the fly from the resource's Weekly Opening and Calendar;
   nothing is pre-generated or stored.
 - Bookings are not required to be aligned with computed slots. A booking may have
   an arbitrary start time and duration (e.g. a volunteer creates a booking starting
@@ -530,7 +535,7 @@ TiBillet HDA conventions.
 ### Volunteer (backoffice)
 
 The volunteer backoffice is managed entirely by the Django admin panel. No custom
-views are required for resource management, slot templates, calendars, or booking
+views are required for resource management, weekly openings, calendars, or booking
 administration.
 
 Django admin registration:
@@ -540,7 +545,7 @@ Django admin registration:
 +==============+==============+===============================================+
 | Resource     | `ModelAdmin` | —                                             |
 +--------------+--------------+-----------------------------------------------+
-| SlotTemplate | `ModelAdmin` | `SlotEntry` as `TabularInline`                |
+| WeeklyOpening | `ModelAdmin` | `OpeningEntry` as `TabularInline`                |
 |              |              | (compact rows: weekday, start_time,           |
 |              |              | duration, count)                              |
 +--------------+--------------+-----------------------------------------------+
@@ -581,7 +586,7 @@ should be discussed with the TiBillet core team.
 ## 9. Out of Scope (v1)
 
 - Recurring bookings (member books "every Monday 9–10am")
-- Multiple slot templates per resource (e.g. summer vs. winter schedule)
+- Multiple weekly openings per resource (e.g. summer vs. winter schedule)
 - Cross-tenant / federated resource sharing
 - Publication of bookable resources to the federated agenda
 - Waitlist when a slot is full

@@ -4,6 +4,11 @@
 **Approach:** each session = write tests FIRST, then the minimal code
 to make them pass.
 
+> **Convention:** at the end of each session, update this document to
+> reflect what was actually implemented (final fields, decisions made,
+> deviations from the initial plan). Mark the session `(DONE ✓)` in
+> its heading.
+
 --------------------------------------------------------------------------------
 
 ## Test location & conventions
@@ -32,7 +37,7 @@ booking/
     ├── __init__.py
     ├── conftest.py                    # Re-exports shared fixtures + booking-specific ones
     ├── test_models.py                 # Session 1 — model declarations
-    ├── test_slot_template_overlap.py  # Session 2 — non-overlap constraint
+    ├── test_weekly_opening_overlap.py  # Session 2 — non-overlap constraint
     ├── test_slot_engine.py            # Session 5 — slot computation
     ├── test_booking_validation.py     # Session 6 — new booking validation
     ├── test_views_public.py           # Session 7
@@ -92,7 +97,7 @@ docker exec lespass_django poetry run python manage.py check
 
 --------------------------------------------------------------------------------
 
-## Session 1 — All booking models (no logic, only simple constraints)
+## Session 1 — All booking models (no logic, only simple constraints) (DONE ✓)
 
 Declare all models in the database. No complex business logic yet —
 only field-level constraints (required, null/blank, defaults, FK
@@ -100,79 +105,71 @@ relationships). The `pricing_rule` FK to TiBillet's `Price` model is
 **excluded** here; it will be added in Session 12 when payment
 integration is tackled.
 
-**Models declared:**
+**Models declared** (file: `booking/models.py`):
 
 +---------------+------------------------------------------------------+
-| Model         | Key fields                                           |
+| Model         | Key fields (as implemented)                          |
 +===============+======================================================+
+| Resource      | name, group FK nullable, calendar FK, weekly_opening |
+|               | FK, capacity (default 1, 0 allowed), tags            |
+|               | cancellation_deadline_hours (default 24),            |
+|               | booking_horizon_days (default 28)                    |
++---------------+------------------------------------------------------+
 | ResourceGroup | name, description, image, tags                       |
 +---------------+------------------------------------------------------+
 | Calendar      | name                                                 |
 +---------------+------------------------------------------------------+
-| ClosedPeriod  | calendar FK, start_date, end_date (nullable), label  |
+| ClosedPeriod  | calendar FK, start_datetime, end_datetime (nullable) |
+|               | label                                                |
 +---------------+------------------------------------------------------+
-| SlotTemplate  | name                                                 |
+| WeeklyOpening | name                                                 |
 +---------------+------------------------------------------------------+
-| SlotEntry     | template FK, weekday, start_time,                    |
+| OpeningEntry  | weekly_opening FK, weekday, start_time,              |
 |               | slot_duration_minutes, slot_count                    |
 +---------------+------------------------------------------------------+
-| Resource      | name, group FK (nullable), calendar FK,              |
-|               | slot_template FK, capacity,                          |
-|               | cancellation_deadline_hours,                         |
-|               | booking_horizon_days, description, image, tags       |
-+---------------+------------------------------------------------------+
-| Booking       | resource FK, member FK, date, start_time,            |
-|               | slot_duration_minutes, slot_count,                   |
-|               | status (new/validated/confirmed), booked_at,         |
-|               | payment_ref (nullable)                               |
+| Booking       | resource FK, user FK (AUTH_USER_MODEL), start_       |
+|               | datetime (timezone-aware), slot_duration_minutes,    |
+|               | slot_count, status (new/validated/confirmed),        |
+|               | booked_at (auto), payment_ref (nullable)             |
 +---------------+------------------------------------------------------+
 
-### Session 1.1 — Red phase
+**Key decisions made during this session:**
 
-**Files to create:**
-- `booking/tests/test_models.py`
+- All FKs use `on_delete=PROTECT` (no cascade).
+- `start_datetime` is a timezone-aware `DateTimeField` — not a split
+  `date` + `time`. TiBillet defines a timezone per tenant; see
+  `booking/doc/tibillet-booking-decisions.md`.
+- Capacity 0 is allowed — it disables booking without an extra flag.
+- The FK to `AUTH_USER_MODEL` is named `user` (not `member`), matching
+  TiBillet's own convention throughout the codebase.
+- `SlotTemplate` / `SlotEntry` renamed to `WeeklyOpening` /
+  `OpeningEntry` in models, tests, spec, and plan.
 
-**Tests to write:**
-```
-test_resource_group_requires_name
-test_calendar_requires_name
-test_closed_period_end_date_is_nullable
-test_closed_period_single_day_start_equals_end
-test_slot_template_requires_name
-test_slot_entry_requires_weekday_start_time_duration_count
-test_resource_capacity_defaults_to_1
-test_resource_cancellation_deadline_defaults_to_24h
-test_resource_booking_horizon_defaults_to_28_days
-test_resource_group_is_optional
-test_booking_default_status_is_new
-test_booking_payment_ref_is_nullable
-```
+**Tests kept** (`booking/tests/test_models.py`):
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
+- `test_booking_default_status_is_new` — the `new` status has
+  important business semantics (basket, not yet confirmed).
 
-### Session 1.2 — Green phase
+**Tests discarded** (tested only Django internals, not business rules):
+`test_resource_group_is_optional`, `test_closed_period_end_date_is_
+nullable`, `test_resource_capacity_defaults_to_1`, `test_booking_
+payment_ref_is_nullable`, and similar default/null checks.
 
-**Files to create / modify:**
-- `booking/models.py` — ResourceGroup, Calendar, ClosedPeriod,
-  SlotTemplate, SlotEntry, Resource, Booking
-- `booking/migrations/0001_initial.py`
-
-Write the minimal model declarations to make all red-phase tests pass.
+**Migration:** `booking/migrations/0001_initial.py` applied to all
+tenant schemas.
 
 --------------------------------------------------------------------------------
 
-## Session 2 — Complex database constraint: SlotTemplate non-overlap
+## Session 2 — Complex database constraint: WeeklyOpening non-overlap
 
-Design and implement the non-overlap validation for SlotEntry within
-a SlotTemplate. This is the most complex rule in the spec (circular
+Design and implement the non-overlap validation for OpeningEntry within
+a WeeklyOpening. This is the most complex rule in the spec (circular
 7-day timeline, bleed-over into next day, wrap-around Sunday→Monday).
 
 ### Session 2.1 — Red phase
 
 **Files to create:**
-- `booking/tests/test_slot_template_overlap.py`
+- `booking/tests/test_weekly_opening_overlap.py`
 
 **Tests to write:**
 ```
@@ -192,7 +189,7 @@ test_slot_entry_overlap_check_treats_week_as_circular
 
 **Files to modify:**
 - `booking/models.py` — add `clean()` or `save()` validation on
-  SlotEntry
+  OpeningEntry
 
 Write the minimal overlap-check logic to make all red-phase tests
 pass.
@@ -216,7 +213,7 @@ test_create_booking_fixtures_command_runs_without_error
 test_create_booking_fixtures_creates_coworking_resource
 test_create_booking_fixtures_creates_salle_repet_group_with_two_resources
 test_create_booking_fixtures_creates_calendar_with_closed_periods
-test_create_booking_fixtures_assigns_slot_templates_to_resources
+test_create_booking_fixtures_assigns_weekly_openings_to_resources
 ```
 
 > ⚠️ **AI stops here.** The human reviews the tests, completes or
@@ -242,11 +239,11 @@ test_create_booking_fixtures_assigns_slot_templates_to_resources
 - Closed July + August 2026 (summer closure)
 - Closed December 24 – January 2 (end-of-year closure)
 
-*Slot template "Coworking weekdays":*
+*Weekly opening "Coworking weekdays":*
 - Every weekday (Mon–Fri), 8 slots of 1 hour starting at 09:00
   (generates: 09:00–10:00, 10:00–11:00, …, 16:00–17:00)
 
-*Slot template "Salles de répét' weekend":*
+*Weekly opening "Salles de répét' weekend":*
 - Saturday + Sunday only, 3 slots of 3 hours starting at 10:00
   (generates: 10:00–13:00, 13:00–16:00, 16:00–19:00)
 
@@ -272,7 +269,7 @@ development.
 +---------------+------------+-----------------------------------+
 | Calendar      | ModelAdmin | ClosedPeriod as StackedInline     |
 +---------------+------------+-----------------------------------+
-| SlotTemplate  | ModelAdmin | SlotEntry as TabularInline        |
+| WeeklyOpening  | ModelAdmin | OpeningEntry as TabularInline        |
 +---------------+------------+-----------------------------------+
 | Resource      | ModelAdmin | —                                 |
 +---------------+------------+-----------------------------------+
@@ -287,7 +284,7 @@ development.
 **Tests to write:**
 ```
 test_admin_resource_list_accessible_to_staff
-test_admin_slot_template_shows_slot_entries_inline
+test_admin_weekly_opening_shows_opening_entries_inline
 test_admin_calendar_shows_closed_periods_inline
 test_admin_booking_list_filterable_by_date
 test_admin_booking_list_filterable_by_status
@@ -321,13 +318,13 @@ into simple, independently testable functions.
 def get_closed_dates_for_resource(resource, date_from, date_to):
     """Query DB: fetch ClosedPeriods from the resource's Calendar."""
 
-def get_slot_entries_for_resource(resource):
-    """Query DB: fetch SlotEntries from the resource's SlotTemplate."""
+def get_opening_entries_for_resource(resource):
+    """Query DB: fetch SlotEntries from the resource's WeeklyOpening."""
 
 def get_existing_bookings_for_resource(resource, date_from, date_to):
     """Query DB: fetch Bookings (new/validated/confirmed) in the period."""
 
-def generate_theoretical_slots(slot_entries, date_from, date_to, closed_dates):
+def generate_theoretical_slots(opening_entries, date_from, date_to, closed_dates):
     """Compute all theoretical slots — no DB queries, pure date math."""
 
 def compute_remaining_capacity(slot, resource_capacity, existing_bookings):
