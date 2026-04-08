@@ -191,7 +191,7 @@ Notes :
 - certain jours ne tombe pas sur une ouverture hebdo, mais on peut les garder
 
 
-### SlotTemplate « Créneaux laser »
+### WeeklyOpening « Créneaux laser »
 
 Les horaires d'ouverture des ateliers (2 sessions de 3h le jeudi à
 partir de 10h, 2 le vendredi à 13h, 3 le samedi à partir de 10h) sont
@@ -224,7 +224,7 @@ découpés en créneaux d'1h pour la laser.
 +-----------------------------+--------------------------------------+
 | calendar                    | Calendrier La Fabrique               |
 +-----------------------------+--------------------------------------+
-| slot_template               | Créneaux laser                       |
+| weekly_opening               | Créneaux laser                       |
 +-----------------------------+--------------------------------------+
 | pricing_rule                | → Price « Laser 15 € »               |
 +-----------------------------+--------------------------------------+
@@ -251,7 +251,7 @@ découpés en créneaux d'1h pour la laser.
 
 Même Calendar que la laser (« Calendrier La Fabrique »).
 
-**SlotTemplate « Sessions atelier »**
+**WeeklyOpening « Sessions atelier »**
 
 +----------+------------+---------+------------+-----------------------------+
 | weekday  | start_time | durée   | slot_count | Créneaux générés            |
@@ -267,7 +267,7 @@ Même Calendar que la laser (« Calendrier La Fabrique »).
 surface et les équipements disponibles) :
 
 +---------------------+----------+--------------------+
-| name                | capacity | slot_template      |
+| name                | capacity | weekly_opening      |
 +=====================+==========+====================+
 | Menuiserie          | 6        | Sessions atelier   |
 +---------------------+----------+--------------------+
@@ -323,7 +323,7 @@ emprunts multi-jours.
 
 > ⚠️ **Limitations :**
 >
-> 1. Le SlotTemplate génère des créneaux récurrents par jour de la
+> 1. Le WeeklyOpening génère des créneaux récurrents par jour de la
 >    semaine. Un emprunt commençant un mercredi pour 5 jours nécessite
 >    que chaque jour de la semaine soit déclaré dans le template, ce
 >    qui est inhabituel par rapport à l'usage prévu du modèle.
