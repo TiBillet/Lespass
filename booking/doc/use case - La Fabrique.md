@@ -83,6 +83,13 @@ peut aussi convenir). La réservation ne doit pas être possible au-delà
 d'un délai configurable, a priori un mois. L'annulation doit être
 possible jusqu'à un certain délai avant la session, a priori la veille.
 
+Il est crucial de pouvoir inclure directement dans le site web existant
+de La Fabrique une vue de la réservation laser. Ce n'est pas grave si
+ensuite l'usager est dirigé vers un autre site mais le parcours de
+découverte doit partir du site de l'association et avoir le moins
+de friction possible. Toute les interfaces web doivent être facilement
+utilisable avec un smartphone.
+
 Les clé2fab doivent pouvoir consulter les réservations de la session
 qu'ils gèrent afin d'autoriser l'accès à une personne.
 
