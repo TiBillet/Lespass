@@ -1456,6 +1456,31 @@ Decouvert par le test E2E test_09 (session 28, avril 2026).
 
 ---
 
+### Piege 68 : Signal post_save Asset et schema public — `UndefinedTable`
+
+Le signal `fedow_core.signals.creer_ou_mettre_a_jour_product_recharge` se declenche
+a chaque `Asset.objects.create()`. Il tente de creer un `CategorieProduct` et un
+`Product` — qui sont des TENANT_APPS. Si le code tourne dans le schema `public`
+(ex: tests `test_fedow_core.py` qui creent des Assets sans `tenant_context`),
+la table `BaseBillet_categorieproduct` n'existe pas → `UndefinedTable`.
+
+**Solution** : le signal verifie `connection.schema_name` en tout debut et retourne
+immediatement si on est dans le schema `public` :
+
+```python
+schema_courant = connection.schema_name
+if schema_courant == "public":
+    return
+```
+
+**Consequence pour les tests** : les tests qui creent un Asset en `schema_context('lespass')`
+declenchent le signal normalement. Les tests qui creent un Asset sans schema tenant
+(ex: `test_fedow_core.py`) ne declenchent PAS le signal (pas de Product cree).
+
+Decouvert lors de l'implementation Asset-first recharge products (avril 2026).
+
+---
+
 ### Controlvanne / Tireuses connectees (session controlvanne, avril 2026)
 
 **9.40 — Fixtures controlvanne : `get_or_create` obligatoire pour Product.**

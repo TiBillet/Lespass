@@ -16,6 +16,7 @@ Laboutik templates use <i class="fas {{ icon }}"></i>.
 Usage :
     docker exec lespass_django poetry run python manage.py create_test_pos_data
 """
+
 import uuid as uuid_module
 from decimal import Decimal
 
@@ -24,6 +25,7 @@ from django.core.management.base import BaseCommand
 from django.db import connection
 from django_tenants.utils import schema_context
 
+from AuthBillet.models import Wallet
 from BaseBillet.models import CategorieProduct, Product, Price
 from Customers.models import Client
 from laboutik.models import CartePrimaire, PointDeVente, Printer
@@ -49,7 +51,9 @@ class Command(BaseCommand):
                 self.stderr.write(self.style.ERROR("Aucun tenant non-public trouve."))
                 return
             schema = first_tenant.schema_name
-            self.stdout.write(f"Schema public detecte, bascule vers le tenant : {schema}")
+            self.stdout.write(
+                f"Schema public detecte, bascule vers le tenant : {schema}"
+            )
 
         with schema_context(schema):
             self.stdout.write(f"Tenant : {schema}")
@@ -116,6 +120,65 @@ class Command(BaseCommand):
                 f"{categorie_boissons_chaudes}, {categorie_snacks}, {categorie_vins}, "
                 f"{categorie_cashless}"
             )
+
+            # --- Assets fedow_core (monnaie locale, cadeau, temps) ---
+            # Le signal post_save cree automatiquement les Products de recharge
+            # et les attache aux PV CASHLESS.
+            # / fedow_core Assets (local currency, gift, time).
+            # The post_save signal auto-creates top-up Products
+            # and attaches them to CASHLESS POS.
+            from fedow_core.models import Asset as FedowAsset
+            from fedow_core.services import AssetService
+            from fedow_connect.models import FedowConfig
+
+            # Recuperer le vrai Client pour les FK tenant
+            # / Get the real Client for tenant FKs
+            tenant_client = Client.objects.get(schema_name=connection.schema_name)
+
+            # Wallet du lieu : utiliser celui de FedowConfig si disponible,
+            # sinon en creer un local (dev sans serveur Fedow).
+            # / Venue wallet: use FedowConfig's if available,
+            # otherwise create a local one (dev without Fedow server).
+            fedow_config = FedowConfig.get_solo()
+            if fedow_config.wallet:
+                wallet_du_lieu = fedow_config.wallet
+            else:
+                wallet_du_lieu, _ = Wallet.objects.get_or_create(
+                    origin=tenant_client,
+                    defaults={"name": f"Wallet {tenant_client.name}"},
+                )
+
+            # Creer les 3 Assets si inexistants
+            # / Create the 3 Assets if they don't exist
+            for asset_def in [
+                {
+                    "name": "Monnaie locale",
+                    "category": FedowAsset.TLF,
+                    "currency_code": "EUR",
+                },
+                {"name": "Cadeau", "category": FedowAsset.TNF, "currency_code": "CAD"},
+                {"name": "Temps", "category": FedowAsset.TIM, "currency_code": "TMP"},
+            ]:
+                asset_existant = FedowAsset.objects.filter(
+                    tenant_origin=tenant_client,
+                    category=asset_def["category"],
+                    active=True,
+                ).first()
+                if asset_existant is None:
+                    AssetService.creer_asset(
+                        tenant=tenant_client,
+                        name=asset_def["name"],
+                        category=asset_def["category"],
+                        currency_code=asset_def["currency_code"],
+                        wallet_origin=wallet_du_lieu,
+                    )
+                    self.stdout.write(
+                        f"  Asset cree : {asset_def['name']} ({asset_def['category']})"
+                    )
+                else:
+                    self.stdout.write(
+                        f"  Asset existant : {asset_existant.name} ({asset_existant.category})"
+                    )
 
             # --- Produits POS avec prix et icones ---
             # Chaque produit a une couleur de fond, une couleur de texte et une icone FontAwesome 5.
@@ -290,52 +353,9 @@ class Command(BaseCommand):
                     "prix": Decimal("4.00"),
                 },
                 # --- Cashless : recharges ---
-                # / Cashless: top-ups
-                {
-                    "name": "Recharge 10€",
-                    "methode_caisse": Product.RECHARGE_EUROS,
-                    "categorie_pos": categorie_cashless,
-                    "couleur_fond_pos": "#10B981",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-coins",
-                    "prix": Decimal("10.00"),
-                },
-                {
-                    "name": "Recharge 20€",
-                    "methode_caisse": Product.RECHARGE_EUROS,
-                    "categorie_pos": categorie_cashless,
-                    "couleur_fond_pos": "#059669",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-coins",
-                    "prix": Decimal("20.00"),
-                },
-                {
-                    "name": "Cadeau 5€",
-                    "methode_caisse": Product.RECHARGE_CADEAU,
-                    "categorie_pos": categorie_cashless,
-                    "couleur_fond_pos": "#F472B6",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-gift",
-                    "prix": Decimal("5.00"),
-                },
-                {
-                    "name": "Cadeau 10€",
-                    "methode_caisse": Product.RECHARGE_CADEAU,
-                    "categorie_pos": categorie_cashless,
-                    "couleur_fond_pos": "#EC4899",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-gift",
-                    "prix": Decimal("10.00"),
-                },
-                {
-                    "name": "Temps 1h",
-                    "methode_caisse": Product.RECHARGE_TEMPS,
-                    "categorie_pos": categorie_cashless,
-                    "couleur_fond_pos": "#8B5CF6",
-                    "couleur_texte_pos": "#FFFFFF",
-                    "icon_pos": "fa-clock",
-                    "prix": Decimal("1.00"),
-                },
+                # Les produits de recharge sont crees automatiquement par le signal
+                # post_save sur fedow_core.Asset (voir bloc Asset ci-dessus).
+                # / Cashless top-up products are auto-created by the Asset post_save signal.
             ]
 
             for product_data in products_data:
@@ -356,12 +376,15 @@ class Command(BaseCommand):
                         prix=prix_value,
                         subscription_type=subscription_type,
                     )
-                    self.stdout.write(f"  Produit cree : {product.name} ({prix_value} EUR)")
+                    self.stdout.write(
+                        f"  Produit cree : {product.name} ({prix_value} EUR)"
+                    )
                 else:
                     # Met a jour les champs POS si le produit existe deja
                     # / Update POS fields if product already exists
                     pos_fields_to_update = {
-                        key: value for key, value in product_data.items()
+                        key: value
+                        for key, value in product_data.items()
                         if key != "name"
                     }
                     for field_name, field_value in pos_fields_to_update.items():
@@ -405,6 +428,7 @@ class Command(BaseCommand):
                 # Stock en centilitres : un fut de 3000 cl (30 litres)
                 # / Stock in centiliters: a 3000 cl keg (30 liters)
                 from inventaire.models import Stock, UniteStock
+
                 Stock.objects.get_or_create(
                     product=blonde_pression,
                     defaults={
@@ -414,7 +438,9 @@ class Command(BaseCommand):
                         "autoriser_vente_hors_stock": False,
                     },
                 )
-                self.stdout.write("  Produit cree : Blonde Pression (Pinte 7€ + Demi 4€, stock 3000cl)")
+                self.stdout.write(
+                    "  Produit cree : Blonde Pression (Pinte 7€ + Demi 4€, stock 3000cl)"
+                )
             else:
                 self.stdout.write("  Produit existant : Blonde Pression")
 
@@ -440,6 +466,7 @@ class Command(BaseCommand):
                     order=1,
                 )
                 from inventaire.models import Stock, UniteStock
+
                 Stock.objects.get_or_create(
                     product=cacahuetes_vrac,
                     defaults={
@@ -449,7 +476,9 @@ class Command(BaseCommand):
                         "autoriser_vente_hors_stock": False,
                     },
                 )
-                self.stdout.write("  Produit cree : Cacahuetes en vrac (12€/kg, stock 5000g)")
+                self.stdout.write(
+                    "  Produit cree : Cacahuetes en vrac (12€/kg, stock 5000g)"
+                )
             else:
                 self.stdout.write("  Produit existant : Cacahuetes en vrac")
 
@@ -480,7 +509,9 @@ class Command(BaseCommand):
                     free_price=True,
                     order=2,
                 )
-                self.stdout.write("  Produit cree : Affiche A4 (Standard 5€ + Prix libre min 2€)")
+                self.stdout.write(
+                    "  Produit cree : Affiche A4 (Standard 5€ + Prix libre min 2€)"
+                )
             else:
                 self.stdout.write("  Produit existant : Affiche A4")
 
@@ -508,6 +539,7 @@ class Command(BaseCommand):
                     order=1,
                 )
                 from inventaire.models import Stock, UniteStock
+
                 Stock.objects.get_or_create(
                     product=vin_vrac,
                     defaults={
@@ -530,9 +562,12 @@ class Command(BaseCommand):
             # They are created by demo_data_v2.py (or by admin in the interface).
             # The ADHESION-typed POS loads them dynamically.
             nb_adhesions = Product.objects.filter(
-                categorie_article=Product.ADHESION, publish=True,
+                categorie_article=Product.ADHESION,
+                publish=True,
             ).count()
-            self.stdout.write(f"  Adhesions existantes : {nb_adhesions} produit(s) publies")
+            self.stdout.write(
+                f"  Adhesions existantes : {nb_adhesions} produit(s) publies"
+            )
 
             # --- Imprimante Mock (dev/test) ---
             # Affiche les tickets en ASCII dans la console Celery.
@@ -551,7 +586,9 @@ class Command(BaseCommand):
             if created_mock:
                 self.stdout.write(f"  Imprimante mock creee : {imprimante_mock.name}")
             else:
-                self.stdout.write(f"  Imprimante mock existante : {imprimante_mock.name}")
+                self.stdout.write(
+                    f"  Imprimante mock existante : {imprimante_mock.name}"
+                )
 
             # --- Points de vente ---
             # update_or_create pour mettre a jour l'icone meme si le PDV existait avant.
@@ -681,7 +718,9 @@ class Command(BaseCommand):
                     prix=Decimal("20.00"),
                     subscription_type=Price.YEAR,
                 )
-                self.stdout.write(f"  Produit adhesion Mix cree : {produit_adhesion_mix.name}")
+                self.stdout.write(
+                    f"  Produit adhesion Mix cree : {produit_adhesion_mix.name}"
+                )
 
             pdv_mix, _ = PointDeVente.objects.update_or_create(
                 name="Mix",
@@ -702,9 +741,19 @@ class Command(BaseCommand):
             # .set() remplace tout le M2M — pas d'accumulation entre les runs.
             # / Mix POS products: Beer (VT) + Recharge 10€ (RE) + Adhesion Test Mix (AD)
             # .set() replaces the whole M2M — no accumulation between runs.
-            produit_biere = Product.objects.filter(name="Biere", methode_caisse=Product.VENTE).first()
-            produit_recharge_10 = Product.objects.filter(name="Recharge 10€", methode_caisse=Product.RECHARGE_EUROS).first()
-            produits_mix = [p for p in [produit_biere, produit_recharge_10, produit_adhesion_mix] if p]
+            produit_biere = Product.objects.filter(
+                name="Biere", methode_caisse=Product.VENTE
+            ).first()
+            # Le produit recharge EUR est cree par le signal Asset (ex: "Recharge Monnaie locale")
+            # / The EUR top-up product is created by the Asset signal (e.g. "Recharge Monnaie locale")
+            produit_recharge_eur_mix = Product.objects.filter(
+                methode_caisse=Product.RECHARGE_EUROS,
+            ).first()
+            produits_mix = [
+                p
+                for p in [produit_biere, produit_recharge_eur_mix, produit_adhesion_mix]
+                if p
+            ]
             pdv_mix.products.set(produits_mix)
             pdv_mix.categories.set([categorie_bar, categorie_cashless])
 
@@ -727,7 +776,9 @@ class Command(BaseCommand):
                 },
             )
 
-            produit_eau = Product.objects.filter(name="Eau", methode_caisse=Product.VENTE).first()
+            produit_eau = Product.objects.filter(
+                name="Eau", methode_caisse=Product.VENTE
+            ).first()
             pdv_festival, _ = PointDeVente.objects.update_or_create(
                 name="Accueil Festival",
                 defaults={
@@ -762,9 +813,8 @@ class Command(BaseCommand):
             restaurant_products = all_pos_products.filter(
                 categorie_pos__in=[categorie_restauration, categorie_boissons_chaudes]
             )
-            cashless_products = all_pos_products.filter(
-                categorie_pos=categorie_cashless,
-            )
+            # Les produits cashless sont geres par le signal Asset, pas par .set()
+            # / Cashless products are managed by the Asset signal, not by .set()
 
             # Bar : boissons froides, vins, snacks
             # / Bar: cold drinks, wines, snacks
@@ -774,19 +824,46 @@ class Command(BaseCommand):
             # Restaurant : plats et boissons chaudes
             # / Restaurant: dishes and hot drinks
             pdv_restaurant.products.set(restaurant_products)
-            pdv_restaurant.categories.set([categorie_restauration, categorie_boissons_chaudes])
+            pdv_restaurant.categories.set(
+                [categorie_restauration, categorie_boissons_chaudes]
+            )
 
             # Terrasse : tout sauf les boissons chaudes et cashless
             # / Terrasse: everything except hot drinks and cashless
             terrasse_products = all_pos_products.filter(
-                categorie_pos__in=[categorie_bar, categorie_restauration, categorie_vins, categorie_snacks]
+                categorie_pos__in=[
+                    categorie_bar,
+                    categorie_restauration,
+                    categorie_vins,
+                    categorie_snacks,
+                ]
             )
             pdv_terrasse.products.set(terrasse_products)
-            pdv_terrasse.categories.set([categorie_bar, categorie_restauration, categorie_vins, categorie_snacks])
+            pdv_terrasse.categories.set(
+                [
+                    categorie_bar,
+                    categorie_restauration,
+                    categorie_vins,
+                    categorie_snacks,
+                ]
+            )
 
-            # Cashless : recharges uniquement (les adhesions sont dans le PV Adhesion)
-            # / Cashless: top-ups only (memberships are in the Adhesion POS)
-            pdv_cashless.products.set(cashless_products)
+            # Cashless : les produits de recharge sont crees par le signal Asset.
+            # Comme les Assets sont crees AVANT les PV, le signal n'a pas pu
+            # les attacher automatiquement. On les ajoute ici.
+            # / Cashless: top-up products are created by the Asset signal.
+            # Since Assets are created BEFORE POS, the signal couldn't
+            # auto-attach them. We add them here.
+            produits_recharge = Product.objects.filter(
+                asset__isnull=False,
+                methode_caisse__in=[
+                    Product.RECHARGE_EUROS,
+                    Product.RECHARGE_CADEAU,
+                    Product.RECHARGE_TEMPS,
+                ],
+            )
+            for produit_recharge in produits_recharge:
+                pdv_cashless.products.add(produit_recharge)
             pdv_cashless.categories.set([categorie_cashless])
 
             self.stdout.write(
@@ -794,7 +871,7 @@ class Command(BaseCommand):
                 f"{pdv_bar} ({bar_products.count()} produits), "
                 f"{pdv_restaurant} ({restaurant_products.count()} produits), "
                 f"{pdv_terrasse} ({terrasse_products.count()} produits), "
-                f"{pdv_cashless} ({cashless_products.count()} produits), "
+                f"{pdv_cashless} ({pdv_cashless.products.count()} produits), "
                 f"{pdv_adhesion} ({pdv_adhesion.products.count()} produits), "
                 f"{pdv_mix} ({pdv_mix.products.count()} produits), "
                 f"{pdv_festival} ({pdv_festival.products.count()} produits)"
@@ -806,16 +883,20 @@ class Command(BaseCommand):
             # / Primary cards (TEST mode only)
             # Test NFC cards allow simulating scans in dev.
             if not settings.TEST:
-                self.stdout.write("  Mode TEST inactif : pas de creation de cartes primaires.")
-                self.stdout.write(self.style.SUCCESS("Donnees de test POS creees avec succes."))
+                self.stdout.write(
+                    "  Mode TEST inactif : pas de creation de cartes primaires."
+                )
+                self.stdout.write(
+                    self.style.SUCCESS("Donnees de test POS creees avec succes.")
+                )
                 return
 
             self.stdout.write("  Mode TEST actif : creation des cartes primaires...")
 
-            # Recuperer le vrai Client (pas FakeTenant) pour la FK Detail.origine
+            # tenant_client est deja defini plus haut (bloc Assets)
             # Detail et CarteCashless sont en SHARED_APPS (schema public).
-            # / Get the real Client (not FakeTenant) for Detail.origine FK
-            tenant_client = Client.objects.get(schema_name=connection.schema_name)
+            # / tenant_client is already defined above (Assets block)
+            # Detail and CarteCashless are in SHARED_APPS (public schema).
 
             # Un Detail (batch de cartes) pour regrouper les cartes de test
             # / A Detail (card batch) to group test cards
@@ -843,9 +924,21 @@ class Command(BaseCommand):
                 carte=carte_cm,
                 defaults={"edit_mode": True},
             )
-            carte_primaire_cm.points_de_vente.set([pdv_bar, pdv_restaurant, pdv_terrasse, pdv_cashless, pdv_adhesion, pdv_mix, pdv_festival])
+            carte_primaire_cm.points_de_vente.set(
+                [
+                    pdv_bar,
+                    pdv_restaurant,
+                    pdv_terrasse,
+                    pdv_cashless,
+                    pdv_adhesion,
+                    pdv_mix,
+                    pdv_festival,
+                ]
+            )
             if created_cm:
-                self.stdout.write(f"  Carte primaire creee : {tag_id_cm} (tous les PV, edit_mode=True)")
+                self.stdout.write(
+                    f"  Carte primaire creee : {tag_id_cm} (tous les PV, edit_mode=True)"
+                )
             else:
                 self.stdout.write(f"  Carte primaire existante : {tag_id_cm}")
 
@@ -886,14 +979,19 @@ class Command(BaseCommand):
                 },
             )
             if created_client3:
-                self.stdout.write(f"  Carte client 3 (jetable) creee : {tag_id_client3}")
+                self.stdout.write(
+                    f"  Carte client 3 (jetable) creee : {tag_id_client3}"
+                )
             else:
-                self.stdout.write(f"  Carte client 3 (jetable) existante : {tag_id_client3}")
+                self.stdout.write(
+                    f"  Carte client 3 (jetable) existante : {tag_id_client3}"
+                )
 
             # Reset de la carte 3 en mode DEBUG
             # / Reset card 3 in DEBUG mode
             if settings.DEBUG:
                 from laboutik.utils.test_helpers import reset_carte
+
                 reset_carte(tag_id_client3)
                 self.stdout.write("  Carte 3 remise a zero (DEBUG=True)")
 
@@ -905,8 +1003,12 @@ class Command(BaseCommand):
             # ================================================================ #
 
             from BaseBillet.models import (
-                LigneArticle, ProductSold, PriceSold,
-                PaymentMethod, SaleOrigin, Event,
+                LigneArticle,
+                ProductSold,
+                PriceSold,
+                PaymentMethod,
+                SaleOrigin,
+                Event,
             )
             from laboutik.models import ClotureCaisse
             from django.utils import timezone
@@ -929,16 +1031,25 @@ class Command(BaseCommand):
                 uuid_transaction_demo = uuid_module.uuid4()
                 lignes_demo = []
 
-                def creer_ligne_demo(produit, prix_obj, quantite, methode_paiement,
-                                     asset_uuid=None, carte=None, wallet=None):
+                def creer_ligne_demo(
+                    produit,
+                    prix_obj,
+                    quantite,
+                    methode_paiement,
+                    asset_uuid=None,
+                    carte=None,
+                    wallet=None,
+                ):
                     """Cree ProductSold + PriceSold + LigneArticle."""
                     product_sold, _ = ProductSold.objects.get_or_create(
-                        product=produit, event=None,
-                        defaults={'categorie_article': produit.categorie_article},
+                        product=produit,
+                        event=None,
+                        defaults={"categorie_article": produit.categorie_article},
                     )
                     price_sold, _ = PriceSold.objects.get_or_create(
-                        productsold=product_sold, price=prix_obj,
-                        defaults={'prix': prix_obj.prix},
+                        productsold=product_sold,
+                        price=prix_obj,
+                        defaults={"prix": prix_obj.prix},
                     )
                     prix_centimes = int(round(float(prix_obj.prix) * 100))
                     ligne = LigneArticle.objects.create(
@@ -957,24 +1068,49 @@ class Command(BaseCommand):
                     return ligne
 
                 # Recuperer les produits existants
-                produit_biere = Product.objects.filter(name="Biere", methode_caisse=Product.VENTE).first()
-                produit_coca = Product.objects.filter(name="Coca", methode_caisse=Product.VENTE).first()
-                produit_eau = Product.objects.filter(name="Eau", methode_caisse=Product.VENTE).first()
-                produit_chips = Product.objects.filter(name="Chips", methode_caisse=Product.VENTE).first()
-                produit_vin_rouge = Product.objects.filter(name="Vin rouge", methode_caisse=Product.VENTE).first()
-                produit_recharge_eur = Product.objects.filter(name="Recharge EUR Test", methode_caisse=Product.RECHARGE_EUROS).first()
-                produit_recharge_cadeau = Product.objects.filter(name="Recharge Cadeau Test", methode_caisse=Product.RECHARGE_CADEAU).first()
-                produit_adhesion = Product.objects.filter(name="Adhesion POS Test", methode_caisse=Product.ADHESION).first()
-                produit_adhesion_mix = Product.objects.filter(name="Adhesion Test Mix", methode_caisse=Product.ADHESION).first()
+                produit_biere = Product.objects.filter(
+                    name="Biere", methode_caisse=Product.VENTE
+                ).first()
+                produit_coca = Product.objects.filter(
+                    name="Coca", methode_caisse=Product.VENTE
+                ).first()
+                produit_eau = Product.objects.filter(
+                    name="Eau", methode_caisse=Product.VENTE
+                ).first()
+                produit_chips = Product.objects.filter(
+                    name="Chips", methode_caisse=Product.VENTE
+                ).first()
+                produit_vin_rouge = Product.objects.filter(
+                    name="Vin rouge", methode_caisse=Product.VENTE
+                ).first()
+                # Les produits recharge sont crees par le signal Asset
+                # / Top-up products are created by the Asset signal
+                produit_recharge_eur = Product.objects.filter(
+                    methode_caisse=Product.RECHARGE_EUROS
+                ).first()
+                produit_recharge_cadeau = Product.objects.filter(
+                    methode_caisse=Product.RECHARGE_CADEAU
+                ).first()
+                produit_adhesion = Product.objects.filter(
+                    name="Adhesion POS Test", methode_caisse=Product.ADHESION
+                ).first()
+                produit_adhesion_mix = Product.objects.filter(
+                    name="Adhesion Test Mix", methode_caisse=Product.ADHESION
+                ).first()
 
                 # Assets fedow pour les paiements NFC
                 from fedow_core.models import Asset as FedowAsset
-                asset_tlf = FedowAsset.objects.filter(category=FedowAsset.TLF, active=True).first()
+
+                asset_tlf = FedowAsset.objects.filter(
+                    category=FedowAsset.TLF, active=True
+                ).first()
 
                 # Carte NFC
                 tag_id_client1 = getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543")
                 carte_nfc = CarteCashless.objects.filter(tag_id=tag_id_client1).first()
-                wallet_nfc = carte_nfc.user.wallet if carte_nfc and carte_nfc.user else None
+                wallet_nfc = (
+                    carte_nfc.user.wallet if carte_nfc and carte_nfc.user else None
+                )
 
                 # 1. Ventes bar (especes + CB + NFC)
                 if produit_biere:
@@ -983,8 +1119,15 @@ class Command(BaseCommand):
                         creer_ligne_demo(produit_biere, tarif, 10, PaymentMethod.CASH)
                         creer_ligne_demo(produit_biere, tarif, 5, PaymentMethod.CC)
                         if asset_tlf and carte_nfc:
-                            creer_ligne_demo(produit_biere, tarif, 3, PaymentMethod.LOCAL_EURO,
-                                             asset_uuid=asset_tlf.uuid, carte=carte_nfc, wallet=wallet_nfc)
+                            creer_ligne_demo(
+                                produit_biere,
+                                tarif,
+                                3,
+                                PaymentMethod.LOCAL_EURO,
+                                asset_uuid=asset_tlf.uuid,
+                                carte=carte_nfc,
+                                wallet=wallet_nfc,
+                            )
 
                 if produit_coca:
                     tarif = Price.objects.filter(product=produit_coca).first()
@@ -1007,19 +1150,32 @@ class Command(BaseCommand):
                     if tarif:
                         creer_ligne_demo(produit_vin_rouge, tarif, 2, PaymentMethod.CC)
                         if asset_tlf and carte_nfc:
-                            creer_ligne_demo(produit_vin_rouge, tarif, 1, PaymentMethod.LOCAL_EURO,
-                                             asset_uuid=asset_tlf.uuid, carte=carte_nfc, wallet=wallet_nfc)
+                            creer_ligne_demo(
+                                produit_vin_rouge,
+                                tarif,
+                                1,
+                                PaymentMethod.LOCAL_EURO,
+                                asset_uuid=asset_tlf.uuid,
+                                carte=carte_nfc,
+                                wallet=wallet_nfc,
+                            )
 
                 # 2. Recharges cashless (especes)
                 if produit_recharge_eur:
                     tarif = Price.objects.filter(product=produit_recharge_eur).first()
                     if tarif:
-                        creer_ligne_demo(produit_recharge_eur, tarif, 2, PaymentMethod.CASH)
+                        creer_ligne_demo(
+                            produit_recharge_eur, tarif, 2, PaymentMethod.CASH
+                        )
 
                 if produit_recharge_cadeau:
-                    tarif = Price.objects.filter(product=produit_recharge_cadeau).first()
+                    tarif = Price.objects.filter(
+                        product=produit_recharge_cadeau
+                    ).first()
                     if tarif:
-                        creer_ligne_demo(produit_recharge_cadeau, tarif, 1, PaymentMethod.CASH)
+                        creer_ligne_demo(
+                            produit_recharge_cadeau, tarif, 1, PaymentMethod.CASH
+                        )
 
                 # 3. Adhesions (especes + CB)
                 if produit_adhesion:
@@ -1031,10 +1187,14 @@ class Command(BaseCommand):
                 if produit_adhesion_mix:
                     tarif = Price.objects.filter(product=produit_adhesion_mix).first()
                     if tarif:
-                        creer_ligne_demo(produit_adhesion_mix, tarif, 2, PaymentMethod.CASH)
+                        creer_ligne_demo(
+                            produit_adhesion_mix, tarif, 2, PaymentMethod.CASH
+                        )
 
                 # 4. Billets (si un event existe)
-                event_futur = Event.objects.filter(datetime__gte=now - timedelta(days=30)).first()
+                event_futur = Event.objects.filter(
+                    datetime__gte=now - timedelta(days=30)
+                ).first()
                 if event_futur:
                     produit_billet = Product.objects.filter(
                         event=event_futur,
@@ -1043,18 +1203,33 @@ class Command(BaseCommand):
                     if produit_billet:
                         tarif = Price.objects.filter(product=produit_billet).first()
                         if tarif:
-                            creer_ligne_demo(produit_billet, tarif, 3, PaymentMethod.CASH)
+                            creer_ligne_demo(
+                                produit_billet, tarif, 3, PaymentMethod.CASH
+                            )
                             creer_ligne_demo(produit_billet, tarif, 1, PaymentMethod.CC)
 
                 # 5. Creer la cloture
-                total_especes = sum(l.amount for l in lignes_demo if l.payment_method == PaymentMethod.CASH)
-                total_cb = sum(l.amount for l in lignes_demo if l.payment_method == PaymentMethod.CC)
-                total_cashless = sum(l.amount for l in lignes_demo
-                                     if l.payment_method in [PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT])
+                total_especes = sum(
+                    ligne.amount
+                    for ligne in lignes_demo
+                    if ligne.payment_method == PaymentMethod.CASH
+                )
+                total_cb = sum(
+                    ligne.amount
+                    for ligne in lignes_demo
+                    if ligne.payment_method == PaymentMethod.CC
+                )
+                total_cashless = sum(
+                    ligne.amount
+                    for ligne in lignes_demo
+                    if ligne.payment_method
+                    in [PaymentMethod.LOCAL_EURO, PaymentMethod.LOCAL_GIFT]
+                )
                 total_general = total_especes + total_cb + total_cashless
 
                 from AuthBillet.models import TibilletUser
-                admin_email = getattr(settings, 'ADMIN_EMAIL', 'jturbeaux@pm.me')
+
+                admin_email = getattr(settings, "ADMIN_EMAIL", "jturbeaux@pm.me")
                 responsable = TibilletUser.objects.filter(email=admin_email).first()
 
                 cloture_demo = ClotureCaisse.objects.create(
@@ -1071,13 +1246,14 @@ class Command(BaseCommand):
 
                 # Generer et sauvegarder le rapport JSON complet
                 from laboutik.reports import RapportComptableService
+
                 service = RapportComptableService(
                     point_de_vente=pdv_bar,
                     datetime_debut=debut_service,
                     datetime_fin=now,
                 )
                 cloture_demo.rapport_json = service.generer_rapport_complet()
-                cloture_demo.save(update_fields=['rapport_json'])
+                cloture_demo.save(update_fields=["rapport_json"])
 
                 self.stdout.write(
                     f"  Cloture de demo : {len(lignes_demo)} lignes, "
@@ -1087,4 +1263,6 @@ class Command(BaseCommand):
                     f"cashless {total_cashless / 100:.2f})"
                 )
 
-            self.stdout.write(self.style.SUCCESS("Donnees de test POS creees avec succes."))
+            self.stdout.write(
+                self.style.SUCCESS("Donnees de test POS creees avec succes.")
+            )

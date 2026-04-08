@@ -476,13 +476,23 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
         point_de_vente_instance.products.filter(
             Q(methode_caisse__isnull=False) | Q(categorie_article=Product.ADHESION)
         )
-        .select_related("categorie_pos", "stock_inventaire")
+        .select_related("categorie_pos", "stock_inventaire", "asset")
         .prefetch_related(prix_euros_prefetch)
         .order_by("poids", "name")
     )
 
     articles = []
     for product in produits:
+        # Produits de recharge sans Asset lie, ou Asset archive/inactif → ne pas afficher
+        # / Top-up products without linked Asset, or archived/inactive Asset → skip
+        if product.methode_caisse in METHODES_RECHARGE:
+            if (
+                product.asset is None
+                or product.asset.archive
+                or not product.asset.active
+            ):
+                continue
+
         # Premier prix publié en euros (déjà filtré par le Prefetch)
         # First published EUR price (already filtered by Prefetch)
         if not product.prix_euros:
@@ -4051,136 +4061,72 @@ def _executer_recharges(
     articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client
 ):
     """
-    Exécute les recharges (RE/RC/TM) contenues dans le panier.
-    Executes top-ups (RE/RC/TM) contained in the cart.
+    Execute les recharges contenues dans le panier.
+    Chaque article de recharge connait son Asset via product.asset (FK directe).
+    / Executes top-ups in the cart.
+    Each top-up article knows its Asset via product.asset (direct FK).
 
     LOCALISATION : laboutik/views.py
 
-    DOIT être appelée à l'intérieur d'un bloc transaction.atomic().
-    MUST be called inside a transaction.atomic() block.
-
-    Pour chaque type de recharge :
-    - Trouve l'asset correspondant (TLF, TNF, TIM) du tenant courant
-    - Appelle TransactionService.creer_recharge(sender=wallet_lieu, receiver=wallet_client)
-    - Crée les LigneArticle avec la carte et l'asset renseignés
-    For each top-up type:
-    - Finds the corresponding asset (TLF, TNF, TIM) of the current tenant
-    - Calls TransactionService.creer_recharge(sender=venue_wallet, receiver=client_wallet)
-    - Creates LigneArticle with the card and asset filled in
+    DOIT etre appelee a l'interieur d'un bloc transaction.atomic().
+    / MUST be called inside a transaction.atomic() block.
 
     :param articles_panier: liste de dicts (seulement les articles recharge)
-    :param wallet_client: Wallet du client à créditer
+    :param wallet_client: Wallet du client a crediter
     :param carte_client: CarteCashless du client
     :param code_methode_paiement: code du moyen de paiement ("espece", "carte_bancaire", "CH")
-    :param ip_client: adresse IP de la requête
+    :param ip_client: adresse IP de la requete
     :return: None
-    :raises ValueError: si un asset requis n'est pas configuré
     """
     tenant_courant = connection.tenant
+    ip_client_str = ip_client or "0.0.0.0"
 
-    # Classifier les recharges par type
-    # Classify top-ups by type
-    articles_re = []  # Recharge euros (TLF)
-    articles_rc = []  # Recharge cadeau (TNF)
-    articles_tm = []  # Recharge temps (TIM)
-
+    # Regrouper les articles par Asset pour faire une seule transaction par Asset
+    # / Group articles by Asset to make one transaction per Asset
+    articles_par_asset = {}
     for article in articles_panier:
-        methode = article["product"].methode_caisse
-        if methode == Product.RECHARGE_EUROS:
-            articles_re.append(article)
-        elif methode == Product.RECHARGE_CADEAU:
-            articles_rc.append(article)
-        elif methode == Product.RECHARGE_TEMPS:
-            articles_tm.append(article)
+        asset = article["product"].asset
+        if asset is None:
+            logger.warning(
+                f"Product de recharge '{article['product'].name}' sans Asset — ignore"
+            )
+            continue
+        if asset.uuid not in articles_par_asset:
+            articles_par_asset[asset.uuid] = {
+                "asset": asset,
+                "articles": [],
+            }
+        articles_par_asset[asset.uuid]["articles"].append(article)
 
-    # Recharge euros (RE) → TLF : lieu → client
-    # Euro top-up (RE) → TLF: venue → client
-    if articles_re:
-        asset_tlf = Asset.objects.filter(
-            tenant_origin=tenant_courant,
-            category=Asset.TLF,
-            active=True,
-        ).first()
-        if asset_tlf is None:
-            raise ValueError(_("Monnaie locale non configurée"))
+    for groupe in articles_par_asset.values():
+        asset = groupe["asset"]
+        articles_du_groupe = groupe["articles"]
 
-        total_re = _calculer_total_panier_centimes(articles_re)
+        total_centimes = _calculer_total_panier_centimes(articles_du_groupe)
+
+        # Determiner le moyen de paiement pour la LigneArticle
+        # Les recharges cadeau (RC) et temps (TM) sont toujours gratuites,
+        # quel que soit le moyen de paiement choisi par le caissier.
+        # / Determine payment method for LigneArticle.
+        # Gift (RC) and time (TM) top-ups are always free.
+        methode_du_groupe = articles_du_groupe[0]["product"].methode_caisse
+        est_recharge_gratuite = methode_du_groupe in METHODES_RECHARGE_GRATUITES
+        code_methode_pour_ligne = (
+            "gift" if est_recharge_gratuite else code_methode_paiement
+        )
+
         TransactionService.creer_recharge(
-            sender_wallet=asset_tlf.wallet_origin,
+            sender_wallet=asset.wallet_origin,
             receiver_wallet=wallet_client,
-            asset=asset_tlf,
-            montant_en_centimes=total_re,
+            asset=asset,
+            montant_en_centimes=total_centimes,
             tenant=tenant_courant,
-            ip=ip_client,
+            ip=ip_client_str,
         )
         _creer_lignes_articles(
-            articles_re,
-            code_methode_paiement,
-            asset_uuid=asset_tlf.uuid,
-            carte=carte_client,
-            wallet=wallet_client,
-        )
-
-    # Recharge cadeau (RC) → TNF : lieu → client
-    # GRATUIT : le caissier offre du cadeau, pas de paiement.
-    # Le payment_method est toujours FREE, quel que soit le moyen de paiement
-    # choisi pour les autres articles du panier.
-    # / Gift top-up (RC) → TNF: venue → client
-    # FREE: the cashier gives a gift, no payment.
-    # payment_method is always FREE regardless of the payment method
-    # chosen for other items in the cart.
-    if articles_rc:
-        asset_tnf = Asset.objects.filter(
-            tenant_origin=tenant_courant,
-            category=Asset.TNF,
-            active=True,
-        ).first()
-        if asset_tnf is None:
-            raise ValueError(_("Monnaie cadeau non configurée"))
-
-        total_rc = _calculer_total_panier_centimes(articles_rc)
-        TransactionService.creer_recharge(
-            sender_wallet=asset_tnf.wallet_origin,
-            receiver_wallet=wallet_client,
-            asset=asset_tnf,
-            montant_en_centimes=total_rc,
-            tenant=tenant_courant,
-            ip=ip_client,
-        )
-        _creer_lignes_articles(
-            articles_rc,
-            "gift",
-            asset_uuid=asset_tnf.uuid,
-            carte=carte_client,
-            wallet=wallet_client,
-        )
-
-    # Recharge temps (TM) → TIM : lieu → client
-    # GRATUIT : meme logique que RC.
-    # / Time top-up (TM) → TIM: venue → client
-    # FREE: same logic as RC.
-    if articles_tm:
-        asset_tim = Asset.objects.filter(
-            tenant_origin=tenant_courant,
-            category=Asset.TIM,
-            active=True,
-        ).first()
-        if asset_tim is None:
-            raise ValueError(_("Monnaie temps non configurée"))
-
-        total_tm = _calculer_total_panier_centimes(articles_tm)
-        TransactionService.creer_recharge(
-            sender_wallet=asset_tim.wallet_origin,
-            receiver_wallet=wallet_client,
-            asset=asset_tim,
-            montant_en_centimes=total_tm,
-            tenant=tenant_courant,
-            ip=ip_client,
-        )
-        _creer_lignes_articles(
-            articles_tm,
-            "gift",
-            asset_uuid=asset_tim.uuid,
+            articles_du_groupe,
+            code_methode_pour_ligne,
+            asset_uuid=asset.uuid,
             carte=carte_client,
             wallet=wallet_client,
         )
@@ -4905,13 +4851,29 @@ class PaiementViewSet(viewsets.ViewSet):
         # 2. Determine client wallet (get or create ephemeral if needed)
         wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
-        # 3. Trouver l'asset TLF actif du tenant
-        # 3. Find the tenant's active TLF asset
-        asset_tlf = Asset.objects.filter(
-            tenant_origin=connection.tenant,
-            category=Asset.TLF,
-            active=True,
-        ).first()
+        # 3. Trouver l'asset du tenant depuis les articles du panier
+        # Les ventes et adhesions sont en TLF — on le prend depuis le premier
+        # article qui a un Asset lie, ou depuis un Product de recharge.
+        # / 3. Find the tenant's asset from cart articles.
+        # Sales and memberships use TLF — get it from the first article
+        # with a linked Asset, or from a top-up Product.
+        asset_tlf = None
+        for article in articles_panier:
+            produit = article["product"]
+            if produit.asset is not None:
+                asset_tlf = produit.asset
+                break
+
+        # Si aucun article n'a d'Asset (ex: panier VT pur sans recharges),
+        # chercher l'Asset TLF du tenant pour les debits.
+        # / If no article has an Asset (e.g. pure VT cart without top-ups),
+        # look up the tenant's TLF Asset for debits.
+        if asset_tlf is None:
+            asset_tlf = Asset.objects.filter(
+                tenant_origin=connection.tenant,
+                category=Asset.TLF,
+                active=True,
+            ).first()
 
         if asset_tlf is None:
             context_erreur = {

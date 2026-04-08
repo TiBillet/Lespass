@@ -1,5 +1,27 @@
 # Changelog / Journal des modifications
 
+## Asset-first recharge products / Produits de recharge pilotes par l'Asset
+
+**Date :** 8 avril 2026
+**Migration :** Oui — `BaseBillet/migrations/0208_product_asset_fk.py`
+
+**Quoi / What:** L'Asset `fedow_core.Asset` (TLF/TNF/TIM) pilote la creation des produits de recharge. Un signal `post_save` sur Asset cree automatiquement un Product multi-tarif (1/5/10/Libre) et l'attache aux PV CASHLESS. Plus de bouton "Recharge" sans Asset, plus d'erreur "Monnaie locale non configuree".
+
+**Pourquoi / Why:** Les produits de recharge etaient crees manuellement sans lien avec un Asset fedow_core. Le lookup par categorie dans `_executer_recharges()` echouait si l'Asset n'existait pas. Maintenant l'Asset drive tout : pas d'Asset = pas de bouton.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | FK `Product.asset → fedow_core.Asset` (nullable) |
+| `BaseBillet/migrations/0208_product_asset_fk.py` | Migration FK |
+| `fedow_core/signals.py` | Nouveau — signal post_save Asset → Product + Prices + PV CASHLESS |
+| `fedow_core/apps.py` | Enregistre le signal dans `ready()` |
+| `laboutik/views.py` | Filtre affichage, refactor `_executer_recharges` et `_payer_par_nfc` |
+| `laboutik/management/commands/create_test_pos_data.py` | Cree 3 Assets au lieu de 5 Products manuels |
+| `tests/pytest/test_asset_recharge_signal.py` | 6 tests signal (creation, archivage, renommage) |
+
+---
+
 ## Rapport temps reel — Session en cours / Real-time report — Current shift
 
 **Date :** Avril 2026
