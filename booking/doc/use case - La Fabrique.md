@@ -135,3 +135,206 @@ se fait avec un fichier partagé et des échanges de SMS. Il y a trois
 remorques (discernable par leur couleur de peinture) et il est important
 de savoir qui à emprunté quoi à tout moment.
 
+
+
+
+--------------------------------------------------------------------------------
+
+# Application des besoins avec la spécification v0.3
+
+--------------------------------------------------------------------------------
+
+## Configuration TiBillet — Besoins critiques : découpeuse laser
+
+### Calendar « Calendrier La Fabrique »
+
++---------------------------------+------------+------------+
+| label                           | start_date | end_date   |
++=================================+============+============+
+| Fermeture estivale              | 2026-08-01 | 2026-08-31 |
++---------------------------------+------------+------------+
+| Fermeture fin d'année           | 2026-12-24 | 2027-01-02 |
++---------------------------------+------------+------------+
+| Jour de l'An                    | 2026-01-01 | 2026-01-01 |
++---------------------------------+------------+------------+
+| Lundi de Pâques                 | 2026-04-06 | 2026-04-06 |
++---------------------------------+------------+------------+
+| Fête du Travail                 | 2026-05-01 | 2026-05-01 |
++---------------------------------+------------+------------+
+| Victoire 1945                   | 2026-05-08 | 2026-05-08 |
++---------------------------------+------------+------------+
+| Ascension                       | 2026-05-14 | 2026-05-14 |
++---------------------------------+------------+------------+
+| Lundi de Pentecôte              | 2026-05-25 | 2026-05-25 |
++---------------------------------+------------+------------+
+| Fête Nationale                  | 2026-07-14 | 2026-07-14 |
++---------------------------------+------------+------------+
+| Assomption                      | 2026-08-15 | 2026-08-15 |
++---------------------------------+------------+------------+
+| Toussaint                       | 2026-11-01 | 2026-11-01 |
++---------------------------------+------------+------------+
+| Armistice                       | 2026-11-11 | 2026-11-11 |
++---------------------------------+------------+------------+
+| Noël                            | 2026-12-25 | 2026-12-25 |
++---------------------------------+------------+------------+
+
+Notes :
+
+- il faut encore ajouter les jours fériés spécifiques à l'Alsace - Moselle
+- certain jours ne tombe pas sur une ouverture hebdo, mais on peut les garder
+
+
+### SlotTemplate « Créneaux laser »
+
+Les horaires d'ouverture des ateliers (2 sessions de 3h le jeudi à
+partir de 10h, 2 le vendredi à 13h, 3 le samedi à partir de 10h) sont
+découpés en créneaux d'1h pour la laser.
+
++----------+------------+---------+------------+------------------------------+
+| weekday  | start_time | durée   | slot_count | Créneaux générés             |
++==========+============+=========+============+==============================+
+| thu      | 10:00      | 60 min  | 6          | 10h–11h, 11h–12h, …, 15h–16h |
++----------+------------+---------+------------+------------------------------+
+| fri      | 13:00      | 60 min  | 6          | 13h–14h, 14h–15h, …, 18h–19h |
++----------+------------+---------+------------+------------------------------+
+| sat      | 10:00      | 60 min  | 9          | 10h–11h, 11h–12h, …, 18h–19h |
++----------+------------+---------+------------+------------------------------+
+
+### Resource « Découpeuse laser »
+
++-----------------------------+--------------------------------------+
+| Champ                       | Valeur                               |
++=============================+======================================+
+| name                        | Découpeuse laser                     |
++-----------------------------+--------------------------------------+
+| group                       | (aucun)                              |
++-----------------------------+--------------------------------------+
+| capacity                    | 1                                    |
++-----------------------------+--------------------------------------+
+| cancellation_deadline_hours | 24 heures                            |
++-----------------------------+--------------------------------------+
+| booking_horizon_days        | 30 jours                             |
++-----------------------------+--------------------------------------+
+| calendar                    | Calendrier La Fabrique               |
++-----------------------------+--------------------------------------+
+| slot_template               | Créneaux laser                       |
++-----------------------------+--------------------------------------+
+| pricing_rule                | → Price « Laser 15 € »               |
++-----------------------------+--------------------------------------+
+
+### Price « Laser 15 € » (modèle TiBillet existant)
+
++----------------------+--------------------------------------------+
+| Champ                | Valeur                                     |
++======================+============================================+
+| prix                 | 15,00                                      |
++----------------------+--------------------------------------------+
+| adhesion_obligatoire | FK → adhésion La Fabrique                  |
++----------------------+--------------------------------------------+
+| max_per_user         | (non utilisé)                              |
++----------------------+--------------------------------------------+
+
+
+--------------------------------------------------------------------------------
+
+
+## Configuration TiBillet — Besoins futurs : autres ressources
+
+### Sessions de travail en atelier
+
+Même Calendar que la laser (« Calendrier La Fabrique »).
+
+**SlotTemplate « Sessions atelier »**
+
++----------+------------+---------+------------+-----------------------------+
+| weekday  | start_time | durée   | slot_count | Créneaux générés            |
++==========+============+=========+============+=============================+
+| thu      | 10:00      | 180 min | 2          | 10h–13h, 13h–16h            |
++----------+------------+---------+------------+-----------------------------+
+| fri      | 13:00      | 180 min | 2          | 13h–16h, 16h–19h            |
++----------+------------+---------+------------+-----------------------------+
+| sat      | 10:00      | 180 min | 3          | 10h–13h, 13h–16h, 16h–19h  |
++----------+------------+---------+------------+-----------------------------+
+
+**Resources** (une par espace d'atelier, capacité à définir selon la
+surface et les équipements disponibles) :
+
++---------------------+----------+--------------------+
+| name                | capacity | slot_template      |
++=====================+==========+====================+
+| Menuiserie          | 6        | Sessions atelier   |
++---------------------+----------+--------------------+
+| Métallerie          | 2        | Sessions atelier   |
++---------------------+----------+--------------------+
+| Atelier couture     | 4        | Sessions atelier   |
++---------------------+----------+--------------------+
+| Cordonnerie         | 3        | Sessions atelier   |
++---------------------+----------+--------------------+
+| Imprimantes 3D      | 3        | Sessions atelier   |
++---------------------+----------+--------------------+
+| Électronique        | 2        | Sessions atelier   |
++---------------------+----------+--------------------+
+
+> ⚠️ **Limitation :** la spec prévoit un seul `pricing_rule` par
+> ressource. Or les sessions sont payantes pour les non-abonnés et
+> gratuites pour les abonnés. Ce cas de double tarification n'est pas
+> couvert en l'état par le modèle de données.
+> La gestion de ticket papier n'est pas possible non plus, le plus
+> simple serait de ne pas faire la gestion du paiement du tout par
+> TiBillet. Ou alors, il faudrait changer le fonctionnement du lieu.
+
+Notes :
+
+- les 3 imprimantes 3D mériteraient un tarif spécifique à l'heure
+
+
+### Remorques Carla
+
+Trois Resource distinctes, une par remorque identifiable à sa couleur,
+pour savoir à tout moment qui a emprunté quoi. Capacity = 1 (une seule
+personne peut emprunter une remorque donnée à la fois).
+Un groupe de ressource peut être défini pour présenter ensemble les
+remorques.
+
++---------------+----------+-------------------------------+
+| name          | capacity | pricing_rule                  |
++===============+==========+===============================+
+| Carla noire   | 1        | → Price « Emprunt Carla »     |
++---------------+----------+-------------------------------+
+| Carla verte   | 1        | → Price « Emprunt Carla »     |
++---------------+----------+-------------------------------+
+| Carla N&Verte | 1        | → Price « Emprunt Carla »     |
++---------------+----------+-------------------------------+
+
+**Price « Emprunt Carla »** : `prix = 0`,
+`adhesion_obligatoire` = FK → adhésion La Fabrique.
+
+La durée d'emprunt est variable (a priori à la journée ou sur plusieurs
+jours). Le modèle peut être approché avec des créneaux de 24h
+(`slot_duration_minutes = 1440`) et un `slot_count > 1` pour les
+emprunts multi-jours.
+
+> ⚠️ **Limitations :**
+>
+> 1. Le SlotTemplate génère des créneaux récurrents par jour de la
+>    semaine. Un emprunt commençant un mercredi pour 5 jours nécessite
+>    que chaque jour de la semaine soit déclaré dans le template, ce
+>    qui est inhabituel par rapport à l'usage prévu du modèle.
+>
+> 2. L'accès aux adhérents du Cambouis est explicitement hors scope v1
+>    (cross-tenant resource sharing).
+>    
+
+Notes, il y a plusieurs problèmes :
+
+- il faut que les adhérents du Cambouis puissent réserver. Le plus simple
+  serait d'ouvrir la réservation à tous. La validation serait en personne
+  sur place lorsque la remorque sort durant les horaires d'ouvertures.
+  Le cambouis à accès a des clé du lieu et peut s'auto gérer.
+- le modèle par session ne convient pas trop mais on peut problablement
+  s'en accomoder en découpant tous les jours de la semaine par : matin,
+  après-midi, soir et nuit.
+- Il faudrait un calendrier spécial ouvert tout le temps pour ne pas
+  restreindre la réservation.
+
+==> Mais le modèle à l'air de pouvoir s'accomoder de ce cas également.
