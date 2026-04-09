@@ -3,35 +3,45 @@
 ## Simulateur Pi3 + refactoring kiosk controlvanne / Pi3 simulator + kiosk refactoring
 
 **Date :** 9 avril 2026
-**Migration necessaire / Migration required :** Non
+**Migration necessaire / Migration required :** Oui — `BaseBillet/migrations/0210_alter_lignearticle_sale_origin_and_more.py`
 
 **Quoi / What:**
 - Simulateur Pi3 (mode DEMO) : panneau JS dans le kiosk qui simule le hardware (NFC + electrovanne + debitmetre)
+- Simulateur fidele au vrai Pi : vanne s'ouvre des l'autorisation, slider = robinet mecanique, fin de service = retrait carte
 - Separation vue ALL (grille) / vue detail (single tap + simulateur)
 - Migration de `kiosk_view` fonction vers `KioskViewSet` (list + retrieve)
 - Extraction carte kiosk en partial reutilisable
+- Push WebSocket explicite dans le viewset (authorize, pour_start, pour_update, pour_end, card_removed)
+- `SaleOrigin.TIREUSE` ("Connected tap") pour distinguer les ventes tireuse des ventes caisse
+- Colonne "Point de vente" ajoutee dans l'admin LigneArticle
+- Correction affichage poids : "cl" au lieu de "g" pour les ventes tireuse
 - Conformite djc : i18n, accessibilite, FALC, logger
 - Fix tenant-awareness du WebSocket consumer (database_sync_to_async)
 - Liens admin Unfold : sidebar dashboard, bouton kiosk sur fiche tireuse, lien module dashboard
 
-**Pourquoi / Why:** Permettre de tester le flow complet tireuse (badge → autorisation → tirage → facturation) sans hardware Pi.
+**Pourquoi / Why:** Permettre de tester le flow complet tireuse (badge → autorisation → tirage → facturation) sans hardware Pi. Corriger la tracabilite des ventes tireuse dans l'admin.
 
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-| `controlvanne/viewsets.py` | `kiosk_view` → `KioskViewSet` (list + retrieve) + `_verifier_authentification_kiosk` |
+| `controlvanne/viewsets.py` | `KioskViewSet` (list + retrieve) + `_push_ws_kiosk` + `_construire_payload_session` |
 | `controlvanne/urls.py` | 2 routes kiosk : `/kiosk/` (list) + `/kiosk/<uuid>/` (retrieve) |
 | `controlvanne/consumers.py` | print→logger, FALC, fix tenant `set_tenant(scope["tenant"])` |
 | `controlvanne/routing.py` | Casse normalisee (ALL→all), FALC |
 | `controlvanne/signals.py` | Documentation tenant-safe |
+| `controlvanne/billing.py` | `SaleOrigin.LABOUTIK` → `SaleOrigin.TIREUSE` |
 | `controlvanne/admin.py` | `change_form_before_template` + `compressed_fields` + `warn_unsaved_form` |
-| `controlvanne/static/controlvanne/js/simu_pi.js` | **Nouveau** — state machine simulateur Pi |
+| `controlvanne/static/controlvanne/js/simu_pi.js` | **Nouveau** — state machine fidele au Pi |
 | `controlvanne/static/controlvanne/js/panel_kiosk.js` | Reecrit FALC, noms explicites, casse WS |
 | `controlvanne/templates/.../kiosk_detail.html` | **Nouveau** — vue single tap + simulateur |
 | `controlvanne/templates/.../kiosk_list.html` | **Nouveau** — vue grille toutes les tireuses |
 | `controlvanne/templates/.../partial/kiosk_card.html` | **Nouveau** — carte reutilisable |
+| `BaseBillet/models.py` | Ajout `SaleOrigin.TIREUSE = "TI"` |
+| `Administration/admin/sales.py` | Colonne `display_point_de_vente` + fix fallback unite poids |
 | `Administration/admin/dashboard.py` | Lien sidebar kiosk + lien module dashboard |
 | `Administration/templates/.../tireusebec_before.html` | **Nouveau** — bouton kiosk sur fiche |
+| `tests/e2e/test_controlvanne_kiosk.py` | **Nouveau** — 10 tests E2E (vues + simulateur + admin) |
+| `tests/PIEGES.md` | Piege 9.100 : `database_sync_to_async` + tenant |
 | `TECH DOC/.../SPEC_SIMULATEUR_PI.md` | **Nouveau** — spec du simulateur |
 
 ## Flush rapide sans migrations / Fast flush without migrations
