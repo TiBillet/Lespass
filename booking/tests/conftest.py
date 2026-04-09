@@ -145,6 +145,31 @@ def test_user(tenant):
         return user
 
 
+@pytest.fixture(scope="module")
+def admin_client(test_user):
+    """
+    Client Django authentifié comme superutilisateur pour tester l'admin.
+    / Django client authenticated as superuser for admin tests.
+
+    LOCALISATION : booking/tests/conftest.py
+
+    Après flush.sh, is_active peut être False sur le superuser — on
+    s'assure qu'il est actif avant force_login.
+    / After flush.sh, is_active can be False on the superuser — we
+    ensure it is active before force_login.
+    """
+    from django.test import Client as DjangoClient
+
+    with schema_context(TENANT_SCHEMA):
+        if not test_user.is_active:
+            test_user.is_active = True
+            test_user.save(update_fields=['is_active'])
+
+    client = DjangoClient(HTTP_HOST='lespass.tibillet.localhost')
+    client.force_login(test_user)
+    return client
+
+
 @pytest.fixture(scope="module", autouse=True)
 def cleanup_test_data(tenant):
     """

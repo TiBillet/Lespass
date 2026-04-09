@@ -4281,3 +4281,5 @@ class InitiativeAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
+
+import booking.admin  # noqa: F401 — enregistre les modèles booking sur staff_admin_site

@@ -502,7 +502,7 @@ def get_sidebar_navigation(request):
     if configuration.module_booking:
         navigation.append(
             {
-                "title": _("Ressources"),
+                "title": _("Booking"),
                 "separator": True,
                 "collapsible": True,
                 "items": [
@@ -757,11 +757,11 @@ MODULE_FIELDS = {
     #     "link_label": _("Open kiosk"),
     #     "link_icon": "fa-display",
     # },
-    # "module_booking": {
-    #     "name": _("Booking"),
-    #     "description": _("Resource booking: rooms, equipment, coworking desks."),
-    #     "testid": "dashboard-card-booking",
-    # },
+    "module_booking": {
+        "name": _("Booking"),
+        "description": _("Resource booking: rooms, equipment, coworking desks."),
+        "testid": "dashboard-card-booking",
+    },
 }
 
 
