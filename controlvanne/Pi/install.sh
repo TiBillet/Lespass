@@ -49,7 +49,7 @@ sudo locale-gen || true
 # ==========================================
 echo "[2/10] 📝 Configuration..."
 
-echo "🔹 URL publique TiBillet (ex: https://tibillet.mondomaine.tld)"
+echo "🔹 URL publique TiBillet (ex: https://tibillet.coop)"
 read -p "   (Défaut: $DEFAULT_PUBLIC_URL) : " PUBLIC_URL
 PUBLIC_URL=${PUBLIC_URL:-$DEFAULT_PUBLIC_URL}
 PUBLIC_URL=${PUBLIC_URL%/}
