@@ -68,7 +68,7 @@ CLAIM_RESPONSE=$(curl -s -X POST "${PUBLIC_URL}/api/discovery/claim/" \
 
 SERVER_URL=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['server_url'])")
 API_KEY=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['api_key'])")
-TIREUSE_UUID=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['tireuse_uuid'])")
+TIREUSE_UUID=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tireuse_uuid', ''))")
 
 if [ -z "$SERVER_URL" ] || [ -z "$API_KEY" ]; then
   echo "ERREUR: Appairage echoue. Verifiez le PIN et l'URL."
@@ -76,9 +76,10 @@ if [ -z "$SERVER_URL" ] || [ -z "$API_KEY" ]; then
 fi
 echo "Appairage reussi ! Tenant: $SERVER_URL, Tireuse: $TIREUSE_UUID"
 
+read -p "🔹 Depot Git [Défaut: $DEFAULT_GIT_REPO] : " GIT_REPO
 read -p "🔹 Branche Git [Défaut: $DEFAULT_GIT_BRANCH] : " GIT_BRANCH
 GIT_BRANCH=${GIT_BRANCH:-$DEFAULT_GIT_BRANCH}
-GIT_REPO="$DEFAULT_GIT_REPO"
+GIT_REPO=${GIT_REPO:-$DEFAULT_GIT_REPO}
 
 echo ""
 echo "🔹 Type de lecteur RFID :"
@@ -121,7 +122,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Extraction du sous-dossier Pi vers le répertoire cible
-SOURCE_SUBDIR="$TEMP_DIR/Pi"
+SOURCE_SUBDIR="$TEMP_DIR/controlvanne/Pi"
 
 if [ -d "$SOURCE_SUBDIR" ]; then
     echo "📂 Installation des fichiers vers $TARGET_DIR..."
@@ -305,6 +306,15 @@ PROFILE_DIR="/home/sysop/.config/chromium-kiosk"
 mkdir -p "$PROFILE_DIR/Default"
 touch "$PROFILE_DIR/First Run"
 
+# Attendre que tibeer ait injecté le cookie sessionid (max 30s)
+# / Wait for tibeer to inject the sessionid cookie (max 30s)
+WAIT=0
+while [ ! -f /tmp/tibeer_cookie_ready ] && [ $WAIT -lt 60 ]; do
+    sleep 0.5
+    WAIT=$((WAIT + 1))
+done
+rm -f /tmp/tibeer_cookie_ready
+
 # Boucle de relance Chromium (X reste actif si Chromium crash)
 while true; do
   "$CHROMIUM_BIN" \
@@ -312,7 +322,7 @@ while true; do
     --force-device-scale-factor=2.0 \
     --lang=fr --accept-lang=fr-FR,fr \
     --no-first-run --no-default-browser-check \
-    --kiosk "$URL" --incognito --start-fullscreen \
+    --kiosk "$URL" --start-fullscreen \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
     --disable-gpu --use-gl=swiftshader --disable-dev-shm-usage \

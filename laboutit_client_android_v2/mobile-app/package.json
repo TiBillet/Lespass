@@ -1,0 +1,41 @@
+{
+  "name": "coop.tibillet.laboutik",
+  "displayName": "TibilletLaBoutik",
+  "version": "1.0.0",
+  "description": "A sample Apache Cordova application that responds to the deviceready event.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ecosystem:cordova"
+  ],
+  "author": "Apache Cordova Team",
+  "license": "Apache-2.0",
+  "cordova": {
+    "plugins": {
+      "cordova-plugin-connectivity": {},
+      "re.filaos.sunmiprinterplugin": {},
+      "cordova-plugin-nfc-reader": {},
+      "cordova-plugin-device": {},
+      "cordova-plugin-networkinterface": {},
+      "cordova-plugin-file": {},
+      "cordova-plugin-android-permissions": {},
+      "cordova-plugin-app-version": {}
+    },
+    "platforms": [
+      "android"
+    ]
+  },
+  "devDependencies": {
+    "cordova-android": "^14.0.0",
+    "cordova-plugin-android-permissions": "^1.1.5",
+    "cordova-plugin-app-version": "^0.1.14",
+    "cordova-plugin-connectivity": "file:mes-plugins/cordova-plugin-connectivity",
+    "cordova-plugin-device": "^3.0.0",
+    "cordova-plugin-file": "^8.1.3",
+    "cordova-plugin-networkinterface": "^2.2.0",
+    "cordova-plugin-nfc-reader": "file:mes-plugins/cordova-plugin-nfc-reader",
+    "cordova-plugin-sunmi-printer": "file:mes-plugins/cordova-plugin-sunmi-printer"
+  }
+}

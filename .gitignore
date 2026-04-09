@@ -179,3 +179,9 @@ AGENTS.md
 #dev prod like
 docker-compose-filaos.yml
 dev-filaos
+
+# Cordova
+**/node_modules/
+**/plugins/
+**/platforms/
+env.js

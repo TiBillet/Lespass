@@ -1,0 +1,97 @@
+## Communication App-to-App sur Android
+
+### 1. **Intents**
+Les **Intents** sont utilisés pour communiquer entre applications. Ils permettent de lancer une action ou d'envoyer des données d'une application à une autre.
+
+Exemple pour envoyer un message SMS :
+```java
+Intent intent = new Intent(Intent.ACTION_SENDTO);
+intent.setData(Uri.parse("smsto:"));
+intent.putExtra("sms_body", "Salut, comment ça va ?");
+startActivity(intent);
+````
+
+### 2. **Content Providers**
+
+Les **Content Providers** permettent de partager des données entre applications. Par exemple, l'accès aux contacts ou à des fichiers peut être réalisé via des Content Providers.
+
+Exemple pour accéder aux contacts :
+
+```java
+Cursor cursor = getContentResolver().query(ContactsContract.Contacts.CONTENT_URI, null, null, null, null);
+```
+
+### 3. **Broadcast Receivers**
+
+Les **Broadcast Receivers** écoutent les événements système ou d'autres applications (par exemple, changement de réseau ou arrivée de message).
+
+Exemple pour écouter un changement de connexion réseau :
+
+```java
+BroadcastReceiver receiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        // Réagir à l'événement réseau
+    }
+};
+IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
+registerReceiver(receiver, filter);
+```
+
+### 4. **Services**
+
+Les **Services** permettent à une application d'exécuter des tâches en arrière-plan. Une autre application peut interagir avec ces services pour obtenir des données ou effectuer des actions.
+
+### 5. **APIs de Partage**
+
+Les **APIs de partage** permettent de partager facilement du contenu (texte, images, fichiers) entre applications.
+
+Exemple pour partager une image :
+
+```java
+Intent shareIntent = new Intent(Intent.ACTION_SEND);
+shareIntent.setType("image/*");
+shareIntent.putExtra(Intent.EXTRA_STREAM, imageUri);
+startActivity(Intent.createChooser(shareIntent, "Partager via"));
+```
+
+### 6. **Firebase Cloud Messaging (FCM)**
+
+**FCM** permet d'envoyer des notifications push et d'autres messages entre applications. Cela permet une communication en temps réel, même si l'application n'est pas en avant-plan.
+
+### 7. **Deep Links**
+
+Les **Deep Links** permettent de diriger un utilisateur vers une page spécifique d'une application à partir d'une URL.
+
+Exemple de deep link :
+
+```java
+Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com/profile"));
+startActivity(intent);
+```
+
+### 8. **Android App Links**
+
+Les **Android App Links** sont un type de deep link qui permet de lier des URLs HTTP(S) directement à des applications Android.
+
+### 9. **Bluetooth/NFC**
+
+Pour des connexions proches, **Bluetooth** ou **NFC** permettent à des appareils Android de communiquer directement entre eux.
+
+---
+
+### Résumé
+
+Les méthodes suivantes sont couramment utilisées pour la communication entre applications sur Android :
+
+* **Intents** : Lancer des actions ou envoyer des données.
+* **Content Providers** : Partager des données entre applications.
+* **Broadcast Receivers** : Écouter des événements système ou d'autres applications.
+* **Services** : Exécuter des tâches en arrière-plan.
+* **APIs de partage** : Partager du contenu entre applications.
+* **FCM** : Notifications et messages en temps réel.
+* **Deep Links** : Diriger vers une page spécifique dans une autre application.
+* **Android App Links** : Liens directs vers des pages d'applications.
+* **Bluetooth/NFC** : Connexion directe entre appareils.
+
+Tu peux adapter et utiliser ces mécanismes selon les besoins de ton projet Android !

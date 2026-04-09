@@ -1,0 +1,12 @@
+#!/bin/bash
+cordova platform remove android \
+&& cordova plugin add ./mes-plugins/cordova-plugin-connectivity \
+&& cordova plugin add ./mes-plugins/cordova-plugin-sunmi-printer \
+&& cordova plugin add ./mes-plugins/cordova-plugin-nfc-reader \
+&& cordova plugin add cordova-plugin-device \
+&& cordova plugin add cordova-plugin-networkinterface \
+&& cordova plugin add cordova-plugin-file \
+&& cordova plugin add cordova-plugin-android-permissions \
+&& cordova plugin add cordova-plugin-app-version \
+&& cordova platform add android@14.0.0 \
+&& cordova build android
