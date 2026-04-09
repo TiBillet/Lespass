@@ -164,21 +164,22 @@ def tireuse_billing(tenant):
                 poids_mesure=True,
             )
 
-        pdv = PointDeVente.objects.create(
-            name="POS tireuse billing test",
-            hidden=True,  # Caché pour ne pas polluer les tests menu_ventes / Hidden to not pollute menu_ventes tests
-        )
-
-        tireuse = TireuseBec.objects.create(
+        tireuse, _created = TireuseBec.objects.get_or_create(
             nom_tireuse="Tireuse billing test",
-            enabled=True,
-            fut_actif=produit_fut,
-            debimetre=debimetre,
-            point_de_vente=pdv,
-            reservoir_ml=Decimal("30000.00"),
-            seuil_mini_ml=Decimal("0.00"),
-            appliquer_reserve=False,
+            defaults={
+                "enabled": True,
+                "fut_actif": produit_fut,
+                "debimetre": debimetre,
+                "reservoir_ml": Decimal("30000.00"),
+                "seuil_mini_ml": Decimal("0.00"),
+                "appliquer_reserve": False,
+            },
         )
+        # Le signal post_save cree automatiquement un PointDeVente.
+        # On le marque hidden pour ne pas polluer les tests menu_ventes.
+        # / post_save signal auto-creates a PointDeVente. Mark it hidden.
+        if tireuse.point_de_vente:
+            PointDeVente.objects.filter(pk=tireuse.point_de_vente_id).update(hidden=True)
 
         return tireuse
 

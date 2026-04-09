@@ -173,6 +173,7 @@ class TireuseBec(models.Model):
 
     nom_tireuse = models.CharField(
         max_length=50,
+        unique=True,
         verbose_name=_("Tap name"),
         help_text=_("Display name: e.g. 'Beer', 'Soft drink'"),
     )

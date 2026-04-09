@@ -95,7 +95,9 @@ class Command(BaseCommand):
 
         # Recuperation du tenant "lespass" comme origine des cartes.
         # / Get the "lespass" tenant as card origin.
-        tenant_lespass = Client.objects.filter(schema_name=SCHEMA_TENANT_ORIGINE).first()
+        tenant_lespass = Client.objects.filter(
+            schema_name=SCHEMA_TENANT_ORIGINE
+        ).first()
         if tenant_lespass is None:
             self.stderr.write(
                 f"ERREUR : tenant '{SCHEMA_TENANT_ORIGINE}' introuvable en base. "
@@ -116,7 +118,6 @@ class Command(BaseCommand):
         nombre_cartes_creees = 0
 
         for tag_id_argument in liste_tag_ids:
-
             # Normalisation du tag_id : majuscules, sans espaces.
             # Le lecteur RFID renvoie des hex en majuscules (ex: "741ECC2A").
             # / Normalize tag_id: uppercase, stripped.
@@ -132,7 +133,9 @@ class Command(BaseCommand):
                 )
                 continue
 
-            tag_id_est_hex_valide = all(c in "0123456789ABCDEF" for c in tag_id_normalise)
+            tag_id_est_hex_valide = all(
+                c in "0123456789ABCDEF" for c in tag_id_normalise
+            )
             if not tag_id_est_hex_valide:
                 self.stderr.write(
                     f"ERREUR : tag_id '{tag_id_normalise}' contient "
@@ -142,7 +145,9 @@ class Command(BaseCommand):
 
             # Verification : une carte avec ce tag_id existe peut-etre deja.
             # / Check: a card with this tag_id may already exist.
-            carte_existante = CarteCashless.objects.filter(tag_id=tag_id_normalise).first()
+            carte_existante = CarteCashless.objects.filter(
+                tag_id=tag_id_normalise
+            ).first()
             if carte_existante is not None:
                 self.stdout.write(
                     f"EXISTE DEJA : tag_id={carte_existante.tag_id}, "

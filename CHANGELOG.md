@@ -1,5 +1,30 @@
 # Changelog / Journal des modifications
 
+## Auto-creation POS + PairingDevice a la creation d'une tireuse / Auto-create POS + PairingDevice on tap creation
+
+**Date :** 9 avril 2026
+**Migration necessaire / Migration required :** Non
+
+**Quoi / What:**
+- A la creation d'une TireuseBec, un PointDeVente (type TIREUSE) et un PairingDevice (PIN 6 chiffres) sont crees automatiquement par le signal post_save
+- Le formulaire admin de creation est simplifie : seuls nom, fut, debimetre, seuil, enabled, notes
+- En edition, point_de_vente et pairing_device apparaissent en lecture seule
+- Colonne PIN dans la liste admin (affiche le PIN ou "Appaire" si consomme)
+- Management command `create_test_carte` pour creer des cartes NFC de test avec origine=lespass
+- Script Pi `test_rfid.py` unifie (supporte RC522/VMA405/ACR122U via .env)
+
+**Pourquoi / Why:** Simplifier la creation d'une tireuse — plus besoin de creer manuellement le POS et l'appareil d'appairage. Le PIN est visible directement dans la liste admin.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `controlvanne/signals.py` | Auto-creation POS + PairingDevice dans `tireusebec_post_save` |
+| `controlvanne/admin.py` | `get_fields()`, `get_readonly_fields()`, `pin_code_display`, `get_queryset` select_related |
+| `QrcodeCashless/management/commands/create_test_carte.py` | Nouveau — management command creation cartes NFC test |
+| `tests/PIEGES.md` | Pieges 9.1b (FakeTenant + FK signal) et 9.1c (get_or_create unique constraint) |
+
+---
+
 ## Simulateur Pi3 + refactoring kiosk controlvanne / Pi3 simulator + kiosk refactoring
 
 **Date :** 9 avril 2026
