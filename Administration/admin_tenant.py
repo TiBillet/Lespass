@@ -14,3 +14,4 @@ from Administration.admin import (  # noqa: F401
     membership, sales, events, reservations, settings_apps, fedow, crowds,
     inventaire,
 )
+import booking.admin  # noqa: F401 — enregistre les modèles booking sur staff_admin_site

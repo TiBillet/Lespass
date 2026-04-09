@@ -429,6 +429,49 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- module_booking : Réservation de ressources ---
+    # / --- module_booking: Resource booking ---
+    if configuration.module_booking:
+        navigation.append(
+            {
+                "title": _("Booking"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Resources"),
+                        "icon": "chair",
+                        "link": reverse_lazy("staff_admin:booking_resource_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Resource groups"),
+                        "icon": "stacks",
+                        "link": reverse_lazy("staff_admin:booking_resourcegroup_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Calendars"),
+                        "icon": "calendar_month",
+                        "link": reverse_lazy("staff_admin:booking_calendar_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Weekly openings"),
+                        "icon": "schedule",
+                        "link": reverse_lazy("staff_admin:booking_weeklyopening_changelist"),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Bookings"),
+                        "icon": "event_available",
+                        "link": reverse_lazy("staff_admin:booking_booking_changelist"),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
     # --- Toujours visible : Ventes & comptabilite ---
     # / --- Always visible: Sales & accounting ---
     navigation.append(
@@ -654,6 +697,11 @@ MODULE_FIELDS = {
             "Connected beer tap management: RFID authorization, flow metering, kiosk display."
         ),
         "testid": "dashboard-card-tireuse",
+    },
+    "module_booking": {
+        "name": _("Booking"),
+        "description": _("Resource booking: rooms, equipment, coworking desks."),
+        "testid": "dashboard-card-booking",
     },
 }
 

@@ -276,53 +276,55 @@ automatically by `demo_data_v2` (and therefore by `flush.sh`).
 
 --------------------------------------------------------------------------------
 
-## Session 4 — Django admin panel
+## Session 4 — Django admin panel (DONE ✓)
 
 Add the admin panel early so that the fixtures from Session 3 are
 visible and manually verifiable in the backoffice throughout
 development.
 
-**Admin registrations (per spec section 7):**
+**Admin registrations as implemented:**
 
-+---------------+------------+-----------------------------------+
-| Model         | Admin type | Inline children                   |
-+===============+============+===================================+
-| ResourceGroup | ModelAdmin | —                                 |
-+---------------+------------+-----------------------------------+
-| Calendar      | ModelAdmin | ClosedPeriod as StackedInline     |
-+---------------+------------+-----------------------------------+
-| WeeklyOpening  | ModelAdmin | OpeningEntry as TabularInline        |
-+---------------+------------+-----------------------------------+
-| Resource      | ModelAdmin | —                                 |
-+---------------+------------+-----------------------------------+
-| Booking       | ModelAdmin | — (filterable by date and status) |
-+---------------+------------+-----------------------------------+
++---------------+------------+--------------------------------------+
+| Model         | Admin type | Inline children / extras             |
++===============+============+======================================+
+| ResourceGroup | ModelAdmin | Resource as TabularInline            |
++---------------+------------+--------------------------------------+
+| Calendar      | ModelAdmin | ClosedPeriod as TabularInline        |
++---------------+------------+--------------------------------------+
+| WeeklyOpening | ModelAdmin | OpeningEntry as TabularInline        |
++---------------+------------+--------------------------------------+
+| Resource      | ModelAdmin | list_display with 5 columns          |
++---------------+------------+--------------------------------------+
+| Booking       | ModelAdmin | filterable by date and status        |
++---------------+------------+--------------------------------------+
 
-### Session 4.1 — Red phase
+**Files created / modified:**
 
-**Files to create:**
-- `booking/tests/test_admin.py`
+- `booking/tests/test_admin.py` — 5 tests
+- `booking/tests/conftest.py` — added `admin_client` fixture
+- `booking/admin.py` — registrations on `staff_admin_site` (Unfold)
+- `Administration/admin_tenant.py` — imports `booking.admin`
+- `Administration/admin/dashboard.py` — booking section in sidebar,
+  conditional on `configuration.module_booking`
+- `BaseBillet/models.py` — added `module_booking` BooleanField
+- `BaseBillet/migrations/0208_module_booking.py` — migration
 
-**Tests to write:**
-```
-test_admin_resource_list_accessible_to_staff
-test_admin_weekly_opening_shows_opening_entries_inline
-test_admin_calendar_shows_closed_periods_inline
-test_admin_booking_list_filterable_by_date
-test_admin_booking_list_filterable_by_status
-```
+**Deviations from plan:**
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
-
-### Session 4.2 — Green phase
-
-**Files to modify:**
-- `booking/admin.py`
-
-Write the minimal admin registrations to make all red-phase tests
-pass.
+- The project uses a custom `staff_admin_site` (Unfold), not
+  `admin.site` — all registrations use `@admin.register(site=...)`.
+- `ClosedPeriod` uses `TabularInline` instead of `StackedInline` —
+  13 entries were too tall with StackedInline.
+- `ResourceGroup` shows its `Resource` children as a TabularInline.
+- `Resource` has `list_display` for a tabular changelist view.
+- `tags` field excluded from admin on both Resource and ResourceGroup
+  (JSONField textarea unusable — see decisions doc §4).
+- Booking section in sidebar gated on `module_booking` flag, added to
+  `Configuration` model and dashboard toggle cards.
+- `ClosedPeriod.end_date` help_text updated to document the
+  single-day / multi-day / endless convention.
+- French translations pending — PO file has upstream merge conflicts
+  (see decisions doc §5).
 
 --------------------------------------------------------------------------------
 

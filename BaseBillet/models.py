@@ -624,6 +624,11 @@ class Configuration(SingletonModel):
         verbose_name=_("Connected tap module"),
         help_text=_("Enable connected beer tap management (controlvanne)."),
     )
+    module_booking = models.BooleanField(
+        default=False,
+        verbose_name=_("Booking module"),
+        help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
+    )
 
     currency_code = models.CharField(max_length=3, default="EUR")
 

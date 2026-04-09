@@ -221,7 +221,11 @@ class ClosedPeriod(models.Model):
         null=True,
         blank=True,
         verbose_name=_('End date'),
-        help_text=_('Leave empty for an endless closure.'),
+        help_text=_(
+            'Same as start date: single-day closure. '
+            'Later than start date: multi-day closure. '
+            'Leave empty: endless closure.'
+        ),
     )
     label = models.CharField(
         max_length=200,
