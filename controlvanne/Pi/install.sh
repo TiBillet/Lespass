@@ -18,9 +18,9 @@ VENV_DIR="$TARGET_DIR/.venv"
 # ==========================================
 # Valeurs exemple par defaut
 # ==========================================
-DEFAULT_PUBLIC_URL="https://tibillet.mondomaine.tld"
-DEFAULT_GIT_REPO="https://github.com/TiBillet/tiheureuse.git"
-DEFAULT_GIT_BRANCH="master"
+DEFAULT_PUBLIC_URL="https://devtib.fr"
+DEFAULT_GIT_REPO="https://github.com/TiBillet/Lespass.git"
+DEFAULT_GIT_BRANCH="V2"
 
 
 echo "🍻 INSTALLATION TIBEER "
