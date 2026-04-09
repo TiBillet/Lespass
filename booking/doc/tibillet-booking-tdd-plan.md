@@ -328,52 +328,102 @@ development.
 
 --------------------------------------------------------------------------------
 
-## Session 5 — Slot computation engine (pure Python, independent file)
+## Session 5 — Slot computation engine (pure Python, independent file) (DONE ✓)
 
 The algorithm lives in `booking/slot_engine.py`. It is broken down
 into simple, independently testable functions.
 
-**Function breakdown:**
+**Files created / modified:**
+
+- `booking/slot_engine.py` — engine implementation
+- `booking/tests/test_slot_engine.py` — 35 tests
+- `booking/doc/tibillet-booking-spec.md` — v0.4 → v0.5
+- `booking/doc/tibillet-booking-decisions.md` — §7, §8, §9 added
+- `booking/tests/test_weekly_opening_overlap.py` — §9 test added (skipped)
+
+**Functions as implemented:**
 
 ```python
-# Assumes a given resource and a given period
-# / Pour une ressource et une période donnée
-
-def get_closed_dates_for_resource(resource, date_from, date_to):
-    """Query DB: fetch ClosedPeriods from the resource's Calendar."""
-
-def get_opening_entries_for_resource(resource):
-    """Query DB: fetch SlotEntries from the resource's WeeklyOpening."""
-
-def get_existing_bookings_for_resource(resource, date_from, date_to):
-    """Query DB: fetch Bookings (new/validated/confirmed) in the period."""
-
-def generate_theoretical_slots(opening_entries, date_from, date_to, closed_dates):
-    """Compute all theoretical slots — no DB queries, pure date math."""
-
-def compute_remaining_capacity(slot, resource_capacity, existing_bookings):
-    """For one slot: capacity − count of overlapping bookings."""
-
-def compute_slots(resource, date_from, date_to):
-    """Entry point: returns list of slots with remaining_capacity."""
+def get_closed_dates_for_resource(resource, date_from, date_to) -> set[date]
+def get_opening_entries_for_resource(resource) -> QuerySet
+def get_existing_bookings_for_resource(resource, date_from, date_to) -> QuerySet
+def generate_theoretical_slots(resource_id, opening_entries, date_from, date_to, closed_dates) -> list[Slot]
+def compute_remaining_capacity(slot, capacity, existing_bookings) -> int
+def compute_slots(resource, date_from, date_to) -> list[Slot]
 ```
 
-### Session 5.1 — Red phase
+Internal helper (not exported):
 
-**Files to create:**
-- `booking/tests/test_slot_engine.py`
-
-**Tests to write (this part must be thoroughly tested):**
+```python
+def _slot_intersects_closed_date(start_dt, end_dt, closed_dates) -> bool
 ```
+
+**Key decisions made during this session:**
+
+- Closure check is **per slot**, not per entry (decisions §7). The original
+  plan had `if current_date not in closed_dates` as an outer guard — this
+  was wrong: an entry whose start day is closed can still produce slots
+  whose `start_datetime` falls on a later open day (bleed-over). Guard
+  removed; `_slot_intersects_closed_date` is called for each slot instead.
+
+- **Half-open interval** for date intersection: `(end_dt − 1 µs).date()`
+  is used as the last checked day. A slot ending exactly at midnight
+  (00:00:00 of the next day) does NOT intersect that next day — it ends
+  at the boundary with zero duration there. A slot ending at 00:30 of the
+  next day does intersect it and is excluded if that day is closed.
+
+- **timedelta arithmetic** for slot start computation — not `hours // 60`.
+  `slot_start_minutes = i × slot_duration_minutes` can exceed 1439 for
+  large slot counts (e.g. 7 × 1440 min → slot[6] starts at 8640 min).
+  `datetime(y, m, d, 144, 0)` raises `ValueError`; `timedelta` addition
+  handles it correctly.
+
+- `compute_remaining_capacity` parameter named `capacity` (not
+  `resource_capacity`) — matches the call sites in the tests.
+
+**Tests written (final list — 35 total):**
+
+```
+# get_closed_dates_for_resource (4)
 test_get_closed_dates_returns_all_dates_in_closed_period
 test_get_closed_dates_handles_single_day_period
 test_get_closed_dates_handles_null_end_date
+test_get_closed_dates_ignores_period_outside_range
+
+# generate_theoretical_slots (13)
 test_generate_theoretical_slots_from_weekday_template
 test_generate_theoretical_slots_excludes_closed_dates
 test_generate_theoretical_slots_respects_booking_horizon
+test_generate_theoretical_slots_start_on_closed_day_bleed_into_open_day_is_excluded
+test_generate_theoretical_slots_last_slot_bleeds_onto_open_day_is_returned
+test_generate_theoretical_slots_bleed_into_closed_day_start_date_is_open
+test_generate_theoretical_slots_multi_day_slot_all_open_days_is_returned
+test_generate_theoretical_slots_multi_day_spanning_entry
+test_generate_theoretical_slots_three_day_slot_with_closed_middle_day_is_excluded
+# full-week opening (7 entries × 24 × 60 min):
+test_full_week_opening_no_closed_day_returns_168_slots
+test_full_week_opening_wednesday_closed_returns_144_slots
+test_full_week_opening_monday_closed_returns_144_slots
+test_full_week_opening_sunday_closed_returns_144_slots
+test_full_week_opening_two_non_adjacent_days_closed_returns_120_slots
+# 1 entry × 7 slots of 1 day (1440 min):
+test_one_day_slots_opening_no_closed_day_returns_7_slots
+test_one_day_slots_opening_wednesday_closed_returns_6_slots
+test_one_day_slots_opening_monday_closed_returns_6_slots  ← verifies per-slot check
+test_one_day_slots_opening_sunday_closed_returns_6_slots
+test_one_day_slots_opening_two_non_adjacent_days_closed_returns_5_slots
+# 1 entry × 1 slot of 1 week (10 080 min = WEEK_MINUTES):
+test_one_week_slot_opening_no_closed_day_returns_1_slot
+test_one_week_slot_opening_wednesday_closed_returns_0_slots
+test_one_week_slot_opening_monday_closed_returns_0_slots
+test_one_week_slot_opening_sunday_closed_returns_0_slots
+
+# compute_remaining_capacity (3)
 test_compute_remaining_capacity_with_no_bookings_equals_capacity
 test_compute_remaining_capacity_decreases_with_overlapping_booking
 test_compute_remaining_capacity_zero_when_all_units_taken
+
+# compute_slots end-to-end (5)
 test_compute_slots_booking_count_gt_1_overlaps_multiple_slots
 test_compute_slots_booking_partial_overlap_counts_as_full_overlap
 test_compute_slots_returns_empty_when_no_template
@@ -381,17 +431,25 @@ test_compute_slots_end_to_end_with_fixture_coworking_resource
 test_compute_slots_end_to_end_with_fixture_petite_salle
 ```
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
+**Deviations from initial plan:**
 
-### Session 5.2 — Green phase
+- 14 tests planned → 35 tests written. The extra tests cover bleed-over
+  edge cases, multi-day slots, full-week openings, and the maximum slot
+  size (WEEK_MINUTES), all of which were added during the red phase review.
+- `generate_theoretical_slots` receives `resource_id` as first argument
+  (needed to populate `Slot.resource_id`); not in the original signature.
+- A private helper `_slot_intersects_closed_date` was extracted to keep
+  the per-slot date-range check readable.
+- The spec was updated (v0.5) and decisions §7/§8/§9 were added during
+  the red phase.
+- Test for §9 (`OpeningEntry` total duration > WEEK_MINUTES raises on
+  `full_clean()`) written in `test_weekly_opening_overlap.py` but marked
+  `@pytest.mark.skip` — the `clean()` check is not yet implemented.
 
-**Files to create:**
-- `booking/slot_engine.py`
+**Pending (carried forward, non-blocking):**
 
-Write the minimal slot computation logic to make all red-phase tests
-pass.
+- §8 — `ClosedPeriod.clean()` + `CheckConstraint`: `end_date >= start_date`
+- §9 — `OpeningEntry.clean()`: `slot_duration_minutes × slot_count ≤ WEEK_MINUTES`
 
 --------------------------------------------------------------------------------
 
