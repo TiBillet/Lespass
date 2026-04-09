@@ -15,7 +15,7 @@
   "cordova": {
     "plugins": {
       "cordova-plugin-connectivity": {},
-      "re.filaos.sunmiprinterplugin": {},
+      "cordova-plugin-sunmi-printer": {},
       "cordova-plugin-nfc-reader": {},
       "cordova-plugin-device": {},
       "cordova-plugin-networkinterface": {},
@@ -31,11 +31,11 @@
     "cordova-android": "^14.0.0",
     "cordova-plugin-android-permissions": "^1.1.5",
     "cordova-plugin-app-version": "^0.1.14",
-    "cordova-plugin-connectivity": "file:mes-plugins/cordova-plugin-connectivity",
+    "cordova-plugin-connectivity": "file:../cordova_local_plugins/cordova-plugin-connectivity",
     "cordova-plugin-device": "^3.0.0",
     "cordova-plugin-file": "^8.1.3",
     "cordova-plugin-networkinterface": "^2.2.0",
-    "cordova-plugin-nfc-reader": "file:mes-plugins/cordova-plugin-nfc-reader",
-    "cordova-plugin-sunmi-printer": "file:mes-plugins/cordova-plugin-sunmi-printer"
+    "cordova-plugin-nfc-reader": "file:../cordova_local_plugins/cordova-plugin-nfc-reader",
+    "cordova-plugin-sunmi-printer": "file:../cordova_local_plugins/cordova-plugin-sunmi-printer"
   }
 }

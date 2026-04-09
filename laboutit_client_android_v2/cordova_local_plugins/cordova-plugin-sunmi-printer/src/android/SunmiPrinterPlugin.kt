@@ -10,6 +10,15 @@ class SunmiPrinterPlugin : CordovaPlugin() {
 
     override fun execute(action: String, args: JSONArray, callbackContext: CallbackContext): Boolean {
         when (action) {
+            "isPrinterAvailable" -> {
+              if(SunmiPrintHelper.isPrinterAvailable()) {
+                callbackContext.success("enabled")
+              } else {
+                callbackContext.error("disabled")
+              }
+              return true
+            }
+
             "initSunmiPrinterService" -> {
                 val context = cordova.activity.applicationContext
                 SunmiPrintHelper.initSunmiPrinterService(context) { connected ->

@@ -24,7 +24,7 @@ docker exect -it cordova bash
 
 # Installer les plugins du projet et lance un build
 ```bash
-./runAndroid
+./buildAndroid
 ```
 
 # Lancer le serveur adb
@@ -34,10 +34,15 @@ adb devices
 
 # Sur le mobile
 - Activer le mode développeur
-- Activer le débeugage sans fil
-- Appairer le mobile à conteneur par code
+- Activer le débogage sans fil
+- Appairer le mobile au conteneur avec un code d'associattion
 
-# Dans le conteneur docker
+# Appairage existant 
+```bash
+adb connect <ip du mobile>:<port>
+```
+
+# Appairage (wifi) dans le conteneur docker
 ```bash
 adb pair <ip du mobile>:<port d'appairage>
 ```

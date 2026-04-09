@@ -162,15 +162,15 @@ class ConnectivityPlugin : CordovaPlugin() {
     if (nfcAdapter == null) {
       // NFC non disponible sur cet appareil
       result.put("status", "not_available")
-      result.put("message", "NFC non disponible sur cet appareil")
+      result.put("message", "NFC not available on this device")
     } else if (nfcAdapter.isEnabled) {
       // NFC activé
       result.put("status", "enabled")
-      result.put("message", "NFC activé")
+      result.put("message", "NFC enabled")
     } else {
       // NFC désactivé
       result.put("status", "disabled")
-      result.put("message", "NFC désactivé")
+      result.put("message", "NFC disabled")
     }
     return result
   }

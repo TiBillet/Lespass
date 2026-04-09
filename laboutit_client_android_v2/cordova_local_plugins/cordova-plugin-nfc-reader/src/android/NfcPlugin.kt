@@ -51,11 +51,13 @@ class NfcPlugin : CordovaPlugin() {
                 Log.d(LOGTAG, "Start listening for NFC tags")
                 true
             }
+            
             "stopListening" -> {
               disableThisForegroundDispatch()
               callbackContext.success()
               true
             }
+
             else -> false
         }
     }
