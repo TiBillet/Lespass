@@ -166,3 +166,35 @@ if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
         % {'week': WEEK_MINUTES}
     )
 ```
+
+## 10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques
+
+**Source :** `booking/tests/`
+
+Tous les tests actuels sont des tests d'intégration : ils accèdent à la
+base de données via `schema_context('lespass')` et testent les fonctions
+à travers la pile complète (modèles Django, ORM, contraintes DB).
+
+Cette approche garantit que le comportement réel en base est correct, mais
+elle présente deux limites pour les modules à forte logique algorithmique :
+
+- **Lenteur** : chaque test effectue des requêtes DB, même pour des fonctions
+  pures.
+- **Couplage** : un échec peut venir de la DB, du modèle ou de l'algorithme —
+  le diagnostic est moins direct.
+
+Les deux modules suivants bénéficieraient d'une stratégie mixte :
+
+- `booking/slot_engine.py` — les fonctions `generate_theoretical_slots`,
+  `compute_remaining_capacity` et `_slot_intersects_closed_date` sont pures
+  (pas d'accès DB). Des tests unitaires avec des objets Python simples
+  (dataclasses, listes) permettraient de cibler l'algorithme seul.
+
+- `booking/booking_validator.py` — la logique de validation (parcours des
+  créneaux, lookup par clé, vérification de capacité) est séparable de
+  l'accès DB. Des tests unitaires pourraient construire des `Slot` factices
+  et tester `validate_new_booking` sans passer par `compute_slots`.
+
+Action future : ajouter des tests unitaires pour ces deux modules, en
+conservant les tests d'intégration existants pour couvrir l'interaction
+avec la base (fermetures réelles, ouvertures réelles, réservations réelles).

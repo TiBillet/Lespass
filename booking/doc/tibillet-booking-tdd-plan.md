@@ -465,31 +465,29 @@ unskipped and passing.
 
 --------------------------------------------------------------------------------
 
-## Session 6 — Booking validation logic
+## Session 6 — Booking validation logic (DONE ✓)
 
 Reuse the slot computation engine to validate a new booking request
-before creating the Booking row. This logic is called by the
-"add to basket" view (Session 10).
+before creating the Booking row. Called by the "add to basket" view
+(Session 10).
 
-**Function breakdown:**
+**Function signature as implemented:**
 
 ```python
-def validate_new_booking(resource, date, start_time, slot_count, member):
-    """
-    Returns (is_valid: bool, error: str | None).
-    Checks:
-    - All requested slots are within booking_horizon_days
-    - None of the requested slots falls in a ClosedPeriod
-    - All requested slots have remaining_capacity > 0
-    """
+def validate_new_booking(resource, start_datetime, slot_duration_minutes,
+                         slot_count, member):
+    """Returns (is_valid: bool, error: str | None)."""
 ```
 
-### Session 6.1 — Red phase
+`date + start_time` replaced by `start_datetime` (timezone-aware,
+decisions §2). `slot_duration_minutes` added — required to look up
+slots by `(start_datetime, slot_duration_minutes)`.
 
-**Files to create:**
-- `booking/tests/test_booking_validation.py`
+**Files created:**
+- `booking/tests/test_booking_validation.py` — 12 tests
+- `booking/booking_validator.py`
 
-**Tests to write (must be thoroughly tested):**
+**Tests (12):**
 ```
 test_validate_booking_accepts_valid_slot
 test_validate_booking_rejects_slot_beyond_horizon
@@ -498,18 +496,47 @@ test_validate_booking_rejects_full_slot
 test_validate_booking_slot_count_gt_1_all_slots_must_be_available
 test_validate_booking_slot_count_gt_1_fails_if_one_slot_full
 test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period
+test_validate_booking_rejects_mismatched_slot_duration
+test_validate_booking_rejects_start_time_not_aligned_to_opening
+test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening
+test_validate_booking_accepts_slot_bleeding_into_next_open_day
+test_validate_booking_rejects_slot_bleeding_into_closed_next_day
 ```
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
+Tests 8–10 enforce the alignment rule: every slot in the requested
+series must match exactly a theoretical slot
+`(start_datetime, slot_duration_minutes)` from `compute_slots`.
 
-### Session 6.2 — Green phase
+Tests 11–12 cover bleed-over: a slot starting late at night and ending
+the next day must be rejected if the next day is closed.
 
-**Files to create:**
-- `booking/booking_validator.py`
+**Implementation strategy:**
 
-Write the minimal validation logic to make all red-phase tests pass.
+`validate_new_booking` calls `compute_slots(resource, date_from,
+date_to)` and builds a lookup dict
+`{(start_datetime, slot_duration_minutes): Slot}`. Every slot in the
+series is checked the same way — no special case for the first slot:
+
+1. Slot present in the lookup → aligned to opening, not closed, within
+   horizon (absent = any of these failures). `compute_slots` already
+   enforces the horizon; a slot beyond it is simply absent.
+2. `remaining_capacity > 0` → not fully booked.
+
+**`date_to` computation — covers bleed-over:**
+
+```python
+last_slot_end_dt = start_datetime + timedelta(
+    minutes=slot_duration_minutes * slot_count
+)
+date_to = (last_slot_end_dt - timedelta(microseconds=1)).date()
+```
+
+`date_to` is the last day actually occupied by the whole requested
+period, using `(end − 1 µs).date()` — consistent with
+`_slot_intersects_closed_date`. A period ending exactly at midnight
+does not occupy the next day. Using `last_slot_start_dt.date()` as
+`date_to` would omit next-day closed periods from the lookup,
+silently allowing bleed-over slots into closed days.
 
 --------------------------------------------------------------------------------
 
