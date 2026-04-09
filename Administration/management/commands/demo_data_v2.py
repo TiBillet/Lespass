@@ -1895,5 +1895,28 @@ class Command(BaseCommand):
         except Exception as e:
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
 
+        # -----------------------------
+        # 4) Données POS de test (si laboutik est installé)
+        # -----------------------------
+        if 'laboutik' in settings.INSTALLED_APPS:
+            from django.core.management import call_command
+            for tenant in created_tenants:
+                with tenant_context(tenant):
+                    config = Configuration.get_solo()
+                    if config.module_caisse:
+                        self.stdout.write(f"Création des données POS pour {tenant.name}…")
+                        call_command('create_test_pos_data')
+
+        # -----------------------------
+        # 5) Données booking de démonstration (si booking est installé)
+        # -----------------------------
+        if 'booking' in settings.INSTALLED_APPS:
+            from django.core.management import call_command as _call_command
+            for tenant in created_tenants:
+                with tenant_context(tenant):
+                    self.stdout.write(f"Création des données booking pour {tenant.name}…")
+                    _call_command('create_booking_fixtures')
+
+
         # Export du dump SQL pour --quick
         # self._dump_database()
