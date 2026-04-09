@@ -160,39 +160,61 @@ tenant schemas.
 
 --------------------------------------------------------------------------------
 
-## Session 2 — Complex database constraint: WeeklyOpening non-overlap
+## Session 2 — Complex database constraint: WeeklyOpening non-overlap (DONE ✓)
 
 Design and implement the non-overlap validation for OpeningEntry within
 a WeeklyOpening. This is the most complex rule in the spec (circular
 7-day timeline, bleed-over into next day, wrap-around Sunday→Monday).
 
-### Session 2.1 — Red phase
+### Session 2.1 — Red phase (DONE ✓)
 
-**Files to create:**
+**Files created:**
 - `booking/tests/test_weekly_opening_overlap.py`
 
-**Tests to write:**
+**Tests written (final list — deviations from initial plan noted):**
 ```
 test_slot_entry_accepts_non_overlapping_entries_same_day
 test_slot_entry_rejects_overlap_same_day
 test_slot_entry_rejects_overlap_bleeding_into_next_day
 test_slot_entry_rejects_circular_overlap_sunday_to_monday
 test_slot_entry_accepts_entries_on_different_days_no_overlap
-test_slot_entry_overlap_check_treats_week_as_circular
+test_slot_entry_rejects_overlap_spanning_whole_week_bleeding_into_wednesday
+test_slot_entry_accepts_entries_touching_at_boundary
 ```
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
+**Deviations from initial plan:**
 
-### Session 2.2 — Green phase
+- `test_slot_entry_overlap_check_treats_week_as_circular` dropped — it
+  was a duplicate of `test_slot_entry_rejects_circular_overlap_sunday_to_monday`
+  (same concept, different numbers).
+- Two tests added during review:
+  - `test_slot_entry_rejects_overlap_spanning_whole_week_bleeding_into_wednesday`
+    — entry spanning 9 days from Monday; covers entire week + bleed.
+    Note: such an entry (duration > WEEK_MINUTES) covers the whole week,
+    so every sibling conflicts. No gap exists — the "after bleed, accepted"
+    sub-case that was initially drafted was removed once the math confirmed
+    it was wrong.
+  - `test_slot_entry_accepts_entries_touching_at_boundary` — guards against
+    off-by-one in the overlap check (intervals are half-open `[start, end)`).
 
-**Files to modify:**
-- `booking/models.py` — add `clean()` or `save()` validation on
-  OpeningEntry
+### Session 2.2 — Green phase (DONE ✓)
 
-Write the minimal overlap-check logic to make all red-phase tests
-pass.
+**Files modified:**
+- `booking/models.py`
+
+**Key decisions made during this session:**
+
+- Overlap logic extracted into a module-level pure function
+  `_intervals_overlap(a_start, a_end, b_start, b_end)` — easier to
+  unit-test independently if needed.
+- `WEEK_MINUTES = 7 * 24 * 60` constant defined at module level.
+- Validation in `OpeningEntry.clean()` (not `save()`) — Django's
+  standard validation hook; called explicitly via `full_clean()`.
+- Guard `if not self.weekly_opening_id: return` — prevents crash when
+  `clean()` is called on an incomplete form before FK validation runs.
+- Three overlap cases handled: (1) direct linear, (2) self bleeds past
+  end of week, (3) sibling bleeds past end of week.
+- All 7 tests pass; Session 1 test unaffected (8/8 green).
 
 --------------------------------------------------------------------------------
 

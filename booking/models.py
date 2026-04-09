@@ -5,8 +5,53 @@ Modèles de l'app booking — réservation de ressources partagées.
 LOCALISATION : booking/models.py
 """
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+WEEK_MINUTES = 7 * 24 * 60  # 10 080 — durée d'une semaine en minutes
+
+
+def _intervals_overlap(a_start, a_end, b_start, b_end):
+    """
+    Vérifie le chevauchement de deux blocs sur une timeline circulaire de
+    7 jours. Les intervalles sont semi-ouverts : [start, end).
+    / Checks overlap of two blocks on a circular 7-day timeline.
+    Intervals are half-open: [start, end).
+
+    Cas couverts :
+    1. Chevauchement linéaire direct.
+    2. Le bloc A déborde en fin de semaine → sa partie circulaire [0, a_end−WEEK)
+       est comparée à B.
+    3. Le bloc B déborde en fin de semaine → sa partie circulaire [0, b_end−WEEK)
+       est comparée à A.
+    / Cases covered:
+    1. Direct linear overlap.
+    2. Block A bleeds past end of week → its circular portion [0, a_end−WEEK)
+       is compared against B.
+    3. Block B bleeds past end of week → its circular portion [0, b_end−WEEK)
+       is compared against A.
+    """
+    # Chevauchement linéaire direct.
+    # / Direct linear overlap.
+    if a_start < b_end and b_start < a_end:
+        return True
+
+    # Débordement de A : la portion circulaire [0, a_bleed) contre B.
+    # / A bleed: circular portion [0, a_bleed) against B.
+    if a_end > WEEK_MINUTES:
+        a_bleed = a_end - WEEK_MINUTES
+        if b_start < a_bleed:
+            return True
+
+    # Débordement de B : la portion circulaire [0, b_bleed) contre A.
+    # / B bleed: circular portion [0, b_bleed) against A.
+    if b_end > WEEK_MINUTES:
+        b_bleed = b_end - WEEK_MINUTES
+        if a_start < b_bleed:
+            return True
+
+    return False
 
 
 class Resource(models.Model):
@@ -278,6 +323,57 @@ class OpeningEntry(models.Model):
         verbose_name = _('Opening entry')
         verbose_name_plural = _('Opening entries')
         ordering = ['weekday', 'start_time']
+
+    def _position_minutes(self):
+        """
+        Position de cet entry dans la semaine, en minutes depuis lundi 00:00.
+        / Position of this entry in the week, in minutes from Monday 00:00.
+        """
+        return (
+            self.weekday * 24 * 60
+            + self.start_time.hour * 60
+            + self.start_time.minute
+        )
+
+    def clean(self):
+        """
+        Vérifie qu'aucun autre entry du même WeeklyOpening ne chevauche
+        cet entry. La semaine est traitée comme une timeline circulaire :
+        un entry qui dépasse minuit déborde sur le jour suivant, et un
+        entry du dimanche peut déborder sur le lundi.
+        / Checks that no sibling entry in the same WeeklyOpening overlaps
+        this one. The week is circular: an entry that extends past midnight
+        bleeds into the next day; a Sunday entry can bleed into Monday.
+
+        Représentation : chaque entry occupe l'intervalle semi-ouvert
+        [start, end) en minutes depuis lundi 00:00.
+        Si end > WEEK_MINUTES, le débordement occupe [0, end − WEEK_MINUTES).
+        / Representation: each entry occupies the half-open interval
+        [start, end) in minutes from Monday 00:00.
+        If end > WEEK_MINUTES, the bleed occupies [0, end − WEEK_MINUTES).
+        """
+        if not self.weekly_opening_id:
+            return
+
+        new_start = self._position_minutes()
+        new_end = new_start + self.slot_duration_minutes * self.slot_count
+
+        siblings = OpeningEntry.objects.filter(
+            weekly_opening=self.weekly_opening,
+        )
+        if self.pk:
+            siblings = siblings.exclude(pk=self.pk)
+
+        for sibling in siblings:
+            sib_start = sibling._position_minutes()
+            sib_end = sib_start + sibling.slot_duration_minutes * sibling.slot_count
+
+            if _intervals_overlap(new_start, new_end, sib_start, sib_end):
+                raise ValidationError(
+                    _(
+                        'This opening entry overlaps with "%(sibling)s".'
+                    ) % {'sibling': sibling}
+                )
 
     def __str__(self):
         weekday_label = dict(self.WEEKDAY_CHOICES).get(self.weekday, self.weekday)
