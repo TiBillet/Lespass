@@ -218,61 +218,61 @@ test_slot_entry_accepts_entries_touching_at_boundary
 
 --------------------------------------------------------------------------------
 
-## Session 3 — Add fixtures in the lespass tenant
+## Session 3 — Add fixtures in the lespass tenant (DONE ✓)
 
-Create realistic test data in the lespass tenant. This data will be
-used in all subsequent sessions and serves as a manual verification
-baseline for the admin panel (Session 4).
+Create realistic demo data in the lespass tenant. This data serves as a
+manual verification baseline for the admin panel (Session 4) and is
+available in all subsequent sessions.
 
-### Session 3.1 — Red phase
+**Deviation from initial plan:** no TDD cycle — fixture data creation
+doesn't warrant tests. Implemented as a management command called
+automatically by `demo_data_v2` (and therefore by `flush.sh`).
 
-**Files to create:**
-- `booking/tests/test_fixtures_command.py`
-
-**Tests to write:**
-```
-test_create_booking_fixtures_command_runs_without_error
-test_create_booking_fixtures_creates_coworking_resource
-test_create_booking_fixtures_creates_salle_repet_group_with_two_resources
-test_create_booking_fixtures_creates_calendar_with_closed_periods
-test_create_booking_fixtures_assigns_weekly_openings_to_resources
-```
-
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
-
-### Session 3.2 — Green phase
-
-**Files to create:**
+**Files created:**
+- `booking/management/__init__.py` (empty)
+- `booking/management/commands/__init__.py` (empty)
 - `booking/management/commands/create_booking_fixtures.py`
 
-**Fixtures to create:**
+**File modified:**
+- `Administration/management/commands/demo_data_v2.py` — section 5
+  added at the end: calls `create_booking_fixtures` per tenant inside
+  `tenant_context`.
 
-*Resources:*
-- Resource "Coworking" — capacity 3, no group
+**Fixtures created (idempotent — get_or_create / update_or_create):**
 
-*Resource group "Salle de répét'" with two resources:*
-- Resource "Petite salle" — capacity 1
-- Resource "Grande salle" — capacity 1
++------------------------------+------------------------------------------+
+| Object                       | Details                                  |
++==============================+==========================================+
+| Calendar "Calendrier 2026"   | 11 French public holidays (single-day),  |
+|                              | summer closure Jul 1 – Aug 31,           |
+|                              | end-of-year closure Dec 21 – Jan 2       |
++------------------------------+------------------------------------------+
+| WeeklyOpening                | Mon–Fri, 8 × 60 min from 09:00           |
+| "Coworking weekdays"         |                                          |
++------------------------------+------------------------------------------+
+| WeeklyOpening                | Sat + Sun, 3 × 180 min from 10:00        |
+| "Salles de répét' weekend"   |                                          |
++------------------------------+------------------------------------------+
+| Resource "Coworking"         | capacity 3, no group, weekday opening    |
++------------------------------+------------------------------------------+
+| Resource "Imprimante 3D"     | capacity 1, no group, weekday opening    |
++------------------------------+------------------------------------------+
+| ResourceGroup                | —                                        |
+| "Salle de répét'"            |                                          |
++------------------------------+------------------------------------------+
+| Resource "Petite salle"      | capacity 1, group Salle de répét',       |
+|                              | weekend opening                          |
++------------------------------+------------------------------------------+
+| Resource "Grande salle"      | capacity 1, group Salle de répét',       |
+|                              | weekend opening                          |
++------------------------------+------------------------------------------+
 
-*Calendar "Calendrier 2026":*
-- Closed on all French public holidays 2026
-- Closed July + August 2026 (summer closure)
-- Closed December 24 – January 2 (end-of-year closure)
-
-*Weekly opening "Coworking weekdays":*
-- Every weekday (Mon–Fri), 8 slots of 1 hour starting at 09:00
-  (generates: 09:00–10:00, 10:00–11:00, …, 16:00–17:00)
-
-*Weekly opening "Salles de répét' weekend":*
-- Saturday + Sunday only, 3 slots of 3 hours starting at 10:00
-  (generates: 10:00–13:00, 13:00–16:00, 16:00–19:00)
-
-Assign "Coworking weekdays" to "Coworking" resource.
-Assign "Salles de répét' weekend" to both "Petite salle" and
-"Grande salle".
-Assign "Calendrier 2026" to all three resources.
+**Key decisions:**
+- "Imprimante 3D" resource added (capacity 1, same opening as Coworking).
+- End-of-year closure starts Dec 21 (not Dec 24 as initially planned).
+- Command relies on caller's tenant context — no internal schema switch.
+- `update_or_create` used for Resources (repairs broken FKs on re-run);
+  `get_or_create` used for all other objects.
 
 --------------------------------------------------------------------------------
 
