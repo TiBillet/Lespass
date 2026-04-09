@@ -34,11 +34,11 @@ from controllers.tibeer_controller import TibeerController
 def inject_session_cookie(session_key, domain):
     """
     Écrit le cookie sessionid dans la base SQLite de Chromium avant son lancement.
-    Chromium est lancé par kiosk.service/.xinitrc — cette fonction prépare le cookie
-    à l'avance pour que Chromium le trouve dès le démarrage.
-    / Writes the sessionid cookie into Chromium's SQLite store before launch.
-    Chromium is launched by kiosk.service/.xinitrc — this function prepares the cookie
-    in advance so Chromium finds it on startup.
+    S'adapte dynamiquement au schéma de la version de Chromium installée.
+    Chromium est lancé par kiosk.service/.xinitrc après le signal /tmp/tibeer_cookie_ready.
+    / Writes sessionid cookie into Chromium's SQLite store before launch.
+    Dynamically adapts to the installed Chromium version's schema.
+    Chromium is launched by kiosk.service/.xinitrc after the /tmp/tibeer_cookie_ready signal.
     """
     profile_dir = "/home/sysop/.config/chromium-kiosk"
     db_dir = os.path.join(profile_dir, "Default")
@@ -50,30 +50,51 @@ def inject_session_cookie(session_key, domain):
     now = (int(time.time()) + epoch_diff) * 1_000_000
     expires = (int(time.time()) + 86400 * 30 + epoch_diff) * 1_000_000  # 30 jours / 30 days
 
+    # Valeurs connues pour toutes les versions de Chromium rencontrées
+    # / Known values for all encountered Chromium versions
+    known_values = {
+        "creation_utc": now,
+        "host_key": domain,
+        "top_frame_site_key": "",
+        "name": "sessionid",
+        "value": session_key,
+        "encrypted_value": b"",
+        "path": "/",
+        "expires_utc": expires,
+        "is_secure": 1,
+        "is_httponly": 1,
+        "last_access_utc": now,
+        "has_expires": 1,
+        "is_persistent": 1,
+        "priority": 1,
+        "samesite": 0,
+        "source_scheme": 2,
+        "source_port": 443,
+        "last_update_utc": now,
+        "source_type": 0,
+        "has_cross_site_ancestor": 0,
+    }
+
     conn = sqlite3.connect(db_path)
-    conn.execute("""CREATE TABLE IF NOT EXISTS cookies (
-        creation_utc INTEGER NOT NULL UNIQUE PRIMARY KEY,
-        host_key TEXT NOT NULL, top_frame_site_key TEXT NOT NULL DEFAULT '',
-        name TEXT NOT NULL, value TEXT NOT NULL, encrypted_value BLOB DEFAULT '',
-        path TEXT NOT NULL, expires_utc INTEGER NOT NULL,
-        is_secure INTEGER NOT NULL, is_httponly INTEGER NOT NULL,
-        last_access_utc INTEGER NOT NULL, has_expires INTEGER NOT NULL DEFAULT 1,
-        is_persistent INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 1,
-        samesite INTEGER NOT NULL DEFAULT -1, source_scheme INTEGER NOT NULL DEFAULT 0,
-        source_port INTEGER NOT NULL DEFAULT -1, last_update_utc INTEGER NOT NULL DEFAULT 0
-    )""")
+
+    # Lire les colonnes réellement présentes dans cette version de Chromium
+    # / Read columns actually present in this Chromium version
+    cursor = conn.execute("PRAGMA table_info(cookies)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+
+    # Garder uniquement les colonnes qui existent dans ce DB
+    # / Keep only columns that exist in this DB
+    cols = [c for c in known_values if c in existing_cols]
+    vals = [known_values[c] for c in cols]
+
+    placeholders = ",".join(["?" for _ in vals])
+    col_list = ",".join(cols)
+
     conn.execute("DELETE FROM cookies WHERE host_key=? AND name='sessionid'", (domain,))
-    conn.execute(
-        """INSERT INTO cookies
-        (creation_utc, host_key, top_frame_site_key, name, value, encrypted_value,
-         path, expires_utc, is_secure, is_httponly, last_access_utc,
-         has_expires, is_persistent, priority, samesite, source_scheme, source_port, last_update_utc)
-        VALUES (?,?,'',' sessionid',?,'',' /',?,1,1,?,1,1,1,0,2,443,?)""",
-        (now, domain, session_key, expires, now, now),
-    )
+    conn.execute(f"INSERT INTO cookies ({col_list}) VALUES ({placeholders})", vals)
     conn.commit()
     conn.close()
-    logger.info(f"Cookie sessionid injecté pour {domain}")
+    logger.info(f"Cookie sessionid injecté pour {domain} ({len(cols)} colonnes)")
 
     # Signal pour .xinitrc : le cookie est prêt, Chromium peut démarrer
     # / Signal for .xinitrc: cookie is ready, Chromium can start
