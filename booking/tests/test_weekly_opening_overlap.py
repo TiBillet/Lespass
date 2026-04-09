@@ -324,7 +324,6 @@ def test_slot_entry_rejects_overlap_spanning_whole_week_bleeding_into_wednesday(
             WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
 
 
-@pytest.mark.skip(reason="§9 not yet implemented — OpeningEntry.clean() missing total-duration check")
 @pytest.mark.django_db
 def test_slot_entry_rejects_single_entry_total_duration_exceeds_one_week():
     """

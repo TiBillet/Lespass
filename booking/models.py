@@ -239,6 +239,27 @@ class ClosedPeriod(models.Model):
         verbose_name = _('Closed period')
         verbose_name_plural = _('Closed periods')
         ordering = ['start_date']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(end_date__isnull=True) | models.Q(end_date__gte=models.F('start_date')),
+                name='closed_period_end_date_gte_start_date',
+            )
+        ]
+
+    def clean(self):
+        """
+        Vérifie que end_date est postérieure ou égale à start_date.
+        / Validates that end_date is on or after start_date.
+
+        LOCALISATION : booking/models.py — classe ClosedPeriod
+
+        end_date null est autorisé (fermeture sans fin — decisions §8).
+        / end_date null is allowed (endless closure — decisions §8).
+        """
+        if self.end_date is not None and self.end_date < self.start_date:
+            raise ValidationError(
+                _('End date must be equal to or later than start date.')
+            )
 
     def __str__(self):
         if self.end_date:
@@ -358,6 +379,16 @@ class OpeningEntry(models.Model):
         """
         if not self.weekly_opening_id:
             return
+
+        # La durée totale ne doit pas dépasser une semaine (decisions §9).
+        # / Total duration must not exceed one week (decisions §9).
+        if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
+            raise ValidationError(
+                _(
+                    'Total duration (slot_duration_minutes × slot_count) '
+                    'must not exceed one week (%(week)d minutes).'
+                ) % {'week': WEEK_MINUTES}
+            )
 
         new_start = self._position_minutes()
         new_end = new_start + self.slot_duration_minutes * self.slot_count

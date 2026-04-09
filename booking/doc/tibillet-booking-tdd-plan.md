@@ -446,10 +446,22 @@ test_compute_slots_end_to_end_with_fixture_petite_salle
   `full_clean()`) written in `test_weekly_opening_overlap.py` but marked
   `@pytest.mark.skip` — the `clean()` check is not yet implemented.
 
-**Pending (carried forward, non-blocking):**
+--------------------------------------------------------------------------------
 
-- §8 — `ClosedPeriod.clean()` + `CheckConstraint`: `end_date >= start_date`
-- §9 — `OpeningEntry.clean()`: `slot_duration_minutes × slot_count ≤ WEEK_MINUTES`
+## Session 5b — Model constraints (DONE ✓)
+
+**decision §8 — ClosedPeriod: end_date ≥ start_date (DONE ✓)**
+
+- `ClosedPeriod.clean()` raises `ValidationError` if `end_date < start_date`.
+- `Meta.constraints` adds a `CheckConstraint` for DB-level enforcement.
+- Migration `0002_closed_period_end_date_constraint.py` applied.
+- 3 tests added to `test_models.py` (reject / equal / null).
+
+**decision §9 — OpeningEntry: slot_duration_minutes × slot_count ≤ WEEK_MINUTES (DONE ✓)**
+
+Check added to `OpeningEntry.clean()` before the overlap check. No migration
+needed. Test `test_slot_entry_rejects_single_entry_total_duration_exceeds_one_week`
+unskipped and passing.
 
 --------------------------------------------------------------------------------
 
