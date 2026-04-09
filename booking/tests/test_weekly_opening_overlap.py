@@ -324,6 +324,70 @@ def test_slot_entry_rejects_overlap_spanning_whole_week_bleeding_into_wednesday(
             WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
 
 
+@pytest.mark.skip(reason="§9 not yet implemented — OpeningEntry.clean() missing total-duration check")
+@pytest.mark.django_db
+def test_slot_entry_rejects_single_entry_total_duration_exceeds_one_week():
+    """
+    Un seul OpeningEntry dont la durée totale dépasse une semaine est refusé.
+    / A single OpeningEntry whose total duration exceeds one week is rejected.
+
+    LOCALISATION : booking/tests/test_weekly_opening_overlap.py
+
+    Règle métier (décisions §9) : la durée totale d'un OpeningEntry
+    (slot_duration_minutes × slot_count) ne peut pas dépasser WEEK_MINUTES
+    (10 080 min = 7 × 24 × 60). Si elle le dépasse, l'entry « déborde sur
+    elle-même » — son dernier slot empiète sur le prochain cycle hebdomadaire
+    du même entry, créant un chevauchement logique.
+    / Business rule (decisions §9): total duration (slot_duration_minutes ×
+    / slot_count) must not exceed WEEK_MINUTES (10 080). If it does, the entry
+    / "bleeds into itself" across the weekly cycle.
+
+    Cas de test — timeline (semaine circulaire 0–10 080 min) :
+    / Test case — circular week timeline (0–10 080 min):
+
+        lun 00:00       lun 00:00 (fin de semaine)
+        |<——————————————————————————————10 081 min——————————————————————————————>|
+        |[0                          Entry A (10 081 min)                  10 081)|
+                                             ^ dépasse 10 080 → rejeté
+
+    Entry A : lundi 00:00, 1 créneau × 10 081 min.
+    10 081 > WEEK_MINUTES (10 080) → full_clean() doit lever ValidationError.
+    / Entry A: Monday 00:00, 1 slot × 10 081 min.
+    / 10 081 > WEEK_MINUTES → full_clean() must raise ValidationError.
+
+    Note : ceci vérifie la validation au niveau de l'entry isolé — sans
+    qu'une autre entry soit présente dans le WeeklyOpening. Le test couvre
+    le gap identifié en décisions §9 (la contrainte de chevauchement inter-
+    entries ne rejette pas un entry trop long créé seul).
+    / Note: this validates the isolated entry — no sibling entry needed.
+    / Covers the gap in decisions §9.
+    """
+    from booking.models import WeeklyOpening, OpeningEntry
+
+    with schema_context(TENANT_SCHEMA):
+        opening = WeeklyOpening.objects.create(
+            name=f'{TEST_PREFIX} rejects_single_entry_exceeds_one_week',
+        )
+        try:
+            # Durée totale : 1 × 10 081 min > 10 080 min (une semaine exacte)
+            # / Total duration: 1 × 10 081 min > 10 080 min (one full week)
+            entry_too_long = OpeningEntry(
+                weekly_opening=opening,
+                weekday=OpeningEntry.MONDAY,
+                start_time=datetime.time(0, 0),
+                slot_duration_minutes=10081,
+                slot_count=1,
+            )
+            with pytest.raises(ValidationError):
+                entry_too_long.full_clean()
+
+        finally:
+            OpeningEntry.objects.filter(
+                weekly_opening__name__startswith=TEST_PREFIX,
+            ).delete()
+            WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
+
+
 @pytest.mark.django_db
 def test_slot_entry_accepts_entries_touching_at_boundary():
     """

@@ -1,13 +1,15 @@
 # TiBillet — Booking Module Specification
 
-**Version:** v0.4
+**Version:** v0.5
 **Status:**  Ready for review by TiBillet core team
-**Date:**    2026-04-07
+**Date:**    2026-04-09
 **Author:**  Joris REHM
 **Note:**    This version was produced in a pair specification session with Claude AI (Anthropic)
 
 Changes:
 
+  - 0.5 Slot: replace date+start_time+end_time with start_datetime+end_datetime
+         (timezone-aware, consistent with Booking.start_datetime — decisions §2)
   - 0.4 Rename SlotTemplate to WeeklyOpening
     and SlotEntry to OpeningEntry
 
@@ -254,24 +256,22 @@ dynamically when a client requests availability.
 
 **Computed fields exposed by the application:**
 
-+-------------------------+---------+-------------------------------------------+
-| Field                   | Type    | Description                               |
-+=========================+=========+===========================================+
-| `resource_id`           | id      | Parent resource                           |
-+-------------------------+---------+-------------------------------------------+
-| `date`                  | date    | Concrete date of the slot                 |
-+-------------------------+---------+-------------------------------------------+
-| `start_time`            | time    | Derived from OpeningEntry                    |
-+-------------------------+---------+-------------------------------------------+
-| `end_time`              | time    | Derived from                              |
-|                         |         | `start_time + slot_duration_minutes`      |
-+-------------------------+---------+-------------------------------------------+
-| `slot_duration_minutes` | integer | Duration of the slot in minutes           |
-+-------------------------+---------+-------------------------------------------+
-| `remaining_capacity`    | integer | `capacity - confirmed bookings count`     |
-|                         |         | for this (resource, date, start_time).    |
-|                         |         | 0 = slot is full.                         |
-+-------------------------+---------+-------------------------------------------+
++-------------------------+----------+------------------------------------------+
+| Field                   | Type     | Description                              |
++=========================+==========+==========================================+
+| `resource_id`           | id       | Parent resource                          |
++-------------------------+----------+------------------------------------------+
+| `start_datetime`        | datetime | Timezone-aware start of the slot.        |
+|                         |          | Derived from OpeningEntry + date.        |
++-------------------------+----------+------------------------------------------+
+| `end_datetime`          | datetime | Timezone-aware end of the slot.          |
+|                         |          | `start_datetime + slot_duration_minutes` |
++-------------------------+----------+------------------------------------------+
+| `slot_duration_minutes` | integer  | Duration of the slot in minutes          |
++-------------------------+----------+------------------------------------------+
+| `remaining_capacity`    | integer  | `capacity − count of overlapping         |
+|                         |          | bookings`. 0 = slot is full.             |
++-------------------------+----------+------------------------------------------+
 
 
 ### 3.6 Pricing
@@ -403,13 +403,17 @@ stored.
 
 - Slots are computed on the fly from the resource's Weekly Opening and Calendar;
   nothing is pre-generated or stored.
+- A slot is generated only if every day it intersects is open: for each date
+  from `start_datetime.date()` to `end_datetime.date()` (inclusive), the date
+  must not fall within a `ClosedPeriod`. A slot may span multiple days as long
+  as none of those days is closed.
 - Bookings are not required to be aligned with computed slots. A booking may have
   an arbitrary start time and duration (e.g. a volunteer creates a booking starting
   at 10:12 for 12 minutes, while the template defines slots at 10:00 for 60
   minutes).
 - A booking decreases `remaining_capacity` by 1 for every computed slot it
   overlaps, even partially. A computed slot is considered overlapped if the
-  booking's time window intersects with the slot's time window on the same date.
+  booking's time window intersects with the slot's time window.
 - A computed slot is considered unavailable when its `remaining_capacity = 0`,
   i.e. all units are covered by at least one overlapping booking in status `new`,
   `validated`, or `confirmed`.

@@ -82,3 +82,87 @@ flux de paiement. Cela peut créer des incohérences (réservation marquée
 `confirmed` sans paiement enregistré). À terme, le statut devrait être
 en lecture seule dans l'admin, ou les transitions autorisées devraient être
 limitées (ex : seul `confirmed → annulation` via suppression).
+
+## 7. Règle de génération des créneaux — tous les jours intersectés doivent être ouverts
+
+**Source :** `booking/slot_engine.py` — `generate_theoretical_slots`
+
+Un créneau est généré **uniquement si chaque jour qu'il intersecte est
+ouvert** (absent des `closed_dates`). Un créneau peut durer plusieurs
+jours tant qu'aucun de ces jours n'est fermé.
+
+Vérification : pour chaque slot généré, itérer de `start_datetime.date()`
+à `end_datetime.date()` inclus et vérifier qu'aucune de ces dates n'est
+dans `closed_dates`. Si l'un de ces jours est fermé, le slot est exclu.
+
+Conséquences :
+- Un créneau qui déborde sur le lendemain fermé est exclu.
+- Un créneau multi-jours dont un jour du milieu est fermé est exclu.
+- Un créneau multi-jours dont tous les jours sont ouverts est **retourné**.
+- La vérification se fait **slot par slot** (pas sur la date de l'entry) :
+  un `OpeningEntry` peut produire des slots dont le `start_datetime.date()`
+  diffère de la date de l'entry (bleed-over) — chaque slot est évalué
+  indépendamment.
+
+## 8. ⚠️ MAJEUR — Contrainte manquante sur ClosedPeriod.end_date
+
+**Source :** `booking/models.py` — classe `ClosedPeriod`
+
+Le modèle `ClosedPeriod` n'a actuellement **aucune contrainte** qui empêche
+`end_date` d'être antérieure à `start_date`. Une période avec
+`start_date=2026-06-10` et `end_date=2026-06-08` est acceptée en base sans
+erreur. Le slot engine (`get_closed_dates_for_resource`) itère de `start`
+à `end` : si `end < start`, la boucle ne s'exécute jamais et la fermeture
+est silencieusement ignorée.
+
+Action à faire : ajouter une validation dans `ClosedPeriod.clean()` :
+
+```python
+def clean(self):
+    if self.end_date is not None and self.end_date < self.start_date:
+        raise ValidationError(
+            _('End date must be equal to or later than start date.')
+        )
+```
+
+Ajouter également un test dans `booking/tests/test_models.py`.
+
+Option complémentaire : ajouter une contrainte base de données via
+`Meta.constraints` avec `CheckConstraint` pour garantir l'intégrité même
+en dehors de Django (imports directs, migrations, shell).
+
+```python
+class Meta:
+    constraints = [
+        models.CheckConstraint(
+            check=models.Q(end_date__isnull=True) | models.Q(end_date__gte=models.F('start_date')),
+            name='closed_period_end_date_gte_start_date',
+        )
+    ]
+```
+
+## 9. Durée totale d'un OpeningEntry ne doit pas dépasser une semaine
+
+**Source :** `booking/models.py` — classe `OpeningEntry`
+
+La durée totale d'un `OpeningEntry` est
+`slot_duration_minutes × slot_count`. Si cette valeur dépasse
+`WEEK_MINUTES` (10 080 min = 7 × 24 × 60), l'entry « déborde sur
+elle-même » : le dernier slot empiète sur le prochain cycle hebdomadaire
+du même entry, créant un chevauchement logique de l'opening avec lui-même.
+
+La contrainte de non-chevauchement inter-entries (`OpeningEntry.clean()`,
+voir session 2) détecte déjà les débordements excessifs dans certains cas,
+mais elle ne garantit pas explicitement que la durée totale d'un seul entry
+reste ≤ `WEEK_MINUTES`.
+
+Action future : ajouter dans `OpeningEntry.clean()` :
+
+```python
+if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
+    raise ValidationError(
+        _('Total duration (slot_duration_minutes × slot_count) '
+          'must not exceed one week (%(week)d minutes).')
+        % {'week': WEEK_MINUTES}
+    )
+```
