@@ -23,6 +23,22 @@ with tenant_context(tenant):
     Event.objects.create(name='Test', ...)
 ```
 
+**9.1b — `connection.tenant` dans un signal post_save + FK vers Client.**
+Si un signal `post_save` cree un objet avec une FK vers `Client` (ex: `PairingDevice.tenant`), il faut verifier que `connection.tenant` est un vrai `Client` et pas un `FakeTenant`. En contexte de test (`schema_context`), `isinstance(connection.tenant, Client)` retourne `False`. Solution : garder la creation avec `isinstance` et skipper si FakeTenant.
+
+```python
+# ❌ Crash en test : FakeTenant n'est pas une instance de Client
+PairingDevice.objects.create(tenant=connection.tenant, ...)
+
+# ✅ OK : on verifie avant de creer
+from Customers.models import Client
+if isinstance(connection.tenant, Client):
+    PairingDevice.objects.create(tenant=connection.tenant, ...)
+```
+
+**9.1c — `get_or_create` obligatoire si le signal cree un objet avec unique constraint.**
+Les tests controlvanne n'ont pas de rollback DB (fixtures `scope="session"` + `schema_context`). Si le signal utilise `create()` sur un modele avec `unique` (ex: `PointDeVente.name`), le 2e run crash avec `IntegrityError`. Utiliser `get_or_create`.
+
 **9.5 — Routes publiques et `HTTP_HOST`.**
 Les routes `/api/discovery/` et les vues SEO ROOT (`/`, `/lieux/`, `/evenements/`, `/adhesions/`, `/recherche/`) sont dans `urls_public.py`. Utiliser `HTTP_HOST='tibillet.localhost'` (schema public), pas `lespass.tibillet.localhost` (tenant). Les tests SEO ROOT utilisent un `root_client` avec `HTTP_HOST='www.tibillet.localhost'`.
 

@@ -46,10 +46,12 @@ def cv_tireuse_sans_fut(tenant):
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseBec
 
-        t = TireuseBec.objects.create(
+        t, _created = TireuseBec.objects.get_or_create(
             nom_tireuse="Tap No Keg",
-            enabled=True,
-            reservoir_ml=Decimal("3000.00"),
+            defaults={
+                "enabled": True,
+                "reservoir_ml": Decimal("3000.00"),
+            },
         )
         yield t
 
@@ -71,13 +73,15 @@ def cv_tireuse_avec_fut(tenant):
             name="Litre models",
             defaults={"prix": Decimal("4.00"), "poids_mesure": True},
         )
-        t = TireuseBec.objects.create(
+        t, _created = TireuseBec.objects.get_or_create(
             nom_tireuse="Tap With Keg",
-            enabled=True,
-            fut_actif=fut,
-            reservoir_ml=Decimal("10000.00"),
-            seuil_mini_ml=Decimal("0.00"),
-            appliquer_reserve=False,
+            defaults={
+                "enabled": True,
+                "fut_actif": fut,
+                "reservoir_ml": Decimal("10000.00"),
+                "seuil_mini_ml": Decimal("0.00"),
+                "appliquer_reserve": False,
+            },
         )
         yield t
 

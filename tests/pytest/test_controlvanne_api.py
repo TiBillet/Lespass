@@ -110,13 +110,15 @@ def test_tireuse(tenant, test_asset_tlf_api):
             name="Litre",
             defaults={"prix": Decimal("5.00"), "poids_mesure": True},
         )
-        tireuse = TireuseBec.objects.create(
+        tireuse, _created = TireuseBec.objects.get_or_create(
             nom_tireuse="Test Tap Phase2",
-            enabled=True,
-            debimetre=debimetre,
-            fut_actif=fut,
-            reservoir_ml=Decimal("5000.00"),
-            seuil_mini_ml=Decimal("200.00"),
+            defaults={
+                "enabled": True,
+                "debimetre": debimetre,
+                "fut_actif": fut,
+                "reservoir_ml": Decimal("5000.00"),
+                "seuil_mini_ml": Decimal("200.00"),
+            },
         )
         yield tireuse
         # Pas de nettoyage — les fixtures utilisent get_or_create sur dev DB

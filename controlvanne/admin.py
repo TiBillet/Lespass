@@ -193,24 +193,55 @@ class TireuseBecAdmin(ModelAdmin):
         "nom_tireuse",
         "fut_actif",
         "debimetre",
+        "pin_code_display",
         "prix_effectif_display",
         "volume_restant_cl",
         "enabled",
     )
     list_editable = ("fut_actif", "debimetre", "enabled")
-    readonly_fields = ("uuid",)
     fields = (
         "nom_tireuse",
         "fut_actif",
         "debimetre",
-        "point_de_vente",
-        "pairing_device",
         "seuil_mini_ml",
         "appliquer_reserve",
         "enabled",
         "notes",
     )
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        En edition, affiche point_de_vente et pairing_device en lecture seule
+        (crees automatiquement par le signal post_save).
+        En creation, on ne les affiche pas (ils seront crees apres le save).
+        / On edit, show point_de_vente and pairing_device as read-only (auto-created).
+        On creation, hide them (created by post_save signal).
+        """
+        if obj is not None:
+            return ("uuid", "point_de_vente", "pairing_device")
+        return ("uuid",)
+
+    def get_fields(self, request, obj=None):
+        """
+        En edition, ajoute point_de_vente et pairing_device en lecture seule apres le nom.
+        En creation, pas de champs auto-generes.
+        / On edit, add read-only point_de_vente and pairing_device after the name.
+        On creation, no auto-generated fields.
+        """
+        champs_de_base = list(self.fields)
+        if obj is not None:
+            # Insere les champs auto-generes apres nom_tireuse (index 0 → positions 1, 2)
+            # / Insert auto-generated fields after nom_tireuse
+            champs_de_base.insert(1, "point_de_vente")
+            champs_de_base.insert(2, "pairing_device")
+        return champs_de_base
+
     search_fields = ("nom_tireuse", "notes")
+
+    def get_queryset(self, request):
+        """Prefetch pairing_device pour eviter le N+1 sur pin_code_display dans la liste.
+        / Prefetch pairing_device to avoid N+1 on pin_code_display in list view."""
+        return super().get_queryset(request).select_related("pairing_device")
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         """
@@ -221,6 +252,18 @@ class TireuseBecAdmin(ModelAdmin):
         if object_id:
             extra_context["kiosk_url"] = f"/controlvanne/kiosk/{object_id}/"
         return super().changeform_view(request, object_id, form_url, extra_context)
+
+    @admin.display(description=_("PIN code"))
+    def pin_code_display(self, obj):
+        """Affiche le PIN du PairingDevice lie a cette tireuse.
+        Si le PIN a ete consomme (appairage fait), affiche "Appaire".
+        / Shows the PIN of the PairingDevice linked to this tap.
+        If PIN was consumed (pairing done), shows "Paired"."""
+        if obj.pairing_device is None:
+            return "—"
+        if obj.pairing_device.is_claimed:
+            return _("Paired")
+        return obj.pairing_device.pin_code
 
     @admin.display(description=_("Price/Liter"))
     def prix_effectif_display(self, obj):

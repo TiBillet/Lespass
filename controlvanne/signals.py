@@ -124,7 +124,9 @@ def tireusebec_pre_save(sender, instance, **kwargs):
 @receiver(post_save, sender=TireuseBec)
 def tireusebec_post_save(sender, instance, created, **kwargs):
     """Push WebSocket apres modification d'une tireuse.
+    A la creation, genere automatiquement un PointDeVente de type TIREUSE.
     / Push WebSocket after tap modification.
+    On creation, auto-generates a PointDeVente of type TIREUSE.
 
     TENANT-SAFE : ce signal est déclenché par un save() en contexte HTTP
     (tenant déjà résolu par TenantMainMiddleware). Le payload est construit
@@ -135,6 +137,60 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
     synchronously by _snapshot_for_bec() BEFORE the async send.
     The consumer state_update() does no DB queries — it forwards the JSON.
     """
+
+    # A la creation d'une tireuse, on cree automatiquement :
+    # 1. Un PointDeVente de type TIREUSE avec le meme nom
+    # 2. Un PairingDevice avec un PIN 6 chiffres pour l'appairage du Pi
+    # Ca evite a l'admin de devoir creer ces objets manuellement.
+    # / On tap creation, auto-create:
+    # 1. A TIREUSE-type PointDeVente with the same name
+    # 2. A PairingDevice with a 6-digit PIN for Pi pairing
+    if created:
+        from django.db import connection
+
+        champs_a_mettre_a_jour = {}
+
+        # --- Auto-creation du PointDeVente ---
+        # nom_tireuse est unique (contrainte DB), donc le nom du POS l'est aussi.
+        # / nom_tireuse is unique (DB constraint), so the POS name is too.
+        if instance.point_de_vente is None:
+            from laboutik.models import PointDeVente
+
+            point_de_vente_cree = PointDeVente.objects.create(
+                name=instance.nom_tireuse,
+                comportement=PointDeVente.TIREUSE,
+            )
+            champs_a_mettre_a_jour["point_de_vente"] = point_de_vente_cree
+            instance.point_de_vente = point_de_vente_cree
+
+        # --- Auto-creation du PairingDevice avec PIN ---
+        # On verifie que connection.tenant est un vrai Client (pas un FakeTenant).
+        # En contexte de test (schema_context), Django met un FakeTenant
+        # qui n'est pas une instance de Client — le PairingDevice FK crasherait.
+        # / Check connection.tenant is a real Client (not FakeTenant from tests).
+        if instance.pairing_device is None:
+            from Customers.models import Client
+
+            tenant_courant = connection.tenant
+            tenant_est_un_vrai_client = isinstance(tenant_courant, Client)
+
+            if tenant_est_un_vrai_client:
+                from discovery.models import PairingDevice
+
+                pin_genere = PairingDevice.generate_unique_pin()
+                pairing_device_cree = PairingDevice.objects.create(
+                    name=instance.nom_tireuse,
+                    tenant=tenant_courant,
+                    pin_code=pin_genere,
+                )
+                champs_a_mettre_a_jour["pairing_device"] = pairing_device_cree
+                instance.pairing_device = pairing_device_cree
+
+        # On lie les objets a la tireuse sans re-declencher le signal post_save.
+        # update() ne passe pas par save(), donc pas de recursion.
+        # / Link objects to tap without re-triggering post_save signal.
+        if champs_a_mettre_a_jour:
+            TireuseBec.objects.filter(pk=instance.pk).update(**champs_a_mettre_a_jour)
 
     payload = _snapshot_for_bec(instance)
 
