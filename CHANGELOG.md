@@ -1,5 +1,20 @@
 # Changelog / Journal des modifications
 
+## Flush rapide sans migrations / Fast flush without migrations
+
+**Date :** 9 avril 2026
+**Migration :** Non
+
+**Quoi / What:** `flush.sh` detecte si la DB est deja initialisee (table `django_migrations` presente). Si oui, lance `demo_data_v2 --flush` pour purger et reimporter les fixtures sans drop/recreate ni migrations. Le `--flush` a ete complete pour purger toutes les tables de demo : laboutik (ClotureCaisse, CartePrimaire, PointDeVente, Printer), comptabilite (LigneArticle, PriceSold, ProductSold), inventaire (Stock), fedow_core (Transaction, Token, Asset, Federation), cartes NFC (CarteCashless, Detail), wallets users, et CategorieProduct. Les wallets du lieu (appairage Fedow) sont preserves.
+
+**Pourquoi / Why:** Le flush complet (drop + create + migrate + install + demo) prend plusieurs minutes. En dev, quand on veut juste repartir de donnees fraiches sans changer le schema, c'est inutilement long.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `flush.sh` | Detection DB initialisee via `psql to_regclass`, branchement flush rapide vs install complete |
+| `Administration/management/commands/demo_data_v2.py` | Section `--flush` etendue : purge fedow_core, laboutik, comptabilite, inventaire, cartes NFC, wallets users, categories |
+
 ## Cascade multi-asset NFC + paiement complementaire
 
 **Date :** 8 avril 2026

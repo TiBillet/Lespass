@@ -435,59 +435,137 @@ class AuthKioskView(APIView):
 
 
 # ──────────────────────────────────────────────────────────────────────
-# kiosk_view — page kiosk temps réel pour l'écran du Pi
+# KioskViewSet — pages kiosk temps réel pour les écrans Pi
+# / KioskViewSet — real-time kiosk pages for Pi screens
 # ──────────────────────────────────────────────────────────────────────
 
 
-def kiosk_view(request, uuid):
+def _verifier_authentification_kiosk(request):
     """
-    GET /controlvanne/kiosk/<uuid>/
-    Affiche le kiosk (panel_bootstrap.html) pour une tireuse.
-    Protégé par session cookie (obtenue via POST /controlvanne/auth-kiosk/)
-    ou par session admin tenant.
-    / Displays the kiosk (panel_bootstrap.html) for a tap.
-    Protected by session cookie (from POST /controlvanne/auth-kiosk/)
-    or tenant admin session.
+    Vérifie que l'utilisateur est authentifié pour le kiosk.
+    Deux moyens d'accès : session kiosk (POST /auth-kiosk/) ou admin tenant.
+    / Checks that the user is authenticated for the kiosk.
+    Two access methods: kiosk session (POST /auth-kiosk/) or tenant admin.
 
     LOCALISATION : controlvanne/viewsets.py
-    """
-    from django.conf import settings
-    from django.shortcuts import render, get_object_or_404
-    from django.http import HttpResponseForbidden
-    from django.db import connection
-    from django.utils.translation import gettext_lazy as _
-    from BaseBillet.models import Configuration
 
-    # Vérifier l'authentification kiosk ou admin
-    # / Check kiosk or admin authentication
+    :param request: HttpRequest
+    :return: True si autorisé, False sinon
+    """
+    from django.db import connection
+
+    # Moyen 1 : session kiosk (créée par POST /controlvanne/auth-kiosk/)
+    # / Method 1: kiosk session (created by POST /controlvanne/auth-kiosk/)
     est_kiosk = request.session.get("controlvanne_authenticated")
-    est_admin = False
+    if est_kiosk:
+        return True
+
+    # Moyen 2 : admin du tenant connecté
+    # / Method 2: logged-in tenant admin
     utilisateur = request.user
     if utilisateur and utilisateur.is_authenticated:
         est_admin = utilisateur.is_tenant_admin(connection.tenant)
+        if est_admin:
+            return True
 
-    if not est_kiosk and not est_admin:
-        return HttpResponseForbidden("Not authenticated for kiosk.")
+    return False
 
-    tireuse = get_object_or_404(TireuseBec, uuid=uuid)
-    becs = TireuseBec.objects.filter(enabled=True).order_by("nom_tireuse")
-    config = Configuration.get_solo()
 
-    context = {
-        "tireuse": tireuse,
-        "becs": becs,
-        "config": config,
-        "slug_focus": str(uuid),
-    }
+class KioskViewSet(viewsets.ViewSet):
+    """
+    Pages kiosk pour les écrans des tireuses connectées.
+    / Kiosk pages for connected tap screens.
 
-    # Mode demo : injecter les tags NFC simulés pour le panneau debug
-    # / Demo mode: inject simulated NFC tags for the debug panel
-    if getattr(settings, "DEMO", False):
-        context["demo_tags"] = [
-            {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
-            {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
-            {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
-            {"tag_id": settings.DEMO_TAGID_CLIENT4, "name": _("Carte inconnue")},
-        ]
+    LOCALISATION : controlvanne/viewsets.py
 
-    return render(request, "controlvanne/panel_bootstrap.html", context)
+    Deux vues :
+    - list()     → GET /controlvanne/kiosk/
+                   Grille de toutes les tireuses actives.
+                   WebSocket : /ws/rfid/all/ (toutes les mises à jour).
+    - retrieve() → GET /controlvanne/kiosk/<uuid>/
+                   Écran dédié à une seule tireuse.
+                   WebSocket : /ws/rfid/<uuid>/ (mises à jour ciblées).
+                   Inclut le panneau simulateur Pi en mode DEMO.
+
+    Auth : session kiosk (POST /controlvanne/auth-kiosk/) ou admin tenant.
+    / Auth: kiosk session (POST /controlvanne/auth-kiosk/) or tenant admin.
+    """
+
+    # Pas de permission DRF — on vérifie manuellement via _verifier_authentification_kiosk
+    # car le kiosk n'utilise pas d'API key, mais un cookie de session.
+    # / No DRF permission — manual check via _verifier_authentification_kiosk
+    # because the kiosk uses a session cookie, not an API key.
+    permission_classes = []
+
+    def list(self, request):
+        """
+        GET /controlvanne/kiosk/
+        Grille de toutes les tireuses actives.
+        Le WebSocket se connecte à /ws/rfid/all/ pour recevoir les mises à jour.
+        / Grid of all active taps.
+        WebSocket connects to /ws/rfid/all/ to receive updates.
+
+        LOCALISATION : controlvanne/viewsets.py
+        """
+        from django.shortcuts import render
+        from django.http import HttpResponseForbidden
+        from BaseBillet.models import Configuration
+
+        if not _verifier_authentification_kiosk(request):
+            return HttpResponseForbidden("Not authenticated for kiosk.")
+
+        toutes_les_tireuses_actives = TireuseBec.objects.filter(
+            enabled=True,
+        ).order_by("nom_tireuse")
+
+        config = Configuration.get_solo()
+
+        context = {
+            "becs": toutes_les_tireuses_actives,
+            "config": config,
+            "slug_focus": "all",
+        }
+
+        return render(request, "controlvanne/kiosk_list.html", context)
+
+    def retrieve(self, request, pk=None):
+        """
+        GET /controlvanne/kiosk/<uuid>/
+        Écran dédié à une seule tireuse avec jauge, prix, et état temps réel.
+        Le WebSocket se connecte à /ws/rfid/<uuid>/ pour les mises à jour ciblées.
+        En mode DEMO, affiche le panneau simulateur Pi (boutons carte + slider débit).
+        / Screen dedicated to a single tap with gauge, prices, and real-time state.
+        WebSocket connects to /ws/rfid/<uuid>/ for targeted updates.
+        In DEMO mode, shows the Pi simulator panel (card buttons + flow slider).
+
+        LOCALISATION : controlvanne/viewsets.py
+        """
+        from django.conf import settings
+        from django.shortcuts import render, get_object_or_404
+        from django.http import HttpResponseForbidden
+        from django.utils.translation import gettext_lazy as _
+        from BaseBillet.models import Configuration
+
+        if not _verifier_authentification_kiosk(request):
+            return HttpResponseForbidden("Not authenticated for kiosk.")
+
+        tireuse = get_object_or_404(TireuseBec, uuid=pk)
+        config = Configuration.get_solo()
+
+        context = {
+            "tireuse": tireuse,
+            "config": config,
+            "slug_focus": str(pk),
+        }
+
+        # Mode demo : injecter les tags NFC simulés pour le panneau debug
+        # / Demo mode: inject simulated NFC tags for the debug panel
+        if getattr(settings, "DEMO", False):
+            context["demo_tags"] = [
+                {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT4, "name": _("Carte inconnue")},
+            ]
+
+        return render(request, "controlvanne/kiosk_detail.html", context)

@@ -176,9 +176,18 @@ class TireuseBecAdmin(ModelAdmin):
     """
     Admin principal pour les tireuses physiques.
     list_editable sur fut_actif, debimetre, enabled pour modifier rapidement depuis la liste.
+    Le change_form_before_template affiche un lien vers la vue kiosk de la tireuse.
     / Main admin for physical taps.
     list_editable on fut_actif, debimetre, enabled for quick updates from the list.
+    The change_form_before_template shows a link to the tap's kiosk view.
     """
+
+    compressed_fields = True
+    warn_unsaved_form = True
+
+    # Template avant le formulaire : lien vers la vue kiosk de cette tireuse
+    # / Template before the form: link to this tap's kiosk view
+    change_form_before_template = "admin/controlvanne/tireusebec_before.html"
 
     list_display = (
         "nom_tireuse",
@@ -202,6 +211,16 @@ class TireuseBecAdmin(ModelAdmin):
         "notes",
     )
     search_fields = ("nom_tireuse", "notes")
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """
+        Injecte l'URL kiosk dans le contexte du formulaire.
+        / Injects the kiosk URL into the form context.
+        """
+        extra_context = extra_context or {}
+        if object_id:
+            extra_context["kiosk_url"] = f"/controlvanne/kiosk/{object_id}/"
+        return super().changeform_view(request, object_id, form_url, extra_context)
 
     @admin.display(description=_("Price/Liter"))
     def prix_effectif_display(self, obj):
