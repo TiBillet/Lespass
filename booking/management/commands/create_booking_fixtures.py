@@ -76,7 +76,7 @@ class Command(BaseCommand):
             ClosedPeriod.objects.get_or_create(
                 calendar=calendrier,
                 start_date=date_ferie,
-                defaults={"label": label},
+                defaults={"end_date": date_ferie, "label": label},
             )
 
         fermetures = [
