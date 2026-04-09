@@ -94,11 +94,11 @@ class RFIDReader:
         """Lecture spécifique RC522."""
         try:
             # 1. Requête
-            (status, TagType) = self.reader.MFRC522_Request(self.reader.PICC_REQIDL)
+            (status, TagType) = self.reader.Request(self.reader.PICC_REQIDL)
 
             if status == self.reader.MI_OK:
                 # 2. Anticollision
-                (status, uid) = self.reader.MFRC522_Anticoll()
+                (status, uid) = self.reader.Anticoll()
 
                 if status == self.reader.MI_OK:
                     return self._uid_to_hex(uid)

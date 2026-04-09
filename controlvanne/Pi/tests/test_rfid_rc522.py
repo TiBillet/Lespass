@@ -39,10 +39,10 @@ print()
 
 try:
     while True:
-        status, tag_type = reader.MFRC522_Request(reader.PICC_REQIDL)
+        status, tag_type = reader.Request(reader.PICC_REQIDL)
 
         if status == reader.MI_OK:
-            status, uid = reader.MFRC522_Anticoll()
+            status, uid = reader.Anticoll()
 
             if status == reader.MI_OK:
                 # RC522 renvoie 5 octets : 4 UID + 1 checksum XOR
