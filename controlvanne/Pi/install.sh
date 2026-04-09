@@ -76,9 +76,10 @@ if [ -z "$SERVER_URL" ] || [ -z "$API_KEY" ]; then
 fi
 echo "Appairage reussi ! Tenant: $SERVER_URL, Tireuse: $TIREUSE_UUID"
 
+read -p "🔹 Depot Git [Défaut: $DEFAULT_GIT_REPO] : " GIT_REPO
 read -p "🔹 Branche Git [Défaut: $DEFAULT_GIT_BRANCH] : " GIT_BRANCH
 GIT_BRANCH=${GIT_BRANCH:-$DEFAULT_GIT_BRANCH}
-GIT_REPO="$DEFAULT_GIT_REPO"
+GIT_REPO=${GIT_REPO:-$DEFAULT_GIT_REPO}
 
 echo ""
 echo "🔹 Type de lecteur RFID :"
@@ -121,7 +122,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # Extraction du sous-dossier Pi vers le répertoire cible
-SOURCE_SUBDIR="$TEMP_DIR/Pi"
+SOURCE_SUBDIR="$TEMP_DIR/controlvanne/Pi"
 
 if [ -d "$SOURCE_SUBDIR" ]; then
     echo "📂 Installation des fichiers vers $TARGET_DIR..."
