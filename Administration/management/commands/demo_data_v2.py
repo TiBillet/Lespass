@@ -64,8 +64,9 @@ class Command(BaseCommand):
             "--flush",
             action="store_true",
             help=(
-                "Purge les contenus (évènements, adhésions, initiatives, produits, tarifs, options, fédérations, tags) "
-                "des tenants de démo avant réimport. Ne supprime pas les assets ni la configuration."
+                "Purge complete des donnees de demo avant reimport : produits, events, laboutik (PV, clotures, cartes), "
+                "comptabilite (lignes, ventes), fedow_core (assets, tokens, transactions), inventaire, wallets users, "
+                "cartes NFC. Preserve : tenants, config, appairage Fedow, users admin, wallets du lieu."
             ),
         )
         parser.add_argument(
@@ -1302,6 +1303,7 @@ class Command(BaseCommand):
                 PriceSold,
                 CategorieProduct,
                 PostalAddress,
+                Reservation,
             )
 
             # Imports conditionnels : ces apps ne sont pas forcement installees
@@ -1460,7 +1462,20 @@ class Command(BaseCommand):
                                     logger.warning(f"--flush {tenant.name} stocks: {e}")
                                     compteurs["stocks"] = 0
 
-                            # --- Events ---
+                            # --- Reservations (+ Tickets en CASCADE) -> Events ---
+                            # Reservation a FK PROTECT vers Event — purger AVANT les Events
+                            # / Reservation has FK PROTECT to Event — purge BEFORE Events
+                            try:
+                                n = Reservation.objects.count()
+                                if n:
+                                    Reservation.objects.all().delete()
+                                compteurs["reservations"] = n
+                            except Exception as e:
+                                logger.warning(
+                                    f"--flush {tenant.name} reservations: {e}"
+                                )
+                                compteurs["reservations"] = 0
+
                             try:
                                 n = Event.objects.count()
                                 if n:

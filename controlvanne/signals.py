@@ -124,7 +124,17 @@ def tireusebec_pre_save(sender, instance, **kwargs):
 @receiver(post_save, sender=TireuseBec)
 def tireusebec_post_save(sender, instance, created, **kwargs):
     """Push WebSocket apres modification d'une tireuse.
-    / Push WebSocket after tap modification."""
+    / Push WebSocket after tap modification.
+
+    TENANT-SAFE : ce signal est déclenché par un save() en contexte HTTP
+    (tenant déjà résolu par TenantMainMiddleware). Le payload est construit
+    en synchrone par _snapshot_for_bec() AVANT l'envoi async.
+    Le consumer state_update() ne fait aucune requête DB — il transmet le JSON.
+    / TENANT-SAFE: this signal is triggered by a save() in HTTP context
+    (tenant already resolved by TenantMainMiddleware). The payload is built
+    synchronously by _snapshot_for_bec() BEFORE the async send.
+    The consumer state_update() does no DB queries — it forwards the JSON.
+    """
 
     payload = _snapshot_for_bec(instance)
 
