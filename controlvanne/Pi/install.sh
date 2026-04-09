@@ -306,6 +306,15 @@ PROFILE_DIR="/home/sysop/.config/chromium-kiosk"
 mkdir -p "$PROFILE_DIR/Default"
 touch "$PROFILE_DIR/First Run"
 
+# Attendre que tibeer ait injecté le cookie sessionid (max 30s)
+# / Wait for tibeer to inject the sessionid cookie (max 30s)
+WAIT=0
+while [ ! -f /tmp/tibeer_cookie_ready ] && [ $WAIT -lt 60 ]; do
+    sleep 0.5
+    WAIT=$((WAIT + 1))
+done
+rm -f /tmp/tibeer_cookie_ready
+
 # Boucle de relance Chromium (X reste actif si Chromium crash)
 while true; do
   "$CHROMIUM_BIN" \
@@ -313,7 +322,7 @@ while true; do
     --force-device-scale-factor=2.0 \
     --lang=fr --accept-lang=fr-FR,fr \
     --no-first-run --no-default-browser-check \
-    --kiosk "$URL" --incognito --start-fullscreen \
+    --kiosk "$URL" --start-fullscreen \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
     --disable-gpu --use-gl=swiftshader --disable-dev-shm-usage \

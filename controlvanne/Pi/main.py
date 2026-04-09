@@ -17,6 +17,7 @@ import os
 import sys
 import subprocess
 import time
+import sqlite3
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,37 +31,53 @@ from network.backend_client import BackendClient
 from controllers.tibeer_controller import TibeerController
 
 
-def launch_chromium_kiosk(kiosk_url):
+def inject_session_cookie(session_key, domain):
     """
-    Lance Chromium en mode kiosk sur l'ecran HDMI du Pi.
-    / Launches Chromium in kiosk mode on the Pi's HDMI screen.
+    Écrit le cookie sessionid dans la base SQLite de Chromium avant son lancement.
+    Chromium est lancé par kiosk.service/.xinitrc — cette fonction prépare le cookie
+    à l'avance pour que Chromium le trouve dès le démarrage.
+    / Writes the sessionid cookie into Chromium's SQLite store before launch.
+    Chromium is launched by kiosk.service/.xinitrc — this function prepares the cookie
+    in advance so Chromium finds it on startup.
+    """
+    profile_dir = "/home/sysop/.config/chromium-kiosk"
+    db_dir = os.path.join(profile_dir, "Default")
+    os.makedirs(db_dir, exist_ok=True)
+    db_path = os.path.join(db_dir, "Cookies")
 
-    Le cookie session est gere par Chromium — le Set-Cookie de auth-kiosk
-    est stocke automatiquement pour le domaine du serveur.
-    / The session cookie is managed by Chromium — the Set-Cookie from auth-kiosk
-    is stored automatically for the server domain.
-    """
-    try:
-        subprocess.Popen(
-            [
-                "chromium-browser",
-                "--kiosk",
-                "--noerrdialogs",
-                "--disable-infobars",
-                "--disable-translate",
-                "--disable-features=TranslateUI",
-                "--check-for-update-interval=31536000",
-                f"--app={kiosk_url}",
-            ],
-            env={**os.environ, "DISPLAY": ":0"},
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        logger.info(f"Chromium kiosk lance sur {kiosk_url}")
-    except FileNotFoundError:
-        logger.warning("Chromium non trouve — kiosk non demarre (mode headless?)")
-    except Exception as e:
-        logger.warning(f"Erreur lancement Chromium: {e}")
+    # Chromium time = microsecondes depuis 1601-01-01 / Chromium time = microseconds since 1601-01-01
+    epoch_diff = 11644473600
+    now = (int(time.time()) + epoch_diff) * 1_000_000
+    expires = (int(time.time()) + 86400 * 30 + epoch_diff) * 1_000_000  # 30 jours / 30 days
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("""CREATE TABLE IF NOT EXISTS cookies (
+        creation_utc INTEGER NOT NULL UNIQUE PRIMARY KEY,
+        host_key TEXT NOT NULL, top_frame_site_key TEXT NOT NULL DEFAULT '',
+        name TEXT NOT NULL, value TEXT NOT NULL, encrypted_value BLOB DEFAULT '',
+        path TEXT NOT NULL, expires_utc INTEGER NOT NULL,
+        is_secure INTEGER NOT NULL, is_httponly INTEGER NOT NULL,
+        last_access_utc INTEGER NOT NULL, has_expires INTEGER NOT NULL DEFAULT 1,
+        is_persistent INTEGER NOT NULL DEFAULT 1, priority INTEGER NOT NULL DEFAULT 1,
+        samesite INTEGER NOT NULL DEFAULT -1, source_scheme INTEGER NOT NULL DEFAULT 0,
+        source_port INTEGER NOT NULL DEFAULT -1, last_update_utc INTEGER NOT NULL DEFAULT 0
+    )""")
+    conn.execute("DELETE FROM cookies WHERE host_key=? AND name='sessionid'", (domain,))
+    conn.execute(
+        """INSERT INTO cookies
+        (creation_utc, host_key, top_frame_site_key, name, value, encrypted_value,
+         path, expires_utc, is_secure, is_httponly, last_access_utc,
+         has_expires, is_persistent, priority, samesite, source_scheme, source_port, last_update_utc)
+        VALUES (?,?,'',' sessionid',?,'',' /',?,1,1,?,1,1,1,0,2,443,?)""",
+        (now, domain, session_key, expires, now, now),
+    )
+    conn.commit()
+    conn.close()
+    logger.info(f"Cookie sessionid injecté pour {domain}")
+
+    # Signal pour .xinitrc : le cookie est prêt, Chromium peut démarrer
+    # / Signal for .xinitrc: cookie is ready, Chromium can start
+    open("/tmp/tibeer_cookie_ready", "w").close()
 
 
 def main():
@@ -95,18 +112,20 @@ def main():
     except Exception as e:
         logger.warning(f"Ping echoue (on continue): {e}")
 
-    # 3. Auth kiosk / Auth kiosk
+    # 3. Auth kiosk + injection cookie / Auth kiosk + cookie injection
     logger.info("Auth kiosk...")
     try:
         session_key = client.auth_kiosk()
-        logger.info("Session kiosk obtenue.")
+        from urllib.parse import urlparse
+        domain = urlparse(SERVER_URL).hostname
+        inject_session_cookie(session_key, domain)
     except Exception as e:
         logger.warning(f"Auth kiosk echoue (kiosk indisponible): {e}")
-        session_key = None
 
-    # 4. Lancer Chromium kiosk / Launch Chromium kiosk
+    # 4. Chromium est lancé par kiosk.service/.xinitrc après le signal /tmp/tibeer_cookie_ready
+    # /  Chromium is launched by kiosk.service/.xinitrc after the /tmp/tibeer_cookie_ready signal
     kiosk_url = f"{SERVER_URL}/controlvanne/kiosk/{TIREUSE_UUID}/"
-    launch_chromium_kiosk(kiosk_url)
+    logger.info(f"Kiosk URL : {kiosk_url}")
 
     # 5. Notification systemd / Systemd notification
     if SYSTEMD_NOTIFY:
