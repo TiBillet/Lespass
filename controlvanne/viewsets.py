@@ -39,6 +39,90 @@ from controlvanne.serializers import (
 logger = logging.getLogger(__name__)
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Helper WS — push temps réel vers le kiosk
+# / WS helper — real-time push to kiosk
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _push_ws_kiosk(tireuse, payload):
+    """
+    Envoie un payload JSON au kiosk via WebSocket (Channels).
+    Pousse vers le groupe spécifique de la tireuse ET le groupe global.
+    / Sends a JSON payload to the kiosk via WebSocket (Channels).
+    Pushes to the tap-specific group AND the global group.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Appelé par authorize() et event() pour informer le kiosk en temps réel.
+    Le signal post_save de TireuseBec ne couvre que les changements de réservoir.
+    Les changements de session NFC (badge, volume, fin) nécessitent ce push explicite.
+    / Called by authorize() and event() to inform the kiosk in real time.
+    The TireuseBec post_save signal only covers reservoir changes.
+    NFC session changes (badge, volume, end) require this explicit push.
+
+    :param tireuse: TireuseBec — la tireuse concernée
+    :param payload: dict — données à envoyer au kiosk (format ws_payloads)
+    """
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+
+    # Canal spécifique à cette tireuse (kiosk detail)
+    # / Channel specific to this tap (kiosk detail)
+    async_to_sync(channel_layer.group_send)(
+        f"rfid_state.{tireuse.uuid}",
+        {"type": "state_update", "payload": payload},
+    )
+
+    # Canal global (kiosk list / dashboard admin)
+    # / Global channel (kiosk list / admin dashboard)
+    async_to_sync(channel_layer.group_send)(
+        "rfid_state.all",
+        {"type": "state_update", "payload": payload},
+    )
+
+
+def _construire_payload_session(tireuse, session, **extras):
+    """
+    Construit le payload WebSocket pour un événement de session NFC.
+    / Builds the WebSocket payload for an NFC session event.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    :param tireuse: TireuseBec
+    :param session: RfidSession (ou None)
+    :param extras: champs supplémentaires à fusionner (vanne_ouverte, session_done, etc.)
+    :return: dict payload
+    """
+    payload = {
+        "tireuse_bec": tireuse.nom_tireuse,
+        "tireuse_bec_uuid": str(tireuse.uuid),
+        "liquid_label": tireuse.liquid_label,
+        "reservoir_ml": float(tireuse.reservoir_ml),
+        "reservoir_max_ml": tireuse.reservoir_max_ml,
+        "prix_litre": str(tireuse.prix_litre),
+        "present": bool(session and session.ended_at is None),
+        "authorized": bool(session and session.authorized),
+        "vanne_ouverte": False,
+        "volume_ml": float(session.dernier_volume_ml if session else 0),
+        "uid": session.uid if session else None,
+        "message": "",
+    }
+    # Carte maintenance → flag maintenance
+    # / Maintenance card → maintenance flag
+    if session and session.is_maintenance:
+        payload["maintenance"] = True
+
+    # Fusionner les champs supplémentaires (vanne_ouverte, balance, message, etc.)
+    # / Merge extra fields (vanne_ouverte, balance, message, etc.)
+    payload.update(extras)
+    return payload
+
+
 class TireuseViewSet(viewsets.ViewSet):
     """
     API du Raspberry Pi pour les tireuses connectées.
@@ -163,6 +247,19 @@ class TireuseViewSet(viewsets.ViewSet):
                 allowed_ml_session=tireuse.reservoir_ml,
                 volume_start_ml=Decimal("0.00"),
             )
+
+            # Push WS : maintenance autorisée, vanne ouverte
+            # / WS push: maintenance authorized, valve open
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    vanne_ouverte=True,
+                    message="Rinçage autorisé",
+                ),
+            )
+
             return Response(
                 {
                     "authorized": True,
@@ -240,6 +337,23 @@ class TireuseViewSet(viewsets.ViewSet):
         logger.info(
             f"Authorize: carte={uid} tireuse={tireuse.nom_tireuse} "
             f"solde={solde_centimes}cts allowed={float(allowed_ml):.0f}ml"
+        )
+
+        # Informer le kiosk : carte posee, autorisee, vanne ouverte.
+        # Sur le vrai Pi, valve.open() est appelé immédiatement après authorize.
+        # Le pour_start est envoyé APRÈS l'ouverture — la vanne est déjà ouverte ici.
+        # / Inform kiosk: card placed, authorized, valve open.
+        # On the real Pi, valve.open() is called immediately after authorize.
+        # pour_start is sent AFTER opening — the valve is already open here.
+        _push_ws_kiosk(
+            tireuse,
+            _construire_payload_session(
+                tireuse,
+                session,
+                vanne_ouverte=True,
+                balance=f"{solde_centimes / 100:.2f}",
+                message=f"Carte {uid} — service autorisé",
+            ),
         )
 
         return Response(
@@ -368,8 +482,53 @@ class TireuseViewSet(viewsets.ViewSet):
                 f"facture={'oui' if resultat_facturation else 'non'}"
             )
 
-        # Le push WebSocket est géré par le signal post_save de TireuseBec
-        # / WebSocket push is handled by TireuseBec's post_save signal
+        # Push WebSocket vers le kiosk selon le type d'événement
+        # / WebSocket push to kiosk based on event type
+        if event_type == "pour_start":
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    vanne_ouverte=True,
+                    message="Tirage en cours",
+                ),
+            )
+        elif event_type == "pour_update":
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    vanne_ouverte=True,
+                    message="Tirage en cours",
+                ),
+            )
+        elif event_type in ("pour_end", "card_removed"):
+            # Calculer le solde restant apres facturation (si disponible)
+            # / Compute remaining balance after billing (if available)
+            solde_apres = None
+            if resultat_facturation:
+                from fedow_core.services import WalletService
+                from controlvanne.billing import obtenir_contexte_cashless as _ctx
+
+                ctx = _ctx(session.carte)
+                if ctx:
+                    solde_apres = WalletService.obtenir_solde(
+                        ctx["wallet_client"], ctx["asset_tlf"]
+                    )
+
+            extras_fin = {
+                "session_done": True,
+                "message": f"Fin de service — {float(volume_ml):.0f} ml",
+            }
+            if solde_apres is not None:
+                extras_fin["balance"] = f"{solde_apres / 100:.2f}"
+
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(tireuse, session, **extras_fin),
+            )
 
         response_data = {
             "status": "ok",

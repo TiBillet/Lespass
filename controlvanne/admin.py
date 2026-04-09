@@ -710,5 +710,7 @@ class ConfigurationTireuseAdmin(ModelAdmin):
 
         obj = ConfigurationTireuse.get_solo()
         return redirect(
-            reverse("staff_admin:controlvanne_configurationtireuse_change", args=[obj.pk])
+            reverse(
+                "staff_admin:controlvanne_configurationtireuse_change", args=[obj.pk]
+            )
         )

@@ -1068,6 +1068,23 @@ def _reset_tous_les_soldes_fiduciaires(wallet):
     ).update(value=0)
 ```
 
+**9.100 — `database_sync_to_async` (Channels) ne herite pas de `connection.tenant`.**
+Les workers threads crees par `database_sync_to_async` partent du schema `public`.
+Toute requete sur une TENANT_APP (TireuseBec, RfidSession, etc.) leve
+`ProgrammingError: relation "xxx" does not exist`.
+Solution : recuperer `scope["tenant"]` (mis par `WebSocketTenantMiddleware`)
+et appeler `connection.set_tenant(tenant)` en debut de methode sync.
+```python
+@database_sync_to_async
+def _ma_methode_sync(self, ...):
+    tenant = self.scope.get("tenant")
+    if tenant:
+        from django.db import connection as db_connection
+        db_connection.set_tenant(tenant)
+    # Maintenant les queries TENANT_APPS fonctionnent
+    TireuseBec.objects.filter(...)
+```
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

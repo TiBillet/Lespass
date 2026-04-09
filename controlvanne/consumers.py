@@ -131,6 +131,7 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
         tenant = self.scope.get("tenant")
         if tenant:
             from django.db import connection as db_connection
+
             db_connection.set_tenant(tenant)
 
         tireuse = TireuseBec.objects.filter(uuid=slug_tireuse).first()
@@ -175,9 +176,13 @@ class PanelConsumer(AsyncJsonWebsocketConsumer):
             "tireuse_bec_uuid": str(tireuse.uuid),
             "liquid_label": tireuse.liquid_label,
             "present": bool(session_ouverte and session_ouverte.uid),
-            "authorized": bool(session_ouverte.authorized) if session_ouverte else False,
+            "authorized": bool(session_ouverte.authorized)
+            if session_ouverte
+            else False,
             "vanne_ouverte": False,
-            "volume_ml": float(session_ouverte.volume_end_ml if session_ouverte else 0.0),
+            "volume_ml": float(
+                session_ouverte.volume_end_ml if session_ouverte else 0.0
+            ),
             "debit_cl_min": 0.0,
             "reservoir_ml": float(tireuse.reservoir_ml),
             "reservoir_max_ml": tireuse.reservoir_max_ml,

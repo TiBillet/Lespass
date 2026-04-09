@@ -77,6 +77,7 @@ class SaleOrigin(models.TextChoices):
     NFC_MA = "NF", _("NFC online")
     API = "AP", _("API")
     WEBHOOK = "WK", _("Webhook Stripe")
+    TIREUSE = "TI", _("Connected tap")
 
 
 class PaymentMethod(models.TextChoices):
