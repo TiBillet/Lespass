@@ -68,7 +68,7 @@ CLAIM_RESPONSE=$(curl -s -X POST "${PUBLIC_URL}/api/discovery/claim/" \
 
 SERVER_URL=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['server_url'])")
 API_KEY=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['api_key'])")
-TIREUSE_UUID=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['tireuse_uuid'])")
+TIREUSE_UUID=$(echo "$CLAIM_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('tireuse_uuid', ''))")
 
 if [ -z "$SERVER_URL" ] || [ -z "$API_KEY" ]; then
   echo "ERREUR: Appairage echoue. Verifiez le PIN et l'URL."
