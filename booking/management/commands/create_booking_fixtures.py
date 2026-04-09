@@ -5,7 +5,7 @@ Commande de création des données de démonstration pour le module booking.
 LOCALISATION : booking/management/commands/create_booking_fixtures.py
 
 Données créées :
-- Calendrier "Calendrier 2026" avec jours fériés français et fermetures.
+- Calendrier "Calendrier général" avec jours fériés français et fermetures.
 - Planning hebdomadaire "Coworking weekdays" (lun–ven, 8 créneaux × 60 min).
 - Planning hebdomadaire "Salles de répét' weekend" (sam–dim, 3 créneaux × 180 min).
 - Ressources : Coworking (capacité 3), Imprimante 3D (capacité 1),
@@ -50,27 +50,26 @@ class Command(BaseCommand):
 
     def _create_calendar(self):
         """
-        Crée le calendrier 2026 avec les jours fériés français et les
-        fermetures.
-        / Creates the 2026 calendar with French public holidays and
-        closures.
+        Crée le calendrier avec les jours fériés français et les fermetures
+        pour l'année en cours.
+        / Creates the calendar with French public holidays and closures
+        for the current year.
         """
         calendrier, _created = Calendar.objects.get_or_create(
-            name="Calendrier 2026",
+            name="Calendrier général",
         )
 
+        y = datetime.date.today().year
+
         jours_feries = [
-            (datetime.date(2026, 1, 1),  "Jour de l'An"),
-            (datetime.date(2026, 4, 6),  "Lundi de Pâques"),
-            (datetime.date(2026, 5, 1),  "Fête du Travail"),
-            (datetime.date(2026, 5, 8),  "Victoire 1945"),
-            (datetime.date(2026, 5, 14), "Ascension"),
-            (datetime.date(2026, 5, 25), "Lundi de Pentecôte"),
-            (datetime.date(2026, 7, 14), "Fête Nationale"),
-            (datetime.date(2026, 8, 15), "Assomption"),
-            (datetime.date(2026, 11, 1), "Toussaint"),
-            (datetime.date(2026, 11, 11),"Armistice"),
-            (datetime.date(2026, 12, 25),"Noël"),
+            (datetime.date(y, 1, 1),  "Jour de l'An"),
+            (datetime.date(y, 5, 1),  "Fête du Travail"),
+            (datetime.date(y, 5, 8),  "Victoire 1945"),
+            (datetime.date(y, 7, 14), "Fête Nationale"),
+            (datetime.date(y, 8, 15), "Assomption"),
+            (datetime.date(y, 11, 1), "Toussaint"),
+            (datetime.date(y, 11, 11),"Armistice"),
+            (datetime.date(y, 12, 25),"Noël"),
         ]
         for date_ferie, label in jours_feries:
             ClosedPeriod.objects.get_or_create(
@@ -80,8 +79,8 @@ class Command(BaseCommand):
             )
 
         fermetures = [
-            (datetime.date(2026, 7, 1),  datetime.date(2026, 8, 31),  "Fermeture estivale"),
-            (datetime.date(2026, 12, 21), datetime.date(2027, 1, 2),  "Fermeture fin d'année"),
+            (datetime.date(y, 7, 1),  datetime.date(y, 8, 31),      "Fermeture estivale"),
+            (datetime.date(y, 12, 21), datetime.date(y + 1, 1, 2),  "Fermeture fin d'année"),
         ]
         for start, end, label in fermetures:
             ClosedPeriod.objects.get_or_create(
@@ -99,7 +98,7 @@ class Command(BaseCommand):
         / Creates "Coworking weekdays": Monday–Friday, 8 × 60 min from 09:00.
         """
         opening, _created = WeeklyOpening.objects.get_or_create(
-            name="Coworking weekdays",
+            name="Coworking en semaine",
         )
 
         weekdays = [
@@ -129,7 +128,7 @@ class Command(BaseCommand):
         / Creates "Salles de répét' weekend": Saturday–Sunday, 3 × 180 min from 10:00.
         """
         opening, _created = WeeklyOpening.objects.get_or_create(
-            name="Salles de répét' weekend",
+            name="Répét' le weekend",
         )
 
         weekend_days = [
