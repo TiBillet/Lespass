@@ -21,7 +21,6 @@ Lancement / Run:
     docker exec lespass_django poetry run pytest tests/pytest/test_paiement_cashless.py -v --api-key dummy
 """
 
-import os
 import sys
 
 # Le code Django est dans /DjangoFiles a l'interieur du conteneur.
@@ -37,17 +36,15 @@ import pytest
 
 from unittest.mock import patch
 
-from django.db import connection
 from django_tenants.utils import schema_context
 
 from AuthBillet.models import TibilletUser, Wallet
 from BaseBillet.models import (
-    LigneArticle, PaymentMethod, Price, Product,
-    ProductSold, PriceSold, SaleOrigin,
+    LigneArticle, PaymentMethod, Price, SaleOrigin,
 )
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless
-from fedow_core.models import Asset, Token, Transaction
+from fedow_core.models import Asset, Transaction
 from fedow_core.services import AssetService, WalletService
 from laboutik.models import PointDeVente
 
@@ -151,6 +148,21 @@ def asset_tlf(tenant, wallet_lieu):
         category=Asset.TLF,
         active=True,
     ).update(active=False)
+
+    # Reutiliser l'asset existant s'il y en a un (piege 68 : le signal post_save
+    # cree un Product et leve UniqueViolation si le Product existe deja d'un run precedent)
+    # / Reuse existing asset if present (trap 68: post_save signal creates a Product
+    # and raises UniqueViolation if the Product already exists from a previous run)
+    asset_existant = Asset.objects.filter(
+        tenant_origin=tenant,
+        name='TestCoin Cashless',
+        category=Asset.TLF,
+    ).first()
+
+    if asset_existant:
+        asset_existant.active = True
+        asset_existant.save(update_fields=['active'])
+        return asset_existant
 
     asset = AssetService.creer_asset(
         tenant=tenant,
@@ -383,10 +395,16 @@ class TestPaiementNFCRollbackSoldeInsuffisant:
             response = client.post('/laboutik/paiement/payer/', data=post_data)
             assert response.status_code == 200
 
-            # Verifier que la reponse est "fonds insuffisants"
-            # / Verify response is "insufficient funds"
+            # Vérifier que la réponse propose un complément de paiement
+            # (avant Task 7 c'était "fonds insuffisants", maintenant c'est l'écran complement)
+            # / Verify response proposes a payment complement
+            # (before Task 7 it was "insufficient funds", now it's the complement screen)
             contenu = response.content.decode()
-            assert "insuffisants" in contenu.lower() or "Il manque" in contenu
+            assert (
+                "complement-paiement" in contenu
+                or "insuffisants" in contenu.lower()
+                or "Il manque" in contenu
+            )
 
             # Verifier : rien n'a change
             # / Verify: nothing changed

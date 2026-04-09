@@ -25,15 +25,30 @@ from django_tenants.utils import schema_context
 @pytest.fixture(scope="session")
 def tireuse_api_key_billing(tenant):
     """Cree une TireuseAPIKey pour les tests billing. Nettoie apres.
-    / Creates a TireuseAPIKey for billing tests. Cleans up after."""
+    / Creates a TireuseAPIKey for billing tests. Cleans up after.
+
+    PIEGE : le yield sort du schema_context. Le teardown (delete)
+    s'execute en schema public → UndefinedTable. Il faut re-ouvrir
+    un schema_context pour le cleanup.
+    / TRAP: yield exits schema_context. Teardown (delete) runs in
+    public schema → UndefinedTable. Must re-open schema_context for cleanup.
+    """
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseAPIKey
 
         api_key_obj, key_string = TireuseAPIKey.objects.create_key(
             name="test-billing-key"
         )
-        yield key_string
-        api_key_obj.delete()
+
+    yield key_string
+
+    # Cleanup dans le bon schema (pas en public)
+    # / Cleanup in the correct schema (not public)
+    with schema_context(tenant.schema_name):
+        try:
+            api_key_obj.delete()
+        except Exception:
+            pass  # Déjà supprimé ou schema indisponible
 
 
 @pytest.fixture(scope="session")

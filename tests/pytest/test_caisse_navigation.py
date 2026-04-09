@@ -56,7 +56,12 @@ def test_data(tenant):
     """Lance create_test_pos_data pour s'assurer que les donnees existent.
     / Runs create_test_pos_data to ensure test data exists."""
     from django.core.management import call_command
-    call_command('create_test_pos_data')
+    # Forcer le schema lespass pour que la commande cree les donnees
+    # dans le bon tenant (sinon elle prend le premier non-public = UUID).
+    # / Force lespass schema so the command creates data in the right
+    # tenant (otherwise it picks the first non-public = UUID).
+    with schema_context(TENANT_SCHEMA):
+        call_command('create_test_pos_data')
     return True
 
 
@@ -89,10 +94,16 @@ def tag_id_carte_primaire():
 
 @pytest.fixture(scope="module")
 def premier_pv(test_data):
-    """Le premier point de vente (Bar, cree par create_test_pos_data).
-    / The first point of sale (Bar, created by create_test_pos_data)."""
+    """Le PV 'Bar' cree par create_test_pos_data.
+    / The 'Bar' POS created by create_test_pos_data."""
     with schema_context(TENANT_SCHEMA):
-        return PointDeVente.objects.filter(hidden=False).order_by('poid_liste').first()
+        # Chercher explicitement le PV 'Bar' (la carte primaire y a acces).
+        # Ne pas utiliser .first() sans filtre car des PV de test
+        # peuvent exister avec poid_liste=0 et ne pas etre dans la carte primaire.
+        # / Explicitly look for the 'Bar' POS (the primary card has access).
+        # Don't use .first() without filter because test POS may exist
+        # with poid_liste=0 and not be in the primary card's POS list.
+        return PointDeVente.objects.get(name='Bar')
 
 
 # ---------------------------------------------------------------------------

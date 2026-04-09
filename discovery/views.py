@@ -70,7 +70,7 @@ class ClaimPinView(APIView):
 
                 if tireuse:
                     _key_obj, api_key_string = TireuseAPIKey.objects.create_key(
-                        name=f"discovery-tireuse-{pairing_device.uuid}"
+                        name=f"discovery-{pairing_device.uuid}"
                     )
                     tireuse_uuid = str(tireuse.uuid)
                 else:

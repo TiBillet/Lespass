@@ -1,6 +1,130 @@
 # Changelog / Journal des modifications
 
-<<<<<<< HEAD
+## Simulateur Pi3 + refactoring kiosk controlvanne / Pi3 simulator + kiosk refactoring
+
+**Date :** 9 avril 2026
+**Migration necessaire / Migration required :** Oui — `BaseBillet/migrations/0210_alter_lignearticle_sale_origin_and_more.py`
+
+**Quoi / What:**
+- Simulateur Pi3 (mode DEMO) : panneau JS dans le kiosk qui simule le hardware (NFC + electrovanne + debitmetre)
+- Simulateur fidele au vrai Pi : vanne s'ouvre des l'autorisation, slider = robinet mecanique, fin de service = retrait carte
+- Separation vue ALL (grille) / vue detail (single tap + simulateur)
+- Migration de `kiosk_view` fonction vers `KioskViewSet` (list + retrieve)
+- Extraction carte kiosk en partial reutilisable
+- Push WebSocket explicite dans le viewset (authorize, pour_start, pour_update, pour_end, card_removed)
+- `SaleOrigin.TIREUSE` ("Connected tap") pour distinguer les ventes tireuse des ventes caisse
+- Colonne "Point de vente" ajoutee dans l'admin LigneArticle
+- Correction affichage poids : "cl" au lieu de "g" pour les ventes tireuse
+- Conformite djc : i18n, accessibilite, FALC, logger
+- Fix tenant-awareness du WebSocket consumer (database_sync_to_async)
+- Liens admin Unfold : sidebar dashboard, bouton kiosk sur fiche tireuse, lien module dashboard
+
+**Pourquoi / Why:** Permettre de tester le flow complet tireuse (badge → autorisation → tirage → facturation) sans hardware Pi. Corriger la tracabilite des ventes tireuse dans l'admin.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `controlvanne/viewsets.py` | `KioskViewSet` (list + retrieve) + `_push_ws_kiosk` + `_construire_payload_session` |
+| `controlvanne/urls.py` | 2 routes kiosk : `/kiosk/` (list) + `/kiosk/<uuid>/` (retrieve) |
+| `controlvanne/consumers.py` | print→logger, FALC, fix tenant `set_tenant(scope["tenant"])` |
+| `controlvanne/routing.py` | Casse normalisee (ALL→all), FALC |
+| `controlvanne/signals.py` | Documentation tenant-safe |
+| `controlvanne/billing.py` | `SaleOrigin.LABOUTIK` → `SaleOrigin.TIREUSE` |
+| `controlvanne/admin.py` | `change_form_before_template` + `compressed_fields` + `warn_unsaved_form` |
+| `controlvanne/static/controlvanne/js/simu_pi.js` | **Nouveau** — state machine fidele au Pi |
+| `controlvanne/static/controlvanne/js/panel_kiosk.js` | Reecrit FALC, noms explicites, casse WS |
+| `controlvanne/templates/.../kiosk_detail.html` | **Nouveau** — vue single tap + simulateur |
+| `controlvanne/templates/.../kiosk_list.html` | **Nouveau** — vue grille toutes les tireuses |
+| `controlvanne/templates/.../partial/kiosk_card.html` | **Nouveau** — carte reutilisable |
+| `BaseBillet/models.py` | Ajout `SaleOrigin.TIREUSE = "TI"` |
+| `Administration/admin/sales.py` | Colonne `display_point_de_vente` + fix fallback unite poids |
+| `Administration/admin/dashboard.py` | Lien sidebar kiosk + lien module dashboard |
+| `Administration/templates/.../tireusebec_before.html` | **Nouveau** — bouton kiosk sur fiche |
+| `tests/e2e/test_controlvanne_kiosk.py` | **Nouveau** — 10 tests E2E (vues + simulateur + admin) |
+| `tests/PIEGES.md` | Piege 9.100 : `database_sync_to_async` + tenant |
+| `TECH DOC/.../SPEC_SIMULATEUR_PI.md` | **Nouveau** — spec du simulateur |
+
+## Flush rapide sans migrations / Fast flush without migrations
+
+**Date :** 9 avril 2026
+**Migration :** Non
+
+**Quoi / What:** `flush.sh` detecte si la DB est deja initialisee (table `django_migrations` presente). Si oui, lance `demo_data_v2 --flush` pour purger et reimporter les fixtures sans drop/recreate ni migrations. Le `--flush` a ete complete pour purger toutes les tables de demo : laboutik (ClotureCaisse, CartePrimaire, PointDeVente, Printer), comptabilite (LigneArticle, PriceSold, ProductSold), inventaire (Stock), fedow_core (Transaction, Token, Asset, Federation), cartes NFC (CarteCashless, Detail), wallets users, et CategorieProduct. Les wallets du lieu (appairage Fedow) sont preserves.
+
+**Pourquoi / Why:** Le flush complet (drop + create + migrate + install + demo) prend plusieurs minutes. En dev, quand on veut juste repartir de donnees fraiches sans changer le schema, c'est inutilement long.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `flush.sh` | Detection DB initialisee via `psql to_regclass`, branchement flush rapide vs install complete |
+| `Administration/management/commands/demo_data_v2.py` | Section `--flush` etendue : purge fedow_core, laboutik, comptabilite, inventaire, cartes NFC, wallets users, categories |
+
+## Cascade multi-asset NFC + paiement complementaire
+
+**Date :** 8 avril 2026
+**Migration :** Oui — `BaseBillet/migrations/0209_price_non_fiduciaire.py`
+
+**Quoi / What:** Paiement NFC en cascade multi-asset : le systeme debite les tokens du client dans l'ordre TNF (cadeau) → TLF (local) → FED (federe). Un article peut generer N LigneArticle (1 par asset debite) avec qty decimale et amount entier en centimes. Si la cascade ne couvre pas le total, l'operateur peut completer en especes, CB, ou 2eme carte NFC. Support des tarifs non-fiduciaires (TIM/FID) via le nouveau champ `Price.non_fiduciaire`.
+
+**Pourquoi / Why:** L'ancien `_payer_par_nfc()` ne debitait que sur un seul asset TLF. Les tokens cadeau (TNF) et federes (FED) n'etaient jamais utilises pour payer. Le legacy LaBoutik supportait la cascade — cette feature retrouve la parite fonctionnelle.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `Price.non_fiduciaire` BooleanField + `clean()` validation |
+| `BaseBillet/migrations/0209_price_non_fiduciaire.py` | Migration |
+| `laboutik/views.py` | Constantes cascade, `_calculer_qty_partielles()`, `_creer_lignes_articles_cascade()`, refonte `_payer_par_nfc()` (8 phases), `payer_complementaire()`, `lire_nfc_complement()` |
+| `laboutik/printing/formatters.py` | `cascade_detail` dans `formatter_ticket_vente()` |
+| `Administration/admin/products.py` | `POSPriceInline` : champs `non_fiduciaire` + `asset` conditionnel, filtre TIM/FID |
+| `laboutik/management/commands/create_test_pos_data.py` | Assets FED/FID, produits TIM/FID, wallet garni multi-asset |
+| `laboutik/templates/laboutik/partial/hx_complement_paiement.html` | Nouveau — ecran complementaire |
+| `laboutik/templates/laboutik/partial/hx_lire_nfc_complement.html` | Nouveau — scan 2eme carte |
+| `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | Affichage multi-soldes |
+| `tests/pytest/test_cascade_nfc.py` | 17 tests (validation Price, qty partielle, cascade, complement) |
+| `tests/e2e/test_pos_paiement.py` | 3 tests adaptes aux nouveaux data-testid |
+| `tests/e2e/test_pos_recharge_cashless.py` | Nouveau — 4 tests E2E recharge cashless complet (tuiles visibles, recharge especes NFC, verification solde DB, vente NFC apres recharge) |
+| `tests/pytest/test_retour_carte_recharges.py` | Fix : products de recharge lies aux assets, tenant force `lespass` |
+| `tests/pytest/test_paiement_cashless.py` | Fix : `get_or_create` asset pour eviter UniqueViolation signal post_save |
+| `tests/pytest/test_controlvanne_billing.py` | Fix : teardown fixture `schema_context` pour eviter UndefinedTable |
+| `tests/pytest/test_caisse_navigation.py` | Fix : PV force `Bar` au lieu de `.first()`, tenant force |
+| `tests/pytest/test_pos_models.py` | Fix : nettoyage Products signal avant creation asset |
+| `tests/pytest/test_pos_views_data.py` | Fix : asset TLF lie au product de recharge |
+| `tests/pytest/test_printing.py` | Fix : `schema_context` + mocks completes |
+| `tests/pytest/test_verify_transactions.py` | Fix : nettoyage Products signal avant creation asset |
+| `tests/e2e/test_pos_adhesion_nfc.py` | Fix : fixture `recharge_asset_setup` pour lier produit recharge |
+| `tests/e2e/test_login.py` | Fix : locator admin adapte au nouveau template |
+| `tests/e2e/test_pos_billetterie.py` | Fix : timeouts augmentes (flaky) |
+| `tests/e2e/test_pos_sortie_caisse_e2e.py` | Fix : timeouts augmentes (flaky) |
+
+### Tests / Resultats
+- **pytest** : 569 PASS, 0 FAILED, 0 ERRORS (avant : 478 pass, 7 failed, 84 errors)
+- **E2E** : 91 PASS, 0 FAILED (avant : 87 pass, 4 failed)
+- **Nouveaux tests** : 17 pytest cascade + 4 E2E recharge cashless = 21 tests ajoutes
+
+---
+
+## Asset-first recharge products / Produits de recharge pilotes par l'Asset
+
+**Date :** 8 avril 2026
+**Migration :** Oui — `BaseBillet/migrations/0208_product_asset_fk.py`
+
+**Quoi / What:** L'Asset `fedow_core.Asset` (TLF/TNF/TIM) pilote la creation des produits de recharge. Un signal `post_save` sur Asset cree automatiquement un Product multi-tarif (1/5/10/Libre) et l'attache aux PV CASHLESS. Plus de bouton "Recharge" sans Asset, plus d'erreur "Monnaie locale non configuree".
+
+**Pourquoi / Why:** Les produits de recharge etaient crees manuellement sans lien avec un Asset fedow_core. Le lookup par categorie dans `_executer_recharges()` echouait si l'Asset n'existait pas. Maintenant l'Asset drive tout : pas d'Asset = pas de bouton.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | FK `Product.asset → fedow_core.Asset` (nullable) |
+| `BaseBillet/migrations/0208_product_asset_fk.py` | Migration FK |
+| `fedow_core/signals.py` | Nouveau — signal post_save Asset → Product + Prices + PV CASHLESS |
+| `fedow_core/apps.py` | Enregistre le signal dans `ready()` |
+| `laboutik/views.py` | Filtre affichage, refactor `_executer_recharges` et `_payer_par_nfc` |
+| `laboutik/management/commands/create_test_pos_data.py` | Cree 3 Assets au lieu de 5 Products manuels |
+| `tests/pytest/test_asset_recharge_signal.py` | 6 tests signal (creation, archivage, renommage) |
+
+---
+
 ## Rapport temps reel — Session en cours / Real-time report — Current shift
 
 **Date :** Avril 2026
@@ -9,7 +133,6 @@
 **Quoi / What:** Bouton "Rapport en cours" sur la liste des clotures de caisse (`/admin/laboutik/cloturecaisse/`). Ouvre dans un nouvel onglet un rapport comptable complet calcule en temps reel depuis la derniere cloture via `RapportComptableService.generer_rapport_complet()`.
 
 **Pourquoi / Why:** Permettre aux operateurs de consulter l'etat comptable du service en cours sans creer de cloture.
-=======
 ## Page Explorer — Carte Leaflet + recherche fusionnee / Explorer page — Leaflet map + merged search
 
 **Date :** 7 avril 2026
@@ -77,12 +200,10 @@
 ### Fichiers modifies / Modified files
 | Fichier / File | Changement / Change |
 |---|---|
-<<<<<<< HEAD
 | `laboutik/views.py` | Nouvelle action `rapport_temps_reel` sur CaisseViewSet |
 | `Administration/templates/admin/cloture/rapport_temps_reel.html` | Template standalone du rapport temps reel (13 sections) |
 | `Administration/templates/admin/cloture/changelist_before.html` | Bouton vert "Rapport en cours" avec `target="_blank"` |
 | `Administration/admin/laboutik.py` | URL du rapport injectee dans `changelist_view()` |
-=======
 | `TiBillet/settings.py` | `seo` dans SHARED_APPS + `CELERY_BEAT_SCHEDULE` |
 | `TiBillet/urls_tenants.py` | Import sitemap depuis `seo.sitemap` |
 | `TiBillet/urls_public.py` | Routes ROOT via `seo.urls` |

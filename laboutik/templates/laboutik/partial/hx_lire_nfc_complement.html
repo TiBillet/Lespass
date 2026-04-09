@@ -1,0 +1,57 @@
+{% load static i18n %}
+<!--
+ATTENTE LECTURE NFC — 2eme carte complement
+Affiche l'ecran d'attente NFC pour la 2eme carte.
+Apres scan, le JS soumet vers payer_complementaire avec moyen_complement=nfc.
+/ NFC read waiting screen — 2nd complement card.
+Displays the NFC wait screen for the 2nd card.
+After scan, JS submits to payer_complementaire with moyen_complement=nfc.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_lire_nfc_complement.html
+
+FLUX :
+1. L'utilisateur clique "2eme CARTE NFC" dans hx_complement_paiement.html
+2. Ce partial affiche le spinner NFC
+3. Le JS au chargement injecte les donnees cascade carte1 dans #addition-form
+4. Scan NFC → JS met tag_id dans #addition-form → POST payer_complementaire
+/ FLOW:
+1. User clicks "2nd NFC CARD" in hx_complement_paiement.html
+2. This partial shows the NFC spinner
+3. JS on load injects card1 cascade data into #addition-form
+4. NFC scan → JS puts tag_id in #addition-form → POST payer_complementaire
+-->
+
+<div id="confirm" data-testid="lire-nfc-complement">
+	<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}">
+		<h1>{% translate "Attente lecture 2ème carte" %}</h1>
+		<p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la 2ème carte du client sur le lecteur" %}</p>
+	</c-read-nfc>
+
+	<script>
+		/**
+		 * Injecte les donnees cascade de la carte1 dans #addition-form au chargement.
+		 * Le NFC reader soumet #addition-form (pas les champs dans ce partial).
+		 * / Injects card1 cascade data into #addition-form on load.
+		 * The NFC reader submits #addition-form (not fields in this partial).
+		 *
+		 * LOCALISATION : hx_lire_nfc_complement.html (inline)
+		 */
+		(function() {
+			var form = document.querySelector('#addition-form');
+			function setHiddenInput(name, value) {
+				var input = form.querySelector('[name="' + name + '"]');
+				if (!input) {
+					input = document.createElement('input');
+					input.type = 'hidden';
+					input.name = name;
+					form.appendChild(input);
+				}
+				input.value = value;
+			}
+			setHiddenInput('tag_id_carte1', '{{ tag_id_carte1|escapejs }}');
+			setHiddenInput('cascade_carte1', '{{ cascade_carte1_json|escapejs }}');
+			setHiddenInput('total_nfc_carte1', '{{ total_nfc_carte1|escapejs }}');
+			setHiddenInput('moyen_complement', 'nfc');
+		})();
+	</script>
+</div>

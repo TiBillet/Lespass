@@ -1,0 +1,21 @@
+// Configuration pour le SDK Sunmi Printer
+// Repository Sunmi et dépendances
+
+repositories {
+    google()
+    mavenCentral()
+    // Repository Sunmi
+    maven { url 'https://dl.sunmi.com/repository/maven-public/' }
+}
+
+dependencies {
+    // SDK Sunmi Printer
+    implementation 'com.sunmi:printerlibrary:1.0.23'
+}
+
+android {
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libjsc.so'
+    }
+}

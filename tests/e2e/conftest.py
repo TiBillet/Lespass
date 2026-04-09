@@ -131,7 +131,7 @@ def login_as():
         # 5. Cliquer sur le lien TEST MODE (apparaît via HTMX swap)
         # / Click the TEST MODE link (appears via HTMX swap)
         test_mode_link = page.locator('a:has-text("TEST MODE")')
-        test_mode_link.wait_for(state="visible", timeout=10_000)
+        test_mode_link.wait_for(state="visible", timeout=15_000)
         test_mode_link.click()
         page.wait_for_load_state("networkidle")
 

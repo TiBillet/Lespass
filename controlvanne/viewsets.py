@@ -39,6 +39,90 @@ from controlvanne.serializers import (
 logger = logging.getLogger(__name__)
 
 
+# ──────────────────────────────────────────────────────────────────────
+# Helper WS — push temps réel vers le kiosk
+# / WS helper — real-time push to kiosk
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _push_ws_kiosk(tireuse, payload):
+    """
+    Envoie un payload JSON au kiosk via WebSocket (Channels).
+    Pousse vers le groupe spécifique de la tireuse ET le groupe global.
+    / Sends a JSON payload to the kiosk via WebSocket (Channels).
+    Pushes to the tap-specific group AND the global group.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Appelé par authorize() et event() pour informer le kiosk en temps réel.
+    Le signal post_save de TireuseBec ne couvre que les changements de réservoir.
+    Les changements de session NFC (badge, volume, fin) nécessitent ce push explicite.
+    / Called by authorize() and event() to inform the kiosk in real time.
+    The TireuseBec post_save signal only covers reservoir changes.
+    NFC session changes (badge, volume, end) require this explicit push.
+
+    :param tireuse: TireuseBec — la tireuse concernée
+    :param payload: dict — données à envoyer au kiosk (format ws_payloads)
+    """
+    from asgiref.sync import async_to_sync
+    from channels.layers import get_channel_layer
+
+    channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
+
+    # Canal spécifique à cette tireuse (kiosk detail)
+    # / Channel specific to this tap (kiosk detail)
+    async_to_sync(channel_layer.group_send)(
+        f"rfid_state.{tireuse.uuid}",
+        {"type": "state_update", "payload": payload},
+    )
+
+    # Canal global (kiosk list / dashboard admin)
+    # / Global channel (kiosk list / admin dashboard)
+    async_to_sync(channel_layer.group_send)(
+        "rfid_state.all",
+        {"type": "state_update", "payload": payload},
+    )
+
+
+def _construire_payload_session(tireuse, session, **extras):
+    """
+    Construit le payload WebSocket pour un événement de session NFC.
+    / Builds the WebSocket payload for an NFC session event.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    :param tireuse: TireuseBec
+    :param session: RfidSession (ou None)
+    :param extras: champs supplémentaires à fusionner (vanne_ouverte, session_done, etc.)
+    :return: dict payload
+    """
+    payload = {
+        "tireuse_bec": tireuse.nom_tireuse,
+        "tireuse_bec_uuid": str(tireuse.uuid),
+        "liquid_label": tireuse.liquid_label,
+        "reservoir_ml": float(tireuse.reservoir_ml),
+        "reservoir_max_ml": tireuse.reservoir_max_ml,
+        "prix_litre": str(tireuse.prix_litre),
+        "present": bool(session and session.ended_at is None),
+        "authorized": bool(session and session.authorized),
+        "vanne_ouverte": False,
+        "volume_ml": float(session.dernier_volume_ml if session else 0),
+        "uid": session.uid if session else None,
+        "message": "",
+    }
+    # Carte maintenance → flag maintenance
+    # / Maintenance card → maintenance flag
+    if session and session.is_maintenance:
+        payload["maintenance"] = True
+
+    # Fusionner les champs supplémentaires (vanne_ouverte, balance, message, etc.)
+    # / Merge extra fields (vanne_ouverte, balance, message, etc.)
+    payload.update(extras)
+    return payload
+
+
 class TireuseViewSet(viewsets.ViewSet):
     """
     API du Raspberry Pi pour les tireuses connectées.
@@ -163,6 +247,19 @@ class TireuseViewSet(viewsets.ViewSet):
                 allowed_ml_session=tireuse.reservoir_ml,
                 volume_start_ml=Decimal("0.00"),
             )
+
+            # Push WS : maintenance autorisée, vanne ouverte
+            # / WS push: maintenance authorized, valve open
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    vanne_ouverte=True,
+                    message="Rinçage autorisé",
+                ),
+            )
+
             return Response(
                 {
                     "authorized": True,
@@ -240,6 +337,23 @@ class TireuseViewSet(viewsets.ViewSet):
         logger.info(
             f"Authorize: carte={uid} tireuse={tireuse.nom_tireuse} "
             f"solde={solde_centimes}cts allowed={float(allowed_ml):.0f}ml"
+        )
+
+        # Informer le kiosk : carte posee, autorisee, vanne ouverte.
+        # Sur le vrai Pi, valve.open() est appelé immédiatement après authorize.
+        # Le pour_start est envoyé APRÈS l'ouverture — la vanne est déjà ouverte ici.
+        # / Inform kiosk: card placed, authorized, valve open.
+        # On the real Pi, valve.open() is called immediately after authorize.
+        # pour_start is sent AFTER opening — the valve is already open here.
+        _push_ws_kiosk(
+            tireuse,
+            _construire_payload_session(
+                tireuse,
+                session,
+                vanne_ouverte=True,
+                balance=f"{solde_centimes / 100:.2f}",
+                message=f"Carte {uid} — service autorisé",
+            ),
         )
 
         return Response(
@@ -368,8 +482,53 @@ class TireuseViewSet(viewsets.ViewSet):
                 f"facture={'oui' if resultat_facturation else 'non'}"
             )
 
-        # Le push WebSocket est géré par le signal post_save de TireuseBec
-        # / WebSocket push is handled by TireuseBec's post_save signal
+        # Push WebSocket vers le kiosk selon le type d'événement
+        # / WebSocket push to kiosk based on event type
+        if event_type == "pour_start":
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    vanne_ouverte=True,
+                    message="Tirage en cours",
+                ),
+            )
+        elif event_type == "pour_update":
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(
+                    tireuse,
+                    session,
+                    vanne_ouverte=True,
+                    message="Tirage en cours",
+                ),
+            )
+        elif event_type in ("pour_end", "card_removed"):
+            # Calculer le solde restant apres facturation (si disponible)
+            # / Compute remaining balance after billing (if available)
+            solde_apres = None
+            if resultat_facturation:
+                from fedow_core.services import WalletService
+                from controlvanne.billing import obtenir_contexte_cashless as _ctx
+
+                ctx = _ctx(session.carte)
+                if ctx:
+                    solde_apres = WalletService.obtenir_solde(
+                        ctx["wallet_client"], ctx["asset_tlf"]
+                    )
+
+            extras_fin = {
+                "session_done": True,
+                "message": f"Fin de service — {float(volume_ml):.0f} ml",
+            }
+            if solde_apres is not None:
+                extras_fin["balance"] = f"{solde_apres / 100:.2f}"
+
+            _push_ws_kiosk(
+                tireuse,
+                _construire_payload_session(tireuse, session, **extras_fin),
+            )
 
         response_data = {
             "status": "ok",
@@ -435,46 +594,137 @@ class AuthKioskView(APIView):
 
 
 # ──────────────────────────────────────────────────────────────────────
-# kiosk_view — page kiosk temps réel pour l'écran du Pi
+# KioskViewSet — pages kiosk temps réel pour les écrans Pi
+# / KioskViewSet — real-time kiosk pages for Pi screens
 # ──────────────────────────────────────────────────────────────────────
 
 
-def kiosk_view(request, uuid):
+def _verifier_authentification_kiosk(request):
     """
-    GET /controlvanne/kiosk/<uuid>/
-    Affiche le kiosk (panel_bootstrap.html) pour une tireuse.
-    Protégé par session cookie (obtenue via POST /controlvanne/auth-kiosk/)
-    ou par session admin tenant.
-    / Displays the kiosk (panel_bootstrap.html) for a tap.
-    Protected by session cookie (from POST /controlvanne/auth-kiosk/)
-    or tenant admin session.
+    Vérifie que l'utilisateur est authentifié pour le kiosk.
+    Deux moyens d'accès : session kiosk (POST /auth-kiosk/) ou admin tenant.
+    / Checks that the user is authenticated for the kiosk.
+    Two access methods: kiosk session (POST /auth-kiosk/) or tenant admin.
 
     LOCALISATION : controlvanne/viewsets.py
-    """
-    from django.shortcuts import render, get_object_or_404
-    from django.http import HttpResponseForbidden
-    from django.db import connection
-    from BaseBillet.models import Configuration
 
-    # Vérifier l'authentification kiosk ou admin
-    # / Check kiosk or admin authentication
+    :param request: HttpRequest
+    :return: True si autorisé, False sinon
+    """
+    from django.db import connection
+
+    # Moyen 1 : session kiosk (créée par POST /controlvanne/auth-kiosk/)
+    # / Method 1: kiosk session (created by POST /controlvanne/auth-kiosk/)
     est_kiosk = request.session.get("controlvanne_authenticated")
-    est_admin = False
+    if est_kiosk:
+        return True
+
+    # Moyen 2 : admin du tenant connecté
+    # / Method 2: logged-in tenant admin
     utilisateur = request.user
     if utilisateur and utilisateur.is_authenticated:
         est_admin = utilisateur.is_tenant_admin(connection.tenant)
+        if est_admin:
+            return True
 
-    if not est_kiosk and not est_admin:
-        return HttpResponseForbidden("Not authenticated for kiosk.")
+    return False
 
-    tireuse = get_object_or_404(TireuseBec, uuid=uuid)
-    becs = TireuseBec.objects.filter(enabled=True).order_by("nom_tireuse")
-    config = Configuration.get_solo()
 
-    context = {
-        "tireuse": tireuse,
-        "becs": becs,
-        "config": config,
-        "slug_focus": str(uuid),
-    }
-    return render(request, "controlvanne/panel_bootstrap.html", context)
+class KioskViewSet(viewsets.ViewSet):
+    """
+    Pages kiosk pour les écrans des tireuses connectées.
+    / Kiosk pages for connected tap screens.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Deux vues :
+    - list()     → GET /controlvanne/kiosk/
+                   Grille de toutes les tireuses actives.
+                   WebSocket : /ws/rfid/all/ (toutes les mises à jour).
+    - retrieve() → GET /controlvanne/kiosk/<uuid>/
+                   Écran dédié à une seule tireuse.
+                   WebSocket : /ws/rfid/<uuid>/ (mises à jour ciblées).
+                   Inclut le panneau simulateur Pi en mode DEMO.
+
+    Auth : session kiosk (POST /controlvanne/auth-kiosk/) ou admin tenant.
+    / Auth: kiosk session (POST /controlvanne/auth-kiosk/) or tenant admin.
+    """
+
+    # Pas de permission DRF — on vérifie manuellement via _verifier_authentification_kiosk
+    # car le kiosk n'utilise pas d'API key, mais un cookie de session.
+    # / No DRF permission — manual check via _verifier_authentification_kiosk
+    # because the kiosk uses a session cookie, not an API key.
+    permission_classes = []
+
+    def list(self, request):
+        """
+        GET /controlvanne/kiosk/
+        Grille de toutes les tireuses actives.
+        Le WebSocket se connecte à /ws/rfid/all/ pour recevoir les mises à jour.
+        / Grid of all active taps.
+        WebSocket connects to /ws/rfid/all/ to receive updates.
+
+        LOCALISATION : controlvanne/viewsets.py
+        """
+        from django.shortcuts import render
+        from django.http import HttpResponseForbidden
+        from BaseBillet.models import Configuration
+
+        if not _verifier_authentification_kiosk(request):
+            return HttpResponseForbidden("Not authenticated for kiosk.")
+
+        toutes_les_tireuses_actives = TireuseBec.objects.filter(
+            enabled=True,
+        ).order_by("nom_tireuse")
+
+        config = Configuration.get_solo()
+
+        context = {
+            "becs": toutes_les_tireuses_actives,
+            "config": config,
+            "slug_focus": "all",
+        }
+
+        return render(request, "controlvanne/kiosk_list.html", context)
+
+    def retrieve(self, request, pk=None):
+        """
+        GET /controlvanne/kiosk/<uuid>/
+        Écran dédié à une seule tireuse avec jauge, prix, et état temps réel.
+        Le WebSocket se connecte à /ws/rfid/<uuid>/ pour les mises à jour ciblées.
+        En mode DEMO, affiche le panneau simulateur Pi (boutons carte + slider débit).
+        / Screen dedicated to a single tap with gauge, prices, and real-time state.
+        WebSocket connects to /ws/rfid/<uuid>/ for targeted updates.
+        In DEMO mode, shows the Pi simulator panel (card buttons + flow slider).
+
+        LOCALISATION : controlvanne/viewsets.py
+        """
+        from django.conf import settings
+        from django.shortcuts import render, get_object_or_404
+        from django.http import HttpResponseForbidden
+        from django.utils.translation import gettext_lazy as _
+        from BaseBillet.models import Configuration
+
+        if not _verifier_authentification_kiosk(request):
+            return HttpResponseForbidden("Not authenticated for kiosk.")
+
+        tireuse = get_object_or_404(TireuseBec, uuid=pk)
+        config = Configuration.get_solo()
+
+        context = {
+            "tireuse": tireuse,
+            "config": config,
+            "slug_focus": str(pk),
+        }
+
+        # Mode demo : injecter les tags NFC simulés pour le panneau debug
+        # / Demo mode: inject simulated NFC tags for the debug panel
+        if getattr(settings, "DEMO", False):
+            context["demo_tags"] = [
+                {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+                {"tag_id": settings.DEMO_TAGID_CLIENT4, "name": _("Carte inconnue")},
+            ]
+
+        return render(request, "controlvanne/kiosk_detail.html", context)

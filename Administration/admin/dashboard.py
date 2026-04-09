@@ -346,6 +346,12 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     {
+                        "title": _("Kiosk dashboard"),
+                        "icon": "monitoring",
+                        "link": "/controlvanne/kiosk/",
+                        "permission": admin_permission,
+                    },
+                    {
                         "title": _("Taps"),
                         "icon": "local_bar",
                         "link": reverse_lazy(
@@ -654,6 +660,9 @@ MODULE_FIELDS = {
             "Connected beer tap management: RFID authorization, flow metering, kiosk display."
         ),
         "testid": "dashboard-card-tireuse",
+        "link_url": "/controlvanne/kiosk/",
+        "link_label": _("Open kiosk"),
+        "link_icon": "fa-display",
     },
 }
 

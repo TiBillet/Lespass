@@ -431,10 +431,38 @@ def test_bt_groupement_par_methode_caisse(tenant):
         )
         Price.objects.create(product=product_vente, name=f'{TEST_PREFIX} Tarif VT', prix=Decimal('5.00'))
 
+        # Un produit de recharge a besoin d'un Asset lie (sinon _construire_donnees_articles le skip).
+        # On reutilise un asset TLF existant du tenant pour eviter les conflits de signal.
+        # Si aucun n'existe, on en cree un (le signal creera aussi un Product).
+        # / A top-up product needs a linked Asset (otherwise _construire_donnees_articles skips it).
+        # Reuse an existing TLF asset from the tenant to avoid signal conflicts.
+        # If none exists, create one (the signal will also create a Product).
+        from AuthBillet.models import Wallet
+        from fedow_core.models import Asset
+        from fedow_core.services import AssetService
+
+        tenant_client = Client.objects.get(schema_name=TENANT_SCHEMA)
+        asset_recharge = Asset.objects.filter(
+            tenant_origin=tenant_client,
+            category=Asset.TLF,
+            active=True,
+        ).first()
+        wallet_groupement_cree = None
+        if asset_recharge is None:
+            wallet_groupement_cree = Wallet.objects.create(name=f'{TEST_PREFIX} Wallet Groupement')
+            asset_recharge = AssetService.creer_asset(
+                tenant=tenant_client,
+                name=f'{TEST_PREFIX} Asset Groupement',
+                category=Asset.TLF,
+                currency_code='EUR',
+                wallet_origin=wallet_groupement_cree,
+            )
+
         product_recharge = Product.objects.create(
             name=f'{TEST_PREFIX} Groupement RECHARGE',
             methode_caisse=Product.RECHARGE_EUROS,
             categorie_pos=cat,
+            asset=asset_recharge,
         )
         Price.objects.create(product=product_recharge, name=f'{TEST_PREFIX} Tarif RE', prix=Decimal('10.00'))
 
@@ -460,6 +488,24 @@ def test_bt_groupement_par_methode_caisse(tenant):
         assert art_recharge['bt_groupement']['groupe'] == 'groupe_RE', (
             f"groupe attendu 'groupe_RE', obtenu '{art_recharge['bt_groupement']['groupe']}'"
         )
+
+        # Les produits de test sont nettoyes par le cleanup_test_data autouse.
+        # Nettoyer le wallet cree localement si on en a cree un.
+        # / Test products are cleaned by the autouse cleanup_test_data.
+        # Clean up locally created wallet if we created one.
+        if wallet_groupement_cree:
+            from fedow_core.models import Token, Transaction
+            Transaction.objects.filter(asset=asset_recharge).delete()
+            Token.objects.filter(wallet=wallet_groupement_cree).delete()
+            # Ne pas supprimer l'asset ni son Product signal si des PriceSold existent
+            # / Don't delete the asset or its signal Product if PriceSold exist
+            try:
+                Price.objects.filter(product__asset=asset_recharge).delete()
+                Product.objects.filter(asset=asset_recharge).delete()
+                asset_recharge.delete()
+            except Exception:
+                pass
+            wallet_groupement_cree.delete()
 
 
 # ---------------------------------------------------------------------------

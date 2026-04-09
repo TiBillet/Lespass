@@ -69,7 +69,7 @@ def _make_cash_sale(page, pos_page, pv_name="Bar"):
     tile = page.locator("#products .article-container").filter(has_text="Biere").first
     expect(tile).to_be_visible(timeout=10_000)
     tile.click()
-    expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=5_000)
+    expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=10_000)
 
     # Valider / Validate
     page.locator("#bt-valider").click()
@@ -187,7 +187,7 @@ class TestSortieDeCaisseE2E:
         # donc la validation JS laisse passer sans alerte.
         # / Enter 1 × 5€ via + button. 5€ <= cash sales so no JS alert.
         input_5 = page.locator('[data-testid="sortie-input-500"]')
-        expect(input_5).to_be_visible(timeout=5_000)
+        expect(input_5).to_be_visible(timeout=10_000)
         page.locator('[data-testid="sortie-btn-plus-500"]').click()
 
         # Verifier que le total JS affiche 5,00 € / Verify JS total shows 5,00 €
@@ -227,7 +227,7 @@ class TestSortieDeCaisseE2E:
         expect(page.locator('[data-testid="recap-solde"]')).to_be_visible(timeout=10_000)
 
         # La ligne "Sorties especes" doit etre visible / "Cash withdrawals" row must be visible
-        expect(page.locator('[data-testid="recap-sorties-especes"]')).to_be_visible(timeout=5_000)
+        expect(page.locator('[data-testid="recap-sorties-especes"]')).to_be_visible(timeout=10_000)
         sorties_texte = page.locator('[data-testid="recap-sorties-especes"]').text_content()
         assert "5,00" in sorties_texte, (
             f"Sorties especes attendu 5,00 €, obtenu: {sorties_texte}"

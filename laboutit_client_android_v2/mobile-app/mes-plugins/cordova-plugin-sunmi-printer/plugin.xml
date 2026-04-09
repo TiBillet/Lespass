@@ -1,0 +1,71 @@
+<plugin  id="re.filaos.sunmiprinterplugin" version="1.0.0"
+  xmlns="http://apache.org/cordova/ns/plugins/1.0"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!-- Informations générales sur le plugin -->
+  <name>SunmiPrinterPlugin</name>
+  <description>Plugin Cordova pour imprimer avec les imprimantes Sunmi</description>
+  <author>filaos</author>
+  <license>Apache 2.0</license>
+
+  <!-- Déclaration du module JavaScript -->
+  <js-module src="www/sunmiPrinterPlugin.js" name="SunmiPrinterPlugin">
+    <clobbers target="SunmiPrinterPlugin" />
+  </js-module>
+
+  <!-- Déclaration de la plateforme Android -->
+  <platform name="android">
+   
+    <!-- Fichier gradle pour les dépendances -->
+    <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
+
+    <config-file target="AndroidManifest.xml" parent="/*">
+      <!-- Permissions -->
+      <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+      <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
+      <uses-permission android:name="android.permission.NFC" />
+      <uses-permission android:name="android.permission.BLUETOOTH" />
+      <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+      <!-- Déclaration d'une fonctionnalité matérielle -->
+      <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
+
+       <queries>
+        <package android:name="woyou.aidlservice.jiuiv5"/>
+      </queries>
+    </config-file>
+
+  
+    <config-file target="AndroidManifest.xml" parent="/manifest/application">
+      <service 
+        android:name="com.sunmi.peripheral.printer.SunmiPrinterService" 
+        android:permission="android.permission.BIND_PRINT_SERVICE"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="com.sunmi.peripheral.printer.SunmiPrinterService" />
+        </intent-filter>
+      </service>
+    </config-file>
+
+    <!-- Déclaration du fichier source Kotlin -->
+     <source-file src="src/android/SunmiPrinterHelper.kt" 
+      target-dir="app/src/main/kotlin/re/filaos/sunmiprinterplugin" />
+    <source-file src="src/android/SunmiPrinterPlugin.kt" 
+      target-dir="app/src/main/kotlin/re/filaos/sunmiprinterplugin" />
+
+
+    <!-- Configuration du plugin Kotlin dans Gradle -->
+    <config-file target="config.xml" parent="/*">
+      <preference name="GradlePluginKotlinEnabled" value="true" />
+      <preference name="GradlePluginKotlinCodeStyle" value="official" />
+    </config-file> 
+
+    <!-- Association de la classe Kotlin/Java à la fonctionnalité du plugin -->
+    <config-file target="res/xml/config.xml" parent="/*">
+      <feature name="SunmiPrinterPlugin">
+        <param name="android-package" value="re.filaos.sunmiprinterplugin.SunmiPrinterPlugin" />
+      </feature>
+    </config-file>
+
+  </platform>
+
+</plugin>
