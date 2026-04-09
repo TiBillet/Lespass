@@ -417,17 +417,58 @@ class TestPOSClientIdentification:
 # ===========================================================================
 
 
+@pytest.fixture(scope="class")
+def recharge_asset_setup(django_shell):
+    """S'assure qu'un asset TLF actif existe et que son produit de recharge
+    est dans le PV Mix. Necessaire car d'autres tests (nfc_setup) peuvent
+    desactiver les assets TLF.
+    / Ensures an active TLF asset exists and its top-up product
+    is in the Mix POS. Needed because other tests (nfc_setup) may
+    deactivate TLF assets.
+    """
+    django_shell(
+        "from Customers.models import Client\n"
+        "from fedow_core.models import Asset\n"
+        "from BaseBillet.models import Product\n"
+        "from laboutik.models import PointDeVente\n"
+        "from django.db import connection\n"
+        "tenant = Client.objects.get(schema_name=connection.schema_name)\n"
+        "# Desactiver TOUS les TLF pour eviter les conflits\n"
+        "# / Deactivate ALL TLF to avoid conflicts\n"
+        "Asset.objects.filter(tenant_origin=tenant, category='TLF').update(active=False)\n"
+        "# Activer uniquement 'Monnaie locale' (cree par create_test_pos_data)\n"
+        "# / Activate only 'Monnaie locale' (created by create_test_pos_data)\n"
+        "asset_tlf = Asset.objects.filter(\n"
+        "    tenant_origin=tenant, category='TLF', name='Monnaie locale'\n"
+        ").first()\n"
+        "if asset_tlf:\n"
+        "    asset_tlf.active = True\n"
+        "    asset_tlf.save(update_fields=['active'])\n"
+        "produit_re = Product.objects.filter(\n"
+        "    asset=asset_tlf, methode_caisse='RE'\n"
+        ").first() if asset_tlf else None\n"
+        "if produit_re:\n"
+        "    pv_mix = PointDeVente.objects.filter(name='Mix').first()\n"
+        "    if pv_mix:\n"
+        "        pv_mix.products.add(produit_re)\n"
+        "    print(f'SETUP_OK asset={asset_tlf.name} product={produit_re.name}')\n"
+        "else:\n"
+        "    print('NO_RECHARGE_PRODUCT')"
+    )
+
+
 class TestPOSPanierMixte:
-    """Panier mixte sur PV "Mix" : Biere (VT) + Recharge 10€ (RE) + Adhesion (AD).
+    """Panier mixte sur PV "Mix" : Biere (VT) + Recharge (RE) + Adhesion (AD).
     Le verrouillage par groupe a ete supprime (session 05) → les 3 types
     peuvent etre ajoutes au meme panier.
-    / Mixed cart on "Mix" POS: Beer (VT) + Recharge 10€ (RE) + Membership (AD).
+    / Mixed cart on "Mix" POS: Beer (VT) + Recharge (RE) + Membership (AD).
     Group-based locking was removed (session 05) → all 3 types
     can be added to the same cart.
     """
 
     def test_panier_mixte_vt_re_ad_nfc_puis_especes(
-        self, page, pos_page, django_shell, adhesion_cards_setup
+        self, page, pos_page, django_shell, adhesion_cards_setup,
+        recharge_asset_setup,
     ):
         """Panier VT + RE + AD → identification NFC → recapitulatif 3 articles → especes.
         Verifie en DB : 3 LigneArticle (VT + RE + AD) avec les bons champs.
@@ -444,17 +485,36 @@ class TestPOSPanierMixte:
         biere_tile = page.locator('#products .article-container[data-name="Biere"]')
         expect(biere_tile).to_be_visible(timeout=10_000)
         biere_tile.click()
-        expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=5_000)
+        expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=10_000)
 
-        # --- Ajouter Recharge 10€ (RE) ---
+        # --- Ajouter Recharge (RE) ---
+        # Le produit de recharge est cree par le signal Asset (ex: "Recharge Monnaie locale").
+        # La fixture recharge_asset_setup s'assure que l'asset TLF est actif.
+        # Le produit est multi-tarif (1, 5, 10, Libre) → clic ouvre un overlay.
+        # On clique le tarif "10" puis on ferme l'overlay.
+        # / The top-up product is created by the Asset signal (e.g. "Recharge Monnaie locale").
+        # The recharge_asset_setup fixture ensures the TLF asset is active.
+        # The product is multi-rate (1, 5, 10, Free) → click opens an overlay.
+        # We click the "10" rate then close the overlay.
         recharge_tile = page.locator('#products .article-container').filter(has_text="Recharge")
-        expect(recharge_tile.first).to_be_visible(timeout=5_000)
+        expect(recharge_tile.first).to_be_visible(timeout=10_000)
         recharge_tile.first.click()
-        expect(page.locator("#addition-list")).to_contain_text("Recharge", timeout=5_000)
+
+        # Si overlay tarif pour la recharge → cliquer tarif "10"
+        # / If rate overlay for top-up → click "10" rate
+        tarif_overlay_re = page.locator('[data-testid="tarif-overlay"]')
+        if tarif_overlay_re.is_visible(timeout=3_000):
+            tarif_10 = tarif_overlay_re.locator(".tarif-btn-fixed").filter(has_text="10")
+            expect(tarif_10.first).to_be_visible(timeout=5_000)
+            tarif_10.first.click()
+            # Fermer l'overlay / Close the overlay
+            page.locator('[data-testid="tarif-btn-retour"]').click()
+
+        expect(page.locator("#addition-list")).to_contain_text("Recharge", timeout=10_000)
 
         # --- Ajouter Adhesion (AD) ---
         adhesion_tile = page.locator('#products .article-container').filter(has_text="Adhesion")
-        expect(adhesion_tile.first).to_be_visible(timeout=5_000)
+        expect(adhesion_tile.first).to_be_visible(timeout=10_000)
         adhesion_tile.first.click()
 
         # Si overlay tarif pour l'adhesion → cliquer premier tarif fixe

@@ -210,6 +210,51 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     # / Training mode: receipts carry "SIMULATION" label (LNE req. 5)
     is_simulation = laboutik_config.mode_ecole
 
+    # Detail cascade NFC (si paiement multi-asset)
+    # / NFC cascade detail (if multi-asset payment)
+    # Cherche le uuid_transaction commun a toutes les lignes de ce paiement.
+    # / Find the uuid_transaction shared by all lines of this payment.
+    cascade_detail = []
+    uuid_tx = None
+    for ligne in lignes_articles:
+        if hasattr(ligne, "uuid_transaction") and ligne.uuid_transaction:
+            uuid_tx = ligne.uuid_transaction
+            break
+
+    if uuid_tx:
+        from django.db.models import Sum as _Sum
+
+        from BaseBillet.models import LigneArticle
+        from fedow_core.models import Asset as FedowAsset
+
+        # Agreger les montants par asset UUID pour ce paiement
+        # / Aggregate amounts by asset UUID for this payment
+        lignes_par_asset = (
+            LigneArticle.objects.filter(
+                uuid_transaction=uuid_tx,
+                asset__isnull=False,
+            )
+            .values("asset")
+            .annotate(total=_Sum("amount"))
+        )
+
+        # Prefetch les assets pour eviter N+1
+        # / Prefetch assets to avoid N+1
+        asset_uuids = [e["asset"] for e in lignes_par_asset]
+        assets_par_uuid = {
+            a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
+        }
+
+        for entry in lignes_par_asset:
+            asset_obj = assets_par_uuid.get(entry["asset"])
+            if asset_obj:
+                cascade_detail.append(
+                    {
+                        "name": asset_obj.name,
+                        "total": entry["total"],
+                    }
+                )
+
     return {
         "header": {
             "title": pv.name if pv else "",
@@ -225,6 +270,7 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         "tva_breakdown": tva_breakdown,
         "total_ht": total_ht_global,
         "total_tva": total_tva_global,
+        "cascade_detail": cascade_detail,
         "is_duplicata": False,
         "is_simulation": is_simulation,
         "pied_ticket": pied_ticket,

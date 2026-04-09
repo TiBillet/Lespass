@@ -1821,11 +1821,63 @@ class Price(models.Model):
         ),
     )
 
+    # Tarif en monnaie non-fiduciaire (temps, fidélité, crypto, etc.)
+    # Si True, le champ `asset` ci-dessus DOIT être renseigné
+    # et doit pointer vers un asset non-fiduciaire (TIM, FID).
+    # Si False (défaut), le prix est en euros et `asset` est ignoré.
+    # / Non-fiduciary price (time, loyalty, crypto, etc.)
+    # If True, the `asset` field above MUST be set
+    # and must point to a non-fiduciary asset (TIM, FID).
+    # If False (default), price is in euros and `asset` is ignored.
+    non_fiduciaire = models.BooleanField(
+        default=False,
+        verbose_name=_("Non-fiduciary price"),
+        help_text=_(
+            "If checked, the price is in tokens (time, loyalty, etc.) "
+            "instead of euros. You must select the asset below."
+        ),
+    )
+
     # def range_max(self):
     #     return range(self.max_per_user + 1)
 
     def __str__(self):
         return f"{self.product.name} {self.name}"
+
+    def clean(self):
+        """
+        Validation du tarif non-fiduciaire.
+        / Non-fiduciary price validation.
+
+        Règles / Rules:
+        - non_fiduciaire=True et asset=None → erreur
+        - non_fiduciaire=True et asset fiduciaire (TLF/TNF/FED) → erreur
+        - non_fiduciaire=False → asset ignoré, pas d'erreur
+        """
+        super().clean()
+
+        if not self.non_fiduciaire:
+            return
+
+        if self.asset is None:
+            raise ValidationError(
+                {
+                    "asset": _("An asset is required for non-fiduciary prices."),
+                }
+            )
+
+        from fedow_core.models import Asset as FedowAsset
+
+        categories_fiduciaires = (FedowAsset.TLF, FedowAsset.TNF, FedowAsset.FED)
+        if self.asset.category in categories_fiduciaires:
+            raise ValidationError(
+                {
+                    "asset": _(
+                        "Fiduciary assets (local, gift, federated) use the automatic cascade. "
+                        "Select a non-fiduciary asset (time, loyalty)."
+                    ),
+                }
+            )
 
     # def has_stock(self):
     #     if self.stock > 0 :

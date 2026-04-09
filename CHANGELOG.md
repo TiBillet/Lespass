@@ -1,5 +1,31 @@
 # Changelog / Journal des modifications
 
+## Cascade multi-asset NFC + paiement complementaire
+
+**Date :** 8 avril 2026
+**Migration :** Oui — `BaseBillet/migrations/0209_price_non_fiduciaire.py`
+
+**Quoi / What:** Paiement NFC en cascade multi-asset : le systeme debite les tokens du client dans l'ordre TNF (cadeau) → TLF (local) → FED (federe). Un article peut generer N LigneArticle (1 par asset debite) avec qty decimale et amount entier en centimes. Si la cascade ne couvre pas le total, l'operateur peut completer en especes, CB, ou 2eme carte NFC. Support des tarifs non-fiduciaires (TIM/FID) via le nouveau champ `Price.non_fiduciaire`.
+
+**Pourquoi / Why:** L'ancien `_payer_par_nfc()` ne debitait que sur un seul asset TLF. Les tokens cadeau (TNF) et federes (FED) n'etaient jamais utilises pour payer. Le legacy LaBoutik supportait la cascade — cette feature retrouve la parite fonctionnelle.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/models.py` | `Price.non_fiduciaire` BooleanField + `clean()` validation |
+| `BaseBillet/migrations/0209_price_non_fiduciaire.py` | Migration |
+| `laboutik/views.py` | Constantes cascade, `_calculer_qty_partielles()`, `_creer_lignes_articles_cascade()`, refonte `_payer_par_nfc()` (8 phases), `payer_complementaire()`, `lire_nfc_complement()` |
+| `laboutik/printing/formatters.py` | `cascade_detail` dans `formatter_ticket_vente()` |
+| `Administration/admin/products.py` | `POSPriceInline` : champs `non_fiduciaire` + `asset` conditionnel, filtre TIM/FID |
+| `laboutik/management/commands/create_test_pos_data.py` | Assets FED/FID, produits TIM/FID, wallet garni multi-asset |
+| `laboutik/templates/laboutik/partial/hx_complement_paiement.html` | Nouveau — ecran complementaire |
+| `laboutik/templates/laboutik/partial/hx_lire_nfc_complement.html` | Nouveau — scan 2eme carte |
+| `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | Affichage multi-soldes |
+| `tests/pytest/test_cascade_nfc.py` | 17 tests (validation Price, qty partielle, cascade, complement) |
+| `tests/e2e/test_pos_paiement.py` | 3 tests adaptes aux nouveaux data-testid |
+
+---
+
 ## Asset-first recharge products / Produits de recharge pilotes par l'Asset
 
 **Date :** 8 avril 2026

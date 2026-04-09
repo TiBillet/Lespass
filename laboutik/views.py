@@ -11,6 +11,7 @@
 import logging
 import uuid as uuid_module
 from datetime import timedelta
+from decimal import Decimal
 from json import dumps
 
 from django.conf import settings
@@ -30,7 +31,7 @@ from django.db.models.functions import Coalesce
 
 from fedow_core.exceptions import SoldeInsuffisant
 from fedow_core.models import Asset
-from fedow_core.services import TransactionService, WalletService
+from fedow_core.services import AssetService, TransactionService, WalletService
 
 from AuthBillet.models import Wallet
 from AuthBillet.utils import get_or_create_user
@@ -3098,6 +3099,96 @@ MAPPING_CODES_PAIEMENT = {
     "nfc": PaymentMethod.LOCAL_EURO,  # TLF = token local fiduciaire adossé à l'euro
 }
 
+# Ordre de priorité pour la cascade de débit NFC fiduciaire.
+# Cadeau d'abord (offert au lieu), puis local (déjà encaissé à la recharge),
+# puis fédéré (frais Stripe pour le lieu).
+# Ordre fixe, pas configurable par tenant (décision brainstorming 2026-04-08).
+# / Priority order for NFC fiduciary debit cascade.
+# Gift first (free to venue), then local (already cashed at top-up),
+# then federated (Stripe fees for venue).
+# Fixed order, not configurable per tenant.
+ORDRE_CASCADE_FIDUCIAIRE = [Asset.TNF, Asset.TLF, Asset.FED]
+
+# Mapping catégorie d'Asset → PaymentMethod pour les LigneArticle.
+# Permet aux rapports de distinguer les paiements cadeau (LG) des paiements
+# monnaie locale (LE) dans le Ticket X et la clôture.
+# / Asset category → PaymentMethod mapping for LigneArticle.
+MAPPING_ASSET_CATEGORY_PAYMENT_METHOD = {
+    Asset.TNF: PaymentMethod.LOCAL_GIFT,  # LG — cadeau
+    Asset.TLF: PaymentMethod.LOCAL_EURO,  # LE — monnaie locale
+    Asset.FED: PaymentMethod.LOCAL_EURO,  # LE — fédéré (assimilé local)
+    Asset.TIM: PaymentMethod.LOCAL_EURO,  # LE — temps
+    Asset.FID: PaymentMethod.LOCAL_EURO,  # LE — fidélité
+}
+
+# Constante Decimal pour arrondir les qty partielles à 6 décimales.
+# / Decimal constant for rounding partial qty to 6 decimal places.
+SIX_DECIMALES = Decimal("0.000001")
+
+
+def _calculer_qty_partielles(lignes_avec_amounts, prix_unitaire_centimes, qty_totale):
+    """
+    Calcule les qty partielles pour N lignes d'un même article splitté.
+    / Computes partial qty for N lines of the same split article.
+
+    LOCALISATION : laboutik/views.py
+
+    Chaque ligne a un amount_centimes (entier). La qty est proportionnelle
+    au montant. La dernière ligne prend le reste pour que la somme soit exacte.
+    / Each line has an amount_centimes (integer). Qty is proportional
+    to the amount. Last line takes the remainder so the sum is exact.
+
+    Exemple / Example:
+        Article 3€ (300 centimes), qty=1, splitté en 3 :
+        - Ligne 1 : 100 centimes → qty = 0.333333
+        - Ligne 2 : 100 centimes → qty = 0.333333
+        - Ligne 3 : 100 centimes → qty = 0.333334 (reste)
+        Somme qty = 1.000000 exactement.
+
+    :param lignes_avec_amounts: list de dicts avec clé "amount_centimes"
+    :param prix_unitaire_centimes: int (prix unitaire en centimes pour qty=1)
+    :param qty_totale: Decimal (quantité totale de l'article)
+    :return: list de dicts enrichis avec clé "qty" ajoutée
+    """
+    nombre_de_lignes = len(lignes_avec_amounts)
+
+    # Cas trivial : 1 seule ligne = qty complète
+    # / Trivial case: 1 line = full qty
+    if nombre_de_lignes == 1:
+        lignes_avec_amounts[0]["qty"] = qty_totale
+        return lignes_avec_amounts
+
+    # Cas article gratuit : prix=0 → toute la qty sur la 1ère ligne, 0 sur les autres
+    # / Free article case: price=0 → all qty on first line, 0 on others
+    if prix_unitaire_centimes == 0:
+        for i, ligne in enumerate(lignes_avec_amounts):
+            ligne["qty"] = qty_totale if i == 0 else Decimal("0")
+        return lignes_avec_amounts
+
+    # Cas général : N lignes, calcul proportionnel
+    # / General case: N lines, proportional calculation
+    somme_qty_precedentes = Decimal("0")
+
+    for i, ligne in enumerate(lignes_avec_amounts):
+        est_derniere_ligne = i == nombre_de_lignes - 1
+
+        if est_derniere_ligne:
+            # Dernière ligne : prend le reste exact
+            # / Last line: takes the exact remainder
+            ligne["qty"] = qty_totale - somme_qty_precedentes
+        else:
+            # Lignes intermédiaires : proportionnel, arrondi 6 décimales
+            # / Intermediate lines: proportional, rounded to 6 decimal places
+            qty_proportionnelle = (
+                qty_totale
+                * Decimal(ligne["amount_centimes"])
+                / Decimal(prix_unitaire_centimes)
+            ).quantize(SIX_DECIMALES)
+            ligne["qty"] = qty_proportionnelle
+            somme_qty_precedentes += qty_proportionnelle
+
+    return lignes_avec_amounts
+
 
 def _extraire_articles_du_panier(donnees_post, point_de_vente):
     """
@@ -3605,6 +3696,278 @@ def _creer_lignes_articles(
         transaction.on_commit(lambda: broadcast_stock_update(donnees_a_broadcaster))
 
     return lignes_creees
+
+
+def _creer_lignes_articles_cascade(
+    lignes_pre_calculees,
+    carte=None,
+    carte_complement=None,
+    wallet=None,
+    uuid_transaction=None,
+    point_de_vente=None,
+):
+    """
+    Crée ProductSold, PriceSold et N LigneArticle par article (1 par asset débité).
+    Creates ProductSold, PriceSold and N LigneArticle per article (1 per debited asset).
+
+    LOCALISATION : laboutik/views.py
+
+    Version « cascade » de _creer_lignes_articles().
+    Un article à 4€ payé 1€ TNF + 3€ TLF produit 2 LigneArticle
+    avec qty partielle proportionnelle au montant.
+    / Cascade version of _creer_lignes_articles().
+    A 4€ article paid 1€ TNF + 3€ TLF produces 2 LigneArticle
+    with partial qty proportional to the amount.
+
+    :param lignes_pre_calculees: liste de tuples
+        (article_dict, asset_ou_none, amount_centimes, payment_method_code)
+    :param carte: CarteCashless principale (1ère carte NFC)
+    :param carte_complement: CarteCashless de complément (2ème carte, Task 7)
+    :param wallet: Wallet du client (1ère carte)
+    :param uuid_transaction: UUID partagé par toutes les lignes du paiement
+    :param point_de_vente: PointDeVente d'origine (ventilation CA par PV)
+    :return: liste de toutes les LigneArticle créées
+    """
+    # --- Déterminer le sale_origin (mode école LNE exigence 5) ---
+    # / Determine sale_origin (training mode LNE req. 5)
+    laboutik_config = LaboutikConfiguration.get_solo()
+    if laboutik_config.mode_ecole:
+        sale_origin_pour_ligne = SaleOrigin.LABOUTIK_TEST
+    else:
+        sale_origin_pour_ligne = SaleOrigin.LABOUTIK
+
+    # ------------------------------------------------------------------ #
+    # Étape 1 : Regrouper les lignes par article (clé = id(article_dict))
+    # / Step 1: Group lines by article (key = id(article_dict))
+    # ------------------------------------------------------------------ #
+    # On utilise id() car le même dict Python revient plusieurs fois
+    # dans lignes_pre_calculees quand un article est splitté sur N assets.
+    # / We use id() because the same Python dict appears multiple times
+    # in lignes_pre_calculees when an article is split across N assets.
+    from collections import OrderedDict
+
+    groupes_par_article = OrderedDict()
+    for tuple_ligne in lignes_pre_calculees:
+        article_dict, asset_ou_none, amount_centimes, payment_method_code = tuple_ligne
+        cle_groupe = id(article_dict)
+        if cle_groupe not in groupes_par_article:
+            groupes_par_article[cle_groupe] = {
+                "article_dict": article_dict,
+                "lignes": [],
+            }
+        groupes_par_article[cle_groupe]["lignes"].append(
+            {
+                "asset_ou_none": asset_ou_none,
+                "amount_centimes": amount_centimes,
+                "payment_method_code": payment_method_code,
+            }
+        )
+
+    toutes_les_lignes_creees = []
+
+    # Accumulateur pour les mises à jour stock (broadcast WebSocket).
+    # / Accumulator for stock updates (WebSocket broadcast).
+    produits_stock_mis_a_jour = []
+
+    # ------------------------------------------------------------------ #
+    # Étape 2 : Pour chaque article, créer ProductSold + PriceSold + N LigneArticle
+    # / Step 2: For each article, create ProductSold + PriceSold + N LigneArticle
+    # ------------------------------------------------------------------ #
+    for cle_groupe, groupe in groupes_par_article.items():
+        article_dict = groupe["article_dict"]
+        lignes_du_groupe = groupe["lignes"]
+
+        produit = article_dict["product"]
+        prix_obj = article_dict["price"]
+        quantite = article_dict["quantite"]
+        prix_centimes = article_dict["prix_centimes"]
+        weight_amount = article_dict.get("weight_amount")
+
+        # ProductSold : snapshot du produit au moment de la vente
+        # ProductSold: product snapshot at the time of sale
+        product_sold, _ = ProductSold.objects.get_or_create(
+            product=produit,
+            event=None,
+            defaults={"categorie_article": produit.categorie_article},
+        )
+
+        # PriceSold : snapshot du prix au moment de la vente
+        # PriceSold: price snapshot at the time of sale
+        price_sold, _ = PriceSold.objects.get_or_create(
+            productsold=product_sold,
+            price=prix_obj,
+            defaults={"prix": prix_obj.prix},
+        )
+
+        # ---------------------------------------------------------- #
+        # Calculer les qty partielles via _calculer_qty_partielles()
+        # / Compute partial qty via _calculer_qty_partielles()
+        # ---------------------------------------------------------- #
+        lignes_pour_calcul = [
+            {"amount_centimes": ligne["amount_centimes"]} for ligne in lignes_du_groupe
+        ]
+        lignes_avec_qty = _calculer_qty_partielles(
+            lignes_pour_calcul, prix_centimes, quantite
+        )
+
+        # ---------------------------------------------------------- #
+        # Créer N LigneArticle (1 par tuple du groupe)
+        # / Create N LigneArticle (1 per tuple in the group)
+        # ---------------------------------------------------------- #
+        premiere_ligne_du_groupe = None
+
+        for i, ligne_info in enumerate(lignes_du_groupe):
+            asset_ou_none = ligne_info["asset_ou_none"]
+            amount_centimes = ligne_info["amount_centimes"]
+            payment_method_code = ligne_info["payment_method_code"]
+            qty_partielle = lignes_avec_qty[i]["qty"]
+
+            # Déterminer l'UUID de l'asset (None pour espèces/CB)
+            # / Determine asset UUID (None for cash/CC)
+            asset_uuid = None
+            if asset_ou_none is not None:
+                asset_uuid = asset_ou_none.pk
+
+            # Toujours associer la carte principale à la LigneArticle.
+            # La carte identifie le client pour le paiement (même pour les
+            # lignes complémentaires espèces/CB, la carte a été scannée).
+            # Pour la 2ème carte NFC, l'appelant passe les lignes des 2 cartes
+            # séparément avec carte=carte1 et carte_complement n'est pas utilisée
+            # ici (elle pourrait servir à un futur enrichissement).
+            # / Always associate the primary card with the LigneArticle.
+            # The card identifies the client for the payment (even for
+            # cash/CC complement lines, the card was scanned).
+            carte_pour_cette_ligne = carte
+
+            ligne = LigneArticle.objects.create(
+                pricesold=price_sold,
+                qty=qty_partielle,
+                amount=amount_centimes,
+                sale_origin=sale_origin_pour_ligne,
+                payment_method=payment_method_code,
+                status=LigneArticle.VALID,
+                uuid_transaction=uuid_transaction,
+                point_de_vente=point_de_vente,
+                # Champs NFC (optionnels, None pour espèces/CB)
+                # NFC fields (optional, None for cash/CC)
+                asset=asset_uuid,
+                carte=carte_pour_cette_ligne,
+                wallet=wallet,
+                # weight_quantity identique sur toutes les lignes d'un même article
+                # / weight_quantity same on all lines of the same article
+                weight_quantity=weight_amount,
+            )
+
+            toutes_les_lignes_creees.append(ligne)
+
+            if premiere_ligne_du_groupe is None:
+                premiere_ligne_du_groupe = ligne
+
+        # ---------------------------------------------------------- #
+        # Décrémentation stock : 1 SEULE FOIS sur la qty totale
+        # / Stock decrement: ONCE ONLY on the total qty
+        # ---------------------------------------------------------- #
+        # On passe la première LigneArticle du groupe comme référence
+        # pour le mouvement de stock (traçabilité).
+        # / We pass the first LigneArticle of the group as reference
+        # for the stock movement (traceability).
+        try:
+            stock_du_produit = produit.stock_inventaire
+            from inventaire.services import StockService
+
+            if weight_amount:
+                # Poids/mesure : la quantité saisie remplace contenance x qty.
+                # / Weight/volume: entered quantity replaces contenance x qty.
+                StockService.decrementer_pour_vente(
+                    stock=stock_du_produit,
+                    contenance=weight_amount,
+                    qty=1,
+                    ligne_article=premiere_ligne_du_groupe,
+                )
+            else:
+                # Tarif classique : contenance fixe x quantité totale
+                # / Standard price: fixed contenance x total quantity
+                StockService.decrementer_pour_vente(
+                    stock=stock_du_produit,
+                    contenance=prix_obj.contenance,
+                    qty=quantite,
+                    ligne_article=premiere_ligne_du_groupe,
+                )
+
+            # Relire le stock depuis la DB pour avoir la quantité à jour
+            # / Re-read stock from DB to get updated quantity
+            stock_du_produit.refresh_from_db()
+
+            produits_stock_mis_a_jour.append(
+                {
+                    "product_uuid": str(produit.uuid),
+                    "quantite": stock_du_produit.quantite,
+                    "unite": stock_du_produit.unite,
+                    "en_alerte": stock_du_produit.est_en_alerte(),
+                    "en_rupture": stock_du_produit.est_en_rupture(),
+                    "bloquant": (
+                        stock_du_produit.est_en_rupture()
+                        and not stock_du_produit.autoriser_vente_hors_stock
+                    ),
+                    "quantite_lisible": _formater_stock_lisible(
+                        stock_du_produit.quantite, stock_du_produit.unite
+                    ),
+                }
+            )
+        except Exception:
+            # Pas de stock géré pour ce produit — comportement normal
+            # / No stock managed for this product — normal behavior
+            pass
+
+    # ------------------------------------------------------------------ #
+    # Étape 3 : Chaînage HMAC (conformité LNE exigence 8)
+    # / Step 3: HMAC chaining (LNE compliance req. 8)
+    # ------------------------------------------------------------------ #
+    config_laboutik = LaboutikConfiguration.get_solo()
+    cle_hmac = config_laboutik.get_or_create_hmac_key()
+
+    # Déterminer le sale_origin pour la chaîne HMAC
+    # / Determine sale_origin for HMAC chain
+    sale_origin_pour_chaine = SaleOrigin.LABOUTIK
+    if toutes_les_lignes_creees:
+        sale_origin_pour_chaine = toutes_les_lignes_creees[0].sale_origin
+
+    previous_hmac_value = obtenir_previous_hmac(sale_origin=sale_origin_pour_chaine)
+
+    for ligne_a_chainer in toutes_les_lignes_creees:
+        # Calculer le HT (donnée élémentaire LNE exigence 3)
+        # / Compute HT (LNE req. 3 elementary data)
+        ligne_a_chainer.total_ht = calculer_total_ht(
+            ligne_a_chainer.amount, ligne_a_chainer.vat
+        )
+
+        # Chaîner le HMAC avec la ligne précédente
+        # / Chain HMAC with previous line
+        ligne_a_chainer.previous_hmac = previous_hmac_value
+        ligne_a_chainer.hmac_hash = calculer_hmac(
+            ligne_a_chainer, cle_hmac, previous_hmac_value
+        )
+        ligne_a_chainer.save(update_fields=["total_ht", "hmac_hash", "previous_hmac"])
+
+        previous_hmac_value = ligne_a_chainer.hmac_hash
+
+    # ------------------------------------------------------------------ #
+    # Étape 4 : Broadcast WebSocket des badges stock mis à jour
+    # / Step 4: WebSocket broadcast of updated stock badges
+    # ------------------------------------------------------------------ #
+    if produits_stock_mis_a_jour:
+        from django.db import transaction
+
+        # Dédupliquer par product_uuid (même logique que _creer_lignes_articles)
+        # / Deduplicate by product_uuid (same logic as _creer_lignes_articles)
+        donnees_par_produit = {}
+        for donnee in produits_stock_mis_a_jour:
+            donnees_par_produit[donnee["product_uuid"]] = donnee
+        donnees_a_broadcaster = list(donnees_par_produit.values())
+
+        transaction.on_commit(lambda: broadcast_stock_update(donnees_a_broadcaster))
+
+    return toutes_les_lignes_creees
 
 
 def _creer_ou_renouveler_adhesion(
@@ -4803,20 +5166,28 @@ class PaiementViewSet(viewsets.ViewSet):
         point_de_vente,
     ):
         """
-        Paiement NFC (cashless) via fedow_core.
-        NFC (cashless) payment via fedow_core.
+        Paiement NFC (cashless) via fedow_core — cascade multi-asset.
+        NFC (cashless) payment via fedow_core — multi-asset cascade.
 
         LOCALISATION : laboutik/views.py
 
         Flux complet / Full flow:
-        1. Chercher la carte client par tag_id
-        2. Déterminer le wallet client (user.wallet ou wallet_ephemere)
-        3. Trouver l'asset TLF du tenant
-        4. Classifier les articles par methode_caisse (VT, RE, RC, TM, AD)
-        5. Vérifier le solde pour les articles qui débitent le client (VT + AD)
-        6. Bloc atomic : ventes + recharges + adhésions
-        7. Succès : afficher nouveau solde
+        1. Gardes : recharges payantes, carte inconnue, wallet introuvable
+        2. Préparer les soldes cascade disponibles (TNF → TLF → FED)
+        3. Classifier les articles (fiduciaire, non-fiduciaire, adhésion, recharge)
+        4. Vérifier soldes non-fiduciaires (tout ou rien)
+        5. Boucle cascade article par article (fiduciaires + adhésions)
+        6. Si complémentaire nécessaire → écran fonds insuffisants
+        7. Bloc atomic : recharges, débits non-fidu, débits cascade, LigneArticle, adhésions
+        8. Succès : afficher soldes multi-asset
         """
+        from collections import OrderedDict
+
+        # ================================================================ #
+        #  GARDES (inchangées)                                              #
+        #  GUARDS (unchanged)                                               #
+        # ================================================================ #
+
         # GARDE : le paiement NFC est interdit si le panier contient des recharges PAYANTES (RE).
         # Les recharges gratuites (RC/TM) sont auto-creditees et ne bloquent pas le NFC.
         # / GUARD: NFC payment forbidden if cart has PAID top-ups (RE).
@@ -4835,8 +5206,8 @@ class PaiementViewSet(viewsets.ViewSet):
 
         tag_id_client = request.POST.get("tag_id", "").upper().strip()
 
-        # 1. Chercher la carte client par tag_id
-        # 1. Find client card by tag_id
+        # Chercher la carte client par tag_id
+        # / Find client card by tag_id
         try:
             carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
         except CarteCashless.DoesNotExist:
@@ -4847,35 +5218,82 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur)
 
-        # 2. Déterminer le wallet client (get or create éphémère si besoin)
-        # 2. Determine client wallet (get or create ephemeral if needed)
+        # Déterminer le wallet client (get or create éphémère si besoin)
+        # / Determine client wallet (get or create ephemeral if needed)
         wallet_client = _obtenir_ou_creer_wallet(carte_client)
 
-        # 3. Trouver l'asset du tenant depuis les articles du panier
-        # Les ventes et adhesions sont en TLF — on le prend depuis le premier
-        # article qui a un Asset lie, ou depuis un Product de recharge.
-        # / 3. Find the tenant's asset from cart articles.
-        # Sales and memberships use TLF — get it from the first article
-        # with a linked Asset, or from a top-up Product.
-        asset_tlf = None
+        # ================================================================ #
+        #  PHASE 1 : Préparer les soldes cascade fiduciaire disponibles     #
+        #  PHASE 1: Prepare available fiduciary cascade balances             #
+        # ================================================================ #
+
+        tenant_courant = connection.tenant
+
+        # Récupérer tous les assets accessibles du tenant (propres + fédérés)
+        # / Get all accessible assets for the tenant (own + federated)
+        assets_accessibles = AssetService.obtenir_assets_accessibles(tenant_courant)
+
+        # Construire la cascade : pour chaque catégorie dans l'ordre fixe,
+        # chercher le 1er asset actif et lire son solde.
+        # / Build cascade: for each category in fixed order,
+        # find the first active asset and read its balance.
+        soldes_cascade = OrderedDict()
+        has_any_fiduciary_asset = False
+
+        for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
+            asset_pour_categorie = assets_accessibles.filter(
+                category=categorie_fiduciaire,
+            ).first()
+            if asset_pour_categorie is not None:
+                has_any_fiduciary_asset = True
+                solde_asset = WalletService.obtenir_solde(
+                    wallet=wallet_client, asset=asset_pour_categorie
+                )
+                if solde_asset > 0:
+                    soldes_cascade[asset_pour_categorie] = solde_asset
+
+        # ================================================================ #
+        #  PHASE 2 : Classifier les articles                                #
+        #  PHASE 2: Classify articles                                       #
+        # ================================================================ #
+
+        articles_fiduciaires = []
+        articles_non_fiduciaires = []
+        articles_adhesion = []
+        articles_recharge_gratuite = []
+
         for article in articles_panier:
             produit = article["product"]
-            if produit.asset is not None:
-                asset_tlf = produit.asset
-                break
+            prix_obj = article["price"]
+            methode = produit.methode_caisse
 
-        # Si aucun article n'a d'Asset (ex: panier VT pur sans recharges),
-        # chercher l'Asset TLF du tenant pour les debits.
-        # / If no article has an Asset (e.g. pure VT cart without top-ups),
-        # look up the tenant's TLF Asset for debits.
-        if asset_tlf is None:
-            asset_tlf = Asset.objects.filter(
-                tenant_origin=connection.tenant,
-                category=Asset.TLF,
-                active=True,
-            ).first()
+            if produit.categorie_article == Product.ADHESION:
+                # Les adhésions utilisent la cascade fiduciaire (pas de non-fidu)
+                # / Memberships use fiduciary cascade (no non-fidu)
+                articles_adhesion.append(article)
+            elif methode in METHODES_RECHARGE_GRATUITES:
+                # RC (cadeau) ou TM (temps) : crédit gratuit, pas de débit
+                # / RC (gift) or TM (time): free credit, no debit
+                articles_recharge_gratuite.append(article)
+            elif (
+                getattr(prix_obj, "non_fiduciaire", False)
+                and prix_obj.asset is not None
+            ):
+                # Prix non-fiduciaire (TIM, FID) : débit direct sur l'asset du prix
+                # / Non-fiduciary price (TIM, FID): direct debit on the price's asset
+                articles_non_fiduciaires.append(article)
+            else:
+                # Vente classique fiduciaire (VT ou tout autre type)
+                # / Standard fiduciary sale (VT or any other type)
+                articles_fiduciaires.append(article)
 
-        if asset_tlf is None:
+        # Les articles fiduciaires + adhésions utilisent la cascade
+        # / Fiduciary articles + memberships use the cascade
+        articles_pour_cascade = articles_fiduciaires + articles_adhesion
+
+        # Vérifier qu'il existe au moins un asset fiduciaire si on a des articles cascade
+        # / Check that at least one fiduciary asset exists if we have cascade articles
+        if articles_pour_cascade and not has_any_fiduciary_asset:
             context_erreur = {
                 "msg_type": "warning",
                 "msg_content": _("Monnaie locale non configurée"),
@@ -4883,63 +5301,28 @@ class PaiementViewSet(viewsets.ViewSet):
             }
             return render(request, "laboutik/partial/hx_messages.html", context_erreur)
 
-        wallet_lieu = asset_tlf.wallet_origin
+        # ================================================================ #
+        #  PHASE 3 : Vérifier soldes non-fiduciaires (tout ou rien)         #
+        #  PHASE 3: Check non-fiduciary balances (all or nothing)           #
+        # ================================================================ #
 
-        # 4. Classifier les articles en 3 categories :
-        #    - Ventes (VT) : debitent le wallet du client en TLF
-        #    - Adhesions (AD) : debitent le wallet du client en TLF + creent un Membership
-        #    - Recharges gratuites (RC/TM) : creditent le wallet du client (pas de debit)
-        #    Les recharges payantes (RE) sont bloquees par la garde ci-dessus.
-        # / 4. Classify articles into 3 categories:
-        #    - Sales (VT): debit the client's wallet in TLF
-        #    - Memberships (AD): debit the client's wallet in TLF + create a Membership
-        #    - Free top-ups (RC/TM): credit the client's wallet (no debit)
-        #    Paid top-ups (RE) are blocked by the guard above.
-        articles_vente = []
-        articles_adhesion = []
-        articles_recharge_gratuite = []
-
-        for article in articles_panier:
-            methode = article["product"].methode_caisse
-            if article["product"].categorie_article == Product.ADHESION:
-                articles_adhesion.append(article)
-            elif methode in METHODES_RECHARGE_GRATUITES:
-                # RC (cadeau) ou TM (temps) : credit gratuit, pas de debit
-                # / RC (gift) or TM (time): free credit, no debit
-                articles_recharge_gratuite.append(article)
-            else:
-                # Vente classique (VT ou tout autre type)
-                # / Standard sale (VT or any other type)
-                articles_vente.append(article)
-
-        total_vente_centimes = _calculer_total_panier_centimes(articles_vente)
-        total_adhesion_centimes = _calculer_total_panier_centimes(articles_adhesion)
-
-        # Le montant qui debite le client = ventes + adhesions.
-        # Les recharges gratuites (RC/TM) ne debitent PAS le client.
-        # / Amount that debits the client = sales + memberships.
-        # Free top-ups (RC/TM) do NOT debit the client.
-        total_debit_client_centimes = total_vente_centimes + total_adhesion_centimes
-
-        # 5. Vérifier le solde AVANT le bloc atomic (rejet rapide, sans verrou)
-        #    Seuls VT + AD débitent le client. RE/RC/TM le créditent.
-        # 5. Check balance BEFORE atomic block (fast reject, no lock)
-        #    Only VT + AD debit the client. RE/RC/TM credit the client.
-        if total_debit_client_centimes > 0:
-            solde_client = WalletService.obtenir_solde(
-                wallet=wallet_client, asset=asset_tlf
+        for article_nf in articles_non_fiduciaires:
+            asset_cible = article_nf["price"].asset
+            montant_necessaire = article_nf["prix_centimes"] * article_nf["quantite"]
+            solde_nf = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_cible
             )
-            if solde_client < total_debit_client_centimes:
-                montant_manquant = total_debit_client_centimes - solde_client
-                donnees_paiement["missing"] = montant_manquant / 100
+            if solde_nf < montant_necessaire:
+                montant_manquant_nf = (montant_necessaire - solde_nf) / 100
+                donnees_paiement["missing"] = montant_manquant_nf
                 context_insuffisant = {
                     "currency_data": CURRENCY_DATA,
                     "payment": donnees_paiement,
                     "card": {"name": carte_client.tag_id},
-                    "monnaie_name": asset_tlf.name,
+                    "monnaie_name": asset_cible.name,
                     "payments_accepted": {
-                        "accepte_especes": point_de_vente.accepte_especes,
-                        "accepte_carte_bancaire": point_de_vente.accepte_carte_bancaire,
+                        "accepte_especes": False,
+                        "accepte_carte_bancaire": False,
                     },
                     "uuid_transaction": "",
                 }
@@ -4949,67 +5332,139 @@ class PaiementViewSet(viewsets.ViewSet):
                     context_insuffisant,
                 )
 
-        # 6. Bloc atomic : ventes + adhésions (pas de recharges en NFC)
-        # 6. Atomic block: sales + memberships (no top-ups in NFC)
-        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
-        tenant_courant = connection.tenant
+        # ================================================================ #
+        #  PHASE 4 : Boucle cascade article par article                     #
+        #  PHASE 4: Cascade loop article by article                         #
+        # ================================================================ #
 
-        # Identifiant unique de ce paiement
-        # / Unique ID for this payment
+        # lignes_nfc : tuples (article_dict, asset_ou_none, amount_centimes, payment_method_code)
+        # asset=None signifie « reste à payer en complémentaire ».
+        # / asset=None means "remainder to pay as complement".
+        lignes_nfc = []
+        soldes_restants = OrderedDict()
+        for asset_cascade, solde_cascade in soldes_cascade.items():
+            soldes_restants[asset_cascade] = solde_cascade
+
+        # Collecter les assets débités pour l'affichage final
+        # / Collect debited assets for final display
+        assets_debites = set()
+
+        # Accumulateur des débits par asset pour l'affichage complémentaire
+        # {asset: montant_total_debite_en_centimes}
+        # / Accumulator of debits per asset for complement display
+        debits_par_asset_pour_affichage = OrderedDict()
+
+        for article_cascade in articles_pour_cascade:
+            montant_total_article = (
+                article_cascade["prix_centimes"] * article_cascade["quantite"]
+            )
+            reste_article = montant_total_article
+
+            for asset_courant, solde_courant in soldes_restants.items():
+                if reste_article <= 0:
+                    break
+                if solde_courant <= 0:
+                    continue
+
+                debit_sur_cet_asset = min(solde_courant, reste_article)
+                payment_method_pour_asset = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                    asset_courant.category, PaymentMethod.LOCAL_EURO
+                )
+                lignes_nfc.append(
+                    (
+                        article_cascade,
+                        asset_courant,
+                        debit_sur_cet_asset,
+                        payment_method_pour_asset,
+                    )
+                )
+                soldes_restants[asset_courant] -= debit_sur_cet_asset
+                reste_article -= debit_sur_cet_asset
+                assets_debites.add(asset_courant)
+
+                # Accumuler le débit pour l'affichage complémentaire
+                # / Accumulate debit for complement display
+                if asset_courant not in debits_par_asset_pour_affichage:
+                    debits_par_asset_pour_affichage[asset_courant] = 0
+                debits_par_asset_pour_affichage[asset_courant] += debit_sur_cet_asset
+
+            # S'il reste un montant non couvert → ligne complémentaire (asset=None)
+            # / If there's an uncovered amount → complement line (asset=None)
+            if reste_article > 0:
+                lignes_nfc.append((article_cascade, None, reste_article, None))
+
+        # ================================================================ #
+        #  PHASE 5 : Calculer le total complémentaire                       #
+        #  PHASE 5: Calculate complement total                              #
+        # ================================================================ #
+
+        total_complementaire = 0
+        for _art, asset_ligne, amount_ligne, _pm in lignes_nfc:
+            if asset_ligne is None:
+                total_complementaire += amount_ligne
+
+        # ================================================================ #
+        #  PHASE 6 : Si complémentaire > 0 → écran fonds insuffisants       #
+        #  PHASE 6: If complement > 0 → insufficient funds screen           #
+        # ================================================================ #
+
+        if total_complementaire > 0:
+            # Phase 6 : complémentaire nécessaire → afficher l'écran de choix
+            # / Phase 6: complement needed → show choice screen
+
+            import json as json_module
+
+            # Préparer le détail cascade pour l'affichage
+            # / Prepare cascade detail for display
+            detail_cascade_affichage = []
+            for asset_debite, montant_debite in debits_par_asset_pour_affichage.items():
+                detail_cascade_affichage.append(
+                    {
+                        "name": asset_debite.name,
+                        "montant_euros": f"{montant_debite / 100:.2f}",
+                    }
+                )
+
+            # Sérialiser les données cascade pour propagation via hidden fields
+            # / Serialize cascade data for propagation via hidden fields
+            cascade_json = json_module.dumps(
+                [
+                    [str(asset.uuid), montant]
+                    for asset, montant in debits_par_asset_pour_affichage.items()
+                ]
+            )
+
+            total_nfc = sum(debits_par_asset_pour_affichage.values())
+
+            context_complement = {
+                "tag_id_carte1": tag_id_client,
+                "detail_cascade": detail_cascade_affichage,
+                "cascade_carte1_json": cascade_json,
+                "total_nfc_carte1": total_nfc,
+                "total_panier_euros": f"{total_centimes / 100:.2f}",
+                "reste_euros": f"{total_complementaire / 100:.2f}",
+                "accepte_especes": point_de_vente.accepte_especes,
+                "accepte_carte_bancaire": point_de_vente.accepte_carte_bancaire,
+                "autoriser_2eme_carte": True,
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_complement_paiement.html",
+                context_complement,
+            )
+
+        # ================================================================ #
+        #  PHASE 7 : Bloc atomic complet (pas de complémentaire)            #
+        #  PHASE 7: Full atomic block (no complement)                       #
+        # ================================================================ #
+
+        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
         uuid_transaction = uuid_module.uuid4()
 
         try:
             with db_transaction.atomic():
-                # a) Ventes (VT) — client → lieu
-                # a) Sales (VT) — client → venue
-                if total_vente_centimes > 0:
-                    TransactionService.creer_vente(
-                        sender_wallet=wallet_client,
-                        receiver_wallet=wallet_lieu,
-                        asset=asset_tlf,
-                        montant_en_centimes=total_vente_centimes,
-                        tenant=tenant_courant,
-                        card=carte_client,
-                        ip=ip_client,
-                    )
-                    _creer_lignes_articles(
-                        articles_vente,
-                        moyen_paiement_code,
-                        asset_uuid=asset_tlf.uuid,
-                        carte=carte_client,
-                        wallet=wallet_client,
-                        uuid_transaction=uuid_transaction,
-                        point_de_vente=point_de_vente,
-                    )
-
-                # b) Adhésions (AD) — débit tokens TLF + création Membership
-                # b) Memberships (AD) — debit TLF tokens + create Membership
-                if total_adhesion_centimes > 0:
-                    TransactionService.creer_vente(
-                        sender_wallet=wallet_client,
-                        receiver_wallet=wallet_lieu,
-                        asset=asset_tlf,
-                        montant_en_centimes=total_adhesion_centimes,
-                        tenant=tenant_courant,
-                        card=carte_client,
-                        ip=ip_client,
-                    )
-                    lignes_adhesion = _creer_lignes_articles(
-                        articles_adhesion,
-                        moyen_paiement_code,
-                        asset_uuid=asset_tlf.uuid,
-                        carte=carte_client,
-                        wallet=wallet_client,
-                        uuid_transaction=uuid_transaction,
-                        point_de_vente=point_de_vente,
-                    )
-
-                # c) Recharges gratuites (RC/TM) — credit wallet client, pas de debit
-                #    Meme logique que dans _payer_en_especes : _executer_recharges
-                #    avec code "gift" → PaymentMethod.FREE.
-                # / c) Free top-ups (RC/TM) — credit client wallet, no debit
-                #    Same logic as _payer_en_especes: _executer_recharges
-                #    with "gift" code → PaymentMethod.FREE.
+                # ----- 7a) Crédits recharges gratuites AVANT les débits -----
+                # / Free top-up credits BEFORE debits
                 if articles_recharge_gratuite:
                     _executer_recharges(
                         articles_recharge_gratuite,
@@ -5019,45 +5474,103 @@ class PaiementViewSet(viewsets.ViewSet):
                         ip_client=ip_client,
                     )
 
-                # Creer/renouveler les adhesions et rattacher aux LigneArticle
-                # Create/renew memberships and link to LigneArticle
+                # ----- 7b) Débits non-fiduciaires (direct sur asset du prix) -----
+                # / Non-fiduciary debits (direct on the price's asset)
+                lignes_non_fidu = []
+                for article_nf in articles_non_fiduciaires:
+                    asset_nf_cible = article_nf["price"].asset
+                    montant_nf = article_nf["prix_centimes"] * article_nf["quantite"]
+                    TransactionService.creer_vente(
+                        sender_wallet=wallet_client,
+                        receiver_wallet=asset_nf_cible.wallet_origin,
+                        asset=asset_nf_cible,
+                        montant_en_centimes=montant_nf,
+                        tenant=tenant_courant,
+                        card=carte_client,
+                        ip=ip_client,
+                    )
+                    pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                        asset_nf_cible.category, PaymentMethod.LOCAL_EURO
+                    )
+                    lignes_non_fidu.append(
+                        (article_nf, asset_nf_cible, montant_nf, pm_nf)
+                    )
+                    assets_debites.add(asset_nf_cible)
+
+                # ----- 7c) Débits fiduciaires cascade -----
+                # Regrouper par asset pour faire 1 seule TransactionService.creer_vente par asset.
+                # / Group by asset to make 1 single TransactionService.creer_vente per asset.
+                debits_par_asset = OrderedDict()
+                for _art_c, asset_c, amount_c, _pm_c in lignes_nfc:
+                    if asset_c is not None:
+                        if asset_c not in debits_par_asset:
+                            debits_par_asset[asset_c] = 0
+                        debits_par_asset[asset_c] += amount_c
+
+                for asset_a_debiter, total_debit_asset in debits_par_asset.items():
+                    TransactionService.creer_vente(
+                        sender_wallet=wallet_client,
+                        receiver_wallet=asset_a_debiter.wallet_origin,
+                        asset=asset_a_debiter,
+                        montant_en_centimes=total_debit_asset,
+                        tenant=tenant_courant,
+                        card=carte_client,
+                        ip=ip_client,
+                    )
+
+                # ----- 7d) Créer toutes les LigneArticle (non-fidu + cascade) -----
+                # / Create all LigneArticle (non-fidu + cascade)
+                toutes_les_lignes_pre_calculees = lignes_non_fidu + lignes_nfc
+                lignes_creees = _creer_lignes_articles_cascade(
+                    lignes_pre_calculees=toutes_les_lignes_pre_calculees,
+                    carte=carte_client,
+                    wallet=wallet_client,
+                    uuid_transaction=uuid_transaction,
+                    point_de_vente=point_de_vente,
+                )
+
+                # ----- 7e) Adhésions : créer Membership, rattacher à la 1ère LigneArticle -----
+                # / Memberships: create Membership, link to first LigneArticle
                 if articles_adhesion:
-                    # Construire un index LigneArticle par product_uuid
+                    # Construire index LigneArticle par product_uuid
                     # / Build LigneArticle index by product_uuid
                     lignes_par_product = {}
-                    for ligne in lignes_adhesion:
-                        product_uuid = str(ligne.pricesold.productsold.product.uuid)
-                        lignes_par_product[product_uuid] = ligne
+                    for ligne_creee in lignes_creees:
+                        product_uuid_str = str(
+                            ligne_creee.pricesold.productsold.product.uuid
+                        )
+                        if product_uuid_str not in lignes_par_product:
+                            lignes_par_product[product_uuid_str] = ligne_creee
 
-                    for article in articles_adhesion:
+                    for article_ad in articles_adhesion:
                         membership = _creer_ou_renouveler_adhesion(
                             carte_client.user,
-                            article["product"],
-                            article["price"],
+                            article_ad["product"],
+                            article_ad["price"],
                         )
-                        # Rattacher la Membership a sa LigneArticle
-                        # / Link the Membership to its LigneArticle
                         if membership:
-                            product_uuid = str(article["product"].uuid)
-                            ligne = lignes_par_product.get(product_uuid)
-                            if ligne:
-                                ligne.membership = membership
-                                ligne.save(update_fields=["membership"])
+                            product_uuid_ad = str(article_ad["product"].uuid)
+                            ligne_ad = lignes_par_product.get(product_uuid_ad)
+                            if ligne_ad:
+                                ligne_ad.membership = membership
+                                ligne_ad.save(update_fields=["membership"])
 
         except SoldeInsuffisant:
             # Race condition : solde a changé entre le check et le débit
-            # Race condition: balance changed between check and debit
-            solde_restant = WalletService.obtenir_solde(
-                wallet=wallet_client,
-                asset=asset_tlf,
-            )
-            montant_manquant = total_debit_client_centimes - solde_restant
-            donnees_paiement["missing"] = montant_manquant / 100
+            # / Race condition: balance changed between check and debit
+            nom_monnaie_fallback = _("Monnaie locale")
+            premier_asset_fallback = assets_accessibles.filter(
+                category__in=[Asset.TLF, Asset.TNF, Asset.FED],
+            ).first()
+            if premier_asset_fallback:
+                nom_monnaie_fallback = premier_asset_fallback.name
+
+            donnees_paiement["missing"] = total_en_euros
             context_insuffisant = {
                 "currency_data": CURRENCY_DATA,
                 "payment": donnees_paiement,
                 "card": {"name": carte_client.tag_id},
-                "monnaie_name": asset_tlf.name,
+                "monnaie_name": nom_monnaie_fallback,
                 "payments_accepted": {
                     "accepte_especes": point_de_vente.accepte_especes,
                     "accepte_carte_bancaire": point_de_vente.accepte_carte_bancaire,
@@ -5070,17 +5583,39 @@ class PaiementViewSet(viewsets.ViewSet):
                 context_insuffisant,
             )
 
-        # 7. Succès : lire le nouveau solde et afficher
-        # 7. Success: read new balance and display
-        nouveau_solde_centimes = WalletService.obtenir_solde(
-            wallet=wallet_client, asset=asset_tlf
-        )
-        nouveau_solde_euros = nouveau_solde_centimes / 100
+        # ================================================================ #
+        #  PHASE 8 : Succès — soldes multi-asset                            #
+        #  PHASE 8: Success — multi-asset balances                          #
+        # ================================================================ #
+
+        # Lire les soldes de TOUS les assets débités (pas seulement TLF)
+        # / Read balances of ALL debited assets (not just TLF)
+        soldes_apres_paiement = []
+        for asset_debite in assets_debites:
+            solde_apres = WalletService.obtenir_solde(
+                wallet=wallet_client, asset=asset_debite
+            )
+            soldes_apres_paiement.append(
+                {
+                    "name": asset_debite.name,
+                    "solde_euros": solde_apres / 100,
+                }
+            )
+
+        # Pour la rétro-compatibilité du template, on passe aussi le solde
+        # du 1er asset débité comme nouveau_solde et monnaie_name.
+        # / For template backward compatibility, also pass the first
+        # debited asset's balance as nouveau_solde and monnaie_name.
+        nouveau_solde_euros = None
+        nom_monnaie_principal = ""
+        if soldes_apres_paiement:
+            nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
+            nom_monnaie_principal = soldes_apres_paiement[0]["name"]
 
         context = {
             "currency_data": CURRENCY_DATA,
             "payment": donnees_paiement,
-            "monnaie_name": asset_tlf.name,
+            "monnaie_name": nom_monnaie_principal,
             "moyen_paiement": PAYMENT_METHOD_TRANSLATIONS.get(moyen_paiement_code, ""),
             "deposit_is_present": consigne_dans_panier,
             "total": total_en_euros,
@@ -5091,6 +5626,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "card_name": carte_client.tag_id,
             "uuid_transaction": str(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
+            # Multi-asset : liste des soldes après paiement
+            # / Multi-asset: list of balances after payment
+            "soldes_apres_paiement": soldes_apres_paiement,
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -5527,6 +6065,784 @@ class PaiementViewSet(viewsets.ViewSet):
         Displays the NFC read waiting partial (for cashless payment).
         """
         return render(request, "laboutik/partial/hx_read_nfc.html", {})
+
+    # ----------------------------------------------------------------------- #
+    #  Paiement complémentaire NFC (espèces, CB, ou 2ème carte)                #
+    #  NFC complement payment (cash, CC, or 2nd card)                          #
+    # ----------------------------------------------------------------------- #
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="lire_nfc_complement",
+        url_name="lire_nfc_complement",
+    )
+    def lire_nfc_complement(self, request):
+        """
+        GET /laboutik/paiement/lire_nfc_complement/
+        Affiche l'écran d'attente NFC pour la 2ème carte (complément).
+        Les données cascade de la carte1 sont propagées via query params.
+        / Displays the NFC wait screen for the 2nd card (complement).
+        Card1 cascade data is propagated via query params.
+
+        LOCALISATION : laboutik/views.py
+        """
+        tag_id_carte1 = request.GET.get("tag_id_carte1", "")
+        cascade_carte1_json = request.GET.get("cascade_carte1", "[]")
+        total_nfc_carte1 = request.GET.get("total_nfc_carte1", "0")
+
+        context = {
+            "tag_id_carte1": tag_id_carte1,
+            "cascade_carte1_json": cascade_carte1_json,
+            "total_nfc_carte1": total_nfc_carte1,
+        }
+        return render(
+            request,
+            "laboutik/partial/hx_lire_nfc_complement.html",
+            context,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="payer_complementaire",
+        url_name="payer_complementaire",
+    )
+    def payer_complementaire(self, request):
+        """
+        POST /laboutik/paiement/payer_complementaire/
+        Finalise un paiement NFC avec complément (espèces, CB, ou 2ème carte).
+        / Finalizes an NFC payment with complement (cash, CC, or 2nd card).
+
+        LOCALISATION : laboutik/views.py
+
+        Flux / Flow:
+        1. Relire les articles du panier depuis les repid-* du POST
+        2. Relire tag_id_carte1, cascade_carte1 (JSON), total_nfc_carte1
+        3. Relire moyen_complement (espece, carte_bancaire, ou nfc)
+        4. Retrouver la carte1 et son wallet
+        5. RE-CALCULER la cascade (protection race condition)
+        6. Si espèces ou CB → bloc atomic (débits NFC + lignes espèces/CB)
+        7. Si NFC → cascade sur la 2ème carte, si insuffisant → re-render
+        8. Succès → render hx_return_payment_success.html
+        """
+        import json as json_module
+        from collections import OrderedDict
+
+        # ---------------------------------------------------------- #
+        # 1. Relire le point de vente et les articles du panier
+        # / 1. Re-read the POS and cart articles
+        # ---------------------------------------------------------- #
+        donnees_paiement = request.POST.dict()
+        uuid_pv = donnees_paiement.get("uuid_pv")
+        try:
+            point_de_vente = PointDeVente.objects.get(uuid=uuid_pv)
+        except (PointDeVente.DoesNotExist, ValueError):
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Point de vente introuvable"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=404
+            )
+
+        try:
+            articles_panier = _extraire_articles_du_panier(request.POST, point_de_vente)
+        except ValueError as e:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": str(e),
+                "selector_bt_retour": "#messages",
+            }
+            return render(
+                request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+            )
+
+        total_centimes = _calculer_total_panier_centimes(articles_panier)
+        state = _construire_state(point_de_vente)
+
+        # ---------------------------------------------------------- #
+        # 2. Relire les données cascade de la carte1
+        # / 2. Re-read card1 cascade data
+        # ---------------------------------------------------------- #
+        tag_id_carte1 = request.POST.get("tag_id_carte1", "").upper().strip()
+        moyen_complement = request.POST.get("moyen_complement", "")
+
+        # ---------------------------------------------------------- #
+        # 3. Retrouver la carte1 et son wallet
+        # / 3. Find card1 and its wallet
+        # ---------------------------------------------------------- #
+        try:
+            carte1 = CarteCashless.objects.get(tag_id=tag_id_carte1)
+        except CarteCashless.DoesNotExist:
+            context_erreur = {
+                "msg_type": "warning",
+                "msg_content": _("Carte 1 inconnue"),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        wallet_carte1 = _obtenir_ou_creer_wallet(carte1)
+        tenant_courant = connection.tenant
+
+        # ---------------------------------------------------------- #
+        # 4. RE-CALCULER la cascade sur la carte1 (race condition)
+        # / 4. RE-CALCULATE cascade on card1 (race condition protection)
+        # ---------------------------------------------------------- #
+        assets_accessibles = AssetService.obtenir_assets_accessibles(tenant_courant)
+
+        soldes_cascade_carte1 = OrderedDict()
+        for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
+            asset_pour_categorie = assets_accessibles.filter(
+                category=categorie_fiduciaire,
+            ).first()
+            if asset_pour_categorie is not None:
+                solde_asset = WalletService.obtenir_solde(
+                    wallet=wallet_carte1, asset=asset_pour_categorie
+                )
+                if solde_asset > 0:
+                    soldes_cascade_carte1[asset_pour_categorie] = solde_asset
+
+        # Classifier les articles (même logique que _payer_par_nfc Phase 2)
+        # / Classify articles (same logic as _payer_par_nfc Phase 2)
+        articles_fiduciaires = []
+        articles_adhesion = []
+        articles_recharge_gratuite = []
+        articles_non_fiduciaires = []
+
+        for article in articles_panier:
+            produit = article["product"]
+            prix_obj = article["price"]
+            methode = produit.methode_caisse
+
+            if produit.categorie_article == Product.ADHESION:
+                articles_adhesion.append(article)
+            elif methode in METHODES_RECHARGE_GRATUITES:
+                articles_recharge_gratuite.append(article)
+            elif (
+                getattr(prix_obj, "non_fiduciaire", False)
+                and prix_obj.asset is not None
+            ):
+                articles_non_fiduciaires.append(article)
+            else:
+                articles_fiduciaires.append(article)
+
+        articles_pour_cascade = articles_fiduciaires + articles_adhesion
+
+        # Cascade carte1 (recalcul)
+        # / Card1 cascade (recalculation)
+        lignes_nfc_carte1 = []
+        soldes_restants_c1 = OrderedDict()
+        for asset_c, solde_c in soldes_cascade_carte1.items():
+            soldes_restants_c1[asset_c] = solde_c
+
+        assets_debites = set()
+
+        for article_cascade in articles_pour_cascade:
+            montant_total_article = (
+                article_cascade["prix_centimes"] * article_cascade["quantite"]
+            )
+            reste_article = montant_total_article
+
+            for asset_courant, solde_courant in soldes_restants_c1.items():
+                if reste_article <= 0:
+                    break
+                if solde_courant <= 0:
+                    continue
+
+                debit_sur_cet_asset = min(solde_courant, reste_article)
+                payment_method_pour_asset = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                    asset_courant.category, PaymentMethod.LOCAL_EURO
+                )
+                lignes_nfc_carte1.append(
+                    (
+                        article_cascade,
+                        asset_courant,
+                        debit_sur_cet_asset,
+                        payment_method_pour_asset,
+                    )
+                )
+                soldes_restants_c1[asset_courant] -= debit_sur_cet_asset
+                reste_article -= debit_sur_cet_asset
+                assets_debites.add(asset_courant)
+
+            if reste_article > 0:
+                lignes_nfc_carte1.append((article_cascade, None, reste_article, None))
+
+        # Calculer le total complémentaire restant
+        # / Calculate remaining complement total
+        total_complementaire = 0
+        for _art, asset_ligne, amount_ligne, _pm in lignes_nfc_carte1:
+            if asset_ligne is None:
+                total_complementaire += amount_ligne
+
+        if total_complementaire <= 0:
+            # Race condition heureuse : entre-temps le client a assez
+            # → payer normalement (rediriger vers payer avec moyen_paiement=nfc)
+            # / Happy race condition: client now has enough → pay normally
+            context_erreur = {
+                "msg_type": "info",
+                "msg_content": _(
+                    "Le solde a changé, le paiement complet est possible. Réessayez."
+                ),
+                "selector_bt_retour": "#messages",
+            }
+            return render(request, "laboutik/partial/hx_messages.html", context_erreur)
+
+        # ---------------------------------------------------------- #
+        # 5. Aiguillage selon le moyen de complément
+        # / 5. Route based on complement method
+        # ---------------------------------------------------------- #
+
+        ip_client = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        uuid_transaction = uuid_module.uuid4()
+
+        donnees_paiement["total"] = total_centimes
+        donnees_paiement["given_sum"] = 0
+        donnees_paiement["missing"] = 0
+
+        if moyen_complement in ("espece", "carte_bancaire"):
+            # ---------------------------------------------------------- #
+            # 6. Complément espèces ou CB
+            # / 6. Cash or CC complement
+            # ---------------------------------------------------------- #
+            # Déterminer le PaymentMethod pour le complément
+            # / Determine PaymentMethod for the complement
+            if moyen_complement == "espece":
+                pm_complement = PaymentMethod.CASH
+            else:
+                pm_complement = PaymentMethod.CC
+
+            try:
+                with db_transaction.atomic():
+                    # 6a) Recharges gratuites
+                    # / 6a) Free top-ups
+                    if articles_recharge_gratuite:
+                        _executer_recharges(
+                            articles_recharge_gratuite,
+                            wallet_carte1,
+                            carte1,
+                            code_methode_paiement="gift",
+                            ip_client=ip_client,
+                        )
+
+                    # 6b) Débits non-fiduciaires
+                    # / 6b) Non-fiduciary debits
+                    lignes_non_fidu = []
+                    for article_nf in articles_non_fiduciaires:
+                        asset_nf_cible = article_nf["price"].asset
+                        montant_nf = (
+                            article_nf["prix_centimes"] * article_nf["quantite"]
+                        )
+                        TransactionService.creer_vente(
+                            sender_wallet=wallet_carte1,
+                            receiver_wallet=asset_nf_cible.wallet_origin,
+                            asset=asset_nf_cible,
+                            montant_en_centimes=montant_nf,
+                            tenant=tenant_courant,
+                            card=carte1,
+                            ip=ip_client,
+                        )
+                        pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                            asset_nf_cible.category, PaymentMethod.LOCAL_EURO
+                        )
+                        lignes_non_fidu.append(
+                            (article_nf, asset_nf_cible, montant_nf, pm_nf)
+                        )
+                        assets_debites.add(asset_nf_cible)
+
+                    # 6c) Débits fiduciaires cascade carte1
+                    # / 6c) Card1 fiduciary cascade debits
+                    debits_par_asset_c1 = OrderedDict()
+                    for _art_c, asset_c, amount_c, _pm_c in lignes_nfc_carte1:
+                        if asset_c is not None:
+                            if asset_c not in debits_par_asset_c1:
+                                debits_par_asset_c1[asset_c] = 0
+                            debits_par_asset_c1[asset_c] += amount_c
+
+                    for (
+                        asset_a_debiter,
+                        total_debit_asset,
+                    ) in debits_par_asset_c1.items():
+                        TransactionService.creer_vente(
+                            sender_wallet=wallet_carte1,
+                            receiver_wallet=asset_a_debiter.wallet_origin,
+                            asset=asset_a_debiter,
+                            montant_en_centimes=total_debit_asset,
+                            tenant=tenant_courant,
+                            card=carte1,
+                            ip=ip_client,
+                        )
+
+                    # 6d) Remplacer les lignes complémentaires (asset=None)
+                    # par des lignes espèces/CB
+                    # / 6d) Replace complement lines (asset=None) with cash/CC lines
+                    lignes_finales = []
+                    for art_c, asset_c, amount_c, pm_c in lignes_nfc_carte1:
+                        if asset_c is None:
+                            # Ligne complémentaire → espèces ou CB
+                            # / Complement line → cash or CC
+                            lignes_finales.append(
+                                (art_c, None, amount_c, pm_complement)
+                            )
+                        else:
+                            lignes_finales.append((art_c, asset_c, amount_c, pm_c))
+
+                    toutes_les_lignes = lignes_non_fidu + lignes_finales
+                    lignes_creees = _creer_lignes_articles_cascade(
+                        lignes_pre_calculees=toutes_les_lignes,
+                        carte=carte1,
+                        wallet=wallet_carte1,
+                        uuid_transaction=uuid_transaction,
+                        point_de_vente=point_de_vente,
+                    )
+
+                    # 6e) Adhésions
+                    # / 6e) Memberships
+                    if articles_adhesion:
+                        lignes_par_product = {}
+                        for ligne_creee in lignes_creees:
+                            product_uuid_str = str(
+                                ligne_creee.pricesold.productsold.product.uuid
+                            )
+                            if product_uuid_str not in lignes_par_product:
+                                lignes_par_product[product_uuid_str] = ligne_creee
+
+                        for article_ad in articles_adhesion:
+                            membership = _creer_ou_renouveler_adhesion(
+                                carte1.user,
+                                article_ad["product"],
+                                article_ad["price"],
+                            )
+                            if membership:
+                                product_uuid_ad = str(article_ad["product"].uuid)
+                                ligne_ad = lignes_par_product.get(product_uuid_ad)
+                                if ligne_ad:
+                                    ligne_ad.membership = membership
+                                    ligne_ad.save(update_fields=["membership"])
+
+            except SoldeInsuffisant:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Solde insuffisant. Le solde a changé depuis la lecture."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+
+            # ---------------------------------------------------------- #
+            # Succès espèces/CB → affichage
+            # / Cash/CC success → display
+            # ---------------------------------------------------------- #
+            soldes_apres_paiement = []
+            for asset_debite in assets_debites:
+                solde_apres = WalletService.obtenir_solde(
+                    wallet=wallet_carte1, asset=asset_debite
+                )
+                soldes_apres_paiement.append(
+                    {
+                        "name": asset_debite.name,
+                        "solde_euros": solde_apres / 100,
+                    }
+                )
+
+            nouveau_solde_euros = None
+            nom_monnaie_principal = ""
+            if soldes_apres_paiement:
+                nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
+                nom_monnaie_principal = soldes_apres_paiement[0]["name"]
+
+            context_succes = {
+                "currency_data": CURRENCY_DATA,
+                "payment": donnees_paiement,
+                "monnaie_name": nom_monnaie_principal,
+                "moyen_paiement": _("NFC"),
+                "original_payment": True,
+                "original_moyen_paiement": _("NFC"),
+                "deposit_is_present": False,
+                "total": total_centimes / 100,
+                "state": state,
+                "nouveau_solde": nouveau_solde_euros,
+                "card_name": carte1.tag_id,
+                "uuid_transaction": str(uuid_transaction),
+                "uuid_pv": str(point_de_vente.uuid),
+                "soldes_apres_paiement": soldes_apres_paiement,
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_return_payment_success.html",
+                context_succes,
+            )
+
+        elif moyen_complement == "nfc":
+            # ---------------------------------------------------------- #
+            # 7. Complément 2ème carte NFC
+            # / 7. 2nd NFC card complement
+            # ---------------------------------------------------------- #
+            tag_id_carte2 = request.POST.get("tag_id", "").upper().strip()
+
+            if not tag_id_carte2:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Carte non lue"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+
+            # Vérifier que la 2ème carte != la 1ère
+            # / Check 2nd card != 1st card
+            if tag_id_carte2 == tag_id_carte1:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "La 2ème carte est la même que la 1ère. "
+                        "Utilisez une carte différente."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+
+            try:
+                carte2 = CarteCashless.objects.get(tag_id=tag_id_carte2)
+            except CarteCashless.DoesNotExist:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _("Carte 2 inconnue"),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+
+            wallet_carte2 = _obtenir_ou_creer_wallet(carte2)
+
+            # Cascade sur la 2ème carte pour le reste
+            # / Cascade on 2nd card for the remainder
+            soldes_cascade_carte2 = OrderedDict()
+            for categorie_fiduciaire in ORDRE_CASCADE_FIDUCIAIRE:
+                asset_pour_categorie = assets_accessibles.filter(
+                    category=categorie_fiduciaire,
+                ).first()
+                if asset_pour_categorie is not None:
+                    solde_asset = WalletService.obtenir_solde(
+                        wallet=wallet_carte2, asset=asset_pour_categorie
+                    )
+                    if solde_asset > 0:
+                        soldes_cascade_carte2[asset_pour_categorie] = solde_asset
+
+            # Construire les lignes carte2 à partir des lignes complémentaires carte1
+            # / Build card2 lines from card1 complement lines
+            lignes_nfc_carte2 = []
+            soldes_restants_c2 = OrderedDict()
+            for asset_c, solde_c in soldes_cascade_carte2.items():
+                soldes_restants_c2[asset_c] = solde_c
+
+            assets_debites_carte2 = set()
+            total_reste_apres_carte2 = 0
+
+            for art_c, asset_c, amount_c, pm_c in lignes_nfc_carte1:
+                if asset_c is not None:
+                    # Ligne carte1 → déjà couverte, garder telle quelle
+                    # / Card1 line → already covered, keep as-is
+                    continue
+
+                # Ligne complémentaire → essayer la cascade carte2
+                # / Complement line → try card2 cascade
+                reste_complement = amount_c
+                for asset_c2, solde_c2 in soldes_restants_c2.items():
+                    if reste_complement <= 0:
+                        break
+                    if solde_c2 <= 0:
+                        continue
+
+                    debit_c2 = min(solde_c2, reste_complement)
+                    pm_c2 = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                        asset_c2.category, PaymentMethod.LOCAL_EURO
+                    )
+                    lignes_nfc_carte2.append((art_c, asset_c2, debit_c2, pm_c2))
+                    soldes_restants_c2[asset_c2] -= debit_c2
+                    reste_complement -= debit_c2
+                    assets_debites_carte2.add(asset_c2)
+
+                if reste_complement > 0:
+                    total_reste_apres_carte2 += reste_complement
+                    lignes_nfc_carte2.append((art_c, None, reste_complement, None))
+
+            if total_reste_apres_carte2 > 0:
+                # Encore insuffisant → re-render complémentaire sans bouton 2ème carte
+                # / Still insufficient → re-render complement without 2nd card button
+                debits_affichage_c1 = OrderedDict()
+                for _art, asset_l, amount_l, _pm in lignes_nfc_carte1:
+                    if asset_l is not None:
+                        if asset_l not in debits_affichage_c1:
+                            debits_affichage_c1[asset_l] = 0
+                        debits_affichage_c1[asset_l] += amount_l
+
+                debits_affichage_c2 = OrderedDict()
+                for _art, asset_l, amount_l, _pm in lignes_nfc_carte2:
+                    if asset_l is not None:
+                        if asset_l not in debits_affichage_c2:
+                            debits_affichage_c2[asset_l] = 0
+                        debits_affichage_c2[asset_l] += amount_l
+
+                detail_cascade_affichage = []
+                for asset_d, montant_d in debits_affichage_c1.items():
+                    detail_cascade_affichage.append(
+                        {
+                            "name": f"{asset_d.name} ({tag_id_carte1})",
+                            "montant_euros": f"{montant_d / 100:.2f}",
+                        }
+                    )
+                for asset_d, montant_d in debits_affichage_c2.items():
+                    detail_cascade_affichage.append(
+                        {
+                            "name": f"{asset_d.name} ({tag_id_carte2})",
+                            "montant_euros": f"{montant_d / 100:.2f}",
+                        }
+                    )
+
+                # Resérialiser cascade carte1 pour le re-render
+                # / Re-serialize card1 cascade for re-render
+                cascade_json_rerender = json_module.dumps(
+                    [
+                        [str(asset.uuid), montant]
+                        for asset, montant in debits_affichage_c1.items()
+                    ]
+                )
+
+                context_complement = {
+                    "tag_id_carte1": tag_id_carte1,
+                    "detail_cascade": detail_cascade_affichage,
+                    "cascade_carte1_json": cascade_json_rerender,
+                    "total_nfc_carte1": sum(debits_affichage_c1.values()),
+                    "total_panier_euros": f"{total_centimes / 100:.2f}",
+                    "reste_euros": f"{total_reste_apres_carte2 / 100:.2f}",
+                    "accepte_especes": point_de_vente.accepte_especes,
+                    "accepte_carte_bancaire": point_de_vente.accepte_carte_bancaire,
+                    "autoriser_2eme_carte": False,
+                }
+                return render(
+                    request,
+                    "laboutik/partial/hx_complement_paiement.html",
+                    context_complement,
+                )
+
+            # Carte2 couvre tout le reste → bloc atomic
+            # / Card2 covers all remainder → atomic block
+            try:
+                with db_transaction.atomic():
+                    # Recharges gratuites
+                    # / Free top-ups
+                    if articles_recharge_gratuite:
+                        _executer_recharges(
+                            articles_recharge_gratuite,
+                            wallet_carte1,
+                            carte1,
+                            code_methode_paiement="gift",
+                            ip_client=ip_client,
+                        )
+
+                    # Débits non-fiduciaires carte1
+                    # / Card1 non-fiduciary debits
+                    lignes_non_fidu = []
+                    for article_nf in articles_non_fiduciaires:
+                        asset_nf_cible = article_nf["price"].asset
+                        montant_nf = (
+                            article_nf["prix_centimes"] * article_nf["quantite"]
+                        )
+                        TransactionService.creer_vente(
+                            sender_wallet=wallet_carte1,
+                            receiver_wallet=asset_nf_cible.wallet_origin,
+                            asset=asset_nf_cible,
+                            montant_en_centimes=montant_nf,
+                            tenant=tenant_courant,
+                            card=carte1,
+                            ip=ip_client,
+                        )
+                        pm_nf = MAPPING_ASSET_CATEGORY_PAYMENT_METHOD.get(
+                            asset_nf_cible.category, PaymentMethod.LOCAL_EURO
+                        )
+                        lignes_non_fidu.append(
+                            (article_nf, asset_nf_cible, montant_nf, pm_nf)
+                        )
+                        assets_debites.add(asset_nf_cible)
+
+                    # Débits cascade carte1 (lignes avec asset != None)
+                    # / Card1 cascade debits (lines with asset != None)
+                    debits_par_asset_c1 = OrderedDict()
+                    for _art_c, asset_c, amount_c, _pm_c in lignes_nfc_carte1:
+                        if asset_c is not None:
+                            if asset_c not in debits_par_asset_c1:
+                                debits_par_asset_c1[asset_c] = 0
+                            debits_par_asset_c1[asset_c] += amount_c
+
+                    for (
+                        asset_a_debiter,
+                        total_debit_asset,
+                    ) in debits_par_asset_c1.items():
+                        TransactionService.creer_vente(
+                            sender_wallet=wallet_carte1,
+                            receiver_wallet=asset_a_debiter.wallet_origin,
+                            asset=asset_a_debiter,
+                            montant_en_centimes=total_debit_asset,
+                            tenant=tenant_courant,
+                            card=carte1,
+                            ip=ip_client,
+                        )
+
+                    # Débits cascade carte2
+                    # / Card2 cascade debits
+                    debits_par_asset_c2 = OrderedDict()
+                    for _art_c2, asset_c2, amount_c2, _pm_c2 in lignes_nfc_carte2:
+                        if asset_c2 is not None:
+                            if asset_c2 not in debits_par_asset_c2:
+                                debits_par_asset_c2[asset_c2] = 0
+                            debits_par_asset_c2[asset_c2] += amount_c2
+
+                    for (
+                        asset_a_debiter_c2,
+                        total_debit_c2,
+                    ) in debits_par_asset_c2.items():
+                        TransactionService.creer_vente(
+                            sender_wallet=wallet_carte2,
+                            receiver_wallet=asset_a_debiter_c2.wallet_origin,
+                            asset=asset_a_debiter_c2,
+                            montant_en_centimes=total_debit_c2,
+                            tenant=tenant_courant,
+                            card=carte2,
+                            ip=ip_client,
+                        )
+
+                    # Créer les LigneArticle pour carte1 (lignes NFC couvertes)
+                    # / Create LigneArticle for card1 (covered NFC lines)
+                    lignes_couvertes_c1 = [
+                        (art, asset, amount, pm)
+                        for art, asset, amount, pm in lignes_nfc_carte1
+                        if asset is not None
+                    ]
+                    lignes_couvertes_c2 = [
+                        (art, asset, amount, pm)
+                        for art, asset, amount, pm in lignes_nfc_carte2
+                        if asset is not None
+                    ]
+
+                    toutes_les_lignes = (
+                        lignes_non_fidu + lignes_couvertes_c1 + lignes_couvertes_c2
+                    )
+                    lignes_creees = _creer_lignes_articles_cascade(
+                        lignes_pre_calculees=toutes_les_lignes,
+                        carte=carte1,
+                        carte_complement=carte2,
+                        wallet=wallet_carte1,
+                        uuid_transaction=uuid_transaction,
+                        point_de_vente=point_de_vente,
+                    )
+
+                    # Adhésions
+                    # / Memberships
+                    if articles_adhesion:
+                        lignes_par_product = {}
+                        for ligne_creee in lignes_creees:
+                            product_uuid_str = str(
+                                ligne_creee.pricesold.productsold.product.uuid
+                            )
+                            if product_uuid_str not in lignes_par_product:
+                                lignes_par_product[product_uuid_str] = ligne_creee
+
+                        for article_ad in articles_adhesion:
+                            membership = _creer_ou_renouveler_adhesion(
+                                carte1.user,
+                                article_ad["product"],
+                                article_ad["price"],
+                            )
+                            if membership:
+                                product_uuid_ad = str(article_ad["product"].uuid)
+                                ligne_ad = lignes_par_product.get(product_uuid_ad)
+                                if ligne_ad:
+                                    ligne_ad.membership = membership
+                                    ligne_ad.save(update_fields=["membership"])
+
+            except SoldeInsuffisant:
+                context_erreur = {
+                    "msg_type": "warning",
+                    "msg_content": _(
+                        "Solde insuffisant. Le solde a changé depuis la lecture."
+                    ),
+                    "selector_bt_retour": "#messages",
+                }
+                return render(
+                    request, "laboutik/partial/hx_messages.html", context_erreur
+                )
+
+            # Succès 2ème carte → affichage multi-soldes
+            # / 2nd card success → multi-balance display
+            soldes_apres_paiement = []
+            for asset_debite in assets_debites:
+                solde_apres = WalletService.obtenir_solde(
+                    wallet=wallet_carte1, asset=asset_debite
+                )
+                soldes_apres_paiement.append(
+                    {
+                        "name": f"{asset_debite.name} ({tag_id_carte1})",
+                        "solde_euros": solde_apres / 100,
+                    }
+                )
+            for asset_debite_c2 in assets_debites_carte2:
+                solde_apres_c2 = WalletService.obtenir_solde(
+                    wallet=wallet_carte2, asset=asset_debite_c2
+                )
+                soldes_apres_paiement.append(
+                    {
+                        "name": f"{asset_debite_c2.name} ({tag_id_carte2})",
+                        "solde_euros": solde_apres_c2 / 100,
+                    }
+                )
+
+            nouveau_solde_euros = None
+            nom_monnaie_principal = ""
+            if soldes_apres_paiement:
+                nouveau_solde_euros = soldes_apres_paiement[0]["solde_euros"]
+                nom_monnaie_principal = soldes_apres_paiement[0]["name"]
+
+            context_succes = {
+                "currency_data": CURRENCY_DATA,
+                "payment": donnees_paiement,
+                "monnaie_name": nom_monnaie_principal,
+                "moyen_paiement": _("NFC"),
+                "original_payment": None,
+                "deposit_is_present": False,
+                "total": total_centimes / 100,
+                "state": state,
+                "nouveau_solde": nouveau_solde_euros,
+                "card_name": carte1.tag_id,
+                "uuid_transaction": str(uuid_transaction),
+                "uuid_pv": str(point_de_vente.uuid),
+                "soldes_apres_paiement": soldes_apres_paiement,
+            }
+            return render(
+                request,
+                "laboutik/partial/hx_return_payment_success.html",
+                context_succes,
+            )
+
+        # Moyen de complément non reconnu
+        # / Unrecognized complement method
+        context_erreur = {
+            "msg_type": "warning",
+            "msg_content": _("Moyen de complément non reconnu"),
+            "selector_bt_retour": "#messages",
+        }
+        return render(
+            request, "laboutik/partial/hx_messages.html", context_erreur, status=400
+        )
 
     @action(
         detail=False,

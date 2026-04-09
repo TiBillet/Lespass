@@ -180,6 +180,39 @@ class Command(BaseCommand):
                         f"  Asset existant : {asset_existant.name} ({asset_existant.category})"
                     )
 
+            # --- Assets supplémentaires pour tests cascade multi-asset ---
+            # / Additional assets for multi-asset cascade tests
+            for asset_def in [
+                {
+                    "name": "Fédéré TiBillet",
+                    "category": FedowAsset.FED,
+                    "currency_code": "EUR",
+                },
+                {
+                    "name": "Points fidélité",
+                    "category": FedowAsset.FID,
+                    "currency_code": "PTS",
+                },
+            ]:
+                asset_existant = FedowAsset.objects.filter(
+                    tenant_origin=tenant_client,
+                    category=asset_def["category"],
+                    active=True,
+                ).first()
+                if asset_existant is None:
+                    AssetService.creer_asset(
+                        tenant=tenant_client,
+                        name=asset_def["name"],
+                        category=asset_def["category"],
+                        currency_code=asset_def["currency_code"],
+                        wallet_origin=wallet_du_lieu,
+                    )
+                    self.stdout.write(f"  Asset '{asset_def['name']}' créé")
+                else:
+                    self.stdout.write(
+                        f"  Asset existant : {asset_existant.name} ({asset_existant.category})"
+                    )
+
             # --- Produits POS avec prix et icones ---
             # Chaque produit a une couleur de fond, une couleur de texte et une icone FontAwesome 5.
             # / POS products with prices and icons.
@@ -553,6 +586,78 @@ class Command(BaseCommand):
             else:
                 self.stdout.write("  Produit existant : Vin en vrac")
 
+            # --- Produits avec tarifs non-fiduciaires (TIM, FID) ---
+            # / Products with non-fiduciary prices (TIM, FID)
+            asset_tim = FedowAsset.objects.filter(
+                tenant_origin=tenant_client, category=FedowAsset.TIM, active=True
+            ).first()
+            asset_fid = FedowAsset.objects.filter(
+                tenant_origin=tenant_client, category=FedowAsset.FID, active=True
+            ).first()
+
+            # Machine 3D : 1 TIM uniquement
+            produit_machine_3d, machine_creee = Product.objects.get_or_create(
+                name="Machine 3D",
+                defaults={
+                    "categorie_article": Product.NONE,
+                    "methode_caisse": Product.VENTE,
+                    "poids": 50,
+                },
+            )
+            if machine_creee and asset_tim:
+                Price.objects.create(
+                    product=produit_machine_3d,
+                    name="1 heure",
+                    prix=Decimal("1.00"),
+                    non_fiduciaire=True,
+                    asset=asset_tim,
+                    publish=True,
+                )
+                self.stdout.write("  Produit 'Machine 3D' créé (1 TIM)")
+            else:
+                self.stdout.write("  Produit existant : Machine 3D")
+
+            # Pin's TiBillet : 300 FID uniquement
+            produit_pins, pins_cree = Product.objects.get_or_create(
+                name="Pin's TiBillet",
+                defaults={
+                    "categorie_article": Product.NONE,
+                    "methode_caisse": Product.VENTE,
+                    "poids": 51,
+                },
+            )
+            if pins_cree and asset_fid:
+                Price.objects.create(
+                    product=produit_pins,
+                    name="300 points",
+                    prix=Decimal("300.00"),
+                    non_fiduciaire=True,
+                    asset=asset_fid,
+                    publish=True,
+                )
+                self.stdout.write("  Produit 'Pin's TiBillet' créé (300 FID)")
+            else:
+                self.stdout.write("  Produit existant : Pin's TiBillet")
+
+            # Bière : ajouter tarif bénévole TIM en plus du tarif EUR existant
+            produit_biere_tim = Product.objects.filter(name="Biere").first()
+            if produit_biere_tim and asset_tim:
+                tarif_tim_existant = Price.objects.filter(
+                    product=produit_biere_tim, non_fiduciaire=True, asset=asset_tim
+                ).exists()
+                if not tarif_tim_existant:
+                    Price.objects.create(
+                        product=produit_biere_tim,
+                        name="Bénévole",
+                        prix=Decimal("1.00"),
+                        non_fiduciaire=True,
+                        asset=asset_tim,
+                        publish=True,
+                    )
+                    self.stdout.write("  Tarif 'Bénévole 1 TIM' ajouté à Biere")
+                else:
+                    self.stdout.write("  Tarif TIM existant sur Biere")
+
             # --- Produits adhesion ---
             # Les produits adhesion ne sont PAS crees ici.
             # Ils sont crees par demo_data_v2.py (ou par l'admin dans l'interface).
@@ -756,6 +861,16 @@ class Command(BaseCommand):
             ]
             pdv_mix.products.set(produits_mix)
             pdv_mix.categories.set([categorie_bar, categorie_cashless])
+
+            # Attacher Machine 3D et Pin's au PV Mix (produits non-fiduciaires)
+            # Utilise add() plutot que set() pour ne pas ecraser les produits deja definis.
+            # / Attach Machine 3D and Pin's to Mix POS (non-fiduciary products)
+            # Uses add() rather than set() to avoid overwriting already-defined products.
+            if produit_machine_3d:
+                pdv_mix.products.add(produit_machine_3d)
+            if produit_pins:
+                pdv_mix.products.add(produit_pins)
+            self.stdout.write("  Produits TIM/FID attachés au PV Mix")
 
             # --- PV Billetterie (type BILLETTERIE) ---
             # Le PV de type BILLETTERIE construit ses articles depuis les events futurs.
@@ -994,6 +1109,101 @@ class Command(BaseCommand):
 
                 reset_carte(tag_id_client3)
                 self.stdout.write("  Carte 3 remise a zero (DEBUG=True)")
+
+            # --- Garnir le wallet test avec des tokens pour la cascade ---
+            # On utilise la 1re carte client (DEMO_TAGID_CLIENT1) comme carte de test.
+            # / Top up test wallet with tokens for cascade testing
+            # We use the first client card (DEMO_TAGID_CLIENT1) as the test card.
+            from fedow_core.services import WalletService
+            from django.db import transaction as db_transaction
+
+            tag_id_cascade = getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543")
+            carte_cascade = CarteCashless.objects.filter(tag_id=tag_id_cascade).first()
+            if carte_cascade:
+                wallet_test = None
+                if carte_cascade.user and hasattr(carte_cascade.user, "wallet"):
+                    wallet_test = carte_cascade.user.wallet
+                elif carte_cascade.wallet_ephemere:
+                    wallet_test = carte_cascade.wallet_ephemere
+
+                if wallet_test:
+                    # Créditer les assets manquants pour tester la cascade
+                    # / Credit missing assets to test cascade
+                    asset_tnf_cascade = FedowAsset.objects.filter(
+                        tenant_origin=tenant_client,
+                        category=FedowAsset.TNF,
+                        active=True,
+                    ).first()
+                    asset_fed_cascade = FedowAsset.objects.filter(
+                        tenant_origin=tenant_client,
+                        category=FedowAsset.FED,
+                        active=True,
+                    ).first()
+                    asset_tim_cascade = FedowAsset.objects.filter(
+                        tenant_origin=tenant_client,
+                        category=FedowAsset.TIM,
+                        active=True,
+                    ).first()
+                    asset_fid_cascade = FedowAsset.objects.filter(
+                        tenant_origin=tenant_client,
+                        category=FedowAsset.FID,
+                        active=True,
+                    ).first()
+
+                    # Seuils : TNF 500 centimes, FED 300, TIM 500, FID 100000
+                    # / Thresholds: TNF 500 cents, FED 300, TIM 500, FID 100000
+                    credits_a_faire = []
+                    if asset_tnf_cascade:
+                        solde = WalletService.obtenir_solde(
+                            wallet_test, asset_tnf_cascade
+                        )
+                        if solde < 500:
+                            credits_a_faire.append(
+                                (asset_tnf_cascade, 500 - solde, "TNF")
+                            )
+                    if asset_fed_cascade:
+                        solde = WalletService.obtenir_solde(
+                            wallet_test, asset_fed_cascade
+                        )
+                        if solde < 300:
+                            credits_a_faire.append(
+                                (asset_fed_cascade, 300 - solde, "FED")
+                            )
+                    if asset_tim_cascade:
+                        solde = WalletService.obtenir_solde(
+                            wallet_test, asset_tim_cascade
+                        )
+                        if solde < 500:
+                            credits_a_faire.append(
+                                (asset_tim_cascade, 500 - solde, "TIM")
+                            )
+                    if asset_fid_cascade:
+                        solde = WalletService.obtenir_solde(
+                            wallet_test, asset_fid_cascade
+                        )
+                        if solde < 100000:
+                            credits_a_faire.append(
+                                (asset_fid_cascade, 100000 - solde, "FID")
+                            )
+
+                    for asset_a_crediter, montant, label in credits_a_faire:
+                        with db_transaction.atomic():
+                            WalletService.crediter(
+                                wallet_test, asset_a_crediter, montant
+                            )
+                        self.stdout.write(
+                            f"  Wallet test crédité +{montant} centimes {label}"
+                        )
+                    if not credits_a_faire:
+                        self.stdout.write("  Wallet test déjà suffisamment garni")
+                else:
+                    self.stdout.write(
+                        f"  Carte {tag_id_cascade} sans wallet — garnissage ignoré"
+                    )
+            else:
+                self.stdout.write(
+                    f"  Carte {tag_id_cascade} introuvable — garnissage ignoré"
+                )
 
             # ================================================================ #
             #  Cloture de demo avec LigneArticle de tous les types             #

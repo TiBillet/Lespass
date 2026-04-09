@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-05 (session 28 terminée)
+> Dernière mise à jour : 2026-04-08 (session 29 — cascade multi-asset NFC)
 
 ---
 
@@ -106,62 +106,26 @@ Migration `0208_product_asset_fk.py`. 6 tests signal.
 > Le WebSocket est un prérequis de l'impression (Sunmi Inner).
 > Les rapports comptables et le menu ventes partagent le même `RapportComptableService`.
 
-### 0. Cascade multi-asset pour le débit NFC ← PROCHAIN
+### 0. Cascade multi-asset NFC + paiement complémentaire ✅
 
-Quand un client paie par NFC, le système doit débiter ses tokens dans un **ordre de priorité configurable** par tenant. Aujourd'hui `_payer_par_nfc()` ne débite que sur un seul Asset (TLF). Si le client a des tokens cadeau (TNF), ils ne sont jamais utilisés pour payer.
+Cascade de débit NFC : TNF (cadeau) → TLF (local) → FED (fédéré), ordre fixe.
+N LigneArticle par article (1 par asset débité), qty décimale, amount entier centimes.
+Paiement complémentaire (espèces/CB/2ème carte) si la cascade ne couvre pas tout.
+Tarifs non-fiduciaires (TIM/FID) via `Price.non_fiduciaire` + débit direct.
+Session 2026-04-08. Spec : `Session 06 - Cascade multi-asset NFC/DESIGN_CASCADE_MULTI_ASSET_NFC.md`.
 
-**Comportement legacy LaBoutik (serveur Fedow distant) :**
-Ordre fixe : TNF (cadeau) → TLF (fiduciaire local) → FED (Stripe fédéré).
-Logique métier : on consomme d'abord ce qui coûte le moins au lieu (cadeau = offert, local = déjà encaissé à la recharge, fédéré = frais Stripe).
-
-**Comportement V2 cible :**
-Ordre configurable par tenant. Chaque tenant choisit sa propre cascade de débit dans sa configuration.
-
-**Exemple concret :**
-Client Alice a 5€ TNF (cadeau) + 10€ TLF (local). Elle achète une bière à 4€ par NFC.
-- Cascade `[TNF, TLF]` → débit 4€ TNF. Solde restant : 1€ TNF + 10€ TLF.
-- Cascade `[TLF, TNF]` → débit 4€ TLF. Solde restant : 5€ TNF + 6€ TLF.
-
-Alice achète ensuite pour 8€ par NFC.
-- Cascade `[TNF, TLF]` → débit 1€ TNF (tout le solde cadeau) + 7€ TLF. Solde : 0€ TNF + 3€ TLF.
-
-**Modèle de données :**
-- Champ `priorite_debit_nfc` sur `LaboutikConfiguration` (ou `Configuration`) :
-  JSONField ou ArrayField avec une liste ordonnée de catégories Asset.
-  Exemple : `["TNF", "TLF"]` ou `["TLF", "TIM", "TNF"]`.
-- Valeur par défaut : `["TNF", "TLF"]` (cadeau d'abord, puis local — même ordre que le legacy).
-- Interface admin Unfold : drag-and-drop ou liste numérotée pour réordonner.
-
-**Flow de débit (dans `_payer_par_nfc`):**
-1. Calculer le `total_debit_client_centimes` (ventes + adhésions).
-2. Pour chaque catégorie Asset dans l'ordre de priorité du tenant :
-   a. Trouver l'Asset actif du tenant pour cette catégorie.
-   b. Lire le solde du wallet client pour cet Asset (`WalletService.obtenir_solde`).
-   c. Débiter le minimum entre le solde disponible et le montant restant.
-   d. Soustraire le montant débité du restant.
-   e. Si restant == 0, sortir de la boucle.
-3. Si restant > 0 après avoir épuisé tous les Assets → "Solde insuffisant".
-4. Toutes les transactions dans un seul `atomic()`.
-
-**Impact sur les LigneArticle :**
-Aujourd'hui, une LigneArticle a un seul `asset` UUID. Avec le débit cascade, un achat de 12€ pourrait générer 2 transactions (5€ TNF + 7€ TLF). Deux options :
-- Option A : 1 LigneArticle avec l'asset principal (TLF), les débits TNF sont des "crédits consommés" sans LigneArticle propre.
-- Option B : N LigneArticle par achat (1 par asset utilisé), chacune avec son montant partiel.
-À décider en brainstorming — le legacy faisait quoi ?
-
-**Impact comptable :**
-Le débit cascade ne change pas la ventilation comptable : le paiement NFC (LE) est déjà ignoré dans l'export comptable (l'encaissement a eu lieu à la recharge). Seul le rapport de clôture pourrait afficher le détail par asset.
-
-**Fichiers impactés :**
-- `laboutik/views.py` : `_payer_par_nfc()` — boucle cascade au lieu d'un seul débit
-- `laboutik/models.py` ou `BaseBillet/models.py` : champ `priorite_debit_nfc` sur la config
-- `fedow_core/services.py` : nouveau service `CascadeDebitService` ou méthode dans `WalletService`
-- `Administration/admin_tenant.py` : champ dans le formulaire config (drag-and-drop ou select ordonné)
-- Tests : scénarios multi-asset (solde partiel, épuisement, cascade complète)
-
-**Prérequis :** Asset-first recharge products (fait). Les Assets TLF/TNF/TIM existent et les Products de recharge sont liés.
-
-**Estimation :** brainstorming + 1 session de dev.
+- [x] `Price.non_fiduciaire` BooleanField + `clean()` validation (migration 0209)
+- [x] `POSPriceInline` : `non_fiduciaire` + `asset` conditionnel (filtré TIM/FID)
+- [x] Constantes `ORDRE_CASCADE_FIDUCIAIRE`, `MAPPING_ASSET_CATEGORY_PAYMENT_METHOD`
+- [x] `_calculer_qty_partielles()` : dernière ligne prend le reste, somme exacte
+- [x] `_creer_lignes_articles_cascade()` : N LigneArticle, stock 1x, HMAC chaîné
+- [x] Refonte `_payer_par_nfc()` (8 phases) : classification, cascade, complémentaire, atomic
+- [x] `payer_complementaire()` action : espèces, CB, 2ème carte NFC (max 2 cartes)
+- [x] Templates : `hx_complement_paiement.html`, `hx_lire_nfc_complement.html`, succès multi-soldes
+- [x] `formatter_ticket_vente()` enrichi avec `cascade_detail`
+- [x] Fixtures : assets FED/FID, produits TIM/FID (Machine 3D, Pin's), wallet garni
+- [x] 17 tests pytest, 3 tests E2E adaptés, 0 régression (497 pytest pass, 87 E2E pass)
+- [ ] **Reste à faire** : ~50 tests avancés de la spec (multi-articles, adhésions cascade, billetterie, stock, HMAC, edge cases), 8 tests E2E nouveaux, i18n makemessages
 
 ### 1. Refactoring Frontend
 

@@ -67,6 +67,20 @@ def wallet_bar():
 
 @pytest.fixture(scope="module")
 def asset_local(tenant_a, wallet_bar):
+    from django_tenants.utils import schema_context
+
+    # Nettoyer le produit signal d'un run precedent.
+    # Le signal post_save Asset cree un Product "Recharge <nom_asset>"
+    # qui peut rester d'un ancien run et provoquer un IntegrityError.
+    # / Clean up signal product from a previous run.
+    # The Asset post_save signal creates a Product "Recharge <asset_name>"
+    # that may remain from an older run and cause an IntegrityError.
+    with schema_context('lespass'):
+        from BaseBillet.models import Price, Product
+        nom_signal = f'Recharge {TEST_PREFIX} Monnaie test'
+        Price.objects.filter(product__name=nom_signal).delete()
+        Product.objects.filter(name=nom_signal).delete()
+
     return AssetService.creer_asset(
         tenant=tenant_a,
         name=f'{TEST_PREFIX} Monnaie test',

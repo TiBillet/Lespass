@@ -253,11 +253,16 @@ class TestPOSPaiementNFC:
         _click_valider(page)
         _pay_nfc(page, DEMO_TAGID_CLIENT1)
 
-        # Vérifier nouveau solde affiché / Verify displayed new balance
-        expect(page.locator('[data-testid="paiement-nfc-succes"]')).to_be_visible()
-        expect(page.locator('[data-testid="paiement-nfc-solde"]')).to_be_visible()
-        solde_text = page.locator('[data-testid="paiement-nfc-solde"]').inner_text()
-        assert solde_text.replace(",", ".").replace(" ", ""), f"Solde non numérique: {solde_text}"
+        # Vérifier soldes multi-asset affichés après paiement NFC
+        # La refonte cascade affiche des badges multi-asset au lieu d'un solde unique.
+        # / Verify multi-asset balances displayed after NFC payment.
+        # The cascade refactor shows multi-asset badges instead of a single balance.
+        expect(page.locator('[data-testid="soldes-multi-asset"]')).to_be_visible()
+        # Au moins 1 badge de solde doit être visible / At least 1 balance badge must be visible
+        premier_badge = page.locator('[data-testid="solde-asset-1"]')
+        expect(premier_badge).to_be_visible()
+        badge_text = premier_badge.inner_text()
+        assert "€" in badge_text, f"Badge solde sans '€': {badge_text}"
 
         _retour_caisse(page)
 
@@ -309,7 +314,9 @@ class TestPOSPaiementNFC:
 
     def test_05_nfc_solde_insuffisant(self, page, pos_page, nfc_setup):
         """Paiement NFC solde insuffisant (CLIENT3 D74B1B5D, solde 0).
+        La cascade ne couvre rien → écran complément de paiement.
         / NFC payment with insufficient balance (CLIENT3, balance 0).
+        Cascade covers nothing → payment complement screen.
         """
         pos_page(page, "Bar")
 
@@ -320,8 +327,11 @@ class TestPOSPaiementNFC:
         expect(page.locator(".nfc-reader-simu-bt").first).to_be_visible(timeout=10_000)
 
         page.locator(f'.nfc-reader-simu-bt[tag-id="{DEMO_TAGID_CLIENT3}"]').click()
-        expect(page.locator('[data-testid="paiement-nfc-insuffisant"]')).to_be_visible(timeout=15_000)
-        expect(page.locator('[data-testid="paiement-nfc-insuffisant"]')).to_contain_text("Il manque")
+        # La refonte cascade affiche l'écran complément au lieu de "fonds insuffisants".
+        # / The cascade refactor shows the complement screen instead of "insufficient funds".
+        expect(page.locator('[data-testid="complement-paiement"]')).to_be_visible(timeout=15_000)
+        expect(page.locator('[data-testid="complement-reste-a-payer"]')).to_be_visible()
+        expect(page.locator('[data-testid="complement-reste-a-payer"]')).to_contain_text("Reste")
 
     def test_06_nfc_puis_especes_consecutifs(self, page, pos_page, django_shell, nfc_setup):
         """NFC puis espèces consécutifs (valide reset HTMX NFC→cash).
@@ -422,7 +432,10 @@ class TestPOSPaiementNFC:
         # Payer par NFC / Pay via NFC
         _click_valider(page)
         _pay_nfc(page, DEMO_TAGID_CLIENT1)
-        expect(page.locator('[data-testid="paiement-nfc-solde"]')).to_be_visible()
+        # Vérifier soldes multi-asset après paiement NFC
+        # / Verify multi-asset balances after NFC payment
+        expect(page.locator('[data-testid="soldes-multi-asset"]')).to_be_visible()
+        expect(page.locator('[data-testid="solde-asset-1"]')).to_be_visible()
 
         _retour_caisse(page)
 

@@ -62,7 +62,12 @@ def test_data(tenant):
     """Lance create_test_pos_data pour s'assurer que les donnees existent.
     / Runs create_test_pos_data to ensure test data exists."""
     from django.core.management import call_command
-    call_command('create_test_pos_data')
+    # Forcer le schema lespass pour que la commande cree les donnees
+    # dans le bon tenant (sinon elle prend le premier non-public = UUID).
+    # / Force lespass schema so the command creates data in the right
+    # tenant (otherwise it picks the first non-public = UUID).
+    with schema_context(TENANT_SCHEMA):
+        call_command('create_test_pos_data')
     return True
 
 
@@ -89,10 +94,14 @@ def admin_user(tenant):
 
 @pytest.fixture(scope="module")
 def premier_pv(test_data):
-    """Le premier point de vente (Bar).
-    / The first point of sale (Bar)."""
+    """Le PV 'Bar' cree par create_test_pos_data.
+    / The 'Bar' POS created by create_test_pos_data."""
     with schema_context(TENANT_SCHEMA):
-        return PointDeVente.objects.filter(hidden=False).order_by('poid_liste').first()
+        # Chercher explicitement le PV 'Bar' pour eviter les PV de test
+        # parasites avec poid_liste=0.
+        # / Explicitly look for the 'Bar' POS to avoid spurious test POS
+        # with poid_liste=0.
+        return PointDeVente.objects.get(name='Bar')
 
 
 @pytest.fixture(scope="module")
@@ -215,17 +224,24 @@ def carte_client(user_client):
 
 
 @pytest.fixture(scope="module")
-def produit_recharge_euros(premier_pv, test_data):
-    """Product avec methode_caisse=RE + Price.
-    / Product with methode_caisse=RE + Price."""
+def produit_recharge_euros(premier_pv, test_data, asset_tlf):
+    """Product avec methode_caisse=RE + Price + asset TLF.
+    / Product with methode_caisse=RE + Price + TLF asset."""
     with schema_context(TENANT_SCHEMA):
         produit, _ = Product.objects.get_or_create(
             name='Recharge EUR Test',
             defaults={
                 'methode_caisse': Product.RECHARGE_EUROS,
                 'publish': True,
+                'asset': asset_tlf,
             },
         )
+        # S'assurer que l'asset est lie (peut exister d'un ancien run sans asset)
+        # / Ensure asset is linked (may exist from an older run without asset)
+        if produit.asset != asset_tlf:
+            produit.asset = asset_tlf
+            produit.save(update_fields=['asset'])
+
         if not premier_pv.products.filter(pk=produit.pk).exists():
             premier_pv.products.add(produit)
 
@@ -242,17 +258,24 @@ def produit_recharge_euros(premier_pv, test_data):
 
 
 @pytest.fixture(scope="module")
-def produit_recharge_cadeau(premier_pv, test_data):
-    """Product avec methode_caisse=RC + Price.
-    / Product with methode_caisse=RC + Price."""
+def produit_recharge_cadeau(premier_pv, test_data, asset_tnf):
+    """Product avec methode_caisse=RC + Price + asset TNF.
+    / Product with methode_caisse=RC + Price + TNF asset."""
     with schema_context(TENANT_SCHEMA):
         produit, _ = Product.objects.get_or_create(
             name='Recharge Cadeau Test',
             defaults={
                 'methode_caisse': Product.RECHARGE_CADEAU,
                 'publish': True,
+                'asset': asset_tnf,
             },
         )
+        # S'assurer que l'asset est lie
+        # / Ensure asset is linked
+        if produit.asset != asset_tnf:
+            produit.asset = asset_tnf
+            produit.save(update_fields=['asset'])
+
         if not premier_pv.products.filter(pk=produit.pk).exists():
             premier_pv.products.add(produit)
 
@@ -269,17 +292,23 @@ def produit_recharge_cadeau(premier_pv, test_data):
 
 
 @pytest.fixture(scope="module")
-def produit_recharge_temps(premier_pv, test_data):
-    """Product avec methode_caisse=TM + Price.
-    / Product with methode_caisse=TM + Price."""
+def produit_recharge_temps(premier_pv, test_data, asset_tim):
+    """Product avec methode_caisse=TM + Price + asset TIM.
+    / Product with methode_caisse=TM + Price + TIM asset."""
     with schema_context(TENANT_SCHEMA):
         produit, _ = Product.objects.get_or_create(
             name='Recharge Temps Test',
             defaults={
                 'methode_caisse': Product.RECHARGE_TEMPS,
                 'publish': True,
+                'asset': asset_tim,
             },
         )
+        # S'assurer que l'asset est lie
+        # / Ensure asset is linked
+        if produit.asset != asset_tim:
+            produit.asset = asset_tim
+            produit.save(update_fields=['asset'])
         if not premier_pv.products.filter(pk=produit.pk).exists():
             premier_pv.products.add(produit)
 
@@ -1319,17 +1348,23 @@ class TestRechargeCB:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def produit_recharge_prix_libre(premier_pv, test_data):
-    """Product recharge euros avec un Price free_price=True (prix minimum 5€).
-    / EUR top-up product with a free_price=True Price (minimum 5€)."""
+def produit_recharge_prix_libre(premier_pv, test_data, asset_tlf):
+    """Product recharge euros avec un Price free_price=True (prix minimum 5€) + asset TLF.
+    / EUR top-up product with a free_price=True Price (minimum 5€) + TLF asset."""
     with schema_context(TENANT_SCHEMA):
         produit, _ = Product.objects.get_or_create(
             name='Recharge Libre Test',
             defaults={
                 'methode_caisse': Product.RECHARGE_EUROS,
                 'publish': True,
+                'asset': asset_tlf,
             },
         )
+        # S'assurer que l'asset est lie
+        # / Ensure asset is linked
+        if produit.asset != asset_tlf:
+            produit.asset = asset_tlf
+            produit.save(update_fields=['asset'])
         if not premier_pv.products.filter(pk=produit.pk).exists():
             premier_pv.products.add(produit)
 

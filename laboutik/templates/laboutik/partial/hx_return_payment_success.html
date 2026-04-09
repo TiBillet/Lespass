@@ -43,8 +43,19 @@ FLUX :
   </div>
   {% endif %}
 
-  <!-- Nouveau solde apres paiement NFC / New balance after NFC payment -->
-  {% if nouveau_solde is not None %}
+  <!-- Soldes multi-asset apres paiement NFC / Multi-asset balances after NFC payment -->
+  {% if soldes_apres_paiement %}
+  <div class="mt-3" data-testid="soldes-multi-asset" aria-live="polite"
+       style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;">
+    {% for solde in soldes_apres_paiement %}
+    <span class="badge" style="background-color: var(--gris02); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;"
+          data-testid="solde-asset-{{ forloop.counter }}">
+      {{ solde.name }} : {{ solde.solde_euros }}€
+    </span>
+    {% endfor %}
+  </div>
+  {% elif nouveau_solde is not None %}
+  <!-- Fallback mono-solde / Single balance fallback -->
   <div class="payment-msg1" data-testid="paiement-nfc-succes">
     {% translate "Nouveau solde" %} {{ card_name }} :
     <span data-testid="paiement-nfc-solde">{{ nouveau_solde }}</span> {{ monnaie_name }}
