@@ -23,6 +23,24 @@
 | `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | Affichage multi-soldes |
 | `tests/pytest/test_cascade_nfc.py` | 17 tests (validation Price, qty partielle, cascade, complement) |
 | `tests/e2e/test_pos_paiement.py` | 3 tests adaptes aux nouveaux data-testid |
+| `tests/e2e/test_pos_recharge_cashless.py` | Nouveau — 4 tests E2E recharge cashless complet (tuiles visibles, recharge especes NFC, verification solde DB, vente NFC apres recharge) |
+| `tests/pytest/test_retour_carte_recharges.py` | Fix : products de recharge lies aux assets, tenant force `lespass` |
+| `tests/pytest/test_paiement_cashless.py` | Fix : `get_or_create` asset pour eviter UniqueViolation signal post_save |
+| `tests/pytest/test_controlvanne_billing.py` | Fix : teardown fixture `schema_context` pour eviter UndefinedTable |
+| `tests/pytest/test_caisse_navigation.py` | Fix : PV force `Bar` au lieu de `.first()`, tenant force |
+| `tests/pytest/test_pos_models.py` | Fix : nettoyage Products signal avant creation asset |
+| `tests/pytest/test_pos_views_data.py` | Fix : asset TLF lie au product de recharge |
+| `tests/pytest/test_printing.py` | Fix : `schema_context` + mocks completes |
+| `tests/pytest/test_verify_transactions.py` | Fix : nettoyage Products signal avant creation asset |
+| `tests/e2e/test_pos_adhesion_nfc.py` | Fix : fixture `recharge_asset_setup` pour lier produit recharge |
+| `tests/e2e/test_login.py` | Fix : locator admin adapte au nouveau template |
+| `tests/e2e/test_pos_billetterie.py` | Fix : timeouts augmentes (flaky) |
+| `tests/e2e/test_pos_sortie_caisse_e2e.py` | Fix : timeouts augmentes (flaky) |
+
+### Tests / Resultats
+- **pytest** : 569 PASS, 0 FAILED, 0 ERRORS (avant : 478 pass, 7 failed, 84 errors)
+- **E2E** : 91 PASS, 0 FAILED (avant : 87 pass, 4 failed)
+- **Nouveaux tests** : 17 pytest cascade + 4 E2E recharge cashless = 21 tests ajoutes
 
 ---
 

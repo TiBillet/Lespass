@@ -451,9 +451,11 @@ def kiosk_view(request, uuid):
 
     LOCALISATION : controlvanne/viewsets.py
     """
+    from django.conf import settings
     from django.shortcuts import render, get_object_or_404
     from django.http import HttpResponseForbidden
     from django.db import connection
+    from django.utils.translation import gettext_lazy as _
     from BaseBillet.models import Configuration
 
     # Vérifier l'authentification kiosk ou admin
@@ -477,4 +479,15 @@ def kiosk_view(request, uuid):
         "config": config,
         "slug_focus": str(uuid),
     }
+
+    # Mode demo : injecter les tags NFC simulés pour le panneau debug
+    # / Demo mode: inject simulated NFC tags for the debug panel
+    if getattr(settings, "DEMO", False):
+        context["demo_tags"] = [
+            {"tag_id": settings.DEMO_TAGID_CLIENT1, "name": _("Carte client 1")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT2, "name": _("Carte client 2")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT3, "name": _("Carte client 3")},
+            {"tag_id": settings.DEMO_TAGID_CLIENT4, "name": _("Carte inconnue")},
+        ]
+
     return render(request, "controlvanne/panel_bootstrap.html", context)
