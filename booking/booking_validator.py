@@ -79,11 +79,11 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes, slot_c
     available_slots = compute_slots(resource, date_from, date_to)
 
     # Dictionnaire d'accès rapide :
-    # clé = (start_datetime, slot_duration_minutes) → Slot
+    # clé = (start, duration_minutes) → BookableInterval
     # / Fast-lookup dict:
-    # key = (start_datetime, slot_duration_minutes) → Slot
+    # key = (start, duration_minutes) → BookableInterval
     slot_by_key = {
-        (slot.start_datetime, slot.slot_duration_minutes): slot
+        (slot.start, slot.duration_minutes()): slot
         for slot in available_slots
     }
 

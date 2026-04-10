@@ -1,4 +1,4 @@
-# Booking — Architecture Decisions
+# Booking — Finding, Issues and Architecture Decisions
 
 > **Convention :** ce document est en ajout uniquement. Ne jamais
 > renuméroter ni supprimer une section existante. Toujours ajouter à
@@ -6,7 +6,7 @@
 > / **Convention:** append-only. Never renumber or remove an existing
 > section. Always add at the end.
 
-## 1. Annulation = suppression de la ligne Booking
+## §1. Annulation = suppression de la ligne de la table Booking
 
 **Source :** `booking/models.py` — classe `Booking`
 
@@ -16,7 +16,7 @@ Risque : perte de traçabilité (litiges remboursement, analytics).
 Migration future si besoin : ajouter `cancelled_at` (DateTimeField nullable).
 Non-null = annulé, null = actif.
 
-## 2. start_datetime est un DateTimeField timezone-aware
+## §2. start_datetime est un DateTimeField timezone-aware
 
 **Source :** `booking/models.py` — classe `Booking`
 
@@ -26,7 +26,7 @@ toutes les dates de réservation doivent être timezone-aware. `timezone.now()`
 et `django.utils.timezone` sont les seuls outils à utiliser pour manipuler ce
 champ.
 
-## 3. Capacity = 0 autorisé
+## §3. Capacity = 0 autorisé
 
 **Source :** `booking/models.py` — classe `Resource`
 
@@ -34,7 +34,7 @@ Capacity=0 désactive silencieusement les réservations sans toucher au
 Calendar ni au WeeklyOpening. Le slot engine vérifie `remaining_capacity > 0`
 — pas besoin d'un flag `is_active` séparé.
 
-## 4. Tags sur Resource et ResourceGroup — JSONField provisoire
+## §4. Tags sur Resource et ResourceGroup — JSONField provisoire
 
 **Source :** `booking/models.py` — classes `Resource` et `ResourceGroup`
 
@@ -49,7 +49,7 @@ de tags dans l'admin et une cohérence avec le reste de la plateforme.
 
 En attendant, le champ est masqué dans l'admin (non listé dans `fields`).
 
-## 5. Traductions françaises du module booking — en attente
+## §5. Traductions françaises du module booking — en attente
 
 **Source :** `locale/fr/LC_MESSAGES/django.po`
 
@@ -62,7 +62,7 @@ Action future : une fois les conflits résolus en amont, lancer
 manquantes dans `locale/fr/LC_MESSAGES/django.po` et recompiler avec
 `compilemessages`.
 
-## 6. Formulaire de réservation dans l'admin — ergonomie à améliorer
+## §6. Formulaire de réservation dans l'admin — ergonomie à améliorer
 
 **Source :** `booking/admin.py` — classe `BookingAdmin`
 
@@ -83,7 +83,7 @@ flux de paiement. Cela peut créer des incohérences (réservation marquée
 en lecture seule dans l'admin, ou les transitions autorisées devraient être
 limitées (ex : seul `confirmed → annulation` via suppression).
 
-## 7. Règle de génération des créneaux — tous les jours intersectés doivent être ouverts
+## §7. Règle de génération des créneaux — tous les jours intersectés doivent être ouverts
 
 **Source :** `booking/slot_engine.py` — `generate_theoretical_slots`
 
@@ -104,7 +104,7 @@ Conséquences :
   diffère de la date de l'entry (bleed-over) — chaque slot est évalué
   indépendamment.
 
-## 8. ⚠️ MAJEUR — Contrainte manquante sur ClosedPeriod.end_date
+## §8. ⚠️ MAJEUR — Contrainte manquante sur ClosedPeriod.end_date
 
 **Source :** `booking/models.py` — classe `ClosedPeriod`
 
@@ -141,7 +141,7 @@ class Meta:
     ]
 ```
 
-## 9. Durée totale d'un OpeningEntry ne doit pas dépasser une semaine
+## §9. Durée totale d'un OpeningEntry ne doit pas dépasser une semaine
 
 **Source :** `booking/models.py` — classe `OpeningEntry`
 
@@ -167,7 +167,7 @@ if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
     )
 ```
 
-## 10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques
+## §10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques
 
 **Source :** `booking/tests/`
 
@@ -198,3 +198,26 @@ Les deux modules suivants bénéficieraient d'une stratégie mixte :
 Action future : ajouter des tests unitaires pour ces deux modules, en
 conservant les tests d'intégration existants pour couvrir l'interaction
 avec la base (fermetures réelles, ouvertures réelles, réservations réelles).
+
+## §11. ⚠️ Ambiguïté dans la spec — alignement des réservations sur les créneaux
+
+**Source :** `booking/doc/tibillet-booking-spec.md` — section 5 (Business Rules)
+
+La spec indique : "Bookings are not required to be aligned with computed
+slots." Cette phrase est ambiguë : elle décrit le comportement du
+volontaire (admin), pas du membre (interface publique).
+
+La règle correcte est :
+
+- **Membre** (interface publique) : chaque créneau réservé doit être
+  exactement l'un des intervalles calculés dans **E** (issu du
+  `WeeklyOpening`). L'alignement est garanti par construction — le membre
+  sélectionne un créneau affiché, il ne saisit pas un `[p, q)` arbitraire.
+- **Volontaire** (admin Django) : aucune contrainte d'alignement. Le
+  volontaire peut créer une réservation ad hoc à n'importe quelle heure
+  et durée, indépendamment du `WeeklyOpening`.
+
+Action future : corriger la section 5 de la spec pour distinguer
+explicitement les deux acteurs. Le `booking_validator.py` implémente
+la règle membre — il ne doit pas être utilisé pour valider les
+réservations créées par un volontaire via l'admin.
