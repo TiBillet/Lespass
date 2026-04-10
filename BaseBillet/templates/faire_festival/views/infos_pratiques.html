@@ -1,5 +1,5 @@
 {% extends "faire_festival/base.html" %}
-{% load static i18n %}
+{% load static i18n l10n %}
 
 {% block title %}{% translate 'Infos pratiques' %}{% endblock %}
 
@@ -44,11 +44,31 @@
                     <span class="badge-festival horaire-texte">{% translate 'Accéder au Faire Festival' %}</span>
                 </div>
                 
+                <!-- Adresse depuis la configuration du tenant -->
+                {% if config.postal_address %}
+                <address class="mb-4 texte-bleu police-mono fw-bold" style="font-size: 0.95rem;">
+                    {% if config.postal_address.name %}
+                        <strong>{{ config.postal_address.name }}</strong><br>
+                    {% endif %}
+                    {% if config.postal_address.street_address %}
+                        {{ config.postal_address.street_address }}<br>
+                    {% endif %}
+                    {% if config.postal_address.postal_code or config.postal_address.address_locality %}
+                        {{ config.postal_address.postal_code }} {{ config.postal_address.address_locality }}
+                    {% endif %}
+                </address>
+                {% elif config.adress %}
+                <address class="mb-4 texte-bleu police-mono fw-bold" style="font-size: 0.95rem;">
+                    {{ config.adress }}<br>
+                    {{ config.postal_code }} {{ config.city }}
+                </address>
+                {% endif %}
+
                 <!-- Accessibilité -->
                 <p class="texte-accessibilite mb-4">
                     {% translate 'LE FAIRE FESTIVAL EST ACCESSIBLE AUX PERSONNES À MOBILITÉ RÉDUITE.' %}
                 </p>
-                
+
                 <!-- VOITURE -->
                 <div class="mb-4">
                     <h3 class="titre-transport">{% translate 'VOITURE' %}</h3>
@@ -103,11 +123,13 @@
                         </div>
                     </div>
                     
-                    <!-- CARTE -->
-                    <div class="w-100">
-                        <img src="{% static 'faire_festival/image/carte.webp' %}"
-                             alt="{% translate 'Carte du Faire Festival' %}" 
-                             class="img-fluid w-100">
+                    <!-- CARTE INTERACTIVE
+                         Leaflet + CartoDB Positron + marqueur custom Faire Festival
+                         scrollWheelZoom et touch zoom actifs pour navigation desktop et mobile
+                         LOCALISATION : faire_festival/views/infos_pratiques.html -->
+                    <div id="carte-faire-festival"
+                         style="width: 100%; height: 400px; border-radius: 8px; border: 3px solid var(--couleur-bleu-vif, #0077F5);"
+                         aria-label="{% translate 'Carte interactive - La Cité, Toulouse' %}">
                     </div>
                 
                 
@@ -305,6 +327,64 @@
 </section>
 
 {% endblock %}
+
+{% block extra_head %}
+<!-- Leaflet CSS — carte interactive infos pratiques -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% endblock extra_head %}
+
+{% block scripts %}
+<!-- Leaflet JS — carte interactive infos pratiques
+     LOCALISATION : faire_festival/views/infos_pratiques.html
+     Utilise config.postal_address pour les coordonnees GPS et l'adresse -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+    // Coordonnees depuis PostalAddress de la Configuration
+    // unlocalize force le separateur decimal "." (pas la virgule francaise)
+    // / Coordinates from Configuration's PostalAddress
+    // / unlocalize forces "." decimal separator (not French comma)
+    var lat = {% localize off %}{{ config.postal_address.latitude|default:"43.5568" }}{% endlocalize %};
+    var lng = {% localize off %}{{ config.postal_address.longitude|default:"1.4835" }}{% endlocalize %};
+    var nom_lieu = "{{ config.postal_address.name|default:"LA CITÉ" }}";
+    var adresse = "{{ config.postal_address.street_address|default:"55 av. Louis Bréguet" }}";
+    var ville = "{{ config.postal_address.postal_code|default:"31400" }} {{ config.postal_address.address_locality|default:"Toulouse" }}";
+
+    var map = L.map('carte-faire-festival', {
+        scrollWheelZoom: true,
+        touchZoom: true,
+        dragging: true,
+        zoomControl: true
+    }).setView([lat, lng], 13);
+
+    // Tuiles CartoDB Positron (sobre, elegant, gratuit sans limite pour usage non-commercial)
+    // / CartoDB Positron tiles (clean, elegant, free for non-commercial use)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19
+    }).addTo(map);
+
+    // Marqueur custom aux couleurs du Faire Festival (jaune + bleu)
+    // / Custom marker with Faire Festival colors (yellow + blue)
+    var icone_festival = L.divIcon({
+        className: '',
+        html: '<div style="background: #FFD700; border: 3px solid #0077F5; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #0077F5; font-size: 22px; font-family: monospace; box-shadow: 0 3px 8px rgba(0,0,0,0.25);">F</div>',
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+        popupAnchor: [0, -26]
+    });
+
+    L.marker([lat, lng], { icon: icone_festival }).addTo(map)
+        .bindPopup(
+            '<div style="font-family: monospace; text-align: center;">' +
+            '<b style="color: #0077F5; font-size: 14px;">' + nom_lieu + '</b><br>' +
+            '<span style="font-size: 12px;">' + adresse + '<br>' + ville + '</span>' +
+            '</div>'
+        )
+        .openPopup();
+})();
+</script>
+{% endblock scripts %}
 
 {% block footer %}
 <!-- =======================================================================
