@@ -1103,5 +1103,50 @@ def _ma_methode_sync(self, ...):
 
 ---
 
+### Piege 71 : Locale francaise et DecimalField dans les templates JS
+
+Django avec `USE_L10N=True` rend les nombres decimaux avec une **virgule** en locale
+francaise : `43,5769` au lieu de `43.5769`. Si on injecte un `DecimalField` (latitude,
+longitude, prix) directement dans un `<script>` via `{{ valeur }}`, le JS recoit
+`var lat = 43,5769` qui est interprete comme deux valeurs separees → `SyntaxError`.
+
+**Solution** : utiliser `{% localize off %}...{% endlocalize %}` autour des valeurs
+numeriques injectees dans du JavaScript.
+
+```html
+{% load l10n %}
+<script>
+var lat = {% localize off %}{{ config.postal_address.latitude }}{% endlocalize %};
+</script>
+```
+
+Rencontre sur : `infos_pratiques.html` (coordonnees GPS pour Leaflet), session 2026-04-10.
+
+---
+
+### Piege 72 : `| safe | escapejs` dans les templates email
+
+Le filtre `escapejs` encode les caracteres HTML en sequences unicode (`\u003C` pour `<`).
+Si on chaine `| safe | escapejs`, le HTML marque comme "sur" est re-encode et rendu
+illisible dans le mail. `| safe` seul suffit. Sanitiser le contenu **avant** le template
+avec `clean_html()` de `Administration/utils.py`.
+
+Rencontre sur : `email_generique.html`, session 2026-04-10.
+
+---
+
+### Piege 73 : Spinner JS manuel vs loading-states HTMX
+
+Le CSS `[data-loading] { display: none }` cache le spinner par defaut. L'extension
+`loading-states` gere le `display` quand elle ajoute `.active`. Mais si du JS ajoute
+`.active` manuellement (`form-spinner.mjs`), `display: none` reste → spinner invisible.
+
+**Solution** : `display: flex !important` dans `.tibillet-overlay.active`.
+Et utiliser `classList.add('active')` au lieu de `style.display = 'block'`.
+
+Rencontre sur : spinner avant redirection Stripe, session 2026-04-10.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

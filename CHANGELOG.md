@@ -1,5 +1,68 @@
 # Changelog / Journal des modifications
 
+## Review skin Faire Festival + SEO + securite emails / Faire Festival skin review + SEO + email security
+
+**Date :** 10 avril 2026
+**Migration necessaire / Migration required :** Non
+
+**Quoi / What:**
+
+### Securite emails / Email security
+- Suppression de `| escapejs` sur `main_text_2` dans `email_generique.html` (causait du HTML illisible)
+- Ajout de `clean_html()` (sanitisation nh3) sur 3 champs admin-controlled avant injection dans les templates email : `additional_text_in_membership_mail`, `custom_confirmation_message`, `member_name()` dans `send_membership_pending_admin`
+
+### Optimisation images / Image optimization
+- 9 PNG convertis en WebP (6.8 Mo → 850 Ko, -87%)
+- Templates mis a jour pour pointer vers les fichiers .webp
+
+### Carte interactive / Interactive map
+- Image statique carte remplacee par Leaflet + CartoDB Positron sur la page Infos Pratiques
+- Coordonnees GPS et adresse depuis `config.postal_address` (avec fallback)
+- Marqueur custom aux couleurs du festival (jaune/bleu)
+
+### SEO (les 2 skins : faire_festival + reunion)
+- Ajout `<link rel="canonical">` dans les 2 base templates
+- Ajout JSON-LD Organization + WebSite (schema.org)
+- Correction `og:image` et `twitter:image` : URLs absolues (etaient relatives)
+- Meta descriptions uniques par page (home, le faire festival, infos pratiques)
+- Ajout `<h1>` sur toutes les pages (visually-hidden quand le titre est une image)
+- Correction hierarchie headings (H1→H2→H3, plus de niveaux sautes)
+- Remplacement `<main>` en double par `<div>` dans 10 templates enfants
+- Ajout `<main>` semantique dans `reunion/base.html`
+
+### Corrections diverses / Miscellaneous fixes
+- `min-height: 100vh` retire de `.conteneur-principal` (causait un gros espace blanc), remplace par classe `.plein-ecran`
+- Adresse footer dynamique depuis `config.postal_address`
+- `href=""` → `href="#"` sur le bouton Contact navbar
+- `<p>` mal ferme dans infos_pratiques.html
+- Texte non traduit ajoute dans `{% translate %}`
+- Spinner Stripe : `classList.add('active')` au lieu de `style.display = 'block'` + `display: flex !important` dans `.active`
+- Import `PostalAddress` manquant dans `demo_data_v2.py`
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/tasks.py` | `clean_html()` sur 3 champs email |
+| `BaseBillet/templates/emails/email_generique.html` | Retire `escapejs` |
+| `BaseBillet/templates/faire_festival/base.html` | canonical, JSON-LD, og:image absolu |
+| `BaseBillet/templates/faire_festival/views/home.html` | SEO meta, h1, h2, plein-ecran, .webp |
+| `BaseBillet/templates/faire_festival/views/le_faire_festival.html` | SEO meta, h1, .webp |
+| `BaseBillet/templates/faire_festival/views/infos_pratiques.html` | Leaflet, l10n, h1, h2, adresse dynamique |
+| `BaseBillet/templates/faire_festival/partials/footer.html` | Adresse dynamique |
+| `BaseBillet/templates/faire_festival/partials/navbar.html` | href="#" |
+| `BaseBillet/static/faire_festival/css/faire_festival.css` | plein-ecran, retire min-height global |
+| `BaseBillet/templates/reunion/base.html` | canonical, JSON-LD, `<main>`, og:image absolu |
+| `BaseBillet/templates/reunion/loading.html` | display flex !important sur .active |
+| `BaseBillet/static/reunion/js/form-spinner.mjs` | classList au lieu de style.display |
+| `BaseBillet/static/mvt_htmx/js/commun.js` | classList.remove au lieu de style.display |
+| `BaseBillet/templates/htmx/forms/login.html` | classList.remove au lieu de style.display |
+| 8 templates reunion/views/* | `<main>` → `<div>` |
+| 2 templates faire_festival/views/* | `<main>` → `<div>` |
+| `Administration/management/commands/demo_data_v2.py` | Import PostalAddress |
+| `PLANS/PLAN_SKIN_FAIRE_FESTIVAL_GENERIQUE.md` | Plan futur skin generique + GrapeJS |
+| `PLANS/PLAN_SEO_TOUS_SKINS.md` | Checklist SEO a reporter |
+| `tests/PIEGES.md` | 3 nouveaux pieges (71-73) |
+
 ## Auto-creation POS + PairingDevice a la creation d'une tireuse / Auto-create POS + PairingDevice on tap creation
 
 **Date :** 9 avril 2026

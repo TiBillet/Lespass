@@ -135,7 +135,7 @@ class CeleryMailerClass():
 
             return mail_return
         else:
-            logger.error(f'Pas de contenu HTML ou de configuration email valide')
+            logger.error('Pas de contenu HTML ou de configuration email valide')
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
@@ -284,7 +284,7 @@ def send_membership_invoice_to_email(membership_uuid: str):
             membership = Membership.objects.get(uuid=membership_uuid)
             user = membership.user
             # Mails de confirmation qui contient un lien vers la facture :
-            logger.info(f"    app.task send_membership_invoice_to_email : Envoi de la confirmation par email")
+            logger.info("    app.task send_membership_invoice_to_email : Envoi de la confirmation par email")
             send_email_generique(
                 context=context_for_membership_email(membership),
                 email=f"{user.email}",
@@ -866,13 +866,13 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
     # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
-            logger.warning(f"No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
+            logger.warning("No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
             return True
     except MaxRetriesExceededError:
         logger.error(f"send_stripe_bank_deposit_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        logger.error("Erreur lors de config.check_serveur_cashless() Serveur down ?")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -934,13 +934,13 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
-            logger.warning(f"No serveur cashless on config. Article not sended")
+            logger.warning("No serveur cashless on config. Article not sended")
             return True
     except MaxRetriesExceededError:
         logger.error(f"send_refund_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        logger.error("Erreur lors de config.check_serveur_cashless() Serveur down ?")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -1020,13 +1020,13 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
-            logger.warning(f"No serveur cashless on config. Article not sended")
+            logger.warning("No serveur cashless on config. Article not sended")
             return True
     except MaxRetriesExceededError:
         logger.error(f"send_sale_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        logger.error("Erreur lors de config.check_serveur_cashless() Serveur down ?")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -1516,10 +1516,10 @@ def webhook_membership(membership_pk):
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             headers={"Content-type": "application/json"},
                                             verify=bool(not settings.DEBUG))
-                logger.debug(f"############### webhook_membership ###############\n")
+                logger.debug("############### webhook_membership ###############\n")
                 logger.debug(f"data sended : {data_sended}\n")
                 logger.debug(f"response : {response.content}")
-                logger.debug(f"############### webhook_membership ###############\n")
+                logger.debug("############### webhook_membership ###############\n")
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
@@ -1598,7 +1598,7 @@ def send_to_ghost_email(email, name=None):
 
         # Create the token (including decoding secret)
         token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
-        logger.debug(f"JWT token: " + token)
+        logger.debug("JWT token: " + token)
 
         ###################################
         ## Appels de l'API Ghost

@@ -40,44 +40,9 @@
         <meta name="twitter:site"
               content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">{% endif %}
 
-    <!-- URL canonique pour eviter les doublons dans les moteurs de recherche -->
-    <link rel="canonical" href="{{ request.build_absolute_uri }}">
-
-    <!-- Donnees structurees JSON-LD (SEO)
-         Organization : Knowledge Panel Google (logo, reseaux sociaux, nom)
-         WebSite : identifie le site pour les moteurs de recherche -->
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@graph": [
-            {
-                "@type": "Organization",
-                "name": "{{ config.organisation }}",
-                "url": "https://{{ request.get_host }}",
-                {% if config.get_social_card %}"logo": "https://{{ request.get_host }}{{ config.get_social_card }}",{% endif %}
-                {% if config.short_description %}"description": "{{ config.short_description|striptags }}",{% endif %}
-                "sameAs": [{% if config.facebook %}"{{ config.facebook }}"{% endif %}{% if config.facebook and config.instagram %}, {% endif %}{% if config.instagram %}"{{ config.instagram }}"{% endif %}{% if config.twitter %}{% if config.facebook or config.instagram %}, {% endif %}"{{ config.twitter }}"{% endif %}]
-                {% if config.postal_address %},
-                "address": {
-                    "@type": "PostalAddress",
-                    {% if config.postal_address.street_address %}"streetAddress": "{{ config.postal_address.street_address }}",{% endif %}
-                    {% if config.postal_address.address_locality %}"addressLocality": "{{ config.postal_address.address_locality }}",{% endif %}
-                    {% if config.postal_address.postal_code %}"postalCode": "{{ config.postal_address.postal_code }}",{% endif %}
-                    {% if config.postal_address.address_country %}"addressCountry": "{{ config.postal_address.address_country }}"{% endif %}
-                }
-                {% endif %}
-            },
-            {
-                "@type": "WebSite",
-                "name": "{{ config.organisation }}",
-                "url": "https://{{ request.get_host }}"
-            }
-        ]
-    }
-    </script>
-
     {% block extra_meta %}{% endblock %}
 
+    <!-- URL canonique pour eviter les doublons dans les moteurs de recherche -->
     <link rel="canonical" href="{% block canonical %}{{ request.build_absolute_uri }}{% endblock %}">
 
     {% block json_ld_org %}
