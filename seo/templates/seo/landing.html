@@ -3,9 +3,9 @@
 
 {% block content %}
 
-{# Chiffres cles / Key figures #}
-<div class="row mb-5 text-center">
-    <div class="col-md-4 mb-3">
+{# Chiffres cles bruts (non filtres) / Raw key figures (unfiltered) #}
+<div class="row mb-5 text-center justify-content-center">
+    <div class="col-6 col-md mb-3">
         <div class="card seo-card bg-light">
             <div class="card-body">
                 <h2 class="card-title display-6 stat-number">{{ lieux_count }}</h2>
@@ -13,58 +13,78 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4 mb-3">
+    <div class="col-6 col-md mb-3">
         <div class="card seo-card bg-light">
             <div class="card-body">
                 <h2 class="card-title display-6 stat-number">{{ events_count }}</h2>
-                <p class="card-text text-muted">{% translate "Événements à venir" %}</p>
+                <p class="card-text text-muted">{% translate "Événements" %}</p>
             </div>
         </div>
     </div>
-    <div class="col-md-4 mb-3">
+    <div class="col-6 col-md mb-3">
         <div class="card seo-card bg-light">
             <div class="card-body">
                 <h2 class="card-title display-6 stat-number">{{ memberships_count }}</h2>
-                <p class="card-text text-muted">{% translate "Adhésions disponibles" %}</p>
+                <p class="card-text text-muted">{% translate "Adhésions" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <h2 class="card-title display-6 stat-number">{{ initiatives_count }}</h2>
+                <p class="card-text text-muted">{% translate "Budgets contributifs" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <h2 class="card-title display-6 stat-number">{{ assets_count }}</h2>
+                <p class="card-text text-muted">{% translate "Monnaies" %}</p>
             </div>
         </div>
     </div>
 </div>
 
-{# Top 12 lieux / Top 12 venues #}
-{% if top_lieux %}
-<section class="mb-5">
+{# Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini #}
+{# Tries par activite decroissante (les plus actifs deferfilent en premier). #}
+{# Si le lieu a un logo → logo affiche. Sinon → initiale sur fond colore. #}
+{# / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee #}
+{# Sorted by descending activity (most active scroll first). #}
+{# If venue has a logo → logo shown. Otherwise → initial on colored background. #}
+{% if lieux_pour_bandeau %}
+<section class="marquee-section mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>{% translate "Lieux" %}</h2>
+        <h2>{% translate "Nos lieux vivants" %}</h2>
         <a href="/lieux/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
     </div>
-    <div class="row">
-        {% for lieu in top_lieux %}
-        <div class="col-md-4 col-lg-3 mb-3">
-            <div class="card seo-card h-100">
+    <div class="marquee-track" aria-label="{% translate 'Lieux du réseau TiBillet' %}">
+        {# Le contenu est double pour creer la boucle infinie. #}
+        {# Le deuxieme jeu est identique au premier — quand le premier sort #}
+        {# a gauche, le deuxieme prend le relais sans coupure. #}
+        {# / Content is duplicated to create the infinite loop. #}
+        {# The second set is identical — when the first exits left, #}
+        {# the second takes over seamlessly. #}
+        {% for copy in "ab" %}
+        <div class="marquee-content" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
+            {% for lieu in lieux_pour_bandeau %}
+            <a href="https://{{ lieu.domain }}/"
+               class="marquee-item"
+               title="{{ lieu.name }}{% if lieu.locality %} — {{ lieu.locality }}{% endif %}">
                 {% if lieu.logo_url %}
-                <img src="{{ lieu.logo_url }}" class="card-img-top" alt="{{ lieu.name }}"
-                     style="height: 120px; object-fit: contain; padding: 10px;">
+                <img src="{{ lieu.logo_url }}"
+                     alt="{{ lieu.name }}"
+                     class="marquee-logo"
+                     loading="lazy">
+                {% else %}
+                <span class="marquee-initiale" data-index="{{ forloop.counter0 }}">
+                    {{ lieu.initiale }}
+                </span>
                 {% endif %}
-                <div class="card-body">
-                    <h5 class="card-title">{{ lieu.name }}</h5>
-                    {% if lieu.locality %}
-                    <p class="card-text text-muted small mb-1">
-                        <i class="bi bi-geo-alt"></i> {{ lieu.locality }}
-                    </p>
-                    {% endif %}
-                    {% if lieu.short_description %}
-                    <p class="card-text small">{{ lieu.short_description|truncatewords:20 }}</p>
-                    {% endif %}
-                </div>
-                {% if lieu.domain %}
-                <div class="card-footer bg-transparent border-0">
-                    <a href="https://{{ lieu.domain }}/" class="btn btn-sm btn-outline-primary w-100">
-                        {% translate "Visiter" %}
-                    </a>
-                </div>
-                {% endif %}
-            </div>
+                <span class="marquee-name">{{ lieu.name }}</span>
+            </a>
+            {% endfor %}
         </div>
         {% endfor %}
     </div>

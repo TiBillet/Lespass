@@ -38,19 +38,45 @@ def landing(request):
     # Lire les agregats depuis le cache / Read aggregates from cache
     lieux_data = get_seo_cache(SEOCache.AGGREGATE_LIEUX) or {}
     events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
-    memberships_data = get_seo_cache(SEOCache.AGGREGATE_MEMBERSHIPS) or {}
 
     all_lieux = lieux_data.get("lieux", [])
     all_events = events_data.get("events", [])
-    all_memberships = memberships_data.get("memberships", [])
 
-    # Chiffres cles / Key figures
-    lieux_count = len(all_lieux)
-    events_count = len(all_events)
-    memberships_count = len(all_memberships)
+    # Chiffres cles bruts (non filtres) depuis le cache GLOBAL_COUNTS.
+    # Contrairement aux agregats (events futurs publies), ces comptages
+    # incluent TOUT : passes, non publies, etc.
+    # / Raw key figures (unfiltered) from the GLOBAL_COUNTS cache.
+    # Unlike aggregates (published future events), these counts
+    # include EVERYTHING: past, unpublished, etc.
+    global_counts = get_seo_cache(SEOCache.GLOBAL_COUNTS) or {}
+    lieux_count = global_counts.get("lieux", len(all_lieux))
+    events_count = global_counts.get("events", 0)
+    memberships_count = global_counts.get("memberships", 0)
+    initiatives_count = global_counts.get("initiatives", 0)
+    assets_count = global_counts.get("assets", 0)
 
-    # Top 12 lieux, top 6 evenements / Top 12 venues, top 6 events
-    top_lieux = all_lieux[:12]
+    # Lieux tries par activite (events + memberships) pour le bandeau deferoulant.
+    # On enrichit chaque lieu avec son comptage depuis les TENANT_SUMMARY caches.
+    # / Venues sorted by activity (events + memberships) for the scrolling marquee.
+    # We enrich each venue with its count from cached TENANT_SUMMARY entries.
+    lieux_pour_bandeau = []
+    for lieu in all_lieux:
+        tenant_id = lieu.get("tenant_id")
+        summary = get_seo_cache(SEOCache.TENANT_SUMMARY, tenant_id) or {}
+        activite = summary.get("event_count", 0) + summary.get("membership_count", 0)
+        lieu_enrichi = dict(lieu)
+        lieu_enrichi["activite"] = activite
+        # Initiale pour le fallback quand pas de logo
+        # / Initial letter fallback when no logo
+        nom = lieu.get("name", "?")
+        lieu_enrichi["initiale"] = nom[0].upper() if nom else "?"
+        lieux_pour_bandeau.append(lieu_enrichi)
+
+    # Trier par activite decroissante (les plus actifs en premier)
+    # / Sort by descending activity (most active first)
+    lieux_pour_bandeau.sort(key=lambda l: l["activite"], reverse=True)
+
+    # Top 6 evenements / Top 6 events
     top_events = all_events[:6]
 
     # JSON-LD Organization pour le reseau TiBillet
@@ -65,7 +91,9 @@ def landing(request):
         "lieux_count": lieux_count,
         "events_count": events_count,
         "memberships_count": memberships_count,
-        "top_lieux": top_lieux,
+        "initiatives_count": initiatives_count,
+        "assets_count": assets_count,
+        "lieux_pour_bandeau": lieux_pour_bandeau,
         "top_events": top_events,
         "json_ld": json.dumps(json_ld_org),
         "page_title": "TiBillet - Reseau cooperatif",

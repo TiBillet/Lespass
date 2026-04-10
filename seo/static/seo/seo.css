@@ -42,3 +42,138 @@ h1, h2, h3, .lead {
     outline: 1px solid rgba(0, 0, 0, 0.10);
     outline-offset: -1px;
 }
+
+
+/* ================================================================ */
+/* Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini      */
+/* / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee    */
+/* ================================================================ */
+
+/* Animation de defilement continu / Continuous scroll animation */
+@keyframes marquee-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+/* Conteneur : masque le debordement, pas de scrollbar */
+/* / Container: hides overflow, no scrollbar */
+.marquee-track {
+    display: flex;
+    overflow: hidden;
+    gap: 0;
+    /* Masque progressif sur les bords (effet fondu)
+       / Progressive mask on edges (fade effect) */
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 6%,
+        black 94%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 6%,
+        black 94%,
+        transparent 100%
+    );
+}
+
+/* Bande de contenu : defilement infini, dure 30s, lineaire */
+/* / Content strip: infinite scroll, 30s duration, linear */
+.marquee-content {
+    display: flex;
+    gap: 1rem;
+    padding-right: 1rem;
+    flex-shrink: 0;
+    animation: marquee-scroll 30s linear infinite;
+}
+
+/* Pause au survol — respect du prefers-reduced-motion */
+/* / Pause on hover — respects prefers-reduced-motion */
+.marquee-track:hover .marquee-content {
+    animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marquee-content {
+        animation: none;
+    }
+    .marquee-track {
+        overflow-x: auto;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+}
+
+/* Item individuel : logo/initiale + nom du lieu */
+/* / Individual item: logo/initial + venue name */
+.marquee-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    background: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.03));
+    text-decoration: none;
+    color: var(--bs-body-color);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 200ms ease, box-shadow 200ms ease;
+}
+
+.marquee-item:hover {
+    background: var(--bs-secondary-bg, rgba(0, 0, 0, 0.06));
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.08),
+        0 2px 6px rgba(0, 0, 0, 0.08);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+/* Logo du lieu (quand il existe) / Venue logo (when available) */
+.marquee-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: contain;
+    outline: 1px solid rgba(0, 0, 0, 0.08);
+    outline-offset: -1px;
+    background: white;
+}
+
+/* Initiale (fallback quand pas de logo) / Initial (fallback when no logo) */
+/* Couleurs distribuees via nth-child pour varier les teintes */
+/* / Colors distributed via nth-child to vary hues */
+.marquee-initiale {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+/* 6 couleurs en rotation / 6 rotating colors */
+.marquee-initiale[data-index="0"] { background: #6366f1; }
+.marquee-initiale[data-index="1"] { background: #f59e0b; }
+.marquee-initiale[data-index="2"] { background: #10b981; }
+.marquee-initiale[data-index="3"] { background: #ef4444; }
+.marquee-initiale[data-index="4"] { background: #8b5cf6; }
+.marquee-initiale[data-index="5"] { background: #06b6d4; }
+.marquee-initiale[data-index="6"] { background: #6366f1; }
+.marquee-initiale[data-index="7"] { background: #f59e0b; }
+.marquee-initiale[data-index="8"] { background: #10b981; }
+.marquee-initiale[data-index="9"] { background: #ef4444; }
+.marquee-initiale[data-index="10"] { background: #8b5cf6; }
+.marquee-initiale[data-index="11"] { background: #06b6d4; }
+
+/* Nom du lieu / Venue name */
+.marquee-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+}

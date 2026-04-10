@@ -19,6 +19,7 @@ class SEOCache(models.Model):
     AGGREGATE_MEMBERSHIPS = "aggregate_memberships"
     AGGREGATE_LIEUX = "aggregate_lieux"
     SITEMAP_INDEX = "sitemap_index"
+    GLOBAL_COUNTS = "global_counts"
 
     CACHE_TYPE_CHOICES = [
         (TENANT_SUMMARY, _("Tenant summary (config, stats, domain)")),
@@ -28,6 +29,7 @@ class SEOCache(models.Model):
         (AGGREGATE_MEMBERSHIPS, _("Aggregated memberships for network (ROOT)")),
         (AGGREGATE_LIEUX, _("Aggregated active venues (ROOT)")),
         (SITEMAP_INDEX, _("Cross-tenant sitemap index (ROOT)")),
+        (GLOBAL_COUNTS, _("Global counts: events, memberships, initiatives (ROOT)")),
     ]
 
     cache_type = models.CharField(

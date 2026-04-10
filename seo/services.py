@@ -348,6 +348,85 @@ def build_tenant_config_data(client):
 
 
 # ---------------------------------------------------------------------------
+# Comptages bruts cross-tenant / Raw cross-tenant counts
+# ---------------------------------------------------------------------------
+
+
+def get_global_counts(tenant_schemas):
+    """
+    Compte le nombre TOTAL (non filtre) d'events, adhesions et initiatives
+    sur tous les schemas tenants. 1 seule requete SQL UNION ALL.
+    / Count the TOTAL (unfiltered) number of events, memberships and initiatives
+    across all tenant schemas. Single UNION ALL SQL query.
+
+    LOCALISATION: seo/services.py
+
+    Contrairement a get_active_tenants_with_counts() qui filtre les events
+    publies et futurs, cette fonction compte TOUT : passes, non publies, etc.
+    C'est pour l'affichage "chiffres cles" de la landing page.
+    / Unlike get_active_tenants_with_counts() which filters published future
+    events, this function counts EVERYTHING: past, unpublished, etc.
+    This is for the "key figures" display on the landing page.
+
+    Parametres / Parameters:
+        tenant_schemas: list[tuple(uuid, schema_name)]
+    Retourne / Returns: dict avec cles events, memberships, initiatives
+    """
+    if not tenant_schemas:
+        return {"events": 0, "memberships": 0, "initiatives": 0}
+
+    # 3 comptages en 1 requete : on fait un UNION ALL de sous-requetes
+    # qui comptent chacune dans leur table, puis on somme par type.
+    # / 3 counts in 1 query: UNION ALL sub-queries that count in their
+    # respective tables, then sum by type.
+    parts = []
+    params = []
+
+    for tenant_uuid, schema_name in tenant_schemas:
+        # Events (tous, pas filtres) / Events (all, unfiltered)
+        parts.append(
+            f"SELECT 'events' AS type_comptage, COUNT(*) AS nb "
+            f'FROM "{schema_name}"."BaseBillet_event"'
+        )
+        # Adhesions (tous les products avec categorie_article='A')
+        # / Memberships (all products with categorie_article='A')
+        parts.append(
+            f"SELECT 'memberships' AS type_comptage, COUNT(*) AS nb "
+            f'FROM "{schema_name}"."BaseBillet_product" '
+            f"WHERE categorie_article = 'A'"
+        )
+        # Initiatives (app crowds) / Initiatives (crowds app)
+        parts.append(
+            f"SELECT 'initiatives' AS type_comptage, COUNT(*) AS nb "
+            f'FROM "{schema_name}"."crowds_initiative"'
+        )
+
+    sql = (
+        f"SELECT type_comptage, SUM(nb) AS total "
+        f"FROM ({' UNION ALL '.join(parts)}) AS counts "
+        f"GROUP BY type_comptage"
+    )
+
+    result = {"events": 0, "memberships": 0, "initiatives": 0, "assets": 0}
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for row in cursor.fetchall():
+            type_comptage = row[0]
+            total = int(row[1])
+            if type_comptage in result:
+                result[type_comptage] = total
+
+    # Assets fedow_core : table dans le schema PUBLIC (SHARED_APPS),
+    # pas besoin de UNION ALL — un simple COUNT suffit.
+    # / fedow_core Assets: table in the PUBLIC schema (SHARED_APPS),
+    # no UNION ALL needed — a simple COUNT is enough.
+    from fedow_core.models import Asset
+    result["assets"] = Asset.objects.filter(active=True).count()
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Explorer data builder / Constructeur de donnees explorer
 # ---------------------------------------------------------------------------
 

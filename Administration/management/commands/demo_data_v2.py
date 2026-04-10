@@ -1634,6 +1634,23 @@ class Command(BaseCommand):
                 except Exception as e:
                     logger.warning(f"--flush wallets/cartes: {e}")
 
+            # Nettoyage du dossier media (images uploadees par les runs precedents).
+            # StdImageField genere des variations (fhd, hdr, med, thumbnail, crop, etc.)
+            # qui s'accumulent a chaque flush + reimport.
+            # On supprime le contenu de MEDIA_ROOT/images/ (pas le dossier lui-meme).
+            # / Clean up media directory (images uploaded by previous runs).
+            # StdImageField generates variations that accumulate with each flush + reimport.
+            # We delete the contents of MEDIA_ROOT/images/ (not the directory itself).
+            try:
+                import shutil
+                media_images_dir = os.path.join(settings.MEDIA_ROOT, "images")
+                if os.path.isdir(media_images_dir):
+                    shutil.rmtree(media_images_dir)
+                    os.makedirs(media_images_dir, exist_ok=True)
+                    self.stdout.write("  Media images nettoyees / Media images cleaned")
+            except Exception as e:
+                logger.warning(f"--flush media cleanup: {e}")
+
             self.stdout.write(
                 self.style.SUCCESS("Purge complète terminée. Réimport en cours…")
             )
@@ -2847,13 +2864,255 @@ class Command(BaseCommand):
                         call_command("create_test_pos_data")
 
         # -----------------------------
-        # 5) Cache SEO cross-tenant (landing page ROOT)
+        # 5) Images de demo (logos tenants, events, initiatives)
+        # Les images sont pre-telechargees dans Administration/fixtures/
+        # et assignees aux objets via StdImageField.save().
+        # / Demo images (tenant logos, events, initiatives)
+        # Images are pre-downloaded in Administration/fixtures/
+        # and assigned to objects via StdImageField.save().
+        # -----------------------------
+        self.stdout.write("Assignation des images de demo…")
+        fixtures_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "fixtures",
+        )
+
+        from django.core.files.base import ContentFile
+
+        # 5a) Logos des tenants → Configuration.logo
+        # Le fichier PNG porte le nom du schema (ex: lespass.png)
+        # / Tenant logos → Configuration.logo
+        # The PNG file is named after the schema (e.g. lespass.png)
+        logos_dir = os.path.join(fixtures_dir, "demo_logos")
+        for tenant in created_tenants:
+            # Chercher le logo par schema_name OU par slugify(name).
+            # Certains tenants ont un schema different du slug de leur nom
+            # (ex: tenant "agenda" a schema_name="meta").
+            # / Look for logo by schema_name OR by slugify(name).
+            # Some tenants have a schema different from their name slug
+            # (e.g. tenant "agenda" has schema_name="meta").
+            logo_path = os.path.join(logos_dir, f"{tenant.schema_name}.png")
+            if not os.path.isfile(logo_path):
+                logo_path = os.path.join(logos_dir, f"{slugify(tenant.name)}.png")
+            if not os.path.isfile(logo_path):
+                continue
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                # Verifier que le logo existe PHYSIQUEMENT sur le disque.
+                # Apres un flush, le champ Django est encore renseigne mais
+                # le fichier a ete supprime par le nettoyage media.
+                # / Check that the logo physically EXISTS on disk.
+                # After a flush, the Django field is still set but
+                # the file was deleted by the media cleanup.
+                if config.logo:
+                    try:
+                        logo_exists = config.logo.storage.exists(config.logo.name)
+                    except Exception:
+                        logo_exists = False
+                    if logo_exists:
+                        continue
+                with open(logo_path, "rb") as f:
+                    config.logo.save(
+                        f"{tenant.schema_name}_logo.png",
+                        ContentFile(f.read()),
+                        save=True,
+                    )
+                self.stdout.write(f"  Logo: {tenant.name}")
+
+        # 5a-bis) Background du tenant → Configuration.img
+        # Image de fond affichee en haut de la page du lieu.
+        # Lespass → image 404. Autres → image picsum.
+        # / Tenant background → Configuration.img
+        # Background image shown at the top of the venue page.
+        # Lespass → 404 image. Others → picsum image.
+        backgrounds_dir = os.path.join(fixtures_dir, "demo_backgrounds")
+        background_images = sorted([
+            f for f in os.listdir(backgrounds_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(backgrounds_dir) else []
+
+        bg_index = 0
+        for tenant in created_tenants:
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                if config.img:
+                    try:
+                        img_exists = config.img.storage.exists(config.img.name)
+                    except Exception:
+                        img_exists = False
+                    if img_exists:
+                        bg_index += 1
+                        continue
+
+                # Lespass → image 404, autres → picsum
+                # / Lespass → 404 image, others → picsum
+                if tenant.schema_name == "lespass" and images_404:
+                    img_file = images_404[0]
+                    img_path = os.path.join(images_404_dir, img_file)
+                elif background_images:
+                    img_file = background_images[bg_index % len(background_images)]
+                    img_path = os.path.join(backgrounds_dir, img_file)
+                else:
+                    bg_index += 1
+                    continue
+
+                with open(img_path, "rb") as f:
+                    config.img.save(
+                        f"{tenant.schema_name}_bg.jpg",
+                        ContentFile(f.read()),
+                        save=True,
+                    )
+                self.stdout.write(f"  Background: {tenant.name}")
+            bg_index += 1
+
+        # 5b-e) Images des events, stickers, adhesions, initiatives.
+        # Pour le tenant "Lespass", on utilise les vraies images 404 du projet
+        # (BaseBillet/static/images/404-*.jpg) — plus jolies que les placeholders.
+        # Pour les autres tenants, on utilise les images picsum telecharges.
+        # / For the "Lespass" tenant, we use the real 404 images from the project
+        # (BaseBillet/static/images/404-*.jpg) — prettier than placeholders.
+        # For other tenants, we use the downloaded picsum images.
+        # Images 404 reduites (960x640) pour le tenant Lespass.
+        # Copies allégées des originales BaseBillet/static/images/404-*.jpg,
+        # reduites pour eviter les timeouts Daphne sur la generation des variations StdImage.
+        # / Resized 404 images (960x640) for the Lespass tenant.
+        # Lighter copies of the originals, resized to avoid Daphne timeouts
+        # when StdImage generates variations.
+        images_404_dir = os.path.join(fixtures_dir, "demo_404")
+        images_404 = sorted([
+            f for f in os.listdir(images_404_dir)
+            if f.startswith("404-") and f.endswith(".jpg")
+        ]) if os.path.isdir(images_404_dir) else []
+
+        events_dir = os.path.join(fixtures_dir, "demo_events")
+        event_images = sorted([
+            f for f in os.listdir(events_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(events_dir) else []
+
+        stickers_dir = os.path.join(fixtures_dir, "demo_stickers")
+        sticker_images = sorted([
+            f for f in os.listdir(stickers_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(stickers_dir) else []
+
+        memberships_dir = os.path.join(fixtures_dir, "demo_memberships")
+        membership_images = sorted([
+            f for f in os.listdir(memberships_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(memberships_dir) else []
+
+        def _choisir_image(tenant, images_generiques, images_generiques_dir, index):
+            """
+            Pour Lespass → image 404 du projet. Pour les autres → image picsum.
+            / For Lespass → project 404 image. For others → picsum image.
+            """
+            if tenant.schema_name == "lespass" and images_404:
+                img_file = images_404[index % len(images_404)]
+                img_path = os.path.join(images_404_dir, img_file)
+            elif images_generiques:
+                img_file = images_generiques[index % len(images_generiques)]
+                img_path = os.path.join(images_generiques_dir, img_file)
+            else:
+                return None
+            return img_path
+
+        # 5b) Event.img (image principale)
+        # / Event main image
+        img_count = 0
+        img_index_par_tenant = {}
+        for tenant in created_tenants:
+            img_index_par_tenant[tenant.schema_name] = 0
+            with tenant_context(tenant):
+                for event_obj in Event.objects.filter(img="").order_by("datetime"):
+                    idx = img_index_par_tenant[tenant.schema_name]
+                    img_path = _choisir_image(tenant, event_images, events_dir, idx)
+                    if img_path:
+                        with open(img_path, "rb") as f:
+                            event_obj.img.save(
+                                f"event_{event_obj.slug or event_obj.pk}.jpg",
+                                ContentFile(f.read()),
+                                save=True,
+                            )
+                        img_count += 1
+                    img_index_par_tenant[tenant.schema_name] = idx + 1
+        self.stdout.write(f"  Events: {img_count} images assignees")
+
+        # 5c) Event.sticker_img (vignette)
+        # / Event thumbnail
+        sticker_count = 0
+        for tenant in created_tenants:
+            sticker_idx = 0
+            with tenant_context(tenant):
+                for event_obj in Event.objects.filter(sticker_img="").order_by("datetime"):
+                    img_path = _choisir_image(tenant, sticker_images, stickers_dir, sticker_idx)
+                    if img_path:
+                        with open(img_path, "rb") as f:
+                            event_obj.sticker_img.save(
+                                f"sticker_{event_obj.slug or event_obj.pk}.jpg",
+                                ContentFile(f.read()),
+                                save=True,
+                            )
+                        sticker_count += 1
+                    sticker_idx += 1
+        self.stdout.write(f"  Stickers: {sticker_count} vignettes assignees")
+
+        # 5d) Product.img (adhesions)
+        # / Membership images
+        membership_count = 0
+        for tenant in created_tenants:
+            mem_idx = 0
+            with tenant_context(tenant):
+                for produit in Product.objects.filter(
+                    categorie_article=Product.ADHESION, img="",
+                ).order_by("name"):
+                    img_path = _choisir_image(tenant, membership_images, memberships_dir, mem_idx)
+                    if img_path:
+                        with open(img_path, "rb") as f:
+                            produit.img.save(
+                                f"membership_{produit.uuid}.jpg",
+                                ContentFile(f.read()),
+                                save=True,
+                            )
+                        membership_count += 1
+                    mem_idx += 1
+        self.stdout.write(f"  Adhesions: {membership_count} images assignees")
+
+        # 5e) Initiative.img
+        # Meme logique : images 404 pour Lespass, picsum pour les autres.
+        # / Same logic: 404 images for Lespass, picsum for others.
+        initiatives_dir = os.path.join(fixtures_dir, "demo_initiatives")
+        initiative_images = sorted([
+            f for f in os.listdir(initiatives_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(initiatives_dir) else []
+
+        init_count = 0
+        for tenant in created_tenants:
+            init_idx = 0
+            with tenant_context(tenant):
+                for init_obj in Initiative.objects.filter(img="").order_by("name"):
+                    img_path = _choisir_image(tenant, initiative_images, initiatives_dir, init_idx)
+                    if img_path:
+                        with open(img_path, "rb") as f:
+                            init_obj.img.save(
+                                f"initiative_{init_obj.pk}.jpg",
+                                ContentFile(f.read()),
+                                save=True,
+                            )
+                        init_count += 1
+                    init_idx += 1
+        self.stdout.write(f"  Initiatives: {init_count} images assignees")
+
+        # -----------------------------
+        # 6) Cache SEO cross-tenant (landing page ROOT)
         # Le cache agrege les events, adhesions et lieux de tous les tenants
         # pour la landing page du reseau. Il faut le lancer APRES la creation
-        # des donnees de tous les tenants.
+        # des donnees et des images de tous les tenants (les logos sont dans le cache).
         # / Cross-tenant SEO cache (ROOT landing page)
         # The cache aggregates events, memberships and venues from all tenants
-        # for the network landing page. Must run AFTER creating all tenant data.
+        # for the network landing page. Must run AFTER creating all tenant data
+        # and images (logos are included in the cache).
         # -----------------------------
         if "seo" in settings.INSTALLED_APPS:
             self.stdout.write("Construction du cache SEO cross-tenant…")
@@ -2864,7 +3123,9 @@ class Command(BaseCommand):
                 self.style.SUCCESS(
                     f"Cache SEO : {result['tenants']} tenants, "
                     f"{result['events']} events, "
-                    f"{result['memberships']} memberships"
+                    f"{result['memberships']} memberships, "
+                    f"{result['initiatives']} initiatives, "
+                    f"{result['assets']} assets"
                 )
             )
 
