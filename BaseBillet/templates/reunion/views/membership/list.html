@@ -14,7 +14,7 @@
 {% block twitter_image_alt %}{% if products.0.name %}{{ products.0.name }} - {% endif %}{% translate 'Memberships' %} - {{ config.organisation }}{% endblock %}
 
 {% block main %}
-    <main class="container-lg py-5">
+    <div class="container-lg py-5">
         {% if config.description_membership_page %}
             <div>{{ config.description_membership_page | safe }}</div>
         {% else %}
@@ -119,5 +119,5 @@
         </div>
     {% endif %}
 
-    </main>
+    </div>
 {% endblock main %}

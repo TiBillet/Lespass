@@ -104,7 +104,7 @@
 {% endblock %}
 
 {% block main %}
-    <main class="container-lg pb-5">
+    <div class="container-lg pb-5">
         <header class="mb-3">
             {% include 'reunion/partials/picture.html' with img=event.img alt=event.name style='max-height: 33vh' %}
             <h1 class="mt-3">
@@ -167,5 +167,5 @@
 
         {% include 'reunion/views/event/partial/accordion.html' %}
 
-    </main>
+    </div>
 {% endblock %}

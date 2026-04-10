@@ -2,7 +2,7 @@
 {% load tibitags i18n %}
 
 {% block main %}
-<main class="container-lg my-5">
+<div class="container-lg my-5">
     {% if not details_submitted %}
         {% translate "You do not seem to have completed your Stripe registration. Please contact us if you need help." %}
 {#        {% translate "Vous ne semblez pas avoir terminé votre enregistrement Stripe. N'hésitez pas à nous contacter si vous avez besoin d'aide." %}#}
@@ -10,5 +10,5 @@
         {% translate "Your stripe account has been registered. Thank you very much!" %}
 {#        {% translate "Votre compte stripe a bien été enregistré. Merci !" %}#}
     {% endif %}
-</main>
+</div>
 {% endblock %}
