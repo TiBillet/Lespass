@@ -130,6 +130,28 @@ def _cleanup():
     Calendar.objects.filter(name__startswith=TEST_PREFIX).delete()
 
 
+def _add_opening_entry(
+    weekly_opening,
+    weekday,
+    start_time,
+    slot_duration_minutes=60,
+    slot_count=1,
+):
+    """
+    Crée une OpeningEntry pour le WeeklyOpening donné.
+    / Creates an OpeningEntry for the given WeeklyOpening.
+    """
+    from booking.models import OpeningEntry
+
+    return OpeningEntry.objects.create(
+        weekly_opening=weekly_opening,
+        weekday=weekday,
+        start_time=start_time,
+        slot_duration_minutes=slot_duration_minutes,
+        slot_count=slot_count,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Tests — get_closed_intervals_for_resource
 # ---------------------------------------------------------------------------
@@ -1332,141 +1354,135 @@ def test_compute_slots_returns_empty_when_no_opening_entries():
 @pytest.mark.django_db
 def test_compute_slots_end_to_end_with_fixture_coworking_resource():
     """
-    Test de bout en bout avec la ressource "Coworking" des fixtures.
-    / End-to-end test with the "Coworking" fixture resource.
+    Test de bout en bout — ressource de type "Coworking".
+    / End-to-end test — "Coworking"-style resource.
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
-    TODO : Ce test dépend de la fixture "Coworking" en base — il n'est pas
-    isolé. Si la fixture est absente ou modifiée, le test est ignoré ou
-    donne des résultats silencieusement incorrects. À réécrire avec des
-    données définies inline (cal, wop, OpeningEntry). Voir §12 dans
-    booking/doc/tibillet-booking-finding.md.
-    / TODO: This test depends on the "Coworking" fixture in the DB — it is
-    not isolated. Rewrite with inline data. See §12 in finding.md.
+    Configuration : lun–ven, 8 créneaux × 60 min à partir de 09:00, capacity=3.
+    Date fixe : 2026-06-02 (lundi), reference_date = 2026-06-01.
+    8 créneaux attendus : 09:00–10:00, 10:00–11:00, …, 16:00–17:00.
+    / Config: Mon–Fri, 8 × 60 min from 09:00, capacity=3.
+    / Fixed date: 2026-06-02 (Monday), reference_date = 2026-06-01.
+    / 8 slots expected: 09:00–10:00, 10:00–11:00, …, 16:00–17:00.
 
-    "Coworking" : lun–ven, 8 créneaux × 60 min à partir de 09:00, capacity=3.
-    On cherche le prochain lundi dans l'horizon de réservation.
-    8 créneaux doivent être retournés, de 09:00 à 17:00.
-    / "Coworking": Mon–Fri, 8 × 60 min from 09:00, capacity=3.
-    / Find next Monday within booking horizon.
-    / 8 slots expected, from 09:00 to 17:00.
-
-    Prochain lundi :
     09:00 10:00 11:00 12:00 13:00 14:00 15:00 16:00 17:00
       ████  ████  ████  ████  ████  ████  ████  ████
       [0]   [1]   [2]   [3]   [4]   [5]   [6]   [7]
-    len = 8, remaining_capacity <= 3 pour chaque créneau.
     """
-    from booking.models import Resource
     from booking.slot_engine import compute_slots
 
+    # reference_date = 2026-06-01 (dimanche) → horizon 28j → jusqu'au 2026-06-29.
+    # date_from = date_to = 2026-06-02 (lundi) — dans l'horizon.
+    # / reference_date = 2026-06-01 (Sunday) → horizon 28d → up to 2026-06-29.
+    # / date_from = date_to = 2026-06-02 (Monday) — within horizon.
+    reference_date = datetime.date(2026, 6, 1)
+    monday = datetime.date(2026, 6, 2)
+
     with schema_context(TENANT_SCHEMA):
-        resource = Resource.objects.filter(name='Coworking').first()
-        if resource is None:
-            pytest.skip('Fixture "Coworking" absente — lancer create_booking_fixtures')
-
-        today = datetime.date.today()
-        # Prochain lundi (jamais aujourd'hui même si on est lundi).
-        # / Next Monday (never today even if today is Monday).
-        days_to_monday = (7 - today.weekday()) % 7 or 7
-        next_monday = today + datetime.timedelta(days=days_to_monday)
-
-        if days_to_monday > resource.booking_horizon_days:
-            pytest.skip(
-                f'Le prochain lundi ({next_monday}) est hors horizon '
-                f'({resource.booking_horizon_days} jours).'
+        try:
+            calendar = _make_calendar('coworking_e2e')
+            opening = _make_weekly_opening('coworking_e2e')
+            resource = _make_resource(
+                'coworking_e2e', calendar, opening, capacity=3, horizon=28,
             )
 
-        slots = compute_slots(resource, next_monday, next_monday)
+            # 5 entrées lun–ven, chacune 8 créneaux × 60 min à 09:00.
+            # / 5 entries Mon–Fri, each 8 × 60 min from 09:00.
+            for weekday in range(5):
+                _add_opening_entry(
+                    opening,
+                    weekday=weekday,
+                    start_time=datetime.time(9, 0),
+                    slot_duration_minutes=60,
+                    slot_count=8,
+                )
 
-        if not slots:
-            pytest.skip(
-                f'Aucun créneau pour {next_monday} — '
-                'probablement un jour férié ou une fermeture.'
-            )
+            slots = compute_slots(resource, monday, monday,
+                                  reference_date=reference_date)
 
-        assert len(slots) == 8
+            assert len(slots) == 8
 
-        assert slots[0].start.time() == datetime.time(9, 0)
-        assert slots[0].end.time() == datetime.time(10, 0)
-        assert slots[7].start.time() == datetime.time(16, 0)
-        assert slots[7].end.time() == datetime.time(17, 0)
+            assert slots[0].start.time() == datetime.time(9, 0)
+            assert slots[0].end.time() == datetime.time(10, 0)
+            assert slots[7].start.time() == datetime.time(16, 0)
+            assert slots[7].end.time() == datetime.time(17, 0)
 
-        for slot in slots:
-            assert slot.start.date() == next_monday
-            assert slot.duration_minutes() == 60
-            assert slot.remaining_capacity <= 3
+            for slot in slots:
+                assert slot.start.date() == monday
+                assert slot.duration_minutes() == 60
+                assert slot.max_capacity == 3
+                assert slot.remaining_capacity == 3
+        finally:
+            _cleanup()
 
 
 @pytest.mark.django_db
 def test_compute_slots_end_to_end_with_fixture_petite_salle():
     """
-    Test de bout en bout avec la ressource "Petite salle" des fixtures.
-    / End-to-end test with the "Petite salle" fixture resource.
+    Test de bout en bout — ressource de type "Petite salle".
+    / End-to-end test — "Petite salle"-style resource.
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
-    TODO : Ce test dépend de la fixture "Petite salle" en base — il n'est
-    pas isolé. Si la fixture est absente ou modifiée, le test est ignoré
-    ou donne des résultats silencieusement incorrects. À réécrire avec des
-    données définies inline (cal, wop, OpeningEntry). Voir §12 dans
-    booking/doc/tibillet-booking-finding.md.
-    / TODO: This test depends on the "Petite salle" fixture in the DB — it
-    is not isolated. Rewrite with inline data. See §12 in finding.md.
-
-    "Petite salle" : sam+dim, 3 créneaux × 180 min à partir de 10:00, capacity=1.
-    On cherche le prochain samedi dans l'horizon de réservation.
-    3 créneaux doivent être retournés : 10:00–13:00, 13:00–16:00, 16:00–19:00.
-    / "Petite salle": Sat+Sun, 3 × 180 min from 10:00, capacity=1.
-    / Find next Saturday within booking horizon.
+    Configuration : sam+dim, 3 créneaux × 180 min à partir de 10:00, capacity=1.
+    Date fixe : 2026-06-07 (samedi), reference_date = 2026-06-01.
+    3 créneaux attendus : 10:00–13:00, 13:00–16:00, 16:00–19:00.
+    / Config: Sat+Sun, 3 × 180 min from 10:00, capacity=1.
+    / Fixed date: 2026-06-07 (Saturday), reference_date = 2026-06-01.
     / 3 slots expected: 10:00–13:00, 13:00–16:00, 16:00–19:00.
 
-    Prochain samedi :
     10:00       13:00       16:00       19:00
       ████████████  ████████████  ████████████
           [0]           [1]           [2]
         180 min       180 min       180 min
     """
-    from booking.models import Resource
     from booking.slot_engine import compute_slots
 
+    # reference_date = 2026-06-01 (dimanche) → horizon 28j → jusqu'au 2026-06-29.
+    # date_from = date_to = 2026-06-07 (samedi) — dans l'horizon.
+    # / reference_date = 2026-06-01 (Sunday) → horizon 28d → up to 2026-06-29.
+    # / date_from = date_to = 2026-06-07 (Saturday) — within horizon.
+    reference_date = datetime.date(2026, 6, 1)
+    saturday = datetime.date(2026, 6, 7)
+
     with schema_context(TENANT_SCHEMA):
-        resource = Resource.objects.filter(name='Petite salle').first()
-        if resource is None:
-            pytest.skip('Fixture "Petite salle" absente — lancer create_booking_fixtures')
-
-        today = datetime.date.today()
-        # Prochain samedi (weekday=5). Jamais aujourd'hui.
-        # / Next Saturday (weekday=5). Never today.
-        days_to_saturday = (5 - today.weekday()) % 7 or 7
-        next_saturday = today + datetime.timedelta(days=days_to_saturday)
-
-        if days_to_saturday > resource.booking_horizon_days:
-            pytest.skip(
-                f'Le prochain samedi ({next_saturday}) est hors horizon '
-                f'({resource.booking_horizon_days} jours).'
+        try:
+            calendar = _make_calendar('petite_salle_e2e')
+            opening = _make_weekly_opening('petite_salle_e2e')
+            resource = _make_resource(
+                'petite_salle_e2e', calendar, opening, capacity=1, horizon=28,
             )
 
-        slots = compute_slots(resource, next_saturday, next_saturday)
+            # 2 entrées sam+dim, chacune 3 créneaux × 180 min à 10:00.
+            # / 2 entries Sat+Sun, each 3 × 180 min from 10:00.
+            for weekday in (5, 6):
+                _add_opening_entry(
+                    opening,
+                    weekday=weekday,
+                    start_time=datetime.time(10, 0),
+                    slot_duration_minutes=180,
+                    slot_count=3,
+                )
 
-        if not slots:
-            pytest.skip(
-                f'Aucun créneau pour {next_saturday} — '
-                'probablement une fermeture.'
-            )
+            slots = compute_slots(resource, saturday, saturday,
+                                  reference_date=reference_date)
 
-        assert len(slots) == 3
+            assert len(slots) == 3
 
-        assert slots[0].start.time() == datetime.time(10, 0)
-        assert slots[0].end.time() == datetime.time(13, 0)
-        assert slots[1].start.time() == datetime.time(13, 0)
-        assert slots[1].end.time() == datetime.time(16, 0)
-        assert slots[2].start.time() == datetime.time(16, 0)
-        assert slots[2].end.time() == datetime.time(19, 0)
+            assert slots[0].start.time() == datetime.time(10, 0)
+            assert slots[0].end.time() == datetime.time(13, 0)
+            assert slots[1].start.time() == datetime.time(13, 0)
+            assert slots[1].end.time() == datetime.time(16, 0)
+            assert slots[2].start.time() == datetime.time(16, 0)
+            assert slots[2].end.time() == datetime.time(19, 0)
 
-        for slot in slots:
-            assert slot.duration_minutes() == 180
+            for slot in slots:
+                assert slot.duration_minutes() == 180
+                assert slot.max_capacity == 1
+                assert slot.remaining_capacity == 1
+        finally:
+            _cleanup()
 
 
 # ---------------------------------------------------------------------------

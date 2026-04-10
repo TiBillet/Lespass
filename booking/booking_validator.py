@@ -12,8 +12,8 @@ It reuses the slot engine to avoid duplicating opening/closure logic.
 
 FLUX D'APPEL / CALL FLOW :
   validate_new_booking(resource, start_datetime, slot_duration_minutes,
-                       slot_count, member)
-    └─ compute_slots(resource, date_from, date_to)   [slot_engine]
+                       slot_count, member, reference_date=None)
+    └─ compute_slots(resource, date_from, date_to, reference_date)   [slot_engine]
          → dict { (start_datetime, slot_duration_minutes) → Slot }
          → vérification créneau par créneau / per-slot check
 
@@ -38,7 +38,8 @@ from django.utils.translation import gettext_lazy as _
 from booking.slot_engine import compute_slots
 
 
-def validate_new_booking(resource, start_datetime, slot_duration_minutes, slot_count, member):
+def validate_new_booking(resource, start_datetime, slot_duration_minutes, slot_count, member,
+                         reference_date=None):
     """
     Vérifie qu'une demande de réservation est valide avant création.
     / Checks that a booking request is valid before creation.
@@ -53,6 +54,11 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes, slot_c
     :param slot_count:             int — nombre de créneaux consécutifs demandés
                                    / number of consecutive slots requested
     :param member:                 utilisateur qui réserve / user making the booking
+    :param reference_date:         datetime.date | None — date de référence pour le
+                                   calcul de l'horizon (voir §13 dans finding.md).
+                                   None = date du jour réelle.
+                                   / reference date for horizon calculation (see §13).
+                                   None = real today.
     :return: tuple (is_valid: bool, error: str | None)
     """
     # --- Calcul de la plage de dates à couvrir ---
@@ -74,8 +80,11 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes, slot_c
     date_to = (last_slot_end_dt - datetime.timedelta(microseconds=1)).date()
 
     # compute_slots applique l'horizon, les fermetures et les capacités.
+    # reference_date est transmis pour permettre les tests avec dates fixes (§13).
     # / compute_slots enforces horizon, closures and capacities.
-    available_slots = compute_slots(resource, date_from, date_to)
+    # reference_date is threaded through to allow fixed-date tests (§13).
+    available_slots = compute_slots(resource, date_from, date_to,
+                                    reference_date=reference_date)
 
     # Dictionnaire d'accès rapide :
     # clé = (start, duration_minutes) → BookableInterval

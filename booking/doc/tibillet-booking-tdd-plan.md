@@ -660,6 +660,44 @@ without reading the implementation.
   would allow all validation tests to use fixed dates instead of
   `next_weekday`.
 
+### Session 6d — Fix §12 et §13 (DONE ✓)
+
+Corrections des deux findings identifiés en session 6c.
+
+**§12 — Suppression de la dépendance aux fixtures de base de données.**
+
+Les deux tests de bout en bout dans `test_slot_engine.py` interrogeaient
+des objets `Calendar` et `WeeklyOpening` nommés `"Coworking"` et
+`"Petite salle"` supposés présents en base. Ils étaient silencieusement
+ignorés si ces fixtures étaient absentes.
+
+Correction : réécriture des deux tests avec des données inline créées
+par les helpers `_make_*` existants. Le helper `_add_opening_entry` (absent
+de `test_slot_engine.py`) a été ajouté au fichier. Les `pytest.skip` ont
+été supprimés.
+
+**§13 — Clock injection dans `compute_slots` et `validate_new_booking`.**
+
+`compute_slots` appelait `timezone.localdate()` en interne, forçant tous
+les tests de `test_booking_validation.py` à calculer des dates relatives
+via `_next_weekday()`. Cela rendait les tests non-déterministes et
+difficiles à lire.
+
+Correction :
+- `compute_slots(resource, date_from, date_to, reference_date=None)` —
+  `reference_date or timezone.localdate()` remplace l'appel direct.
+- `validate_new_booking(..., reference_date=None)` — le paramètre est
+  propagé jusqu'à `compute_slots`.
+- Les 12 tests de `test_booking_validation.py` remplacent
+  `_next_weekday()` par les constantes fixes `MONDAY_NEAR = 2026-06-08`
+  et `MONDAY_FAR = 2026-06-15` (anchor `REFERENCE_DATE = 2026-06-01`).
+- Le catalogue `tibillet-booking-test-cases.md` est mis à jour : dates
+  fixes dans toute la section `validate_new_booking`, données inline pour
+  les deux tests de bout en bout.
+
+**Résultat :** 47/47 tests passent, aucun `pytest.skip`, aucun appel à
+`_next_weekday` dans `test_booking_validation.py`.
+
 --------------------------------------------------------------------------------
 
 ## Session 7 — Public view: resource list + available slots
