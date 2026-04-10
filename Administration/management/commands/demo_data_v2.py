@@ -10,7 +10,11 @@ from django_tenants.utils import tenant_context, schema_context
 from django.db import connection
 from faker import Faker
 
-from AuthBillet.models import TibilletUser
+from decimal import Decimal
+
+from django.db.models import ProtectedError
+
+from AuthBillet.models import TibilletUser, Wallet
 from AuthBillet.utils import get_or_create_user
 from BaseBillet.models import (
     Product,
@@ -22,13 +26,20 @@ from BaseBillet.models import (
     ProductFormField,
     FederatedPlace,
     Membership,
+    PostalAddress,
+    LigneArticle,
+    Paiement_stripe,
+    ProductSold,
+    PriceSold,
+    CategorieProduct,
+    Reservation,
 )
 from Customers.models import Client, Domain
+from QrcodeCashless.models import CarteCashless, Detail
 from fedow_connect.fedow_api import FedowAPI, AssetFedow
-from fedow_connect.models import FedowConfig
+from fedow_connect.models import FedowConfig, Asset as FedowConnectAsset
 from fedow_public.models import AssetFedowPublic
 from crowds.models import Initiative, Contribution, Participation, BudgetItem, Vote
-from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -1296,16 +1307,8 @@ class Command(BaseCommand):
                     )
                     return
 
-            from django.db.models import ProtectedError
-            from BaseBillet.models import (
-                LigneArticle,
-                Paiement_stripe,
-                ProductSold,
-                PriceSold,
-                CategorieProduct,
-                PostalAddress,
-                Reservation,
-            )
+            # Imports deja en global : ProtectedError, LigneArticle, Paiement_stripe,
+            # ProductSold, PriceSold, CategorieProduct, Reservation, PostalAddress
 
             # Imports conditionnels : ces apps ne sont pas forcement installees
             # / Conditional imports: these apps may not be installed
@@ -1342,9 +1345,7 @@ class Command(BaseCommand):
             # Tenant models have FK PROTECT/SET_NULL to public models.
             # Must delete/nullify these references BEFORE touching the public schema.
             # =====================================================================
-            from AuthBillet.models import Wallet
-            from QrcodeCashless.models import CarteCashless, Detail
-            from fedow_connect.models import Asset as FedowConnectAsset
+            # Imports deja en global : Wallet, CarteCashless, Detail, FedowConnectAsset
 
             for fx in fixtures:
                 name = fx.get("name")
