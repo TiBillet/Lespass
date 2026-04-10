@@ -58,16 +58,15 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes, slot_c
     # --- Calcul de la plage de dates à couvrir ---
     # date_from : jour du premier créneau.
     # date_to   : dernier jour réellement occupé par la période entière,
-    #             calculé avec (fin − 1 µs).date() pour rester cohérent
-    #             avec l'intervalle semi-ouvert de _slot_intersects_closed_date.
+    #             calculé avec (fin − 1 µs).date().
     #             Un créneau se terminant exactement à minuit n'occupe pas
-    #             le lendemain.
+    #             le lendemain — cohérent avec la sémantique semi-ouverte [)
+    #             gérée par Interval.overlaps() dans slot_engine.
     # / date_from : day of the first slot.
     # / date_to   : last day actually occupied by the whole period,
-    # /             using (end − 1 µs).date() for half-open interval
-    # /             consistency with _slot_intersects_closed_date.
-    # /             A slot ending exactly at midnight does not occupy
-    # /             the next day.
+    # /             using (end − 1 µs).date().
+    # /             A slot ending exactly at midnight does not occupy the next
+    # /             day — consistent with half-open [) semantics in Interval.overlaps().
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count
     )

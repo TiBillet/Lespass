@@ -76,6 +76,42 @@ def _make_weekly_opening(label):
     return opening
 
 
+def _day_interval(date):
+    """
+    Convertit une date en Interval timezone-aware [date 00:00, date+1 00:00).
+    Utilisé dans les tests pour construire des closed_intervals depuis des dates.
+    / Converts a date to a timezone-aware Interval [date 00:00, date+1 00:00).
+    Used in tests to build closed_intervals from dates.
+    """
+    import datetime as _dt
+    from django.utils import timezone as _tz
+    from booking.slot_engine import Interval
+
+    tz = _tz.get_current_timezone()
+    start = _tz.make_aware(_dt.datetime.combine(date, _dt.time(0, 0)), tz)
+    end = _tz.make_aware(_dt.datetime.combine(date + _dt.timedelta(days=1), _dt.time(0, 0)), tz)
+    return Interval(start=start, end=end)
+
+
+def _covers_date(closed_intervals, date):
+    """
+    Vrai si l'un des Interval couvre minuit du jour donné.
+    / True if any Interval covers midnight of the given date.
+    Remplace le test `date in closed_dates` pour les assertions.
+    / Replaces `date in closed_dates` test for assertions.
+    """
+    import datetime as _dt
+    from django.utils import timezone as _tz
+    from booking.slot_engine import Interval
+
+    tz = _tz.get_current_timezone()
+    # Teste si le point de minuit du jour est inclus dans un intervalle fermé.
+    # / Tests whether the midnight point of the day is included in a closed interval.
+    midnight = _tz.make_aware(_dt.datetime.combine(date, _dt.time(0, 0)), tz)
+    probe = Interval(start=midnight, end=midnight + _dt.timedelta(minutes=1))
+    return any(probe.overlaps(ci) for ci in closed_intervals)
+
+
 def _cleanup():
     """
     Supprime toutes les données de test dans l'ordre correct (on_delete=PROTECT).
@@ -95,25 +131,28 @@ def _cleanup():
 
 
 # ---------------------------------------------------------------------------
-# Tests — get_closed_dates_for_resource
+# Tests — get_closed_intervals_for_resource
 # ---------------------------------------------------------------------------
 
 @pytest.mark.django_db
-def test_get_closed_dates_returns_all_dates_in_closed_period():
+def test_get_closed_intervals_returns_interval_covering_closed_period():
     """
-    get_closed_dates_for_resource retourne toutes les dates d'une période
-    de fermeture multi-jours.
-    / get_closed_dates_for_resource returns all dates of a multi-day closure.
+    get_closed_intervals_for_resource retourne un Interval couvrant chaque
+    jour d'une période de fermeture multi-jours.
+    / get_closed_intervals_for_resource returns an Interval covering each day
+    of a multi-day closure.
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
     Période : 2026-06-10 → 2026-06-12.
-    La requête couvre juin 2026 entier.
-    Les trois dates fermées doivent apparaître dans le résultat.
-    La date précédente (2026-06-09) ne doit pas y être.
-    / Period: 2026-06-10 → 2026-06-12. Query covers all of June 2026.
-    / The three closed dates must appear in the result.
-    / The preceding date (2026-06-09) must not.
+    L'Interval retourné couvre [2026-06-10 00:00, 2026-06-13 00:00).
+    _covers_date vérifie que chaque jour est bien couvert.
+    La date précédente (2026-06-09) et la suivante (2026-06-13) ne doivent
+    pas être couvertes.
+    / Period: 2026-06-10 → 2026-06-12.
+    / Returned Interval covers [2026-06-10 00:00, 2026-06-13 00:00).
+    / _covers_date checks each day is covered.
+    / The preceding (2026-06-09) and following (2026-06-13) dates must not be.
 
     Juin 2026 (jours) :
      1   2   3   4   5   6   7   8   9  10  11  12  13  14 …
@@ -121,7 +160,7 @@ def test_get_closed_dates_returns_all_dates_in_closed_period():
                                      ✗   ↑   ↑   ↑   ✗
     """
     from booking.models import ClosedPeriod
-    from booking.slot_engine import get_closed_dates_for_resource
+    from booking.slot_engine import get_closed_intervals_for_resource
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -136,28 +175,28 @@ def test_get_closed_dates_returns_all_dates_in_closed_period():
                 label='Test closure',
             )
 
-            closed = get_closed_dates_for_resource(
+            closed = get_closed_intervals_for_resource(
                 resource,
                 datetime.date(2026, 6, 1),
                 datetime.date(2026, 6, 30),
             )
 
-            assert datetime.date(2026, 6, 10) in closed
-            assert datetime.date(2026, 6, 11) in closed
-            assert datetime.date(2026, 6, 12) in closed
-            assert datetime.date(2026, 6, 9) not in closed
-            assert datetime.date(2026, 6, 13) not in closed
+            assert _covers_date(closed, datetime.date(2026, 6, 10))
+            assert _covers_date(closed, datetime.date(2026, 6, 11))
+            assert _covers_date(closed, datetime.date(2026, 6, 12))
+            assert not _covers_date(closed, datetime.date(2026, 6, 9))
+            assert not _covers_date(closed, datetime.date(2026, 6, 13))
 
         finally:
             _cleanup()
 
 
 @pytest.mark.django_db
-def test_get_closed_dates_handles_single_day_period():
+def test_get_closed_intervals_handles_single_day_period():
     """
-    get_closed_dates_for_resource gère une ClosedPeriod d'un seul jour
+    get_closed_intervals_for_resource gère une ClosedPeriod d'un seul jour
     (start_date == end_date).
-    / get_closed_dates_for_resource handles a single-day ClosedPeriod.
+    / get_closed_intervals_for_resource handles a single-day ClosedPeriod.
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
@@ -169,7 +208,7 @@ def test_get_closed_dates_handles_single_day_period():
             ✗   ↑   ✗
     """
     from booking.models import ClosedPeriod
-    from booking.slot_engine import get_closed_dates_for_resource
+    from booking.slot_engine import get_closed_intervals_for_resource
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -184,36 +223,36 @@ def test_get_closed_dates_handles_single_day_period():
                 label='Single day',
             )
 
-            closed = get_closed_dates_for_resource(
+            closed = get_closed_intervals_for_resource(
                 resource,
                 datetime.date(2026, 6, 1),
                 datetime.date(2026, 6, 30),
             )
 
-            assert datetime.date(2026, 6, 15) in closed
-            assert datetime.date(2026, 6, 14) not in closed
-            assert datetime.date(2026, 6, 16) not in closed
+            assert _covers_date(closed, datetime.date(2026, 6, 15))
+            assert not _covers_date(closed, datetime.date(2026, 6, 14))
+            assert not _covers_date(closed, datetime.date(2026, 6, 16))
 
         finally:
             _cleanup()
 
 
 @pytest.mark.django_db
-def test_get_closed_dates_handles_null_end_date():
+def test_get_closed_intervals_handles_null_end_date():
     """
-    get_closed_dates_for_resource gère une fermeture sans fin (end_date=None).
-    Les dates de la fenêtre de requête après start_date sont toutes fermées.
-    / get_closed_dates_for_resource handles an endless closure (end_date=None).
-    / All dates in the query window after start_date are closed.
+    get_closed_intervals_for_resource gère une fermeture sans fin (end_date=None).
+    L'Interval s'étend jusqu'à date_to.
+    / get_closed_intervals_for_resource handles an endless closure (end_date=None).
+    / The Interval extends to date_to.
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
     Fermeture sans fin depuis 2026-06-20.
     Fenêtre de requête : 2026-06-18 → 2026-06-25.
-    2026-06-20 à 2026-06-25 doivent être fermés. 2026-06-19 doit être ouvert.
+    2026-06-20 à 2026-06-25 doivent être couverts. 2026-06-19 doit rester ouvert.
     / Endless closure from 2026-06-20.
     / Query window: 2026-06-18 → 2026-06-25.
-    / 2026-06-20 to 2026-06-25 must be closed. 2026-06-19 must be open.
+    / 2026-06-20 to 2026-06-25 must be covered. 2026-06-19 must remain open.
 
     Fenêtre 18–25 :
      18  19  20  21  22  23  24  25
@@ -223,7 +262,7 @@ def test_get_closed_dates_handles_null_end_date():
     / Closure extends to date_to because end_date is None.
     """
     from booking.models import ClosedPeriod
-    from booking.slot_engine import get_closed_dates_for_resource
+    from booking.slot_engine import get_closed_intervals_for_resource
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -238,46 +277,48 @@ def test_get_closed_dates_handles_null_end_date():
                 label='Endless closure',
             )
 
-            closed = get_closed_dates_for_resource(
+            closed = get_closed_intervals_for_resource(
                 resource,
                 datetime.date(2026, 6, 18),
                 datetime.date(2026, 6, 25),
             )
 
             for day in range(20, 26):
-                assert datetime.date(2026, 6, day) in closed
+                assert _covers_date(closed, datetime.date(2026, 6, day))
 
-            assert datetime.date(2026, 6, 19) not in closed
+            assert not _covers_date(closed, datetime.date(2026, 6, 19))
 
         finally:
             _cleanup()
 
 
 @pytest.mark.django_db
-def test_get_closed_dates_handles_overlapping_closed_periods():
+def test_get_closed_intervals_handles_overlapping_closed_periods():
     """
-    get_closed_dates_for_resource retourne l'union de deux ClosedPeriod
-    qui se chevauchent, sans doublon ni trou.
-    / get_closed_dates_for_resource returns the union of two overlapping
-    ClosedPeriods, without duplicates or gaps.
+    get_closed_intervals_for_resource retourne un Interval par ClosedPeriod.
+    Deux périodes qui se chevauchent produisent deux intervalles (pas de fusion).
+    L'union des deux couvre toutes les dates de la plage chevauchée.
+    / get_closed_intervals_for_resource returns one Interval per ClosedPeriod.
+    / Two overlapping periods produce two intervals (no merging).
+    / Their union covers all dates of the overlapping range.
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
     Période A : 2026-06-10 → 2026-06-15.
     Période B : 2026-06-13 → 2026-06-18 (chevauche A sur 13–15).
-    Union attendue : 2026-06-10 → 2026-06-18 (9 dates).
+    L'union des deux intervalles couvre 2026-06-10 → 2026-06-18.
     / Period A: 2026-06-10 → 2026-06-15.
     / Period B: 2026-06-13 → 2026-06-18 (overlaps A on 13–15).
-    / Expected union: 2026-06-10 → 2026-06-18 (9 dates).
+    / The union of both intervals covers 2026-06-10 → 2026-06-18.
 
      10  11  12  13  14  15  16  17  18
     ░░░A░░░░░░░░░░░░░░░
                   ░░░░░░B░░░░░░░░░░░░░
     ──────────────────────────────────
-    ↑   ↑   ↑   ↑   ↑   ↑   ↑   ↑   ↑   (toutes dans le résultat)
+    ↑   ↑   ↑   ↑   ↑   ↑   ↑   ↑   ↑   (toutes couvertes)
     """
     from booking.models import ClosedPeriod
-    from booking.slot_engine import get_closed_dates_for_resource
+    from booking.slot_engine import get_closed_intervals_for_resource
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -298,21 +339,25 @@ def test_get_closed_dates_handles_overlapping_closed_periods():
                 label='Période B',
             )
 
-            closed = get_closed_dates_for_resource(
+            closed = get_closed_intervals_for_resource(
                 resource,
                 datetime.date(2026, 6, 1),
                 datetime.date(2026, 6, 30),
             )
 
-            # Toutes les dates de l'union doivent être présentes.
-            # / All dates of the union must be present.
-            for day in range(10, 19):
-                assert datetime.date(2026, 6, day) in closed
+            # Deux périodes = deux intervalles.
+            # / Two periods = two intervals.
+            assert len(closed) == 2
 
-            # Les dates hors union doivent être absentes.
-            # / Dates outside the union must be absent.
-            assert datetime.date(2026, 6, 9) not in closed
-            assert datetime.date(2026, 6, 19) not in closed
+            # Toutes les dates de l'union doivent être couvertes.
+            # / All dates of the union must be covered.
+            for day in range(10, 19):
+                assert _covers_date(closed, datetime.date(2026, 6, day))
+
+            # Les dates hors union doivent être ouvertes.
+            # / Dates outside the union must be open.
+            assert not _covers_date(closed, datetime.date(2026, 6, 9))
+            assert not _covers_date(closed, datetime.date(2026, 6, 19))
 
         finally:
             _cleanup()
@@ -368,7 +413,7 @@ def test_generate_theoretical_slots_from_weekday_template():
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 1),
-                closed_dates=set(),
+                closed_intervals=[],
             )
 
             assert len(slots) == 2
@@ -421,13 +466,13 @@ def test_generate_theoretical_slots_excludes_closed_dates():
                 slot_count=1,
             )
 
-            closed_dates = {datetime.date(2026, 6, 1)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 1))]
 
             slots = generate_theoretical_slots(
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 8),
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 1
@@ -478,7 +523,7 @@ def test_generate_theoretical_slots_respects_date_to_boundary():
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 7),
-                closed_dates=set(),
+                closed_intervals=[],
             )
 
             assert len(slots) == 1
@@ -545,13 +590,13 @@ def test_generate_theoretical_slots_start_on_closed_day_bleed_into_open_day_is_e
                 slot_count=1,
             )
 
-            closed_dates = {datetime.date(2026, 6, 1)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 1))]
 
             slots = generate_theoretical_slots(
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 2),
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             # Le créneau commence lundi (fermé) → il doit être EXCLU.
@@ -632,13 +677,13 @@ def test_generate_theoretical_slots_last_slot_bleeds_onto_open_day_is_returned()
                 slot_count=2,
             )
 
-            closed_dates = {datetime.date(2026, 6, 1)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 1))]
 
             slots = generate_theoretical_slots(
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 2),
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             # slot[0] commence lundi (fermé) → exclu.
@@ -708,13 +753,13 @@ def test_generate_theoretical_slots_multi_day_spanning_entry():
 
             # Mardi 2026-06-02 est fermé.
             # / Tuesday 2026-06-02 is closed.
-            closed_dates = {datetime.date(2026, 6, 2)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 2))]
 
             slots = generate_theoretical_slots(
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 2),
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             # Seul [0] est retourné : tous ses jours intersectés (lundi) sont ouverts.
@@ -797,13 +842,13 @@ def test_generate_theoretical_slots_bleed_into_closed_day_start_date_is_open():
                 slot_count=1,
             )
 
-            closed_dates = {datetime.date(2026, 6, 8)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 8))]
 
             slots = generate_theoretical_slots(
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 7),
                 date_to=datetime.date(2026, 6, 8),
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             # Le créneau intersecte lundi (fermé) → exclu.
@@ -864,7 +909,7 @@ def test_generate_theoretical_slots_multi_day_slot_all_open_days_is_returned():
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 4),
                 date_to=datetime.date(2026, 6, 6),
-                closed_dates=set(),
+                closed_intervals=[],
             )
 
             # Tous les jours intersectés sont ouverts → créneau retourné.
@@ -947,13 +992,13 @@ def test_generate_theoretical_slots_three_day_slot_with_closed_middle_day_is_exc
                 slot_count=1,
             )
 
-            closed_dates = {datetime.date(2026, 6, 5)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 5))]
 
             slots = generate_theoretical_slots(
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 4),
                 date_to=datetime.date(2026, 6, 7),
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             # Le créneau intersecte vendredi (fermé) → exclu.
@@ -1496,7 +1541,7 @@ def test_full_week_opening_no_closed_day_returns_168_slots():
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=set(),
+                closed_intervals=[],
             )
 
             assert len(slots) == 168
@@ -1534,13 +1579,13 @@ def test_full_week_opening_wednesday_closed_returns_144_slots():
 
             # Mercredi 2026-06-03 (weekday=2)
             # / Wednesday 2026-06-03 (weekday=2)
-            closed_dates = {datetime.date(2026, 6, 3)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 3))]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 144
@@ -1586,13 +1631,13 @@ def test_full_week_opening_monday_closed_returns_144_slots():
 
             # Lundi 2026-06-01 (weekday=0)
             # / Monday 2026-06-01 (weekday=0)
-            closed_dates = {datetime.date(2026, 6, 1)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 1))]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 144
@@ -1638,13 +1683,13 @@ def test_full_week_opening_sunday_closed_returns_144_slots():
 
             # Dimanche 2026-06-07 (weekday=6)
             # / Sunday 2026-06-07 (weekday=6)
-            closed_dates = {datetime.date(2026, 6, 7)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 7))]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 144
@@ -1691,16 +1736,16 @@ def test_full_week_opening_two_non_adjacent_days_closed_returns_120_slots():
 
             # Mardi 2026-06-02 et vendredi 2026-06-05
             # / Tuesday 2026-06-02 and Friday 2026-06-05
-            closed_dates = {
-                datetime.date(2026, 6, 2),
-                datetime.date(2026, 6, 5),
-            }
+            closed_intervals = [
+                _day_interval(datetime.date(2026, 6, 2)),
+                _day_interval(datetime.date(2026, 6, 5)),
+            ]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 120
@@ -1709,7 +1754,7 @@ def test_full_week_opening_two_non_adjacent_days_closed_returns_120_slots():
             # / No slot must start on a closed day.
             closed_day_slots = [
                 s for s in slots
-                if s.start.date() in closed_dates
+                if _covers_date(closed_intervals, s.start.date())
             ]
             assert len(closed_day_slots) == 0
 
@@ -1804,7 +1849,7 @@ def test_one_day_slots_opening_no_closed_day_returns_7_slots():
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=set(),
+                closed_intervals=[],
             )
 
             assert len(slots) == 7
@@ -1854,13 +1899,13 @@ def test_one_day_slots_opening_wednesday_closed_returns_6_slots():
             entries = list(opening.opening_entries.all())
 
             # Mercredi 2026-06-03
-            closed_dates = {datetime.date(2026, 6, 3)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 3))]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 6
@@ -1912,13 +1957,13 @@ def test_one_day_slots_opening_monday_closed_returns_6_slots():
 
             # Lundi 2026-06-01 (jour de l'entrée) fermé.
             # / Monday 2026-06-01 (entry's own day) closed.
-            closed_dates = {datetime.date(2026, 6, 1)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 1))]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             # 6 créneaux (mar–dim), pas 0 ni 7.
@@ -1970,13 +2015,13 @@ def test_one_day_slots_opening_sunday_closed_returns_6_slots():
 
             # Dimanche 2026-06-07 (weekday=6)
             # / Sunday 2026-06-07 (weekday=6)
-            closed_dates = {datetime.date(2026, 6, 7)}
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 7))]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 6
@@ -2019,16 +2064,16 @@ def test_one_day_slots_opening_two_non_adjacent_days_closed_returns_5_slots():
 
             # Mardi 2026-06-02 et vendredi 2026-06-05
             # / Tuesday 2026-06-02 and Friday 2026-06-05
-            closed_dates = {
-                datetime.date(2026, 6, 2),
-                datetime.date(2026, 6, 5),
-            }
+            closed_intervals = [
+                _day_interval(datetime.date(2026, 6, 2)),
+                _day_interval(datetime.date(2026, 6, 5)),
+            ]
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 5
@@ -2036,7 +2081,7 @@ def test_one_day_slots_opening_two_non_adjacent_days_closed_returns_5_slots():
             # Aucun créneau ne doit démarrer un jour fermé.
             # / No slot must start on a closed day.
             assert all(
-                s.start.date() not in closed_dates
+                not _covers_date(closed_intervals, s.start.date())
                 for s in slots
             )
 
@@ -2128,7 +2173,7 @@ def test_one_week_slot_opening_no_closed_day_returns_1_slot():
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=set(),
+                closed_intervals=[],
             )
 
             assert len(slots) == 1
@@ -2171,13 +2216,13 @@ def test_one_week_slot_opening_wednesday_closed_returns_0_slots():
             opening = _make_one_week_slot_opening('wednesday_closed')
             entries = list(opening.opening_entries.all())
 
-            closed_dates = {datetime.date(2026, 6, 3)}  # mercredi / Wednesday
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 3))]  # mercredi / Wednesday
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 0
@@ -2212,13 +2257,13 @@ def test_one_week_slot_opening_monday_closed_returns_0_slots():
             opening = _make_one_week_slot_opening('monday_closed')
             entries = list(opening.opening_entries.all())
 
-            closed_dates = {datetime.date(2026, 6, 1)}  # lundi / Monday
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 1))]  # lundi / Monday
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 0
@@ -2257,13 +2302,13 @@ def test_one_week_slot_opening_sunday_closed_returns_0_slots():
             opening = _make_one_week_slot_opening('sunday_closed')
             entries = list(opening.opening_entries.all())
 
-            closed_dates = {datetime.date(2026, 6, 7)}  # dimanche / Sunday
+            closed_intervals = [_day_interval(datetime.date(2026, 6, 7))]  # dimanche / Sunday
 
             slots = generate_theoretical_slots(
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
-                closed_dates=closed_dates,
+                closed_intervals=closed_intervals,
             )
 
             assert len(slots) == 0

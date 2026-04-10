@@ -332,7 +332,7 @@ def test_slot_local_time_is_preserved_utc_plus_1():
                     opening_entries=opening_entries,
                     date_from=monday,
                     date_to=monday,
-                    closed_dates=set(),
+                    closed_intervals=[],
                 )
 
             assert len(slots) == 1
@@ -404,7 +404,7 @@ def test_slot_local_time_is_preserved_utc_plus_9():
                     opening_entries=opening_entries,
                     date_from=monday,
                     date_to=monday,
-                    closed_dates=set(),
+                    closed_intervals=[],
                 )
 
             assert len(slots) == 1
@@ -449,7 +449,7 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_1():
     from booking.slot_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
-        get_closed_dates_for_resource,
+        get_closed_intervals_for_resource,
     )
 
     with schema_context(TENANT_SCHEMA):
@@ -484,14 +484,13 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_1():
 
             # Récupère les dates fermées sur la plage mercredi−jeudi.
             # / Retrieve closed dates over the Wednesday−Thursday range.
-            closed_dates = get_closed_dates_for_resource(resource_for_test, wednesday, thursday)
-
             with timezone.override(tz):
+                closed_intervals = get_closed_intervals_for_resource(resource_for_test, wednesday, thursday)
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     date_from=wednesday,
                     date_to=wednesday,
-                    closed_dates=closed_dates,
+                    closed_intervals=closed_intervals,
                 )
 
             # Le slot intersecte le jeudi local qui est fermé → exclu.
@@ -527,7 +526,7 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_9():
     from booking.slot_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
-        get_closed_dates_for_resource,
+        get_closed_intervals_for_resource,
     )
 
     with schema_context(TENANT_SCHEMA):
@@ -554,14 +553,13 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_9():
             _add_closed_period(calendar, start_date=thursday, label='Jeudi fermé Tokyo')
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
-            closed_dates = get_closed_dates_for_resource(resource_for_test, wednesday, thursday)
-
             with timezone.override(tz):
+                closed_intervals = get_closed_intervals_for_resource(resource_for_test, wednesday, thursday)
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     date_from=wednesday,
                     date_to=wednesday,
-                    closed_dates=closed_dates,
+                    closed_intervals=closed_intervals,
                 )
 
             assert len(slots) == 0, (
@@ -616,7 +614,7 @@ def test_midnight_crossing_slot_open_second_day_utc_plus_1():
                     opening_entries=opening_entries,
                     date_from=wednesday,
                     date_to=wednesday,
-                    closed_dates=set(),
+                    closed_intervals=[],
                 )
 
             assert len(slots) == 1, (
@@ -652,7 +650,7 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1():
     from booking.slot_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
-        get_closed_dates_for_resource,
+        get_closed_intervals_for_resource,
     )
 
     with schema_context(TENANT_SCHEMA):
@@ -681,14 +679,13 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1():
             _add_closed_period(calendar, start_date=tuesday, label='Mardi fermé Lagos')
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
-            closed_dates = get_closed_dates_for_resource(resource_for_test, monday, tuesday)
-
             with timezone.override(tz):
+                closed_intervals = get_closed_intervals_for_resource(resource_for_test, monday, tuesday)
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     date_from=monday,
                     date_to=monday,
-                    closed_dates=closed_dates,
+                    closed_intervals=closed_intervals,
                 )
 
             assert len(slots) == 0, (
@@ -718,7 +715,7 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_9():
     from booking.slot_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
-        get_closed_dates_for_resource,
+        get_closed_intervals_for_resource,
     )
 
     with schema_context(TENANT_SCHEMA):
@@ -745,14 +742,13 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_9():
             _add_closed_period(calendar, start_date=tuesday, label='Mardi fermé Tokyo')
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
-            closed_dates = get_closed_dates_for_resource(resource_for_test, monday, tuesday)
-
             with timezone.override(tz):
+                closed_intervals = get_closed_intervals_for_resource(resource_for_test, monday, tuesday)
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     date_from=monday,
                     date_to=monday,
-                    closed_dates=closed_dates,
+                    closed_intervals=closed_intervals,
                 )
 
             assert len(slots) == 0, (
@@ -789,7 +785,7 @@ def test_slot_ending_exactly_at_midnight_next_day_closed_utc_plus_1():
     from booking.slot_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
-        get_closed_dates_for_resource,
+        get_closed_intervals_for_resource,
     )
 
     with schema_context(TENANT_SCHEMA):
@@ -818,14 +814,13 @@ def test_slot_ending_exactly_at_midnight_next_day_closed_utc_plus_1():
             _add_closed_period(calendar, start_date=tuesday, label='Mardi fermé')
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
-            closed_dates = get_closed_dates_for_resource(resource_for_test, monday, tuesday)
-
             with timezone.override(tz):
+                closed_intervals = get_closed_intervals_for_resource(resource_for_test, monday, tuesday)
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     date_from=monday,
                     date_to=monday,
-                    closed_dates=closed_dates,
+                    closed_intervals=closed_intervals,
                 )
 
             # Le slot finit EXACTEMENT à minuit → n'occupe pas le mardi.

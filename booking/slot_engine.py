@@ -12,7 +12,7 @@ booking views to display available slots.
 FLUX D'APPEL / CALL FLOW :
   compute_slots(resource, date_from, date_to)
     ├─ get_opening_entries_for_resource(resource)        [DB]
-    ├─ get_closed_dates_for_resource(resource, ...)      [DB]
+    ├─ get_closed_intervals_for_resource(resource, ...)  [DB]
     ├─ get_existing_bookings_for_resource(resource, ...) [DB]
     ├─ generate_theoretical_slots(...)                   [pur / pure]
     └─ compute_remaining_capacity(slot, ...)             [pur / pure]
@@ -109,24 +109,34 @@ class BookableInterval:
 
 
 
-def get_closed_dates_for_resource(resource, date_from, date_to):
+def get_closed_intervals_for_resource(resource, date_from, date_to):
     """
-    Retourne l'ensemble des dates fermées dans [date_from, date_to].
-    / Returns the set of closed dates within [date_from, date_to].
+    Retourne la liste des intervalles fermés dans [date_from, date_to].
+    / Returns the list of closed Intervals within [date_from, date_to].
 
     LOCALISATION : booking/slot_engine.py
 
-    Parcourt les ClosedPeriod du Calendar de la ressource.
+    Chaque ClosedPeriod devient un Interval timezone-aware :
+      [start_clamped 00:00 local, end_clamped+1 00:00 local)
+    Utilise le fuseau courant (timezone.get_current_timezone()), cohérent
+    avec generate_theoretical_slots qui construit les créneaux dans ce même fuseau.
     Si end_date est None, la fermeture s'étend jusqu'à date_to (decisions §8).
-    / Iterates ClosedPeriods of the resource's Calendar.
+    Les intervalles sont ensuite comparés avec Interval.overlaps() — pas de
+    conversion jour-par-jour.
+    / Each ClosedPeriod becomes a timezone-aware Interval:
+      [start_clamped 00:00 local, end_clamped+1 00:00 local)
+    Uses the current timezone (timezone.get_current_timezone()), consistent
+    with generate_theoretical_slots which builds slots in the same timezone.
     If end_date is None, the closure extends to date_to (decisions §8).
+    Intervals are then compared with Interval.overlaps() — no day-by-day loop.
 
     :param resource: instance Resource
     :param date_from: datetime.date — borne inférieure incluse / lower bound (inclusive)
     :param date_to:   datetime.date — borne supérieure incluse / upper bound (inclusive)
-    :return: set[datetime.date]
+    :return: list[Interval]
     """
-    closed = set()
+    tz = timezone.get_current_timezone()
+    closed_intervals = []
 
     for period in resource.calendar.closed_periods.all():
         period_start = period.start_date
@@ -136,14 +146,27 @@ def get_closed_dates_for_resource(resource, date_from, date_to):
 
         # On se limite à la fenêtre demandée.
         # / Clamp to the requested window.
-        current = max(period_start, date_from)
+        start_clamped = max(period_start, date_from)
         end_clamped = min(period_end, date_to)
 
-        while current <= end_clamped:
-            closed.add(current)
-            current += datetime.timedelta(days=1)
+        if start_clamped > end_clamped:
+            # La période est entièrement hors de la fenêtre.
+            # / Period is entirely outside the window.
+            continue
 
-    return closed
+        # [start_clamped 00:00 local, end_clamped+1 00:00 local)
+        interval_start = timezone.make_aware(
+            datetime.datetime.combine(start_clamped, datetime.time(0, 0)), tz
+        )
+        interval_end = timezone.make_aware(
+            datetime.datetime.combine(
+                end_clamped + datetime.timedelta(days=1), datetime.time(0, 0)
+            ),
+            tz,
+        )
+        closed_intervals.append(Interval(start=interval_start, end=interval_end))
+
+    return closed_intervals
 
 
 def get_opening_entries_for_resource(resource):
@@ -187,37 +210,7 @@ def get_existing_bookings_for_resource(resource, date_from, date_to):
     )
 
 
-def _slot_intersects_closed_date(start_dt, end_dt, closed_dates):
-    """
-    Retourne True si le créneau [start_dt, end_dt) intersecte au moins
-    une date fermée.
-    / Returns True if the slot [start_dt, end_dt) intersects at least
-    one closed date.
-
-    LOCALISATION : booking/slot_engine.py
-
-    Utilise l'intervalle semi-ouvert : end_dt − 1 µs donne le dernier
-    instant appartenant réellement au créneau. Un créneau finissant
-    exactement à minuit (end = 00:00:00 du lendemain) n'intersecte pas
-    le lendemain — il se termine à la frontière, sans y avoir de durée.
-    / Uses half-open interval: end_dt − 1 µs gives the last instant
-    actually within the slot. A slot ending exactly at midnight
-    (end = 00:00:00 of the next day) does NOT intersect the next day —
-    it ends at the boundary with zero duration there.
-    """
-    last_dt = end_dt - datetime.timedelta(microseconds=1)
-    check_date = start_dt.date()
-    last_day = last_dt.date()
-
-    while check_date <= last_day:
-        if check_date in closed_dates:
-            return True
-        check_date += datetime.timedelta(days=1)
-
-    return False
-
-
-def generate_theoretical_slots(opening_entries, date_from, date_to, closed_dates):
+def generate_theoretical_slots(opening_entries, date_from, date_to, closed_intervals):
     """
     Calcul pur — génère tous les créneaux théoriques pour la plage donnée.
     / Pure computation — generates all theoretical slots for the given range.
@@ -253,7 +246,8 @@ def generate_theoretical_slots(opening_entries, date_from, date_to, closed_dates
     :param opening_entries:  iterable[OpeningEntry]
     :param date_from:        datetime.date
     :param date_to:          datetime.date
-    :param closed_dates:     set[datetime.date]
+    :param closed_intervals: list[Interval] — intervalles fermés en heure locale
+                             / list[Interval] — closed intervals in local time
     :return: list[BookableInterval] — max_capacity et remaining_capacity
              initialisés à 0, remplis par compute_slots
              / max_capacity and remaining_capacity initialised to 0,
@@ -287,13 +281,21 @@ def generate_theoretical_slots(opening_entries, date_from, date_to, closed_dates
                     minutes=entry.slot_duration_minutes
                 )
 
-                # Exclure si au moins un jour intersecté est fermé (decisions §7).
-                # / Exclude if any intersected day is closed (decisions §7).
-                if _slot_intersects_closed_date(start_dt, end_dt, closed_dates):
+                # Construit l'Interval maintenant pour pouvoir l'utiliser
+                # dans le test de fermeture ET dans BookableInterval.
+                # / Build the Interval now to reuse it in both the closure
+                # check and the BookableInterval constructor.
+                slot_interval = Interval(start=start_dt, end=end_dt)
+
+                # Exclure si le créneau chevauche un intervalle fermé (decisions §7).
+                # Interval.overlaps() gère la sémantique semi-ouverte [start, end).
+                # / Exclude if the slot overlaps any closed interval (decisions §7).
+                # Interval.overlaps() handles half-open [start, end) semantics.
+                if any(slot_interval.overlaps(ci) for ci in closed_intervals):
                     continue
 
                 bookable_intervals.append(BookableInterval(
-                    interval=Interval(start=start_dt, end=end_dt),
+                    interval=slot_interval,
                     max_capacity=0,
                     remaining_capacity=0,
                 ))
@@ -358,7 +360,7 @@ def compute_slots(resource, date_from, date_to):
     FLUX / FLOW :
     1. Calcul de effective_date_to (horizon)
     2. get_opening_entries_for_resource → QuerySet
-    3. get_closed_dates_for_resource    → set[date]
+    3. get_closed_intervals_for_resource → list[Interval]
     4. get_existing_bookings_for_resource → QuerySet
     5. generate_theoretical_slots       → list[BookableInterval] (capacités à 0)
     6. compute_remaining_capacity       → remplissage de max_capacity et
@@ -379,14 +381,14 @@ def compute_slots(resource, date_from, date_to):
         return []
 
     opening_entries = get_opening_entries_for_resource(resource)
-    closed_dates = get_closed_dates_for_resource(resource, date_from, effective_date_to)
+    closed_intervals = get_closed_intervals_for_resource(resource, date_from, effective_date_to)
     existing_bookings = get_existing_bookings_for_resource(resource, date_from, effective_date_to)
 
     bookable_intervals = generate_theoretical_slots(
         opening_entries=opening_entries,
         date_from=date_from,
         date_to=effective_date_to,
-        closed_dates=closed_dates,
+        closed_intervals=closed_intervals,
     )
 
     result = []
