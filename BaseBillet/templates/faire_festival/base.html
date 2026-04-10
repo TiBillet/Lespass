@@ -90,6 +90,23 @@
     <!-- HTMX : Bibliothèque pour les requêtes AJAX sans JavaScript -->
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
 
+    <!-- Scroll vers le haut après navigation HTMX -->
+    <script>
+        // FR: Remonter en haut de page après chaque navigation HTMX qui remplace le body
+        // EN: Scroll to top after each HTMX navigation that replaces the body
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                // Vérifie si le swap concerne le body
+                if (evt.detail.target === document.body) {
+                    // Petit délai pour s'assurer que le DOM est bien mis à jour
+                    setTimeout(function() {
+                        window.scrollTo(0, 0);
+                    }, 10);
+                }
+            });
+        });
+    </script>
+
     <!-- Loading States : Indicateurs de chargement pour HTMX -->
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 

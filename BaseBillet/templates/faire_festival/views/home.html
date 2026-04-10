@@ -5,221 +5,289 @@
 
 {% block main %}
 
-    <!-- =======================================================================
-				 CONTENU PRINCIPAL DE LA PAGE D'ACCUEIL
-				 Adapté depuis la maquette index.html du Faire Festival
-				 ======================================================================= -->
-    <main class="container-fluid conteneur-principal">
+<!-- =======================================================================
+     CONTENU PRINCIPAL DE LA PAGE D'ACCUEIL
+     Adapté depuis la maquette index.html du Faire Festival
+     ======================================================================= -->
+<main class="container-fluid conteneur-principal">
 
-        <!-- ===================================================================
-						 SECTION HÉROS (Bannière principale)
-						 Affiche le titre principal, la date de l'événement et le sous-titre
-						 =================================================================== -->
-        <section class="container py-5 position-relative">
+    <!-- ===================================================================
+         SECTION HÉROS (Bannière principale)
+         Affiche le titre principal, la date de l'événement et le sous-titre
+         =================================================================== -->
+    <section class="container py-5 position-relative">
 
-            <!-- Motif de grille en arrière-plan (effet blueprint) -->
+        <!-- Motif de grille en arrière-plan (effet blueprint) -->
+        
 
+        <div class="row align-items-start">
 
-            <div class="row align-items-start">
-
-                <!-- ============================================================
-										 BLOC DATE (Gauche) - Visible uniquement sur desktop
-										 Image du badge de date du festival
-										 ============================================================ -->
-                <div class="col-md-2 d-none d-md-block">
-                    <img src="{% static 'faire_festival/image/dateaccueil.png' %}"
-                         alt="28-30 MAI 2026"
-                         class="img-fluid date-badge-left">
-                </div>
-
-                <!-- ============================================================
-										 TITRE PRINCIPAL (Centre)
-										 Logo Faire Festival avec sous-titre intégré
-										 ============================================================ -->
-                <div class="col-md-8 text-center position-relative">
-                    <div class="titre-principal mb-4">
-                        <img src="{% static 'faire_festival/image/logopage.png' %}"
-                             alt="Faire Festival"
-                             class="img-fluid logo-homepage">
-                    </div>
-                </div>
-
-                <!-- Colonne vide pour l'équilibre à droite -->
-                <div class="col-md-2"></div>
+            <!-- ============================================================
+                 BLOC DATE (Gauche) - Visible uniquement sur desktop
+                 Image du badge de date du festival
+                 ============================================================ -->
+            <div class="col-md-2 d-none d-md-block">
+                <img src="{% static 'faire_festival/image/dateaccueil.png' %}" 
+                     alt="28-30 MAI 2026" 
+                     class="img-fluid date-badge-left">
             </div>
-        </section>
 
-        <!-- ===================================================================
-							SECTION APPEL À L'ACTION (CTA - Call To Action)
-							Boutons principaux pour naviguer vers les sections importantes
-							=================================================================== -->
-        <section class="container py-4">
-            <div class="row g-4 justify-content-center">
+            <!-- ============================================================
+                 TITRE PRINCIPAL (Centre)
+                 Logo Faire Festival avec sous-titre intégré
+                 ============================================================ -->
+            <div class="col-md-8 text-center position-relative">
+                <div class="titre-principal mb-4">
+                    <img src="{% static 'faire_festival/image/logopage.png' %}"
+                         alt="Faire Festival"
+                         class="img-fluid logo-homepage">
+                </div>
+                <div>
+                    <p class="fw-bold fs-5 mt-5">Le grand rendez-vous toulousain pour réinventer notre façon de produire, de consommer et de transmettre !</p>
+                </div>
+            </div>
 
-                <!-- Bouton vers la liste des événements -->
-                <div class="col-md-4">
-                    <a href="{% url 'event-list' %}"
-                       class="btn btn-block w-100 bouton-action police-titre"
-                       hx-get="{% url 'event-list' %}"
+            <!-- Colonne vide pour l'équilibre à droite -->
+            <div class="col-md-2"></div>
+        </div>
+    </section>
+
+
+    <!-- ===================================================================
+         SECTION INFORMATION & PRÉSENTATION
+         Bloc d'information avec image et texte explicatif
+         =================================================================== -->
+    <section class="container py-5">
+        <div class="row">
+
+            <!-- ============================================================
+                 VIDÉO ILLUSTRATIVE (Gauche)
+                 Vidéo motion-table du Faire Festival
+                 ============================================================ -->
+            <div class="col-md-5 mb-4 mb-md-0 bordure-epaisse">
+                <div class="h-100 d-flex align-items-center justify-content-center p-2">
+                    <!-- Vidéo statique motion-table qui tourne en boucle -->
+                    <!-- preload="none" empêche le téléchargement immédiat (fix blocage Firefox mobile) -->
+                    <!-- IntersectionObserver charge la vidéo quand elle entre dans le viewport -->
+                    <video autoplay loop muted class="w-100" style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);" src="{% static 'faire_festival/image/motion-table.mp4' %}">
+                </div>
+            </div>
+
+            <!-- ============================================================
+                 TEXTE EXPLICATIF (Droite)
+                 Présentation de l'organisation et description
+                 ============================================================ -->
+            <div class="col-md-7 ps-md-5">
+                <div class="mb-4">
+                    <!-- Titre encadré -->
+                    <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 rounded-pill">
+                        <h3 class="m-0 texte-bleu police-mono fw-bold">
+                            {% translate "Le Faire Festival, c'est quoi ?" %}
+                        </h3>
+                    </div>
+
+                    <!-- Description longue en 2 colonnes -->
+                    {% if config.long_description %}
+                        <div class="row texte-bleu police-mono small lh-sm">
+                            <div class="col-12">
+                                {{ config.long_description|safe }}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Texte par défaut du Faire Festival -->
+                        <div class="row texte-bleu police-mono small lh-sm">
+                            <div class="col-md-6 mb-3">
+                                <p>
+                                    FabLabs et Espace du FAIRE... Bienvenue dans le FAIRE Festival, trois jours pour FAIRE ensemble. Un festival géant avec des ateliers, rencontres, conférences, animations, stands, démonstrations, une exposition, une boutique et un SuperLab...
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <p>
+                                    Pour aller plus loin dans la fabrication partagée et distribuée. Trois jours de rencontres entre le public, les Espaces, et Communautés du Faire et les entreprises pour se rencontrer, se comprendre, expérimenter et faire ensemble dans un espace accessible à tous·tes.
+                                </p>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- ========================================================
+                     GRILLE DES JOURS (Jour 01, 02, 03)
+                     ======================================================== -->
+                <div class="row g-3 justify-content-center text-center">
+
+                    <!-- Carte Jour 01 -->
+                    <div class="col-md-4">
+                        <div class="carte-jour">
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 pr-3 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h4>
+                            </div>
+                            <p class="small texte-bleu police-mono">
+                                {% translate "Entre Espaces," %}<br>
+                                {% translate "Communautés du Faire" %}<br>
+                                {% translate "et Entreprises" %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Carte Jour 02 -->
+                    <div class="col-md-4">
+                        <div class="carte-jour">
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2">
+                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h4>
+                            </div>
+                            <p class="small texte-bleu police-mono">
+                                {% translate "Entre Espaces," %}<br>
+                                {% translate "Communautés du Faire" %}<br>
+                                {% translate "et Entreprises" %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Carte Jour 03 (Avec badge gratuit) -->
+                    <div class="col-md-4">
+                        <div class="carte-jour">
+                            <!-- En-tête avec badge positionné par rapport à lui -->
+                            <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2 position-relative">
+                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h4>
+                                <!-- Badge 'Gratuit' collé à l'en-tête -->
+                                <div class="badge-gratuit position-absolute"
+                                     style="top:-20px; right:-34px; transform: rotate(30deg); background: white; padding: 0px 8px; border-radius: 20px; z-index: 10;">
+                                    <span class="texte-bleu police-mono small fw-bold">{% translate "gratuit" %}</span>
+                                </div>
+                            </div>
+                            <p class="small texte-bleu police-mono">
+                                {% translate "Entre Grand Public," %}<br>
+                                {% translate "Espaces et" %}<br>
+                                {% translate "Communautés du Faire" %}
+                            </p>
+                    </div>
+                </div> <!-- Fin Row Jours -->
+                
+                <!-- Bouton En savoir plus sur le Faire Festival -->
+                <div class="mt-4">
+                    <a href="{% url 'le_faire_festival' %}"
+                       class="btn bouton-action police-titre pe-3"
+                       style="max-width: min(90vw, 300px); width: 100%; padding: 0.5rem 0.5rem; font-size: 0.7rem;"
+                       hx-get="{% url 'le_faire_festival' %}"
                        hx-target="body"
                        hx-push-url="true">
-                        <p class="mb-0">{% translate "Découvrir le programme" %}</p>
+                        {% translate "En savoir plus sur le Faire Festival" %}
                     </a>
                 </div>
+            </div> <!-- Fin Col Droite -->
+        </div> <!-- Fin Row Principale -->
+    </section>
 
-                <!-- Bouton vers la liste des adhésions/billets -->
-                <div class="col-md-4">
+    <!-- ===================================================================
+         SECTION TUTO - COMMENT CRÉER SON PROGRAMME
+         Tutoriel en 3 étapes pour guider l'utilisateur
+         =================================================================== -->
+    <section class="container py-5">
+        
+        <!-- Titre avec image -->
+        <div class="titre-principal titre-programme mb-5 w-100">
+            <img src="{% static 'faire_festival/image/Fichier-14.png' %}"
+                 alt="{% translate 'Comment créer son programme' %}"
+                 class="img-fluid">
+        </div>
+        
+        <!-- Grille des 3 étapes -->
+        <div class="row g-4">
+            
+            <!-- ÉTAPE 1 : Billetterie -->
+            <div class="col-md-4">
+                <div class="etape-tuto text-center">
+                    
+                    <!-- Image illustrative -->
+                    <div class="image-etape mb-3">
+                        <img src="{% static 'faire_festival/image/Fichier-11.png' %}"
+                             alt="{% translate 'Billets' %}"
+                             class="img-fluid"
+                             style="height: 180px; object-fit: contain;">
+                    </div>
+                    
+                    <!-- Description -->
+                    <p class="texte-bleu police-mono small mb-3">
+                        {% translate "Rendez-vous sur l'onglet billetterie et prenez vos billets à prix libre !" %}
+                    </p>
+                    
+                    <!-- Bouton d'action -->
                     <a href="{% url 'membership_mvt-list' %}"
-                       class="btn btn-block w-100 bouton-action police-titre"
+                       class="btn bouton-action w-100"
                        hx-get="{% url 'membership_mvt-list' %}"
                        hx-target="body"
                        hx-push-url="true">
-                        {% if config.membership_menu_name %}{{ config.membership_menu_name }}{% else %}
-                            {% translate 'Prendre mes billets' %}{% endif %}
-                    </a>
-                </div>
-
-                <!-- Bouton vers la newsletter -->
-                <div class="col-md-4">
-                    <a href="https://48f51656.sibforms.com/serve/MUIFAArFIX33ZM9-a7q9l01i5hINeSqwQgaWsymRXJiTLCHEqCoivWnhvTE99gbq6bXLyM77Q2PAup8lpgZvyBxA5mtfST8GrTwqJ-vm6OblXffc6MBqKCi1qsB55MsSLzSQhJcXPHEZCK7T6dhOVNxtMzaWmzkf4DgtX1sizFjj3I9W64f-3xPF56EDw0rV94p1ryPqALhK5j05?utm_content=link_in_bio&utm_medium=social&utm_source=ig"
-                       class="btn btn-block w-100 bouton-action police-titre">
-                        {% translate "S'inscrire à la newsletter" %}
+                        {% translate "Billetterie" %}
                     </a>
                 </div>
             </div>
-        </section>
-
-        <!-- ===================================================================
-						 SECTION INFORMATION & PRÉSENTATION
-						 Bloc d'information avec image et texte explicatif
-						 =================================================================== -->
-        <section class="container py-5">
-            <div class="row">
-
-                <!-- ============================================================
-										 VIDÉO ILLUSTRATIVE (Gauche)
-										 Vidéo motion-table du Faire Festival
-										 ============================================================ -->
-                <div class="col-md-5 mb-4 mb-md-0 bordure-epaisse">
-                    <div class="h-100 d-flex align-items-center justify-content-center p-2">
-                        <!-- Vidéo statique motion-table qui tourne en boucle -->
-                        <!-- preload="none" empêche le téléchargement immédiat (fix blocage Firefox mobile) -->
-                        <!-- IntersectionObserver charge la vidéo quand elle entre dans le viewport -->
-                        <video autoplay
-                               loop
-                               muted
-                               playsinline
-                               preload="none"
-                               poster="{% static 'faire_festival/image/motion-table-poster.jpg' %}"
-                               class="w-100"
-                               style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);"
-                               src="{% static 'faire_festival/image/motion-table.mp4' %}">
-                        </video>
+            
+            <!-- ÉTAPE 2 : Programmation -->
+            <div class="col-md-4">
+                <div class="etape-tuto text-center">
+                    
+                    <!-- Image illustrative -->
+                    <div class="image-etape mb-3">
+                        <img src="{% static 'faire_festival/image/Fichier-12.png' %}"
+                             alt="{% translate 'Programmation' %}"
+                             class="img-fluid"
+                             style="height: 180px; object-fit: contain;">
                     </div>
+                    
+                    <!-- Description -->
+                    <p class="texte-bleu police-mono small mb-3">
+                        {% translate "Accédez aux différents événements classés par 22 thématiques !" %}
+                    </p>
+                    
+                    <!-- Bouton d'action -->
+                    <a href="{% url 'event-list' %}"
+                       class="btn bouton-action w-100"
+                       hx-get="{% url 'event-list' %}"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate "Programmation" %}
+                    </a>
                 </div>
-
-                <!-- ============================================================
-										 TEXTE EXPLICATIF (Droite)
-										 Présentation de l'organisation et description
-										 ============================================================ -->
-                <div class="col-md-7 ps-md-5">
-                    <div class="mb-4">
-                        <!-- Titre encadré -->
-                        <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 rounded-pill">
-                            <h3 class="m-0 texte-bleu police-mono fw-bold">
-                                {% translate "Le Faire Festival, c'est quoi ?" %}
-                            </h3>
-                        </div>
-
-                        <!-- Description longue en 2 colonnes -->
-                        {% if config.long_description %}
-                            <div class="row texte-bleu police-mono small lh-sm">
-                                <div class="col-12">
-                                    {{ config.long_description|safe }}
-                                </div>
-                            </div>
-                        {% else %}
-                            <!-- Texte par défaut du Faire Festival -->
-                            <div class="row texte-bleu police-mono small lh-sm">
-                                <div class="col-md-6 mb-3">
-                                    <p>
-                                        FabLabs et Espace du FAIRE... Bienvenue dans le FAIRE Festival, trois jours pour
-                                        FAIRE ensemble. Un festival géant avec des ateliers, rencontres, conférences,
-                                        animations, stands, démonstrations, une exposition, une boutique et un
-                                        SuperLab...
-                                    </p>
-                                </div>
-                                <div class="col-md-6">
-                                    <p>
-                                        Pour aller plus loin dans la fabrication partagée et distribuée. Trois jours de
-                                        rencontres entre le public, les Espaces, et Communautés du Faire et les
-                                        entreprises pour se rencontrer, se comprendre, expérimenter et faire ensemble
-                                        dans un espace accessible à tous·tes.
-                                    </p>
-                                </div>
-                            </div>
-                        {% endif %}
+            </div>
+            
+            <!-- ÉTAPE 3 : Infos pratiques -->
+            <div class="col-md-4">
+                <div class="etape-tuto text-center">
+                    
+                    <!-- Image illustrative -->
+                    <div class="image-etape mb-3">
+                        <img src="{% static 'faire_festival/image/Fichier-13.png' %}"
+                             alt="{% translate 'Faire Festival' %}"
+                             class="img-fluid"
+                             style="height: 180px; object-fit: contain;">
                     </div>
+                    
+                    <!-- Description -->
+                    <p class="texte-bleu police-mono small mb-3">
+                        {% translate "Venez profiter les 28, 29 et 30 mai lors du Faire Festival !" %}
+                    </p>
+                    
+                    <!-- Bouton d'action -->
+                    <a href="/infos-pratiques/"
+                       class="btn bouton-action w-100"
+                       hx-get="/infos-pratiques/"
+                       hx-target="body"
+                       hx-push-url="true">
+                        {% translate "Infos pratiques" %}
+                    </a>
+                </div>
+            </div>
+            
+        </div> <!-- Fin row -->
+    </section>
 
-                    <!-- ========================================================
-												 GRILLE DES JOURS (Jour 01, 02, 03)
-												 ======================================================== -->
-                    <div class="row g-3 justify-content-center text-center mb-5">
-
-                        <!-- Carte Jour 01 -->
-                        <div class="col-md-4">
-                            <div class="carte-jour">
-                                <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 pr-3 py-1 mb-2">
-                                    <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h4>
-                                </div>
-                                <p class="small texte-bleu police-mono">
-                                    {% translate "Entre Espaces," %}<br>
-                                    {% translate "Communautés du Faire" %}<br>
-                                    {% translate "et Entreprises" %}
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Carte Jour 02 -->
-                        <div class="col-md-4">
-                            <div class="carte-jour">
-                                <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2">
-                                    <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h4>
-                                </div>
-                                <p class="small texte-bleu police-mono">
-                                    {% translate "Entre Espaces," %}<br>
-                                    {% translate "Communautés du Faire" %}<br>
-                                    {% translate "et Entreprises" %}
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Carte Jour 03 (Avec badge gratuit) -->
-                        <div class="col-md-4">
-                            <div class="carte-jour">
-                                <!-- En-tête avec badge positionné par rapport à lui -->
-                                <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2 position-relative">
-                                    <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h4>
-                                    <!-- Badge 'Gratuit' collé à l'en-tête -->
-                                    <div class="badge-gratuit position-absolute"
-                                         style="top:-20px; right:-34px; transform: rotate(30deg); background: white; padding: 0px 8px; border-radius: 20px; z-index: 10;">
-                                        <span class="texte-bleu police-mono small fw-bold">{% translate "gratuit" %}</span>
-                                    </div>
-                                </div>
-                                <p class="small texte-bleu police-mono">
-                                    {% translate "Entre Grand Public," %}<br>
-                                    {% translate "Espaces et" %}<br>
-                                    {% translate "Communautés du Faire" %}
-                                </p>
-                            </div>
-                        </div>
-                    </div> <!-- Fin Row Jours -->
-
-                </div> <!-- Fin Col Droite -->
-            </div> <!-- Fin Row Principale -->
-        </section>
-
-    </main>
+</main>
 
 {% endblock main %}
 
+{% block footer %}
+<!-- =======================================================================
+     FOOTER - Version locale du skin Faire Festival
+     ======================================================================= -->
+{% include "faire_festival/partials/footer.html" %}
+{% endblock footer %}
