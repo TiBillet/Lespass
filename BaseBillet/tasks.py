@@ -32,6 +32,7 @@ from django_tenants.utils import get_tenant_model, tenant_context
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
+from Administration.utils import clean_html
 from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
@@ -239,7 +240,7 @@ def context_for_membership_email(membership: "Membership"):
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
         'main_text': _("Your payment for ") + f"{membership.price.product.name}" + _(" has been received."),
-        'main_text_2': config.additional_text_in_membership_mail,
+        'main_text_2': clean_html(config.additional_text_in_membership_mail) if config.additional_text_in_membership_mail else None,
         'main_text_3': additionnal_text_3,
         'table_info': {
             _('Receipt for:'): f'{membership.member_name()}',
@@ -351,7 +352,7 @@ def send_membership_pending_admin(membership_uuid: str):
         'image_url': image_url,
         'sub_title': _("Administration"),
         'main_text': _("Une nouvelle demande d'adhésion est en attente de validation manuelle."),
-        'main_text_2': f"{membership.member_name()} — {membership.price.product.name} — {membership.price.name}",
+        'main_text_2': clean_html(f"{membership.member_name()} — {membership.price.product.name} — {membership.price.name}"),
         'table_info': {
             _('Adhérent'): f'{membership.member_name()}',
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
@@ -1438,7 +1439,7 @@ def ticket_celery_mailer(reservation_uuid: str):
                 template='emails/buy_confirmation.html',
                 context={
                     'config': config,
-                    'custom_confirmation_message': reservation.event.custom_confirmation_message,
+                    'custom_confirmation_message': clean_html(reservation.event.custom_confirmation_message) if reservation.event.custom_confirmation_message else None,
                     'reservation': reservation,
                     'image_url_place': image_url_place,
                     'image_url_event': image_url_event,

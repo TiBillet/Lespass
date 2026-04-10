@@ -178,20 +178,27 @@ def get_context(request):
         "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
-            {'name': 'event-list', 'url': '/event/',
-             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
-             'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
+            {'name': 'event-list', 'url': '/event/',
+             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+             'icon': 'calendar-date'},
         ]
     }
 
     navbar: list = context["main_nav"]
 
-    # Infos pratiques : uniquement pour le thème Faire Festival
-    # Practical info page: only for the Faire Festival skin
+    # Le Faire Festival et Infos pratiques : uniquement pour le thème Faire Festival
+    # Le Faire Festival and Practical info pages: only for the Faire Festival skin
     if config.skin == "faire_festival":
+        # On insère en première position pour que "Le Faire Festival" soit le premier lien
+        # Insert at first position so "Le Faire Festival" is the first link
+        navbar.insert(0,
+            {'name': 'le_faire_festival', 'url': '/le-faire-festival/',
+             'label': _('Le Faire Festival'),
+             'icon': 'star-fill'}
+        )
         navbar.append(
             {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
              'label': _('Infos pratiques'),
@@ -1529,6 +1536,21 @@ def infos_pratiques(request):
     # Résolution du template avec fallback vers reunion si le skin n'a pas de infos_pratiques.html
     config = Configuration.get_solo()
     template_path = get_skin_template(config, "views/infos_pratiques.html")
+
+    return render(request, template_path, context=template_context)
+
+
+@require_GET
+def le_faire_festival(request):
+    """
+    FR: Page de présentation "Le Faire Festival" - description de l'événement
+    EN: Presentation page "Le Faire Festival" - event description
+    """
+    template_context = get_context(request)
+
+    # Résolution du template avec fallback vers reunion si le skin n'a pas de le_faire_festival.html
+    config = Configuration.get_solo()
+    template_path = get_skin_template(config, "views/le_faire_festival.html")
 
     return render(request, template_path, context=template_context)
 

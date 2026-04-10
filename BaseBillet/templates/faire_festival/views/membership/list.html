@@ -35,7 +35,7 @@
      Adaptée depuis la maquette tickets.html du Faire Festival
      Affiche tous les produits d'adhésion disponibles
      ======================================================================= -->
-<main class="container py-5 conteneur-principal">
+<div class="container py-5 conteneur-principal">
 
     <!-- Titre de la page -->
     <div class="row mb-5">
@@ -275,7 +275,7 @@
     </div>
     {% endcomment %}
 
-</main>
+</div>
 
 {% endblock main %}
 
@@ -346,3 +346,10 @@ document.addEventListener("DOMContentLoaded", initDescriptionMembershipCollapse)
 document.addEventListener("htmx:afterSettle", initDescriptionMembershipCollapse);
 </script>
 {% endblock scripts %}
+
+{% block footer %}
+<!-- =======================================================================
+     FOOTER - Version locale du skin Faire Festival
+     ======================================================================= -->
+{% include "faire_festival/partials/footer.html" %}
+{% endblock footer %}

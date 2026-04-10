@@ -126,7 +126,7 @@
      Adaptée depuis la maquette event_detail.html du Faire Festival
      Affiche toutes les informations détaillées d'un événement
      ======================================================================= -->
-<main class="container-fluid py-5 conteneur-principal">
+<div class="container-fluid py-5 conteneur-principal">
     <div class="container">
 
     <!-- ===================================================================
@@ -404,6 +404,13 @@
 
     </div> <!-- Fin container -->
 
-</main>
+</div>
 
 {% endblock %}
+
+{% block footer %}
+<!-- =======================================================================
+     FOOTER - Version locale du skin Faire Festival
+     ======================================================================= -->
+{% include "faire_festival/partials/footer.html" %}
+{% endblock footer %}

@@ -59,7 +59,7 @@
             evt.preventDefault()
 		    evt.stopPropagation()
             // efface le spinner
-		    document.querySelector('#tibillet-spinner').style.display = 'none'
+		    document.querySelector('#tibillet-spinner').classList.remove('active')
             // input en mode invalid
             input.parentNode.classList.remove('is-valid')
             input.parentNode.classList.add('is-invalid')

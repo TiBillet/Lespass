@@ -29,7 +29,7 @@
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="og:title" content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta property="og:image" content="{% block og_image %}{{ config.get_social_card }}{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{% if config.get_social_card %}https://{{ request.get_host }}{{ config.get_social_card }}{% endif %}{% endblock %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
@@ -43,11 +43,14 @@
     <meta name="twitter:domain" content="{{ request.get_host }}">
     <meta name="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
     <meta name="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta name="twitter:image" content="{% block twitter_image %}{{ config.get_social_card }}{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}{% if config.get_social_card %}https://{{ request.get_host }}{{ config.get_social_card }}{% endif %}{% endblock %}">
     <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
     {% if config.twitter %}
         <meta name="twitter:site" content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">
     {% endif %}
+
+    <!-- URL canonique pour éviter les doublons dans les moteurs de recherche -->
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
 
     {% block extra_meta %}{% endblock %}
 
@@ -96,6 +99,23 @@
     <!-- HTMX : Bibliothèque pour les requêtes AJAX sans JavaScript -->
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
 
+    <!-- Scroll vers le haut après navigation HTMX -->
+    <script>
+        // FR: Remonter en haut de page après chaque navigation HTMX qui remplace le body
+        // EN: Scroll to top after each HTMX navigation that replaces the body
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                // Vérifie si le swap concerne le body
+                if (evt.detail.target === document.body) {
+                    // Petit délai pour s'assurer que le DOM est bien mis à jour
+                    setTimeout(function() {
+                        window.scrollTo(0, 0);
+                    }, 10);
+                }
+            });
+        });
+    </script>
+
     <!-- Loading States : Indicateurs de chargement pour HTMX -->
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>
 
@@ -118,6 +138,42 @@
         ThemeSwitcher.init()
         LanguageSwitcher.init()
         MembershipForm.init()
+    </script>
+
+    <!-- ================================================================
+         DONNEES STRUCTUREES JSON-LD (SEO)
+         Organization : permet a Google d'afficher le Knowledge Panel
+         (logo, reseaux sociaux, nom) et d'associer les sitelinks.
+         WebSite : identifie le site pour les moteurs de recherche.
+         ================================================================ -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "name": "{{ config.organisation }}",
+                "url": "https://{{ request.get_host }}",
+                {% if config.get_social_card %}"logo": "https://{{ request.get_host }}{{ config.get_social_card }}",{% endif %}
+                {% if config.short_description %}"description": "{{ config.short_description|striptags }}",{% endif %}
+                "sameAs": [{% if config.facebook %}"{{ config.facebook }}"{% endif %}{% if config.facebook and config.instagram %}, {% endif %}{% if config.instagram %}"{{ config.instagram }}"{% endif %}{% if config.twitter %}{% if config.facebook or config.instagram %}, {% endif %}"{{ config.twitter }}"{% endif %}]
+                {% if config.postal_address %},
+                "address": {
+                    "@type": "PostalAddress",
+                    {% if config.postal_address.street_address %}"streetAddress": "{{ config.postal_address.street_address }}",{% endif %}
+                    {% if config.postal_address.address_locality %}"addressLocality": "{{ config.postal_address.address_locality }}",{% endif %}
+                    {% if config.postal_address.postal_code %}"postalCode": "{{ config.postal_address.postal_code }}",{% endif %}
+                    {% if config.postal_address.address_country %}"addressCountry": "{{ config.postal_address.address_country }}"{% endif %}
+                }
+                {% endif %}
+            },
+            {
+                "@type": "WebSite",
+                "name": "{{ config.organisation }}",
+                "url": "https://{{ request.get_host }}"
+            }
+        ]
+    }
     </script>
 
     {% block extra_head %}{% endblock %}
