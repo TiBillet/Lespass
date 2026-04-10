@@ -1,6 +1,7 @@
 # TDD Incremental Meta-Plan — `booking` app
 
 **Spec reference:** `booking/doc/tibillet-booking-spec.md`
+**Design reference:** `booking/doc/tibillet-booking-logic-design.md`
 **Approach:** each session = write tests FIRST, then the minimal code
 to make them pass.
 
