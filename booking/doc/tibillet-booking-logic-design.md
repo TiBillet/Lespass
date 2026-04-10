@@ -2,7 +2,7 @@
 
 **Date:**       2026-04-10
 **Authors:**    Joris REHM + Claude (Anthropic) — pair design session
-**Status:**     Phase 1 — discussion in progress
+**Status:**     Migration Done
 
 
 ## 1. Motivation
@@ -257,7 +257,7 @@ needed. `BookableInterval` is not frozen because `remaining_capacity` is
 filled in after construction.
 
 
-### 4.2 Migration plan
+### 4.2 Migration plan (Done)
 
 The current `Slot` dataclass was an intermediate design that did not fully
 model the domain. It is dropped entirely — there is no backward
