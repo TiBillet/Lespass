@@ -2846,5 +2846,27 @@ class Command(BaseCommand):
                         )
                         call_command("create_test_pos_data")
 
+        # -----------------------------
+        # 5) Cache SEO cross-tenant (landing page ROOT)
+        # Le cache agrege les events, adhesions et lieux de tous les tenants
+        # pour la landing page du reseau. Il faut le lancer APRES la creation
+        # des donnees de tous les tenants.
+        # / Cross-tenant SEO cache (ROOT landing page)
+        # The cache aggregates events, memberships and venues from all tenants
+        # for the network landing page. Must run AFTER creating all tenant data.
+        # -----------------------------
+        if "seo" in settings.INSTALLED_APPS:
+            self.stdout.write("Construction du cache SEO cross-tenant…")
+            from seo.tasks import refresh_seo_cache
+
+            result = refresh_seo_cache()
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Cache SEO : {result['tenants']} tenants, "
+                    f"{result['events']} events, "
+                    f"{result['memberships']} memberships"
+                )
+            )
+
         # Export du dump SQL pour --quick
         # self._dump_database()
