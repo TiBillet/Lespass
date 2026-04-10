@@ -7,8 +7,14 @@
             {# main nav #}
             <div class="col-sm-4 col-md-3 pb-5 pb-md-0">
                 <h4 class="text-white">{{ config.organisation }}</h4>
-                <address>55 Avenue Louis Bréguet, <br>
-                         31400 Toulouse
+                <address>
+                    {% if config.postal_address %}
+                        {{ config.postal_address.street_address }}<br>
+                        {{ config.postal_address.postal_code }} {{ config.postal_address.address_locality }}
+                    {% elif config.adress %}
+                        {{ config.adress }}<br>
+                        {{ config.postal_code }} {{ config.city }}
+                    {% endif %}
                 </address>
                 <ul class="nav flex-column">
                     {% for item in main_nav %}

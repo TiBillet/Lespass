@@ -3,6 +3,12 @@
 
 {% block title %}{% translate 'Le Faire Festival' %}{% endblock %}
 
+{% block meta_description %}{% translate "Découvrez le Faire Festival : le plus grand festival de fabrication en France. Ateliers, conférences, rencontres entre makers, artisans et grand public." %}{% endblock %}
+{% block og_title %}{% translate 'Le Faire Festival' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate "Découvrez le Faire Festival : le plus grand festival de fabrication en France. Ateliers, conférences, rencontres entre makers, artisans et grand public." %}{% endblock %}
+{% block twitter_title %}{% translate 'Le Faire Festival' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate "Découvrez le Faire Festival : le plus grand festival de fabrication en France. Ateliers, conférences, rencontres entre makers, artisans et grand public." %}{% endblock %}
+
 {% block main %}
 
 <!-- =======================================================================
@@ -10,7 +16,7 @@
      Présentation de l'événement : c'est quoi, qui organise, où ça se passe
      Version fidèle à la maquette avec images larges et texte compact
      ======================================================================= -->
-<main class="container-fluid conteneur-principal">
+<div class="container-fluid conteneur-principal">
 
     <!-- ===================================================================
          SECTION HEADER (Bannière principale)
@@ -19,7 +25,8 @@
     <section class="container pt-5">
         <div class="row justify-content-center">
             <div class="col-10 text-center">
-                <img src="{% static 'faire_festival/image/Fichier-18.png' %}" 
+                <h1 class="visually-hidden">{% translate 'Le Faire Festival' %}</h1>
+                <img src="{% static 'faire_festival/image/Fichier-18.png' %}"
                      class="img-fluid"
                      style="max-width: 90%;"
                      alt="{% translate 'Bienvenue au Faire Festival' %}">
@@ -154,7 +161,7 @@
         </div>
     </section>
 
-</main>
+</div>
 
 {% endblock main %}
 

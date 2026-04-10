@@ -3,6 +3,12 @@
 
 {% block title %}{% translate 'Infos pratiques' %}{% endblock %}
 
+{% block meta_description %}{% translate "Accès, horaires, plan et informations pratiques. Comment venir en voiture, bus ou train." %}{% endblock %}
+{% block og_title %}{% translate 'Infos pratiques' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate "Accès, horaires, plan et informations pratiques. Comment venir en voiture, bus ou train." %}{% endblock %}
+{% block twitter_title %}{% translate 'Infos pratiques' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate "Accès, horaires, plan et informations pratiques. Comment venir en voiture, bus ou train." %}{% endblock %}
+
 {% block main %}
 
 <!-- =====================================================================
@@ -25,9 +31,10 @@
                 
                 <!-- TITRE -->
                 <div>
+                    <h1 class="visually-hidden">{% translate 'Infos pratiques' %}</h1>
                     <span class="badge-festival horaire-texte">{% translate 'Infos pratiques' %}</span>
                 </div>
-                <p class="mb-2">Bienvenue dans le FAIRE Festival, trois jours pour FAIRE ensemble. <p>
+                <p class="mb-2">{% translate "Bienvenue dans le FAIRE Festival, trois jours pour FAIRE ensemble." %}</p>
                 
                 <!-- HORAIRES -->
                 <div class="mb-4">

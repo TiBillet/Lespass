@@ -1,7 +1,13 @@
 {% extends "faire_festival/base.html" %}
 {% load static i18n tibitags %}
 
-{% block title %}{% translate 'Home' %}{% endblock %}
+{% block title %}{{ config.organisation }}{% endblock %}
+
+{% block meta_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
+{% block og_title %}{{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
+{% block twitter_title %}{{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
 
 {% block main %}
 
@@ -9,7 +15,7 @@
      CONTENU PRINCIPAL DE LA PAGE D'ACCUEIL
      Adapté depuis la maquette index.html du Faire Festival
      ======================================================================= -->
-<main class="container-fluid conteneur-principal">
+<div class="container-fluid conteneur-principal">
 
     <!-- ===================================================================
          SECTION HÉROS (Bannière principale)
@@ -38,6 +44,7 @@
                  ============================================================ -->
             <div class="col-md-8 text-center position-relative">
                 <div class="titre-principal mb-4">
+                    <h1 class="visually-hidden">{{ config.organisation }}</h1>
                     <img src="{% static 'faire_festival/image/logopage.webp' %}"
                          alt="Faire Festival"
                          class="img-fluid logo-homepage">
@@ -282,7 +289,7 @@
         </div> <!-- Fin row -->
     </section>
 
-</main>
+</div>
 
 {% endblock main %}
 
