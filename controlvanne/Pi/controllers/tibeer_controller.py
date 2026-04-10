@@ -22,7 +22,7 @@ from utils.exceptions import BackendError
 
 # Anti-rebond : delai avant de considerer que la carte est partie (secondes)
 # / Anti-bounce: delay before considering the card is gone (seconds)
-CARD_GRACE_PERIOD_S = 5.0
+CARD_GRACE_PERIOD_S = 1.5
 
 # Frequence d'envoi des events pour_update (secondes)
 # / Frequency of pour_update events (seconds)

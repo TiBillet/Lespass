@@ -6,7 +6,7 @@ Conflicts=getty@tty1.service
 
 [Service]
 User=sysop
-WorkingDirectory=/home/sysop
+WorkingDirectory=/home/sysop/tibeer/controlvanne/Pi
 StandardInput=tty
 TTYPath=/dev/tty1
 TTYReset=yes
@@ -18,9 +18,7 @@ Environment=XDG_RUNTIME_DIR=/run/user/1000
 ExecStartPre=/bin/sh -c 'setterm -blank 0 -powersave off -powerdown 0 </dev/tty1; \
                          mkdir -p /run/user/1000; chown 1000:1000 /run/user/1000; \
                          chvt 1 || true; sleep 0.2'
-# Log Xorg dédié verbeux
-
-ExecStart=/usr/bin/xinit /home/sysop/xinitrc.bash -- /usr/lib/xorg/Xorg :0 -nolisten tcp -logverbose 6 -verbose 6 -logfile /home/sysop/Xorg.kiosk.log vt1 -keeptty
+ExecStart=/usr/bin/xinit /home/sysop/.xinitrc -- /usr/lib/xorg/Xorg :0 -nolisten tcp -logverbose 6 -verbose 6 -logfile /home/sysop/Xorg.kiosk.log vt1 -keeptty
 Restart=on-failure
 RestartSec=8
 
