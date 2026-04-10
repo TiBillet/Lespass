@@ -22,7 +22,7 @@ from utils.exceptions import BackendError
 
 # Anti-rebond : delai avant de considerer que la carte est partie (secondes)
 # / Anti-bounce: delay before considering the card is gone (seconds)
-CARD_GRACE_PERIOD_S = 1.0
+CARD_GRACE_PERIOD_S = 5.0
 
 # Frequence d'envoi des events pour_update (secondes)
 # / Frequency of pour_update events (seconds)
@@ -171,10 +171,11 @@ class TibeerController:
 
         # Envoyer card_removed (declenche le popup kiosk via WebSocket)
         # / Send card_removed (triggers kiosk popup via WebSocket)
-        try:
-            self.client.send_event("card_removed", self.current_uid, 0)
-        except BackendError:
-            pass
+        if self.session_id is not None:
+            try:
+                self.client.send_event("card_removed", self.current_uid, 0)
+            except BackendError:
+                pass
 
         self.current_uid = None
         self.session_id = None
