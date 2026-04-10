@@ -31,9 +31,21 @@ from django_tenants.utils import schema_context
 TEST_PREFIX = '[test_booking_validation]'
 TENANT_SCHEMA = 'lespass'
 
-# Date du jour utilisée comme ancrage pour tous les calculs de dates.
-# / Today's date used as anchor for all date calculations.
-TODAY = datetime.date.today()
+# Date de référence fixe utilisée comme "aujourd'hui" dans tous les tests (§13).
+# reference_date = 2026-06-01 (lundi) → horizon 28j → jusqu'au 2026-06-29.
+# Les tests utilisent des lundis dans la semaine du 2026-06-08 ou 2026-06-15.
+# / Fixed reference date used as "today" in all tests (§13).
+# reference_date = 2026-06-01 (Monday) → 28-day horizon → up to 2026-06-29.
+# Tests use Mondays in the week of 2026-06-08 or 2026-06-15.
+REFERENCE_DATE = datetime.date(2026, 6, 1)
+
+# Lundi au moins 2 jours après REFERENCE_DATE (2026-06-01 + 2 = 2026-06-03 → lundi suivant).
+# / Monday at least 2 days after REFERENCE_DATE (2026-06-01 + 2 = 2026-06-03 → next Monday).
+MONDAY_NEAR = datetime.date(2026, 6, 8)    # lundi +7j — min_days_ahead=2 et 3
+
+# Lundi au moins 14 jours après REFERENCE_DATE.
+# / Monday at least 14 days after REFERENCE_DATE.
+MONDAY_FAR = datetime.date(2026, 6, 15)   # lundi +14j — min_days_ahead=14
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +228,9 @@ def test_validate_booking_accepts_valid_slot():
             opening = _make_weekly_opening('accepts_valid')
             resource = _make_resource('accepts_valid', calendar, opening, capacity=1, horizon=28)
 
-            # Lundi prochain, au moins 2 jours dans le futur.
-            # / Next Monday, at least 2 days in the future.
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            # Lundi 2026-06-08, date fixe (reference_date=2026-06-01).
+            # / Monday 2026-06-08, fixed date (reference_date=2026-06-01).
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             _add_opening_entry(
@@ -229,7 +241,7 @@ def test_validate_booking_accepts_valid_slot():
                 slot_count=1,
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -238,6 +250,7 @@ def test_validate_booking_accepts_valid_slot():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is True
@@ -273,20 +286,22 @@ def test_validate_booking_rejects_slot_beyond_horizon():
             # / 7-day horizon — the target date (14d ahead) exceeds the limit.
             resource = _make_resource('beyond_horizon', calendar, opening, capacity=1, horizon=7)
 
-            # Un lundi au moins 14 jours dans le futur.
-            # / A Monday at least 14 days in the future.
-            far_monday = _next_weekday(weekday=0, min_days_ahead=14)
+            # Lundi 2026-06-15, 14 jours après reference_date=2026-06-01.
+            # L'horizon de 7 jours (2026-06-08) ne couvre pas cette date.
+            # / Monday 2026-06-15, 14 days after reference_date=2026-06-01.
+            # The 7-day horizon (2026-06-08) does not reach this date.
+            monday = MONDAY_FAR
             slot_time = datetime.time(10, 0)
 
             _add_opening_entry(
                 opening,
-                weekday=far_monday.weekday(),
+                weekday=monday.weekday(),
                 start_time=slot_time,
                 slot_duration_minutes=60,
                 slot_count=1,
             )
 
-            start_dt = _make_aware_dt(far_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -295,6 +310,7 @@ def test_validate_booking_rejects_slot_beyond_horizon():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -330,7 +346,7 @@ def test_validate_booking_rejects_slot_in_closed_period():
             opening = _make_weekly_opening('closed_period')
             resource = _make_resource('closed_period', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             _add_opening_entry(
@@ -340,16 +356,16 @@ def test_validate_booking_rejects_slot_in_closed_period():
                 slot_duration_minutes=60,
                 slot_count=1,
             )
-            # Fermeture sur la journée entière du lundi.
-            # / Full-day closure on Monday.
+            # Fermeture sur la journée entière du lundi 2026-06-08.
+            # / Full-day closure on Monday 2026-06-08.
             _add_closed_period(
                 calendar,
-                start_date=next_monday,
-                end_date=next_monday,
+                start_date=monday,
+                end_date=monday,
                 label='Fermeture test',
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -358,6 +374,7 @@ def test_validate_booking_rejects_slot_in_closed_period():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -391,7 +408,7 @@ def test_validate_booking_rejects_full_slot():
             opening = _make_weekly_opening('full_slot')
             resource = _make_resource('full_slot', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             _add_opening_entry(
@@ -402,7 +419,7 @@ def test_validate_booking_rejects_full_slot():
                 slot_count=1,
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             # Réservation existante qui occupe ce créneau.
@@ -421,6 +438,7 @@ def test_validate_booking_rejects_full_slot():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -456,7 +474,7 @@ def test_validate_booking_slot_count_gt_1_all_slots_must_be_available():
             opening = _make_weekly_opening('multi_all_available')
             resource = _make_resource('multi_all_available', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             # 3 créneaux consécutifs de 60 min disponibles.
@@ -469,7 +487,7 @@ def test_validate_booking_slot_count_gt_1_all_slots_must_be_available():
                 slot_count=3,
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -478,6 +496,7 @@ def test_validate_booking_slot_count_gt_1_all_slots_must_be_available():
                 slot_duration_minutes=60,
                 slot_count=3,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is True
@@ -517,7 +536,7 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_full():
             opening = _make_weekly_opening('multi_one_full')
             resource = _make_resource('multi_one_full', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             _add_opening_entry(
@@ -528,7 +547,7 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_full():
                 slot_count=3,
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             # Créneau du milieu (11:00) déjà pris.
             # / Middle slot (11:00) already taken.
             second_slot_start = start_dt + datetime.timedelta(minutes=60)
@@ -548,6 +567,7 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_full():
                 slot_duration_minutes=60,
                 slot_count=3,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -587,12 +607,10 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period():
             opening = _make_weekly_opening('multi_one_closed')
             resource = _make_resource('multi_one_closed', calendar, opening, capacity=1, horizon=28)
 
-            # Lundi prochain, au moins 3 jours dans le futur pour garantir
-            # que lundi + mardi + mercredi sont tous dans l'horizon.
-            # / Next Monday, at least 3 days ahead to ensure Mon/Tue/Wed
-            # all fall within horizon.
-            next_monday = _next_weekday(weekday=0, min_days_ahead=3)
-            next_tuesday = next_monday + datetime.timedelta(days=1)
+            # Lundi 2026-06-08, mardi 2026-06-09 (dates fixes).
+            # / Monday 2026-06-08, Tuesday 2026-06-09 (fixed dates).
+            monday = MONDAY_NEAR
+            tuesday = MONDAY_NEAR + datetime.timedelta(days=1)
             slot_time = datetime.time(0, 0)
 
             # Une entrée lundi, 3 créneaux de 24h — couvre lun, mar, mer.
@@ -605,16 +623,16 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period():
                 slot_count=3,
             )
 
-            # Fermeture du mardi — le 2ème créneau tombe ce jour-là.
-            # / Tuesday closure — the 2nd slot falls on that day.
+            # Fermeture du mardi 2026-06-09 — le 2ème créneau tombe ce jour-là.
+            # / Tuesday 2026-06-09 closure — the 2nd slot falls on that day.
             _add_closed_period(
                 calendar,
-                start_date=next_tuesday,
-                end_date=next_tuesday,
+                start_date=tuesday,
+                end_date=tuesday,
                 label='Fermeture mardi',
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -623,6 +641,7 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period():
                 slot_duration_minutes=1440,
                 slot_count=3,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -662,7 +681,7 @@ def test_validate_booking_rejects_mismatched_slot_duration():
             opening = _make_weekly_opening('mismatched_duration')
             resource = _make_resource('mismatched_duration', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             # Ouverture : créneaux de 60 min.
@@ -675,7 +694,7 @@ def test_validate_booking_rejects_mismatched_slot_duration():
                 slot_count=1,
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             # Demande avec slot_duration_minutes=30 — ne correspond à aucun
@@ -688,6 +707,7 @@ def test_validate_booking_rejects_mismatched_slot_duration():
                 slot_duration_minutes=30,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -727,7 +747,7 @@ def test_validate_booking_rejects_start_time_not_aligned_to_opening():
             opening = _make_weekly_opening('misaligned_start')
             resource = _make_resource('misaligned_start', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
 
             _add_opening_entry(
                 opening,
@@ -739,7 +759,7 @@ def test_validate_booking_rejects_start_time_not_aligned_to_opening():
 
             # 10:15 — ni le début ni un multiple de 60 min depuis 10:00.
             # / 10:15 — neither the start nor a multiple of 60 min from 10:00.
-            misaligned_dt = _make_aware_dt(next_monday, datetime.time(10, 15))
+            misaligned_dt = _make_aware_dt(monday, datetime.time(10, 15))
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -748,6 +768,7 @@ def test_validate_booking_rejects_start_time_not_aligned_to_opening():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -790,7 +811,7 @@ def test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening():
             opening = _make_weekly_opening('exceeds_opening')
             resource = _make_resource('exceeds_opening', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
             slot_time = datetime.time(10, 0)
 
             # Ouverture : seulement 2 créneaux de 60 min.
@@ -803,7 +824,7 @@ def test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening():
                 slot_count=2,
             )
 
-            start_dt = _make_aware_dt(next_monday, slot_time)
+            start_dt = _make_aware_dt(monday, slot_time)
             user = _get_test_user()
 
             # Demande de 3 créneaux — le 3ème (12:00) n'est pas dans l'ouverture.
@@ -814,6 +835,7 @@ def test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening():
                 slot_duration_minutes=60,
                 slot_count=3,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False
@@ -848,7 +870,7 @@ def test_validate_booking_accepts_slot_bleeding_into_next_open_day():
             opening = _make_weekly_opening('bleed_open_next_day')
             resource = _make_resource('bleed_open_next_day', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
+            monday = MONDAY_NEAR
 
             _add_opening_entry(
                 opening,
@@ -858,7 +880,7 @@ def test_validate_booking_accepts_slot_bleeding_into_next_open_day():
                 slot_count=1,
             )
 
-            start_dt = _make_aware_dt(next_monday, datetime.time(23, 0))
+            start_dt = _make_aware_dt(monday, datetime.time(23, 0))
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -867,6 +889,7 @@ def test_validate_booking_accepts_slot_bleeding_into_next_open_day():
                 slot_duration_minutes=120,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is True
@@ -901,8 +924,8 @@ def test_validate_booking_rejects_slot_bleeding_into_closed_next_day():
             opening = _make_weekly_opening('bleed_closed_next_day')
             resource = _make_resource('bleed_closed_next_day', calendar, opening, capacity=1, horizon=28)
 
-            next_monday = _next_weekday(weekday=0, min_days_ahead=2)
-            next_tuesday = next_monday + datetime.timedelta(days=1)
+            monday = MONDAY_NEAR
+            tuesday = MONDAY_NEAR + datetime.timedelta(days=1)
 
             _add_opening_entry(
                 opening,
@@ -912,18 +935,18 @@ def test_validate_booking_rejects_slot_bleeding_into_closed_next_day():
                 slot_count=1,
             )
 
-            # Fermeture du mardi — le créneau lundi 23:00–mardi 01:00
+            # Fermeture du mardi 2026-06-09 — le créneau lundi 23:00–mardi 01:00
             # intersecte ce jour fermé.
-            # / Tuesday closure — the Monday 23:00–Tuesday 01:00 slot
+            # / Tuesday 2026-06-09 closure — the Monday 23:00–Tuesday 01:00 slot
             # intersects this closed day.
             _add_closed_period(
                 calendar,
-                start_date=next_tuesday,
-                end_date=next_tuesday,
+                start_date=tuesday,
+                end_date=tuesday,
                 label='Fermeture mardi',
             )
 
-            start_dt = _make_aware_dt(next_monday, datetime.time(23, 0))
+            start_dt = _make_aware_dt(monday, datetime.time(23, 0))
             user = _get_test_user()
 
             is_valid, error = validate_new_booking(
@@ -932,6 +955,7 @@ def test_validate_booking_rejects_slot_bleeding_into_closed_next_day():
                 slot_duration_minutes=120,
                 slot_count=1,
                 member=user,
+                reference_date=REFERENCE_DATE,
             )
 
             assert is_valid is False

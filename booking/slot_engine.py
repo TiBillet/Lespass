@@ -343,7 +343,7 @@ def compute_remaining_capacity(slot, capacity, existing_bookings):
     return max(0, capacity - overlap_count)
 
 
-def compute_slots(resource, date_from, date_to):
+def compute_slots(resource, date_from, date_to, reference_date=None):
     """
     Point d'entrée — orchestre toutes les fonctions du moteur.
     / Entry point — orchestrates all engine functions.
@@ -366,14 +366,21 @@ def compute_slots(resource, date_from, date_to):
     6. compute_remaining_capacity       → remplissage de max_capacity et
                                           remaining_capacity
 
-    :param resource:  instance Resource
-    :param date_from: datetime.date
-    :param date_to:   datetime.date
+    :param resource:       instance Resource
+    :param date_from:      datetime.date
+    :param date_to:        datetime.date
+    :param reference_date: datetime.date | None — date de référence pour le
+                           calcul de l'horizon. None = date du jour réelle.
+                           Utilisé dans les tests pour des dates fixes.
+                           / reference date for horizon calculation.
+                           None = real today. Used in tests for fixed dates.
     :return: list[BookableInterval]
     """
-    # timezone.localdate() utilise le fuseau horaire du tenant (decisions §2).
-    # / timezone.localdate() uses the tenant's timezone (decisions §2).
-    today = timezone.localdate()
+    # reference_date permet d'injecter une date fixe dans les tests (§13).
+    # En production, reference_date est None → on utilise la date du jour réelle.
+    # / reference_date allows injecting a fixed date in tests (§13).
+    # In production, reference_date is None → use the real current date.
+    today = reference_date or timezone.localdate()
     horizon_end = today + datetime.timedelta(days=resource.booking_horizon_days)
     effective_date_to = min(date_to, horizon_end)
 
