@@ -69,7 +69,7 @@
                     <!-- Vidéo statique motion-table qui tourne en boucle -->
                     <!-- preload="none" empêche le téléchargement immédiat (fix blocage Firefox mobile) -->
                     <!-- IntersectionObserver charge la vidéo quand elle entre dans le viewport -->
-                    <video autoplay loop muted class="w-100" style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);" src="{% static 'faire_festival/image/motion-table.mp4' %}">
+                    <video autoplay loop muted class="w-100" style="max-height: 380px; object-fit: cover; background-color: var(--couleur-jaune-principal);" src="{% static 'faire_festival/image/motion-table.mp4' %}"></video>
                 </div>
             </div>
 
@@ -160,6 +160,7 @@
                                 {% translate "Espaces et" %}<br>
                                 {% translate "Communautés du Faire" %}
                             </p>
+                        </div>
                     </div>
                 </div> <!-- Fin Row Jours -->
                 
