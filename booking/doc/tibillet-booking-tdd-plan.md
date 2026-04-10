@@ -38,6 +38,7 @@ booking/
     ├── conftest.py                    # Re-exports shared fixtures + booking-specific ones
     ├── test_models.py                 # Session 1 — model declarations
     ├── test_weekly_opening_overlap.py  # Session 2 — non-overlap constraint
+    ├── test_interval.py               # Session 6b — Interval / BookableInterval unit tests
     ├── test_slot_engine.py            # Session 5 — slot computation
     ├── test_booking_validation.py     # Session 6 — new booking validation
     ├── test_views_public.py           # Session 7
@@ -537,6 +538,86 @@ period, using `(end − 1 µs).date()` — consistent with
 does not occupy the next day. Using `last_slot_start_dt.date()` as
 `date_to` would omit next-day closed periods from the lookup,
 silently allowing bleed-over slots into closed days.
+
+--------------------------------------------------------------------------------
+
+## Session 6b — Refactoring booking logic (DONE ✓)
+
+The human had intuition about several issues:
+
+1. As stated in §2, datetimes in database are timezone-aware but dates in
+   Calendar are not. In a tenant at UTC+10 this matters significantly.
+2. A better data model was needed for slot creation and booking validation.
+   The core abstraction is the half-open time interval [a, b). Open days of
+   a venue can be normalized into a disjoint series of open-ended intervals.
+   A bookable slot is such an interval with capacity metadata.
+
+### Phase 1 — Pair design session (DONE ✓)
+
+A pair design session (human + AI) produced the design document
+`booking/doc/tibillet-booking-logic-design.md`.
+
+Key decisions made:
+
+- `Slot` dataclass dropped in favour of two new classes: `Interval`
+  (pure, frozen, hashable half-open time interval) and `BookableInterval`
+  (`Interval` + `max_capacity` + `remaining_capacity`, composed not
+  inherited).
+- Open time modelled as three sets: **O** (normalized open-day intervals
+  from `Calendar`), **W** (weekly opening intervals from `WeeklyOpening`),
+  **E** = `{ w ∈ W | ∃ o ∈ O, w ⊆ o }` (bookable intervals — containment,
+  not clipping).
+- A member booking is a series **B** of consecutive intervals, all from
+  the same `e ∈ E`, each with `remaining_capacity > 0`.
+- `remaining_capacity` counts all DB bookings that overlap the interval,
+  regardless of alignment (volunteer bookings included).
+- Spec ambiguity §5 ("bookings not required to be aligned") applies only
+  to volunteer/admin bookings, not member bookings. Recorded as finding §11.
+
+### Phase 2 — Inner red/green TDD cycle on new classes (DONE ✓)
+
+**Inner TDD cycle** for `Interval` and `BookableInterval` only:
+
+- Skeleton classes added to `booking/slot_engine.py` with
+  `NotImplementedError` stubs.
+- `booking/tests/test_interval.py` created — 23 pure unit tests (no DB)
+  covering `overlaps()`, `contains()`, `duration_minutes()` boundary
+  cases and `BookableInterval` property delegation.
+- Methods implemented (one-liners). All 23 tests pass.
+
+**Integration tests rewritten** (`test_slot_engine.py`) to use the new
+API:
+
+- `slot.start_datetime` → `slot.start`
+- `slot.end_datetime` → `slot.end`
+- `slot.slot_duration_minutes` (assertions) → `slot.duration_minutes()`
+- `Slot(...)` constructors → `BookableInterval(interval=Interval(...), ...)`
+- `resource_id` parameter removed from `generate_theoretical_slots` calls
+
+At this stage: 20 tests were RED (implementation still returned `Slot`),
+23 unit tests GREEN, 10 booking-validation tests GREEN.
+
+### Phase 3 — Green phase (DONE ✓)
+
+**`booking/slot_engine.py`** rewritten:
+
+- `Slot` class removed.
+- `generate_theoretical_slots` — `resource_id` parameter dropped, returns
+  `list[BookableInterval]` (`max_capacity=0, remaining_capacity=0`
+  at generation time, filled by `compute_slots`).
+- `compute_remaining_capacity` — accepts `BookableInterval`, uses
+  `slot.interval.overlaps(booking_interval)` (constructs an `Interval`
+  for each DB booking and delegates to `Interval.overlaps`).
+- `compute_slots` — timezone bug fixed: `datetime.date.today()` →
+  `timezone.localdate()`; sets `max_capacity` and `remaining_capacity`
+  on each `BookableInterval`.
+
+**`booking/booking_validator.py`** — dict key updated from
+`(slot.start_datetime, slot.slot_duration_minutes)` to
+`(slot.start, slot.duration_minutes())`.
+
+Final result: **70/70 tests pass** (23 unit + 30 slot-engine integration +
+10 booking-validation + 7 pre-existing model/overlap tests).
 
 --------------------------------------------------------------------------------
 

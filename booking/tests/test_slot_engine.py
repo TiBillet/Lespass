@@ -365,7 +365,6 @@ def test_generate_theoretical_slots_from_weekday_template():
             )
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 1),
@@ -373,14 +372,14 @@ def test_generate_theoretical_slots_from_weekday_template():
             )
 
             assert len(slots) == 2
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 1)
-            assert slots[0].start_datetime.time() == datetime.time(9, 0)
-            assert slots[0].end_datetime.time() == datetime.time(10, 0)
-            assert slots[1].start_datetime.time() == datetime.time(10, 0)
-            assert slots[1].end_datetime.time() == datetime.time(11, 0)
+            assert slots[0].start.date() == datetime.date(2026, 6, 1)
+            assert slots[0].start.time() == datetime.time(9, 0)
+            assert slots[0].end.time() == datetime.time(10, 0)
+            assert slots[1].start.time() == datetime.time(10, 0)
+            assert slots[1].end.time() == datetime.time(11, 0)
             # Les start_datetime doivent être timezone-aware.
             # / start_datetime must be timezone-aware.
-            assert slots[0].start_datetime.tzinfo is not None
+            assert slots[0].start.tzinfo is not None
 
         finally:
             OpeningEntry.objects.filter(
@@ -425,7 +424,6 @@ def test_generate_theoretical_slots_excludes_closed_dates():
             closed_dates = {datetime.date(2026, 6, 1)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 8),
@@ -433,7 +431,7 @@ def test_generate_theoretical_slots_excludes_closed_dates():
             )
 
             assert len(slots) == 1
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 8)
+            assert slots[0].start.date() == datetime.date(2026, 6, 8)
 
         finally:
             OpeningEntry.objects.filter(
@@ -477,7 +475,6 @@ def test_generate_theoretical_slots_respects_date_to_boundary():
             )
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 7),
@@ -485,7 +482,7 @@ def test_generate_theoretical_slots_respects_date_to_boundary():
             )
 
             assert len(slots) == 1
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 1)
+            assert slots[0].start.date() == datetime.date(2026, 6, 1)
 
         finally:
             OpeningEntry.objects.filter(
@@ -551,7 +548,6 @@ def test_generate_theoretical_slots_start_on_closed_day_bleed_into_open_day_is_e
             closed_dates = {datetime.date(2026, 6, 1)}
 
             slots = generate_theoretical_slots(
-                resource_id=resource.pk,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 2),
@@ -639,7 +635,6 @@ def test_generate_theoretical_slots_last_slot_bleeds_onto_open_day_is_returned()
             closed_dates = {datetime.date(2026, 6, 1)}
 
             slots = generate_theoretical_slots(
-                resource_id=resource.pk,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 2),
@@ -651,9 +646,9 @@ def test_generate_theoretical_slots_last_slot_bleeds_onto_open_day_is_returned()
             # / slot[0] starts Monday (closed) → excluded.
             # / slot[1] starts Tuesday (open) → returned.
             assert len(slots) == 1
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 2)
-            assert slots[0].start_datetime.time() == datetime.time(0, 0)
-            assert slots[0].end_datetime.time() == datetime.time(2, 0)
+            assert slots[0].start.date() == datetime.date(2026, 6, 2)
+            assert slots[0].start.time() == datetime.time(0, 0)
+            assert slots[0].end.time() == datetime.time(2, 0)
 
         finally:
             _cleanup()
@@ -716,7 +711,6 @@ def test_generate_theoretical_slots_multi_day_spanning_entry():
             closed_dates = {datetime.date(2026, 6, 2)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 1),
                 date_to=datetime.date(2026, 6, 2),
@@ -730,9 +724,9 @@ def test_generate_theoretical_slots_multi_day_spanning_entry():
             # / [1] intersects Tuesday (closed) → excluded (decisions §7).
             # / [2] intersects Tuesday (closed) → excluded.
             assert len(slots) == 1
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 1)
-            assert slots[0].start_datetime.time() == datetime.time(8, 0)
-            assert slots[0].end_datetime.time() == datetime.time(20, 0)
+            assert slots[0].start.date() == datetime.date(2026, 6, 1)
+            assert slots[0].start.time() == datetime.time(8, 0)
+            assert slots[0].end.time() == datetime.time(20, 0)
 
         finally:
             OpeningEntry.objects.filter(
@@ -806,7 +800,6 @@ def test_generate_theoretical_slots_bleed_into_closed_day_start_date_is_open():
             closed_dates = {datetime.date(2026, 6, 8)}
 
             slots = generate_theoretical_slots(
-                resource_id=resource.pk,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 7),
                 date_to=datetime.date(2026, 6, 8),
@@ -868,7 +861,6 @@ def test_generate_theoretical_slots_multi_day_slot_all_open_days_is_returned():
             )
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 4),
                 date_to=datetime.date(2026, 6, 6),
@@ -878,11 +870,11 @@ def test_generate_theoretical_slots_multi_day_slot_all_open_days_is_returned():
             # Tous les jours intersectés sont ouverts → créneau retourné.
             # / All intersected days are open → slot returned.
             assert len(slots) == 1
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 4)
-            assert slots[0].start_datetime.time() == datetime.time(0, 0)
-            assert slots[0].end_datetime.date() == datetime.date(2026, 6, 6)
-            assert slots[0].end_datetime.time() == datetime.time(0, 0)
-            assert slots[0].slot_duration_minutes == 2880
+            assert slots[0].start.date() == datetime.date(2026, 6, 4)
+            assert slots[0].start.time() == datetime.time(0, 0)
+            assert slots[0].end.date() == datetime.date(2026, 6, 6)
+            assert slots[0].end.time() == datetime.time(0, 0)
+            assert slots[0].duration_minutes() == 2880
 
         finally:
             OpeningEntry.objects.filter(
@@ -958,7 +950,6 @@ def test_generate_theoretical_slots_three_day_slot_with_closed_middle_day_is_exc
             closed_dates = {datetime.date(2026, 6, 5)}
 
             slots = generate_theoretical_slots(
-                resource_id=resource.pk,
                 opening_entries=[entry],
                 date_from=datetime.date(2026, 6, 4),
                 date_to=datetime.date(2026, 6, 7),
@@ -985,13 +976,14 @@ def test_compute_remaining_capacity_with_no_bookings_equals_capacity():
 
     LOCALISATION : booking/tests/test_slot_engine.py
     """
-    from booking.slot_engine import Slot, compute_remaining_capacity
+    from booking.slot_engine import BookableInterval, Interval, compute_remaining_capacity
 
-    slot = Slot(
-        resource_id=1,
-        start_datetime=timezone.make_aware(datetime.datetime(2026, 6, 1, 9, 0)),
-        end_datetime=timezone.make_aware(datetime.datetime(2026, 6, 1, 10, 0)),
-        slot_duration_minutes=60,
+    slot = BookableInterval(
+        interval=Interval(
+            start=timezone.make_aware(datetime.datetime(2026, 6, 1, 9, 0)),
+            end=timezone.make_aware(datetime.datetime(2026, 6, 1, 10, 0)),
+        ),
+        max_capacity=3,
         remaining_capacity=0,
     )
     assert compute_remaining_capacity(slot, capacity=3, existing_bookings=[]) == 3
@@ -1014,7 +1006,7 @@ def test_compute_remaining_capacity_decreases_with_overlapping_booking():
                                remaining = 2  ✓
     """
     from booking.models import Booking
-    from booking.slot_engine import Slot, compute_remaining_capacity
+    from booking.slot_engine import BookableInterval, Interval, compute_remaining_capacity
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -1034,11 +1026,12 @@ def test_compute_remaining_capacity_decreases_with_overlapping_booking():
                 status=Booking.STATUS_NEW,
             )
 
-            slot = Slot(
-                resource_id=resource.pk,
-                start_datetime=timezone.make_aware(datetime.datetime(2026, 6, 1, 9, 0)),
-                end_datetime=timezone.make_aware(datetime.datetime(2026, 6, 1, 10, 0)),
-                slot_duration_minutes=60,
+            slot = BookableInterval(
+                interval=Interval(
+                    start=timezone.make_aware(datetime.datetime(2026, 6, 1, 9, 0)),
+                    end=timezone.make_aware(datetime.datetime(2026, 6, 1, 10, 0)),
+                ),
+                max_capacity=3,
                 remaining_capacity=0,
             )
 
@@ -1068,7 +1061,7 @@ def test_compute_remaining_capacity_zero_when_all_units_taken():
                                remaining = 0  ✓
     """
     from booking.models import Booking
-    from booking.slot_engine import Slot, compute_remaining_capacity
+    from booking.slot_engine import BookableInterval, Interval, compute_remaining_capacity
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -1096,11 +1089,12 @@ def test_compute_remaining_capacity_zero_when_all_units_taken():
                 status=Booking.STATUS_CONFIRMED,
             )
 
-            slot = Slot(
-                resource_id=resource.pk,
-                start_datetime=timezone.make_aware(datetime.datetime(2026, 6, 1, 9, 0)),
-                end_datetime=timezone.make_aware(datetime.datetime(2026, 6, 1, 10, 0)),
-                slot_duration_minutes=60,
+            slot = BookableInterval(
+                interval=Interval(
+                    start=timezone.make_aware(datetime.datetime(2026, 6, 1, 9, 0)),
+                    end=timezone.make_aware(datetime.datetime(2026, 6, 1, 10, 0)),
+                ),
+                max_capacity=2,
                 remaining_capacity=0,
             )
 
@@ -1341,14 +1335,14 @@ def test_compute_slots_end_to_end_with_fixture_coworking_resource():
 
         assert len(slots) == 8
 
-        assert slots[0].start_datetime.time() == datetime.time(9, 0)
-        assert slots[0].end_datetime.time() == datetime.time(10, 0)
-        assert slots[7].start_datetime.time() == datetime.time(16, 0)
-        assert slots[7].end_datetime.time() == datetime.time(17, 0)
+        assert slots[0].start.time() == datetime.time(9, 0)
+        assert slots[0].end.time() == datetime.time(10, 0)
+        assert slots[7].start.time() == datetime.time(16, 0)
+        assert slots[7].end.time() == datetime.time(17, 0)
 
         for slot in slots:
-            assert slot.start_datetime.date() == next_monday
-            assert slot.slot_duration_minutes == 60
+            assert slot.start.date() == next_monday
+            assert slot.duration_minutes() == 60
             assert slot.remaining_capacity <= 3
 
 
@@ -1403,15 +1397,15 @@ def test_compute_slots_end_to_end_with_fixture_petite_salle():
 
         assert len(slots) == 3
 
-        assert slots[0].start_datetime.time() == datetime.time(10, 0)
-        assert slots[0].end_datetime.time() == datetime.time(13, 0)
-        assert slots[1].start_datetime.time() == datetime.time(13, 0)
-        assert slots[1].end_datetime.time() == datetime.time(16, 0)
-        assert slots[2].start_datetime.time() == datetime.time(16, 0)
-        assert slots[2].end_datetime.time() == datetime.time(19, 0)
+        assert slots[0].start.time() == datetime.time(10, 0)
+        assert slots[0].end.time() == datetime.time(13, 0)
+        assert slots[1].start.time() == datetime.time(13, 0)
+        assert slots[1].end.time() == datetime.time(16, 0)
+        assert slots[2].start.time() == datetime.time(16, 0)
+        assert slots[2].end.time() == datetime.time(19, 0)
 
         for slot in slots:
-            assert slot.slot_duration_minutes == 180
+            assert slot.duration_minutes() == 180
 
 
 # ---------------------------------------------------------------------------
@@ -1499,7 +1493,6 @@ def test_full_week_opening_no_closed_day_returns_168_slots():
             entries = list(opening.opening_entries.all())
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1544,7 +1537,6 @@ def test_full_week_opening_wednesday_closed_returns_144_slots():
             closed_dates = {datetime.date(2026, 6, 3)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1557,7 +1549,7 @@ def test_full_week_opening_wednesday_closed_returns_144_slots():
             # / No slot must start on Wednesday.
             closed_day_slots = [
                 s for s in slots
-                if s.start_datetime.date() == datetime.date(2026, 6, 3)
+                if s.start.date() == datetime.date(2026, 6, 3)
             ]
             assert len(closed_day_slots) == 0
 
@@ -1597,7 +1589,6 @@ def test_full_week_opening_monday_closed_returns_144_slots():
             closed_dates = {datetime.date(2026, 6, 1)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1610,7 +1601,7 @@ def test_full_week_opening_monday_closed_returns_144_slots():
             # / No slot must start on Monday.
             monday_slots = [
                 s for s in slots
-                if s.start_datetime.date() == datetime.date(2026, 6, 1)
+                if s.start.date() == datetime.date(2026, 6, 1)
             ]
             assert len(monday_slots) == 0
 
@@ -1650,7 +1641,6 @@ def test_full_week_opening_sunday_closed_returns_144_slots():
             closed_dates = {datetime.date(2026, 6, 7)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1663,7 +1653,7 @@ def test_full_week_opening_sunday_closed_returns_144_slots():
             # / No slot must start on Sunday.
             sunday_slots = [
                 s for s in slots
-                if s.start_datetime.date() == datetime.date(2026, 6, 7)
+                if s.start.date() == datetime.date(2026, 6, 7)
             ]
             assert len(sunday_slots) == 0
 
@@ -1707,7 +1697,6 @@ def test_full_week_opening_two_non_adjacent_days_closed_returns_120_slots():
             }
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1720,7 +1709,7 @@ def test_full_week_opening_two_non_adjacent_days_closed_returns_120_slots():
             # / No slot must start on a closed day.
             closed_day_slots = [
                 s for s in slots
-                if s.start_datetime.date() in closed_dates
+                if s.start.date() in closed_dates
             ]
             assert len(closed_day_slots) == 0
 
@@ -1812,7 +1801,6 @@ def test_one_day_slots_opening_no_closed_day_returns_7_slots():
             entries = list(opening.opening_entries.all())
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1833,8 +1821,8 @@ def test_one_day_slots_opening_no_closed_day_returns_7_slots():
                 datetime.date(2026, 6, 7),  # dim / Sun
             ]
             for slot, expected_date in zip(slots, expected_dates):
-                assert slot.start_datetime.date() == expected_date
-                assert slot.slot_duration_minutes == 1440
+                assert slot.start.date() == expected_date
+                assert slot.duration_minutes() == 1440
 
         finally:
             _cleanup()
@@ -1869,7 +1857,6 @@ def test_one_day_slots_opening_wednesday_closed_returns_6_slots():
             closed_dates = {datetime.date(2026, 6, 3)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1881,7 +1868,7 @@ def test_one_day_slots_opening_wednesday_closed_returns_6_slots():
             # Aucun créneau ne doit démarrer le mercredi.
             # / No slot must start on Wednesday.
             assert all(
-                s.start_datetime.date() != datetime.date(2026, 6, 3)
+                s.start.date() != datetime.date(2026, 6, 3)
                 for s in slots
             )
 
@@ -1928,7 +1915,6 @@ def test_one_day_slots_opening_monday_closed_returns_6_slots():
             closed_dates = {datetime.date(2026, 6, 1)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1942,13 +1928,13 @@ def test_one_day_slots_opening_monday_closed_returns_6_slots():
             # Aucun créneau ne commence le lundi.
             # / No slot starts on Monday.
             assert all(
-                s.start_datetime.date() != datetime.date(2026, 6, 1)
+                s.start.date() != datetime.date(2026, 6, 1)
                 for s in slots
             )
 
             # Le premier créneau retourné doit commencer le mardi.
             # / The first returned slot must start on Tuesday.
-            assert slots[0].start_datetime.date() == datetime.date(2026, 6, 2)
+            assert slots[0].start.date() == datetime.date(2026, 6, 2)
 
         finally:
             _cleanup()
@@ -1987,7 +1973,6 @@ def test_one_day_slots_opening_sunday_closed_returns_6_slots():
             closed_dates = {datetime.date(2026, 6, 7)}
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -1998,7 +1983,7 @@ def test_one_day_slots_opening_sunday_closed_returns_6_slots():
 
             # Le dernier créneau retourné doit être le samedi.
             # / The last returned slot must be Saturday.
-            assert slots[-1].start_datetime.date() == datetime.date(2026, 6, 6)
+            assert slots[-1].start.date() == datetime.date(2026, 6, 6)
 
         finally:
             _cleanup()
@@ -2040,7 +2025,6 @@ def test_one_day_slots_opening_two_non_adjacent_days_closed_returns_5_slots():
             }
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -2052,7 +2036,7 @@ def test_one_day_slots_opening_two_non_adjacent_days_closed_returns_5_slots():
             # Aucun créneau ne doit démarrer un jour fermé.
             # / No slot must start on a closed day.
             assert all(
-                s.start_datetime.date() not in closed_dates
+                s.start.date() not in closed_dates
                 for s in slots
             )
 
@@ -2141,7 +2125,6 @@ def test_one_week_slot_opening_no_closed_day_returns_1_slot():
             entries = list(opening.opening_entries.all())
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -2151,12 +2134,12 @@ def test_one_week_slot_opening_no_closed_day_returns_1_slot():
             assert len(slots) == 1
 
             slot = slots[0]
-            assert slot.start_datetime.date() == datetime.date(2026, 6, 1)
-            assert slot.slot_duration_minutes == WEEK_MINUTES
+            assert slot.start.date() == datetime.date(2026, 6, 1)
+            assert slot.duration_minutes() == WEEK_MINUTES
             # Le créneau dure exactement une semaine.
             # / The slot lasts exactly one week.
-            expected_end = slot.start_datetime + datetime.timedelta(minutes=WEEK_MINUTES)
-            assert slot.end_datetime == expected_end
+            expected_end = slot.start + datetime.timedelta(minutes=WEEK_MINUTES)
+            assert slot.end == expected_end
 
         finally:
             _cleanup()
@@ -2191,7 +2174,6 @@ def test_one_week_slot_opening_wednesday_closed_returns_0_slots():
             closed_dates = {datetime.date(2026, 6, 3)}  # mercredi / Wednesday
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -2233,7 +2215,6 @@ def test_one_week_slot_opening_monday_closed_returns_0_slots():
             closed_dates = {datetime.date(2026, 6, 1)}  # lundi / Monday
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,
@@ -2279,7 +2260,6 @@ def test_one_week_slot_opening_sunday_closed_returns_0_slots():
             closed_dates = {datetime.date(2026, 6, 7)}  # dimanche / Sunday
 
             slots = generate_theoretical_slots(
-                resource_id=1,
                 opening_entries=entries,
                 date_from=DATE_FROM_FULL_WEEK,
                 date_to=DATE_TO_FULL_WEEK,

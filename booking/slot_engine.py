@@ -29,22 +29,84 @@ import datetime
 from django.utils import timezone
 
 
-@dataclasses.dataclass
-class Slot:
+@dataclasses.dataclass(frozen=True)
+class Interval:
     """
-    Créneau calculé à la volée — jamais stocké en base.
-    / On-the-fly computed slot — never stored in the database.
+    Intervalle de temps semi-ouvert [start, end).
+    / Half-open time interval [start, end).
 
     LOCALISATION : booking/slot_engine.py
 
-    start_datetime et end_datetime sont toujours timezone-aware (decisions §2).
-    / start_datetime and end_datetime are always timezone-aware (decisions §2).
+    Immuable et hashable grâce à frozen=True — peut être utilisé comme
+    clé de dictionnaire ou élément de set.
+    Les deux bornes doivent être timezone-aware (decisions §2).
+    / Immutable and hashable via frozen=True — usable as dict key or set element.
+    Both bounds must be timezone-aware (decisions §2).
     """
-    resource_id: int
-    start_datetime: datetime.datetime    # timezone-aware
-    end_datetime: datetime.datetime      # start_datetime + slot_duration_minutes
-    slot_duration_minutes: int
-    remaining_capacity: int              # capacity − réservations qui chevauchent
+    start: datetime.datetime   # timezone-aware, borne inférieure incluse / inclusive lower bound
+    end:   datetime.datetime   # timezone-aware, borne supérieure exclue / exclusive upper bound
+
+    def overlaps(self, other: 'Interval') -> bool:
+        """
+        Vrai si les deux intervalles se chevauchent.
+        [a, b) et [c, d) se chevauchent ssi a < d et c < b.
+        / True if the two intervals overlap.
+        [a, b) and [c, d) overlap iff a < d and c < b.
+        """
+        return self.start < other.end and other.start < self.end
+
+    def contains(self, other: 'Interval') -> bool:
+        """
+        Vrai si other est entièrement contenu dans cet intervalle.
+        self.start ≤ other.start et other.end ≤ self.end.
+        / True if other is entirely contained within this interval.
+        self.start ≤ other.start and other.end ≤ self.end.
+        """
+        return self.start <= other.start and other.end <= self.end
+
+    def duration_minutes(self) -> int:
+        """
+        Durée de l'intervalle en minutes entières (arrondi vers le bas).
+        / Duration of the interval in whole minutes (floor).
+        """
+        return int((self.end - self.start).total_seconds() / 60)
+
+
+@dataclasses.dataclass
+class BookableInterval:
+    """
+    Créneau réservable : un Interval avec une capacité maximale et une
+    capacité restante calculée à la volée.
+    / Bookable slot: an Interval with max capacity and remaining capacity
+    computed on the fly.
+
+    LOCALISATION : booking/slot_engine.py
+
+    Composé à partir d'un Interval (pas d'héritage) pour éviter de porter
+    la capacité sur les intervalles purs (fenêtres d'ouverture, créneaux
+    hebdomadaires). Voir design §4 dans tibillet-booking-logic-design.md.
+    / Composed from an Interval (no inheritance) to avoid attaching capacity
+    to pure intervals (open-day windows, weekly slots).
+    See design §4 in tibillet-booking-logic-design.md.
+    """
+    interval:           Interval
+    max_capacity:       int
+    remaining_capacity: int
+
+    @property
+    def start(self) -> datetime.datetime:
+        """Délègue à interval.start. / Delegates to interval.start."""
+        return self.interval.start
+
+    @property
+    def end(self) -> datetime.datetime:
+        """Délègue à interval.end. / Delegates to interval.end."""
+        return self.interval.end
+
+    def duration_minutes(self) -> int:
+        """Délègue à interval.duration_minutes(). / Delegates to interval.duration_minutes()."""
+        return self.interval.duration_minutes()
+
 
 
 def get_closed_dates_for_resource(resource, date_from, date_to):
@@ -155,7 +217,7 @@ def _slot_intersects_closed_date(start_dt, end_dt, closed_dates):
     return False
 
 
-def generate_theoretical_slots(resource_id, opening_entries, date_from, date_to, closed_dates):
+def generate_theoretical_slots(opening_entries, date_from, date_to, closed_dates):
     """
     Calcul pur — génère tous les créneaux théoriques pour la plage donnée.
     / Pure computation — generates all theoretical slots for the given range.
@@ -176,27 +238,28 @@ def generate_theoretical_slots(resource_id, opening_entries, date_from, date_to,
     Note : la vérification des fermetures est faite SLOT PAR SLOT,
     pas une fois pour l'OpeningEntry entière. Un entry dont le jour de
     départ est fermé peut quand même produire des créneaux dont le
-    start_datetime tombe un jour ouvert (bleed-over).
+    start tombe un jour ouvert (bleed-over).
     / Note: closure check is done PER SLOT, not once for the whole
     OpeningEntry. An entry whose start day is closed can still produce
-    slots whose start_datetime falls on an open day (bleed-over).
+    slots whose start falls on an open day (bleed-over).
 
-    Note : start_datetime est calculé par addition de timedelta, pas par
-    division heures/minutes — un slot_duration_minutes > 1440 (ex : 8640 min)
-    produirait datetime(y, m, d, 144, 0) qui lève ValueError.
-    / Note: start_datetime is computed via timedelta addition, not
-    hour/minute division — slot_duration_minutes > 1440 (e.g. 8640 min)
-    would produce datetime(y, m, d, 144, 0) which raises ValueError.
+    Note : start est calculé par addition de timedelta, pas par division
+    heures/minutes — une durée > 1440 min (ex : 8640 min) produirait
+    datetime(y, m, d, 144, 0) qui lève ValueError.
+    / Note: start is computed via timedelta addition, not hour/minute
+    division — duration > 1440 min (e.g. 8640 min) would produce
+    datetime(y, m, d, 144, 0) which raises ValueError.
 
-    :param resource_id:      int — pk de la ressource / resource pk
     :param opening_entries:  iterable[OpeningEntry]
     :param date_from:        datetime.date
     :param date_to:          datetime.date
     :param closed_dates:     set[datetime.date]
-    :return: list[Slot] — remaining_capacity est initialisé à 0
-                        / remaining_capacity is initialised to 0
+    :return: list[BookableInterval] — max_capacity et remaining_capacity
+             initialisés à 0, remplis par compute_slots
+             / max_capacity and remaining_capacity initialised to 0,
+             filled by compute_slots
     """
-    slots = []
+    bookable_intervals = []
     tz = timezone.get_current_timezone()
     current_date = date_from
 
@@ -229,17 +292,15 @@ def generate_theoretical_slots(resource_id, opening_entries, date_from, date_to,
                 if _slot_intersects_closed_date(start_dt, end_dt, closed_dates):
                     continue
 
-                slots.append(Slot(
-                    resource_id=resource_id,
-                    start_datetime=start_dt,
-                    end_datetime=end_dt,
-                    slot_duration_minutes=entry.slot_duration_minutes,
+                bookable_intervals.append(BookableInterval(
+                    interval=Interval(start=start_dt, end=end_dt),
+                    max_capacity=0,
                     remaining_capacity=0,
                 ))
 
         current_date += datetime.timedelta(days=1)
 
-    return slots
+    return bookable_intervals
 
 
 def compute_remaining_capacity(slot, capacity, existing_bookings):
@@ -249,19 +310,18 @@ def compute_remaining_capacity(slot, capacity, existing_bookings):
 
     LOCALISATION : booking/slot_engine.py
 
-    Une réservation chevauche le créneau si son intervalle
-    [booking_start, booking_end[ intersecte [slot_start, slot_end[.
-    Le chevauchement partiel compte comme un chevauchement complet.
-    / A booking overlaps the slot if its interval
-    [booking_start, booking_end[ intersects [slot_start, slot_end[.
-    Partial overlap counts as full overlap.
+    Une réservation chevauche le créneau si son Interval chevauche celui du
+    créneau (méthode Interval.overlaps). Le chevauchement partiel compte
+    comme un chevauchement complet.
+    / A booking overlaps the slot if its Interval overlaps the slot's Interval
+    (Interval.overlaps method). Partial overlap counts as full overlap.
 
     booking_end = booking_start + slot_duration_minutes × slot_count
     (une réservation peut couvrir plusieurs créneaux consécutifs)
     / booking_end = booking_start + slot_duration_minutes × slot_count
     (a booking can cover multiple consecutive slots)
 
-    :param slot:               Slot
+    :param slot:               BookableInterval
     :param capacity:           int — capacité totale de la ressource / total capacity
     :param existing_bookings:  iterable[Booking]
     :return: int — toujours ≥ 0 / always ≥ 0
@@ -269,13 +329,13 @@ def compute_remaining_capacity(slot, capacity, existing_bookings):
     overlap_count = 0
 
     for booking in existing_bookings:
-        booking_start = booking.start_datetime
-        booking_end = booking_start + datetime.timedelta(
+        booking_end = booking.start_datetime + datetime.timedelta(
             minutes=booking.slot_duration_minutes * booking.slot_count
         )
-        # Chevauchement semi-ouvert : [booking_start, booking_end) ∩ [slot_start, slot_end)
-        # / Half-open overlap: [booking_start, booking_end) ∩ [slot_start, slot_end)
-        if booking_start < slot.end_datetime and booking_end > slot.start_datetime:
+        # Construit l'Interval de la réservation pour utiliser overlaps().
+        # / Builds the booking's Interval to use overlaps().
+        booking_interval = Interval(start=booking.start_datetime, end=booking_end)
+        if slot.interval.overlaps(booking_interval):
             overlap_count += 1
 
     return max(0, capacity - overlap_count)
@@ -300,15 +360,18 @@ def compute_slots(resource, date_from, date_to):
     2. get_opening_entries_for_resource → QuerySet
     3. get_closed_dates_for_resource    → set[date]
     4. get_existing_bookings_for_resource → QuerySet
-    5. generate_theoretical_slots       → list[Slot] (remaining_capacity=0)
-    6. compute_remaining_capacity       → remplissage de remaining_capacity
+    5. generate_theoretical_slots       → list[BookableInterval] (capacités à 0)
+    6. compute_remaining_capacity       → remplissage de max_capacity et
+                                          remaining_capacity
 
     :param resource:  instance Resource
     :param date_from: datetime.date
     :param date_to:   datetime.date
-    :return: list[Slot]
+    :return: list[BookableInterval]
     """
-    today = datetime.date.today()
+    # timezone.localdate() utilise le fuseau horaire du tenant (decisions §2).
+    # / timezone.localdate() uses the tenant's timezone (decisions §2).
+    today = timezone.localdate()
     horizon_end = today + datetime.timedelta(days=resource.booking_horizon_days)
     effective_date_to = min(date_to, horizon_end)
 
@@ -319,8 +382,7 @@ def compute_slots(resource, date_from, date_to):
     closed_dates = get_closed_dates_for_resource(resource, date_from, effective_date_to)
     existing_bookings = get_existing_bookings_for_resource(resource, date_from, effective_date_to)
 
-    theoretical_slots = generate_theoretical_slots(
-        resource_id=resource.pk,
+    bookable_intervals = generate_theoretical_slots(
         opening_entries=opening_entries,
         date_from=date_from,
         date_to=effective_date_to,
@@ -328,10 +390,11 @@ def compute_slots(resource, date_from, date_to):
     )
 
     result = []
-    for slot in theoretical_slots:
-        slot.remaining_capacity = compute_remaining_capacity(
-            slot, capacity=resource.capacity, existing_bookings=existing_bookings
+    for bookable in bookable_intervals:
+        bookable.max_capacity = resource.capacity
+        bookable.remaining_capacity = compute_remaining_capacity(
+            bookable, capacity=resource.capacity, existing_bookings=existing_bookings
         )
-        result.append(slot)
+        result.append(bookable)
 
     return result
