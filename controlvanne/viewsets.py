@@ -171,7 +171,6 @@ class TireuseViewSet(viewsets.ViewSet):
                     "prix_litre": str(tireuse.prix_litre),
                     "reservoir_ml": float(tireuse.reservoir_ml),
                     "reservoir_max_ml": tireuse.reservoir_max_ml,
-                    "seuil_mini_ml": float(tireuse.seuil_mini_ml),
                     "calibration_factor": (
                         tireuse.debimetre.flow_calibration_factor
                         if tireuse.debimetre
@@ -301,13 +300,9 @@ class TireuseViewSet(viewsets.ViewSet):
                 }
             )
 
-        # Réservoir disponible (avec ou sans réserve)
-        # / Available reservoir (with or without reserve)
+        # Volume disponible dans le reservoir
+        # / Available volume in reservoir
         reservoir_disponible = float(tireuse.reservoir_ml)
-        if tireuse.appliquer_reserve:
-            reservoir_disponible = max(
-                0, reservoir_disponible - float(tireuse.seuil_mini_ml)
-            )
 
         allowed_ml = calculer_volume_autorise_ml(
             solde_centimes, prix_litre, reservoir_disponible

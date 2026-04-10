@@ -79,8 +79,6 @@ def cv_tireuse_avec_fut(tenant):
                 "enabled": True,
                 "fut_actif": fut,
                 "reservoir_ml": Decimal("10000.00"),
-                "seuil_mini_ml": Decimal("0.00"),
-                "appliquer_reserve": False,
             },
         )
         yield t

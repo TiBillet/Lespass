@@ -117,7 +117,6 @@ def test_tireuse(tenant, test_asset_tlf_api):
                 "debimetre": debimetre,
                 "fut_actif": fut,
                 "reservoir_ml": Decimal("5000.00"),
-                "seuil_mini_ml": Decimal("200.00"),
             },
         )
         yield tireuse

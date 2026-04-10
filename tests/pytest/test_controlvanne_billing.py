@@ -171,15 +171,15 @@ def tireuse_billing(tenant):
                 "fut_actif": produit_fut,
                 "debimetre": debimetre,
                 "reservoir_ml": Decimal("30000.00"),
-                "seuil_mini_ml": Decimal("0.00"),
-                "appliquer_reserve": False,
             },
         )
         # Le signal post_save cree automatiquement un PointDeVente.
         # On le marque hidden pour ne pas polluer les tests menu_ventes.
         # / post_save signal auto-creates a PointDeVente. Mark it hidden.
         if tireuse.point_de_vente:
-            PointDeVente.objects.filter(pk=tireuse.point_de_vente_id).update(hidden=True)
+            PointDeVente.objects.filter(pk=tireuse.point_de_vente_id).update(
+                hidden=True
+            )
 
         return tireuse
 

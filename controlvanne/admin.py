@@ -203,8 +203,6 @@ class TireuseBecAdmin(ModelAdmin):
         "nom_tireuse",
         "fut_actif",
         "debimetre",
-        "seuil_mini_ml",
-        "appliquer_reserve",
         "enabled",
         "notes",
     )

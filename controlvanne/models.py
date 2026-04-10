@@ -239,19 +239,6 @@ class TireuseBec(models.Model):
         verbose_name=_("Remaining volume"),
         help_text=_("Current volume in ml (decremented in real time)."),
     )
-    seuil_mini_ml = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal("0.00"),
-        verbose_name=_("Minimum threshold"),
-        help_text=_("Low threshold in ml (this volume is reserved)."),
-    )
-    appliquer_reserve = models.BooleanField(
-        default=True,
-        verbose_name=_("Apply reserve"),
-        help_text=_("Apply reserve (stock - threshold)."),
-    )
-
     # --- Proprietes calculees ---
 
     @property

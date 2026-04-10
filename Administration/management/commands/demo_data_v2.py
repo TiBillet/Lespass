@@ -1299,6 +1299,7 @@ class Command(BaseCommand):
             from django.db.models import ProtectedError
             from BaseBillet.models import (
                 LigneArticle,
+                Paiement_stripe,
                 ProductSold,
                 PriceSold,
                 CategorieProduct,
@@ -1318,6 +1319,7 @@ class Command(BaseCommand):
                     PointDeVente,
                     CartePrimaire,
                     Printer,
+                    SortieCaisse,
                 )
 
             if inventaire_installed:
@@ -1331,6 +1333,246 @@ class Command(BaseCommand):
                     Federation,
                 )
 
+            # =====================================================================
+            # ETAPE 1 : Purge des donnees TENANT (enfants qui referent des objets public)
+            # Les modeles tenant (LigneArticle, Product, Price…) ont des FK PROTECT/SET_NULL
+            # vers des modeles public (CarteCashless, Wallet, fedow_core.Asset).
+            # Il faut supprimer/nullifier ces references AVANT de toucher le schema public.
+            # / STEP 1: Purge TENANT data (children that reference public objects)
+            # Tenant models have FK PROTECT/SET_NULL to public models.
+            # Must delete/nullify these references BEFORE touching the public schema.
+            # =====================================================================
+            from AuthBillet.models import Wallet
+            from QrcodeCashless.models import CarteCashless, Detail
+            from fedow_connect.models import Asset as FedowConnectAsset
+
+            for fx in fixtures:
+                name = fx.get("name")
+                if not name:
+                    continue
+                schema = slugify(name)
+                tenant = Client.objects.filter(schema_name=schema).first()
+                if not tenant:
+                    logger.info(
+                        f"--flush: tenant '{name}' introuvable, rien à purger."
+                    )
+                    continue
+                try:
+                    with tenant_context(tenant):
+                        compteurs = {}
+
+                        # --- Nullifier les FK cross-schema vers fedow_core.Asset ---
+                        # Product.asset et Price.asset sont SET_NULL vers fedow_core.Asset (SHARED_APPS).
+                        # Django ne peut pas cascader SET_NULL entre schemas (la table tenant
+                        # n'existe pas dans le schema public).
+                        # / NULL out cross-schema FKs to fedow_core.Asset (shared).
+                        # Django can't cascade SET_NULL across schemas.
+                        if fedow_core_installed:
+                            Product.objects.filter(asset__isnull=False).update(asset=None)
+                            Price.objects.filter(asset__isnull=False).update(asset=None)
+
+                        # --- Laboutik : SortieCaisse -> ClotureCaisse -> CartePrimaire -> PointDeVente -> Printer ---
+                        # SortieCaisse.point_de_vente est FK PROTECT vers PointDeVente
+                        # / SortieCaisse.point_de_vente is FK PROTECT to PointDeVente
+                        if laboutik_installed:
+                            for model_cls, label in [
+                                (SortieCaisse, "sorties_caisse"),
+                                (ClotureCaisse, "clotures"),
+                                (CartePrimaire, "cartes_primaires"),
+                                (PointDeVente, "points_de_vente"),
+                                (Printer, "imprimantes"),
+                            ]:
+                                try:
+                                    n = model_cls.objects.count()
+                                    if n:
+                                        model_cls.objects.all().delete()
+                                    compteurs[label] = n
+                                except Exception as e:
+                                    logger.warning(
+                                        f"--flush {tenant.name} {label}: {e}"
+                                    )
+                                    compteurs[label] = 0
+
+                        # --- Comptabilite : LigneArticle -> Paiement_stripe -> PriceSold -> ProductSold ---
+                        # LigneArticle.credit_note_for est une self-FK PROTECT :
+                        # il faut d'abord mettre ce champ a NULL avant de pouvoir supprimer.
+                        # Paiement_stripe.reservation est FK PROTECT vers Reservation :
+                        # il faut supprimer Paiement_stripe AVANT Reservation.
+                        # / LigneArticle.credit_note_for is a self-FK PROTECT:
+                        # must NULL it out before deleting.
+                        # Paiement_stripe.reservation is FK PROTECT to Reservation:
+                        # must delete Paiement_stripe BEFORE Reservation.
+                        try:
+                            # Casser l'auto-reference PROTECT avant suppression
+                            # / Break self-referential PROTECT before deletion
+                            LigneArticle.objects.filter(
+                                credit_note_for__isnull=False
+                            ).update(credit_note_for=None)
+                            n = LigneArticle.objects.count()
+                            if n:
+                                LigneArticle.objects.all().delete()
+                            compteurs["lignes_article"] = n
+                        except Exception as e:
+                            logger.warning(
+                                f"--flush {tenant.name} lignes_article: {e}"
+                            )
+                            compteurs["lignes_article"] = 0
+
+                        # Paiement_stripe : FK PROTECT vers Reservation
+                        # / Paiement_stripe: FK PROTECT to Reservation
+                        try:
+                            n = Paiement_stripe.objects.count()
+                            if n:
+                                Paiement_stripe.objects.all().delete()
+                            compteurs["paiements_stripe"] = n
+                        except Exception as e:
+                            logger.warning(
+                                f"--flush {tenant.name} paiements_stripe: {e}"
+                            )
+                            compteurs["paiements_stripe"] = 0
+
+                        for model_cls, label in [
+                            (PriceSold, "price_sold"),
+                            (ProductSold, "product_sold"),
+                        ]:
+                            try:
+                                n = model_cls.objects.count()
+                                if n:
+                                    model_cls.objects.all().delete()
+                                compteurs[label] = n
+                            except Exception as e:
+                                logger.warning(
+                                    f"--flush {tenant.name} {label}: {e}"
+                                )
+                                compteurs[label] = 0
+
+                        # --- Inventaire : Stock ---
+                        if inventaire_installed:
+                            try:
+                                n = Stock.objects.count()
+                                if n:
+                                    Stock.objects.all().delete()
+                                compteurs["stocks"] = n
+                            except Exception as e:
+                                logger.warning(f"--flush {tenant.name} stocks: {e}")
+                                compteurs["stocks"] = 0
+
+                        # --- Reservations (+ Tickets en CASCADE) -> Events ---
+                        # Reservation a FK PROTECT vers Event — purger AVANT les Events
+                        # / Reservation has FK PROTECT to Event — purge BEFORE Events
+                        try:
+                            n = Reservation.objects.count()
+                            if n:
+                                Reservation.objects.all().delete()
+                            compteurs["reservations"] = n
+                        except Exception as e:
+                            logger.warning(
+                                f"--flush {tenant.name} reservations: {e}"
+                            )
+                            compteurs["reservations"] = 0
+
+                        try:
+                            n = Event.objects.count()
+                            if n:
+                                Event.objects.all().delete()
+                            compteurs["events"] = n
+                        except Exception as e:
+                            logger.warning(f"--flush {tenant.name} events: {e}")
+                            compteurs["events"] = 0
+
+                        # --- Adhesions ---
+                        try:
+                            n = Membership.objects.count()
+                            if n:
+                                Membership.objects.all().delete()
+                            compteurs["adhesions"] = n
+                        except Exception as e:
+                            logger.warning(f"--flush {tenant.name} adhesions: {e}")
+                            compteurs["adhesions"] = 0
+
+                        # --- Crowds : Vote -> Participation -> BudgetItem -> Contribution -> Initiative ---
+                        try:
+                            Vote.objects.all().delete()
+                            Participation.objects.all().delete()
+                            BudgetItem.objects.all().delete()
+                            Contribution.objects.all().delete()
+                            n = Initiative.objects.count()
+                            if n:
+                                Initiative.objects.all().delete()
+                            compteurs["initiatives"] = n
+                        except ProtectedError as e:
+                            logger.warning(
+                                f"--flush {tenant.name} initiatives (protected): {e}"
+                            )
+                            compteurs["initiatives"] = 0
+                        except Exception as e:
+                            logger.warning(
+                                f"--flush {tenant.name} initiatives: {e}"
+                            )
+                            compteurs["initiatives"] = 0
+
+                        # --- Tarifs -> Produits -> Categories ---
+                        # Ordre : Price -> Product -> CategorieProduct
+                        # / Order: Price -> Product -> CategorieProduct
+                        for model_cls, label in [
+                            (Price, "tarifs"),
+                            (Product, "produits"),
+                            (CategorieProduct, "categories"),
+                        ]:
+                            try:
+                                n = model_cls.objects.count()
+                                if n:
+                                    model_cls.objects.all().delete()
+                                compteurs[label] = n
+                            except Exception as e:
+                                logger.warning(
+                                    f"--flush {tenant.name} {label}: {e}"
+                                )
+                                compteurs[label] = 0
+
+                        # --- Options, federations, adresses, tags ---
+                        # / Options, federations, addresses, tags
+                        for model_cls, label in [
+                            (OptionGenerale, "options"),
+                            (FederatedPlace, "federations"),
+                            (PostalAddress, "adresses"),
+                            (Tag, "tags"),
+                        ]:
+                            try:
+                                n = model_cls.objects.count()
+                                if n:
+                                    model_cls.objects.all().delete()
+                                compteurs[label] = n
+                            except Exception as e:
+                                logger.warning(
+                                    f"--flush {tenant.name} {label}: {e}"
+                                )
+                                compteurs[label] = 0
+
+                        # Resume lisible
+                        # / Readable summary
+                        parties_non_vides = [
+                            f"{label}={n}"
+                            for label, n in compteurs.items()
+                            if n > 0
+                        ]
+                        if parties_non_vides:
+                            logger.info(
+                                f"--flush {tenant.name}: {', '.join(parties_non_vides)}"
+                            )
+                        else:
+                            logger.info(f"--flush {tenant.name}: rien à purger")
+
+                except Exception as e:
+                    logger.error(f"--flush: échec de purge pour '{name}': {e}")
+
+            # =====================================================================
+            # ETAPE 2 : Purge des donnees PUBLIC (fedow_core, cartes, wallets)
+            # Les FK cross-schema ont ete nullifiees/supprimees dans l'etape 1.
+            # On peut maintenant supprimer les objets public sans erreur de cascade.
+            # / STEP 2: Purge PUBLIC data (fedow_core, cards, wallets)
+            # Cross-schema FKs were nullified/deleted in step 1.
+            # =====================================================================
             with schema_context("public"):
                 # --- Purge fedow_core (SHARED_APPS, schema public) ---
                 # Ordre : Transaction -> Token -> Asset -> Federation
@@ -1357,23 +1599,17 @@ class Command(BaseCommand):
                         logger.warning(f"--flush fedow_core: {e}")
 
                 # --- Purge CarteCashless, Detail, Wallets users (SHARED_APPS, schema public) ---
-                # On garde les Wallets du lieu (origin != null) — lies a l'appairage Fedow.
-                # On supprime les Wallets users (origin = null) — donnees de demo.
-                # CarteCashless.wallet_ephemere est SET_NULL, TibilletUser.wallet est SET_NULL → safe.
-                # fedow_connect.Asset.wallet_origin est FK PROTECT → supprimer les assets fedow_connect d'abord.
-                # / Keep venue Wallets (origin != null) — linked to Fedow handshake.
-                # Delete user Wallets (origin = null) — demo data.
-                from AuthBillet.models import Wallet
-                from QrcodeCashless.models import CarteCashless, Detail
-                from fedow_connect.models import Asset as FedowConnectAsset
-
+                # LigneArticle (PROTECT vers CarteCashless et Wallet) a ete supprime dans l'etape 1.
+                # / LigneArticle (PROTECT to CarteCashless and Wallet) was deleted in step 1.
+                fc_asset_deleted = 0
                 try:
-                    # Supprimer les assets fedow_connect (FK PROTECT vers Wallet)
-                    # / Delete fedow_connect assets (FK PROTECT to Wallet)
                     fc_asset_deleted = FedowConnectAsset.objects.count()
                     if fc_asset_deleted:
                         FedowConnectAsset.objects.all().delete()
+                except Exception as e:
+                    logger.warning(f"--flush fedow_connect_asset: {e}")
 
+                try:
                     carte_deleted = CarteCashless.objects.count()
                     if carte_deleted:
                         CarteCashless.objects.all().delete()
@@ -1396,180 +1632,6 @@ class Command(BaseCommand):
                     )
                 except Exception as e:
                     logger.warning(f"--flush wallets/cartes: {e}")
-
-                for fx in fixtures:
-                    name = fx.get("name")
-                    if not name:
-                        continue
-                    schema = slugify(name)
-                    tenant = Client.objects.filter(schema_name=schema).first()
-                    if not tenant:
-                        logger.info(
-                            f"--flush: tenant '{name}' introuvable, rien à purger."
-                        )
-                        continue
-                    try:
-                        with tenant_context(tenant):
-                            compteurs = {}
-
-                            # --- Laboutik : clotures, cartes primaires, PV, imprimantes ---
-                            # Ordre : ClotureCaisse -> CartePrimaire -> PointDeVente -> Printer
-                            # / Order: ClotureCaisse -> CartePrimaire -> PointDeVente -> Printer
-                            if laboutik_installed:
-                                for model_cls, label in [
-                                    (ClotureCaisse, "clotures"),
-                                    (CartePrimaire, "cartes_primaires"),
-                                    (PointDeVente, "points_de_vente"),
-                                    (Printer, "imprimantes"),
-                                ]:
-                                    try:
-                                        n = model_cls.objects.count()
-                                        if n:
-                                            model_cls.objects.all().delete()
-                                        compteurs[label] = n
-                                    except Exception as e:
-                                        logger.warning(
-                                            f"--flush {tenant.name} {label}: {e}"
-                                        )
-                                        compteurs[label] = 0
-
-                            # --- Comptabilite : LigneArticle -> PriceSold -> ProductSold ---
-                            # / Accounting: LigneArticle -> PriceSold -> ProductSold
-                            for model_cls, label in [
-                                (LigneArticle, "lignes_article"),
-                                (PriceSold, "price_sold"),
-                                (ProductSold, "product_sold"),
-                            ]:
-                                try:
-                                    n = model_cls.objects.count()
-                                    if n:
-                                        model_cls.objects.all().delete()
-                                    compteurs[label] = n
-                                except Exception as e:
-                                    logger.warning(
-                                        f"--flush {tenant.name} {label}: {e}"
-                                    )
-                                    compteurs[label] = 0
-
-                            # --- Inventaire : Stock ---
-                            if inventaire_installed:
-                                try:
-                                    n = Stock.objects.count()
-                                    if n:
-                                        Stock.objects.all().delete()
-                                    compteurs["stocks"] = n
-                                except Exception as e:
-                                    logger.warning(f"--flush {tenant.name} stocks: {e}")
-                                    compteurs["stocks"] = 0
-
-                            # --- Reservations (+ Tickets en CASCADE) -> Events ---
-                            # Reservation a FK PROTECT vers Event — purger AVANT les Events
-                            # / Reservation has FK PROTECT to Event — purge BEFORE Events
-                            try:
-                                n = Reservation.objects.count()
-                                if n:
-                                    Reservation.objects.all().delete()
-                                compteurs["reservations"] = n
-                            except Exception as e:
-                                logger.warning(
-                                    f"--flush {tenant.name} reservations: {e}"
-                                )
-                                compteurs["reservations"] = 0
-
-                            try:
-                                n = Event.objects.count()
-                                if n:
-                                    Event.objects.all().delete()
-                                compteurs["events"] = n
-                            except Exception as e:
-                                logger.warning(f"--flush {tenant.name} events: {e}")
-                                compteurs["events"] = 0
-
-                            # --- Adhesions ---
-                            try:
-                                n = Membership.objects.count()
-                                if n:
-                                    Membership.objects.all().delete()
-                                compteurs["adhesions"] = n
-                            except Exception as e:
-                                logger.warning(f"--flush {tenant.name} adhesions: {e}")
-                                compteurs["adhesions"] = 0
-
-                            # --- Crowds : Vote -> Participation -> BudgetItem -> Contribution -> Initiative ---
-                            try:
-                                Vote.objects.all().delete()
-                                Participation.objects.all().delete()
-                                BudgetItem.objects.all().delete()
-                                Contribution.objects.all().delete()
-                                n = Initiative.objects.count()
-                                if n:
-                                    Initiative.objects.all().delete()
-                                compteurs["initiatives"] = n
-                            except ProtectedError as e:
-                                logger.warning(
-                                    f"--flush {tenant.name} initiatives (protected): {e}"
-                                )
-                                compteurs["initiatives"] = 0
-                            except Exception as e:
-                                logger.warning(
-                                    f"--flush {tenant.name} initiatives: {e}"
-                                )
-                                compteurs["initiatives"] = 0
-
-                            # --- Tarifs -> Produits -> Categories ---
-                            # Ordre : Price -> Product -> CategorieProduct
-                            # / Order: Price -> Product -> CategorieProduct
-                            for model_cls, label in [
-                                (Price, "tarifs"),
-                                (Product, "produits"),
-                                (CategorieProduct, "categories"),
-                            ]:
-                                try:
-                                    n = model_cls.objects.count()
-                                    if n:
-                                        model_cls.objects.all().delete()
-                                    compteurs[label] = n
-                                except Exception as e:
-                                    logger.warning(
-                                        f"--flush {tenant.name} {label}: {e}"
-                                    )
-                                    compteurs[label] = 0
-
-                            # --- Options, federations, adresses, tags ---
-                            # / Options, federations, addresses, tags
-                            for model_cls, label in [
-                                (OptionGenerale, "options"),
-                                (FederatedPlace, "federations"),
-                                (PostalAddress, "adresses"),
-                                (Tag, "tags"),
-                            ]:
-                                try:
-                                    n = model_cls.objects.count()
-                                    if n:
-                                        model_cls.objects.all().delete()
-                                    compteurs[label] = n
-                                except Exception as e:
-                                    logger.warning(
-                                        f"--flush {tenant.name} {label}: {e}"
-                                    )
-                                    compteurs[label] = 0
-
-                            # Resume lisible
-                            # / Readable summary
-                            parties_non_vides = [
-                                f"{label}={n}"
-                                for label, n in compteurs.items()
-                                if n > 0
-                            ]
-                            if parties_non_vides:
-                                logger.info(
-                                    f"--flush {tenant.name}: {', '.join(parties_non_vides)}"
-                                )
-                            else:
-                                logger.info(f"--flush {tenant.name}: rien à purger")
-
-                    except Exception as e:
-                        logger.error(f"--flush: échec de purge pour '{name}': {e}")
 
             self.stdout.write(
                 self.style.SUCCESS("Purge complète terminée. Réimport en cours…")
