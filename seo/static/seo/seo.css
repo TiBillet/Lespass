@@ -177,3 +177,146 @@ h1, h2, h3, .lead {
     font-size: 0.9rem;
     font-weight: 500;
 }
+
+
+/* ================================================================ */
+/* Bandeau deferoulant "Prochains evenements" — marquee avec vignettes */
+/* / Scrolling marquee "Upcoming events" — marquee with thumbnails   */
+/* ================================================================ */
+
+/* La bande events defile plus lentement (plus de contenu visible) */
+/* / Event strip scrolls slower (more visible content) */
+.marquee-content--events {
+    gap: 1.25rem;
+    padding-right: 1.25rem;
+    animation-duration: 45s;
+}
+
+/* Carte event dans le marquee : vignette + texte */
+/* / Event card in marquee: thumbnail + text */
+.event-marquee-card {
+    display: flex;
+    flex-direction: column;
+    width: 260px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg, #fff);
+    box-shadow:
+        0px 0px 0px 1px rgba(0, 0, 0, 0.06),
+        0px 1px 2px -1px rgba(0, 0, 0, 0.06),
+        0px 2px 4px 0px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.event-marquee-card:hover {
+    box-shadow:
+        0px 0px 0px 1px rgba(0, 0, 0, 0.08),
+        0px 2px 8px -1px rgba(0, 0, 0, 0.12),
+        0px 4px 12px 0px rgba(0, 0, 0, 0.08);
+    transform: translateY(-3px);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+/* Conteneur de la vignette (ratio 16:9 fixe) / Thumbnail container (fixed 16:9 ratio) */
+.event-marquee-img-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--bs-tertiary-bg, #f0f0f0);
+}
+
+.event-marquee-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Outline discret a l'interieur de l'image (regle UI) */
+    /* / Subtle outline inside the image (UI rule) */
+    outline: 1px solid rgba(0, 0, 0, 0.08);
+    outline-offset: -1px;
+    transition: transform 400ms ease;
+}
+
+/* Zoom leger au survol de la carte / Slight zoom on card hover */
+.event-marquee-card:hover .event-marquee-img {
+    transform: scale(1.04);
+}
+
+/* Placeholder quand pas d'image / Placeholder when no image */
+.event-marquee-img-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+}
+
+.event-marquee-img-placeholder[data-index="0"] { background: #6366f1; }
+.event-marquee-img-placeholder[data-index="1"] { background: #f59e0b; }
+.event-marquee-img-placeholder[data-index="2"] { background: #10b981; }
+.event-marquee-img-placeholder[data-index="3"] { background: #ef4444; }
+.event-marquee-img-placeholder[data-index="4"] { background: #8b5cf6; }
+.event-marquee-img-placeholder[data-index="5"] { background: #06b6d4; }
+.event-marquee-img-placeholder[data-index="6"] { background: #6366f1; }
+.event-marquee-img-placeholder[data-index="7"] { background: #f59e0b; }
+.event-marquee-img-placeholder[data-index="8"] { background: #10b981; }
+.event-marquee-img-placeholder[data-index="9"] { background: #ef4444; }
+.event-marquee-img-placeholder[data-index="10"] { background: #8b5cf6; }
+.event-marquee-img-placeholder[data-index="11"] { background: #06b6d4; }
+
+/* Corps texte de la carte event / Event card text body */
+.event-marquee-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem 0.75rem 0.75rem;
+}
+
+/* Nom de l'evenement — max 2 lignes avec ellipsis */
+/* / Event name — max 2 lines with ellipsis */
+.event-marquee-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Date et lieu : petits, discrets / Date and venue: small, subtle */
+.event-marquee-date,
+.event-marquee-lieu {
+    font-size: 0.76rem;
+    color: var(--bs-secondary-color, #6c757d);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-marquee-date i,
+.event-marquee-lieu i {
+    font-size: 0.7rem;
+    margin-right: 0.2rem;
+}
+
+/* Border-radius concentrique : rayon ext (12) = rayon int (8) + padding visuel (4) */
+/* / Concentric border-radius: outer (12) = inner (8) + visual padding (4) */
+.event-marquee-img-wrapper {
+    border-radius: 8px 8px 0 0;
+}
+
+/* Responsive : cards plus petites sur mobile */
+/* / Responsive: smaller cards on mobile */
+@media (max-width: 575.98px) {
+    .event-marquee-card {
+        width: 220px;
+    }
+    .event-marquee-name {
+        font-size: 0.82rem;
+    }
+}

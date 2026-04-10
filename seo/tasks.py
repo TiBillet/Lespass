@@ -33,6 +33,7 @@ def refresh_seo_cache():
     7. Ecriture Memcached L1
     """
     from seo.services import (
+        build_stdimage_variation_url,
         build_tenant_config_data,
         get_active_tenants_with_counts,
         get_events_for_tenants,
@@ -119,6 +120,27 @@ def refresh_seo_cache():
         )
         tenant_events = events_by_tenant.get(tenant_id, [])
         tenant_memberships = memberships_by_tenant.get(tenant_id, [])
+
+        # Enrichir chaque event avec image_url et canonical_url.
+        # On utilise le domaine du tenant pour construire les URLs completes.
+        # / Enrich each event with image_url and canonical_url.
+        # We use the tenant domain to build full URLs.
+        tenant_domain = config_data.get("domain", "")
+        tenant_name = config_data.get("organisation") or config_data.get("name", "")
+        for event in tenant_events:
+            # URL de la vignette crop (480x270) / Crop thumbnail URL (480x270)
+            event["image_url"] = build_stdimage_variation_url(
+                event.get("img", ""), variation="crop"
+            )
+            # URL canonique vers la page de l'event sur le site du tenant
+            # / Canonical URL to the event page on the tenant site
+            slug = event.get("slug", "")
+            if tenant_domain and slug:
+                event["canonical_url"] = f"https://{tenant_domain}/event/{slug}"
+            else:
+                event["canonical_url"] = None
+            # Nom du lieu (tenant) pour affichage / Venue name for display
+            event["tenant_name"] = tenant_name
 
         # tenant_summary : config + stats
         summary_data = {

@@ -54,6 +54,28 @@ def get_memcached_l1(cache_type, tenant_uuid):
 
 
 # ---------------------------------------------------------------------------
+# Helpers URL images / Image URL helpers
+# ---------------------------------------------------------------------------
+
+
+def build_stdimage_variation_url(img_path, variation="crop"):
+    """
+    Construit l'URL d'une variation StdImageField a partir du chemin brut en DB.
+    Exemple : "images/event_foo.jpg" → "/media/images/event_foo.crop.jpg"
+    Retourne None si pas d'image.
+    / Builds a StdImageField variation URL from the raw DB path.
+    Example: "images/event_foo.jpg" → "/media/images/event_foo.crop.jpg"
+    Returns None if no image.
+    """
+    if not img_path:
+        return None
+    import os
+
+    base_sans_extension, extension = os.path.splitext(img_path)
+    return f"/media/{base_sans_extension}.{variation}{extension}"
+
+
+# ---------------------------------------------------------------------------
 # Requetes SQL cross-schema / Cross-schema SQL queries
 # ---------------------------------------------------------------------------
 #
@@ -164,7 +186,7 @@ def get_events_for_tenants(tenant_schemas):
 
     Parametres / Parameters:
         tenant_schemas: list[tuple(uuid, schema_name)]
-    Retourne / Returns: list[dict] avec cles tenant_id, name, slug, short_description, datetime, end_datetime
+    Retourne / Returns: list[dict] avec cles tenant_id, name, slug, short_description, datetime, end_datetime, img
     """
     if not tenant_schemas:
         return []
@@ -174,9 +196,13 @@ def get_events_for_tenants(tenant_schemas):
     now = timezone.now()
 
     for tenant_uuid, schema_name in tenant_schemas:
+        # On recupere aussi le champ `img` (chemin relatif StdImageField)
+        # pour construire les URLs des vignettes dans tasks.py.
+        # / Also fetch the `img` field (relative StdImageField path)
+        # to build thumbnail URLs in tasks.py.
         parts.append(
             f"SELECT %s AS tenant_id, name, slug, short_description, "
-            f"datetime, end_datetime "
+            f"datetime, end_datetime, img "
             f'FROM "{schema_name}"."BaseBillet_event" '
             f"WHERE published = true AND datetime >= %s"
         )
@@ -196,6 +222,7 @@ def get_events_for_tenants(tenant_schemas):
                     "short_description": row[3],
                     "datetime": row[4].isoformat() if row[4] else None,
                     "end_datetime": row[5].isoformat() if row[5] else None,
+                    "img": row[6] or "",
                 }
             )
 

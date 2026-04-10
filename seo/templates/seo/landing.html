@@ -91,39 +91,54 @@
 </section>
 {% endif %}
 
-{# Top 6 evenements / Top 6 events #}
+{# Bandeau deferoulant "Prochains evenements" — marquee CSS infini avec vignettes #}
+{# Meme principe que le bandeau des lieux, mais avec les images events. #}
+{# / Scrolling marquee "Upcoming events" — infinite CSS marquee with thumbnails #}
+{# Same principle as the venues marquee, but with event images. #}
 {% if top_events %}
-<section class="mb-5">
+<section class="marquee-section mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>{% translate "Prochains événements" %}</h2>
         <a href="/evenements/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
     </div>
-    <div class="row">
-        {% for event in top_events %}
-        <div class="col-md-6 mb-3">
-            <div class="card seo-card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">{{ event.name }}</h5>
-                    <p class="card-text text-muted small mb-1">
-                        <i class="bi bi-calendar-event"></i> {{ event.datetime|format_iso_date }}
-                    </p>
-                    {% if event.tenant_name %}
-                    <p class="card-text text-muted small mb-1">
-                        <i class="bi bi-geo-alt"></i> {{ event.tenant_name }}
-                    </p>
-                    {% endif %}
-                    {% if event.short_description %}
-                    <p class="card-text small">{{ event.short_description|truncatewords:30 }}</p>
-                    {% endif %}
+    <div class="marquee-track marquee-track--events" aria-label="{% translate 'Prochains événements du réseau TiBillet' %}">
+        {# Contenu double pour la boucle infinie / Duplicated for infinite loop #}
+        {% for copy in "ab" %}
+        <div class="marquee-content marquee-content--events" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
+            {% for event in top_events %}
+            <a href="{{ event.canonical_url|default:'#' }}"
+               class="event-marquee-card"
+               title="{{ event.name }}{% if event.tenant_name %} — {{ event.tenant_name }}{% endif %}"
+               data-testid="event-marquee-card-{{ forloop.counter }}">
+                {% if event.image_url %}
+                <div class="event-marquee-img-wrapper">
+                    <img src="{{ event.image_url }}"
+                         alt="{{ event.name }}"
+                         class="event-marquee-img"
+                         loading="lazy">
                 </div>
-                {% if event.canonical_url %}
-                <div class="card-footer bg-transparent border-0">
-                    <a href="{{ event.canonical_url }}" class="btn btn-sm btn-outline-primary">
-                        {% translate "Voir l'événement" %}
-                    </a>
+                {% else %}
+                {# Fallback : fond colore avec icone calendrier #}
+                {# / Fallback: colored background with calendar icon #}
+                <div class="event-marquee-img-wrapper event-marquee-img-placeholder" data-index="{{ forloop.counter0 }}">
+                    <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 </div>
                 {% endif %}
-            </div>
+                <div class="event-marquee-body">
+                    <span class="event-marquee-name">{{ event.name }}</span>
+                    <span class="event-marquee-date">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                        {{ event.datetime|format_iso_date }}
+                    </span>
+                    {% if event.tenant_name %}
+                    <span class="event-marquee-lieu">
+                        <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                        {{ event.tenant_name }}
+                    </span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
         </div>
         {% endfor %}
     </div>
