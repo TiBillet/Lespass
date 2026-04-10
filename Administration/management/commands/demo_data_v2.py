@@ -2879,6 +2879,16 @@ class Command(BaseCommand):
 
         from django.core.files.base import ContentFile
 
+        # Images 404 reduites (960x640) pour le tenant Lespass.
+        # Definies ici car utilisees par plusieurs blocs (backgrounds, events, etc.).
+        # / Resized 404 images (960x640) for the Lespass tenant.
+        # Defined here because used by multiple blocks (backgrounds, events, etc.).
+        images_404_dir = os.path.join(fixtures_dir, "demo_404")
+        images_404 = sorted([
+            f for f in os.listdir(images_404_dir)
+            if f.startswith("404-") and f.endswith(".jpg")
+        ]) if os.path.isdir(images_404_dir) else []
+
         # 5a) Logos des tenants → Configuration.logo
         # Le fichier PNG porte le nom du schema (ex: lespass.png)
         # / Tenant logos → Configuration.logo
@@ -2972,18 +2982,6 @@ class Command(BaseCommand):
         # / For the "Lespass" tenant, we use the real 404 images from the project
         # (BaseBillet/static/images/404-*.jpg) — prettier than placeholders.
         # For other tenants, we use the downloaded picsum images.
-        # Images 404 reduites (960x640) pour le tenant Lespass.
-        # Copies allégées des originales BaseBillet/static/images/404-*.jpg,
-        # reduites pour eviter les timeouts Daphne sur la generation des variations StdImage.
-        # / Resized 404 images (960x640) for the Lespass tenant.
-        # Lighter copies of the originals, resized to avoid Daphne timeouts
-        # when StdImage generates variations.
-        images_404_dir = os.path.join(fixtures_dir, "demo_404")
-        images_404 = sorted([
-            f for f in os.listdir(images_404_dir)
-            if f.startswith("404-") and f.endswith(".jpg")
-        ]) if os.path.isdir(images_404_dir) else []
-
         events_dir = os.path.join(fixtures_dir, "demo_events")
         event_images = sorted([
             f for f in os.listdir(events_dir)
