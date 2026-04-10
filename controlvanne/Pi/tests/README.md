@@ -2,13 +2,24 @@
 
 Scripts autonomes pour valider le câblage et les périphériques, **sans lancer le service tibeer**.
 
-Tous les scripts lisent les valeurs par défaut depuis `../  .env` si présent, et acceptent des arguments en ligne de commande pour surcharger.
+Tous les scripts lisent les valeurs par défaut depuis `.env` si présent, et acceptent des arguments en ligne de commande pour surcharger.
 
-## Prérequis communs
+## Lancement via make (recommandé)
+
+Depuis `/home/sysop/tibeer/controlvanne/Pi/` — pas besoin d'activer le virtualenv :
 
 ```bash
-source /home/sysop/tibeer/.venv/bin/activate
-cd /home/sysop/tibeer/tests
+make test-rfid      # lance le test du lecteur défini dans .env (RC522/VMA405/ACR122U)
+make test-hardware  # diagnostic global du matériel
+```
+
+## Lancement direct
+
+Si vous préférez lancer les scripts manuellement, activez d'abord le virtualenv :
+
+```bash
+source /home/sysop/tibeer/controlvanne/Pi/.venv/bin/activate
+cd /home/sysop/tibeer/controlvanne/Pi/tests
 ```
 
 ## Scripts disponibles
@@ -25,6 +36,8 @@ python3 check_hardware.py
 
 ### `test_rfid_rc522.py` — Lecteur RC522 (SPI)
 
+Prérequis : SPI activé (`raspi-config` → Interface Options → SPI).
+
 ```bash
 python3 test_rfid_rc522.py
 ```
@@ -35,15 +48,17 @@ python3 test_rfid_rc522.py
 
 ```bash
 python3 test_rfid_vma405.py                      # utilise .env
-python3 test_rfid_vma405.py /dev/ttyUSB0 9600    # surcharge
+python3 test_rfid_vma405.py /dev/ttyUSB0 9600    # surcharge port et baudrate
 ```
 
 ---
 
 ### `test_rfid_acr122u.py` — Lecteur ACR122U (USB PC/SC)
 
+Prérequis : service `pcscd` actif.
+
 ```bash
-sudo systemctl start pcscd   # si pas encore actif
+sudo systemctl start pcscd
 python3 test_rfid_acr122u.py
 ```
 
