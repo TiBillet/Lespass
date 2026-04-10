@@ -1,7 +1,7 @@
 {% extends "faire_festival/base.html" %}
 {% load static i18n tibitags %}
 
-{% block title %}{{ config.organisation }}{% endblock %}
+{% block title %}{% translate 'Accueil' %}{% endblock %}
 
 {% block meta_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
 {% block og_title %}{{ config.organisation }}{% endblock %}
@@ -15,7 +15,7 @@
      CONTENU PRINCIPAL DE LA PAGE D'ACCUEIL
      Adapté depuis la maquette index.html du Faire Festival
      ======================================================================= -->
-<div class="container-fluid conteneur-principal">
+<div class="container-fluid conteneur-principal plein-ecran">
 
     <!-- ===================================================================
          SECTION HÉROS (Bannière principale)
@@ -88,9 +88,9 @@
                 <div class="mb-4">
                     <!-- Titre encadré -->
                     <div class="d-inline-block bordure-epaisse bg-white px-4 py-2 mb-3 rounded-pill">
-                        <h3 class="m-0 texte-bleu police-mono fw-bold">
+                        <h2 class="m-0 texte-bleu police-mono fw-bold" style="font-size: 1.17em;">
                             {% translate "Le Faire Festival, c'est quoi ?" %}
-                        </h3>
+                        </h2>
                     </div>
 
                     <!-- Description longue en 2 colonnes -->
@@ -126,7 +126,7 @@
                     <div class="col-md-4">
                         <div class="carte-jour">
                             <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 pr-3 py-1 mb-2">
-                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h4>
+                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h4>
                             </div>
                             <p class="small texte-bleu police-mono">
                                 {% translate "Entre Espaces," %}<br>
@@ -140,7 +140,7 @@
                     <div class="col-md-4">
                         <div class="carte-jour">
                             <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2">
-                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h4>
+                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h4>
                             </div>
                             <p class="small texte-bleu police-mono">
                                 {% translate "Entre Espaces," %}<br>
@@ -155,7 +155,7 @@
                         <div class="carte-jour">
                             <!-- En-tête avec badge positionné par rapport à lui -->
                             <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2 position-relative">
-                                <h4 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h4>
+                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h4>
                                 <!-- Badge 'Gratuit' collé à l'en-tête -->
                                 <div class="badge-gratuit position-absolute"
                                      style="top:-20px; right:-34px; transform: rotate(30deg); background: white; padding: 0px 8px; border-radius: 20px; z-index: 10;">

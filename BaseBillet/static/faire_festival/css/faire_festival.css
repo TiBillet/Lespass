@@ -399,10 +399,16 @@
    ========================================================================== */
 .skin-faire-festival .conteneur-principal {
     background-color: #ffffff;
-    /* Image de fond du Faire Festival — tuile 270x270 répétée */
+    /* Image de fond du Faire Festival — tuile 270x270 repetee */
+    /* / Faire Festival background pattern — 270x270 tiled */
     background-image: url('../image/fond.png');
     background-size: 56px 56px;
     background-repeat: repeat;
+}
+
+/* Plein ecran pour les pages a section unique (home, le faire festival) */
+/* / Full viewport height for single-section pages (home, le faire festival) */
+.skin-faire-festival .conteneur-principal.plein-ecran {
     min-height: 100vh;
 }
 
