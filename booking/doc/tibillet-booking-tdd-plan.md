@@ -620,6 +620,46 @@ At this stage: 20 tests were RED (implementation still returned `Slot`),
 Final result: **70/70 tests pass** (23 unit + 30 slot-engine integration +
 10 booking-validation + 7 pre-existing model/overlap tests).
 
+### Session 6c — Test catalogue (DONE ✓)
+
+A pair design session (human + AI) produced a formal test catalogue
+`booking/doc/tibillet-booking-test-cases.md`.
+
+**Motivation:** the existing test files are correct but the business
+rules they verify are implicit — buried in docstrings and scattered
+`assert` calls. The catalogue makes every test case a self-contained,
+readable specification.
+
+**Notation:** pseudo-Haskell functional syntax. Each test is a
+derivation chain expressed with five core functions:
+
+```
+open-day           :: Date → Date → Timezone → Calendar → [Interval]
+theoretical-slots  :: WeeklyOpening → [Interval] → [Interval]
+expand             :: Booking → [Interval]
+bookable-intervals :: [Interval] → Int → [Interval] → [BookableInterval]
+validate_new_booking :: Resource → DateTime → Int → Int → User
+                      → (Bool, Str | None)
+```
+
+The derivation chain `cal → O → W → B → E → validate` is explicit in
+every test. Intermediate `assert` steps show why the final result holds,
+making the containment rule (`w ⊆ o`) and capacity arithmetic visible
+without reading the implementation.
+
+**Coverage:** all 48 tests from `test_slot_engine.py` and
+`test_booking_validation.py` are documented.
+
+**Findings recorded during this session:**
+
+- §12 — two tests in `test_slot_engine.py` depend on database fixtures
+  (`"Coworking"`, `"Petite salle"`) instead of inline data. TODO warnings
+  added in both the test file and the catalogue.
+- §13 — clock injection pattern identified for `compute_slots` and
+  `validate_new_booking`: adding an optional `reference_date` parameter
+  would allow all validation tests to use fixed dates instead of
+  `next_weekday`.
+
 --------------------------------------------------------------------------------
 
 ## Session 7 — Public view: resource list + available slots

@@ -221,3 +221,54 @@ Action future : corriger la section 5 de la spec pour distinguer
 explicitement les deux acteurs. Le `booking_validator.py` implémente
 la règle membre — il ne doit pas être utilisé pour valider les
 réservations créées par un volontaire via l'admin.
+
+## §12. ⚠️ Tests couplés aux fixtures — `test_slot_engine.py`
+
+**Source :** `booking/tests/test_slot_engine.py` — fonctions
+`test_compute_slots_end_to_end_with_fixture_coworking_resource` et
+`test_compute_slots_end_to_end_with_fixture_petite_salle`
+
+Ces deux tests ne construisent pas leurs propres données : ils lisent
+directement les ressources `"Coworking"` et `"Petite salle"` depuis la
+base via `Resource.objects.filter(name=...).first()`. Si la fixture est
+absente, le test est ignoré (`pytest.skip`). Si la fixture est modifiée
+(ajout d'une entrée, changement d'horaire, changement de capacité), le
+test peut passer silencieusement avec des assertions devenues fausses.
+
+Ce couplage viole le principe d'isolation des tests : un test doit
+définir inline toutes les données dont il dépend pour être reproductible
+indépendamment de l'état de la base.
+
+Action future : réécrire ces deux tests en définissant explicitement
+`cal`, `wop` et leurs `OpeningEntry` inline, sans référence aux fixtures.
+Les tests `pytest.skip` conditionnels disparaîtront en même temps.
+
+## §13. 💡 Clock injection dans `compute_slots` et `validate_new_booking`
+
+**Source :** `booking/slot_engine.py:376`, `booking/booking_validator.py`
+
+`compute_slots` appelle `timezone.localdate()` en interne pour calculer
+`horizon_end = today + booking_horizon_days`. Ce couplage au clock système
+force les tests de `validate_new_booking` à utiliser des dates relatives
+(`next_weekday`) plutôt que des dates fixes, ce qui rend le catalogue de
+tests moins lisible et les assertions moins précises.
+
+Le pattern **clock injection** résout ce problème : ajouter un paramètre
+optionnel `reference_date=None` à `compute_slots` (et en cascade à
+`validate_new_booking`). En production, `reference_date=None` → la
+fonction utilise `timezone.localdate()` comme aujourd'hui. Dans les
+tests, `reference_date="2026-06-01"` → toutes les dates deviennent
+statiques et les `next_weekday` disparaissent.
+
+```python
+def compute_slots(resource, date_from, date_to, reference_date=None):
+    today = reference_date or timezone.localdate()
+    horizon_end = today + datetime.timedelta(days=resource.booking_horizon_days)
+    ...
+```
+
+Aucun site d'appel en production n'est modifié (paramètre optionnel).
+
+Action future : appliquer ce changement à `compute_slots` et
+`validate_new_booking`, puis réécrire les tests de validation avec
+des dates fixes.

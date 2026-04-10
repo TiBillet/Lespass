@@ -1337,6 +1337,14 @@ def test_compute_slots_end_to_end_with_fixture_coworking_resource():
 
     LOCALISATION : booking/tests/test_slot_engine.py
 
+    TODO : Ce test dépend de la fixture "Coworking" en base — il n'est pas
+    isolé. Si la fixture est absente ou modifiée, le test est ignoré ou
+    donne des résultats silencieusement incorrects. À réécrire avec des
+    données définies inline (cal, wop, OpeningEntry). Voir §12 dans
+    booking/doc/tibillet-booking-finding.md.
+    / TODO: This test depends on the "Coworking" fixture in the DB — it is
+    not isolated. Rewrite with inline data. See §12 in finding.md.
+
     "Coworking" : lun–ven, 8 créneaux × 60 min à partir de 09:00, capacity=3.
     On cherche le prochain lundi dans l'horizon de réservation.
     8 créneaux doivent être retournés, de 09:00 à 17:00.
@@ -1398,6 +1406,14 @@ def test_compute_slots_end_to_end_with_fixture_petite_salle():
     / End-to-end test with the "Petite salle" fixture resource.
 
     LOCALISATION : booking/tests/test_slot_engine.py
+
+    TODO : Ce test dépend de la fixture "Petite salle" en base — il n'est
+    pas isolé. Si la fixture est absente ou modifiée, le test est ignoré
+    ou donne des résultats silencieusement incorrects. À réécrire avec des
+    données définies inline (cal, wop, OpeningEntry). Voir §12 dans
+    booking/doc/tibillet-booking-finding.md.
+    / TODO: This test depends on the "Petite salle" fixture in the DB — it
+    is not isolated. Rewrite with inline data. See §12 in finding.md.
 
     "Petite salle" : sam+dim, 3 créneaux × 180 min à partir de 10:00, capacity=1.
     On cherche le prochain samedi dans l'horizon de réservation.
