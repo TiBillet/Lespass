@@ -96,8 +96,12 @@ def landing(request):
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "top_events": top_events,
         "json_ld": json.dumps(json_ld_org),
-        "page_title": "TiBillet - Reseau cooperatif",
-        "page_description": "Decouvrez les lieux, evenements et adhesions du reseau TiBillet.",
+        "page_title": "TiBillet — Billetterie coopérative, adhésions et monnaie locale",
+        "page_description": (
+            "TiBillet : billetterie, adhésions, caisse enregistreuse, cashless "
+            "et monnaie locale pour les lieux culturels et associatifs. "
+            "Libre et open source."
+        ),
         "canonical_url": request.build_absolute_uri("/"),
     }
 

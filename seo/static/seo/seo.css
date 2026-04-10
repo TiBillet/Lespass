@@ -11,6 +11,240 @@ h1, h2, h3, .lead {
     text-wrap: balance;
 }
 
+/* Antialiased pour un rendu net sur tous les OS */
+/* / Antialiased for crisp rendering on all OSes */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ================================================================ */
+/* HERO — style tibillet.org : gradient sur mots-cles + logo         */
+/* / HERO — tibillet.org style: gradient on keywords + logo          */
+/* ================================================================ */
+
+/* Fond gris-vert subtil comme tibillet.org / Subtle gray-green bg like tibillet.org */
+.hero-section {
+    background: var(--bs-tertiary-bg, #f0f4f3);
+    padding: 3rem 1rem 2.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Layout 2 colonnes : texte a gauche, logo a droite */
+/* / 2 columns: text left, logo right */
+.hero-layout {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+}
+
+.hero-text {
+    flex: 1;
+}
+
+/* Titre H1 — style tibillet.org avec mots-cles en gradient vert */
+/* / H1 title — tibillet.org style with green gradient keywords */
+.hero-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 2rem;
+}
+
+/* Mots-cles en gradient vert/bleu palette TiBillet */
+/* / Keywords in green/blue gradient from TiBillet palette */
+/* Palette : sousou=#259d49, losean=#4296cc, kari=#e9b322 */
+.hero-kw {
+    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Boutons CTA / CTA buttons */
+.hero-cta {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.hero-btn-primary {
+    font-weight: 600;
+    padding: 0.65rem 1.8rem;
+    border-radius: 8px;
+    background: #259d49;
+    border-color: #259d49;
+    color: #fff;
+}
+
+.hero-btn-primary:hover {
+    background: #1e8a3f;
+    border-color: #1e8a3f;
+    color: #fff;
+}
+
+.hero-btn-secondary {
+    font-weight: 600;
+    padding: 0.65rem 1.8rem;
+    border-radius: 8px;
+    border: 2px solid var(--bs-border-color, #dee2e6);
+    background: transparent;
+    color: var(--bs-body-color);
+}
+
+.hero-btn-secondary:hover {
+    border-color: #259d49;
+    color: #259d49;
+}
+
+/* Logo TiBillet a droite — masque sur mobile */
+/* / TiBillet logo on right — hidden on mobile */
+.hero-logo {
+    flex-shrink: 0;
+}
+
+.hero-logo-img {
+    max-width: 320px;
+    height: auto;
+}
+
+/* Responsive mobile : empilage vertical, logo cache */
+/* / Mobile responsive: vertical stack, logo hidden */
+@media (max-width: 767.98px) {
+    .hero-layout {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .hero-logo {
+        display: none;
+    }
+
+    .hero-cta {
+        justify-content: center;
+    }
+
+    .hero-section {
+        padding: 2rem 1rem;
+    }
+}
+
+
+/* ================================================================ */
+/* PHILOSOPHIE — texte de fond 2 colonnes                            */
+/* / PHILOSOPHY — 2-column background text                           */
+/* ================================================================ */
+
+.philo-section {
+    margin-bottom: 3rem;
+    padding: 2rem 0;
+}
+
+.philo-title {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+}
+
+.philo-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.philo-col p {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+@media (max-width: 767.98px) {
+    .philo-columns {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+
+/* ================================================================ */
+/* FONCTIONNALITES — grille 3x2 avec icones                          */
+/* / FEATURES — 3x2 grid with icons                                 */
+/* ================================================================ */
+
+.features-section {
+    margin-bottom: 3rem;
+    padding: 2.5rem 0;
+}
+
+.features-heading {
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.features-subheading {
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 2.5rem;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+}
+
+.feature-card {
+    text-align: center;
+    padding: 1.5rem 1rem;
+}
+
+/* Icone dans un cercle colore / Icon in a colored circle */
+.feature-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.12) 0%, rgba(66, 150, 204, 0.12) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 1.5rem;
+    color: #259d49;
+}
+
+.feature-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.feature-desc {
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 0;
+}
+
+/* Responsive : 2 colonnes tablette, 1 colonne mobile */
+/* / Responsive: 2 cols tablet, 1 col mobile */
+@media (max-width: 991.98px) {
+    .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .features-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+
 /* Chiffres tabulaires pour les compteurs (largeur egale, pas de "saut") */
 /* / Tabular numbers for counters (equal width, no "jump") */
 .stat-number {
