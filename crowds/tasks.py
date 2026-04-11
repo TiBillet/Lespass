@@ -34,7 +34,11 @@ def email_participation_requested_admin(schema_name: str, initiative_uuid: str, 
     """
     try:
         with schema_context(schema_name):
-            client: Client = connection.tenant
+            # connection.tenant retourne un FakeTenant dans schema_context
+            # (pas un vrai Client avec les M2M). On charge le vrai Client.
+            # / connection.tenant returns a FakeTenant in schema_context
+            # (not a real Client with M2M). We load the real Client.
+            client: Client = Client.objects.get(schema_name=schema_name)
             config = Configuration.get_solo()
             activate(config.language)
 
@@ -219,7 +223,9 @@ def email_contribution_paid_admin(schema_name: str, initiative_uuid: str, contri
     """
     try:
         with schema_context(schema_name):
-            client: Client = connection.tenant
+            # Charger le vrai Client (pas FakeTenant) pour acceder aux M2M.
+            # / Load the real Client (not FakeTenant) to access M2M.
+            client: Client = Client.objects.get(schema_name=schema_name)
 
             config = Configuration.get_solo()
             activate(config.language)

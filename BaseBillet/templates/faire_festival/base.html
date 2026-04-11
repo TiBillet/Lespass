@@ -29,7 +29,7 @@
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="og:title" content="{% block og_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta property="og:image" content="{% block og_image %}{{ config.get_social_card }}{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}{% if config.get_social_card %}https://{{ request.get_host }}{{ config.get_social_card }}{% endif %}{% endblock %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:image:alt" content="{% block og_image_alt %}{{ config.organisation }}{% endblock %}">
@@ -43,7 +43,7 @@
     <meta name="twitter:domain" content="{{ request.get_host }}">
     <meta name="twitter:title" content="{% block twitter_title %}{% translate 'Home' %} | {{ config.organisation }}{% endblock %}">
     <meta name="twitter:description" content="{% block twitter_description %}{% if config.short_description %}{{ config.short_description|striptags }}{% else %}{{ config.organisation }}{% endif %}{% endblock %}">
-    <meta name="twitter:image" content="{% block twitter_image %}{{ config.get_social_card }}{% endblock %}">
+    <meta name="twitter:image" content="{% block twitter_image %}{% if config.get_social_card %}https://{{ request.get_host }}{{ config.get_social_card }}{% endif %}{% endblock %}">
     <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ config.organisation }}{% endblock %}">
     {% if config.twitter %}
         <meta name="twitter:site" content="@{{ config.twitter|cut:'https://twitter.com/'|cut:'https://x.com/'|cut:'/' }}">
@@ -51,6 +51,7 @@
 
     {% block extra_meta %}{% endblock %}
 
+    <!-- URL canonique pour eviter les doublons dans les moteurs de recherche -->
     <link rel="canonical" href="{% block canonical %}{{ request.build_absolute_uri }}{% endblock %}">
 
     {% block json_ld_org %}
@@ -95,6 +96,23 @@
 
     <!-- HTMX : Bibliothèque pour les requêtes AJAX sans JavaScript -->
     <script src="{% static 'mvt_htmx/js/htmx.min.1.9.12.js' %}"></script>
+
+    <!-- Scroll vers le haut après navigation HTMX -->
+    <script>
+        // FR: Remonter en haut de page après chaque navigation HTMX qui remplace le body
+        // EN: Scroll to top after each HTMX navigation that replaces the body
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                // Vérifie si le swap concerne le body
+                if (evt.detail.target === document.body) {
+                    // Petit délai pour s'assurer que le DOM est bien mis à jour
+                    setTimeout(function() {
+                        window.scrollTo(0, 0);
+                    }, 10);
+                }
+            });
+        });
+    </script>
 
     <!-- Loading States : Indicateurs de chargement pour HTMX -->
     <script src="{% static 'mvt_htmx/js/loading-states.js' %}"></script>

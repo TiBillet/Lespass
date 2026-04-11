@@ -24,6 +24,8 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Termine : {result['tenants']} tenants, "
                 f"{result['events']} events, "
-                f"{result['memberships']} memberships / Done"
+                f"{result['memberships']} memberships, "
+                f"{result['initiatives']} initiatives, "
+                f"{result['assets']} assets / Done"
             )
         )

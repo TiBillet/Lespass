@@ -33,9 +33,11 @@ def refresh_seo_cache():
     7. Ecriture Memcached L1
     """
     from seo.services import (
+        build_stdimage_variation_url,
         build_tenant_config_data,
         get_active_tenants_with_counts,
         get_events_for_tenants,
+        get_global_counts,
         get_memberships_for_tenants,
         set_memcached_l1,
     )
@@ -118,6 +120,27 @@ def refresh_seo_cache():
         )
         tenant_events = events_by_tenant.get(tenant_id, [])
         tenant_memberships = memberships_by_tenant.get(tenant_id, [])
+
+        # Enrichir chaque event avec image_url et canonical_url.
+        # On utilise le domaine du tenant pour construire les URLs completes.
+        # / Enrich each event with image_url and canonical_url.
+        # We use the tenant domain to build full URLs.
+        tenant_domain = config_data.get("domain", "")
+        tenant_name = config_data.get("organisation") or config_data.get("name", "")
+        for event in tenant_events:
+            # URL de la vignette crop (480x270) / Crop thumbnail URL (480x270)
+            event["image_url"] = build_stdimage_variation_url(
+                event.get("img", ""), variation="crop"
+            )
+            # URL canonique vers la page de l'event sur le site du tenant
+            # / Canonical URL to the event page on the tenant site
+            slug = event.get("slug", "")
+            if tenant_domain and slug:
+                event["canonical_url"] = f"https://{tenant_domain}/event/{slug}"
+            else:
+                event["canonical_url"] = None
+            # Nom du lieu (tenant) pour affichage / Venue name for display
+            event["tenant_name"] = tenant_name
 
         # tenant_summary : config + stats
         summary_data = {
@@ -205,6 +228,23 @@ def refresh_seo_cache():
     )
     set_memcached_l1(SEOCache.AGGREGATE_LIEUX, None, aggregate_lieux_data)
 
+    # global_counts : comptages bruts (tous events, toutes adhesions, toutes initiatives)
+    # Ces comptages ne sont PAS filtres (ni par date, ni par publish).
+    # Utilises pour les "chiffres cles" de la landing page.
+    # / global_counts: raw counts (all events, all memberships, all initiatives)
+    # These counts are NOT filtered (neither by date nor by publish).
+    # Used for the "key figures" on the landing page.
+    global_counts = get_global_counts(tenant_schemas)
+    # Ajouter le nombre de lieux (= nombre de tenants actifs avec domaine)
+    # / Add venue count (= number of active tenants with domain)
+    global_counts["lieux"] = len(lieux)
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.GLOBAL_COUNTS,
+        tenant=None,
+        defaults={"data": global_counts},
+    )
+    set_memcached_l1(SEOCache.GLOBAL_COUNTS, None, global_counts)
+
     # sitemap_index : liste des tenants avec domaine pour le sitemap
     # / sitemap_index: list of tenants with domain for sitemap
     sitemap_tenants = []
@@ -244,18 +284,24 @@ def refresh_seo_cache():
         )
 
     logger.info(
-        "Fin refresh_seo_cache : %d tenants, %d events, %d memberships / "
-        "Done refresh_seo_cache: %d tenants, %d events, %d memberships",
+        "Fin refresh_seo_cache : %d tenants, %d events, %d memberships, %d initiatives, %d assets / "
+        "Done: %d tenants, %d events, %d memberships, %d initiatives, %d assets",
         len(active_tenant_ids),
-        len(all_events),
-        len(all_memberships),
+        global_counts["events"],
+        global_counts["memberships"],
+        global_counts["initiatives"],
+        global_counts["assets"],
         len(active_tenant_ids),
-        len(all_events),
-        len(all_memberships),
+        global_counts["events"],
+        global_counts["memberships"],
+        global_counts["initiatives"],
+        global_counts["assets"],
     )
 
     return {
         "tenants": len(active_tenant_ids),
-        "events": len(all_events),
-        "memberships": len(all_memberships),
+        "events": global_counts["events"],
+        "memberships": global_counts["memberships"],
+        "initiatives": global_counts["initiatives"],
+        "assets": global_counts["assets"],
     }

@@ -51,6 +51,7 @@
      data-loading-delay handles the debounce (no blink on fast requests).
      Once the delay expires, the overlay must appear quickly (80ms). */
   .tibillet-overlay.active {
+    display: flex !important; /* Override [data-loading] { display: none } */
     opacity: 1;
     pointer-events: auto;
     backdrop-filter: blur(6px);
@@ -100,6 +101,7 @@
      / Fallback for pages still using hx-indicator — same visual via .htmx-request */
   .htmx-request#tibillet-spinner,
   .htmx-request #tibillet-spinner {
+    display: flex !important;
     opacity: 1;
     pointer-events: auto;
     backdrop-filter: blur(6px);

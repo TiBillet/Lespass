@@ -1,113 +1,291 @@
 {% extends "seo/base.html" %}
-{% load i18n seo_tags %}
+{% load i18n seo_tags static %}
 
-{% block content %}
+{# Le hero est HORS du container (full-width via main_wrapper). #}
+{# Le reste du contenu est DANS le container (block content). #}
+{# / Hero is OUTSIDE the container (full-width via main_wrapper). #}
+{# Rest of content is INSIDE the container (block content). #}
+{% block main_wrapper %}
 
-{# Chiffres cles / Key figures #}
-<div class="row mb-5 text-center">
-    <div class="col-md-4 mb-3">
+{# ================================================================ #}
+{# HERO — style tibillet.org : gradient sur mots-cles + logo         #}
+{# Le H1 porte les mots-cles principaux pour le SEO.                #}
+{# / HERO — tibillet.org style: gradient on keywords + logo          #}
+{# The H1 carries the main SEO keywords.                            #}
+{# ================================================================ #}
+<section class="hero-section" data-testid="hero-section">
+    <div class="hero-layout">
+        <div class="hero-text">
+            <h1 class="hero-title">
+                <span class="hero-kw">{% translate "Adhésion" %}</span>,
+                {% translate "billetterie," %}
+                <br>
+                <span class="hero-kw">{% translate "caisse enregistreuse" %}</span>
+                {% translate "et" %}
+                <br>
+                <span class="hero-kw">{% translate "outils" %}</span>
+                {% translate "libres et fédérés." %}
+            </h1>
+            <div class="hero-cta">
+                <a href="/lieux/" class="btn btn-lg hero-btn-primary" data-testid="hero-cta-explore">
+                    {% translate "Explorer le réseau" %}
+                </a>
+                <a href="https://tibillet.org" target="_blank" rel="noopener"
+                   class="btn btn-lg hero-btn-secondary" data-testid="hero-cta-create">
+                    {% translate "Créer son espace" %}
+                </a>
+            </div>
+        </div>
+        <div class="hero-logo" aria-hidden="true">
+            <img src="{% static 'seo/tibillet-logo-couleur.svg' %}"
+                 alt=""
+                 class="hero-logo-img">
+        </div>
+    </div>
+</section>
+
+{# Le reste du contenu est dans un container / Rest of content in a container #}
+<main class="container-lg my-4">
+
+{# ================================================================ #}
+{# PHILOSOPHIE — texte de fond sur TiBillet                          #}
+{# Inspire du discours de Jonas et de la page philosophie.           #}
+{# / PHILOSOPHY — background text about TiBillet                     #}
+{# Inspired by Jonas's talk and the philosophy page.                 #}
+{# ================================================================ #}
+<section class="philo-section" data-testid="philo-section">
+    <h2 class="philo-title">{% translate "Un commun numérique coopératif" %}</h2>
+    <div class="philo-columns">
+        <div class="philo-col">
+            <p>
+                {% blocktranslate %}
+                TiBillet est né sur le terrain, dans les festivals et les cafés associatifs de La Réunion. Pas dans un bureau d'études, mais dans les besoins concrets des lieux qui accueillent du public : vendre des billets sans frais cachés, gérer les adhésions, encaisser au bar, et fédérer les agendas entre structures voisines.
+                {% endblocktranslate %}
+            </p>
+            <p>
+                {% blocktranslate %}
+                Aujourd'hui, c'est une boîte à outils complète — billetterie, cashless, caisse enregistreuse, monnaie locale, budget contributif — conçue pour et par des associations culturelles. Zéro dark pattern, remboursement garanti, open source.
+                {% endblocktranslate %}
+            </p>
+        </div>
+        <div class="philo-col">
+            <p>
+                {% blocktranslate %}
+                TiBillet est porté par une SCIC — une coopérative d'intérêt collectif. Les décisions sont prises ensemble, lors de réunions ouvertes. Le code est libre (licence AGPLv3), mais ce qui fait un commun numérique, ce n'est pas juste la licence : c'est la communauté et la gouvernance qui l'entourent.
+                {% endblocktranslate %}
+            </p>
+            <p>
+                {% blocktranslate %}
+                Le principe fédératif est simple : chaque lieu garde son autonomie (son agenda, sa caisse, ses adhésions) et choisit avec qui se connecter. Une seule carte pour plusieurs lieux. Un réseau qui grandit par le bouche-à-oreille, pas par le marketing.
+                {% endblocktranslate %}
+            </p>
+        </div>
+    </div>
+</section>
+
+{# ================================================================ #}
+{# FONCTIONNALITES — grille 3x2 comme tibillet.org                   #}
+{# / FEATURES — 3x2 grid like tibillet.org                           #}
+{# ================================================================ #}
+<section class="features-section" data-testid="features-section">
+    <h2 class="features-heading">{% translate "Fonctionnalités" %}</h2>
+    <p class="features-subheading text-center">
+        {% translate "Une solution complète pour les lieux culturels et associatifs." %}
+    </p>
+    <div class="features-grid">
+
+        <div class="feature-card" data-testid="feature-adhesion">
+            <div class="feature-icon">
+                <i class="bi bi-person-check" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Adhésions et abonnements" %}</h3>
+            <p class="feature-desc">
+                {% translate "Gérez les adhésions à votre association et proposez des abonnements. Suivez les renouvellements et offrez des avantages exclusifs aux membres." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-billetterie">
+            <div class="feature-icon">
+                <i class="bi bi-ticket-perforated" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Billetterie" %}</h3>
+            <p class="feature-desc">
+                {% translate "Événements gratuits et payants avec prix préférentiels pour les adhérents. Sans frais cachés, sans commission surprise." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-agenda">
+            <div class="feature-icon">
+                <i class="bi bi-calendar2-week" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Agenda fédéré" %}</h3>
+            <p class="feature-desc">
+                {% translate "Créez un agenda partagé et choisissez les lieux avec qui partager vos événements. Fédérez votre programmation avec d'autres structures." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-caisse">
+            <div class="feature-icon">
+                <i class="bi bi-shop" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Caisse enregistreuse" %}</h3>
+            <p class="feature-desc">
+                {% translate "Solution complète pour gérer vos ventes sur place, avec imprimantes de préparation en cuisine et gestion des stocks." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-cashless">
+            <div class="feature-icon">
+                <i class="bi bi-contactless" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Cashless et carte NFC" %}</h3>
+            <p class="feature-desc">
+                {% translate "Système cashless comme en festival, avec vérification de l'adhésion sur la carte. Une seule carte pour plusieurs lieux du réseau." %}
+            </p>
+        </div>
+
+        <div class="feature-card" data-testid="feature-monnaie">
+            <div class="feature-icon">
+                <i class="bi bi-coin" aria-hidden="true"></i>
+            </div>
+            <h3 class="feature-title">{% translate "Monnaie locale et temps" %}</h3>
+            <p class="feature-desc">
+                {% translate "Monnaie temps, cadeaux et valorisation de bénévoles. Multi-monnaies sur une seule carte : euros, cadeaux, temps." %}
+            </p>
+        </div>
+
+    </div>
+</section>
+
+{# Chiffres cles bruts — utilise des <span> et pas des <h2> car ce sont #}
+{# des valeurs numeriques, pas des titres de section. #}
+{# / Raw key figures — uses <span> not <h2> because these are numeric #}
+{# values, not section headings. #}
+<div class="row mb-5 text-center justify-content-center" data-testid="stats-row">
+    <div class="col-6 col-md mb-3">
         <div class="card seo-card bg-light">
             <div class="card-body">
-                <h2 class="card-title display-6 stat-number">{{ lieux_count }}</h2>
-                <p class="card-text text-muted">{% translate "Lieux" %}</p>
+                <span class="card-title display-6 stat-number d-block">{{ lieux_count }}</span>
+                <p class="card-text text-muted mb-0">{% translate "Lieux" %}</p>
             </div>
         </div>
     </div>
-    <div class="col-md-4 mb-3">
+    <div class="col-6 col-md mb-3">
         <div class="card seo-card bg-light">
             <div class="card-body">
-                <h2 class="card-title display-6 stat-number">{{ events_count }}</h2>
-                <p class="card-text text-muted">{% translate "Événements à venir" %}</p>
+                <span class="card-title display-6 stat-number d-block">{{ events_count }}</span>
+                <p class="card-text text-muted mb-0">{% translate "Événements" %}</p>
             </div>
         </div>
     </div>
-    <div class="col-md-4 mb-3">
+    <div class="col-6 col-md mb-3">
         <div class="card seo-card bg-light">
             <div class="card-body">
-                <h2 class="card-title display-6 stat-number">{{ memberships_count }}</h2>
-                <p class="card-text text-muted">{% translate "Adhésions disponibles" %}</p>
+                <span class="card-title display-6 stat-number d-block">{{ memberships_count }}</span>
+                <p class="card-text text-muted mb-0">{% translate "Adhésions" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <span class="card-title display-6 stat-number d-block">{{ initiatives_count }}</span>
+                <p class="card-text text-muted mb-0">{% translate "Budgets contributifs" %}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md mb-3">
+        <div class="card seo-card bg-light">
+            <div class="card-body">
+                <span class="card-title display-6 stat-number d-block">{{ assets_count }}</span>
+                <p class="card-text text-muted mb-0">{% translate "Monnaies" %}</p>
             </div>
         </div>
     </div>
 </div>
 
-{# Top 12 lieux / Top 12 venues #}
-{% if top_lieux %}
-<section class="mb-5">
+{# Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini #}
+{# / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee #}
+{% if lieux_pour_bandeau %}
+<section class="marquee-section mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>{% translate "Lieux" %}</h2>
+        <h2>{% translate "Nos lieux vivants" %}</h2>
         <a href="/lieux/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
     </div>
-    <div class="row">
-        {% for lieu in top_lieux %}
-        <div class="col-md-4 col-lg-3 mb-3">
-            <div class="card seo-card h-100">
+    <div class="marquee-track" aria-label="{% translate 'Lieux du réseau TiBillet' %}">
+        {% for copy in "ab" %}
+        <div class="marquee-content" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
+            {% for lieu in lieux_pour_bandeau %}
+            <a href="https://{{ lieu.domain }}/"
+               class="marquee-item"
+               title="{{ lieu.name }}{% if lieu.locality %} — {{ lieu.locality }}{% endif %}">
                 {% if lieu.logo_url %}
-                <img src="{{ lieu.logo_url }}" class="card-img-top" alt="{{ lieu.name }}"
-                     style="height: 120px; object-fit: contain; padding: 10px;">
+                <img src="{{ lieu.logo_url }}"
+                     alt="{{ lieu.name }}"
+                     class="marquee-logo"
+                     loading="lazy">
+                {% else %}
+                <span class="marquee-initiale" data-index="{{ forloop.counter0 }}">
+                    {{ lieu.initiale }}
+                </span>
                 {% endif %}
-                <div class="card-body">
-                    <h5 class="card-title">{{ lieu.name }}</h5>
-                    {% if lieu.locality %}
-                    <p class="card-text text-muted small mb-1">
-                        <i class="bi bi-geo-alt"></i> {{ lieu.locality }}
-                    </p>
-                    {% endif %}
-                    {% if lieu.short_description %}
-                    <p class="card-text small">{{ lieu.short_description|truncatewords:20 }}</p>
-                    {% endif %}
-                </div>
-                {% if lieu.domain %}
-                <div class="card-footer bg-transparent border-0">
-                    <a href="https://{{ lieu.domain }}/" class="btn btn-sm btn-outline-primary w-100">
-                        {% translate "Visiter" %}
-                    </a>
-                </div>
-                {% endif %}
-            </div>
+                <span class="marquee-name">{{ lieu.name }}</span>
+            </a>
+            {% endfor %}
         </div>
         {% endfor %}
     </div>
 </section>
 {% endif %}
 
-{# Top 6 evenements / Top 6 events #}
+{# Bandeau deferoulant "Prochains evenements" — marquee avec vignettes #}
+{# / Scrolling marquee "Upcoming events" — marquee with thumbnails #}
 {% if top_events %}
-<section class="mb-5">
+<section class="marquee-section mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>{% translate "Prochains événements" %}</h2>
         <a href="/evenements/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
     </div>
-    <div class="row">
-        {% for event in top_events %}
-        <div class="col-md-6 mb-3">
-            <div class="card seo-card h-100">
-                <div class="card-body">
-                    <h5 class="card-title">{{ event.name }}</h5>
-                    <p class="card-text text-muted small mb-1">
-                        <i class="bi bi-calendar-event"></i> {{ event.datetime|format_iso_date }}
-                    </p>
-                    {% if event.tenant_name %}
-                    <p class="card-text text-muted small mb-1">
-                        <i class="bi bi-geo-alt"></i> {{ event.tenant_name }}
-                    </p>
-                    {% endif %}
-                    {% if event.short_description %}
-                    <p class="card-text small">{{ event.short_description|truncatewords:30 }}</p>
-                    {% endif %}
+    <div class="marquee-track marquee-track--events" aria-label="{% translate 'Prochains événements du réseau TiBillet' %}">
+        {% for copy in "ab" %}
+        <div class="marquee-content marquee-content--events" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
+            {% for event in top_events %}
+            <a href="{{ event.canonical_url|default:'#' }}"
+               class="event-marquee-card"
+               title="{{ event.name }}{% if event.tenant_name %} — {{ event.tenant_name }}{% endif %}"
+               data-testid="event-marquee-card-{{ forloop.counter }}">
+                {% if event.image_url %}
+                <div class="event-marquee-img-wrapper">
+                    <img src="{{ event.image_url }}"
+                         alt="{{ event.name }}"
+                         class="event-marquee-img"
+                         loading="lazy">
                 </div>
-                {% if event.canonical_url %}
-                <div class="card-footer bg-transparent border-0">
-                    <a href="{{ event.canonical_url }}" class="btn btn-sm btn-outline-primary">
-                        {% translate "Voir l'événement" %}
-                    </a>
+                {% else %}
+                <div class="event-marquee-img-wrapper event-marquee-img-placeholder" data-index="{{ forloop.counter0 }}">
+                    <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 </div>
                 {% endif %}
-            </div>
+                <div class="event-marquee-body">
+                    <span class="event-marquee-name">{{ event.name }}</span>
+                    <span class="event-marquee-date">
+                        <i class="bi bi-calendar3" aria-hidden="true"></i>
+                        {{ event.datetime|format_iso_date }}
+                    </span>
+                    {% if event.tenant_name %}
+                    <span class="event-marquee-lieu">
+                        <i class="bi bi-geo-alt" aria-hidden="true"></i>
+                        {{ event.tenant_name }}
+                    </span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
         </div>
         {% endfor %}
     </div>
 </section>
 {% endif %}
 
-{% endblock %}
+</main>
+{% endblock main_wrapper %}

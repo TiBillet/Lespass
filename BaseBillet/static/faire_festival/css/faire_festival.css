@@ -399,10 +399,16 @@
    ========================================================================== */
 .skin-faire-festival .conteneur-principal {
     background-color: #ffffff;
-    /* Image de fond du Faire Festival — tuile 270x270 répétée */
+    /* Image de fond du Faire Festival — tuile 270x270 repetee */
+    /* / Faire Festival background pattern — 270x270 tiled */
     background-image: url('../image/fond.png');
     background-size: 56px 56px;
     background-repeat: repeat;
+}
+
+/* Plein ecran pour les pages a section unique (home, le faire festival) */
+/* / Full viewport height for single-section pages (home, le faire festival) */
+.skin-faire-festival .conteneur-principal.plein-ecran {
     min-height: 100vh;
 }
 
@@ -675,6 +681,22 @@
 .skin-faire-festival .titre-principal img {
     max-width: 100%;
     height: auto;
+}
+
+/* --- Titre Programme (réduit et centré) --- */
+.skin-faire-festival .titre-programme {
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.skin-faire-festival .titre-programme img {
+    max-width: 50%;
+    max-height: 120px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
 }
 
 /* Logo homepage - taille augmentée */
@@ -966,6 +988,124 @@
 
 .skin-faire-festival .lien-contact:hover {
     color: var(--couleur-jaune-principal);
+}
+
+/* ==========================================================================
+   25. SECTION TUTO - COMMENT CRÉER SON PROGRAMME
+   ========================================================================== */
+
+/* Conteneur d'une étape du tuto */
+.skin-faire-festival .etape-tuto {
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* --- Boutons d'Action pour le tuto (plus petits) --- */
+.skin-faire-festival .etape-tuto .bouton-action {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+}
+
+/* Conteneur de l'image d'étape */
+.skin-faire-festival .image-etape {
+    width: 100%;
+    max-width: 200px;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.skin-faire-festival .image-etape img {
+    max-height: 280px;
+    width: auto;
+    object-fit: contain;
+}
+
+/* Description de l'étape */
+.skin-faire-festival .etape-tuto p {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+}
+
+
+/* ==========================================================================
+   26. FOOTER FAIRE FESTIVAL
+   Footer avec fond bleu et texte blanc
+   ========================================================================== */
+
+/* Conteneur principal du footer */
+.skin-faire-festival .footer-faire-festival {
+    background-color: var(--couleur-bleu-vif);
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+}
+
+/* Titres du footer */
+.skin-faire-festival .footer-faire-festival h4 {
+    color: var(--couleur-blanc);
+    font-family: var(--police-titre);
+    margin-bottom: 1rem;
+}
+
+/* Liens de navigation dans le footer */
+.skin-faire-festival .footer-faire-festival .nav-link {
+    color: var(--couleur-blanc) !important;
+    font-family: var(--police-mono);
+    transition: all 0.2s ease;
+}
+
+.skin-faire-festival .footer-faire-festival .nav-link:hover {
+    color: var(--couleur-jaune-principal) !important;
+    text-decoration: underline;
+}
+
+/* Lien actif dans le footer */
+.skin-faire-festival .footer-faire-festival .nav-link.active {
+    color: var(--couleur-jaune-principal) !important;
+    font-weight: bold;
+}
+
+/* Séparateur horizontal */
+.skin-faire-festival .footer-faire-festival hr {
+    border-color: var(--couleur-blanc);
+    opacity: 0.25;
+}
+
+/* Texte principal */
+.skin-faire-festival .footer-faire-festival p {
+    color: var(--couleur-blanc);
+}
+
+/* Texte lead (introduction) */
+.skin-faire-festival .footer-faire-festival .lead {
+    color: var(--couleur-blanc);
+    font-family: var(--police-mono);
+}
+
+/* Texte secondaire (France 2030) */
+.skin-faire-festival .footer-faire-festival .text-secondary {
+    color: var(--couleur-blanc) !important;
+    opacity: 0.8;
+}
+
+/* SVG dans le footer (logo TiBillet) */
+.skin-faire-festival .footer-faire-festival svg {
+    fill: var(--couleur-blanc) !important;
+    color: var(--couleur-blanc) !important;
+}
+
+.skin-faire-festival .footer-faire-festival svg path {
+    fill: var(--couleur-blanc) !important;
+}
+
+/* Liens des icônes réseaux sociaux - sans soulignement */
+.skin-faire-festival .footer-faire-festival section a {
+    text-decoration: none !important;
 }
 
 /* ==========================================================================

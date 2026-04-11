@@ -237,7 +237,7 @@ window.validateForm = function (evt, elementForm) {
 	// console.log("-> evt.target.checkValidity() =", form.checkValidity())
 	if (form.checkValidity() === false) {
 		// efface le spinner
-		document.querySelector('#tibillet-spinner').style.display = 'none'
+		document.querySelector('#tibillet-spinner').classList.remove('active')
 		if (evt !== undefined && evt !== null) {
 			evt.preventDefault()
 			evt.stopPropagation()
