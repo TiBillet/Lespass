@@ -6,7 +6,7 @@
 > / **Convention:** append-only. Never renumber or remove an existing
 > section. Always add at the end.
 
-## §1. Annulation = suppression de la ligne de la table Booking
+## §1. Annulation = suppression de la ligne de la table Booking (Futur)
 
 **Source :** `booking/models.py` — classe `Booking`
 
@@ -16,7 +16,10 @@ Risque : perte de traçabilité (litiges remboursement, analytics).
 Migration future si besoin : ajouter `cancelled_at` (DateTimeField nullable).
 Non-null = annulé, null = actif.
 
-## §2. start_datetime est un DateTimeField timezone-aware
+À prendre en compte après la v1.
+
+
+## §2. start_datetime est un DateTimeField timezone-aware (Obsolète)
 
 **Source :** `booking/models.py` — classe `Booking`
 
@@ -26,7 +29,10 @@ toutes les dates de réservation doivent être timezone-aware. `timezone.now()`
 et `django.utils.timezone` sont les seuls outils à utiliser pour manipuler ce
 champ.
 
-## §3. Capacity = 0 autorisé
+Obsolète : cela a été précisé dans la spécification.
+
+
+## §3. Capacity = 0 autorisé (Obsolète)
 
 **Source :** `booking/models.py` — classe `Resource`
 
@@ -34,7 +40,10 @@ Capacity=0 désactive silencieusement les réservations sans toucher au
 Calendar ni au WeeklyOpening. Le slot engine vérifie `remaining_capacity > 0`
 — pas besoin d'un flag `is_active` séparé.
 
-## §4. Tags sur Resource et ResourceGroup — JSONField provisoire
+Obsolète : cela a été précisé dans la spécification.
+
+
+## §4. Tags sur Resource et ResourceGroup — JSONField provisoire (Futur)
 
 **Source :** `booking/models.py` — classes `Resource` et `ResourceGroup`
 
@@ -49,7 +58,8 @@ de tags dans l'admin et une cohérence avec le reste de la plateforme.
 
 En attendant, le champ est masqué dans l'admin (non listé dans `fields`).
 
-## §5. Traductions françaises du module booking — en attente
+
+## §5. Traductions françaises du module booking (en attente)
 
 **Source :** `locale/fr/LC_MESSAGES/django.po`
 
@@ -62,7 +72,8 @@ Action future : une fois les conflits résolus en amont, lancer
 manquantes dans `locale/fr/LC_MESSAGES/django.po` et recompiler avec
 `compilemessages`.
 
-## §6. Formulaire de réservation dans l'admin — ergonomie à améliorer
+
+## §6. Formulaire de réservation dans l'admin (Futur)
 
 **Source :** `booking/admin.py` — classe `BookingAdmin`
 
@@ -83,7 +94,8 @@ flux de paiement. Cela peut créer des incohérences (réservation marquée
 en lecture seule dans l'admin, ou les transitions autorisées devraient être
 limitées (ex : seul `confirmed → annulation` via suppression).
 
-## §7. Règle de génération des créneaux — tous les jours intersectés doivent être ouverts
+
+## §7. Règle de génération des créneaux de plusieurs jours (Obsolète)
 
 **Source :** `booking/slot_engine.py` — `generate_theoretical_slots`
 
@@ -104,7 +116,10 @@ Conséquences :
   diffère de la date de l'entry (bleed-over) — chaque slot est évalué
   indépendamment.
 
-## §8. ⚠️ MAJEUR — Contrainte manquante sur ClosedPeriod.end_date
+Obsolète : cela a été précisé dans la spécification.
+
+
+## §8. Contrainte manquante sur ClosedPeriod.end_date (Obsolète)
 
 **Source :** `booking/models.py` — classe `ClosedPeriod`
 
@@ -141,7 +156,10 @@ class Meta:
     ]
 ```
 
-## §9. Durée totale d'un OpeningEntry ne doit pas dépasser une semaine
+Obsolète : cela a été précisé dans la spécification et implémenté
+
+
+## §9. Durée totale d'un OpeningEntry ne doit pas dépasser une semaine (Obsolète)
 
 **Source :** `booking/models.py` — classe `OpeningEntry`
 
@@ -166,8 +184,10 @@ if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
         % {'week': WEEK_MINUTES}
     )
 ```
+Obsolète : cela a été précisé dans la spécification et implémenté
 
-## §10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques
+
+## §10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques (à faire)
 
 **Source :** `booking/tests/`
 
@@ -199,7 +219,7 @@ Action future : ajouter des tests unitaires pour ces deux modules, en
 conservant les tests d'intégration existants pour couvrir l'interaction
 avec la base (fermetures réelles, ouvertures réelles, réservations réelles).
 
-## §11. ⚠️ Ambiguïté dans la spec — alignement des réservations sur les créneaux
+## §11. Ambiguïté dans la spec — alignement des réservations sur les créneaux (Obsolète)
 
 **Source :** `booking/doc/tibillet-booking-spec.md` — section 5 (Business Rules)
 
@@ -217,12 +237,16 @@ La règle correcte est :
   volontaire peut créer une réservation ad hoc à n'importe quelle heure
   et durée, indépendamment du `WeeklyOpening`.
 
-Action future : corriger la section 5 de la spec pour distinguer
-explicitement les deux acteurs. Le `booking_validator.py` implémente
-la règle membre — il ne doit pas être utilisé pour valider les
-réservations créées par un volontaire via l'admin.
+Obsolète : la distinction membre / volontaire est désormais documentée
+dans `§3.2.4 B` (spec v0.6) et dans la section 5 "Business Rules /
+Availability" de la spec. Le `booking_validator.py` implémente la règle
+membre — il ne doit pas être utilisé pour valider les réservations créées
+par un volontaire via l'admin.
 
-## §12. ⚠️ Tests couplés aux fixtures — `test_slot_engine.py`
+
+
+
+## §12. Tests couplés aux fixtures — `test_slot_engine.py` (Obsolète)
 
 **Source :** `booking/tests/test_slot_engine.py` — fonctions
 `test_compute_slots_end_to_end_with_fixture_coworking_resource` et
@@ -243,7 +267,10 @@ Action future : réécrire ces deux tests en définissant explicitement
 `cal`, `wop` et leurs `OpeningEntry` inline, sans référence aux fixtures.
 Les tests `pytest.skip` conditionnels disparaîtront en même temps.
 
-## §13. 💡 Clock injection dans `compute_slots` et `validate_new_booking`
+Obsolète : les test ont été mise à jour
+
+
+## §13. 💡 Clock injection dans `compute_slots` et `validate_new_booking`  (Obsolète)
 
 **Source :** `booking/slot_engine.py:376`, `booking/booking_validator.py`
 
@@ -273,7 +300,10 @@ Action future : appliquer ce changement à `compute_slots` et
 `validate_new_booking`, puis réécrire les tests de validation avec
 des dates fixes.
 
-## §14. ⚠️ MAJEUR — Race condition sur la capacité restante
+Obsolète : les test ont été mise à jour
+
+
+## §14. ⚠️ MAJEUR — Race condition sur la capacité restante (à faire)
 
 **Source :** `booking/doc/tibillet-booking-spec.md` — section 3.2.4 (B)
 
