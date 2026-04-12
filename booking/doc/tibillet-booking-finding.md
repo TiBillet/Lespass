@@ -272,3 +272,47 @@ Aucun site d'appel en production n'est modifié (paramètre optionnel).
 Action future : appliquer ce changement à `compute_slots` et
 `validate_new_booking`, puis réécrire les tests de validation avec
 des dates fixes.
+
+## §14. ⚠️ MAJEUR — Race condition sur la capacité restante
+
+**Source :** `booking/doc/tibillet-booking-spec.md` — section 3.2.4 (B)
+
+E est calculé à partir d'un snapshot de la base au moment de la
+requête. Deux requêtes HTTP concurrentes qui demandent le dernier
+créneau disponible (`remaining_capacity = 1`) peuvent toutes les deux
+passer la validation et créer chacune une réservation — laissant la
+ressource en sur-réservation (`remaining_capacity = -1`).
+
+La règle `B ⊆ E'` est une vérification correcte mais pas atomique :
+entre le moment où E' est calculé et le moment où la ligne `Booking`
+est insérée, un autre processus peut avoir consommé la capacité.
+
+Action à faire : re-vérifier `remaining_capacity` à l'intérieur d'une
+transaction base de données avec un verrou au niveau de la ligne sur
+les créneaux concernés, juste avant d'insérer la réservation. En
+Django, le pattern recommandé est :
+
+```python
+from django.db import transaction
+
+with transaction.atomic():
+    # Re-calcule remaining_capacity avec SELECT FOR UPDATE
+    # sur les réservations existantes qui chevauchent le créneau
+    overlapping_count = (
+        Booking.objects
+        .select_for_update()
+        .filter(
+            resource=resource,
+            start_datetime__lt=slot_end,
+            end_datetime__gt=slot_start,
+            status__in=['new', 'validated', 'confirmed'],
+        )
+        .count()
+    )
+    if overlapping_count >= resource.capacity:
+        raise ValidationError(_('This slot is no longer available.'))
+    Booking.objects.create(...)
+```
+
+Sans ce verrou, la contrainte de capacité n'est pas garantie sous
+charge concurrente.
