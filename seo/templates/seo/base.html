@@ -179,6 +179,12 @@
     </div>
 </footer>
 
+{# Elements flottants (FAB, overlays) — enfants directs de body #}
+{# pour un position: fixed relatif au viewport (pas d'ancetre parasite). #}
+{# / Floating elements (FAB, overlays) — direct children of body #}
+{# so position: fixed is relative to the viewport (no ancestor issues). #}
+{% block body_extras %}{% endblock %}
+
 {% block extra_js %}{% endblock %}
 
 </body>

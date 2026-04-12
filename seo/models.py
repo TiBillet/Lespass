@@ -18,6 +18,8 @@ class SEOCache(models.Model):
     AGGREGATE_EVENTS = "aggregate_events"
     AGGREGATE_MEMBERSHIPS = "aggregate_memberships"
     AGGREGATE_LIEUX = "aggregate_lieux"
+    AGGREGATE_INITIATIVES = "aggregate_initiatives"
+    AGGREGATE_ASSETS = "aggregate_assets"
     SITEMAP_INDEX = "sitemap_index"
     GLOBAL_COUNTS = "global_counts"
 
@@ -28,6 +30,8 @@ class SEOCache(models.Model):
         (AGGREGATE_EVENTS, _("Aggregated events for network (ROOT)")),
         (AGGREGATE_MEMBERSHIPS, _("Aggregated memberships for network (ROOT)")),
         (AGGREGATE_LIEUX, _("Aggregated active venues (ROOT)")),
+        (AGGREGATE_INITIATIVES, _("Aggregated initiatives for network (ROOT)")),
+        (AGGREGATE_ASSETS, _("Aggregated assets/currencies for network (ROOT)")),
         (SITEMAP_INDEX, _("Cross-tenant sitemap index (ROOT)")),
         (GLOBAL_COUNTS, _("Global counts: events, memberships, initiatives (ROOT)")),
     ]

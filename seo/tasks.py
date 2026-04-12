@@ -36,8 +36,10 @@ def refresh_seo_cache():
         build_stdimage_variation_url,
         build_tenant_config_data,
         get_active_tenants_with_counts,
+        get_all_assets,
         get_events_for_tenants,
         get_global_counts,
+        get_initiatives_for_tenants,
         get_memberships_for_tenants,
         set_memcached_l1,
     )
@@ -74,6 +76,8 @@ def refresh_seo_cache():
     # ------------------------------------------------------------------
     all_events = get_events_for_tenants(tenant_schemas)
     all_memberships = get_memberships_for_tenants(tenant_schemas)
+    all_initiatives = get_initiatives_for_tenants(tenant_schemas)
+    all_assets = get_all_assets()
 
     # Grouper par tenant_id / Group by tenant_id
     events_by_tenant = {}
@@ -89,6 +93,13 @@ def refresh_seo_cache():
         if tid not in memberships_by_tenant:
             memberships_by_tenant[tid] = []
         memberships_by_tenant[tid].append(membership)
+
+    initiatives_by_tenant = {}
+    for initiative in all_initiatives:
+        tid = initiative["tenant_id"]
+        if tid not in initiatives_by_tenant:
+            initiatives_by_tenant[tid] = []
+        initiatives_by_tenant[tid].append(initiative)
 
     # ------------------------------------------------------------------
     # Etape 4 : Config par tenant (N requetes ORM)
@@ -120,6 +131,7 @@ def refresh_seo_cache():
         )
         tenant_events = events_by_tenant.get(tenant_id, [])
         tenant_memberships = memberships_by_tenant.get(tenant_id, [])
+        tenant_initiatives = initiatives_by_tenant.get(tenant_id, [])
 
         # Enrichir chaque event avec image_url et canonical_url.
         # On utilise le domaine du tenant pour construire les URLs completes.
@@ -141,6 +153,11 @@ def refresh_seo_cache():
                 event["canonical_url"] = None
             # Nom du lieu (tenant) pour affichage / Venue name for display
             event["tenant_name"] = tenant_name
+
+        # Enrichir les initiatives avec le nom du lieu
+        # / Enrich initiatives with venue name
+        for initiative in tenant_initiatives:
+            initiative["tenant_name"] = tenant_name
 
         # tenant_summary : config + stats
         summary_data = {
@@ -198,6 +215,26 @@ def refresh_seo_cache():
         defaults={"data": aggregate_memberships_data},
     )
     set_memcached_l1(SEOCache.AGGREGATE_MEMBERSHIPS, None, aggregate_memberships_data)
+
+    # aggregate_initiatives : toutes les initiatives de tous les tenants
+    # / aggregate_initiatives: all initiatives from all tenants
+    aggregate_initiatives_data = {"initiatives": all_initiatives}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.AGGREGATE_INITIATIVES,
+        tenant=None,
+        defaults={"data": aggregate_initiatives_data},
+    )
+    set_memcached_l1(SEOCache.AGGREGATE_INITIATIVES, None, aggregate_initiatives_data)
+
+    # aggregate_assets : tous les assets fedow_core (monnaies)
+    # / aggregate_assets: all fedow_core assets (currencies)
+    aggregate_assets_data = {"assets": all_assets}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.AGGREGATE_ASSETS,
+        tenant=None,
+        defaults={"data": aggregate_assets_data},
+    )
+    set_memcached_l1(SEOCache.AGGREGATE_ASSETS, None, aggregate_assets_data)
 
     # aggregate_lieux : liste des lieux actifs (tenants avec domaine)
     # / aggregate_lieux: list of active venues (tenants with domain)

@@ -2,67 +2,104 @@
  * Explorer — carte Leaflet + liste filtree + toggle mobile.
  * / Explorer — Leaflet map + filtered list + mobile toggle.
  *
- * SECTIONS :
- *   1. Etat global / Global state
- *   2. Initialisation / Initialization
- *   3. Filtrage / Filtering
- *   4. Rendu liste / List rendering
- *   5. Carte Leaflet / Leaflet map (Task 6)
- *   6. Cross-highlighting desktop (Task 6)
- *   7. Toggle mobile / Mobile toggle (Task 6)
- *
  * LOCALISATION: seo/static/seo/explorer.js
  */
 
 // ============================================================
-// SECTION 1 — Etat global / Global state
+// Etat global / Global state
 // ============================================================
 
 var explorerData = null;
-var activeFilters = {
-    text: '',
-    category: 'all'
-};
+var activeFilters = { text: '', category: 'all' };
 var map = null;
 var markers = {};
 var markerClusterGroup = null;
 var mapInitialized = false;
+var currentView = 'list';
+
+// Config des categories : icone, badge, label, builder des champs secondaires.
+// / Category config: icon, badge, label, secondary fields builder.
+var CATEGORIES = {
+    event: {
+        icon: '\u{1F3B6}',
+        badge: 'Événement',
+        className: 'event',
+        meta: function(item) {
+            var d = item.datetime ? formatShortDate(item.datetime) : '';
+            return (d ? '\u{1F4C5} ' + d + ' · ' : '') + (item.lieu_name || '');
+        },
+    },
+    membership: {
+        icon: '\u{1F91D}',
+        badge: 'Adhésion',
+        className: 'membership',
+        meta: function(item) { return '\u{1F3DB} ' + (item.lieu_name || ''); },
+    },
+    initiative: {
+        icon: '\u{1F4A1}',
+        badge: 'Initiative',
+        className: 'initiative',
+        meta: function(item) {
+            var budget = item.budget_contributif ? ' · Budget contributif' : '';
+            return '\u{1F3DB} ' + (item.lieu_name || '') + budget;
+        },
+    },
+    asset: {
+        icon: '\u{1FA99}',
+        badge: 'Monnaie',
+        className: 'asset',
+        meta: function(item) {
+            var labels = { TLF: 'Monnaie locale', TNF: 'Cadeau', TIM: 'Temps', FED: 'Fédéré', FID: 'Fidélité' };
+            return labels[item.category] || item.category;
+        },
+    },
+};
 
 // ============================================================
-// SECTION 2 — Initialisation / Initialization
+// Helpers
+// ============================================================
+
+function escapeHtml(text) {
+    if (!text) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+
+function pluralize(count, singular, plural) {
+    return count + ' ' + (count > 1 ? plural : singular);
+}
+
+function formatShortDate(isoString) {
+    return new Date(isoString).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+// ============================================================
+// Initialisation / Initialization
 // ============================================================
 
 function init() {
     var dataElement = document.getElementById('explorer-data');
-    if (!dataElement) {
-        console.error('Element #explorer-data introuvable / #explorer-data element not found');
-        return;
-    }
+    if (!dataElement) return;
     explorerData = JSON.parse(dataElement.textContent);
 
     bindSearch();
     bindPills();
     bindFAB();
-
-    // Premier rendu / First render
     applyFilters();
 
-    // Sur desktop, initialiser la carte immediatement
-    // / On desktop, initialize the map immediately
-    if (window.innerWidth >= 992) {
-        initMap();
-    }
+    if (window.innerWidth >= 992) initMap();
 }
 
 function bindSearch() {
-    var searchInput = document.getElementById('explorer-search');
-    if (!searchInput) return;
+    var input = document.getElementById('explorer-search');
+    if (!input) return;
 
-    var debounceTimer = null;
-    searchInput.addEventListener('input', function() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(function() {
-            activeFilters.text = searchInput.value.trim().toLowerCase();
+    var timer = null;
+    input.addEventListener('input', function() {
+        clearTimeout(timer);
+        timer = setTimeout(function() {
+            activeFilters.text = input.value.trim().toLowerCase();
             applyFilters();
         }, 300);
     });
@@ -80,234 +117,306 @@ function bindPills() {
     });
 }
 
+function bindFAB() {
+    var fab = document.getElementById('explorer-fab');
+    if (!fab) return;
+    fab.addEventListener('click', toggleView);
+}
+
 // ============================================================
-// SECTION 3 — Filtrage / Filtering
+// Filtrage / Filtering
 // ============================================================
+
+function matchesText(item) {
+    if (!activeFilters.text) return true;
+    var q = activeFilters.text;
+    var fields = [item.name, item.locality, item.short_description, item.lieu_name];
+    for (var i = 0; i < fields.length; i++) {
+        if ((fields[i] || '').toLowerCase().indexOf(q) !== -1) return true;
+    }
+    return false;
+}
+
+function filterCategory(sourceArray, categoryName) {
+    // Retourne [] si la categorie active ne correspond ni a 'all' ni a categoryName.
+    // / Returns [] if active category matches neither 'all' nor categoryName.
+    if (activeFilters.category !== 'all' && activeFilters.category !== categoryName) {
+        return [];
+    }
+    return (sourceArray || []).filter(matchesText);
+}
 
 function applyFilters() {
     if (!explorerData) return;
 
-    var filteredLieux = [];
-    var filteredEvents = [];
-    var filteredMemberships = [];
+    var lieux = filterCategory(explorerData.lieux, 'lieu');
+    var events = filterCategory(explorerData.events, 'event');
+    var memberships = filterCategory(explorerData.memberships, 'membership');
+    var initiatives = filterCategory(explorerData.initiatives, 'initiative');
+    var assets = filterCategory(explorerData.assets, 'asset');
 
-    if (activeFilters.category === 'all' || activeFilters.category === 'lieu') {
-        for (var i = 0; i < explorerData.lieux.length; i++) {
-            var lieu = explorerData.lieux[i];
-            if (matchesText(lieu)) {
-                filteredLieux.push(lieu);
-            }
-        }
-    }
+    renderList(lieux, events, memberships, initiatives, assets);
+    updateCounters(lieux.length, events.length, memberships.length, initiatives.length, assets.length);
 
-    if (activeFilters.category === 'all' || activeFilters.category === 'event') {
-        for (var j = 0; j < explorerData.events.length; j++) {
-            var event = explorerData.events[j];
-            if (matchesText(event)) {
-                filteredEvents.push(event);
-            }
-        }
-    }
-
-    if (activeFilters.category === 'all' || activeFilters.category === 'membership') {
-        for (var k = 0; k < explorerData.memberships.length; k++) {
-            var membership = explorerData.memberships[k];
-            if (matchesText(membership)) {
-                filteredMemberships.push(membership);
-            }
-        }
-    }
-
-    renderList(filteredLieux, filteredEvents, filteredMemberships);
-    updateCounters(filteredLieux.length, filteredEvents.length, filteredMemberships.length);
-
+    // Calcule les lieux a afficher sur la carte : union des lieux de toutes
+    // les categories filtrees (events/memberships/initiatives rattachees a un lieu).
+    // / Compute lieux to show on map: union of lieux from all filtered
+    // categories (events/memberships/initiatives tied to a lieu).
     if (mapInitialized) {
-        updateMapMarkers(filteredLieux);
+        var lieuxSurCarte = collectLieuxFromResults(lieux, events, memberships, initiatives);
+        updateMapMarkers(lieuxSurCarte);
+        updateMapEmptyOverlay(lieuxSurCarte.length, assets.length);
     }
 }
 
-function matchesText(item) {
-    if (!activeFilters.text) return true;
+/**
+ * Affiche un overlay sur la carte quand aucun lieu n'a de marqueur.
+ * Explicite le cas "Monnaies" (globales, pas de geolocalisation).
+ * / Shows map overlay when no lieu has a marker.
+ * Makes the "Assets" case explicit (global, no geolocation).
+ */
+function updateMapEmptyOverlay(lieuxCount, assetsCount) {
+    var mapEl = document.getElementById('explorer-map');
+    if (!mapEl) return;
 
-    var query = activeFilters.text;
-    var name = (item.name || '').toLowerCase();
-    var locality = (item.locality || '').toLowerCase();
-    var description = (item.short_description || '').toLowerCase();
-    var lieuName = (item.lieu_name || '').toLowerCase();
+    var existing = mapEl.querySelector('.explorer-map-empty');
+    if (lieuxCount > 0) {
+        if (existing) existing.remove();
+        return;
+    }
 
-    return name.indexOf(query) !== -1
-        || locality.indexOf(query) !== -1
-        || description.indexOf(query) !== -1
-        || lieuName.indexOf(query) !== -1;
+    // Message different si on filtre uniquement les monnaies (assets globaux)
+    // / Different message if filtering only currencies (global assets)
+    var isAssetFilter = activeFilters.category === 'asset' && assetsCount > 0;
+    var title = isAssetFilter ? 'Les monnaies sont globales' : 'Aucun résultat sur la carte';
+    var message = isAssetFilter
+        ? 'Les monnaies fédérées sont partagées par tout le réseau, elles n\'ont pas de lieu géolocalisé.'
+        : 'Aucun lieu ne correspond à votre recherche. Essayez d\'élargir les filtres.';
+
+    if (!existing) {
+        existing = document.createElement('div');
+        existing.className = 'explorer-map-empty';
+        mapEl.appendChild(existing);
+    }
+    existing.innerHTML = '<strong>' + title + '</strong>' + message;
 }
 
-function updateCounters(lieuxCount, eventsCount, membershipsCount) {
+/**
+ * Agrege les lieux visibles sur la carte depuis les resultats filtres.
+ * Chaque event/adhesion/initiative ajoute le lieu_id a l'ensemble.
+ * / Aggregates lieux visible on map from filtered results.
+ * Each event/membership/initiative adds its lieu_id to the set.
+ */
+function collectLieuxFromResults(lieux, events, memberships, initiatives) {
+    var lieuIdsVisibles = {};
+    for (var i = 0; i < lieux.length; i++) lieuIdsVisibles[lieux[i].tenant_id] = true;
+    for (var j = 0; j < events.length; j++) if (events[j].lieu_id) lieuIdsVisibles[events[j].lieu_id] = true;
+    for (var k = 0; k < memberships.length; k++) if (memberships[k].lieu_id) lieuIdsVisibles[memberships[k].lieu_id] = true;
+    for (var l = 0; l < initiatives.length; l++) if (initiatives[l].lieu_id) lieuIdsVisibles[initiatives[l].lieu_id] = true;
+
+    // Retourne la liste complete des objets lieu dont l'id est visible.
+    // / Returns the full list of lieu objects whose id is visible.
+    var result = [];
+    for (var m = 0; m < explorerData.lieux.length; m++) {
+        if (lieuIdsVisibles[explorerData.lieux[m].tenant_id]) {
+            result.push(explorerData.lieux[m]);
+        }
+    }
+    return result;
+}
+
+function updateCounters(lieuxN, eventsN, membersN, initsN, assetsN) {
     var counter = document.getElementById('explorer-counter');
     if (!counter) return;
 
-    var parts = [];
-    parts.push(lieuxCount + ' lieu' + (lieuxCount > 1 ? 'x' : ''));
-    parts.push(eventsCount + ' événement' + (eventsCount > 1 ? 's' : ''));
-    parts.push(membershipsCount + ' adhésion' + (membershipsCount > 1 ? 's' : ''));
+    var parts = [
+        pluralize(lieuxN, 'lieu', 'lieux'),
+        pluralize(eventsN, 'événement', 'événements'),
+        pluralize(membersN, 'adhésion', 'adhésions'),
+    ];
+    if (initsN > 0) parts.push(pluralize(initsN, 'initiative', 'initiatives'));
+    if (assetsN > 0) parts.push(pluralize(assetsN, 'monnaie', 'monnaies'));
     counter.textContent = parts.join(' · ');
 }
 
 // ============================================================
-// SECTION 4 — Rendu liste / List rendering
+// Rendu liste / List rendering
 // ============================================================
 
-function renderList(lieux, events, memberships) {
-    var listContainer = document.getElementById('explorer-list');
-    if (!listContainer) return;
+function renderList(lieux, events, memberships, initiatives, assets) {
+    var container = document.getElementById('explorer-list');
+    if (!container) return;
 
     var html = '';
+    for (var i = 0; i < lieux.length; i++) html += buildLieuCard(lieux[i]);
+    for (var j = 0; j < events.length; j++) html += buildFlatCard(events[j], 'event');
+    for (var k = 0; k < memberships.length; k++) html += buildFlatCard(memberships[k], 'membership');
+    for (var l = 0; l < initiatives.length; l++) html += buildFlatCard(initiatives[l], 'initiative');
+    for (var m = 0; m < assets.length; m++) html += buildFlatCard(assets[m], 'asset');
 
-    for (var i = 0; i < lieux.length; i++) {
-        html += buildLieuCard(lieux[i]);
-    }
-    for (var j = 0; j < events.length; j++) {
-        html += buildEventCard(events[j]);
-    }
-    for (var k = 0; k < memberships.length; k++) {
-        html += buildMembershipCard(memberships[k]);
-    }
+    container.innerHTML = html || '<p class="text-muted text-center py-4">Aucun résultat trouvé.</p>';
 
-    if (!html) {
-        html = '<p class="text-muted text-center py-4">Aucun résultat trouvé.</p>';
-    }
-
-    listContainer.innerHTML = html;
-
-    if (window.innerWidth >= 992) {
-        bindCardHoverEvents();
-    }
+    if (window.innerWidth >= 992) bindCardHoverEvents();
 }
 
+/**
+ * Carte d'un lieu (cliquable, focus carte + accordeon events/adhesions/initiatives).
+ * / Lieu card (clickable, map focus + events/memberships/initiatives accordion).
+ */
 function buildLieuCard(lieu) {
+    var tenantId = escapeHtml(lieu.tenant_id);
     var domain = lieu.domain || '';
     var href = domain ? 'https://' + domain + '/' : '#';
-    var logoHtml = '';
-    if (lieu.logo_url) {
-        logoHtml = '<img src="' + escapeHtml(lieu.logo_url) + '" alt="" class="explorer-card-icon lieu" style="object-fit:contain;padding:4px;">';
-    } else {
-        logoHtml = '<div class="explorer-card-icon lieu">&#127963;</div>';
+
+    var logo = lieu.logo_url
+        ? '<img src="' + escapeHtml(lieu.logo_url) + '" alt="" class="explorer-card-icon lieu" style="object-fit:contain;padding:4px;">'
+        : '<div class="explorer-card-icon lieu">\u{1F3DB}</div>';
+
+    var meta = lieu.locality
+        ? '<div class="explorer-card-meta">\u{1F4CD} ' + escapeHtml(lieu.locality)
+            + (lieu.country ? ', ' + escapeHtml(lieu.country) : '') + '</div>'
+        : '';
+    var desc = lieu.short_description
+        ? '<div class="explorer-card-desc">' + escapeHtml(lieu.short_description) + '</div>'
+        : '';
+
+    return ''
+        + '<div class="explorer-card explorer-card--lieu" data-lieu-id="' + tenantId + '" data-type="lieu">'
+            + '<div class="explorer-card-focus" onclick="focusOnLieu(\'' + tenantId + '\')" role="button" tabindex="0" title="Voir sur la carte">'
+                + logo
+                + '<div class="explorer-card-body">'
+                    + '<div class="explorer-card-header">'
+                        + '<h3 class="explorer-card-title">' + escapeHtml(lieu.name) + '</h3>'
+                        + '<span class="explorer-badge lieu">Lieu</span>'
+                    + '</div>'
+                    + meta
+                    + desc
+                + '</div>'
+            + '</div>'
+            + buildAccordion(lieu, domain)
+            + '<div class="explorer-card-footer">'
+                + '<a href="' + escapeHtml(href) + '" target="_blank" class="explorer-card-link">Visiter le lieu \u2192</a>'
+            + '</div>'
+        + '</div>';
+}
+
+function buildAccordion(lieu, domain) {
+    var events = lieu.events || [];
+    var memberships = lieu.memberships || [];
+    var initiatives = lieu.initiatives || [];
+    var total = events.length + memberships.length + initiatives.length;
+    if (total === 0) return '';
+
+    var parts = [pluralize(events.length, 'événement', 'événements')];
+    if (memberships.length > 0) parts.push(pluralize(memberships.length, 'adhésion', 'adhésions'));
+    if (initiatives.length > 0) parts.push(pluralize(initiatives.length, 'initiative', 'initiatives'));
+
+    var items = '';
+    for (var i = 0; i < events.length; i++) {
+        items += buildAccordionItem('\u{1F3B6}', events[i].name,
+            events[i].datetime ? formatShortDate(events[i].datetime) : '',
+            domain && events[i].slug ? 'https://' + domain + '/event/' + events[i].slug + '/' : '#');
+    }
+    for (var j = 0; j < memberships.length; j++) {
+        items += buildAccordionItem('\u{1F91D}', memberships[j].name, '',
+            domain ? 'https://' + domain + '/' : '#');
+    }
+    for (var k = 0; k < initiatives.length; k++) {
+        items += buildAccordionItem('\u{1F4A1}', initiatives[k].name,
+            initiatives[k].budget_contributif ? 'Budget contributif' : '',
+            domain ? 'https://' + domain + '/crowds/' : '#');
     }
 
-    return '<a class="explorer-card" href="' + escapeHtml(href) + '" target="_blank"'
-        + ' data-lieu-id="' + escapeHtml(lieu.tenant_id) + '"'
-        + ' data-type="lieu">'
-        + logoHtml
-        + '<div class="explorer-card-body">'
-        + '<div class="explorer-card-header">'
-        + '<h3 class="explorer-card-title">' + escapeHtml(lieu.name) + '</h3>'
-        + '<span class="explorer-badge lieu">Lieu</span>'
-        + '</div>'
-        + (lieu.locality ? '<div class="explorer-card-meta">&#128205; ' + escapeHtml(lieu.locality)
-            + (lieu.country ? ', ' + escapeHtml(lieu.country) : '') + '</div>' : '')
-        + (lieu.short_description ? '<div class="explorer-card-desc">' + escapeHtml(lieu.short_description) + '</div>' : '')
-        + '<div class="explorer-card-stats">'
-        + (lieu.events ? lieu.events.length : 0) + ' événement' + ((lieu.events && lieu.events.length > 1) ? 's' : '')
-        + ' · '
-        + (lieu.memberships ? lieu.memberships.length : 0) + ' adhésion' + ((lieu.memberships && lieu.memberships.length > 1) ? 's' : '')
-        + '</div>'
-        + '</div>'
+    return ''
+        + '<div class="explorer-accordion">'
+            + '<button class="explorer-accordion-toggle" onclick="toggleAccordion(event, this)" type="button">'
+                + '<span>' + parts.join(' · ') + '</span>'
+                + '<i class="bi bi-chevron-down explorer-accordion-chevron"></i>'
+            + '</button>'
+            + '<div class="explorer-accordion-panel">' + items + '</div>'
+        + '</div>';
+}
+
+function buildAccordionItem(icon, name, date, href) {
+    return ''
+        + '<a class="explorer-accordion-item" href="' + escapeHtml(href) + '" target="_blank">'
+            + '<span class="explorer-accordion-icon">' + icon + '</span>'
+            + '<span class="explorer-accordion-name">' + escapeHtml(name) + '</span>'
+            + (date ? '<span class="explorer-accordion-date">' + escapeHtml(date) + '</span>' : '')
         + '</a>';
 }
 
-function buildEventCard(event) {
-    var domain = event.lieu_domain || '';
-    var slug = event.slug || '';
-    var href = domain && slug ? 'https://' + domain + '/event/' + slug + '/' : '#';
-    var dateStr = '';
-    if (event.datetime) {
-        var d = new Date(event.datetime);
-        dateStr = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-    }
+/**
+ * Carte "plate" (event, membership, initiative, asset).
+ * Clic = focus carte sur le lieu parent, sauf pour les assets (globaux).
+ * / Flat card (event, membership, initiative, asset).
+ * Click = map focus on parent lieu, except assets (global).
+ */
+function buildFlatCard(item, categoryName) {
+    var cat = CATEGORIES[categoryName];
+    var lieuId = escapeHtml(item.lieu_id || '');
+    var focusable = categoryName !== 'asset' && lieuId;
+    var desc = item.short_description
+        ? '<div class="explorer-card-desc">' + escapeHtml(item.short_description) + '</div>'
+        : '';
 
-    return '<a class="explorer-card" href="' + escapeHtml(href) + '" target="_blank"'
-        + ' data-lieu-id="' + escapeHtml(event.lieu_id || '') + '"'
-        + ' data-type="event">'
-        + '<div class="explorer-card-icon event">&#127926;</div>'
-        + '<div class="explorer-card-body">'
-        + '<div class="explorer-card-header">'
-        + '<h3 class="explorer-card-title">' + escapeHtml(event.name) + '</h3>'
-        + '<span class="explorer-badge event">Événement</span>'
-        + '</div>'
-        + '<div class="explorer-card-meta">'
-        + (dateStr ? '&#128197; ' + dateStr + ' · ' : '')
-        + escapeHtml(event.lieu_name || '')
-        + '</div>'
-        + (event.short_description ? '<div class="explorer-card-desc">' + escapeHtml(event.short_description) + '</div>' : '')
-        + '</div>'
-        + '</a>';
-}
+    var clickAttr = focusable
+        ? ' onclick="focusOnLieu(\'' + lieuId + '\')" role="button" tabindex="0"'
+        : '';
+    var lieuAttr = lieuId ? ' data-lieu-id="' + lieuId + '"' : '';
 
-function buildMembershipCard(membership) {
-    var domain = membership.lieu_domain || '';
-    var href = domain ? 'https://' + domain + '/' : '#';
-
-    return '<a class="explorer-card" href="' + escapeHtml(href) + '" target="_blank"'
-        + ' data-lieu-id="' + escapeHtml(membership.lieu_id || '') + '"'
-        + ' data-type="membership">'
-        + '<div class="explorer-card-icon membership">&#129309;</div>'
-        + '<div class="explorer-card-body">'
-        + '<div class="explorer-card-header">'
-        + '<h3 class="explorer-card-title">' + escapeHtml(membership.name) + '</h3>'
-        + '<span class="explorer-badge membership">Adhésion</span>'
-        + '</div>'
-        + '<div class="explorer-card-meta">&#127963; ' + escapeHtml(membership.lieu_name || '') + '</div>'
-        + (membership.short_description ? '<div class="explorer-card-desc">' + escapeHtml(membership.short_description) + '</div>' : '')
-        + '</div>'
-        + '</a>';
-}
-
-function escapeHtml(text) {
-    if (!text) return '';
-    var div = document.createElement('div');
-    div.appendChild(document.createTextNode(text));
-    return div.innerHTML;
+    return ''
+        + '<div class="explorer-card"' + clickAttr + lieuAttr + ' data-type="' + categoryName + '">'
+            + '<div class="explorer-card-icon ' + cat.className + '">' + cat.icon + '</div>'
+            + '<div class="explorer-card-body">'
+                + '<div class="explorer-card-header">'
+                    + '<h3 class="explorer-card-title">' + escapeHtml(item.name) + '</h3>'
+                    + '<span class="explorer-badge ' + cat.className + '">' + cat.badge + '</span>'
+                + '</div>'
+                + '<div class="explorer-card-meta">' + escapeHtml(cat.meta(item)) + '</div>'
+                + desc
+            + '</div>'
+        + '</div>';
 }
 
 // ============================================================
-// SECTION 5 — Carte Leaflet / Leaflet map
+// Carte Leaflet / Leaflet map
 // ============================================================
 
 function initMap() {
     if (mapInitialized) return;
+    if (!document.getElementById('explorer-map')) return;
 
-    var mapContainer = document.getElementById('explorer-map');
-    if (!mapContainer) return;
+    map = L.map('explorer-map', { zoomControl: true, scrollWheelZoom: true });
 
-    map = L.map('explorer-map', {
-        zoomControl: true,
-        scrollWheelZoom: true,
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    // Tuiles CartoDB Voyager : pas de restriction referer (OSM bloque en localhost).
+    // / CartoDB Voyager tiles: no referer restriction (OSM blocks on localhost).
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
         maxZoom: 19,
+        subdomains: 'abcd',
     }).addTo(map);
 
     markerClusterGroup = L.markerClusterGroup();
     map.addLayer(markerClusterGroup);
-
     addMarkers(explorerData.lieux);
-
     mapInitialized = true;
+
+    // Re-applique les filtres pour synchroniser les marqueurs avec l'etat actuel.
+    // Important sur mobile ou la carte est initialisee tardivement (au 1er toggle).
+    // / Re-apply filters to sync markers with current state.
+    // Important on mobile where the map is initialized lazily (on first toggle).
+    applyFilters();
 }
 
 function addMarkers(lieux) {
     if (!map || !markerClusterGroup) return;
-
     markerClusterGroup.clearLayers();
     markers = {};
-
     var bounds = [];
 
     for (var i = 0; i < lieux.length; i++) {
         var lieu = lieux[i];
-        if (lieu.latitude === null || lieu.longitude === null) continue;
-
         var lat = parseFloat(lieu.latitude);
         var lng = parseFloat(lieu.longitude);
         if (isNaN(lat) || isNaN(lng)) continue;
@@ -321,200 +430,228 @@ function addMarkers(lieux) {
         });
 
         var marker = L.marker([lat, lng], { icon: icon });
+        marker.bindPopup(buildPopupContent(lieu), { maxWidth: 280 });
 
-        var popupContent = buildPopupContent(lieu);
-        marker.bindPopup(popupContent, { maxWidth: 280 });
-
-        markers[lieu.tenant_id] = marker;
-
+        // Closure pour capturer tenant_id / Closure to capture tenant_id
         (function(tenantId) {
-            marker.on('click', function() {
-                onMarkerClick(tenantId);
-            });
+            marker.on('click', function() { scrollToCard(tenantId); });
         })(lieu.tenant_id);
 
+        markers[lieu.tenant_id] = marker;
         markerClusterGroup.addLayer(marker);
         bounds.push([lat, lng]);
     }
 
-    if (bounds.length > 0) {
-        map.fitBounds(bounds, { padding: [20, 20] });
-    } else {
-        map.setView([46.603354, 1.888334], 6);
-    }
+    if (bounds.length > 0) map.fitBounds(bounds, { padding: [20, 20] });
+    else map.setView([46.603354, 1.888334], 6);
 }
 
 function buildPopupContent(lieu) {
-    var domain = lieu.domain || '';
-    var href = domain ? 'https://' + domain + '/' : '#';
-
-    var html = '<div class="explorer-popup">';
-    html += '<h4 class="explorer-popup-title">' + escapeHtml(lieu.name) + '</h4>';
+    var href = lieu.domain ? 'https://' + lieu.domain + '/' : '#';
+    var html = '<div class="explorer-popup">'
+        + '<h4 class="explorer-popup-title">' + escapeHtml(lieu.name) + '</h4>';
 
     if (lieu.short_description) {
         html += '<p class="explorer-popup-desc">' + escapeHtml(lieu.short_description) + '</p>';
     }
-
     if (lieu.locality) {
-        html += '<p class="explorer-popup-stats">&#128205; ' + escapeHtml(lieu.locality);
-        if (lieu.country) html += ', ' + escapeHtml(lieu.country);
-        html += '</p>';
+        html += '<p class="explorer-popup-stats">\u{1F4CD} ' + escapeHtml(lieu.locality)
+            + (lieu.country ? ', ' + escapeHtml(lieu.country) : '') + '</p>';
     }
 
-    var events = lieu.events || [];
-    if (events.length > 0) {
-        html += '<div class="explorer-popup-events">';
-        html += '<strong>Prochains événements :</strong><ul style="margin:4px 0;padding-left:16px;">';
-        var maxEvents = Math.min(events.length, 3);
-        for (var i = 0; i < maxEvents; i++) {
-            var ev = events[i];
-            var dateStr = '';
-            if (ev.datetime) {
-                var d = new Date(ev.datetime);
-                dateStr = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-            }
-            html += '<li>' + escapeHtml(ev.name);
-            if (dateStr) html += ' — ' + dateStr;
-            html += '</li>';
-        }
-        html += '</ul>';
-        if (events.length > 3) {
-            html += '<span style="font-size:11px;color:#999;">+ ' + (events.length - 3) + ' autre(s)</span>';
-        }
-        html += '</div>';
-    }
+    html += buildPopupList(lieu.events, 'Prochains événements', 3, function(ev) {
+        return escapeHtml(ev.name) + (ev.datetime ? ' — ' + formatShortDate(ev.datetime) : '');
+    });
+    html += buildPopupList(lieu.memberships, 'Adhésions', 2, function(mb) {
+        return escapeHtml(mb.name);
+    });
 
-    var memberships = lieu.memberships || [];
-    if (memberships.length > 0) {
-        html += '<div class="explorer-popup-events">';
-        html += '<strong>Adhésions :</strong><ul style="margin:4px 0;padding-left:16px;">';
-        var maxMemberships = Math.min(memberships.length, 2);
-        for (var j = 0; j < maxMemberships; j++) {
-            html += '<li>' + escapeHtml(memberships[j].name) + '</li>';
-        }
-        html += '</ul>';
-        if (memberships.length > 2) {
-            html += '<span style="font-size:11px;color:#999;">+ ' + (memberships.length - 2) + ' autre(s)</span>';
-        }
-        html += '</div>';
-    }
-
-    html += '<a class="explorer-popup-link" href="' + escapeHtml(href) + '" target="_blank">Visiter le lieu &rarr;</a>';
-    html += '</div>';
-
+    html += '<a class="explorer-popup-link" href="' + escapeHtml(href) + '" target="_blank">Visiter le lieu \u2192</a>'
+        + '</div>';
     return html;
+}
+
+function buildPopupList(items, title, max, formatter) {
+    items = items || [];
+    if (items.length === 0) return '';
+
+    var html = '<div class="explorer-popup-events"><strong>' + title + ' :</strong>'
+        + '<ul style="margin:4px 0;padding-left:16px;">';
+    var n = Math.min(items.length, max);
+    for (var i = 0; i < n; i++) html += '<li>' + formatter(items[i]) + '</li>';
+    html += '</ul>';
+    if (items.length > max) {
+        html += '<span style="font-size:11px;color:#999;">+ ' + (items.length - max) + ' autre(s)</span>';
+    }
+    return html + '</div>';
 }
 
 function updateMapMarkers(filteredLieux) {
     if (!mapInitialized) return;
-
-    var filteredIds = {};
-    for (var i = 0; i < filteredLieux.length; i++) {
-        filteredIds[filteredLieux[i].tenant_id] = true;
-    }
+    var keep = {};
+    for (var i = 0; i < filteredLieux.length; i++) keep[filteredLieux[i].tenant_id] = true;
 
     for (var tenantId in markers) {
         var marker = markers[tenantId];
-        if (filteredIds[tenantId]) {
-            if (!markerClusterGroup.hasLayer(marker)) {
-                markerClusterGroup.addLayer(marker);
-            }
-        } else {
-            if (markerClusterGroup.hasLayer(marker)) {
-                markerClusterGroup.removeLayer(marker);
-            }
-        }
+        var isVisible = markerClusterGroup.hasLayer(marker);
+        if (keep[tenantId] && !isVisible) markerClusterGroup.addLayer(marker);
+        else if (!keep[tenantId] && isVisible) markerClusterGroup.removeLayer(marker);
     }
 }
 
 // ============================================================
-// SECTION 6 — Cross-highlighting desktop
+// Focus carte + accordeon + cross-highlighting
 // ============================================================
 
-function bindCardHoverEvents() {
-    var cards = document.querySelectorAll('.explorer-card[data-lieu-id]');
-    cards.forEach(function(card) {
-        var lieuId = card.getAttribute('data-lieu-id');
-        if (!lieuId) return;
+/**
+ * Focus la carte sur un lieu : zoom + popup + highlight + accordeon (desktop).
+ * / Focus the map on a lieu: zoom + popup + highlight + accordion (desktop).
+ */
+function focusOnLieu(tenantId) {
+    // Bascule en mode carte sur mobile si on est en mode liste.
+    // / Switch to map view on mobile if currently in list mode.
+    if (window.innerWidth < 992 && currentView === 'list') toggleView();
 
-        card.addEventListener('mouseenter', function() {
-            onCardHover(lieuId);
-        });
-        card.addEventListener('mouseleave', function() {
-            onCardLeave(lieuId);
-        });
-    });
-}
+    if (!mapInitialized) initMap();
+    var marker = markers[tenantId];
+    if (!marker) return;
 
-function onCardHover(lieuId) {
-    var pinEl = document.querySelector('.explorer-pin[data-lieu-id="' + lieuId + '"]');
-    if (pinEl) {
-        pinEl.classList.add('selected');
+    map.setView(marker.getLatLng(), 15, { animate: true });
+    // Attendre la desagregation du cluster / Wait for cluster unspiderfy
+    setTimeout(function() { marker.openPopup(); }, 400);
+
+    highlightPin(tenantId);
+
+    // Desktop : auto-ouvre l'accordeon du lieu et scrolle la liste vers lui.
+    // / Desktop: auto-open the lieu's accordion and scroll list to it.
+    if (window.innerWidth >= 992) {
+        openLieuAccordion(tenantId);
     }
 }
 
-function onCardLeave(lieuId) {
-    var pinEl = document.querySelector('.explorer-pin[data-lieu-id="' + lieuId + '"]');
-    if (pinEl) {
-        pinEl.classList.remove('selected');
-    }
+function highlightPin(tenantId) {
+    var pin = document.querySelector('.explorer-pin[data-lieu-id="' + tenantId + '"]');
+    if (!pin) return;
+    pin.classList.add('selected');
+    setTimeout(function() { pin.classList.remove('selected'); }, 3000);
 }
 
-function onMarkerClick(lieuId) {
-    scrollToCard(lieuId);
-}
-
-function scrollToCard(lieuId) {
-    var card = document.querySelector('.explorer-card[data-lieu-id="' + lieuId + '"][data-type="lieu"]');
+/**
+ * Comportement "single accordion" : un seul accordeon ouvert a la fois.
+ * - Clic sur un lieu dont l'accordeon est ferme : ferme les autres, ouvre celui-ci.
+ * - Clic sur le meme lieu dont l'accordeon est ouvert : le ferme (toggle).
+ * / "Single accordion" behavior: only one accordion open at a time.
+ * - Click on a lieu with closed accordion: close others, open this one.
+ * - Click on the same lieu with open accordion: close it (toggle).
+ */
+function openLieuAccordion(tenantId) {
+    var card = document.querySelector('.explorer-card--lieu[data-lieu-id="' + tenantId + '"]');
     if (!card) return;
 
-    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var panel = card.querySelector('.explorer-accordion-panel');
+    var wasOpen = panel && panel.classList.contains('open');
 
-    card.setAttribute('data-highlighted', 'true');
-    setTimeout(function() {
-        card.removeAttribute('data-highlighted');
-    }, 2000);
+    // Ferme tous les autres accordeons ouverts.
+    // / Close all other open accordions.
+    closeAllAccordionsExcept(tenantId);
+
+    if (panel) {
+        setAccordionState(card, !wasOpen);
+    }
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-// ============================================================
-// SECTION 7 — Toggle mobile / Mobile toggle
-// ============================================================
+function closeAllAccordionsExcept(tenantId) {
+    var allCards = document.querySelectorAll('.explorer-card--lieu');
+    for (var i = 0; i < allCards.length; i++) {
+        var card = allCards[i];
+        if (card.getAttribute('data-lieu-id') === tenantId) continue;
+        setAccordionState(card, false);
+    }
+}
 
-var currentView = 'list';
+function setAccordionState(card, shouldBeOpen) {
+    var panel = card.querySelector('.explorer-accordion-panel');
+    var chevron = card.querySelector('.explorer-accordion-chevron');
+    if (!panel) return;
 
-function bindFAB() {
-    var fab = document.getElementById('explorer-fab');
-    if (!fab) return;
+    panel.classList.toggle('open', shouldBeOpen);
+    panel.style.maxHeight = shouldBeOpen ? panel.scrollHeight + 'px' : null;
+    if (chevron) chevron.style.transform = shouldBeOpen ? 'rotate(180deg)' : '';
+}
 
-    fab.addEventListener('click', function() {
-        toggleView();
+function toggleAccordion(event, button) {
+    // Empeche le declenchement du focus carte de la card parente.
+    // / Prevents parent card's map focus from triggering.
+    event.stopPropagation();
+
+    var card = button.closest('.explorer-card--lieu');
+    if (!card) return;
+
+    var panel = card.querySelector('.explorer-accordion-panel');
+    var willOpen = !panel.classList.contains('open');
+
+    // Ferme les autres accordeons avant d'ouvrir celui-ci.
+    // / Close other accordions before opening this one.
+    if (willOpen) {
+        closeAllAccordionsExcept(card.getAttribute('data-lieu-id'));
+    }
+    setAccordionState(card, willOpen);
+}
+
+function bindCardHoverEvents() {
+    document.querySelectorAll('.explorer-card[data-lieu-id]').forEach(function(card) {
+        var id = card.getAttribute('data-lieu-id');
+        card.addEventListener('mouseenter', function() { highlightPinClass(id, true); });
+        card.addEventListener('mouseleave', function() { highlightPinClass(id, false); });
     });
 }
+
+function highlightPinClass(tenantId, isOn) {
+    var pin = document.querySelector('.explorer-pin[data-lieu-id="' + tenantId + '"]');
+    if (pin) pin.classList.toggle('selected', isOn);
+}
+
+function scrollToCard(tenantId) {
+    var card = document.querySelector('.explorer-card[data-lieu-id="' + tenantId + '"][data-type="lieu"]');
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    card.setAttribute('data-highlighted', 'true');
+    setTimeout(function() { card.removeAttribute('data-highlighted'); }, 2000);
+}
+
+// ============================================================
+// Toggle mobile / Mobile toggle
+// ============================================================
 
 function toggleView() {
     var container = document.querySelector('.explorer-container');
     var fab = document.getElementById('explorer-fab');
+    var label = fab ? fab.querySelector('.explorer-fab-label') : null;
     if (!container || !fab) return;
 
     if (currentView === 'list') {
         container.classList.add('explorer-view-map');
-        fab.innerHTML = '&#9776; Liste';
+        // Classe sur body pour masquer le footer en CSS (pas atteignable
+        // depuis .explorer-view-map car footer est hors du container).
+        // / Class on body to hide footer via CSS (footer is outside the container).
+        document.body.classList.add('explorer-map-active');
+        if (label) label.textContent = 'Liste';
         currentView = 'map';
 
-        if (!mapInitialized) {
-            initMap();
-        } else {
-            map.invalidateSize();
-        }
+        // Scroll en haut de la page pour voir la carte en entier.
+        // / Scroll to top of page to see the full map.
+        window.scrollTo({ top: 0, behavior: 'instant' });
+
+        if (!mapInitialized) initMap();
+        else map.invalidateSize();
     } else {
         container.classList.remove('explorer-view-map');
-        fab.innerHTML = '&#128506; Carte';
+        document.body.classList.remove('explorer-map-active');
+        if (label) label.textContent = 'Carte';
         currentView = 'list';
     }
 }
 
 // ============================================================
-// Point d'entree / Entry point
-// ============================================================
-
 document.addEventListener('DOMContentLoaded', init);

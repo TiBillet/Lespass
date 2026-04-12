@@ -272,6 +272,77 @@ def get_memberships_for_tenants(tenant_schemas):
     return results
 
 
+def get_initiatives_for_tenants(tenant_schemas):
+    """
+    Recupere toutes les initiatives non archivees pour les schemas donnes.
+    1 seule requete SQL UNION ALL.
+    / Fetch all non-archived initiatives for given schemas.
+    Single UNION ALL SQL query.
+
+    Parametres / Parameters:
+        tenant_schemas: list[tuple(uuid, schema_name)]
+    Retourne / Returns: list[dict] avec cles tenant_id, uuid, name, short_description, budget_contributif
+    """
+    if not tenant_schemas:
+        return []
+
+    parts = []
+    params = []
+
+    for tenant_uuid, schema_name in tenant_schemas:
+        parts.append(
+            f"SELECT %s AS tenant_id, uuid::text, name, short_description, "
+            f"budget_contributif "
+            f'FROM "{schema_name}"."crowds_initiative" '
+            f"WHERE archived = false"
+        )
+        params.append(str(tenant_uuid))
+
+    sql = " UNION ALL ".join(parts)
+
+    results = []
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for row in cursor.fetchall():
+            results.append(
+                {
+                    "tenant_id": row[0],
+                    "uuid": row[1],
+                    "name": row[2],
+                    "short_description": row[3],
+                    "budget_contributif": row[4],
+                }
+            )
+
+    return results
+
+
+def get_all_assets():
+    """
+    Recupere tous les assets fedow_core (SHARED_APPS, schema public).
+    / Fetch all fedow_core assets (SHARED_APPS, public schema).
+
+    Retourne / Returns: list[dict] avec cles uuid, name, category
+    """
+    sql = """
+        SELECT uuid::text, name, category
+        FROM "public"."fedow_core_asset"
+    """
+    results = []
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        for row in cursor.fetchall():
+            results.append(
+                {
+                    "uuid": row[0],
+                    "name": row[1],
+                    "category": row[2],
+                }
+            )
+
+    return results
+
+
 def build_tenant_config_data(client):
     """
     Bascule sur le schema du tenant et lit la Configuration singleton.
@@ -478,15 +549,19 @@ def build_explorer_data():
     from seo.models import SEOCache
     from seo.views_common import get_seo_cache
 
-    # Lire les 3 agregats depuis le cache L1/L2
-    # / Read the 3 aggregates from L1/L2 cache
+    # Lire les 5 agregats depuis le cache L1/L2
+    # / Read the 5 aggregates from L1/L2 cache
     lieux_data = get_seo_cache(SEOCache.AGGREGATE_LIEUX) or {}
     events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
     memberships_data = get_seo_cache(SEOCache.AGGREGATE_MEMBERSHIPS) or {}
+    initiatives_data = get_seo_cache(SEOCache.AGGREGATE_INITIATIVES) or {}
+    assets_data = get_seo_cache(SEOCache.AGGREGATE_ASSETS) or {}
 
     raw_lieux = lieux_data.get("lieux", [])
     raw_events = events_data.get("events", [])
     raw_memberships = memberships_data.get("memberships", [])
+    raw_initiatives = initiatives_data.get("initiatives", [])
+    raw_assets = assets_data.get("assets", [])
 
     # Index des lieux par tenant_id, en excluant ceux sans coordonnees GPS
     # / Index lieux by tenant_id, excluding those without GPS coordinates
@@ -499,6 +574,7 @@ def build_explorer_data():
         lieu_copy = dict(lieu)
         lieu_copy["events"] = []
         lieu_copy["memberships"] = []
+        lieu_copy["initiatives"] = []
         tenant_id = lieu["tenant_id"]
         lieux_by_tenant[tenant_id] = lieu_copy
 
@@ -540,6 +616,22 @@ def build_explorer_data():
 
         lieu["memberships"].append(membership)
 
+    # Meme chose pour les initiatives / Same for initiatives
+    flat_initiatives = []
+    for initiative in raw_initiatives:
+        tenant_id = initiative.get("tenant_id")
+        lieu = lieux_by_tenant.get(tenant_id)
+        if lieu is None:
+            continue
+
+        initiative_copy = dict(initiative)
+        initiative_copy["lieu_id"] = tenant_id
+        initiative_copy["lieu_name"] = lieu.get("name", "")
+        initiative_copy["lieu_domain"] = lieu.get("domain", "")
+        flat_initiatives.append(initiative_copy)
+
+        lieu["initiatives"].append(initiative)
+
     # Convertir l'index en liste / Convert index to list
     result_lieux = list(lieux_by_tenant.values())
 
@@ -547,4 +639,6 @@ def build_explorer_data():
         "lieux": result_lieux,
         "events": flat_events,
         "memberships": flat_memberships,
+        "initiatives": flat_initiatives,
+        "assets": raw_assets,
     }

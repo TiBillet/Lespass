@@ -271,12 +271,12 @@ class Command(BaseCommand):
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
                     "name": "En bas de chez moi",
-                    "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
-                    "address_country": "",
-                    "latitude": "",
-                    "longitude": "",
+                    "street_address": "12 rue du Docteur Dolard",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
+                    "address_country": "FR",
+                    "latitude": "45.7676",
+                    "longitude": "4.8799",
                 },
                 "events": [
                     {  # Gratuit, entrée libre (aucune réservation)
@@ -925,12 +925,12 @@ class Command(BaseCommand):
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
                     "name": "La grange conviviale",
-                    "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "street_address": "45 cours Émile Zola",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7660",
+                    "longitude": "4.8730",
                 },
                 "events": [
                     {
@@ -1030,12 +1030,12 @@ class Command(BaseCommand):
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
                     "name": "Maison du projet",
-                    "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "street_address": "7 place Charles Hernu",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7715",
+                    "longitude": "4.8622",
                 },
                 "events": [
                     {
@@ -1110,12 +1110,12 @@ class Command(BaseCommand):
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
                     "name": "L'atelier partagé",
-                    "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "street_address": "29 rue Francis de Pressensé",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7740",
+                    "longitude": "4.8855",
                 },
                 "events": [
                     {
@@ -1211,12 +1211,12 @@ class Command(BaseCommand):
                 "legal_documents": "https://tibillet.org/cgucgv",
                 "adresse": {
                     "name": "Maison du Réseau",
-                    "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "street_address": "3 rue du 4 Août 1789",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7695",
+                    "longitude": "4.8770",
                 },
                 # Réseau régional: uniquement des adhésions
                 "adhesions": [

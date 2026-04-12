@@ -25,6 +25,8 @@
             <button class="explorer-pill" data-category="lieu">{% translate "Lieux" %}</button>
             <button class="explorer-pill" data-category="event">{% translate "Événements" %}</button>
             <button class="explorer-pill" data-category="membership">{% translate "Adhésions" %}</button>
+            <button class="explorer-pill" data-category="initiative">{% translate "Initiatives" %}</button>
+            <button class="explorer-pill" data-category="asset">{% translate "Monnaies" %}</button>
         </div>
     </div>
     <div class="explorer-counter" id="explorer-counter"></div>
@@ -39,16 +41,21 @@
     <div class="explorer-map" id="explorer-map"></div>
 </div>
 
-{# Bouton toggle mobile / Mobile toggle FAB #}
-<button class="explorer-fab" id="explorer-fab" aria-label="{% translate 'Basculer carte/liste' %}">
-    &#128506; {% translate "Carte" %}
-</button>
-
 {# Donnees JSON pour le JS / JSON data for JS #}
 {{ explorer_data|json_script:"explorer-data" }}
 
 </main>
 {% endblock main_wrapper %}
+
+{# FAB en enfant direct de body (block body_extras) pour que position: fixed #}
+{# soit relatif au viewport, pas a un ancetre avec containing block. #}
+{# / FAB as direct body child so position: fixed is viewport-relative. #}
+{% block body_extras %}
+<button class="explorer-fab" id="explorer-fab" type="button"
+        aria-label="{% translate 'Basculer carte/liste' %}">
+    &#128506; <span class="explorer-fab-label">{% translate "Carte" %}</span>
+</button>
+{% endblock body_extras %}
 
 {% block extra_js %}
 <script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
