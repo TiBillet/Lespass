@@ -38,7 +38,7 @@ def _interval(start_hour, end_hour, start_day=1, end_day=1):
     Raccourci : crée un Interval [start_hour:00, end_hour:00) sur le jour donné.
     / Shortcut: creates an Interval [start_hour:00, end_hour:00) on the given day.
     """
-    from booking.slot_engine import Interval
+    from booking.booking_engine import Interval
 
     return Interval(
         start=_dt(start_hour, day=start_day),
@@ -287,7 +287,7 @@ def test_duration_minutes_half_hour():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import Interval
+    from booking.booking_engine import Interval
 
     a = Interval(
         start=_dt(10, 0),
@@ -305,7 +305,7 @@ def test_duration_minutes_crossing_midnight():
 
     23:00 → 01:00 = 120 minutes.
     """
-    from booking.slot_engine import Interval
+    from booking.booking_engine import Interval
 
     a = Interval(
         start=_dt(23, 0, day=1),
@@ -321,7 +321,7 @@ def test_duration_minutes_full_day():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import Interval
+    from booking.booking_engine import Interval
 
     a = Interval(
         start=_dt(0, 0, day=1),
@@ -341,7 +341,7 @@ def test_bookable_interval_start_end_delegate_to_interval():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import BookableInterval
+    from booking.booking_engine import BookableInterval
 
     interval = _interval(10, 11)
     bookable = BookableInterval(
@@ -361,7 +361,7 @@ def test_bookable_interval_stores_capacities():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import BookableInterval
+    from booking.booking_engine import BookableInterval
 
     interval = _interval(10, 11)
     bookable = BookableInterval(
@@ -381,7 +381,7 @@ def test_bookable_interval_remaining_capacity_can_be_zero():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import BookableInterval
+    from booking.booking_engine import BookableInterval
 
     interval = _interval(10, 11)
     bookable = BookableInterval(
@@ -402,7 +402,7 @@ def test_bookable_interval_remaining_capacity_is_mutable():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import BookableInterval
+    from booking.booking_engine import BookableInterval
 
     interval = _interval(10, 11)
     bookable = BookableInterval(
@@ -422,7 +422,7 @@ def test_bookable_interval_wraps_interval_methods():
 
     LOCALISATION : booking/tests/test_interval.py
     """
-    from booking.slot_engine import BookableInterval, Interval
+    from booking.booking_engine import BookableInterval, Interval
 
     interval_a = _interval(10, 11)
     interval_b = _interval(10, 12)

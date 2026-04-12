@@ -40,8 +40,7 @@ booking/
     ├── test_models.py                 # Session 1 — model declarations
     ├── test_weekly_opening_overlap.py  # Session 2 — non-overlap constraint
     ├── test_interval.py               # Session 6b — Interval / BookableInterval unit tests
-    ├── test_slot_engine.py            # Session 5 — slot computation
-    ├── test_booking_validation.py     # Session 6 — new booking validation
+    ├── test_booking_engine.py         # Sessions 5+6 — moteur O/W/E + validate_new_booking
     ├── test_views_public.py           # Session 7
     ├── test_embed.py                  # Session 8 — embeddable iframe page
     ├── test_slot_picker.py            # Session 9
@@ -697,6 +696,86 @@ Correction :
 
 **Résultat :** 47/47 tests passent, aucun `pytest.skip`, aucun appel à
 `_next_weekday` dans `test_booking_validation.py`.
+
+### Session 6e — Réécriture du moteur et consolidation des fichiers (DONE ✓)
+
+Travail réalisé en pair-programming (humain + IA) à partir de la
+spécification §3.2 (v0.6) et du finding §14.
+
+**Réécriture de `slot_engine.py` → `booking_engine.py`.**
+
+La version précédente implémentait O et W de façon implicite : elle
+calculait les intervalles fermés et vérifiait que les créneaux ne les
+chevauchaient pas. La nouvelle version suit littéralement §3.2 :
+
+- **O** — nouvelle fonction pure `compute_open_intervals(closed_periods,
+  date_from, date_to, tz)` : calcule le complémentaire des `ClosedPeriod`
+  fusionnées (nouvelle fonction `merge_intervals`). Prend `tz` en
+  paramètre au lieu de lire `timezone.get_current_timezone()` en interne
+  — testable sans base de données.
+- **W** — `generate_theoretical_slots` utilise désormais
+  `Interval.contains()` sur les intervalles ouverts O (règle
+  `w ∈ W ⟺ ∃ o ∈ O, w ⊆ o`) au lieu de `overlaps()` sur les intervalles
+  fermés. Prend `open_intervals` et `tz` en paramètres.
+- **E** — `get_existing_bookings_for_resource` filtre explicitement sur
+  `status__in=[new, validated, confirmed]` (spec §3.2.3). La nouvelle
+  fonction `get_closed_periods_for_resource` remplace l'ancienne
+  `get_closed_intervals_for_resource`.
+- **B + §14** — `validate_new_booking` intègre désormais la création
+  atomique en deux étapes : pré-validation rapide (non atomique) puis
+  `transaction.atomic()` avec `Resource.objects.select_for_update()`.
+  Le verrou sur la ligne `Resource` sérialise les créations concurrentes
+  et élimine la race condition décrite en §14.
+
+**Consolidation des fichiers.**
+
+- `booking_validator.py` supprimé : `validate_new_booking` est désormais
+  une fonction directe dans `booking_engine.py` (plus de wrapper).
+- `slot_engine.py` renommé `booking_engine.py` (le mot « slot » n'est
+  plus le terme structurant de la spec v0.6).
+- `test_slot_engine.py` renommé `test_booking_engine.py`.
+- `test_booking_validation.py` fusionné dans `test_booking_engine.py` :
+  constantes `REFERENCE_DATE`/`MONDAY_NEAR`/`MONDAY_FAR`, helpers
+  `_get_test_user`, `_make_aware_dt`, `_add_closed_period`, `_add_booking`
+  et les 12 tests de validation ajoutés au fichier unifié. Le helper
+  inutilisé `_next_weekday` (référençait une variable `TODAY` non définie)
+  a été supprimé.
+
+**Refactoring des tests — finding §10 (tests unitaires purs).**
+
+Suite à la mise à jour de `tibillet-booking-test-cases.md` et à la
+réécriture de `booking_engine.py`, `test_booking_engine.py` a été
+entièrement réécrit pour appliquer §10 (stratégie mixte).
+
+- **Tests unitaires purs** (sans `@pytest.mark.django_db`, sans
+  `schema_context`) pour les fonctions algorithmiquement pures :
+  `compute_open_intervals`, `generate_theoretical_slots`,
+  `compute_remaining_capacity`. Ces tests utilisent `types.SimpleNamespace`
+  (`_cp`, `_oe`, `_bk`) et `zoneinfo.ZoneInfo('Europe/Paris')` — aucun
+  accès base de données.
+- **Tests d'intégration** conservés pour les orchestrateurs DB :
+  `compute_slots` et `validate_new_booking`.
+- Corrections d'API : les anciens tests passaient `closed_intervals=...`
+  (keyword inexistant) à `generate_theoretical_slots` → `TypeError`.
+  Remplacés par le flux correct : `compute_open_intervals → O →
+  generate_theoretical_slots(open_intervals=O)`.
+- `test_get_closed_intervals_*` (signature erronée sur 3 args) remplacés
+  par `test_compute_open_intervals_*` qui appellent la bonne fonction.
+- Hack `booking_horizon_days = 99999` remplacé par
+  `reference_date=datetime.date(2026, 6, 1)` (clock injection §13).
+
+**Résultat : 47 tests, 0 échec.**
+
+**Structure du test après consolidation :**
+
+```
+booking/tests/
+    test_booking_engine.py   # moteur O/W/E + validate_new_booking (B)
+    test_interval.py         # tests unitaires purs Interval/BookableInterval
+    test_timezone_slots.py   # cas fuseau horaire
+    test_models.py
+    test_weekly_opening_overlap.py
+```
 
 --------------------------------------------------------------------------------
 

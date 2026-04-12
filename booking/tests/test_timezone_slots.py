@@ -301,7 +301,7 @@ def test_slot_local_time_is_preserved_utc_plus_1():
 
     Lundi (weekday=0), 09:00, 60 min, 1 créneau.
     """
-    from booking.slot_engine import generate_theoretical_slots, get_opening_entries_for_resource
+    from booking.booking_engine import generate_theoretical_slots, get_opening_entries_for_resource
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
@@ -375,7 +375,7 @@ def test_slot_local_time_is_preserved_utc_plus_9():
 
     Lundi (weekday=0), 09:00, 60 min, 1 créneau.
     """
-    from booking.slot_engine import generate_theoretical_slots, get_opening_entries_for_resource
+    from booking.booking_engine import generate_theoretical_slots, get_opening_entries_for_resource
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
@@ -446,7 +446,7 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_1():
     Mercredi (weekday=2), 23:00, 120 min (finit jeudi 01:00 local).
     ClosedPeriod : le jeudi correspondant.
     """
-    from booking.slot_engine import (
+    from booking.booking_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
         get_closed_intervals_for_resource,
@@ -523,7 +523,7 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_9():
     The UTC instants differ radically from the UTC+1 test (22:00−00:00),
     but the local closure behavior must be identical.
     """
-    from booking.slot_engine import (
+    from booking.booking_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
         get_closed_intervals_for_resource,
@@ -584,7 +584,7 @@ def test_midnight_crossing_slot_open_second_day_utc_plus_1():
     / Nominal case: no closure → 1 slot expected,
     starting at 23:00 local Lagos time.
     """
-    from booking.slot_engine import generate_theoretical_slots, get_opening_entries_for_resource
+    from booking.booking_engine import generate_theoretical_slots, get_opening_entries_for_resource
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
@@ -647,7 +647,7 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1():
     Locally in Lagos: crosses midnight, touches local Monday AND Tuesday.
     Tuesday closure must exclude the slot even though in UTC it is Monday.
     """
-    from booking.slot_engine import (
+    from booking.booking_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
         get_closed_intervals_for_resource,
@@ -712,7 +712,7 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_9():
     Locally in Tokyo: crosses midnight, touches local Monday AND Tuesday.
     Same expected behavior as UTC+1, despite different UTC hours.
     """
-    from booking.slot_engine import (
+    from booking.booking_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
         get_closed_intervals_for_resource,
@@ -782,7 +782,7 @@ def test_slot_ending_exactly_at_midnight_next_day_closed_utc_plus_1():
     / Contrast with test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1:
     30 extra minutes and the slot would be excluded.
     """
-    from booking.slot_engine import (
+    from booking.booking_engine import (
         generate_theoretical_slots,
         get_opening_entries_for_resource,
         get_closed_intervals_for_resource,
@@ -853,7 +853,7 @@ def test_booking_validation_accepts_valid_slot_utc_plus_1():
     Lundi 10:00 heure Lagos, 60 min, capacité 1, aucune réservation existante.
     / Monday 10:00 Lagos time, 60 min, capacity 1, no existing bookings.
     """
-    from booking.booking_validator import validate_new_booking
+    from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
@@ -914,7 +914,7 @@ def test_booking_validation_accepts_valid_slot_utc_plus_9():
     In UTC this slot is at 01:00 (10:00 − 9h).
     Validation must work identically to UTC+1.
     """
-    from booking.booking_validator import validate_new_booking
+    from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
@@ -971,7 +971,7 @@ def test_booking_validation_rejects_full_slot_utc_plus_9():
     / Resource capacity=1. An existing booking occupies the slot.
     The second attempt must be rejected.
     """
-    from booking.booking_validator import validate_new_booking
+    from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
@@ -1045,7 +1045,7 @@ def test_booking_validation_rejects_slot_on_closed_date_utc_plus_1():
     / The requested Monday is in a ClosedPeriod.
     compute_slots excludes this slot → validation returns False.
     """
-    from booking.booking_validator import validate_new_booking
+    from booking.booking_engine import validate_new_booking
 
     with schema_context(TENANT_SCHEMA):
         from BaseBillet.models import Configuration
