@@ -3103,6 +3103,16 @@ class Command(BaseCommand):
         self.stdout.write(f"  Initiatives: {init_count} images assignees")
 
         # -----------------------------
+        # 5b) Federations demo (fedow_core)
+        # Cree les federations et lie les assets AVANT le cache SEO
+        # car l'explorer lit Federation.assets pour construire les donnees.
+        # / Demo federations (fedow_core)
+        # Creates federations and links assets BEFORE SEO cache
+        # because the explorer reads Federation.assets to build data.
+        # -----------------------------
+        self._create_federations_demo()
+
+        # -----------------------------
         # 6) Cache SEO cross-tenant (landing page ROOT)
         # Le cache agrege les events, adhesions et lieux de tous les tenants
         # pour la landing page du reseau. Il faut le lancer APRES la creation
@@ -3129,3 +3139,101 @@ class Command(BaseCommand):
 
         # Export du dump SQL pour --quick
         # self._dump_database()
+
+    def _create_federations_demo(self):
+        """
+        Cree 2 federations demo et lie les assets pour une demo realiste.
+        / Creates 2 demo federations and links assets for a realistic demo.
+
+        - "Réseau TiBillet Lyon" : tous les tenants + asset FED principal
+        - "Echange local" : 2 tenants + asset TIM (temps)
+        Cree aussi un asset "Monnaie Coeur" pour le-coeur-en-or (diversite).
+        """
+        from fedow_core.models import Asset, Federation
+        from Customers.models import Client
+
+        # Liste explicite des tenants demo. On exclut les schemas de tests
+        # (qui ont des noms UUID generes automatiquement) pour que les
+        # federations ne contiennent que les lieux reels de la demo.
+        # / Explicit list of demo tenants. We exclude test schemas
+        # (auto-generated UUID names) so federations only contain
+        # the real demo venues.
+        SCHEMAS_DEMO = [
+            "lespass",
+            "chantefrein",
+            "le-coeur-en-or",
+            "la-maison-des-communs",
+            "le-reseau-des-lieux-en-reseau",
+        ]
+        tenants = list(Client.objects.filter(schema_name__in=SCHEMAS_DEMO))
+        if len(tenants) < 2:
+            self.stdout.write("Pas assez de tenants demo pour creer les federations.")
+            return
+
+        # Federation globale : tous les tenants.
+        # Le createur est le premier tenant (lespass idealement).
+        # / Global federation: all tenants. Creator = first tenant.
+        lespass = Client.objects.filter(schema_name="lespass").first()
+        createur = lespass or tenants[0]
+
+        fed_globale, _created = Federation.objects.get_or_create(
+            name="Réseau TiBillet Lyon",
+            defaults={"created_by": createur, "description": "Fédération globale du réseau TiBillet Lyon."},
+        )
+        fed_globale.tenants.set(tenants)
+
+        # Federation partielle : 2 tenants (lespass + chantefrein si possible)
+        # / Partial federation: 2 tenants (lespass + chantefrein if possible)
+        chantefrein = Client.objects.filter(schema_name="chantefrein").first()
+        partenaires_partiels = [createur]
+        if chantefrein:
+            partenaires_partiels.append(chantefrein)
+        else:
+            partenaires_partiels.append(tenants[1])
+
+        fed_partielle, _created = Federation.objects.get_or_create(
+            name="Echange local",
+            defaults={"created_by": createur, "description": "Fédération partielle : Lespass ↔ Chantefrein."},
+        )
+        fed_partielle.tenants.set(partenaires_partiels)
+
+        # Lier les assets existants aux federations via Federation.assets (M2M)
+        # / Link existing assets to federations via Federation.assets (M2M)
+        asset_fed = Asset.objects.filter(category="FED").first()
+        if asset_fed:
+            fed_globale.assets.add(asset_fed)
+            self.stdout.write(f"Asset {asset_fed.name} -> Reseau TiBillet Lyon")
+
+        asset_tim = Asset.objects.filter(category="TIM").first()
+        if asset_tim:
+            fed_partielle.assets.add(asset_tim)
+            self.stdout.write(f"Asset {asset_tim.name} -> Echange local")
+
+        # Creer un asset supplementaire pour un autre lieu (diversite carte)
+        # / Create an extra asset for another lieu (map diversity)
+        coeur = Client.objects.filter(schema_name="le-coeur-en-or").first()
+        if coeur:
+            from AuthBillet.models import Wallet
+
+            # Obtenir ou creer le wallet principal du tenant coeur.
+            # Get or create the primary wallet for the coeur tenant.
+            wallet_coeur = Wallet.objects.filter(origin=coeur).first()
+            if wallet_coeur is None:
+                wallet_coeur = Wallet.objects.create(
+                    origin=coeur,
+                    name=coeur.name,
+                )
+
+            Asset.objects.get_or_create(
+                name="Monnaie Coeur",
+                defaults={
+                    "category": "TLF",
+                    "tenant_origin": coeur,
+                    "wallet_origin": wallet_coeur,
+                    "currency_code": "MCO",
+                    "active": True,
+                },
+            )
+            self.stdout.write("Asset 'Monnaie Coeur' cree pour le-coeur-en-or")
+
+        self.stdout.write(self.style.SUCCESS("Federations demo creees."))

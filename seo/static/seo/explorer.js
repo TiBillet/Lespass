@@ -17,6 +17,25 @@ var markerClusterGroup = null;
 var mapInitialized = false;
 var currentView = 'list';
 
+// UUID de l'asset actuellement en mode focus, ou null.
+// / UUID of currently focused asset, or null.
+var activeAssetUuid = null;
+
+// Layer group Leaflet pour contenir les arcs/polygone du mode focus.
+// Vide = clear facile via clearLayers().
+// / Leaflet layer group for focus mode arcs/polygon. Empty = easy clear via clearLayers().
+var assetLayerGroup = null;
+
+// Icones compacts + libelles courts pour les badges monnaie sur les cards lieu.
+// / Compact icons + short labels for asset badges on lieu cards.
+var ASSET_BADGE_CONFIG = {
+    TLF: { icon: '\u{1F4B0}', label: 'Monnaie locale' },
+    TNF: { icon: '\u{1F381}', label: 'Cadeau' },
+    TIM: { icon: '\u{23F0}', label: 'Temps' },
+    FED: { icon: '\u{1F517}', label: 'Fédéré' },
+    FID: { icon: '\u{2B50}', label: 'Fidélité' },
+};
+
 // Config des categories : icone, badge, label, builder des champs secondaires.
 // / Category config: icon, badge, label, secondary fields builder.
 var CATEGORIES = {
@@ -163,42 +182,9 @@ function applyFilters() {
     // / Compute lieux to show on map: union of lieux from all filtered
     // categories (events/memberships/initiatives tied to a lieu).
     if (mapInitialized) {
-        var lieuxSurCarte = collectLieuxFromResults(lieux, events, memberships, initiatives);
+        var lieuxSurCarte = collectLieuxFromResults(lieux, events, memberships, initiatives, assets);
         updateMapMarkers(lieuxSurCarte);
-        updateMapEmptyOverlay(lieuxSurCarte.length, assets.length);
     }
-}
-
-/**
- * Affiche un overlay sur la carte quand aucun lieu n'a de marqueur.
- * Explicite le cas "Monnaies" (globales, pas de geolocalisation).
- * / Shows map overlay when no lieu has a marker.
- * Makes the "Assets" case explicit (global, no geolocation).
- */
-function updateMapEmptyOverlay(lieuxCount, assetsCount) {
-    var mapEl = document.getElementById('explorer-map');
-    if (!mapEl) return;
-
-    var existing = mapEl.querySelector('.explorer-map-empty');
-    if (lieuxCount > 0) {
-        if (existing) existing.remove();
-        return;
-    }
-
-    // Message different si on filtre uniquement les monnaies (assets globaux)
-    // / Different message if filtering only currencies (global assets)
-    var isAssetFilter = activeFilters.category === 'asset' && assetsCount > 0;
-    var title = isAssetFilter ? 'Les monnaies sont globales' : 'Aucun résultat sur la carte';
-    var message = isAssetFilter
-        ? 'Les monnaies fédérées sont partagées par tout le réseau, elles n\'ont pas de lieu géolocalisé.'
-        : 'Aucun lieu ne correspond à votre recherche. Essayez d\'élargir les filtres.';
-
-    if (!existing) {
-        existing = document.createElement('div');
-        existing.className = 'explorer-map-empty';
-        mapEl.appendChild(existing);
-    }
-    existing.innerHTML = '<strong>' + title + '</strong>' + message;
 }
 
 /**
@@ -207,12 +193,25 @@ function updateMapEmptyOverlay(lieuxCount, assetsCount) {
  * / Aggregates lieux visible on map from filtered results.
  * Each event/membership/initiative adds its lieu_id to the set.
  */
-function collectLieuxFromResults(lieux, events, memberships, initiatives) {
+function collectLieuxFromResults(lieux, events, memberships, initiatives, assets) {
     var lieuIdsVisibles = {};
     for (var i = 0; i < lieux.length; i++) lieuIdsVisibles[lieux[i].tenant_id] = true;
     for (var j = 0; j < events.length; j++) if (events[j].lieu_id) lieuIdsVisibles[events[j].lieu_id] = true;
     for (var k = 0; k < memberships.length; k++) if (memberships[k].lieu_id) lieuIdsVisibles[memberships[k].lieu_id] = true;
     for (var l = 0; l < initiatives.length; l++) if (initiatives[l].lieu_id) lieuIdsVisibles[initiatives[l].lieu_id] = true;
+
+    // Pour les assets filtres, on inclut tous les lieux acceptants.
+    // Ainsi, filtrer par "Monnaies" garde les marqueurs sur la carte.
+    // / For filtered assets, include all accepting lieux.
+    // So filtering by "Monnaies" keeps markers on the map.
+    if (assets) {
+        for (var a = 0; a < assets.length; a++) {
+            var acceptingIds = assets[a].accepting_tenant_ids || [];
+            for (var b = 0; b < acceptingIds.length; b++) {
+                lieuIdsVisibles[acceptingIds[b]] = true;
+            }
+        }
+    }
 
     // Retourne la liste complete des objets lieu dont l'id est visible.
     // / Returns the full list of lieu objects whose id is visible.
@@ -291,6 +290,7 @@ function buildLieuCard(lieu) {
                     + '</div>'
                     + meta
                     + desc
+                    + buildLieuAssetBadges(lieu)
                 + '</div>'
             + '</div>'
             + buildAccordion(lieu, domain)
@@ -298,6 +298,56 @@ function buildLieuCard(lieu) {
                 + '<a href="' + escapeHtml(href) + '" target="_blank" class="explorer-card-link">Visiter le lieu \u2192</a>'
             + '</div>'
         + '</div>';
+}
+
+/**
+ * Construit la rangee de badges monnaies pour une card lieu.
+ * Croise lieu.accepted_asset_ids avec explorerData.assets pour retrouver les donnees.
+ * / Builds the asset badges row for a lieu card.
+ * Cross-references lieu.accepted_asset_ids with explorerData.assets.
+ */
+function buildLieuAssetBadges(lieu) {
+    var acceptedIds = lieu.accepted_asset_ids || [];
+    if (acceptedIds.length === 0) return '';
+
+    // Index rapide des assets par uuid / Quick asset lookup by uuid
+    var assetsByUuid = {};
+    for (var i = 0; i < explorerData.assets.length; i++) {
+        assetsByUuid[explorerData.assets[i].uuid] = explorerData.assets[i];
+    }
+
+    var badges = '';
+    for (var j = 0; j < acceptedIds.length; j++) {
+        var asset = assetsByUuid[acceptedIds[j]];
+        if (!asset) continue;
+        var config = ASSET_BADGE_CONFIG[asset.category] || { icon: '\u{1F4B0}', label: asset.category };
+        var uuidEscaped = escapeHtml(asset.uuid);
+        badges += ''
+            + '<button type="button" class="lieu-asset-badge" data-asset-uuid="' + uuidEscaped + '"'
+            + ' onclick="handleAssetBadgeClick(event, \'' + uuidEscaped + '\')" title="' + escapeHtml(asset.name) + '">'
+            + '<span class="lieu-asset-badge-icon">' + config.icon + '</span>'
+            + '<span class="lieu-asset-badge-label">' + escapeHtml(config.label) + '</span>'
+            + '</button>';
+    }
+
+    if (!badges) return '';
+    return '<div class="lieu-asset-badges">' + badges + '</div>';
+}
+
+/**
+ * Handler du clic sur un badge monnaie : empeche la propagation (pas de focus lieu)
+ * et delegue a focusOnAsset (implementation en Phase 3).
+ * / Asset badge click handler: stops propagation and delegates to focusOnAsset.
+ */
+function handleAssetBadgeClick(event, assetUuid) {
+    event.stopPropagation();
+    // focusOnAsset sera defini en Phase 3 (Task 6). En Phase 2, log simple.
+    // / focusOnAsset will be defined in Phase 3 (Task 6). For Phase 2, simple log.
+    if (typeof focusOnAsset === 'function') {
+        focusOnAsset(assetUuid);
+    } else {
+        console.log('[asset badge] clicked (focus not yet implemented)', assetUuid);
+    }
 }
 
 function buildAccordion(lieu, domain) {
@@ -352,15 +402,26 @@ function buildAccordionItem(icon, name, date, href) {
  * / Flat card (event, membership, initiative, asset).
  * Click = map focus on parent lieu, except assets (global).
  */
+/**
+ * Carte "plate" (event, membership, initiative, asset).
+ * Clic = focus carte sur le lieu parent, sauf pour asset (focus carte sur la monnaie).
+ * / Flat card (event, membership, initiative, asset).
+ * Click = map focus on parent lieu, except for asset (map focus on the currency).
+ */
 function buildFlatCard(item, categoryName) {
+    // Les assets ont leur propre builder (accordeon + focus carte)
+    // / Assets have their own builder (accordion + map focus)
+    if (categoryName === 'asset') {
+        return buildAssetCard(item);
+    }
+
     var cat = CATEGORIES[categoryName];
     var lieuId = escapeHtml(item.lieu_id || '');
-    var focusable = categoryName !== 'asset' && lieuId;
     var desc = item.short_description
         ? '<div class="explorer-card-desc">' + escapeHtml(item.short_description) + '</div>'
         : '';
 
-    var clickAttr = focusable
+    var clickAttr = lieuId
         ? ' onclick="focusOnLieu(\'' + lieuId + '\')" role="button" tabindex="0"'
         : '';
     var lieuAttr = lieuId ? ' data-lieu-id="' + lieuId + '"' : '';
@@ -376,6 +437,98 @@ function buildFlatCard(item, categoryName) {
                 + '<div class="explorer-card-meta">' + escapeHtml(cat.meta(item)) + '</div>'
                 + desc
             + '</div>'
+        + '</div>';
+}
+
+/**
+ * Card monnaie : header cliquable (focus carte) + accordeon avec la liste
+ * des lieux acceptants (cliquables pour zoomer sur chaque lieu).
+ * / Asset card: clickable header (map focus) + accordion listing the accepting
+ * lieux (each clickable to zoom on the lieu).
+ */
+function buildAssetCard(asset) {
+    var cat = CATEGORIES.asset;
+    var assetUuid = escapeHtml(asset.uuid || '');
+    var badgeConfig = ASSET_BADGE_CONFIG[asset.category] || { icon: '\u{1F4B0}', label: asset.category };
+    var assetIcon = badgeConfig.icon;
+
+    // Meta simplifiee : catégorie + origine + compte
+    // / Simplified meta: category + origin + count
+    var metaParts = [escapeHtml(badgeConfig.label)];
+    if (asset.tenant_origin_name) {
+        metaParts.push('Origine : ' + escapeHtml(asset.tenant_origin_name));
+    }
+    if (asset.accepting_count > 1) {
+        metaParts.push('Accepté par ' + asset.accepting_count + ' lieux');
+    } else if (asset.accepting_count === 1) {
+        metaParts.push('Local à 1 lieu');
+    }
+    var metaLine = metaParts.join(' · ');
+
+    // Accordeon : liste des lieux acceptants (croise avec explorerData.lieux)
+    // / Accordion: list of accepting lieux (cross-referenced with explorerData.lieux)
+    var accordionHtml = buildAssetAccordion(asset);
+
+    return ''
+        + '<div class="explorer-card explorer-card--asset"'
+        + ' data-asset-uuid="' + assetUuid + '" data-type="asset">'
+            + '<div class="explorer-card-focus" onclick="focusOnAsset(\'' + assetUuid + '\')" role="button" tabindex="0" title="Voir sur la carte">'
+                + '<div class="explorer-card-icon ' + cat.className + '">' + assetIcon + '</div>'
+                + '<div class="explorer-card-body">'
+                    + '<div class="explorer-card-header">'
+                        + '<h3 class="explorer-card-title">' + escapeHtml(asset.name) + '</h3>'
+                        + '<span class="explorer-badge ' + cat.className + '">' + cat.badge + '</span>'
+                    + '</div>'
+                    + '<div class="explorer-card-meta">' + metaLine + '</div>'
+                + '</div>'
+            + '</div>'
+            + accordionHtml
+        + '</div>';
+}
+
+/**
+ * Accordeon des lieux acceptants pour une monnaie.
+ * Masque si 0 ou 1 lieu (pas d'interet a lister).
+ * / Accepting lieux accordion for an asset.
+ * Hidden if 0 or 1 lieu (no point listing).
+ */
+function buildAssetAccordion(asset) {
+    var acceptingIds = asset.accepting_tenant_ids || [];
+    if (acceptingIds.length < 2) return '';
+
+    // Index rapide des lieux connus par tenant_id
+    // / Quick lookup of known lieux by tenant_id
+    var lieuxByTenantId = {};
+    for (var i = 0; i < explorerData.lieux.length; i++) {
+        lieuxByTenantId[explorerData.lieux[i].tenant_id] = explorerData.lieux[i];
+    }
+
+    // Construire la liste des items (lieux connus seulement)
+    // / Build items list (known lieux only)
+    var items = '';
+    var knownCount = 0;
+    for (var j = 0; j < acceptingIds.length; j++) {
+        var lieu = lieuxByTenantId[acceptingIds[j]];
+        if (!lieu) continue;
+        knownCount++;
+        var lieuId = escapeHtml(lieu.tenant_id);
+        items += ''
+            + '<button type="button" class="explorer-accordion-item"'
+            + ' onclick="focusOnLieu(\'' + lieuId + '\')">'
+                + '<span class="explorer-accordion-icon">\u{1F3DB}</span>'
+                + '<span class="explorer-accordion-name">' + escapeHtml(lieu.name) + '</span>'
+            + '</button>';
+    }
+
+    if (knownCount === 0) return '';
+
+    return ''
+        + '<div class="explorer-accordion">'
+            + '<button class="explorer-accordion-toggle" onclick="toggleAccordion(event, this)" type="button">'
+                + '<span>' + knownCount + ' lieu' + (knownCount > 1 ? 'x' : '') + ' acceptant cette monnaie</span>'
+                + '<i class="bi bi-chevron-down explorer-accordion-chevron"></i>'
+            + '</button>'
+            + '<div class="explorer-accordion-panel">' + items + '</div>'
         + '</div>';
 }
 
@@ -399,6 +552,14 @@ function initMap() {
 
     markerClusterGroup = L.markerClusterGroup();
     map.addLayer(markerClusterGroup);
+
+    // Layer group dedie au mode focus asset (arcs, hull).
+    // Ajoute apres markerClusterGroup pour passer AU-DESSUS des markers.
+    // / Dedicated layer group for asset focus mode (arcs, hull).
+    // Added after markerClusterGroup to render ABOVE markers.
+    assetLayerGroup = L.layerGroup();
+    map.addLayer(assetLayerGroup);
+
     addMarkers(explorerData.lieux);
     mapInitialized = true;
 
@@ -561,11 +722,15 @@ function openLieuAccordion(tenantId) {
     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function closeAllAccordionsExcept(tenantId) {
-    var allCards = document.querySelectorAll('.explorer-card--lieu');
+function closeAllAccordionsExcept(cardIdentifier) {
+    // Ferme les accordeons des cards lieu ET des cards asset, sauf celle ciblee.
+    // / Closes accordions on both lieu and asset cards, except the targeted one.
+    var allCards = document.querySelectorAll('.explorer-card--lieu, .explorer-card--asset');
     for (var i = 0; i < allCards.length; i++) {
         var card = allCards[i];
-        if (card.getAttribute('data-lieu-id') === tenantId) continue;
+        var tenantId = card.getAttribute('data-lieu-id');
+        var assetUuid = card.getAttribute('data-asset-uuid');
+        if (tenantId === cardIdentifier || assetUuid === cardIdentifier) continue;
         setAccordionState(card, false);
     }
 }
@@ -585,16 +750,20 @@ function toggleAccordion(event, button) {
     // / Prevents parent card's map focus from triggering.
     event.stopPropagation();
 
-    var card = button.closest('.explorer-card--lieu');
+    // Supporte les cards lieu ET asset. / Supports both lieu and asset cards.
+    var card = button.closest('.explorer-card--lieu, .explorer-card--asset');
     if (!card) return;
 
     var panel = card.querySelector('.explorer-accordion-panel');
     var willOpen = !panel.classList.contains('open');
 
     // Ferme les autres accordeons avant d'ouvrir celui-ci.
+    // L'identifiant est soit data-lieu-id (card lieu) soit data-asset-uuid (card asset).
     // / Close other accordions before opening this one.
+    // Identifier is either data-lieu-id (lieu card) or data-asset-uuid (asset card).
     if (willOpen) {
-        closeAllAccordionsExcept(card.getAttribute('data-lieu-id'));
+        var cardId = card.getAttribute('data-lieu-id') || card.getAttribute('data-asset-uuid');
+        closeAllAccordionsExcept(cardId);
     }
     setAccordionState(card, willOpen);
 }
@@ -651,6 +820,363 @@ function toggleView() {
         if (label) label.textContent = 'Carte';
         currentView = 'list';
     }
+}
+
+// ============================================================
+// Mode focus asset / Asset focus mode
+// ============================================================
+
+/**
+ * Active le mode focus sur une monnaie : highlight des lieux acceptants,
+ * dim des autres, dessin des liaisons (arcs ou polygone) sur la carte.
+ * Si l'asset est deja actif, on desactive (toggle).
+ * / Activate asset focus: highlight accepting lieux, dim others, draw links
+ * (arcs or polygon) on map. If asset already active, deactivate (toggle).
+ */
+function focusOnAsset(assetUuid) {
+    // Toggle : si meme asset clique 2 fois, on sort du mode focus.
+    // / Toggle: same asset clicked twice exits focus mode.
+    if (activeAssetUuid === assetUuid) {
+        clearAssetFocus();
+        return;
+    }
+
+    var asset = findAssetByUuid(assetUuid);
+    if (!asset) return;
+
+    // Init carte si pas encore fait / Init map if not done yet
+    if (!mapInitialized) initMap();
+
+    // Sur mobile, basculer en vue carte / On mobile, switch to map view
+    if (window.innerWidth < 992 && currentView === 'list') toggleView();
+
+    activeAssetUuid = assetUuid;
+    applyDimming(asset.accepting_tenant_ids || []);
+    drawAssetLinks(asset);
+    renderAssetLegend(asset);
+    refreshAssetBadgeActiveState();
+    refreshMapMarkersForFocus(asset);
+}
+
+function clearAssetFocus() {
+    activeAssetUuid = null;
+    applyDimming(null);
+    if (assetLayerGroup) assetLayerGroup.clearLayers();
+    renderAssetLegend(null);
+    refreshAssetBadgeActiveState();
+    // Remettre les marqueurs a l'etat "applique filtres" / Reapply filters to markers
+    applyFilters();
+}
+
+function findAssetByUuid(uuid) {
+    if (!explorerData || !explorerData.assets) return null;
+    for (var i = 0; i < explorerData.assets.length; i++) {
+        if (explorerData.assets[i].uuid === uuid) return explorerData.assets[i];
+    }
+    return null;
+}
+
+/**
+ * Applique la classe CSS dimmed aux marqueurs non acceptants.
+ * Si acceptingIds est null, retire le dimming partout.
+ * / Apply dimmed CSS class to non-accepting markers.
+ * If acceptingIds is null, remove dimming everywhere.
+ */
+function applyDimming(acceptingIds) {
+    var pinElements = document.querySelectorAll('.explorer-pin');
+    if (!acceptingIds) {
+        pinElements.forEach(function(el) { el.classList.remove('explorer-pin--dimmed'); });
+        return;
+    }
+    var acceptingSet = {};
+    for (var i = 0; i < acceptingIds.length; i++) acceptingSet[acceptingIds[i]] = true;
+    pinElements.forEach(function(el) {
+        var id = el.getAttribute('data-lieu-id');
+        if (acceptingSet[id]) el.classList.remove('explorer-pin--dimmed');
+        else el.classList.add('explorer-pin--dimmed');
+    });
+}
+
+/**
+ * Restaure les marqueurs sur la carte en mode focus : tous les lieux
+ * (acceptants + dimmed) doivent rester visibles pour lire les liaisons.
+ * / Refresh map markers in focus mode: all lieux (accepting + dimmed)
+ * remain visible to read the connections.
+ */
+function refreshMapMarkersForFocus(asset) {
+    if (!mapInitialized) return;
+    // En mode focus, on affiche TOUS les lieux (pour que le dimming
+    // ait du sens et que les connexions soient lisibles).
+    // / In focus mode, we show ALL lieux (so dimming makes sense
+    // and connections are readable).
+    updateMapMarkers(explorerData.lieux);
+    // Fit bounds sur les lieux acceptants uniquement pour zoomer dessus.
+    // / Fit bounds on accepting lieux only to zoom on them.
+    var acceptingLatLngs = [];
+    for (var i = 0; i < asset.accepting_tenant_ids.length; i++) {
+        var marker = markers[asset.accepting_tenant_ids[i]];
+        if (marker) acceptingLatLngs.push(marker.getLatLng());
+    }
+    if (acceptingLatLngs.length > 0) {
+        map.fitBounds(L.latLngBounds(acceptingLatLngs), { padding: [40, 40], maxZoom: 14 });
+    }
+}
+
+/**
+ * Met a jour la classe active sur les badges monnaie des cards lieu.
+ * / Update active class on asset badges of lieu cards.
+ */
+/**
+ * Met a jour la classe active sur les badges monnaie des cards lieu
+ * ET sur les cards monnaie de la liste plate.
+ * / Update active class on asset badges of lieu cards
+ * AND on asset cards in the flat list.
+ */
+function refreshAssetBadgeActiveState() {
+    // Badges monnaie sur les cards lieu / Asset badges on lieu cards
+    document.querySelectorAll('.lieu-asset-badge').forEach(function(badge) {
+        var badgeUuid = badge.getAttribute('data-asset-uuid');
+        badge.classList.toggle('lieu-asset-badge--active', badgeUuid === activeAssetUuid);
+    });
+    // Cards monnaie dans la liste / Asset cards in the list
+    document.querySelectorAll('.explorer-card[data-asset-uuid]').forEach(function(card) {
+        var cardUuid = card.getAttribute('data-asset-uuid');
+        card.classList.toggle('explorer-card--active', cardUuid === activeAssetUuid);
+    });
+}
+
+/**
+ * Convex hull via algorithme de Graham scan (implementation simple).
+ * / Convex hull via Graham scan algorithm (simple implementation).
+ *
+ * Retourne les points du hull dans l'ordre (pour tracer un polygone).
+ * / Returns hull points in order (for polygon drawing).
+ *
+ * Entree : tableau de [lat, lng] / Input: array of [lat, lng]
+ */
+function computeConvexHull(points) {
+    if (points.length < 3) return points.slice();
+
+    // Trier par lng puis lat pour avoir un ordre deterministe.
+    // / Sort by lng then lat for deterministic order.
+    var sorted = points.slice().sort(function(a, b) {
+        return a[1] - b[1] || a[0] - b[0];
+    });
+
+    // Cross product pour tester le sens du virage (anti-horaire > 0).
+    // / Cross product to test turn direction (counter-clockwise > 0).
+    function cross(o, a, b) {
+        return (a[1] - o[1]) * (b[0] - o[0]) - (a[0] - o[0]) * (b[1] - o[1]);
+    }
+
+    // Lower hull
+    var lower = [];
+    for (var i = 0; i < sorted.length; i++) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], sorted[i]) <= 0) {
+            lower.pop();
+        }
+        lower.push(sorted[i]);
+    }
+
+    // Upper hull
+    var upper = [];
+    for (var j = sorted.length - 1; j >= 0; j--) {
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], sorted[j]) <= 0) {
+            upper.pop();
+        }
+        upper.push(sorted[j]);
+    }
+
+    // Concatener sans les doublons en bout / Concat without end duplicates
+    lower.pop();
+    upper.pop();
+    return lower.concat(upper);
+}
+
+/**
+ * Dessine un polygone translucide englobant les lieux acceptants (style B).
+ * Utilise pour les assets federes primaires (TiBillet, category FED).
+ * Si 2 points seulement, trace une ligne. Si 1 point, rien.
+ * / Draws a translucent polygon around accepting lieux (style B).
+ * Used for primary federated assets (TiBillet, category FED).
+ * 2 points → polyline. 1 point → nothing.
+ */
+function drawHull(latLngs) {
+    if (!assetLayerGroup || latLngs.length < 2) return;
+
+    // 2 points : polyline epaisse / 2 points: thick polyline
+    if (latLngs.length === 2) {
+        L.polyline(latLngs, {
+            color: '#259d49',
+            weight: 3,
+            opacity: 0.7,
+        }).addTo(assetLayerGroup);
+        return;
+    }
+
+    // 3+ points : convex hull polygon
+    var pointsAsArray = latLngs.map(function(ll) { return [ll.lat, ll.lng]; });
+    var hull = computeConvexHull(pointsAsArray);
+
+    L.polygon(hull, {
+        color: '#259d49',
+        weight: 1.5,
+        fillColor: '#259d49',
+        fillOpacity: 0.22,
+        opacity: 0.7,
+    }).addTo(assetLayerGroup);
+}
+
+/**
+ * Dessine des arcs courbes depuis le lieu origine vers chaque lieu acceptant (style C).
+ * Implementation : L.polyline avec points d'une courbe de Bezier quadratique
+ * discretisee (pas de plugin externe).
+ * / Draws curved arcs from origin lieu to each accepting lieu (style C).
+ * Uses L.polyline with points from a discretized quadratic Bezier curve (no plugin).
+ *
+ * @param {string} originId - tenant_id du lieu origine
+ * @param {string[]} acceptingIds - tous les tenant_id acceptant (origine incluse, sera filtree)
+ */
+function drawArcs(originId, acceptingIds) {
+    if (!assetLayerGroup) return;
+    var originMarker = markers[originId];
+    if (!originMarker) return;
+
+    var originLatLng = originMarker.getLatLng();
+
+    for (var i = 0; i < acceptingIds.length; i++) {
+        var targetId = acceptingIds[i];
+        if (targetId === originId) continue;  // skip origine
+        var targetMarker = markers[targetId];
+        if (!targetMarker) continue;
+
+        var targetLatLng = targetMarker.getLatLng();
+        var arcPoints = bezierArcPoints(originLatLng, targetLatLng, 20);
+
+        L.polyline(arcPoints, {
+            color: '#259d49',
+            weight: 2,
+            opacity: 0.7,
+        }).addTo(assetLayerGroup);
+    }
+}
+
+/**
+ * Calcule les points d'une courbe de Bezier quadratique entre deux points.
+ * Le point de controle est au milieu, decale orthogonalement vers le "haut"
+ * (ici en latitude) de 0.3 * distance.
+ * / Computes points of a quadratic Bezier curve between two points.
+ * Control point is at midpoint, offset orthogonally "upward" (latitude)
+ * by 0.3 * distance.
+ *
+ * @param {L.LatLng} start
+ * @param {L.LatLng} end
+ * @param {number} segments - nombre de segments de la discretisation
+ * @returns {L.LatLng[]} tableau de points sur la courbe (format [lat, lng])
+ */
+function bezierArcPoints(start, end, segments) {
+    var midLat = (start.lat + end.lat) / 2;
+    var midLng = (start.lng + end.lng) / 2;
+    var dLat = end.lat - start.lat;
+    var dLng = end.lng - start.lng;
+
+    // Vecteur orthogonal (rotation 90 deg) pour decaler le point de controle vers le "haut".
+    // / Orthogonal vector (90 deg rotation) to offset control point "upward".
+    var offsetLat = -dLng * 0.3;
+    var offsetLng = dLat * 0.3;
+
+    var ctrlLat = midLat + offsetLat;
+    var ctrlLng = midLng + offsetLng;
+
+    var points = [];
+    for (var i = 0; i <= segments; i++) {
+        var t = i / segments;
+        // Bezier quadratique : B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+        var it = 1 - t;
+        var lat = it * it * start.lat + 2 * it * t * ctrlLat + t * t * end.lat;
+        var lng = it * it * start.lng + 2 * it * t * ctrlLng + t * t * end.lng;
+        points.push([lat, lng]);
+    }
+    return points;
+}
+
+/**
+ * Dispatcher selon la nature de l'asset :
+ * - Federation primaire (is_federation_primary) : polygone hull (drawHull)
+ * - Asset federe partiellement avec origine : arcs (drawArcs) — Task 8
+ * - Asset local (1 seul lieu) : pas de ligne
+ * / Dispatcher based on asset nature:
+ * - Primary federation: hull polygon (drawHull)
+ * - Partially federated with origin: arcs (drawArcs) — Task 8
+ * - Local asset (1 lieu): no line
+ */
+function drawAssetLinks(asset) {
+    if (!assetLayerGroup) return;
+    assetLayerGroup.clearLayers();
+
+    var acceptingIds = asset.accepting_tenant_ids || [];
+    if (acceptingIds.length < 2) return;
+
+    // Coordonnees des lieux acceptants via les marqueurs Leaflet deja crees.
+    // / Accepting lieux coordinates via existing Leaflet markers.
+    var latLngs = [];
+    for (var i = 0; i < acceptingIds.length; i++) {
+        var marker = markers[acceptingIds[i]];
+        if (marker) latLngs.push(marker.getLatLng());
+    }
+    if (latLngs.length < 2) return;
+
+    if (asset.is_federation_primary) {
+        drawHull(latLngs);
+    } else if (asset.tenant_origin_id) {
+        // drawArcs sera implemente a la Task 8. En attendant, fallback hull.
+        // / drawArcs implemented in Task 8. Meanwhile, fallback to hull.
+        if (typeof drawArcs === 'function') {
+            drawArcs(asset.tenant_origin_id, acceptingIds);
+        } else {
+            drawHull(latLngs);
+        }
+    } else {
+        drawHull(latLngs);
+    }
+}
+/**
+ * Affiche ou masque la legende contextuelle de l'asset actif.
+ * Si asset est null, masque la legende.
+ * / Shows or hides the active asset's contextual legend.
+ * If asset is null, hides the legend.
+ */
+function renderAssetLegend(asset) {
+    var legend = document.getElementById('explorer-asset-legend');
+    if (!legend) return;
+
+    if (!asset) {
+        legend.hidden = true;
+        return;
+    }
+
+    var config = ASSET_BADGE_CONFIG[asset.category] || { icon: '\u{1F4B0}', label: asset.category };
+    var content = legend.querySelector('.explorer-asset-legend-content');
+
+    var origineStr = asset.tenant_origin_name
+        ? '<span class="explorer-asset-legend-origin">Origine : ' + escapeHtml(asset.tenant_origin_name) + '</span>'
+        : '';
+    var countStr = asset.accepting_count > 1
+        ? '<span class="explorer-asset-legend-count">Partagée avec ' + (asset.accepting_count - 1) + ' autre(s) lieu(x)</span>'
+        : '<span class="explorer-asset-legend-count">Utilisée localement</span>';
+
+    content.innerHTML = ''
+        + '<div class="explorer-asset-legend-title">'
+            + '<span class="explorer-asset-legend-icon">' + config.icon + '</span>'
+            + '<strong>' + escapeHtml(asset.name) + '</strong>'
+        + '</div>'
+        + '<div class="explorer-asset-legend-meta">'
+            + '<span class="explorer-asset-legend-category">' + escapeHtml(config.label) + '</span>'
+            + origineStr
+            + countStr
+        + '</div>';
+
+    legend.hidden = false;
 }
 
 // ============================================================

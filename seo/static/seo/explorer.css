@@ -294,9 +294,63 @@
     margin-top: 6px;
 }
 
-/* Carte lieu : layout vertical (header cliquable + accordeon + footer) */
-/* / Lieu card: vertical layout (clickable header + accordion + footer) */
-.explorer-card--lieu {
+/* ============================================================
+ * Badges monnaies sur cards lieu / Asset badges on lieu cards
+ * ============================================================ */
+.lieu-asset-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.lieu-asset-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.03);
+    font-size: 11px;
+    color: #555;
+    cursor: pointer;
+    transition: background 150ms, border-color 150ms, transform 150ms;
+}
+
+.lieu-asset-badge:hover {
+    background: rgba(37, 157, 73, 0.08);
+    border-color: rgba(37, 157, 73, 0.3);
+    color: #259d49;
+    transform: translateY(-1px);
+}
+
+.lieu-asset-badge--active {
+    background: #259d49;
+    border-color: #259d49;
+    color: #fff;
+}
+
+/* Card monnaie active dans la liste : highlight visuel. */
+/* / Active currency card in the list: visual highlight. */
+.explorer-card[data-type="asset"].explorer-card--active {
+    border-color: #259d49;
+    box-shadow: 0 0 0 2px rgba(37, 157, 73, 0.2), 0 4px 12px rgba(37, 157, 73, 0.15);
+}
+
+.lieu-asset-badge-icon {
+    font-size: 12px;
+    line-height: 1;
+}
+
+.lieu-asset-badge-label {
+    font-weight: 500;
+}
+
+/* Carte lieu et carte asset : layout vertical avec zone focus + accordeon */
+/* / Lieu card and asset card: vertical layout with focus zone + accordion */
+.explorer-card--lieu,
+.explorer-card--asset {
     flex-direction: column;
     padding: 0;
     gap: 0;
@@ -399,18 +453,32 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 16px;
+    padding: 8px 16px;
     font-size: 13px;
     color: inherit;
     text-decoration: none;
     transition: background 150ms;
     border-top: 1px solid #f5f5f5;
+    /* Reset de tous les styles par defaut des <button> pour avoir un rendu */
+    /* identique a un <a> (full-width, pas de border/bg, meme curseur). */
+    /* / Reset all default <button> styles for a rendering identical to <a> */
+    /* (full-width, no border/bg, same cursor). */
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
 }
 
 .explorer-accordion-item:hover {
-    background: rgba(0, 0, 0, 0.03);
+    background: rgba(37, 157, 73, 0.05);
     text-decoration: none;
     color: inherit;
+}
+
+.explorer-accordion-item:active {
+    background: rgba(37, 157, 73, 0.1);
 }
 
 .explorer-accordion-icon {
@@ -452,6 +520,15 @@
     background: #222;
     color: #fff;
     transform: scale(1.08);
+}
+
+/* Pin estompe en mode focus asset : les lieux qui n'acceptent pas */
+/* la monnaie selectionnee apparaissent en retrait visuel.         */
+/* / Dimmed pin in asset focus mode: lieux that do not accept the  */
+/* selected currency fade visually.                                */
+.explorer-pin--dimmed {
+    opacity: 0.3;
+    filter: grayscale(0.5);
 }
 
 /* ============================================================
@@ -544,35 +621,69 @@
 }
 
 /* ============================================================
- * Overlay carte : message quand aucun marqueur n'est affiche
- * (ex: filtre "Monnaies" = assets globaux sans geolocalisation)
- * / Map overlay: message when no markers shown
- * (e.g. "Assets" filter = global currencies, no geolocation)
+ * Legende contextuelle asset (mode focus monnaie)
+ * / Contextual asset legend (currency focus mode)
  * ============================================================ */
-.explorer-map-empty {
+.explorer-asset-legend {
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    bottom: 16px;
+    left: 16px;
+    z-index: 500;
     background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 16px 20px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 12px 16px;
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    font-size: 13px;
-    color: #555;
-    text-align: center;
     max-width: 280px;
-    z-index: 500;
-    pointer-events: none;
+    font-size: 12px;
+    color: #333;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
 }
 
-.explorer-map-empty strong {
-    display: block;
-    font-size: 14px;
-    color: #222;
+.explorer-asset-legend[hidden] {
+    display: none;
+}
+
+.explorer-asset-legend-content {
+    flex: 1;
+}
+
+.explorer-asset-legend-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-bottom: 4px;
+}
+
+.explorer-asset-legend-icon {
+    font-size: 16px;
+}
+
+.explorer-asset-legend-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    color: #666;
+}
+
+.explorer-asset-legend-close {
+    background: transparent;
+    border: none;
+    font-size: 18px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    line-height: 1;
+}
+
+.explorer-asset-legend-close:hover {
+    color: #333;
 }
 
 /* ============================================================
@@ -585,10 +696,18 @@
         gap: 8px;
     }
 
-    /* Pills defilantes horizontalement / Horizontally scrollable pills */
+    /* Pills : retour a la ligne plutot que scroll horizontal sur mobile.   */
+    /* Plus lisible qu'une liste tronquee qu'il faut scroller manuellement. */
+    /* / Pills: wrap instead of horizontal scroll on mobile.                */
+    /* More readable than a truncated list that needs manual scrolling.     */
     .explorer-pills {
-        overflow-x: auto;
-        padding-bottom: 4px;
+        flex-wrap: wrap;
+        overflow-x: visible;
+        row-gap: 6px;
+        /* Retire le mask-image fade (inutile sans scroll). */
+        /* / Remove mask-image fade (useless without scroll). */
+        -webkit-mask-image: none;
+        mask-image: none;
     }
 
     /* Conteneur en bloc / Container becomes block */
@@ -629,14 +748,16 @@
         gap: 12px;
     }
 
-    /* La carte lieu garde son layout vertical sans padding global */
-    /* / Lieu card keeps its vertical layout without global padding */
-    .explorer-card--lieu {
+    /* Les cards lieu/asset gardent leur layout vertical sans padding global */
+    /* / Lieu/asset cards keep their vertical layout without global padding */
+    .explorer-card--lieu,
+    .explorer-card--asset {
         padding: 0;
         gap: 0;
     }
 
-    .explorer-card--lieu .explorer-card-focus {
+    .explorer-card--lieu .explorer-card-focus,
+    .explorer-card--asset .explorer-card-focus {
         padding: 12px;
         gap: 12px;
     }
@@ -674,5 +795,14 @@
 
     body.explorer-map-active footer {
         display: none;
+    }
+
+    /* Legende asset : pleine largeur au-dessus du FAB sur mobile */
+    /* / Asset legend: full-width above FAB on mobile */
+    .explorer-asset-legend {
+        left: 16px;
+        right: 16px;
+        bottom: 80px;
+        max-width: none;
     }
 }

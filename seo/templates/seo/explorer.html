@@ -24,9 +24,9 @@
             <button class="explorer-pill active" data-category="all">{% translate "Tous" %}</button>
             <button class="explorer-pill" data-category="lieu">{% translate "Lieux" %}</button>
             <button class="explorer-pill" data-category="event">{% translate "Événements" %}</button>
-            <button class="explorer-pill" data-category="membership">{% translate "Adhésions" %}</button>
             <button class="explorer-pill" data-category="initiative">{% translate "Initiatives" %}</button>
             <button class="explorer-pill" data-category="asset">{% translate "Monnaies" %}</button>
+            <button class="explorer-pill" data-category="membership">{% translate "Adhésions" %}</button>
         </div>
     </div>
     <div class="explorer-counter" id="explorer-counter"></div>
@@ -37,8 +37,18 @@
     {# Liste des resultats / Results list #}
     <div class="explorer-list" id="explorer-list"></div>
 
-    {# Carte Leaflet / Leaflet map #}
-    <div class="explorer-map" id="explorer-map"></div>
+    {# Carte Leaflet + legende flottante dedans. Avoir la legende DANS .explorer-map #}
+    {# garantit que position:absolute se place par rapport a la carte, pas a la liste. #}
+    {# / Leaflet map + floating legend inside. Having the legend INSIDE .explorer-map #}
+    {# ensures position:absolute is relative to the map, not the list. #}
+    <div class="explorer-map" id="explorer-map">
+        <div class="explorer-asset-legend" id="explorer-asset-legend" hidden>
+            <div class="explorer-asset-legend-content"></div>
+            <button type="button" class="explorer-asset-legend-close"
+                    onclick="clearAssetFocus()"
+                    aria-label="{% translate 'Fermer' %}">&times;</button>
+        </div>
+    </div>
 </div>
 
 {# Donnees JSON pour le JS / JSON data for JS #}

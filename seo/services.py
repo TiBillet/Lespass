@@ -319,26 +319,93 @@ def get_initiatives_for_tenants(tenant_schemas):
 
 def get_all_assets():
     """
-    Recupere tous les assets fedow_core (SHARED_APPS, schema public).
-    / Fetch all fedow_core assets (SHARED_APPS, public schema).
+    Recupere tous les assets fedow_core actifs avec leurs relations d'acceptation.
+    Deux mecanismes d'acceptation sont pris en compte :
+    1. M2M directe Asset.federated_with → Client (table fedow_core_asset_federated_with)
+    2. Via Federation : Asset ∈ Federation.assets ET Client ∈ Federation.tenants
+    / Fetch all active fedow_core assets with their acceptance relations.
+    Two acceptance mechanisms are taken into account:
+    1. Direct M2M Asset.federated_with → Client (table fedow_core_asset_federated_with)
+    2. Via Federation: Asset ∈ Federation.assets AND Client ∈ Federation.tenants
 
-    Retourne / Returns: list[dict] avec cles uuid, name, category
+    Regles / Rules:
+    - accepting_tenants(asset) = {tenant_origin}
+                               ∪ {clients via asset.federated_with}
+                               ∪ {clients via asset.federations → federation.tenants}
+    - Seuls les assets actifs (active=TRUE, archive=FALSE) sont retournes.
+    - is_federation_primary = True si category == 'FED'
+
+    Retourne / Returns: list[dict] avec cles :
+        uuid, name, category, tenant_origin_id, tenant_origin_name,
+        accepting_tenant_ids (list), accepting_count (int), is_federation_primary (bool)
     """
+    # CTE (Common Table Expressions) pour les deux mecanismes d'acceptation :
+    # 1. direct_acceptance  : M2M directe Asset.federated_with → Client
+    # 2. federation_acceptance : via Federation (asset → federation → tenants)
+    # 3. all_acceptance : union des deux
+    # / CTEs for both acceptance mechanisms:
+    # 1. direct_acceptance  : direct M2M Asset.federated_with → Client
+    # 2. federation_acceptance : via Federation (asset → federation → tenants)
+    # 3. all_acceptance : union of both
     sql = """
-        SELECT uuid::text, name, category
-        FROM "public"."fedow_core_asset"
+        WITH direct_acceptance AS (
+            -- Clients acceptant l'asset via la M2M directe Asset.federated_with
+            -- / Clients accepting the asset via the direct M2M Asset.federated_with
+            SELECT asset_id, client_id::text AS client_uuid
+            FROM "public"."fedow_core_asset_federated_with"
+        ),
+        federation_acceptance AS (
+            -- Clients acceptant l'asset via une Federation commune
+            -- / Clients accepting the asset via a shared Federation
+            SELECT fa.asset_id, ft.client_id::text AS client_uuid
+            FROM "public"."fedow_core_federation_assets" fa
+            JOIN "public"."fedow_core_federation_tenants" ft ON fa.federation_id = ft.federation_id
+        ),
+        all_acceptance AS (
+            SELECT asset_id, client_uuid FROM direct_acceptance
+            UNION
+            SELECT asset_id, client_uuid FROM federation_acceptance
+        )
+        SELECT
+            a.uuid::text AS asset_uuid,
+            a.name AS asset_name,
+            a.category AS asset_category,
+            c_origin.uuid::text AS origin_uuid,
+            c_origin.name AS origin_name,
+            COALESCE(
+                ARRAY_AGG(DISTINCT aa.client_uuid) FILTER (WHERE aa.client_uuid IS NOT NULL),
+                ARRAY[]::text[]
+            ) AS accepting_uuids
+        FROM "public"."fedow_core_asset" a
+        LEFT JOIN "public"."Customers_client" c_origin ON a.tenant_origin_id = c_origin.uuid
+        LEFT JOIN all_acceptance aa ON aa.asset_id = a.uuid
+        WHERE a.active = TRUE AND a.archive = FALSE
+        GROUP BY a.uuid, a.name, a.category, c_origin.uuid, c_origin.name
+        ORDER BY a.name
     """
+
     results = []
     with connection.cursor() as cursor:
         cursor.execute(sql)
         for row in cursor.fetchall():
-            results.append(
-                {
-                    "uuid": row[0],
-                    "name": row[1],
-                    "category": row[2],
-                }
-            )
+            asset_uuid, asset_name, asset_category, origin_uuid, origin_name, accepting_uuids = row
+
+            # Union : tenant_origin + lieux federes (direct + federation) = lieux acceptants
+            # / Union: tenant_origin + federated venues (direct + federation) = accepting venues
+            accepting = set(accepting_uuids or [])
+            if origin_uuid:
+                accepting.add(origin_uuid)
+
+            results.append({
+                "uuid": asset_uuid,
+                "name": asset_name,
+                "category": asset_category,
+                "tenant_origin_id": origin_uuid,
+                "tenant_origin_name": origin_name,
+                "accepting_tenant_ids": sorted(accepting),
+                "accepting_count": len(accepting),
+                "is_federation_primary": asset_category == "FED",
+            })
 
     return results
 
@@ -441,6 +508,39 @@ def build_tenant_config_data(client):
             client.name,
             exc,
         )
+
+    # Liste des uuid d'assets acceptes par ce tenant.
+    # Trois chemins d'acceptation :
+    # 1. tenant_origin == ce tenant
+    # 2. via Asset.federated_with (M2M directe Asset↔Client)
+    # 3. via Federation.assets + Federation.tenants (groupe)
+    # / List of asset UUIDs accepted by this tenant.
+    # Three acceptance paths:
+    # 1. tenant_origin == this tenant
+    # 2. via Asset.federated_with (direct Asset↔Client M2M)
+    # 3. via Federation.assets + Federation.tenants (group)
+    sql_accepted = """
+        SELECT DISTINCT a.uuid::text
+        FROM "public"."fedow_core_asset" a
+        WHERE a.tenant_origin_id = %s AND a.active = TRUE AND a.archive = FALSE
+        UNION
+        SELECT DISTINCT afw.asset_id::text
+        FROM "public"."fedow_core_asset_federated_with" afw
+        JOIN "public"."fedow_core_asset" a ON afw.asset_id = a.uuid
+        WHERE afw.client_id = %s AND a.active = TRUE AND a.archive = FALSE
+        UNION
+        SELECT DISTINCT fa.asset_id::text
+        FROM "public"."fedow_core_federation_assets" fa
+        JOIN "public"."fedow_core_federation_tenants" ft ON fa.federation_id = ft.federation_id
+        JOIN "public"."fedow_core_asset" a ON fa.asset_id = a.uuid
+        WHERE ft.client_id = %s AND a.active = TRUE AND a.archive = FALSE
+    """
+    accepted_ids = []
+    with connection.cursor() as cursor:
+        cursor.execute(sql_accepted, [str(client.uuid), str(client.uuid), str(client.uuid)])
+        for row in cursor.fetchall():
+            accepted_ids.append(row[0])
+    data["accepted_asset_ids"] = sorted(accepted_ids)
 
     return data
 
@@ -576,6 +676,10 @@ def build_explorer_data():
         lieu_copy["memberships"] = []
         lieu_copy["initiatives"] = []
         tenant_id = lieu["tenant_id"]
+        # Les assets acceptes par ce lieu viennent du tenant_summary en cache.
+        # / Accepted assets for this lieu come from cached tenant_summary.
+        summary = get_seo_cache(SEOCache.TENANT_SUMMARY, tenant_id) or {}
+        lieu_copy["accepted_asset_ids"] = summary.get("accepted_asset_ids", [])
         lieux_by_tenant[tenant_id] = lieu_copy
 
     # Construire la liste plate d'events avec infos du lieu parent

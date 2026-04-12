@@ -70,14 +70,14 @@ Un seul modele dans le schema public. 10 types de cache :
 
 | Type | tenant | Contenu |
 |------|--------|---------|
-| `TENANT_SUMMARY` | FK client | Config + stats (domain, org, description, GPS, contacts, logo_url) |
+| `TENANT_SUMMARY` | FK client | Config + stats (domain, org, description, GPS, contacts, logo_url, accepted_asset_ids) |
 | `TENANT_EVENTS` | FK client | `{"events": [...]}` du tenant — chaque event a `image_url`, `canonical_url`, `tenant_name` |
 | `TENANT_MEMBERSHIPS` | FK client | `{"memberships": [...]}` du tenant |
 | `AGGREGATE_EVENTS` | `null` | Tous les events de tous les tenants, tries par date, avec images |
 | `AGGREGATE_MEMBERSHIPS` | `null` | Toutes les adhesions de tous les tenants |
 | `AGGREGATE_LIEUX` | `null` | Lieux actifs (domain, GPS, description, logo) |
 | `AGGREGATE_INITIATIVES` | `null` | Toutes les initiatives (crowdfunding, budget contributif) |
-| `AGGREGATE_ASSETS` | `null` | Toutes les monnaies federees (TLF, TNF, TIM, FED, FID) |
+| `AGGREGATE_ASSETS` | `null` | Toutes les monnaies federees (TLF, TNF, TIM, FED, FID). Chaque asset a : tenant_origin_id, tenant_origin_name, accepting_tenant_ids, accepting_count, is_federation_primary |
 | `SITEMAP_INDEX` | `null` | Liste des tenants avec domaine pour `sitemap.xml` |
 | `GLOBAL_COUNTS` | `null` | Chiffres cles bruts (lieux, events, memberships, initiatives, assets) |
 
@@ -125,9 +125,16 @@ Sur mobile : liste par defaut, FAB pour basculer vers la carte.
 - **Accordeon dans chaque card lieu** : liste les events + adhesions + initiatives du lieu
 - **Auto-ouverture accordeon desktop** : le clic sur un lieu ouvre aussi son accordeon
 - **Focus carte via event/adhesion/initiative** : clic sur une card "plate" zoome sur le lieu parent
-- **Monnaies** : cards globales (pas de lieu parent, pas de focus carte)
+- **Monnaies** : cards cliquables déclenchant le mode focus monnaie (voir ci-dessous)
 - **FAB mobile** : deplace dans `document.body` au chargement pour eviter les containing blocks parasites qui cassent `position: fixed`
 - **`noindex, nofollow`** : pas indexe par les moteurs (page d'exploration, pas de SEO)
+- **Mode focus monnaie** : clic sur une card monnaie ou un badge monnaie d'un lieu active le mode focus :
+  - Highlight des lieux acceptants + dim des autres (opacity 0.3)
+  - Style B (polygone translucide convex hull) pour la monnaie fédérée primaire (`category=FED`, ex: TiBillet)
+  - Style C (arcs Bézier depuis origine) pour les assets fédérés partiellement
+  - Légende contextuelle en bas-gauche (nom, catégorie, origine, nombre de lieux)
+  - Clic à nouveau sur la même monnaie = reset (toggle)
+- **Badges monnaies sur cards lieu** : chaque card lieu affiche les monnaies acceptées sous la description, cliquables pour déclencher le focus
 
 
 ## SEO — fonctionnalites implementees
