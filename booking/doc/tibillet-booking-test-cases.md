@@ -1,6 +1,6 @@
 # Catalogue des cas de test — `booking` app
 
-**Référence design :** `booking/doc/tibillet-booking-logic-design.md`
+**Référence spécification :** `booking/doc/tibillet-booking-spec.md` Section 3
 **Fichiers de test :** `booking/tests/`
 
 --------------------------------------------------------------------------------
