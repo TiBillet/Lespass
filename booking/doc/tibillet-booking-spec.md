@@ -1,13 +1,18 @@
 # TiBillet — Booking Module Specification
 
-**Version:** v0.5
+**Version:** v0.6
 **Status:**  Ready for review by TiBillet core team
-**Date:**    2026-04-09
+**Date:**    2026-04-12
 **Author:**  Joris REHM
 **Note:**    This version was produced in a pair specification session with Claude AI (Anthropic)
 
 Changes:
 
+  - 0.6 Section 3 restructured: §3.1 Schema Models groups all persisted
+         models (§3.1.1–§3.1.6); §3.5 Slot removed and replaced by a new
+         §3.2 Booking Logic that formally defines the four sets O, W, E, B.
+         Each set has a Purpose, a Definition, and cross-references to the
+         schema models.
   - 0.5 Slot: replace date+start_time+end_time with start_datetime+end_datetime
          (timezone-aware, consistent with Booking.start_datetime — decisions §2)
   - 0.4 Rename SlotTemplate to WeeklyOpening
@@ -64,11 +69,15 @@ optional payment via the existing TiBillet payment system.
 
 ## 3. Core Concepts
 
-### 3.1 Resource
+### 3.1 Schema Models
+
+The Django models that persist data for the booking module.
+
+#### 3.1.1 Resource
 
 A bookable entity. Examples: "Salle de réunion A", "Imprimante 3D Prusa",
-"Bureau coworking 1". Availability is controlled via a Calendar (see 3.3),
-not by an active flag.
+"Bureau coworking 1". Availability is controlled via a Calendar
+(see 3.1.3), not by an active flag.
 
 **Core logic attributes:**
 
@@ -87,7 +96,7 @@ not by an active flag.
 | `booking_horizon_days`        | integer         | How far ahead a member can book             |
 |                               |                 | (e.g. 28 = no booking beyond 28 days)       |
 +-------------------------------+-----------------+---------------------------------------------+
-| `weekly_opening`               | FK              | Weekly opening schedule applied to this     |
+| `weekly_opening`              | FK              | Weekly opening schedule applied to this     |
 |                               |                 | resource                                    |
 +-------------------------------+-----------------+---------------------------------------------+
 | `pricing_rule`                | FK              | TiBillet Price object applied to bookings   |
@@ -112,7 +121,7 @@ not by an active flag.
 +---------------+-----------------+-----------------------------------------------+
 
 
-### 3.2 Resource Group
+#### 3.1.2 Resource Group
 
 A Resource Group is an optional organisational layer that clusters related
 resources for display on the public booking page. For example, "Salles de
@@ -146,11 +155,11 @@ specific resource within the group before booking.
   membership.
 
 
-### 3.3 Calendar
+#### 3.1.3 Calendar
 
-A Calendar defines when resources are closed or open. An association can have one or
-several calendars (e.g. one for all rooms, one for machines). Outside of declared
-closed periods, a resource is implicitly open.
+A Calendar defines when resources are closed or open. An association can
+have one or several calendars (e.g. one for all rooms, one for machines).
+Outside of declared closed periods, a resource is implicitly open.
 
 **Attributes:**
 
@@ -179,35 +188,40 @@ A Calendar contains a set of **ClosedPeriod** entries:
 
 **Rules:**
 
-- Slots that fall within a ClosedPeriod are excluded when computing availability
-  on the fly.
+- Slots that fall within a ClosedPeriod are excluded when computing
+  availability on the fly.
 - ClosedPeriods can overlap without conflict.
-- Adding a ClosedPeriod over dates that already have confirmed bookings does
-  **not** automatically cancel those bookings. The volunteer handles them manually.
-- A single day off is modelled as a ClosedPeriod where `start_date == end_date`.
+- Adding a ClosedPeriod over dates that already have confirmed bookings
+  does **not** automatically cancel those bookings. The volunteer handles
+  them manually.
+- A single day off is modelled as a ClosedPeriod where
+  `start_date == end_date`.
 
 
-### 3.4 Weekly Opening
+#### 3.1.4 Weekly Opening
 
-A reusable weekly opening schedule. It defines which time slots are open on which
-days of the week. A template can be shared across multiple resources. Temporal
-exceptions (holidays, closures) are handled exclusively by the Calendar.
+A reusable weekly opening schedule. It defines which time slots are open
+on which days of the week. A template can be shared across multiple
+resources. Temporal exceptions (holidays, closures) are handled
+exclusively by the Calendar.
 
-**v1 constraint:** a resource has exactly one weekly opening at a time. Multiple
-templates per resource (e.g. a summer vs. winter schedule) are out of scope for v1
-and would require a date-ranged assignment model.
+**v1 constraint:** a resource has exactly one weekly opening at a time.
+Multiple templates per resource (e.g. a summer vs. winter schedule) are
+out of scope for v1 and would require a date-ranged assignment model.
 
-**Non-overlap constraint:** within a given Weekly Opening, SlotEntries must not
-overlap each other. The system must reject any OpeningEntry whose generated time window
-intersects with an existing one. This check is non-trivial because:
+**Non-overlap constraint:** within a given Weekly Opening, OpeningEntries
+must not overlap each other. The system must reject any OpeningEntry whose
+generated time window intersects with an existing one. This check is
+non-trivial because:
 
-- A OpeningEntry can bleed into the next day if
+- An OpeningEntry can bleed into the next day if
   `start_time + slot_count × slot_duration_minutes > 24h`.
-- The last OpeningEntry of the week (e.g. Sunday) can bleed into the first OpeningEntry
-  of the week (Monday), creating a wrap-around overlap.
+- The last OpeningEntry of the week (e.g. Sunday) can bleed into the
+  first OpeningEntry of the week (Monday), creating a wrap-around
+  overlap.
 
-The overlap check must therefore treat the weekly schedule as a circular 7-day
-timeline and compare all OpeningEntry windows modulo 7 days.
+The overlap check must therefore treat the weekly schedule as a circular
+7-day timeline and compare all OpeningEntry windows modulo 7 days.
 
 **Attributes:**
 
@@ -217,13 +231,13 @@ timeline and compare all OpeningEntry windows modulo 7 days.
 | `name` | string | e.g. "Horaires standard", "Horaires été" |
 +--------+--------+------------------------------------------+
 
-A Weekly Opening contains a set of **OpeningEntry** rows, each defining one recurring
-slot:
+A Weekly Opening contains a set of **OpeningEntry** rows, each defining
+one recurring slot:
 
 +-------------------------+---------+------------------------------------------+
 | Field                   | Type    | Description                              |
 +=========================+=========+==========================================+
-| `template`              | FK      | Parent weekly opening                     |
+| `template`              | FK      | Parent weekly opening                    |
 +-------------------------+---------+------------------------------------------+
 | `weekday`               | enum    | `mon`, `tue`, `wed`, `thu`,              |
 |                         |         | `fri`, `sat`, `sun`                      |
@@ -237,77 +251,47 @@ slot:
 |                         |         | from `start_time`                        |
 +-------------------------+---------+------------------------------------------+
 
-**Example:** `weekday=mon, start_time=10:00, slot_duration_minutes=60, slot_count=5`
-generates: 10:00–11:00, 11:00–12:00, 12:00–13:00, 13:00–14:00, 14:00–15:00.
+**Example:** `weekday=mon, start_time=10:00, slot_duration_minutes=60,
+slot_count=5` generates: 10:00–11:00, 11:00–12:00, 12:00–13:00,
+13:00–14:00, 14:00–15:00.
 
 
-### 3.5 Slot
+#### 3.1.5 Pricing
 
-A Slot is a virtual, non-persisted concept. Slots are computed on the fly by the
-application from three inputs:
-
-- The resource's **WeeklyOpening** (weekdays, start time, duration, count).
-- The resource's **Calendar** (ClosedPeriods are excluded).
-- The resource's **`booking_horizon_days`** (slots beyond the horizon are not
-  surfaced).
-
-No Slot rows are stored in the database. The application computes and returns them
-dynamically when a client requests availability.
-
-**Computed fields exposed by the application:**
-
-+-------------------------+----------+------------------------------------------+
-| Field                   | Type     | Description                              |
-+=========================+==========+==========================================+
-| `resource_id`           | id       | Parent resource                          |
-+-------------------------+----------+------------------------------------------+
-| `start_datetime`        | datetime | Timezone-aware start of the slot.        |
-|                         |          | Derived from OpeningEntry + date.        |
-+-------------------------+----------+------------------------------------------+
-| `end_datetime`          | datetime | Timezone-aware end of the slot.          |
-|                         |          | `start_datetime + slot_duration_minutes` |
-+-------------------------+----------+------------------------------------------+
-| `slot_duration_minutes` | integer  | Duration of the slot in minutes          |
-+-------------------------+----------+------------------------------------------+
-| `remaining_capacity`    | integer  | `capacity − count of overlapping         |
-|                         |          | bookings`. 0 = slot is full.             |
-+-------------------------+----------+------------------------------------------+
-
-
-### 3.6 Pricing
-
-TiBillet already has a Product + Price model that covers all pricing needs for the
-booking module. Rather than introducing a custom PricingRule model, each bookable
-resource is backed by a TiBillet **Product**, and pricing is configured via the
-existing **Price** model, which provides:
+TiBillet already has a Product + Price model that covers all pricing
+needs for the booking module. Rather than introducing a custom
+PricingRule model, each bookable resource is backed by a TiBillet
+**Product**, and pricing is configured via the existing **Price** model,
+which provides:
 
 - `prix` — the amount (0 for free slots).
-- `adhesion_obligatoire` — optional FK to a membership product; gates booking to
-  members of that type.
-- `max_per_user` — **not used for bookings.** Availability is naturally constrained
-  by capacity and time; no per-member cap is applied.
+- `adhesion_obligatoire` — optional FK to a membership product; gates
+  booking to members of that type.
+- `max_per_user` — **not used for bookings.** Availability is naturally
+  constrained by capacity and time; no per-member cap is applied.
 - `vat` — inherited VAT handling.
 
-The `pricing_rule` FK on Resource (see 3.1) therefore points to a TiBillet **Price**
-object, not a custom model.
+The `pricing_rule` FK on Resource (see 3.1.1) therefore points to a
+TiBillet **Price** object, not a custom model.
 
-> **Open question (core team):** confirm the correct way to integrate the booking
-> product into the existing Product model (correct `categorie_article` value, any
-> required flags, etc.).
+> **Open question (core team):** confirm the correct way to integrate
+> the booking product into the existing Product model (correct
+> `categorie_article` value, any required flags, etc.).
 
 
-### 3.7 Booking
+#### 3.1.6 Booking
 
-A Booking is a fully self-contained record. It stores the actual agreed time
-explicitly, independently of the resource's current Weekly Opening. This means:
+A Booking is a fully self-contained record. It stores the actual agreed
+time explicitly, independently of the resource's current Weekly Opening.
+This means:
 
-- If the Weekly Opening changes after a booking is made, existing bookings are
-  unaffected.
-- Volunteers can create bookings that do not correspond to any slot in the template
-  (e.g. exceptional one-off reservations).
+- If the Weekly Opening changes after a booking is made, existing
+  bookings are unaffected.
+- Volunteers can create bookings that do not correspond to any slot in
+  the template (e.g. exceptional one-off reservations).
 
-Cancellation is modelled as deletion of the Booking row — no cancelled state is
-stored.
+Cancellation is modelled as deletion of the Booking row — no cancelled
+state is stored.
 
 **Attributes:**
 
@@ -323,6 +307,7 @@ stored.
 | `slot_duration_minutes` | integer            | Duration of each slot unit in minutes    |
 +-------------------------+--------------------+------------------------------------------+
 | `slot_count`            | integer            | Number of consecutive slot units booked  |
++-------------------------+--------------------+------------------------------------------+
 | `member`                | FK → TiBillet User | The member who made the booking          |
 +-------------------------+--------------------+------------------------------------------+
 | `status`                | enum               | `new` — in basket, pending user          |
@@ -336,6 +321,196 @@ stored.
 |                         |                    | wallet/cashless transaction, set on      |
 |                         |                    | confirmation                             |
 +-------------------------+--------------------+------------------------------------------+
+
+
+### 3.2 Booking Logic
+
+The booking logic is triggered by two kinds of user requests:
+
+1. **Slot browsing** — a member (or public visitor) opens the booking
+   page for a resource and asks: "which slots are available, and how
+   many places remain in each?" The system returns the set E of bookable
+   intervals for that resource over a date range.
+
+2. **Booking request** — a member submits a request to book a specific
+   start time, duration, and slot count on a resource. The system checks
+   the request against E and, if valid, creates the booking B.
+
+In both cases the same pipeline is evaluated on the fly from the stored
+models. None of the intermediate sets are persisted.
+
+**O** — normalized open-day intervals
+:   `Calendar + ClosedPeriods`
+
+**W** — theoretical slots
+:   `WeeklyOpening + O`
+
+**E** — bookable intervals, annotated with capacity
+:   `W + capacity from DB`
+
+**B** — a booking
+:   `member selection from E`
+
+All datetimes are timezone-aware, using the tenant's venue timezone.
+
+
+#### 3.2.1 O — Normalized Open-Day Intervals
+
+**Purpose.** The Calendar records which days the venue is closed (see
+§3.1.3). O is the complement: the set of continuous time spans during
+which the venue is open. It answers the question "on which stretches of
+time is this resource potentially available?" before any opening
+schedule is applied.
+
+**Computation window.** O is always computed over a finite window
+`[date_from, date_to]`, supplied by the user request:
+
+- For slot browsing, `date_from` is today and `date_to` is
+  `today + booking_horizon_days`. "Today" is resolved in the tenant's
+  venue timezone, not in UTC.
+- For a booking request, `date_from` is the date the booking starts
+  and `date_to` is the date it ends — which may be later than
+  `date_from` when the booking spans multiple days.
+
+**Definition.** Given the Calendar's ClosedPeriods (see §3.1.3), O is
+the complement of the closed set within the window
+`[date_from 00:00 local, date_to+1 00:00 local)`.
+
+Each ClosedPeriod (`start_date`, `end_date`) — stored as naive
+`DateField` values — defines a closed span
+`[start_date 00:00 local, end_date+1 00:00 local)`. When periods
+overlap or are adjacent, they are merged. `end_date = None` extends
+the closure to the end of the window.
+
+O is then the set of gaps that remain:
+
+```
+O = complement of merged_closed_periods
+    within [date_from 00:00, date_to+1 00:00)
+```
+
+Example (Europe/Paris, CEST = +02:00, window = full summer):
+`date_from = 2026-07-01`, `date_to = 2026-08-31`
+
+```
+ClosedPeriods: 2026-07-14 → 2026-07-20,  2026-08-15 (single day)
+
+O = [
+  [2026-07-01 00:00+02, 2026-07-14 00:00+02),
+  [2026-07-21 00:00+02, 2026-08-15 00:00+02),
+  [2026-08-16 00:00+02, 2026-09-01 00:00+02),
+]
+```
+
+
+#### 3.2.2 W — Theoretical Slots
+
+**Purpose.** The WeeklyOpening (see §3.1.4) defines a repeating weekly
+pattern of time windows. W is that pattern unrolled over the open-day
+intervals O: the set of concrete time slots that the resource offers
+during open days. It answers the question "given the opening schedule,
+on which specific time windows could a booking exist?"
+
+**Definition.** For each OpeningEntry in the WeeklyOpening, and for
+each occurrence of its weekday within the computation window,
+`slot_count` consecutive half-open intervals of `slot_duration_minutes`
+are generated starting at `start_time`. A generated slot is included
+in W if and only if it is fully contained within some open-day interval
+`o ∈ O`:
+
+```
+w ∈ W  ⟺  ∃ o ∈ O,  w ⊆ o
+```
+
+A slot that straddles a boundary of O is rejected entirely — it is
+never trimmed. Three consequences worth noting:
+
+- A slot that starts on an open day but ends on a closed day is
+  excluded.
+- A slot that starts on a closed day but ends on the next open day is
+  excluded.
+- A multi-day slot that starts and ends on open days but crosses a
+  closed day in the middle is excluded.
+
+
+#### 3.2.3 E — Bookable Intervals
+
+**Purpose.** W contains every slot the opening schedule produces over
+open days, with no regard for how those slots are already booked. E is W
+enriched with real-time capacity information in order to define what a
+member can actually book right now, It is the set the member sees on the
+booking page: each element is a slot that is open, reachable within the
+booking horizon, and shows how many places are still available. It is
+also the set which will be used to validate a booking request.
+
+**Definition.** E is W annotated with two capacity fields:
+
+- **max_capacity** — the resource's capacity (see §3.1.1), constant
+  across all intervals.
+- **remaining_capacity(w)** — units still available for interval `w`:
+
+```
+remaining_capacity(w) = max_capacity − |{ x ∈ DB | x overlaps w }|
+```
+
+DB is all existing bookings with status `new`, `validated`, or
+`confirmed`. Two intervals overlap when their intersection is not empty.
+Partial overlap counts as full. `remaining_capacity` is clamped to 0
+(never negative).
+
+> **Business rule.** A member who books a slot gets full ownership of
+> the resource for its entire duration. Any existing booking that
+> touches the slot — even briefly — already occupies the resource, so
+> the available capacity decreases by one for the whole slot.
+
+
+#### 3.2.4 B — A Booking
+
+**Purpose.** E tells the member which slots exist and how many places
+remain. B is the member's choice: one or more consecutive slots from E
+that they want to reserve. It answers the question "is this specific
+booking request valid, and can it be created?"
+
+**Definition.** A booking is a series of `k` consecutive half-open
+intervals, each of duration `T`, starting at a chosen start time `p`:
+
+```
+B = { [p, p+T), [p+T, p+2T), …, [p+(k-1)T, p+kT) }
+```
+
+This maps directly to the Booking model (see §3.1.6): `p` is
+`start_datetime`, `T` is `slot_duration_minutes`, and `k` is
+`slot_count`.
+
+**Member booking.** The UI presents elements of E, but the booking
+request arrives as a plain HTTP POST — the server cannot trust that
+`p`, `T`, and `k` are aligned to any slot in E. The server must
+therefore verify the request against E explicitly. The validity rule is:
+
+```
+Let E' = { e ∈ E | remaining_capacity(e) > 0 }
+B is valid  ⟺  B ⊆ E'
+```
+
+Each element of B must be exactly a slot present in E' — same start,
+same duration. This single condition captures alignment, availability,
+and the gap constraint: if a closed day falls within the consecutive
+sequence of B, the corresponding slot is absent from E' and the
+inclusion fails. If a member needs slots across two separate open
+windows, they submit two booking requests.
+
+**Volunteer booking.** The volunteer may create ad-hoc bookings at any
+start time and duration via the admin panel (see §4.3), with no
+alignment constraint. Such bookings bypass the E validity rule but
+still decrease `remaining_capacity` for any overlapping slot.
+
+> **Concurrency.** E is computed from a snapshot of the database at
+> request time. Two concurrent booking requests for the last available
+> slot can both see `remaining_capacity = 1`, both pass validation, and
+> both succeed — leaving the resource overbooked. The server must
+> therefore enforce the capacity constraint atomically: re-check
+> `remaining_capacity` inside a database transaction with a row-level
+> lock on the affected slots before inserting the Booking row.
 
 
 ## 4. User Flows
