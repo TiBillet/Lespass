@@ -13,6 +13,13 @@ Changes:
          §3.2 Booking Logic that formally defines the four sets O, W, E, B.
          Each set has a Purpose, a Definition, and cross-references to the
          schema models.
+         Schema corrections (aligned with code): Booking.date+start_time
+         replaced by start_datetime (tz-aware); Booking.member renamed user;
+         OpeningEntry.template renamed weekly_opening. §3.1.1 capacity=0
+         note added. §3.1.3 end_date >= start_date rule added. §3.1.4
+         max-opening-duration consequence added. §5 Business Rules:
+         member vs volunteer alignment rule distinguished explicitly
+         (finding §11 resolved).
   - 0.5 Slot: replace date+start_time+end_time with start_datetime+end_datetime
          (timezone-aware, consistent with Booking.start_datetime — decisions §2)
   - 0.4 Rename SlotTemplate to WeeklyOpening
@@ -102,6 +109,11 @@ A bookable entity. Examples: "Salle de réunion A", "Imprimante 3D Prusa",
 | `pricing_rule`                | FK              | TiBillet Price object applied to bookings   |
 |                               |                 | on this resource                            |
 +-------------------------------+-----------------+---------------------------------------------+
+
+Note:
+
+- `capacity` can be equal to 0, thus desactivating the ressource.
+
 
 **Presentation attributes:**
 
@@ -196,7 +208,7 @@ A Calendar contains a set of **ClosedPeriod** entries:
   them manually.
 - A single day off is modelled as a ClosedPeriod where
   `start_date == end_date`.
-
+- `end_date` >= `start_date` (if not null)
 
 #### 3.1.4 Weekly Opening
 
@@ -223,6 +235,9 @@ non-trivial because:
 The overlap check must therefore treat the weekly schedule as a circular
 7-day timeline and compare all OpeningEntry windows modulo 7 days.
 
+As a consequence: the longest possible opengings is a slot that cover
+a full week or a partition of that.
+
 **Attributes:**
 
 +--------+--------+------------------------------------------+
@@ -237,7 +252,7 @@ one recurring slot:
 +-------------------------+---------+------------------------------------------+
 | Field                   | Type    | Description                              |
 +=========================+=========+==========================================+
-| `template`              | FK      | Parent weekly opening                    |
+| `weekly_opening`        | FK      | Parent weekly opening                    |
 +-------------------------+---------+------------------------------------------+
 | `weekday`               | enum    | `mon`, `tue`, `wed`, `thu`,              |
 |                         |         | `fri`, `sat`, `sun`                      |
@@ -300,15 +315,14 @@ state is stored.
 +=========================+====================+==========================================+
 | `resource`              | FK                 | The booked resource                      |
 +-------------------------+--------------------+------------------------------------------+
-| `date`                  | date               | Date of the booking                      |
-+-------------------------+--------------------+------------------------------------------+
-| `start_time`            | time               | Start time of the booking                |
+| `start_datetime`        | datetime (tz-aware)| Start of the booking, in the tenant's    |
+|                         |                    | venue timezone                           |
 +-------------------------+--------------------+------------------------------------------+
 | `slot_duration_minutes` | integer            | Duration of each slot unit in minutes    |
 +-------------------------+--------------------+------------------------------------------+
 | `slot_count`            | integer            | Number of consecutive slot units booked  |
 +-------------------------+--------------------+------------------------------------------+
-| `member`                | FK → TiBillet User | The member who made the booking          |
+| `user`                  | FK → TiBillet User | The member who made the booking          |
 +-------------------------+--------------------+------------------------------------------+
 | `status`                | enum               | `new` — in basket, pending user          |
 |                         |                    | validation;                              |
@@ -582,13 +596,18 @@ still decrease `remaining_capacity` for any overlapping slot.
   from `start_datetime.date()` to `end_datetime.date()` (inclusive), the date
   must not fall within a `ClosedPeriod`. A slot may span multiple days as long
   as none of those days is closed.
-- Bookings are not required to be aligned with computed slots. A booking may have
-  an arbitrary start time and duration (e.g. a volunteer creates a booking starting
-  at 10:12 for 12 minutes, while the template defines slots at 10:00 for 60
-  minutes).
-- A booking decreases `remaining_capacity` by 1 for every computed slot it
-  overlaps, even partially. A computed slot is considered overlapped if the
-  booking's time window intersects with the slot's time window.
+- **Member bookings** must be aligned with the computed slots in E: each slot in
+  the request must match exactly an element of E' (same start, same duration).
+  The server verifies this explicitly — it cannot trust the HTTP POST (see
+  §3.2.4).
+- **Volunteer bookings** (created via the admin panel) are not required to be
+  aligned with computed slots. A volunteer may choose an arbitrary start time and
+  duration (e.g. 10:12 for 12 minutes while the opening defines 60-minute slots
+  starting at 10:00). The E validity rule does not apply, but the booking still
+  decreases `remaining_capacity` for any overlapping slot.
+- Any booking (member or volunteer) decreases `remaining_capacity` by 1 for
+  every computed slot it overlaps, even partially. Two intervals overlap when
+  their intersection is not empty (see §3.2.3).
 - A computed slot is considered unavailable when its `remaining_capacity = 0`,
   i.e. all units are covered by at least one overlapping booking in status `new`,
   `validated`, or `confirmed`.
