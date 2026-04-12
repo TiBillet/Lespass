@@ -12,48 +12,6 @@ from django.utils.translation import gettext_lazy as _
 WEEK_MINUTES = 7 * 24 * 60  # 10 080 — durée d'une semaine en minutes
 
 
-def _intervals_overlap(a_start, a_end, b_start, b_end):
-    """
-    Vérifie le chevauchement de deux blocs sur une timeline circulaire de
-    7 jours. Les intervalles sont semi-ouverts : [start, end).
-    / Checks overlap of two blocks on a circular 7-day timeline.
-    Intervals are half-open: [start, end).
-
-    Cas couverts :
-    1. Chevauchement linéaire direct.
-    2. Le bloc A déborde en fin de semaine → sa partie circulaire [0, a_end−WEEK)
-       est comparée à B.
-    3. Le bloc B déborde en fin de semaine → sa partie circulaire [0, b_end−WEEK)
-       est comparée à A.
-    / Cases covered:
-    1. Direct linear overlap.
-    2. Block A bleeds past end of week → its circular portion [0, a_end−WEEK)
-       is compared against B.
-    3. Block B bleeds past end of week → its circular portion [0, b_end−WEEK)
-       is compared against A.
-    """
-    # Chevauchement linéaire direct.
-    # / Direct linear overlap.
-    if a_start < b_end and b_start < a_end:
-        return True
-
-    # Débordement de A : la portion circulaire [0, a_bleed) contre B.
-    # / A bleed: circular portion [0, a_bleed) against B.
-    if a_end > WEEK_MINUTES:
-        a_bleed = a_end - WEEK_MINUTES
-        if b_start < a_bleed:
-            return True
-
-    # Débordement de B : la portion circulaire [0, b_bleed) contre A.
-    # / B bleed: circular portion [0, b_bleed) against A.
-    if b_end > WEEK_MINUTES:
-        b_bleed = b_end - WEEK_MINUTES
-        if a_start < b_bleed:
-            return True
-
-    return False
-
-
 class Resource(models.Model):
     """
     Une ressource réservable (salle, machine, bureau coworking, etc.).
@@ -403,7 +361,25 @@ class OpeningEntry(models.Model):
             sib_start = sibling._position_minutes()
             sib_end = sib_start + sibling.slot_duration_minutes * sibling.slot_count
 
-            if _intervals_overlap(new_start, new_end, sib_start, sib_end):
+            # Chevauchement linéaire direct sur la timeline hebdomadaire circulaire.
+            # / Direct linear overlap on the circular weekly timeline.
+            linear_overlap = new_start < sib_end and sib_start < new_end
+
+            # Débordement de new_end au-delà de la semaine : la portion circulaire
+            # [0, new_end − WEEK) est comparée à sib_start.
+            # / new_end bleed: circular portion [0, new_end − WEEK) against sib_start.
+            new_bleed_overlap = (
+                new_end > WEEK_MINUTES and sib_start < new_end - WEEK_MINUTES
+            )
+
+            # Débordement de sib_end au-delà de la semaine : la portion circulaire
+            # [0, sib_end − WEEK) est comparée à new_start.
+            # / sib_end bleed: circular portion [0, sib_end − WEEK) against new_start.
+            sib_bleed_overlap = (
+                sib_end > WEEK_MINUTES and new_start < sib_end - WEEK_MINUTES
+            )
+
+            if linear_overlap or new_bleed_overlap or sib_bleed_overlap:
                 raise ValidationError(
                     _(
                         'This opening entry overlaps with "%(sibling)s".'
