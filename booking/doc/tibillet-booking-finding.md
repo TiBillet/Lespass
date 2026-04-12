@@ -187,7 +187,7 @@ if self.slot_duration_minutes * self.slot_count > WEEK_MINUTES:
 Obsolète : cela a été précisé dans la spécification et implémenté
 
 
-## §10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques (à faire)
+## §10. Tests d'intégration uniquement — des tests unitaires seraient bénéfiques (Obsolète)
 
 **Source :** `booking/tests/`
 
@@ -203,21 +203,22 @@ elle présente deux limites pour les modules à forte logique algorithmique :
 - **Couplage** : un échec peut venir de la DB, du modèle ou de l'algorithme —
   le diagnostic est moins direct.
 
-Les deux modules suivants bénéficieraient d'une stratégie mixte :
+Les fonctions pures de `booking/booking_engine.py` bénéficieraient d'une
+stratégie mixte : `compute_open_intervals`, `generate_theoretical_slots` et
+`compute_remaining_capacity` n'ont pas d'accès DB. Des tests unitaires avec
+des objets Python simples (`types.SimpleNamespace`) permettraient de cibler
+l'algorithme seul.
 
-- `booking/slot_engine.py` — les fonctions `generate_theoretical_slots`,
-  `compute_remaining_capacity` et `_slot_intersects_closed_date` sont pures
-  (pas d'accès DB). Des tests unitaires avec des objets Python simples
-  (dataclasses, listes) permettraient de cibler l'algorithme seul.
-
-- `booking/booking_validator.py` — la logique de validation (parcours des
-  créneaux, lookup par clé, vérification de capacité) est séparable de
-  l'accès DB. Des tests unitaires pourraient construire des `Slot` factices
-  et tester `validate_new_booking` sans passer par `compute_slots`.
-
-Action future : ajouter des tests unitaires pour ces deux modules, en
+Action future : ajouter des tests unitaires pour ces fonctions, en
 conservant les tests d'intégration existants pour couvrir l'interaction
 avec la base (fermetures réelles, ouvertures réelles, réservations réelles).
+
+Obsolète : `test_booking_engine.py` a été réécrit avec une stratégie mixte.
+Les fonctions pures sont couvertes par des tests unitaires sans DB
+(`_cp`/`_oe`/`_bk` SimpleNamespace, `PARIS_TZ` injecté). Les
+orchestrateurs (`compute_slots`, `validate_new_booking`) conservent leurs
+tests d'intégration.
+
 
 ## §11. Ambiguïté dans la spec — alignement des réservations sur les créneaux (Obsolète)
 
@@ -270,7 +271,7 @@ Les tests `pytest.skip` conditionnels disparaîtront en même temps.
 Obsolète : les test ont été mise à jour
 
 
-## §13. 💡 Clock injection dans `compute_slots` et `validate_new_booking`  (Obsolète)
+## §13. 💡 Clock injection dans `compute_slots` et `validate_new_booking` (Obsolète)
 
 **Source :** `booking/slot_engine.py:376`, `booking/booking_validator.py`
 
@@ -303,7 +304,7 @@ des dates fixes.
 Obsolète : les test ont été mise à jour
 
 
-## §14. ⚠️ MAJEUR — Race condition sur la capacité restante (à faire)
+## §14. ⚠️ MAJEUR — Race condition sur la capacité restante (Obsolète)
 
 **Source :** `booking/doc/tibillet-booking-spec.md` — section 3.2.4 (B)
 
@@ -346,3 +347,5 @@ with transaction.atomic():
 
 Sans ce verrou, la contrainte de capacité n'est pas garantie sous
 charge concurrente.
+
+Obsolète : Cela a été implémenté.
