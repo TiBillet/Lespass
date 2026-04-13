@@ -122,6 +122,15 @@ function bindSearch() {
     var input = document.getElementById('explorer-search');
     if (!input) return;
 
+    // Si l'input arrive pre-rempli (via ?q=... soumis par la navbar globale),
+    // on initialise le filtre texte avant le premier applyFilters().
+    // / If the input arrives pre-filled (via ?q=... from the global navbar),
+    // initialize the text filter before the first applyFilters() call.
+    var initialValue = input.value.trim().toLowerCase();
+    if (initialValue) {
+        activeFilters.text = initialValue;
+    }
+
     var timer = null;
     input.addEventListener('input', function() {
         clearTimeout(timer);

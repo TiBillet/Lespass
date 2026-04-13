@@ -17,7 +17,11 @@
 {# Barre de recherche + pills / Search bar + category pills #}
 <div class="explorer-toolbar">
     <div class="explorer-search-row">
+        {# name="q" + value pre-rempli : la navbar globale soumet vers /explorer/?q=... #}
+        {# / name="q" + pre-filled value: the global navbar submits to /explorer/?q=... #}
         <input type="search" class="explorer-search" id="explorer-search"
+               name="q"
+               value="{{ request.GET.q|default:'' }}"
                placeholder="{% translate 'Rechercher un lieu, événement, adhésion...' %}"
                aria-label="{% translate 'Rechercher' %}">
         <div class="explorer-pills" id="explorer-pills">

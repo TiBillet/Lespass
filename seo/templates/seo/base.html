@@ -74,30 +74,27 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="mainMenu">
+            {# Navbar humaine : Explorer couvre Lieux/Événements/Adhésions via filtres. #}
+            {# Les pages dediees restent accessibles via footer + sitemap (SEO). #}
+            {# / Human navbar: Explorer covers Lieux/Events/Memberships via filters. #}
+            {# Standalone pages stay reachable via footer + sitemap (SEO). #}
             <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="/lieux/">
-                        <i class="bi bi-geo-alt"></i> {% translate "Lieux" %}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/evenements/">
-                        <i class="bi bi-calendar-event"></i> {% translate "Événements" %}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/adhesions/">
-                        <i class="bi bi-people"></i> {% translate "Adhésions" %}
-                    </a>
-                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="/explorer/">
                         <i class="bi bi-map"></i> {% translate "Explorer" %}
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://tibillet.github.io/documentation_v3/"
+                       target="_blank" rel="noopener">
+                        <i class="bi bi-book"></i> {% translate "Documentation" %}
+                    </a>
+                </li>
             </ul>
             <div class="navbar-nav d-flex mb-0">
-                <form class="d-flex" action="/recherche/" method="get">
+                {# Recherche globale : soumet vers Explorer qui gere le filtre texte. #}
+                {# / Global search: submits to Explorer which handles the text filter. #}
+                <form class="d-flex" action="/explorer/" method="get">
                     <input class="form-control me-2" type="search" name="q"
                            placeholder="{% translate 'Rechercher...' %}" aria-label="{% translate 'Rechercher' %}"
                            value="{{ query|default:'' }}">
@@ -168,7 +165,7 @@
                     <div class="col-md-4 col-lg-3">
                         <ul class="nav flex-column">
                             <li class="nav-item"><a class="nav-link" href="https://tibillet.org" target="_blank">TiBillet.org</a></li>
-                            <li class="nav-item"><a class="nav-link" href="https://tibillet.org/fr/docs/category/documentation-utilisateur/" target="_blank">{% translate "Documentation" %}</a></li>
+                            <li class="nav-item"><a class="nav-link" href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">{% translate "Documentation" %}</a></li>
                             <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a></li>
                             <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/" target="_blank">Github</a></li>
                         </ul>
