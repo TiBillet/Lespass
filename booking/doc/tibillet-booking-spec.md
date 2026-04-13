@@ -467,10 +467,9 @@ also the set which will be used to validate a booking request.
 remaining_capacity(w) = max_capacity − |{ x ∈ DB | x overlaps w }|
 ```
 
-DB is all existing bookings with status `new`, `validated`, or
-`confirmed`. Two intervals overlap when their intersection is not empty.
-Partial overlap counts as full. `remaining_capacity` is clamped to 0
-(never negative).
+DB is all existing bookings whatever their status. Two intervals
+overlap when their intersection is not empty. Partial overlap counts
+as full. `remaining_capacity` is clamped to 0 (never negative).
 
 > **Business rule.** A member who books a slot gets full ownership of
 > the resource for its entire duration. Any existing booking that
@@ -609,8 +608,8 @@ still decrease `remaining_capacity` for any overlapping slot.
   every computed slot it overlaps, even partially. Two intervals overlap when
   their intersection is not empty (see §3.2.3).
 - A computed slot is considered unavailable when its `remaining_capacity = 0`,
-  i.e. all units are covered by at least one overlapping booking in status `new`,
-  `validated`, or `confirmed`.
+  i.e. all units are covered by at least one overlapping booking regardless of
+  of their status.
 - When a member books multiple consecutive slots (`slot_count > 1`), all slots in
   the range must be available before the booking is created.
 - Slots outside the resource's `booking_horizon_days` window are never surfaced to
