@@ -135,7 +135,11 @@ def lieux(request):
         "lieux": all_lieux,
         "json_ld": json.dumps(json_ld_list),
         "page_title": "Lieux - TiBillet",
-        "page_description": "Tous les lieux du reseau cooperatif TiBillet.",
+        "page_description": (
+            "Découvrez les lieux culturels et associatifs du réseau coopératif "
+            "TiBillet : salles, cafés, festivals, tiers-lieux. Billetterie libre "
+            "et monnaie locale."
+        ),
         "canonical_url": request.build_absolute_uri("/lieux/"),
     }
 
@@ -172,7 +176,11 @@ def evenements(request):
         "page_obj": page_obj,
         "json_ld": json.dumps(json_ld_list),
         "page_title": "Evenements - TiBillet",
-        "page_description": "Tous les evenements a venir du reseau TiBillet.",
+        "page_description": (
+            "Tous les événements à venir dans le réseau TiBillet : concerts, "
+            "ateliers, spectacles, rencontres. Billetterie en ligne libre et "
+            "coopérative, sans frais cachés."
+        ),
         "canonical_url": request.build_absolute_uri("/evenements/"),
     }
 
@@ -204,7 +212,11 @@ def adhesions(request):
         "memberships": all_memberships,
         "json_ld": json.dumps(json_ld_list),
         "page_title": "Adhesions - TiBillet",
-        "page_description": "Toutes les adhesions disponibles dans le reseau TiBillet.",
+        "page_description": (
+            "Adhésions associatives, abonnements et souscriptions disponibles "
+            "dans le réseau coopératif TiBillet. Soutenez les lieux culturels "
+            "et associatifs qui vous entourent."
+        ),
         "canonical_url": request.build_absolute_uri("/adhesions/"),
     }
 
@@ -271,7 +283,16 @@ def recherche(request):
         "page_title": f"Recherche : {query} - TiBillet"
         if query
         else "Recherche - TiBillet",
-        "page_description": "Rechercher dans le reseau TiBillet.",
+        "page_description": (
+            f"Résultats de recherche pour « {query} » dans le réseau coopératif "
+            f"TiBillet : lieux, événements et adhésions."
+            if query
+            else (
+                "Recherchez un lieu, un événement ou une adhésion dans le "
+                "réseau coopératif TiBillet. Billetterie libre, adhésions, "
+                "monnaie locale."
+            )
+        ),
         "canonical_url": request.build_absolute_uri("/recherche/"),
     }
 
@@ -294,7 +315,11 @@ def explorer(request):
     context = {
         "explorer_data": explorer_data,
         "page_title": "Explorer - TiBillet",
-        "page_description": "Explorez les lieux, evenements et adhesions du reseau TiBillet sur une carte interactive.",
+        "page_description": (
+            "Explorez sur une carte interactive les lieux culturels, "
+            "événements, adhésions et monnaies locales du réseau coopératif "
+            "TiBillet. Filtrez, visualisez, découvrez."
+        ),
     }
 
     return TemplateResponse(request, "seo/explorer.html", context)

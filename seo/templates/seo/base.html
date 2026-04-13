@@ -13,18 +13,30 @@
     <meta name="robots" content="index, follow">
     <title>{{ page_title|default:"TiBillet" }}</title>
 
+    {# Social card : image par defaut pour Open Graph et Twitter. #}
+    {# Chaque vue peut surcharger via la variable `social_card_url`. #}
+    {# / Social card: default image for Open Graph and Twitter. #}
+    {# Views can override with the `social_card_url` context variable. #}
+    {% with social_image=social_card_url|default:request.scheme|add:"://"|add:request.get_host|add:"/static/seo/social-card.png" %}
+
     {# Open Graph / Facebook #}
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="og:title" content="{{ page_title|default:'TiBillet' }}">
     <meta property="og:description" content="{{ page_description|default:'Logiciel libre de billetterie et monnaie locale' }}">
     <meta property="og:site_name" content="TiBillet">
+    <meta property="og:image" content="{{ social_image }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="675">
+    <meta property="og:image:alt" content="TiBillet">
 
     {# Twitter #}
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
     <meta name="twitter:title" content="{{ page_title|default:'TiBillet' }}">
     <meta name="twitter:description" content="{{ page_description|default:'Logiciel libre de billetterie et monnaie locale' }}">
+    <meta name="twitter:image" content="{{ social_image }}">
+    {% endwith %}
 
     {# Canonical #}
     <link rel="canonical" href="{{ canonical_url|default:request.build_absolute_uri }}">
@@ -44,7 +56,11 @@
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
 
-    <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
+    {# Favicons : SVG (modernes) + PNG 192 (Android) + apple-touch-icon (iOS). #}
+    {# / Favicons: SVG (modern browsers) + PNG 192 (Android) + apple-touch-icon (iOS). #}
+    <link rel="icon" type="image/svg+xml" href="{% static 'seo/favicon.svg' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'seo/favicon-192.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'seo/apple-touch-icon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
     <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
           href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
@@ -64,8 +80,12 @@
 {# Barre de navigation ROOT / ROOT navigation bar #}
 <nav class="navbar navbar-expand-xl bg-body">
     <div class="container-lg justify-content-between">
-        <a class="navbar-brand flex-grow-1" href="/">
-            TiBillet
+        <a class="navbar-brand flex-grow-1 d-flex align-items-center gap-2" href="/">
+            {# Logo couleur (SVG depuis le kit graphique) + texte accessible. #}
+            {# / Color logo (SVG from graphical kit) + accessible text. #}
+            <img src="{% static 'seo/favicon.svg' %}" alt=""
+                 width="32" height="32" class="navbar-brand-logo">
+            <span>TiBillet</span>
         </a>
         <button class="navbar-toggler" type="button"
                 data-bs-toggle="collapse" data-bs-target="#mainMenu"
