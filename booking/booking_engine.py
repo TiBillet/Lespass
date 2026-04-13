@@ -293,11 +293,6 @@ def get_existing_bookings_for_resource(resource, date_from, date_to):
     return Booking.objects.filter(
         resource=resource,
         start_datetime__date__range=(date_from, date_to),
-        status__in=[
-            Booking.STATUS_NEW,
-            Booking.STATUS_VALIDATED,
-            Booking.STATUS_CONFIRMED,
-        ],
     )
 
 
