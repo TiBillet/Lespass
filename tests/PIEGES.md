@@ -1148,5 +1148,63 @@ Rencontre sur : spinner avant redirection Stripe, session 2026-04-10.
 
 ---
 
+### Piege 74 : `Asset.federated_with` vs `Federation.tenants` — 3 chemins d'acceptation
+
+Dans `fedow_core/models.py`, un `Asset` peut etre accepte par un `Client` (tenant)
+via **3 mecanismes differents** :
+
+1. `Asset.tenant_origin` — le tenant createur de la monnaie
+2. `Asset.federated_with` — M2M **directe** Asset↔Client (flow invitation 1-to-1)
+3. `Federation.assets` + `Federation.tenants` — M2M via le groupe Federation
+
+Quand on calcule "qui accepte cette monnaie", il faut **unir les 3**. Un SQL qui ne
+regarde qu'un seul chemin donnera un resultat incomplet.
+
+Piege supplementaire : `fedow_core_asset_federated_with` a les colonnes
+`(asset_id, client_id)` — **pas** `federation_id`. C'est une M2M directe vers Client.
+Ne pas confondre avec `fedow_core_federation_tenants` qui lui a `(federation_id, client_id)`.
+
+Voir `seo/services.py:get_all_assets()` pour une requete CTE qui fait les 3 unions.
+
+Rencontre sur : enrichissement du cache SEO pour la page `/explorer/`, session 2026-04-12.
+
+---
+
+### Piege 75 : Animer `max-height` avec `scrollHeight` en JS — hack fragile
+
+Le pattern courant pour animer l'ouverture d'un accordeon :
+```js
+panel.style.maxHeight = panel.scrollHeight + 'px';  // ouverture
+panel.style.maxHeight = null;  // fermeture
+```
+Ca marche mais : si le contenu change apres ouverture la hauteur reste figee, il
+faut recalculer scrollHeight a chaque toggle, et le `null` ne redevient pas
+exactement `0` instantanement.
+
+**Meilleure technique : `grid-template-rows: 0fr → 1fr`** (pas de JS, anime
+n'importe quelle hauteur) :
+
+```css
+.accordion-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.accordion-panel > .panel-inner {
+    overflow: hidden;
+    min-height: 0;
+}
+.accordion-panel.open {
+    grid-template-rows: 1fr;
+}
+```
+
+Le JS devient trivial : `panel.classList.toggle('open')`. Requiere un wrapper
+`.panel-inner` avec `overflow: hidden` et `min-height: 0`.
+
+Rencontre sur : accordeon des cards lieu et monnaies de `/explorer/`, session 2026-04-12.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

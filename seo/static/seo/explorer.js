@@ -107,7 +107,15 @@ function init() {
     bindFAB();
     applyFilters();
 
-    if (window.innerWidth >= 992) initMap();
+    if (window.innerWidth >= 992) {
+        initMap();
+    } else {
+        // Mobile : la carte est initialisee au 1er toggle vers "Carte".
+        // Le spinner reste cache tant qu'on est en mode liste.
+        // / Mobile: map initialized on first toggle to "Carte".
+        // Spinner stays hidden while in list mode.
+        hideMapLoadingSpinner();
+    }
 }
 
 function bindSearch() {
@@ -341,13 +349,7 @@ function buildLieuAssetBadges(lieu) {
  */
 function handleAssetBadgeClick(event, assetUuid) {
     event.stopPropagation();
-    // focusOnAsset sera defini en Phase 3 (Task 6). En Phase 2, log simple.
-    // / focusOnAsset will be defined in Phase 3 (Task 6). For Phase 2, simple log.
-    if (typeof focusOnAsset === 'function') {
-        focusOnAsset(assetUuid);
-    } else {
-        console.log('[asset badge] clicked (focus not yet implemented)', assetUuid);
-    }
+    focusOnAsset(assetUuid);
 }
 
 function buildAccordion(lieu, domain) {
@@ -383,7 +385,7 @@ function buildAccordion(lieu, domain) {
                 + '<span>' + parts.join(' · ') + '</span>'
                 + '<i class="bi bi-chevron-down explorer-accordion-chevron"></i>'
             + '</button>'
-            + '<div class="explorer-accordion-panel">' + items + '</div>'
+            + '<div class="explorer-accordion-panel"><div class="explorer-accordion-panel-inner">' + items + '</div></div>'
         + '</div>';
 }
 
@@ -471,7 +473,8 @@ function buildAssetCard(asset) {
 
     return ''
         + '<div class="explorer-card explorer-card--asset"'
-        + ' data-asset-uuid="' + assetUuid + '" data-type="asset">'
+        + ' data-asset-uuid="' + assetUuid + '" data-type="asset"'
+        + ' data-testid="explorer-asset-card">'
             + '<div class="explorer-card-focus" onclick="focusOnAsset(\'' + assetUuid + '\')" role="button" tabindex="0" title="Voir sur la carte">'
                 + '<div class="explorer-card-icon ' + cat.className + '">' + assetIcon + '</div>'
                 + '<div class="explorer-card-body">'
@@ -528,7 +531,7 @@ function buildAssetAccordion(asset) {
                 + '<span>' + knownCount + ' lieu' + (knownCount > 1 ? 'x' : '') + ' acceptant cette monnaie</span>'
                 + '<i class="bi bi-chevron-down explorer-accordion-chevron"></i>'
             + '</button>'
-            + '<div class="explorer-accordion-panel">' + items + '</div>'
+            + '<div class="explorer-accordion-panel"><div class="explorer-accordion-panel-inner">' + items + '</div></div>'
         + '</div>';
 }
 
@@ -568,6 +571,21 @@ function initMap() {
     // / Re-apply filters to sync markers with current state.
     // Important on mobile where the map is initialized lazily (on first toggle).
     applyFilters();
+
+    // Cacher le spinner de chargement avec fade-out.
+    // / Hide loading spinner with fade-out.
+    hideMapLoadingSpinner();
+}
+
+function hideMapLoadingSpinner() {
+    var loader = document.getElementById('explorer-map-loading');
+    if (!loader) return;
+    loader.classList.add('explorer-map-loading--fading');
+    // Retrait du DOM apres la transition (200ms).
+    // / Remove from DOM after transition (200ms).
+    setTimeout(function() {
+        if (loader.parentElement) loader.parentElement.removeChild(loader);
+    }, 250);
 }
 
 function addMarkers(lieux) {
@@ -736,12 +754,15 @@ function closeAllAccordionsExcept(cardIdentifier) {
 }
 
 function setAccordionState(card, shouldBeOpen) {
+    // L'animation smooth est portee par le CSS (grid-template-rows 0fr ↔ 1fr).
+    // Pas besoin de calculer scrollHeight en JS.
+    // / Smooth animation is driven by CSS (grid-template-rows 0fr ↔ 1fr).
+    // No need to compute scrollHeight in JS.
     var panel = card.querySelector('.explorer-accordion-panel');
     var chevron = card.querySelector('.explorer-accordion-chevron');
     if (!panel) return;
 
     panel.classList.toggle('open', shouldBeOpen);
-    panel.style.maxHeight = shouldBeOpen ? panel.scrollHeight + 'px' : null;
     if (chevron) chevron.style.transform = shouldBeOpen ? 'rotate(180deg)' : '';
 }
 
@@ -1129,13 +1150,7 @@ function drawAssetLinks(asset) {
     if (asset.is_federation_primary) {
         drawHull(latLngs);
     } else if (asset.tenant_origin_id) {
-        // drawArcs sera implemente a la Task 8. En attendant, fallback hull.
-        // / drawArcs implemented in Task 8. Meanwhile, fallback to hull.
-        if (typeof drawArcs === 'function') {
-            drawArcs(asset.tenant_origin_id, acceptingIds);
-        } else {
-            drawHull(latLngs);
-        }
+        drawArcs(asset.tenant_origin_id, acceptingIds);
     } else {
         drawHull(latLngs);
     }

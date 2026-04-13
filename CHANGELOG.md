@@ -1,5 +1,64 @@
 # Changelog / Journal des modifications
 
+## Explorer : visualisation monnaies et federations / Explorer: currencies and federations visualization
+
+**Date :** 12 avril 2026
+**Migration necessaire / Migration required :** Non
+
+**Quoi / What:**
+
+### Page `/explorer/` enrichie / Enriched `/explorer/` page
+
+- **Mode focus monnaie** : clic sur une card monnaie ou un badge monnaie d'un lieu active le mode focus :
+  - Highlight des lieux acceptants + dim des autres (opacity 0.3)
+  - Style B (polygone convex hull) pour la monnaie federee primaire (`category=FED`)
+  - Style C (arcs Bezier depuis origine) pour les assets federes partiellement
+  - Legende contextuelle en bas-droit de la carte
+  - Clic a nouveau sur la meme monnaie = reset (toggle)
+- **Badges monnaies** sur chaque card lieu (sous la description)
+- **Accordeon des lieux acceptants** dans chaque card monnaie
+- **Animation accordeon smooth** via `grid-template-rows: 0fr → 1fr`
+- **Loading state** : spinner pendant l'init de Leaflet
+- **Filtres reordonnes** : Tous / Lieux / Evenements / Initiatives / Monnaies / Adhesions
+- **Mobile** : filtres a la ligne (`flex-wrap`) au lieu de scroll horizontal
+
+### Backend / Backend
+
+- `get_all_assets()` enrichi : 3 chemins d'acceptation (`tenant_origin`, `Asset.federated_with`, `Federation.assets+tenants`) unis via CTE
+- `build_tenant_config_data()` : ajoute `accepted_asset_ids` pour chaque tenant
+- `build_explorer_data()` : propage les champs de federation aux lieux
+- Filtre `active=TRUE AND archive=FALSE` sur toutes les queries assets
+
+### Fixture demo / Demo fixture
+
+- `_create_federations_demo()` dans `demo_data_v2` : 2 Federations ("Reseau TiBillet Lyon" + "Echange local") + asset "Monnaie Coeur" pour le-coeur-en-or
+- Filtre `SCHEMAS_DEMO` pour exclure les schemas UUID de tests
+
+**Pourquoi / Why:** permettre aux visiteurs de `/explorer/` de comprendre visuellement les relations entre lieux et monnaies du reseau. Deux mental models : diversite des outils + perspective utilisateur.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `get_all_assets()` CTE 3 unions + `build_tenant_config_data` +`accepted_asset_ids` + `build_explorer_data` propagation |
+| `seo/static/seo/explorer.js` | Mode focus asset, hull/arcs Bezier, accordeon asset, badges lieu, loading spinner |
+| `seo/static/seo/explorer.css` | Styles badges, accordeon grid-template-rows, legende asset, loading spinner |
+| `seo/templates/seo/explorer.html` | +DOM legende + spinner, reordre des pills |
+| `seo/README.md` | Doc mode focus monnaie |
+| `Administration/management/commands/demo_data_v2.py` | +`_create_federations_demo()` |
+| `tests/pytest/test_seo_explorer_assets.py` | +6 tests unitaires (nouveau) |
+| `tests/e2e/test_explorer_assets_focus.py` | +3 tests E2E Playwright (nouveau) |
+| `tests/PIEGES.md` | +Pieges 74 (3 chemins acceptation) et 75 (grid-template-rows) |
+| `A TESTER et DOCUMENTER/explorer-monnaies-federation.md` | Doc test manuel (nouveau) |
+| `TECH DOC/SESSIONS/ROOT_VIEW/2026-04-12-*.md` | Spec + plan (nouveaux) |
+
+### Tests
+
+- 6 pytest + 3 E2E Playwright : PASS
+- ERROR teardown FK `fedow_connect_fedowconfig → AuthBillet_wallet` documentees comme piege preexistant (a investiguer)
+
+---
+
 ## Review skin Faire Festival + SEO + securite emails / Faire Festival skin review + SEO + email security
 
 **Date :** 10 avril 2026

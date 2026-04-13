@@ -2,6 +2,7 @@
 Tests pour l'enrichissement des assets dans le cache SEO.
 / Tests for asset enrichment in SEO cache.
 """
+
 import pytest
 from Customers.models import Client
 
@@ -36,6 +37,7 @@ def test_asset_fed_is_federation_primary():
     Les assets de catégorie FED sont marqués is_federation_primary=True.
     """
     from seo.services import get_all_assets
+
     assets = get_all_assets()
     fed_assets = [a for a in assets if a["category"] == "FED"]
     for asset in fed_assets:
@@ -51,6 +53,7 @@ def test_asset_origin_is_always_in_accepting_tenants():
     and accepting_count must be >= 1.
     """
     from seo.services import get_all_assets
+
     assets = get_all_assets()
     for asset in assets:
         if asset["tenant_origin_id"]:
@@ -85,6 +88,7 @@ def test_build_explorer_data_assets_have_federation_fields():
     """
     from seo.services import build_explorer_data
     from django.core.management import call_command
+
     call_command("refresh_seo_cache")
 
     data = build_explorer_data()
@@ -107,6 +111,7 @@ def test_build_explorer_data_lieux_have_accepted_assets():
     """
     from seo.services import build_explorer_data
     from django.core.management import call_command
+
     call_command("refresh_seo_cache")
 
     data = build_explorer_data()
