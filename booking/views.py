@@ -4,11 +4,9 @@ Vues de l'app booking.
 
 LOCALISATION : booking/views.py
 """
-import datetime
 from collections import defaultdict
 
 from django.shortcuts import render
-from django.utils import timezone
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 
@@ -44,14 +42,11 @@ class BookingViewSet(viewsets.ViewSet):
                 if tag_filtre in r.tags
             ]
 
-        date_debut = timezone.localdate()
-        date_fin   = date_debut + datetime.timedelta(days=14)
-
         items_par_groupe  = defaultdict(list)
         items_sans_groupe = []
 
         for ressource in toutes_les_ressources:
-            creneaux = compute_slots(ressource, date_debut, date_fin)
+            creneaux = compute_slots(ressource)
             item = {
                 'ressource':      ressource,
                 'creneaux':       creneaux,
