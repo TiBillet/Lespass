@@ -45,15 +45,26 @@ Travail découpé en 3 phases indépendantes. Chaque phase est livrable et testa
 - Plan : à venir après validation du spec
 
 ### Phase 2 — Suivi de la dette pot central → tenant (FED remboursés)
-- Nouvelle action `Transaction.BANK_TRANSFER` (modèle déjà extensible).
-- Vue admin pour saisir un virement bancaire reçu (référence + montant + date).
-- Calcul agrégé de la dette : `Sum(REFUND FED to tenant) - Sum(BANK_TRANSFER to tenant)`.
-- Tableau de bord « Dette en attente de virement » côté tenant et côté pot central (superuser).
-- Spec : à venir
+- Nouvelle action `Transaction.BANK_TRANSFER = 'BTR'` (table Transaction étendue).
+- Saisie superuser : page dédiée `/admin/bank-transfers/` dans la section « Root Configuration ».
+- Validation hard : `montant <= dette_actuelle` (rejet sur-versement, pas de cancellation).
+- Mécanique : sender=`asset.wallet_origin`, receiver=`tenant.wallet`, **no token mutation** (étendre
+  `actions_sans_credit/sans_debit` dans `TransactionService.creer()`).
+- LigneArticle d'encaissement positif (`payment_method=TRANSFER`) pour rapports comptables.
+- Nouveau code `Product.VIREMENT_RECU = "VR"` + helper `get_or_create_product_virement_recu()`.
+- Affichage double : dashboard superuser (table tous tenants × assets) + widget tenant (solde +
+  dernier virement) + 2 historiques (global et tenant).
+- Spec : [`2026-04-13-phase2-bank-transfer-design.md`](2026-04-13-phase2-bank-transfer-design.md)
+- Plan : à venir après validation du spec
 
-### Phase 3 — Bouton POS Cashless « Rembourser carte / Vider carte »
-- Ajout `Product.methode_caisse = VC` et `VV` (champ existe déjà).
-- Configuration : article système « Vider Carte » sélectionnable dans l'admin (`LaboutikConfiguration.methode_vider_carte`, miroir du legacy).
-- Vue dans `laboutik/views.py` qui réutilise le service de remboursement de la Phase 1.
-- Flow POS : caissier scan carte → écran récap tokens → bouton confirmer (avec checkbox VV).
-- Spec : à venir
+### Phase 3 — Bouton POS Cashless « Vider Carte »
+- Tile POS auto-générée via Product `methode_caisse=VC` (créé par Phase 1) dans le M2M du PV.
+- Flow dédié qui court-circuite le panier : clic tile → overlay scan NFC → récap tokens
+  (total + détail TLF/FED) → checkbox VV → exécution via `WalletService.rembourser_en_especes()`
+  (Phase 1) → écran succès + bouton impression reçu optionnel.
+- Protection self-refund, contrôle d'accès via M2M `pv.cartes_primaires`.
+- Patch additif léger : paramètre `primary_card=None` sur `WalletService.rembourser_en_especes()`
+  pour tracer le·a caissier·e dans les Transactions REFUND.
+- Formatter impression dédié (`formatter_recu_vider_carte`).
+- Spec : [`2026-04-13-phase3-pos-vider-carte-design.md`](2026-04-13-phase3-pos-vider-carte-design.md)
+- Plan : à venir après validation du spec

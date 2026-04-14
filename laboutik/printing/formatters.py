@@ -557,3 +557,73 @@ def formatter_ticket_cloture(cloture):
             f"{_('Fermeture')}: {date_cloture}",
         ],
     }
+
+
+def formatter_recu_vider_carte(transactions):
+    """
+    Formate un recu client pour un vider carte (remboursement especes).
+    Inclut les mentions legales + detail par asset + reference Transaction.
+    / Formats a customer receipt for a card refund (cash refund).
+    Includes legal mentions + detail per asset + Transaction reference.
+
+    LOCALISATION : laboutik/printing/formatters.py
+
+    :param transactions: liste de Transaction REFUND (1 par asset)
+    :return: dict ticket_data compatible avec imprimer_async
+    """
+    from BaseBillet.models import Configuration
+    from laboutik.models import LaboutikConfiguration
+
+    now = timezone.localtime(timezone.now())
+
+    config = Configuration.get_solo()
+    laboutik_config = LaboutikConfiguration.get_solo()
+
+    # Mentions legales basiques (adresse + SIRET si dispo).
+    # / Basic legal mentions.
+    parties_adresse = []
+    if config.adress:
+        parties_adresse.append(config.adress)
+    if config.postal_code:
+        parties_adresse.append(str(config.postal_code))
+    if config.city:
+        parties_adresse.append(config.city)
+    adresse_complete = " ".join(parties_adresse)
+
+    legal = {
+        "organisation": config.organisation or "",
+        "adresse": adresse_complete,
+        "siret": getattr(laboutik_config, "siret", "") or "",
+    }
+
+    # Calcul du total et detail par asset.
+    # / Compute total and per-asset detail.
+    total_centimes = 0
+    articles = []
+    for tx in transactions:
+        total_centimes += tx.amount
+        articles.append({
+            "name": f"{tx.asset.name} ({tx.get_action_display()})",
+            "qty": 1,
+            "prix_centimes": tx.amount,
+            "total_centimes": tx.amount,
+        })
+
+    return {
+        "header": {
+            "title": str(_("REMBOURSEMENT CARTE")),
+            "subtitle": "",
+            "date": now.strftime("%d/%m/%Y %H:%M"),
+        },
+        "legal": legal,
+        "articles": articles,
+        "total": {
+            "amount": total_centimes,
+            "label": str(_("Especes")),
+        },
+        "is_duplicata": False,
+        "is_simulation": False,
+        "pied_ticket": str(_("Merci de votre visite.")),
+        "qrcode": None,
+        "footer": [],
+    }

@@ -1,5 +1,61 @@
 # Changelog / Journal des modifications
 
+## Cartes NFC : admin web + remboursement + virements pot central + bouton POS / NFC cards: admin + refund + central pot transfers + POS button
+
+**Date :** 13-14 avril 2026
+**Migration necessaire / Migration required :** Oui (2 alter choices)
+
+**Quoi / What:**
+
+Chantier en 3 phases livre l'administration complete des cartes NFC cashless :
+
+### Phase 1 — Admin web Cartes + page de remboursement
+- Admin Unfold pour `CarteCashless` et `Detail` (filtre tenant via `detail.origine`, creation/suppression superuser only).
+- Page dediee `/admin/QrcodeCashless/cartecashless/<uuid>/refund/` qui rembourse en especes les TLF du tenant + FED.
+- Service metier `WalletService.rembourser_en_especes()` atomic : Transaction REFUND par asset + LigneArticle FED + LigneArticle CASH negative + reset carte optionnel (VV).
+- README `fedow_core/REFUND.md` documente le mecanisme TLF + FED + dette pot central.
+
+### Phase 2 — Suivi de la dette pot central → tenant pour les FED rembourses
+- Nouvelle action `Transaction.BANK_TRANSFER = 'BTR'` (immutable, sans mutation Token).
+- `BankTransferService` (4 methodes) + page dediee `/admin/bank-transfers/` (superuser only).
+- Validation hard `montant <= dette_actuelle` (rejet sur-versement).
+- Widget « Dette du pot central » sur le dashboard tenant.
+- LigneArticle d'encaissement `payment_method=TRANSFER` pour les rapports comptables.
+- Nouveau code `Product.VIREMENT_RECU = "VR"`.
+
+### Phase 3 — Bouton POS Cashless « Vider Carte »
+- Tile auto-generee via Product `methode_caisse=VC` dans le M2M du PV.
+- Flow dedie : clic tile → overlay scan NFC → recap tokens → checkbox VV → execution + ecran succes + impression recu optionnelle.
+- Patch additif `primary_card=None` sur `WalletService.rembourser_en_especes()` (audit trail caissier).
+- Protection self-refund + controle d'acces via M2M `pv.cartes_primaires`.
+- Formatter `formatter_recu_vider_carte()` pour impression thermique.
+
+**Pourquoi / Why:** centralise et trace toutes les operations cashless dans `fedow_core` (Phase 1 du plan mono-repo), elimine la dependance HTTP au serveur Fedow distant pour les nouveaux tenants, expose les flows d'admin web et POS dans la meme infrastructure.
+
+### Migration / Migration
+
+- `fedow_core/migrations/0002_alter_transaction_action.py` : ajout choix `BTR`
+- `BaseBillet/migrations/0211_alter_product_methode_caisse.py` : ajout choix `VR`
+
+### Tests / Tests
+
+- **34 tests pytest DB-only** + **3 tests E2E Playwright** (1 SKIP Playwright si admin non-superuser).
+- Tous PASS en isolation.
+
+### Limites connues / Known limitations
+
+- **Admin web** : pas de bouton « Rembourser » sur la fiche carte (URL `/refund/` a saisir manuellement). `change_view` enrichi avec tokens + transactions recentes pas encore implemente — Phase 1.5 a livrer separement.
+- **Admin web** : pas de colonne « Solde » dans la liste des cartes (Phase 1.5).
+- **Affichage des montants** : tout est affiche en « centimes » au lieu d'euros formates (`20,00 €`). Templatetag `centimes_en_euros` a creer pour Phase 1.5.
+- **Phase 2** : message Django flash `messages.success` ne s'affiche pas apres refund admin (integration `admin_site.admin_view()` wrapping). L'operation DB reussit, seul le toast UX manque.
+- **Cross-file test pollution** : Products auto-crees par signal `send_membership_product_to_fedow` quand on cree des Assets. Workaround : exécuter chaque fichier de test en isolation.
+
+### Reference complete / Full reference
+
+Voir `TECH DOC/SESSIONS/CARTES_CASHLESS_ADMIN/INDEX.md` et les 6 fichiers design/plan associes.
+
+---
+
 ## Explorer : visualisation monnaies et federations / Explorer: currencies and federations visualization
 
 **Date :** 12 avril 2026

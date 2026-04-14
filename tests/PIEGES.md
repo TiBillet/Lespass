@@ -1206,5 +1206,153 @@ Rencontre sur : accordeon des cards lieu et monnaies de `/explorer/`, session 20
 
 ---
 
+### Pieges chantier Cartes NFC admin (sessions 2026-04-13/14)
+
+#### `tag_id_cm` est le nom canonique du tag caissier au POS, pas `tag_id_primary`
+
+Le tag NFC du caissier (carte primaire) est propage dans tout le POS sous le nom
+`tag_id_cm` (tag id carte manager). On le trouve :
+- En URL query param : `?uuid_pv=X&tag_id_cm=Y` entre toutes les pages POS
+- En hidden field dans `#addition-form` (`addition.html:31`) : `<input name="tag_id_cm">`
+- Disponible dans tous les templates POS via `{{ card.tag_id }}`
+
+Ne pas inventer `tag_id_primary` ou autre — utiliser `tag_id_cm`.
+
+#### `StaffAdminSite.get_urls()` override : custom AVANT super
+
+Pour ajouter des URLs custom au scope `/admin/` :
+
+```python
+def get_urls(self):
+    custom_urls = [path('mon-truc/', view, name='mon_truc'), ...]
+    return custom_urls + super().get_urls()  # custom AVANT super
+```
+
+Si on inverse l'ordre, les URLs Django Admin captureront `mon-truc/` en 404 si
+le format ressemble a un app_label.
+
+#### Tile POS et `data-methode-caisse`
+
+Le template `cotton/articles.html` rend les tiles POS avec `data-uuid`, `data-name`,
+`data-price`, `data-group` mais PAS `data-methode-caisse` par defaut. Pour qu'un
+JS handler puisse intercepter les clics par categorie metier (ex: `methode_caisse=VC`),
+il faut ajouter cet attribut au template.
+
+C'est fait depuis Phase 3 du chantier Cartes NFC : `data-methode-caisse="{{ article.methode_caisse }}"`
+sur la `<div data-uuid=...>` ligne 18.
+
+#### `_check_superuser` qui `raise PermissionDenied` dans une DRF ViewSet → JSON brut
+
+Dans une vue HTML, il faut renvoyer un `HttpResponse` avec un template d'erreur,
+PAS lever `PermissionDenied` qui est interceptee par DRF Browsable API et rendue
+en JSON brut "HTTP 403 Forbidden".
+
+```python
+# MAUVAIS — affiche le rendu DRF JSON 403 brut
+def _check_superuser(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied(_('...'))
+
+# BON — render un partial HTML d'erreur
+def _check_superuser(request):
+    if request.user.is_superuser:
+        return None
+    return render(request, 'partial/hx_messages.html', {...}, status=403)
+
+# Caller :
+forbidden = _check_superuser(request)
+if forbidden is not None:
+    return forbidden
+```
+
+Decouvert sur `Administration/views_bank_transfers.py` (Phase 2 chantier Cartes NFC).
+
+#### Signal `send_membership_product_to_fedow` cree un Product a chaque Asset
+
+Quand `AssetService.creer_asset(...)` est appele, un signal `post_save` cree
+automatiquement un Product `Recharge {asset.name}` (categorie_article=NONE,
+methode_caisse=RE). Ce Product a une contrainte unique sur (categorie_article, name).
+
+**Consequences pour les tests** : si plusieurs fichiers de tests creent des Assets
+avec des noms qui pourraient se chevaucher, ou si les Products ne sont pas nettoyes
+dans le teardown, le 2e run du test cross-file echoue avec `IntegrityError` sur
+`BaseBillet_product_categorie_article_name_fa9da1c7_uniq`.
+
+**Workaround** : 
+- Lancer chaque fichier de test en isolation (pas en suite combinee).
+- Ou ajouter un cleanup explicit dans la fixture autouse de teardown :
+  ```python
+  Product.objects.filter(name__startswith='Recharge MyTestPrefix').delete()
+  ```
+
+Pre-existant — pollue depuis la creation du signal Asset post_save.
+
+#### `page.request.post` Playwright + DRF ViewSet : besoin du X-CSRFToken header
+
+Pour POST une form via `page.request.post(url, form={...})` apres un `login_as_admin`,
+DRF exige le header CSRF. Le cookie `csrftoken` est defini apres `page.goto('/')`,
+mais `page.request.post` ne le passe pas automatiquement.
+
+```python
+# Recuperer le token apres login + visite d'une page Django
+page.goto('/laboutik/caisse/')
+cookies = page.context.cookies()
+csrf = next((c['value'] for c in cookies if c['name'] == 'csrftoken'), None)
+
+response = page.request.post('/laboutik/paiement/vider_carte/',
+    form={'tag_id': 'X', ...},
+    headers={'X-CSRFToken': csrf, 'Referer': 'https://lespass.tibillet.localhost/'},
+)
+```
+
+Decouvert sur `tests/e2e/test_pos_vider_carte.py` (Phase 3 chantier Cartes NFC).
+
+#### Order de delete pour cleanup avec FK PROTECTED
+
+`Transaction.primary_card` (FK PROTECTED) et `Token.asset` (FK PROTECTED) imposent
+un ordre strict de cleanup en fin de test :
+
+```
+Transactions → Tokens → Cartes → Assets → Wallets
+```
+
+Si on supprime un Wallet ou un Asset avant les Transactions/Tokens qui les referencent,
+django leve `ProtectedError`. Le `try/except Exception: pass` qui enrobe le cleanup
+masque parfois ce probleme — preferer un ordre explicite.
+
+#### `Asset.objects.get(category=Asset.FED)` peut lever MultipleObjectsReturned
+
+Convention "1 seul FED dans le systeme" non enforced en DB. Si plusieurs FED ont ete
+crees par accident (ex: tests successifs sans cleanup), l'appel `.get()` echoue.
+
+Preferer :
+```python
+fed_asset = Asset.objects.filter(category=Asset.FED).first()
+if fed_asset is None:
+    raise RuntimeError('Aucun asset FED dans le systeme')
+```
+
+Decouvert sur `WalletService.rembourser_en_especes()` (Phase 1 chantier Cartes NFC).
+
+#### `messages.success` apres `redirect()` depuis vue wrappee `admin_site.admin_view()`
+
+Les messages Django flash (`messages.success`, `messages.warning`) ne sont PAS rendus
+sur la page admin de redirect quand la vue source est wrappee par `admin_site.admin_view()`.
+
+Symptomes :
+- Le message est ajoute en session (vu via `request.session['_messages']`).
+- La page de redirect (admin /change/) ne le rend pas.
+
+Cause probable : Unfold ne rend pas le bloc messages dans son base template, ou le
+contexte n'est pas peuple par le message middleware sur les vues custom.
+
+**Workaround temporaire** : afficher le succes via le contenu du template render
+(pas via `messages` framework). Ou utiliser un toast HTMX via `HX-Trigger` header.
+
+A investiguer pour Phase 1.5 du chantier Cartes NFC. Touche les flows refund admin
+et bank-transfers.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

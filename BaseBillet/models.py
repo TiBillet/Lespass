@@ -1281,6 +1281,7 @@ class Product(models.Model):
     FRACTIONNE_POS = "FR"
     BILLET_POS = "BI"
     FIDELITE = "FD"
+    VIREMENT_RECU = "VR"
 
     METHODE_CAISSE_CHOICES = [
         (VENTE, _("Sale")),
@@ -1293,6 +1294,7 @@ class Product(models.Model):
         (FRACTIONNE_POS, _("Split payment")),
         (BILLET_POS, _("Ticket")),
         (FIDELITE, _("Loyalty")),
+        (VIREMENT_RECU, _("Bank transfer received")),
     ]
 
     methode_caisse = models.CharField(

@@ -224,6 +224,25 @@ class WalletService:
         return total_en_centimes
 
     @staticmethod
+    def get_or_create_wallet_tenant(tenant):
+        """
+        Recupere ou cree le wallet "lieu" du tenant — wallet receveur des refunds
+        et BANK_TRANSFER, et sender des operations sortantes du lieu.
+        Returns or creates the tenant's "venue" wallet.
+
+        Convention : un wallet par tenant, identifie par origin=tenant
+        ET name=f"Lieu {tenant.schema_name}". Idempotent.
+
+        NB : a remplacer par tenant.wallet quand la convention sera formalisee
+        sur le modele Customers.Client.
+        """
+        wallet, _created = Wallet.objects.get_or_create(
+            origin=tenant,
+            name=f"Lieu {tenant.schema_name}",
+        )
+        return wallet
+
+    @staticmethod
     def crediter(wallet, asset, montant_en_centimes):
         """
         Augmente le solde d'un wallet pour un asset donne.
@@ -466,6 +485,178 @@ class WalletService:
 
         return token_verrouille
 
+    @staticmethod
+    def rembourser_en_especes(
+        carte,
+        tenant,
+        receiver_wallet,
+        ip: str = "0.0.0.0",
+        vider_carte: bool = False,
+        primary_card=None,
+    ) -> dict:
+        """
+        Rembourse en especes les tokens eligibles d'une carte.
+        Refunds in cash the eligible tokens of a card.
+
+        Tokens eligibles / Eligible tokens :
+        - TLF avec asset.tenant_origin == tenant
+        - FED (toutes valeurs, sans filtre origine — un seul FED dans le systeme)
+
+        Cree :
+        - 1 Transaction(action=REFUND, sender=wallet_carte, receiver=receiver_wallet) par asset
+        - 1 LigneArticle FED (encaissement positif STRIPE_FED) si solde FED > 0
+        - 1 LigneArticle CASH negative (sortie cash totale TLF + FED)
+        - Si vider_carte=True : carte.user=None, carte.wallet_ephemere=None,
+          CartePrimaire.objects.filter(carte=carte).delete()
+
+        Tout dans un seul transaction.atomic().
+        All in a single transaction.atomic() block.
+
+        :param carte: CarteCashless (la carte a vider)
+        :param tenant: Client (le tenant courant)
+        :param receiver_wallet: Wallet (le wallet receveur des REFUND, generalement le wallet du lieu)
+        :param ip: str (adresse IP de la requete)
+        :param vider_carte: bool (si True, reset user + wallet_ephemere + CartePrimaire)
+
+        :return: dict {
+            "transactions": list[Transaction],
+            "lignes_articles": list[LigneArticle],
+            "total_centimes": int,
+            "total_tlf_centimes": int,
+            "total_fed_centimes": int,
+        }
+        :raises NoEligibleTokens: si aucun token eligible n'a value > 0
+        """
+        # Imports locaux pour eviter le cycle (BaseBillet est en TENANT_APPS)
+        # / Local imports to avoid cycle (BaseBillet is in TENANT_APPS)
+        from django.db.models import Q
+        from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+        from BaseBillet.services_refund import (
+            get_or_create_product_remboursement,
+            get_or_create_pricesold_refund,
+        )
+        from fedow_core.exceptions import NoEligibleTokens
+
+        # 1. Charger le wallet de la carte
+        # / 1. Load the card's wallet
+        wallet_carte = None
+        if carte.user is not None and carte.user.wallet is not None:
+            wallet_carte = carte.user.wallet
+        elif carte.wallet_ephemere is not None:
+            wallet_carte = carte.wallet_ephemere
+
+        if wallet_carte is None:
+            raise NoEligibleTokens(carte_tag_id=carte.tag_id)
+
+        # 2. Filtrer les tokens eligibles : TLF du tenant + FED
+        # / 2. Filter eligible tokens: tenant's TLF + FED
+        tokens_eligibles = list(
+            Token.objects.filter(
+                wallet=wallet_carte,
+                value__gt=0,
+            ).filter(
+                Q(asset__category=Asset.TLF, asset__tenant_origin=tenant)
+                | Q(asset__category=Asset.FED)
+            ).select_related('asset', 'asset__tenant_origin')
+        )
+
+        if not tokens_eligibles:
+            raise NoEligibleTokens(carte_tag_id=carte.tag_id)
+
+        # 3. Atomic : transactions REFUND + LigneArticle + reset eventuel
+        # / 3. Atomic: REFUND transactions + LigneArticle + optional reset
+        transactions_creees = []
+        total_tlf = 0
+        total_fed = 0
+
+        with transaction.atomic():
+            for token in tokens_eligibles:
+                tx = TransactionService.creer(
+                    sender=wallet_carte,
+                    receiver=receiver_wallet,
+                    asset=token.asset,
+                    montant_en_centimes=token.value,
+                    action=Transaction.REFUND,
+                    tenant=tenant,
+                    card=carte,
+                    primary_card=primary_card,
+                    ip=ip,
+                    comment="Remboursement especes admin",
+                    metadata={
+                        "vider_carte": vider_carte,
+                    },
+                )
+                transactions_creees.append(tx)
+                if token.asset.category == Asset.TLF:
+                    total_tlf += token.value
+                elif token.asset.category == Asset.FED:
+                    total_fed += token.value
+
+            # 4. Creer les LigneArticle (Product/PriceSold systeme partages)
+            # / 4. Create LigneArticle (shared system Product/PriceSold)
+            product_refund = get_or_create_product_remboursement()
+            pricesold_refund = get_or_create_pricesold_refund(product_refund)
+
+            lignes_creees = []
+
+            if total_fed > 0:
+                # Recupere l'asset FED unique (convention : 1 seul FED dans le systeme)
+                # On utilise .filter().first() pour un message d'erreur clair si absent
+                # / Get the unique FED asset (convention: 1 FED in the system).
+                # Using .filter().first() for a clear error message if missing.
+                fed_asset = Asset.objects.filter(category=Asset.FED).first()
+                if fed_asset is None:
+                    raise RuntimeError(
+                        "Aucun asset FED n'existe dans le systeme : "
+                        "impossible de rembourser le solde federe."
+                    )
+                ligne_fed = LigneArticle.objects.create(
+                    pricesold=pricesold_refund,
+                    qty=1,
+                    amount=total_fed,
+                    payment_method=PaymentMethod.STRIPE_FED,
+                    status=LigneArticle.VALID,
+                    sale_origin=SaleOrigin.ADMIN,
+                    carte=carte,
+                    wallet=wallet_carte,
+                    asset=fed_asset.uuid,
+                )
+                lignes_creees.append(ligne_fed)
+
+            ligne_cash = LigneArticle.objects.create(
+                pricesold=pricesold_refund,
+                qty=1,
+                amount=-(total_tlf + total_fed),
+                payment_method=PaymentMethod.CASH,
+                status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.ADMIN,
+                carte=carte,
+                wallet=wallet_carte,
+            )
+            lignes_creees.append(ligne_cash)
+
+            # 5. Reset optionnel de la carte (action VV)
+            # / 5. Optional card reset (VV action)
+            if vider_carte:
+                # Import local : laboutik n'est pas toujours dispo selon le contexte
+                # / Local import: laboutik may not be available depending on context
+                try:
+                    from laboutik.models import CartePrimaire
+                    CartePrimaire.objects.filter(carte=carte).delete()
+                except ImportError:
+                    pass
+                carte.user = None
+                carte.wallet_ephemere = None
+                carte.save(update_fields=["user", "wallet_ephemere"])
+
+        return {
+            "transactions": transactions_creees,
+            "lignes_articles": lignes_creees,
+            "total_centimes": total_tlf + total_fed,
+            "total_tlf_centimes": total_tlf,
+            "total_fed_centimes": total_fed,
+        }
+
 
 # ---------------------------------------------------------------------------
 # TransactionService : creation de transactions (mouvements financiers)
@@ -557,7 +748,12 @@ class TransactionService:
             # Some actions don't debit the sender:
             # - FIRST / CREATION: genesis, no debit
             # - REFILL: the venue issues tokens, it doesn't spend its own
-            actions_sans_debit = [Transaction.FIRST, Transaction.CREATION, Transaction.REFILL]
+            actions_sans_debit = [
+                Transaction.FIRST,
+                Transaction.CREATION,
+                Transaction.REFILL,
+                Transaction.BANK_TRANSFER,  # virement bancaire externe : pas de mutation Token
+            ]
             action_necessite_debit = action not in actions_sans_debit
 
             if action_necessite_debit:
@@ -568,10 +764,18 @@ class TransactionService:
                 )
 
             # --- Credit du receiver ---
-            # Certaines actions ne creditent pas (VOID, REFUND sans receiver).
-            # Some actions don't credit (VOID, REFUND without receiver).
+            # Certaines actions ne creditent pas le receiver :
+            # - receiver=None (VOID, REFUND sans receiver explicite)
+            # - BANK_TRANSFER : virement bancaire externe, l'argent n'arrive pas
+            #   sur le wallet receveur (il arrive sur le compte bancaire externe).
+            # Some actions don't credit:
+            # - receiver=None (VOID, REFUND without explicit receiver)
+            # - BANK_TRANSFER: external bank movement, money does NOT land on
+            #   the receiver wallet (it lands on the external bank account).
+            actions_sans_credit = [Transaction.BANK_TRANSFER]
             receiver_existe = receiver is not None
-            if receiver_existe:
+            action_necessite_credit = action not in actions_sans_credit
+            if receiver_existe and action_necessite_credit:
                 WalletService.crediter(
                     wallet=receiver,
                     asset=asset,
@@ -705,3 +909,210 @@ class TransactionService:
         )
 
         return transaction_recharge
+
+
+# ---------------------------------------------------------------------------
+# BankTransferService : suivi de la dette pot central → tenant (Phase 2)
+# BankTransferService: tracking central pot debt to tenants (Phase 2)
+# ---------------------------------------------------------------------------
+
+class BankTransferService:
+    """
+    Service de gestion des virements bancaires pot central -> tenant.
+    Tracks the central pot's debt to tenants for refunded FED tokens.
+
+    La dette = somme(REFUND FED vers tenant) - somme(BANK_TRANSFER FED vers tenant).
+    Aucune mutation Token (les BANK_TRANSFER sont des evenements bancaires externes,
+    enregistres pour audit + reporting comptable).
+
+    The debt = sum(REFUND FED to tenant) - sum(BANK_TRANSFER FED to tenant).
+    No Token mutation (BANK_TRANSFER are external bank events, recorded for
+    audit + accounting reporting only).
+    """
+
+    @staticmethod
+    def calculer_dette(tenant, asset) -> int:
+        """
+        Retourne la dette actuelle en centimes du pot central envers ce tenant pour cet asset.
+        Returns the central pot's current debt to this tenant for this asset, in cents.
+
+        Calcul : sum(REFUND, asset, tenant=tenant) - sum(BANK_TRANSFER, asset, tenant=tenant).
+        Garantit >= 0 (validation hard a la saisie empeche tout sur-versement).
+        """
+        from django.db.models import Sum
+
+        agg_refund = Transaction.objects.filter(
+            action=Transaction.REFUND,
+            asset=asset,
+            tenant=tenant,
+        ).aggregate(total=Sum('amount'))
+        total_refund = agg_refund.get('total') or 0
+
+        agg_virement = Transaction.objects.filter(
+            action=Transaction.BANK_TRANSFER,
+            asset=asset,
+            tenant=tenant,
+        ).aggregate(total=Sum('amount'))
+        total_virement = agg_virement.get('total') or 0
+
+        dette = total_refund - total_virement
+        return max(0, dette)  # filet de securite : la dette ne peut etre negative
+
+    @staticmethod
+    def obtenir_dettes_par_tenant_et_asset() -> list:
+        """
+        Pour le dashboard superuser : toutes les dettes par couple (tenant, asset).
+        For the superuser dashboard: all debts per (tenant, asset) pair.
+
+        Inclut les couples avec dette > 0 OU au moins 1 REFUND historique.
+        Trie par dette decroissante.
+
+        Retourne : list[dict] avec les cles :
+          - tenant: Client
+          - asset: Asset
+          - dette_centimes: int
+          - total_refund_centimes: int
+          - total_virements_centimes: int
+          - dernier_virement: Transaction | None
+        """
+        from django.db.models import Sum
+        from Customers.models import Client
+
+        couples = Transaction.objects.filter(
+            action__in=[Transaction.REFUND, Transaction.BANK_TRANSFER],
+            asset__category=Asset.FED,
+        ).values_list('tenant_id', 'asset_id').distinct()
+
+        resultat = []
+        for tenant_id, asset_id in couples:
+            tenant = Client.objects.filter(pk=tenant_id).first()
+            asset = Asset.objects.filter(pk=asset_id).first()
+            if tenant is None or asset is None:
+                continue
+
+            agg_refund = Transaction.objects.filter(
+                action=Transaction.REFUND, asset=asset, tenant=tenant,
+            ).aggregate(total=Sum('amount'))
+            total_refund = agg_refund.get('total') or 0
+
+            agg_virement = Transaction.objects.filter(
+                action=Transaction.BANK_TRANSFER, asset=asset, tenant=tenant,
+            ).aggregate(total=Sum('amount'))
+            total_virement = agg_virement.get('total') or 0
+
+            dette = max(0, total_refund - total_virement)
+
+            dernier_virement = Transaction.objects.filter(
+                action=Transaction.BANK_TRANSFER, asset=asset, tenant=tenant,
+            ).order_by('-datetime').first()
+
+            resultat.append({
+                "tenant": tenant,
+                "asset": asset,
+                "dette_centimes": dette,
+                "total_refund_centimes": total_refund,
+                "total_virements_centimes": total_virement,
+                "dernier_virement": dernier_virement,
+            })
+
+        # Tri : dette decroissante / Sort: debt descending
+        resultat.sort(key=lambda d: d["dette_centimes"], reverse=True)
+        return resultat
+
+    @staticmethod
+    def obtenir_dette_pour_tenant(tenant) -> list:
+        """
+        Pour le widget tenant : meme structure que obtenir_dettes_par_tenant_et_asset
+        mais filtree au tenant courant.
+        """
+        toutes = BankTransferService.obtenir_dettes_par_tenant_et_asset()
+        return [d for d in toutes if d["tenant"].pk == tenant.pk]
+
+    @staticmethod
+    def enregistrer_virement(
+        tenant,
+        asset,
+        montant_en_centimes: int,
+        date_virement,
+        reference_bancaire: str,
+        comment: str = "",
+        ip: str = "0.0.0.0",
+        admin_email: str = "",
+    ):
+        """
+        Enregistre un virement bancaire recu par le tenant.
+        Records a bank transfer received by the tenant.
+
+        Cree atomiquement :
+        - 1 Transaction(action=BANK_TRANSFER, sender=asset.wallet_origin,
+                        receiver=tenant.wallet_lieu, asset=asset, amount=...).
+        - 1 LigneArticle d'encaissement (payment_method=TRANSFER, +amount,
+                                          sale_origin=ADMIN, asset=asset.uuid).
+
+        Validation : montant <= calculer_dette(tenant, asset) (re-check dans l'atomic).
+
+        :return: Transaction creee
+        :raises MontantSuperieurDette: si sur-versement
+        """
+        # Imports locaux pour eviter le cycle SHARED_APPS / TENANT_APPS
+        # / Local imports to avoid SHARED_APPS / TENANT_APPS cycle
+        from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+        from BaseBillet.services_refund import (
+            get_or_create_product_virement_recu,
+            get_or_create_pricesold_refund,
+        )
+        from fedow_core.exceptions import MontantSuperieurDette
+
+        with transaction.atomic():
+            # Re-check de la dette dans l'atomic (race guard)
+            dette = BankTransferService.calculer_dette(tenant=tenant, asset=asset)
+            if montant_en_centimes > dette:
+                raise MontantSuperieurDette(
+                    montant_demande_en_centimes=montant_en_centimes,
+                    dette_actuelle_en_centimes=dette,
+                )
+
+            receiver_wallet = WalletService.get_or_create_wallet_tenant(tenant)
+
+            # 1. Transaction BANK_TRANSFER (no token mutation grace a actions_sans_credit)
+            tx = TransactionService.creer(
+                sender=asset.wallet_origin,
+                receiver=receiver_wallet,
+                asset=asset,
+                montant_en_centimes=montant_en_centimes,
+                action=Transaction.BANK_TRANSFER,
+                tenant=tenant,
+                ip=ip,
+                comment=comment,
+                metadata={
+                    "reference_bancaire": reference_bancaire,
+                    "date_virement": date_virement.isoformat(),
+                    "saisi_par": admin_email,
+                },
+            )
+
+            # 2. LigneArticle d'encaissement (rapport comptable)
+            product_vr = get_or_create_product_virement_recu()
+            pricesold_vr = get_or_create_pricesold_refund(product_vr)
+            LigneArticle.objects.create(
+                pricesold=pricesold_vr,
+                qty=1,
+                amount=montant_en_centimes,
+                payment_method=PaymentMethod.TRANSFER,
+                status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.ADMIN,
+                asset=asset.uuid,
+                wallet=receiver_wallet,
+                carte=None,
+                metadata={
+                    "reference_bancaire": reference_bancaire,
+                    "date_virement": date_virement.isoformat(),
+                    "transaction_uuid": str(tx.uuid),
+                },
+            )
+
+        logger.info(
+            f"Virement bancaire enregistre : {montant_en_centimes} centimes "
+            f"vers tenant {tenant.schema_name} (asset {asset.name})"
+        )
+        return tx

@@ -16,6 +16,7 @@
 	{# Tuile standard carrée — articles VT, RE, AD, etc. #}
 	{# / Standard square tile — VT, RE, AD articles, etc. #}
 	<div data-uuid="{{article.id}}" data-name="{{article.name}}" data-price="{{article.prix}}" data-currency="{{ currency_data.symbol }}" data-group="{{article.bt_groupement.groupe}}"
+		data-methode-caisse="{{ article.methode_caisse }}"
 		data-multi-tarif="{{ article.multi_tarif|yesno:'true,false' }}"
 		data-est-adhesion="{{ article.est_adhesion|yesno:'true,false' }}"
 		data-tarifs='{{ article.tarifs_json }}'

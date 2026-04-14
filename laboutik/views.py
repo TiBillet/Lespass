@@ -21,7 +21,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from django_htmx.http import HttpResponseClientRedirect
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 
 from django.core.exceptions import PermissionDenied
@@ -30,7 +30,7 @@ from django.db.models import F, Max, Prefetch, Sum, Count, Q
 from django.db.models.functions import Coalesce
 
 from fedow_core.exceptions import SoldeInsuffisant
-from fedow_core.models import Asset
+from fedow_core.models import Asset, Transaction
 from fedow_core.services import AssetService, TransactionService, WalletService
 
 from AuthBillet.models import Wallet
@@ -973,6 +973,19 @@ def _obtenir_ou_creer_wallet(carte):
     carte.save(update_fields=["wallet_ephemere"])
     logger.info(f"Wallet éphémère créé pour carte {carte.tag_id}: {wallet.uuid}")
     return wallet
+
+
+def _render_erreur_toast(request, msg):
+    """
+    Rend un partial d'erreur compatible avec le pattern POS (toast dans #messages).
+    / Renders an error partial compatible with POS toast pattern (in #messages).
+    """
+    contexte = {
+        "msg_type": "warning",
+        "msg_content": str(msg),
+        "selector_bt_retour": "#messages",
+    }
+    return render(request, "laboutik/partial/hx_messages.html", contexte)
 
 
 def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
@@ -4495,6 +4508,28 @@ def _executer_recharges(
         )
 
 
+# -------------------------------------------------------------------------- #
+#  ViderCarteSerializer — validation du POST /laboutik/paiement/vider_carte/  #
+#  / ViderCarteSerializer — validation for POST /laboutik/paiement/vider_carte/ #
+# -------------------------------------------------------------------------- #
+
+class ViderCarteSerializer(serializers.Serializer):
+    """
+    Valide le POST de saisie d'un vider carte au POS.
+    Validates the POST form for a POS card refund.
+    """
+    tag_id = serializers.CharField(max_length=8)
+    tag_id_cm = serializers.CharField(max_length=8)
+    uuid_pv = serializers.UUIDField()
+    vider_carte = serializers.BooleanField(required=False, default=False)
+
+    def validate_tag_id(self, value):
+        return value.strip().upper()
+
+    def validate_tag_id_cm(self, value):
+        return value.strip().upper()
+
+
 # --------------------------------------------------------------------------- #
 #  PaiementViewSet — HTMX partials du flux de paiement                        #
 # --------------------------------------------------------------------------- #
@@ -6951,6 +6986,221 @@ class PaiementViewSet(viewsets.ViewSet):
             "state": state,
         }
         return render(request, "laboutik/partial/hx_card_feedback.html", context)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="vider_carte/overlay",
+        url_name="vider_carte_overlay",
+    )
+    def vider_carte_overlay(self, request):
+        """
+        GET /laboutik/paiement/vider_carte/overlay/
+        Rend l'overlay de scan NFC pour vider carte.
+        / Renders the NFC scan overlay for card refund.
+        """
+        uuid_pv = request.GET.get("uuid_pv", "")
+        tag_id_cm = request.GET.get("tag_id_cm", "")
+
+        pv = None
+        if uuid_pv:
+            pv = PointDeVente.objects.filter(uuid=uuid_pv).first()
+
+        # Contexte minimal : pv + card.tag_id via tag_id_cm query param.
+        # / Minimal context: pv + card.tag_id via tag_id_cm query param.
+        contexte = {
+            "pv": pv,
+            "card": {"tag_id": tag_id_cm},
+        }
+        return render(
+            request, "laboutik/partial/hx_vider_carte_overlay.html", contexte,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vider_carte/preview",
+        url_name="vider_carte_preview",
+    )
+    def vider_carte_preview(self, request):
+        """
+        POST /laboutik/paiement/vider_carte/preview/
+        Calcule les tokens eligibles pour la carte client scannee et renvoie
+        l'overlay de confirmation. Pas de mutation DB.
+        / Computes eligible tokens for the scanned client card and returns
+        the confirmation overlay. No DB mutation.
+        """
+        from django.db.models import Q
+        from fedow_core.models import Asset, Token
+
+        tag_id = request.POST.get("tag_id", "").strip().upper()
+        tag_id_cm = request.POST.get("tag_id_cm", "").strip().upper()
+        uuid_pv = request.POST.get("uuid_pv", "")
+
+        # Protection self-refund.
+        if tag_id and tag_id == tag_id_cm:
+            return _render_erreur_toast(
+                request, _("Ne peut pas vider une carte primaire."),
+            )
+
+        try:
+            carte = CarteCashless.objects.get(tag_id=tag_id)
+        except CarteCashless.DoesNotExist:
+            return _render_erreur_toast(request, _("Carte client inconnue."))
+
+        wallet = _obtenir_ou_creer_wallet(carte)
+        if wallet is None:
+            return _render_erreur_toast(request, _("Carte vierge."))
+
+        tokens = list(
+            Token.objects.filter(
+                wallet=wallet, value__gt=0,
+            ).filter(
+                Q(asset__category=Asset.TLF, asset__tenant_origin=connection.tenant)
+                | Q(asset__category=Asset.FED)
+            ).select_related('asset', 'asset__tenant_origin').order_by('asset__category')
+        )
+
+        if not tokens:
+            return _render_erreur_toast(
+                request, _("Aucun solde remboursable sur cette carte."),
+            )
+
+        total_tlf = sum(t.value for t in tokens if t.asset.category == Asset.TLF)
+        total_fed = sum(t.value for t in tokens if t.asset.category == Asset.FED)
+
+        contexte = {
+            "carte": carte,
+            "tokens": tokens,
+            "total_centimes": total_tlf + total_fed,
+            "total_tlf_centimes": total_tlf,
+            "total_fed_centimes": total_fed,
+            "tag_id": tag_id,
+            "tag_id_cm": tag_id_cm,
+            "uuid_pv": uuid_pv,
+        }
+        return render(
+            request, "laboutik/partial/hx_vider_carte_confirm.html", contexte,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vider_carte",
+        url_name="vider_carte",
+    )
+    def vider_carte(self, request):
+        """
+        POST /laboutik/paiement/vider_carte/
+        Execute le remboursement via WalletService.rembourser_en_especes.
+        Renvoie l'ecran de succes ou un toast d'erreur.
+        / Executes the refund via WalletService.rembourser_en_especes.
+        Returns the success screen or an error toast.
+        """
+        from fedow_core.exceptions import NoEligibleTokens
+
+        serializer = ViderCarteSerializer(data=request.POST)
+        serializer.is_valid(raise_exception=True)
+
+        tag_id_client = serializer.validated_data["tag_id"]
+        tag_id_cm = serializer.validated_data["tag_id_cm"]
+        uuid_pv = serializer.validated_data["uuid_pv"]
+        vider_carte_flag = serializer.validated_data["vider_carte"]
+
+        # Protection self-refund (meme check qu'en preview).
+        # / Self-refund protection (same check as preview).
+        if tag_id_client == tag_id_cm:
+            return _render_erreur_toast(
+                request, _("Ne peut pas vider une carte primaire."),
+            )
+
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+        except CarteCashless.DoesNotExist:
+            return _render_erreur_toast(request, _("Carte client inconnue."))
+
+        carte_primaire_obj, erreur_cp = _charger_carte_primaire(tag_id_cm)
+        if erreur_cp:
+            return _render_erreur_toast(request, erreur_cp)
+
+        pv = PointDeVente.objects.filter(uuid=uuid_pv).first()
+        if pv is None:
+            return _render_erreur_toast(request, _("PV introuvable."))
+
+        # Controle d'acces : la carte primaire doit pouvoir operer sur ce PV.
+        # / Access control: primary card must have access to this POS.
+        if not pv.cartes_primaires.filter(pk=carte_primaire_obj.pk).exists():
+            return _render_erreur_toast(
+                request, _("Cette carte caissier n'a pas acces a ce PV."),
+            )
+
+        receiver_wallet = WalletService.get_or_create_wallet_tenant(connection.tenant)
+
+        try:
+            resultat = WalletService.rembourser_en_especes(
+                carte=carte_client,
+                tenant=connection.tenant,
+                receiver_wallet=receiver_wallet,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+                vider_carte=vider_carte_flag,
+                primary_card=carte_primaire_obj.carte,
+            )
+        except NoEligibleTokens:
+            return _render_erreur_toast(
+                request, _("Aucun solde remboursable (solde a pu changer)."),
+            )
+
+        contexte = {
+            "total_centimes": resultat["total_centimes"],
+            "total_tlf_centimes": resultat["total_tlf_centimes"],
+            "total_fed_centimes": resultat["total_fed_centimes"],
+            "lignes_articles": resultat["lignes_articles"],
+            "transaction_uuids": [str(tx.uuid) for tx in resultat["transactions"]],
+            "uuid_pv": uuid_pv,
+            "vider_carte": vider_carte_flag,
+        }
+        return render(
+            request, "laboutik/partial/hx_vider_carte_success.html", contexte,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vider_carte/imprimer_recu",
+        url_name="vider_carte_imprimer_recu",
+    )
+    def vider_carte_imprimer_recu(self, request):
+        """
+        POST /laboutik/paiement/vider_carte/imprimer_recu/
+        Lance l'impression Celery du recu pour les transactions_uuids donnees.
+        / Launches the Celery receipt print for the given transaction UUIDs.
+        """
+        transaction_uuids = request.POST.getlist("transaction_uuids")
+        uuid_pv = request.POST.get("uuid_pv", "")
+
+        if not transaction_uuids or not uuid_pv:
+            return _render_erreur_toast(request, _("Parametres manquants."))
+
+        pv = PointDeVente.objects.select_related("printer").filter(uuid=uuid_pv).first()
+        if pv is None or pv.printer is None or not pv.printer.active:
+            return _render_erreur_toast(
+                request, _("Pas d'imprimante configuree sur ce PV."),
+            )
+
+        transactions = Transaction.objects.filter(
+            uuid__in=transaction_uuids,
+        ).select_related("asset")
+
+        from laboutik.printing.formatters import formatter_recu_vider_carte
+        from laboutik.printing.tasks import imprimer_async
+
+        recu_data = formatter_recu_vider_carte(list(transactions))
+        imprimer_async.delay(
+            str(pv.printer.pk),
+            recu_data,
+            connection.schema_name,
+        )
+        return render(request, "laboutik/partial/hx_impression_ok.html")
 
     # ------------------------------------------------------------------ #
     #  Impression ticket de vente (bouton sur l'ecran de succes)           #

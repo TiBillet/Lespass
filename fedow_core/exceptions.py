@@ -35,3 +35,48 @@ class SoldeInsuffisant(Exception):
             'demande': montant_demande_en_centimes,
         }
         super().__init__(message)
+
+
+class NoEligibleTokens(Exception):
+    """
+    Levee quand une carte n'a aucun token eligible au remboursement.
+    Raised when a card has no eligible tokens for refund.
+
+    Tokens eligibles = TLF dont asset.tenant_origin == tenant courant + FED.
+    Cas typiques : carte vierge, solde 0, ou tokens uniquement en categories
+    non remboursables (TNF, TIM, FID).
+    """
+
+    def __init__(self, carte_tag_id: str = ""):
+        self.carte_tag_id = carte_tag_id
+        message = _(
+            "Aucun solde remboursable sur la carte {tag_id}."
+        ).format(tag_id=carte_tag_id)
+        super().__init__(message)
+
+
+class MontantSuperieurDette(Exception):
+    """
+    Levee quand un superuser tente d'enregistrer un virement bancaire d'un montant
+    superieur a la dette actuelle du pot central envers le tenant pour cet asset.
+
+    Raised when a superuser attempts to record a bank transfer larger than
+    the central pot's current debt to the tenant for this asset.
+
+    Securite hard : on n'accepte jamais qu'un BANK_TRANSFER cree une dette negative
+    (qui voudrait dire "le tenant doit au pot central", hors scope V2).
+    / Hard security: we never accept a BANK_TRANSFER that creates negative debt
+    (which would mean "tenant owes the central pot", out of V2 scope).
+    """
+
+    def __init__(self, montant_demande_en_centimes: int, dette_actuelle_en_centimes: int):
+        self.montant_demande_en_centimes = montant_demande_en_centimes
+        self.dette_actuelle_en_centimes = dette_actuelle_en_centimes
+        message = _(
+            "Montant demande %(montant)s centimes superieur a la dette actuelle "
+            "%(dette)s centimes."
+        ) % {
+            "montant": montant_demande_en_centimes,
+            "dette": dette_actuelle_en_centimes,
+        }
+        super().__init__(message)

@@ -45,6 +45,34 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Helpers module-level — affichage admin lisible
+# Module-level helpers — readable admin display
+#
+# IMPORTANT : jamais a l'interieur d'une classe ModelAdmin Unfold (piege 23).
+# IMPORTANT: never inside a ModelAdmin class with Unfold (pitfall 23).
+# ---------------------------------------------------------------------------
+
+def _wallet_court(wallet):
+    """Renvoie les 8 premiers caracteres de l'UUID du wallet (lisibilite admin).
+    Returns the first 8 chars of the wallet UUID (admin readability)."""
+    if wallet is None:
+        return "—"
+    return str(wallet.uuid)[:8]
+
+
+def _value_en_euros(centimes):
+    """Affiche un montant en centimes formate '12,50\u00a0€' (arithmetique entiere).
+    Displays a centimes amount formatted as '12,50\u00a0€' (integer arithmetic)."""
+    if centimes is None:
+        centimes = 0
+    signe = "-" if centimes < 0 else ""
+    absolu = abs(int(centimes))
+    euros = absolu // 100
+    cents = absolu % 100
+    return f"{signe}{euros},{cents:02d}\u00a0€"
+
+
+# ---------------------------------------------------------------------------
 # Asset : monnaies et types de tokens (editable)
 # Asset: currencies and token types (editable)
 #
@@ -447,12 +475,20 @@ class TokenAdmin(ModelAdmin):
     Tenant filter: shows tokens linked to this venue's assets.
     """
     list_display = [
-        'wallet',
+        'wallet_court',
         'asset',
-        'value',
+        'value_court',
     ]
     list_filter = ['asset']
     search_fields = ['wallet__name']
+
+    def wallet_court(self, obj):
+        return _wallet_court(obj.wallet)
+    wallet_court.short_description = _("Wallet")
+
+    def value_court(self, obj):
+        return _value_en_euros(obj.value)
+    value_court.short_description = _("Solde")
 
     def get_queryset(self, request):
         """
@@ -507,13 +543,26 @@ class TransactionAdmin(ModelAdmin):
         'id',
         'action',
         'asset',
-        'amount',
-        'sender',
-        'receiver',
+        'amount_court',
+        'sender_court',
+        'receiver_court',
         'datetime',
     ]
     list_filter = ['action', 'asset']
     search_fields = ['id', 'comment']
+
+    def amount_court(self, obj):
+        return _value_en_euros(obj.amount)
+    amount_court.short_description = _("Montant")
+
+    def sender_court(self, obj):
+        return _wallet_court(obj.sender)
+    sender_court.short_description = _("Emetteur")
+
+    def receiver_court(self, obj):
+        return _wallet_court(obj.receiver)
+    receiver_court.short_description = _("Recepteur")
+
     readonly_fields = [
         'id',
         'uuid',
