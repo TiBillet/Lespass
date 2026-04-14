@@ -298,19 +298,24 @@ def get_existing_bookings_for_resource(resource, date_from, date_to):
 
 # ─── Orchestrateurs / Orchestrators ──────────────────────────────────────────
 
-def compute_slots(resource, date_from, date_to, reference_date=None):
+def compute_slots(resource, date_from=None, date_to=None, reference_date=None):
     """
     Calcule E pour la ressource sur [date_from, date_to].
     / Computes E for the resource over [date_from, date_to].
 
     LOCALISATION : booking/booking_engine.py
 
-    Applique l'horizon : effective_date_to = min(date_to, today + horizon_days).
+    date_from=None → aujourd'hui.
+    date_to=None   → date_from + resource.booking_horizon_days.
     reference_date injecte une date fixe dans les tests (finding §13).
 
     :return: list[BookableInterval]
     """
     today = reference_date or timezone.localdate()
+    if date_from is None:
+        date_from = today
+    if date_to is None:
+        date_to = date_from + datetime.timedelta(days=resource.booking_horizon_days)
     effective_date_to = min(
         date_to,
         today + datetime.timedelta(days=resource.booking_horizon_days),
