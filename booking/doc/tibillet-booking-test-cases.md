@@ -792,8 +792,9 @@ assert W == []
 # ---------------------------------------------------------------------------
 # Tests — validate_new_booking
 # Signature: validate_new_booking resource start duration count member
-#            reference_date → (is_valid: bool, error: str | None)
+#            reference_date reference_now → (is_valid: bool, error: str | None)
 # reference_date = "2026-06-01" dans tous les tests (§13).
+# reference_now  = datetime aware injecté pour les tests de garde temporelle.
 # ---------------------------------------------------------------------------
 
 # test_validate_booking_accepts_valid_slot
@@ -1122,6 +1123,54 @@ res          = Resource cal wop capacity=1 horizon=28
 start        = "2026-06-08 23:00 +02:00"
 (valid, err) = validate_new_booking res start duration=120 count=1 member
              reference_date="2026-06-01"
+
+assert valid == False
+assert err   is not None
+
+
+# test_validate_booking_accepts_slot_starting_in_a_few_minutes
+# reference_now = 09:55; slot starts at 10:00 (5 min ahead) → accepted (§5 Availability)
+# No minimum advance notice: start_datetime strictly > now is sufficient.
+
+tz     = "Europe/Paris"
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+cal    = Calendar "cal" []
+O      = open-day monday monday tz cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+now          = "2026-06-08 09:55 +02:00"   # 5 minutes avant le début du créneau
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01" reference_now=now
+
+assert valid == True
+assert err   is None
+
+
+# test_validate_booking_rejects_slot_that_has_already_started
+# reference_now = 10:05; slot started at 10:00 (5 min ago) → rejected (§5 Availability)
+
+tz     = "Europe/Paris"
+monday = "2026-06-08"   # MONDAY_NEAR — reference_date=2026-06-01
+cal    = Calendar "cal" []
+O      = open-day monday monday tz cal
+wop    = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 1]
+W      = theoretical-slots wop O
+assert W == [
+    Interval "2026-06-08 10:00 +02:00" "2026-06-08 11:00 +02:00",
+]
+
+res          = Resource cal wop capacity=1 horizon=28
+start        = "2026-06-08 10:00 +02:00"
+now          = "2026-06-08 10:05 +02:00"   # 5 minutes après le début du créneau
+(valid, err) = validate_new_booking res start duration=60 count=1 member
+             reference_date="2026-06-01" reference_now=now
+# start_datetime <= now → refusé avant toute vérification de disponibilité
 
 assert valid == False
 assert err   is not None
