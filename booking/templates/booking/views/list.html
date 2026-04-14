@@ -1,0 +1,143 @@
+{% extends base_template %}
+{% load i18n %}
+
+{% block title %}{% translate "Réservation" %}{% endblock %}
+{% block meta_description %}{% translate "Réservez une ressource en ligne." %}{% endblock %}
+
+{% block main %}
+<!--
+PAGE LISTE DES RESSOURCES DE RÉSERVATION
+/ Resource booking list page
+
+LOCALISATION : booking/templates/booking/views/list.html
+
+Affiche toutes les ressources réservables avec leurs créneaux à venir.
+Filtre par tag possible via ?tag=<tag>.
+Chaque ressource est rendue par booking/partial/card.html.
+
+Deux sections :
+  1. Groupes (groupes_annotes) — un titre h2 par groupe, une grille de cards.
+  2. Ressources sans groupe (items_sans_groupe) — grille de cards individuelles.
+
+Spec §3.1.2 : les groupes sont purement présentationnels.
+Spec §4.4 — vue publique de réservation :
+  - Accessible sans login
+  - Filtre par tag via paramètre URL
+  - Ressources sans créneau → grisées
+  - Créneaux complets → marqués indisponibles
+
+/ Shows all bookable resources with their upcoming slots.
+Tag filtering via ?tag=<tag>.
+Each resource is rendered by booking/partial/card.html.
+
+Two sections:
+  1. Groups (groupes_annotes) — one h2 heading per group, a card grid.
+  2. Ungrouped resources (items_sans_groupe) — individual card grid.
+
+Spec §3.1.2: groups are purely presentational.
+Spec §4.4 — public booking view:
+  - Accessible without login
+  - Tag filter via URL parameter
+  - Resources with no slots → greyed out
+  - Full slots → marked unavailable
+
+FLUX HTMX / HTMX FLOW :
+  Navigation depuis le menu → hx-target="body" hx-swap="innerHTML"
+  Filtre par tag → même flux, hx-push-url="true"
+-->
+<main class="container-lg py-4" data-testid="booking-resource-list">
+
+    <h1 class="mb-4">{% translate "Réservation de ressources" %}</h1>
+
+    {% if tag_filtre %}
+        <!--
+        Indicateur du filtre actif + lien pour réinitialiser.
+        / Active filter indicator + link to clear it.
+        aria-live="polite" : le lecteur d'écran annonce le changement.
+        / aria-live="polite": screen reader announces the change.
+        -->
+        <div class="mb-3 d-flex align-items-center gap-2" aria-live="polite">
+            <i class="bi bi-funnel" aria-hidden="true"></i>
+            <span class="badge bg-primary" data-testid="booking-tag-filter-active">
+                {{ tag_filtre }}
+            </span>
+            <a class="small text-decoration-none"
+               href="/booking/"
+               hx-get="/booking/"
+               hx-target="body"
+               hx-swap="innerHTML"
+               hx-push-url="true"
+               aria-label="{% translate 'Effacer le filtre de tag' %}">
+                <i class="bi bi-x-circle" aria-hidden="true"></i>
+                {% translate "Effacer le filtre" %}
+            </a>
+        </div>
+    {% endif %}
+
+    <!--
+    SECTIONS DE GROUPES
+    Chaque ResourceGroup forme une section avec un titre h2 et sa grille de cards.
+    / GROUP SECTIONS
+    Each ResourceGroup forms a section with an h2 heading and its card grid.
+
+    Spec §3.1.2 : les groupes sont purement présentationnels.
+    / Spec §3.1.2: groups are purely presentational.
+    -->
+    {% for section in groupes_annotes %}
+    <section class="mb-5" aria-label="{{ section.groupe.name }}">
+
+        <h2 class="mb-3">{{ section.groupe.name }}</h2>
+
+        {% if section.groupe.description %}
+            <p class="text-muted mb-3">{{ section.groupe.description }}</p>
+        {% endif %}
+
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for item in section.items %}
+                {% include "booking/partial/card.html" with item=item %}
+            {% endfor %}
+        </div>
+
+    </section>
+    {% endfor %}
+
+    <!--
+    RESSOURCES SANS GROUPE
+    Ressources non assignées à un groupe — affichées individuellement (spec §3.1.2).
+    Si des groupes sont présents au-dessus, un séparateur <hr> et un titre h2
+    délimitent clairement les deux zones.
+    / UNGROUPED RESOURCES
+    Resources not assigned to any group — displayed individually (spec §3.1.2).
+    When groups are shown above, a <hr> and h2 heading separate the two zones.
+    -->
+    {% if items_sans_groupe %}
+    {% if groupes_annotes %}<hr class="my-5">{% endif %}
+    <section class="mb-5" aria-label="{% translate 'Autres ressources' %}">
+
+        {% if groupes_annotes %}
+            <h2 class="mb-3">{% translate "Autres ressources" %}</h2>
+        {% endif %}
+
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+            {% for item in items_sans_groupe %}
+                {% include "booking/partial/card.html" with item=item %}
+            {% endfor %}
+        </div>
+
+    </section>
+    {% endif %}
+
+    <!--
+    ÉTAT VIDE — aucune ressource ni groupe après filtrage.
+    / EMPTY STATE — no resources or groups after filtering.
+    -->
+    {% if not groupes_annotes and not items_sans_groupe %}
+    <div class="col-12">
+        <p class="text-muted" data-testid="booking-empty-list">
+            {% translate "Aucune ressource disponible." %}
+        </p>
+    </div>
+    {% endif %}
+
+</main>
+{% endblock %}
