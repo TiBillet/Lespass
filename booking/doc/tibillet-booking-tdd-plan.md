@@ -849,32 +849,44 @@ test_embed_page_has_no_site_navigation_chrome
 
 --------------------------------------------------------------------------------
 
-## Session 9 — Slot picker (HTMX partial view)
+## Session 9 — Resource detail page (full slot list) (DONE ✓)
+
+Spec §4.1 step 3 : after browsing the list, the member selects a slot on the
+resource detail page. The list card shows only the first 5 slots; the detail
+page shows all slots within `booking_horizon_days` and will carry the "add to
+basket" button (Session 10).
+
+Same pattern as Session 7: `retrieve()` returns a full server-rendered page,
+navigated to via HTMX anti-blink link from each card. No separate `@action`
+needed — the DefaultRouter already maps `GET /booking/<pk>/` to `retrieve()`.
 
 ### Session 9.1 — Red phase
 
-**Files to create:**
-- `booking/tests/test_slot_picker.py`
+**Files created:**
+- `booking/tests/test_views_detail.py`
 
-**Tests to write:**
+**Tests written (5):**
 ```
-test_slot_picker_returns_partial_html
-test_slot_picker_excludes_slots_beyond_horizon
-test_slot_picker_excludes_slots_in_closed_period
-test_slot_picker_marks_full_slots_as_unavailable
+test_resource_detail_accessible_without_authentication
+test_resource_detail_returns_404_for_unknown_resource
+test_resource_detail_shows_resource_name
+test_resource_detail_shows_all_slots_within_horizon
+test_resource_detail_marks_full_slots_as_unavailable
 ```
-
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
 
 ### Session 9.2 — Green phase
 
-**Files to create / modify:**
-- `booking/views.py` — `BookingViewSet.slots()` (@action GET)
-- `booking/templates/booking/partial/slot_picker.html`
+**Files created / modified:**
+- `booking/views.py` — `retrieve()` stub replaced; `get_object_or_404`
+  added to imports; calls `compute_slots(ressource)` with no date args
+- `booking/templates/booking/views/detail.html` — full page: image, name,
+  description, tags, all slots (no `|slice`); `mx-md-4 mx-lg-5` on slot
+  list for horizontal inset on large screens; HTMX back-link to `/booking/`
+- `booking/templates/booking/partial/card.html` — resource name wrapped in
+  HTMX anti-blink link to `/booking/<pk>/`
 
-Write the minimal HTMX partial view to make all red-phase tests pass.
+`booking/urls.py` — no change; DefaultRouter already routes
+`GET /booking/<pk>/` to `retrieve()`.
 
 --------------------------------------------------------------------------------
 
@@ -895,11 +907,11 @@ test_add_to_basket_rejects_slot_in_closed_period
 test_add_to_basket_slot_count_gt_1_checks_all_slots
 ```
 
+### Session 10.2 — Green phase
+
 > ⚠️ **AI stops here.** The human reviews the tests, completes or
 > adjusts them if needed, and confirms before proceeding to the green
 > phase.
-
-### Session 10.2 — Green phase
 
 **Files to create / modify:**
 - `booking/views.py` — `BookingViewSet.add_to_basket()` (@action POST)
@@ -933,11 +945,11 @@ test_my_bookings_hides_cancellation_button_after_deadline
 test_my_bookings_excludes_past_bookings
 ```
 
+### Session 11.2 — Green phase
+
 > ⚠️ **AI stops here.** The human reviews the tests, completes or
 > adjusts them if needed, and confirms before proceeding to the green
 > phase.
-
-### Session 11.2 — Green phase
 
 **Files to create / modify:**
 - `booking/views.py` — `BookingViewSet.my_bookings()` (@action GET)
@@ -968,11 +980,11 @@ test_validate_basket_insufficient_payment_deletes_bookings
 test_validate_empty_basket_returns_error
 ```
 
+### Session 12.2 — Green phase
+
 > ⚠️ **AI stops here.** The human reviews the tests, completes or
 > adjusts them if needed, and confirms before proceeding to the green
 > phase.
-
-### Session 12.2 — Green phase
 
 **Files to create / modify:**
 - `booking/models.py` — add `pricing_rule = FK(Price)` on Resource
@@ -999,11 +1011,11 @@ test_cancel_refunds_wallet_payment
 test_cancel_rejects_booking_owned_by_another_member
 ```
 
+### Session 13.2 — Green phase
+
 > ⚠️ **AI stops here.** The human reviews the tests, completes or
 > adjusts them if needed, and confirms before proceeding to the green
 > phase.
-
-### Session 13.2 — Green phase
 
 **Files to create / modify:**
 - `booking/views.py` — `BookingViewSet.cancel()` (@action POST)
@@ -1027,11 +1039,11 @@ test_expire_new_bookings_keeps_confirmed_booking
 test_expire_new_bookings_does_not_delete_before_timeout
 ```
 
+### Session 14.2 — Green phase
+
 > ⚠️ **AI stops here.** The human reviews the tests, completes or
 > adjusts them if needed, and confirms before proceeding to the green
 > phase.
-
-### Session 14.2 — Green phase
 
 **Files to create / modify:**
 - `booking/tasks.py` — `expire_new_bookings_task()`

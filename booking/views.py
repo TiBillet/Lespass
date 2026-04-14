@@ -6,7 +6,7 @@ LOCALISATION : booking/views.py
 """
 from collections import defaultdict
 
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 
@@ -101,5 +101,14 @@ class BookingViewSet(viewsets.ViewSet):
         return reponse
 
     def retrieve(self, request, pk=None):
-        # à implémenter / to be implemented
-        return render(request, 'booking/views/detail.html', {})
+        ressource = get_object_or_404(
+            Resource.objects.select_related('calendar', 'weekly_opening', 'group'),
+            pk=pk,
+        )
+        creneaux = compute_slots(ressource)
+        contexte = get_context(request)
+        contexte.update({
+            'ressource': ressource,
+            'creneaux':  creneaux,
+        })
+        return render(request, 'booking/views/detail.html', contexte)

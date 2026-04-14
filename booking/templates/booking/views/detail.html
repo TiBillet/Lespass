@@ -1,0 +1,96 @@
+{% extends base_template %}
+{% load i18n %}
+
+{% block title %}{{ ressource.name }}{% endblock %}
+{% block meta_description %}{{ ressource.description|truncatewords:20 }}{% endblock %}
+
+{% block main %}
+<!--
+LOCALISATION : booking/templates/booking/views/detail.html
+
+Variables attendues / Expected variables:
+  ressource  — objet Resource
+  creneaux   — list[BookableInterval] triée par start, sans slice
+-->
+<main class="container-lg py-4" data-testid="booking-resource-detail">
+
+    <a href="/booking/"
+       hx-get="/booking/"
+       hx-target="body"
+       hx-swap="innerHTML"
+       hx-push-url="true"
+       class="text-decoration-none small text-muted d-inline-flex align-items-center gap-1 mb-4">
+        <i class="bi bi-arrow-left" aria-hidden="true"></i>
+        {% translate "Retour aux ressources" %}
+    </a>
+
+    {% if ressource.image %}
+        <img src="{{ ressource.image }}"
+             class="img-fluid rounded mb-4"
+             alt="{{ ressource.name }}"
+             style="max-height: 300px; object-fit: cover; width: 100%;">
+    {% endif %}
+
+    <h1 class="mb-2">{{ ressource.name }}</h1>
+
+    {% if ressource.description %}
+        <p class="text-muted mb-3">{{ ressource.description }}</p>
+    {% endif %}
+
+    {% if ressource.tags %}
+        <p class="mb-4" aria-label="{% translate 'Tags' %}">
+            {% for tag in ressource.tags %}
+                <a class="badge bg-secondary text-decoration-none me-1"
+                   href="/booking/?tag={{ tag }}"
+                   hx-get="/booking/?tag={{ tag }}"
+                   hx-target="body"
+                   hx-swap="innerHTML"
+                   hx-push-url="true"
+                   aria-label="{% blocktrans with t=tag %}Filtrer par tag {{ t }}{% endblocktrans %}">
+                    {{ tag }}
+                </a>
+            {% endfor %}
+        </p>
+    {% endif %}
+
+    <h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
+
+    {% if creneaux %}
+        <ul class="list-unstyled" aria-label="{% translate 'Créneaux' %}">
+            {% for creneau in creneaux %}
+
+                {% if creneau.remaining_capacity == 0 %}
+                    <li class="d-flex align-items-center gap-2 mb-2 text-muted"
+                        data-testid="booking-slot-unavailable"
+                        aria-label="{% translate 'Créneau complet' %}">
+                        <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                        <span>{{ creneau.start|date:"D d/m H:i" }}</span>
+                        <span class="badge bg-danger ms-auto">
+                            {% translate "Complet" %}
+                        </span>
+                    </li>
+
+                {% else %}
+                    <li class="d-flex align-items-center gap-2 mb-2"
+                        data-testid="booking-slot-available">
+                        <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
+                        <span>{{ creneau.start|date:"D d/m H:i" }}</span>
+                        <span class="badge bg-success ms-auto">
+                            {{ creneau.remaining_capacity }}
+                            {% translate "place(s)" %}
+                        </span>
+                    </li>
+                {% endif %}
+
+            {% endfor %}
+        </ul>
+
+    {% else %}
+        <p class="text-muted" aria-live="polite">
+            <i class="bi bi-calendar-x" aria-hidden="true"></i>
+            {% translate "Aucun créneau disponible prochainement." %}
+        </p>
+    {% endif %}
+
+</main>
+{% endblock %}

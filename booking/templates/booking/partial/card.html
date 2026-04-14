@@ -22,7 +22,14 @@ Variables attendues / Expected variables:
 
             <div class="card-body d-flex flex-column">
 
-                <h2 class="card-title h5">{{ item.ressource.name }}</h2>
+                <a href="/booking/{{ item.ressource.pk }}/"
+                   hx-get="/booking/{{ item.ressource.pk }}/"
+                   hx-target="body"
+                   hx-swap="innerHTML"
+                   hx-push-url="true"
+                   class="text-dark">
+                    <h2 class="card-title h5">{{ item.ressource.name }}</h2>
+                </a>
 
                 {% if item.ressource.description %}
                     <p class="card-text text-muted small">
