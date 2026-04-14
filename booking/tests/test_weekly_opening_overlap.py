@@ -431,3 +431,124 @@ def test_slot_entry_accepts_entries_touching_at_boundary():
                 weekly_opening__name__startswith=TEST_PREFIX,
             ).delete()
             WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
+
+
+@pytest.mark.django_db
+def test_slot_entry_accepts_full_week_entries_touching_at_sunday_22h():
+    """
+    Un entry qui couvre lundi 00:00 → dimanche 22:00 (166 × 60 min) et un
+    entry qui couvre dimanche 22:00 → dimanche 24:00 (2 × 60 min) se touchent
+    exactement à la frontière — aucun chevauchement — full_clean() ne doit pas lever.
+    / An entry covering Monday 00:00 → Sunday 22:00 (166 × 60 min) and an entry
+    / covering Sunday 22:00 → Sunday 24:00 (2 × 60 min) touch at the boundary —
+    / no overlap — full_clean() must NOT raise.
+
+    LOCALISATION : booking/tests/test_weekly_opening_overlap.py
+
+    Représentation en minutes dans la semaine circulaire (0–10 080) :
+    / Minutes representation in the circular week (0–10 080):
+      Entry A : [0, 9 960)    lundi 00:00 → dimanche 22:00
+      Entry B : [9 960, 10 080)  dimanche 22:00 → dimanche 24:00
+      Frontière commune : 9 960. Intervalles semi-ouverts → pas de chevauchement.
+    / Common boundary: 9 960. Half-open intervals → no overlap.
+
+    Calcul / Calculation:
+      166 slots × 60 min = 9 960 min = dimanche 22:00 (6 × 1 440 + 22 × 60)
+      2   slots × 60 min = 120 min   → fin à 10 080 (= fin de semaine)
+    """
+    from booking.models import WeeklyOpening, OpeningEntry
+
+    with schema_context(TENANT_SCHEMA):
+        opening = WeeklyOpening.objects.create(
+            name=f'{TEST_PREFIX} accepts_full_week_touching_sunday_22h',
+        )
+        try:
+            # Entry A : lundi 00:00, 166 créneaux × 60 min = 9 960 min (→ dimanche 22:00)
+            # / Entry A: Monday 00:00, 166 slots × 60 min = 9 960 min (→ Sunday 22:00)
+            OpeningEntry.objects.create(
+                weekly_opening=opening,
+                weekday=OpeningEntry.MONDAY,
+                start_time=datetime.time(0, 0),
+                slot_duration_minutes=60,
+                slot_count=166,
+            )
+
+            # Entry B : dimanche 22:00, 2 créneaux × 60 min (→ dimanche 24:00)
+            # / Entry B: Sunday 22:00, 2 slots × 60 min (→ Sunday 24:00)
+            entry_sunday_22h = OpeningEntry(
+                weekly_opening=opening,
+                weekday=OpeningEntry.SUNDAY,
+                start_time=datetime.time(22, 0),
+                slot_duration_minutes=60,
+                slot_count=2,
+            )
+            entry_sunday_22h.full_clean()
+
+        finally:
+            OpeningEntry.objects.filter(
+                weekly_opening__name__startswith=TEST_PREFIX,
+            ).delete()
+            WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
+
+
+@pytest.mark.django_db
+def test_slot_entry_rejects_overlap_first_entry_ends_sunday_23h():
+    """
+    Un entry qui couvre lundi 00:00 → dimanche 23:00 (167 × 60 min) chevauche
+    un entry qui commence dimanche 22:00 (2 × 60 min) sur la plage 22:00–23:00.
+    full_clean() doit lever ValidationError.
+    / An entry covering Monday 00:00 → Sunday 23:00 (167 × 60 min) overlaps an
+    / entry starting Sunday 22:00 (2 × 60 min) over the 22:00–23:00 range.
+    / full_clean() must raise ValidationError.
+
+    LOCALISATION : booking/tests/test_weekly_opening_overlap.py
+
+    Représentation en minutes dans la semaine circulaire (0–10 080) :
+    / Minutes representation in the circular week (0–10 080):
+      Entry A : [0, 10 020)      lundi 00:00 → dimanche 23:00
+      Entry B : [9 960, 10 080)  dimanche 22:00 → dimanche 24:00
+      Chevauchement : [9 960, 10 020) = dimanche 22:00 → dimanche 23:00
+    / Overlap: [9 960, 10 020) = Sunday 22:00 → Sunday 23:00
+
+    Calcul / Calculation:
+      167 slots × 60 min = 10 020 min = dimanche 23:00 (6 × 1 440 + 23 × 60)
+      2   slots × 60 min = 120 min    → fin à 10 080 (= fin de semaine)
+      10 020 < 10 080 → Entry A ne dépasse pas la semaine, pas de wrap-around.
+    / 10 020 < 10 080 → Entry A does not exceed the week, no wrap-around.
+    """
+    from booking.models import WeeklyOpening, OpeningEntry
+
+    with schema_context(TENANT_SCHEMA):
+        opening = WeeklyOpening.objects.create(
+            name=f'{TEST_PREFIX} rejects_overlap_first_entry_ends_sunday_23h',
+        )
+        try:
+            # Entry A : lundi 00:00, 167 créneaux × 60 min = 10 020 min (→ dimanche 23:00)
+            # / Entry A: Monday 00:00, 167 slots × 60 min = 10 020 min (→ Sunday 23:00)
+            OpeningEntry.objects.create(
+                weekly_opening=opening,
+                weekday=OpeningEntry.MONDAY,
+                start_time=datetime.time(0, 0),
+                slot_duration_minutes=60,
+                slot_count=167,
+            )
+
+            # Entry B : dimanche 22:00, 2 créneaux × 60 min (→ dimanche 24:00)
+            # Chevauche Entry A sur dimanche 22:00–23:00 → doit lever ValidationError.
+            # / Entry B: Sunday 22:00, 2 slots × 60 min (→ Sunday 24:00)
+            # / Overlaps Entry A on Sunday 22:00–23:00 → must raise ValidationError.
+            entry_sunday_22h = OpeningEntry(
+                weekly_opening=opening,
+                weekday=OpeningEntry.SUNDAY,
+                start_time=datetime.time(22, 0),
+                slot_duration_minutes=60,
+                slot_count=2,
+            )
+            with pytest.raises(ValidationError):
+                entry_sunday_22h.full_clean()
+
+        finally:
+            OpeningEntry.objects.filter(
+                weekly_opening__name__startswith=TEST_PREFIX,
+            ).delete()
+            WeeklyOpening.objects.filter(name__startswith=TEST_PREFIX).delete()
