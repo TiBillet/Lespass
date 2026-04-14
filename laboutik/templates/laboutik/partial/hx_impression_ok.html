@@ -1,0 +1,13 @@
+{% load i18n %}
+<!--
+CONFIRMATION D'IMPRESSION DU RECU (VIDER CARTE)
+Feedback apres impression du recu de remboursement.
+/ Print confirmation for receipt after emptying card refund.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_impression_ok.html
+-->
+<div class="payment-msg-discret" style="color: #16A34A; margin-top: 0.5rem;"
+     data-testid="impression-ok-toast">
+  <i class="fas fa-check" aria-hidden="true"></i>
+  {% translate "Reçu imprimé" %}
+</div>

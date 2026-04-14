@@ -1,0 +1,66 @@
+{% load i18n billet_filters %}
+{# Overlay de confirmation avec recap tokens + checkbox VV. #}
+{# Confirmation overlay with token summary + VV checkbox. #}
+
+<div id="vider-carte-confirm"
+     class="overlay overlay-fullscreen"
+     data-testid="vider-carte-confirm">
+    <div class="overlay-content" style="max-width: 500px; margin: 80px auto; padding: 24px; background: white; border-radius: 8px;">
+        <h2 style="margin-top: 0;">{% translate "Vider la carte" %} {{ carte.tag_id }}</h2>
+
+        <div style="font-size: 2rem; font-weight: bold; text-align: center; margin: 24px 0; color: #16A34A;">
+            {% translate "À rendre" %} : {{ total_centimes|cents_to_euros }}
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin: 16px 0;" data-testid="vider-carte-tokens-table">
+            <thead>
+                <tr style="background: #F9FAFB; border-bottom: 1px solid #E5E7EB;">
+                    <th style="padding: 8px; text-align: left;">{% translate "Asset" %}</th>
+                    <th style="padding: 8px; text-align: right;">{% translate "Solde" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for token in tokens %}
+                <tr style="border-bottom: 1px solid #E5E7EB;">
+                    <td style="padding: 8px;">{{ token.asset.name }} ({{ token.asset.get_category_display }})</td>
+                    <td style="padding: 8px; text-align: right;">{{ token.value|cents_to_asset:token.asset }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <form method="post"
+              action="{% url 'laboutik-paiement-vider_carte' %}"
+              hx-post="{% url 'laboutik-paiement-vider_carte' %}"
+              hx-target="#messages"
+              hx-swap="innerHTML"
+              data-testid="vider-carte-confirm-form">
+            {% csrf_token %}
+            <input type="hidden" name="tag_id" value="{{ tag_id }}">
+            <input type="hidden" name="tag_id_cm" value="{{ tag_id_cm }}">
+            <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+
+            <p style="margin: 16px 0;">
+                <label>
+                    <input type="checkbox" name="vider_carte" value="true"
+                           data-testid="vider-carte-checkbox-vv">
+                    {% translate "Réinitialiser la carte après remboursement (détache user, wallet, carte primaire)" %}
+                </label>
+            </p>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button type="submit"
+                        style="flex: 1; padding: 12px; background: #16A34A; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
+                        data-testid="vider-carte-btn-confirm">
+                    {% translate "Confirmer le remboursement" %}
+                </button>
+                <button type="button"
+                        onclick="document.getElementById('vider-carte-confirm').remove();"
+                        style="flex: 1; padding: 12px; background: #6B7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
+                        data-testid="vider-carte-btn-cancel">
+                    {% translate "Annuler" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

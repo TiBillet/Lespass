@@ -1,0 +1,42 @@
+{% load i18n unfold %}
+
+<style>
+    .refund-before-container {
+        margin-bottom: 24px;
+    }
+    .refund-before-container .refund-card {
+        background: var(--color-base-0, #ffffff);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .refund-before-container h2 {
+        margin: 0 0 12px;
+        font-size: 1.15rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .refund-before-container h2 .material-symbols-outlined {
+        font-size: 1.3rem;
+    }
+    .refund-before-container .hint {
+        color: var(--color-base-500, #6B7280);
+        font-size: 0.9em;
+    }
+</style>
+
+<div class="refund-before-container" data-testid="refund-before">
+    <div class="refund-card"
+         hx-get="{% url 'staff_admin:QrcodeCashless_cartecashless_refund_panel' original.uuid %}"
+         hx-trigger="load"
+         hx-swap="innerHTML">
+        <p class="hint">{% translate "Chargement du panneau de remboursement..." %}</p>
+    </div>
+
+    {# Zone d'injection du modal (HTMX cible #refund-modal-slot) #}
+    {# Modal injection zone (HTMX targets #refund-modal-slot) #}
+    <div id="refund-modal-slot"></div>
+</div>

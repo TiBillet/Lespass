@@ -1,0 +1,64 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% load billet_filters %}
+
+{% block title %}{% translate "Historique des virements pot central" %}{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto; padding: 20px;" data-testid="bank-transfers-historique">
+
+    <h1 style="margin: 0 0 16px; font-size: 1.5rem;">
+        {% if scope == "global" %}
+            {% translate "Historique global des virements" %}
+        {% else %}
+            {% translate "Historique de mes virements reçus" %}
+        {% endif %}
+    </h1>
+
+    {% if scope == "global" %}
+    <p>
+        <a href="{% url 'staff_admin:bank_transfers_dashboard' %}"
+           style="color: #2563EB; text-decoration: none;" data-testid="link-back-dashboard">
+            ← {% translate "Retour au dashboard" %}
+        </a>
+    </p>
+    {% endif %}
+
+    {% if transactions %}
+    <table style="width: 100%; border-collapse: collapse; background: white;" data-testid="historique-table">
+        <thead>
+            <tr style="background: #F9FAFB; border-bottom: 2px solid #E5E7EB;">
+                <th style="padding: 12px; text-align: left;">{% translate "Date saisie" %}</th>
+                {% if scope == "global" %}
+                <th style="padding: 12px; text-align: left;">{% translate "Tenant" %}</th>
+                {% endif %}
+                <th style="padding: 12px; text-align: left;">{% translate "Asset" %}</th>
+                <th style="padding: 12px; text-align: right;">{% translate "Montant" %}</th>
+                <th style="padding: 12px; text-align: left;">{% translate "Date virement" %}</th>
+                <th style="padding: 12px; text-align: left;">{% translate "Référence" %}</th>
+                <th style="padding: 12px; text-align: left;">{% translate "Commentaire" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tx in transactions %}
+            <tr style="border-bottom: 1px solid #E5E7EB;" data-testid="historique-row-{{ forloop.counter }}">
+                <td style="padding: 12px;">{{ tx.datetime|date:"d/m/Y H:i" }}</td>
+                {% if scope == "global" %}
+                <td style="padding: 12px;">{{ tx.tenant.name }}</td>
+                {% endif %}
+                <td style="padding: 12px;">{{ tx.asset.name }}</td>
+                <td style="padding: 12px; text-align: right; font-weight: 600;">{{ tx.amount|cents_to_euros }}</td>
+                <td style="padding: 12px;">{{ tx.metadata.date_virement|default:"—" }}</td>
+                <td style="padding: 12px;">{{ tx.metadata.reference_bancaire|default:"—" }}</td>
+                <td style="padding: 12px;">{{ tx.comment|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p data-testid="no-transactions-message" style="text-align: center; padding: 32px; color: #6B7280;">
+            {% translate "Aucun virement enregistré." %}
+        </p>
+    {% endif %}
+</div>
+{% endblock %}

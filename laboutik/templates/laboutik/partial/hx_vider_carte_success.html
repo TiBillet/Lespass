@@ -1,0 +1,61 @@
+{% load i18n billet_filters %}
+{# Ecran de succes apres vider carte. #}
+{# Success screen after empty card. #}
+
+<div id="vider-carte-success"
+     class="overlay overlay-fullscreen"
+     data-testid="vider-carte-success">
+    <div class="overlay-content" style="max-width: 500px; margin: 80px auto; padding: 24px; background: white; border-radius: 8px;">
+        <h2 style="margin-top: 0; color: #16A34A;">
+            {% translate "Remboursement effectué" %}
+        </h2>
+
+        <div style="font-size: 2.5rem; font-weight: bold; text-align: center; margin: 24px 0;"
+             data-testid="vider-carte-success-amount">
+            {{ total_centimes|cents_to_euros }}
+        </div>
+
+        <div style="background: #F3F4F6; padding: 12px; border-radius: 6px; margin: 16px 0; font-size: 0.9rem;">
+            {% if total_tlf_centimes > 0 %}
+            <p style="margin: 4px 0;">
+                {% translate "Monnaie locale" %} : {{ total_tlf_centimes|cents_to_euros }}
+            </p>
+            {% endif %}
+            {% if total_fed_centimes > 0 %}
+            <p style="margin: 4px 0;">
+                {% translate "Fiduciaire fédérée" %} : {{ total_fed_centimes|cents_to_euros }}
+            </p>
+            {% endif %}
+        </div>
+
+        {% if vider_carte %}
+        <div style="background: #FEF3C7; color: #92400E; padding: 12px; border-radius: 6px; margin: 16px 0;">
+            {% translate "La carte a été réinitialisée." %}
+        </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <form style="flex: 1; margin: 0;"
+                  hx-post="{% url 'laboutik-paiement-vider_carte_imprimer_recu' %}"
+                  hx-target="#messages"
+                  hx-swap="innerHTML">
+                {% csrf_token %}
+                {% for tx_uuid in transaction_uuids %}
+                <input type="hidden" name="transaction_uuids" value="{{ tx_uuid }}">
+                {% endfor %}
+                <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+                <button type="submit"
+                        style="width: 100%; padding: 12px; background: #2563EB; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
+                        data-testid="vider-carte-btn-imprimer">
+                    {% translate "Imprimer reçu" %}
+                </button>
+            </form>
+            <button type="button"
+                    onclick="document.getElementById('vider-carte-success').remove();"
+                    style="flex: 1; padding: 12px; background: #6B7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
+                    data-testid="vider-carte-btn-retour">
+                {% translate "Retour" %}
+            </button>
+        </div>
+    </div>
+</div>
