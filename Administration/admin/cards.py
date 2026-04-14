@@ -162,20 +162,22 @@ class CarteCashlessAddForm(forms.ModelForm):
         return cleaned_data
 
     def save(self, commit=True):
-        # Save manuel : on instancie CarteCashless avec les 3 champs saisis
-        # (Django ne peut pas le faire automatiquement puisqu'ils sont
-        # editable=False sur le modele).
-        # Manual save: we instantiate CarteCashless with the 3 entered fields
-        # (Django cannot do it automatically since they are editable=False
-        # on the model).
-        carte = CarteCashless(
-            tag_id=self.cleaned_data["tag_id"],
-            number=self.cleaned_data["number"],
-            uuid=self.cleaned_data["uuid"],
-        )
+        # On passe par super().save(commit=False) pour beneficier de
+        # l'attachement de save_m2m (Django admin l'appelle ensuite dans
+        # save_related). On assigne les 3 champs sur l'instance cree vide
+        # (Meta.fields = (), donc aucun champ n'est peuple automatiquement).
+        # Use super().save(commit=False) to get save_m2m attached
+        # (Django admin calls it afterwards in save_related). We assign the
+        # 3 fields on the empty instance (Meta.fields = (), so nothing is
+        # populated automatically).
+        instance = super().save(commit=False)
+        instance.tag_id = self.cleaned_data["tag_id"]
+        instance.number = self.cleaned_data["number"]
+        instance.uuid = self.cleaned_data["uuid"]
         if commit:
-            carte.save()
-        return carte
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 # ---------------------------------------------------------------------------
