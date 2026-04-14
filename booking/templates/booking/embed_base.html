@@ -1,0 +1,25 @@
+{% load i18n static %}
+<!--
+LOCALISATION : booking/templates/booking/embed_base.html
+
+Base minimale sans chrome pour BookingViewSet.embed().
+Override de base_template → list.html rendu sans navbar ni footer.
+/ Minimal chrome-free base for BookingViewSet.embed().
+base_template override → list.html rendered without navbar or footer.
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{% translate "Réservation" %}{% endblock %} | {{ config.organisation }}</title>
+    <link data-bs-stylesheet="bootstrap"
+          href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}"
+          rel="stylesheet">
+    <link rel="stylesheet"
+          href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
+</head>
+<body>
+{% block main %}{% endblock %}
+</body>
+</html>
