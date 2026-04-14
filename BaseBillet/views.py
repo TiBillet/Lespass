@@ -212,6 +212,14 @@ def get_context(request):
              'label': f'{crowd_config.title}', 'icon': 'people-fill'}
         )
 
+    # Module réservation de ressources — visible seulement si activé dans la config.
+    # / Resource booking module — visible only when enabled in admin config.
+    if config.module_booking:
+        navbar.append(
+            {'name': 'booking-list', 'url': '/booking/',
+             'label': _('Booking'), 'icon': 'calendar-check'}
+        )
+
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
 

@@ -823,6 +823,9 @@ the embed.
 
 ### Session 8.1 — Red phase
 
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
+
 **Files to create:**
 - `booking/tests/test_embed.py`
 
@@ -858,6 +861,9 @@ Session 7; no new business logic needed.
 
 ### Session 9.1 — Red phase
 
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
+
 **Files to create:**
 - `booking/tests/test_slot_picker.py`
 
@@ -886,6 +892,9 @@ Write the minimal HTMX partial view to make all red-phase tests pass.
 ## Session 10 — Add to basket (authenticated member)
 
 ### Session 10.1 — Red phase
+
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
 
 **Files to create:**
 - `booking/tests/test_basket.py`
@@ -925,6 +934,9 @@ dashboard").
 
 ### Session 11.1 — Red phase
 
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
+
 **Files to create:**
 - `booking/tests/test_views_member.py`
 
@@ -962,6 +974,9 @@ implementing this session.
 
 ### Session 12.1 — Red phase
 
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
+
 **Files to create:**
 - `booking/tests/test_validate.py`
 
@@ -993,6 +1008,9 @@ tests pass.
 
 ### Session 13.1 — Red phase
 
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
+
 **Files to create:**
 - `booking/tests/test_cancel.py`
 
@@ -1020,6 +1038,9 @@ Write the minimal cancellation logic to make all red-phase tests pass.
 ## Session 14 — Celery task: basket expiry
 
 ### Session 14.1 — Red phase
+
+> ⚠️ **AI goes in plan mode** The human review the plan and confirms
+> before proceeding the the red phase.
 
 **Files to create:**
 - `booking/tests/test_tasks.py`
