@@ -1,13 +1,18 @@
 # TiBillet — Booking Module Specification
 
-**Version:** v0.6
+**Version:** v0.7
 **Status:**  Ready for review by TiBillet core team
-**Date:**    2026-04-12
+**Date:**    2026-04-14
 **Author:**  Joris REHM
 **Note:**    This version was produced in a pair specification session with Claude AI (Anthropic)
 
 Changes:
 
+  - 0.7 §2 Member actor updated. §3.1.6 Booking status updated.
+         §4.2 Member cancel flow clarified. §4.3 Volunteer flow updated.
+         §5 Availability, Pricing, Cancellation rules updated.
+         §7 Member views updated; new §7 Member (account administration)
+         section added. §7 Volunteer admin table updated.
   - 0.6 Section 3 restructured: §3.1 Schema Models groups all persisted
          models (§3.1.1–§3.1.6); §3.5 Slot removed and replaced by a new
          §3.2 Booking Logic that formally defines the four sets O, W, E, B.
@@ -24,6 +29,9 @@ Changes:
          (timezone-aware, consistent with Booking.start_datetime — decisions §2)
   - 0.4 Rename SlotTemplate to WeeklyOpening
     and SlotEntry to OpeningEntry
+  - 0.3 Simplify: the "unit" feature replaced by resource grouping
+  - 0.2 First commited version
+  - 0.1 Early draft (not published)
 
 ---
 
@@ -63,7 +71,9 @@ optional payment via the existing TiBillet payment system.
 +====================+==============================================================+
 | **Member**         | A user with an active membership in the tenant's             |
 |                    | association. Can browse resources, book slots, and cancel    |
-|                    | within the deadline.                                         |
+|                    | confirmed bookings within the deadline. Has access to a      |
+|                    | restricted admin area to view and cancel own confirmed        |
+|                    | bookings.                                                    |
 +--------------------+--------------------------------------------------------------+
 | **Volunteer**      | A trusted member with elevated rights. Manages resources,    |
 |                    | weekly openings, calendars, and cancellation policies via the |
@@ -327,7 +337,10 @@ state is stored.
 | `status`                | enum               | `new` — in basket, pending user          |
 |                         |                    | validation;                              |
 |                         |                    | `validated` — pending payment;           |
-|                         |                    | `confirmed` — payment done               |
+|                         |                    | `confirmed` — payment done.              |
+|                         |                    | Free slots (`prix = 0`) skip             |
+|                         |                    | `validated` and go directly from         |
+|                         |                    | `new` to `confirmed`.                    |
 +-------------------------+--------------------+------------------------------------------+
 | `booked_at`             | datetime           | When the booking was created             |
 +-------------------------+--------------------+------------------------------------------+
@@ -551,27 +564,36 @@ still decrease `remaining_capacity` for any overlapping slot.
 
 ### 4.2 Member — Cancel a Booking
 
-1. Member views their upcoming confirmed bookings in their TiBillet account
-   dashboard.
-2. Member requests cancellation.
-3. System checks whether the cancellation deadline has passed: the current time must
-   be before the booking start time minus the resource's cancellation deadline.
+Only `confirmed` bookings can be cancelled through this flow. `new` and
+`validated` bookings are removed from the basket management page (see §4.1,
+steps 6–7) with no refund, as no payment has been collected.
+
+1. Member opens their account administration page and views their upcoming
+   `confirmed` bookings.
+2. Member requests cancellation of a booking from the account administration
+   page.
+3. System checks whether the cancellation deadline has passed: the current time
+   must be before the booking start time minus the resource's cancellation
+   deadline.
 4. If past the deadline: cancellation is refused; member is shown the deadline.
-5. If before the deadline: booking is deleted, wallet/cashless refunded if
-   applicable.
+5. If before the deadline: booking is deleted, wallet/cashless refunded
+   automatically if applicable. Member receives a cancellation confirmation
+   notification.
 
 ### 4.3 Volunteer — Manage Resources
 
 1. Volunteer accesses the booking admin panel within TiBillet backoffice.
-2. Volunteer creates/edits Resources, assigns a Weekly Opening, a Calendar, and a
-   Price.
-3. Volunteer manages Calendars: creates ClosedPeriods for holidays or extended
+2. Volunteer creates/edits ResourceGroups to organise resources for display on
+   the public page.
+3. Volunteer creates/edits Resources, assigns a Weekly Opening, a Calendar, and a
+   Price. Resources can optionally be assigned to a ResourceGroup.
+4. Volunteer manages Calendars: creates ClosedPeriods for holidays or extended
    closures.
-4. Volunteer views all bookings for any resource (list + calendar view), filterable
+5. Volunteer views all bookings for any resource (list + calendar view), filterable
    by date and status.
-5. Volunteer can delete any booking on behalf of a member. Refund is handled
-   manually.
-6. Volunteer can create an ad-hoc booking for any resource, date, and time,
+6. Volunteer can delete any booking on behalf of a member. No automatic refund is
+   triggered; any refund is handled manually by the volunteer.
+7. Volunteer can create an ad-hoc booking for any resource, date, and time,
    regardless of the Weekly Opening.
 
 ### 4.4 Public Booking Page
@@ -587,7 +609,7 @@ still decrease `remaining_capacity` for any overlapping slot.
 
 ## 5. Business Rules
 
-### Availability
+### Availability and Capacity
 
 - Slots are computed on the fly from the resource's Weekly Opening and Calendar;
   nothing is pre-generated or stored.
@@ -599,6 +621,8 @@ still decrease `remaining_capacity` for any overlapping slot.
   the request must match exactly an element of E' (same start, same duration).
   The server verifies this explicitly — it cannot trust the HTTP POST (see
   §3.2.4).
+- A member may hold any number of bookings on the same resource, as long as
+  capacity allows.
 - **Volunteer bookings** (created via the admin panel) are not required to be
   aligned with computed slots. A volunteer may choose an arbitrary start time and
   duration (e.g. 10:12 for 12 minutes while the opening defines 60-minute slots
@@ -614,28 +638,29 @@ still decrease `remaining_capacity` for any overlapping slot.
   the range must be available before the booking is created.
 - Slots outside the resource's `booking_horizon_days` window are never surfaced to
   members.
-
-### Capacity
-
-- A slot is full when all its units are taken (`remaining_capacity = 0`).
-- A unit cannot be shared between several bookings: at any point in time, a unit
-  may only be held by one booking.
-- A member may hold any number of bookings on the same resource, as long as
-  capacity allows.
+- A member can book any slot whose start time is strictly in the future. There
+  is no minimum advance notice: a slot starting in a few minutes is bookable
+  as long as it has not started yet and capacity allows.
 
 ### Pricing & Membership
 
 - Pricing and membership eligibility are checked at booking validation time.
-- Free slots (`prix = 0`) skip the payment step entirely and go directly to
-  `confirmed`.
+- Free slots (`prix = 0`) skip the payment step entirely: status transitions
+  directly from `new` to `confirmed`, bypassing `validated`.
 
 ### Cancellation
 
 - Cancellation is modelled as deletion of the Booking row. No cancelled state is
   stored.
-- Cancellation deadline is configured per resource. Default: 24 hours before slot
-  start.
-- Refunds on cancellation are handled by TiBillet for wallet and cashless payments.
+- Only `confirmed` bookings are cancellable through the member account
+  administration page. `new` and `validated` bookings are removed from the
+  basket management page; no refund applies as no payment has been collected.
+- Cancellation deadline is configured per resource. Default: 24 hours before
+  slot start.
+- **Member cancellation** (own `confirmed` booking via account administration):
+  wallet/cashless refunded automatically if applicable.
+- **Volunteer cancellation** (any booking via backoffice): no automatic refund.
+  Any refund is handled manually by the volunteer.
 
 > **Open question (core team):** what is the refund behaviour for credit card
 > payments on cancellation?
@@ -714,8 +739,13 @@ TiBillet HDA conventions.
 |                 |                                    | prompt to add more or        |
 |                 |                                    | proceed to validation        |
 +-----------------+------------------------------------+------------------------------+
-| Basket view     | GET                                | Partial: list of `new`       |
-|                 |                                    | bookings with total price    |
+| Basket view     | GET                                | Partial: list of `new` and   |
+|                 |                                    | `validated` bookings with    |
+|                 |                                    | total price                  |
++-----------------+------------------------------------+------------------------------+
+| Remove from     | POST — member removes a booking    | Partial: updated basket;     |
+| basket          | from basket                        | booking deleted (no refund   |
+|                 |                                    | as no payment collected)     |
 +-----------------+------------------------------------+------------------------------+
 | Validate basket | POST — member confirms basket      | Redirect to TiBillet payment |
 |                 |                                    | flow; bookings move to       |
@@ -724,10 +754,19 @@ TiBillet HDA conventions.
 | Booking list    | GET                                | Full page: member's upcoming |
 |                 |                                    | `confirmed` bookings         |
 +-----------------+------------------------------------+------------------------------+
-| Cancel booking  | POST — member requests             | Partial: updated booking     |
-|                 | cancellation                       | list or error if past        |
-|                 |                                    | deadline                     |
-+-----------------+------------------------------------+------------------------------+
+
+### Member (account administration)
+
+Members have access to a restricted area of the Django admin panel.
+Unlike volunteers, a member can only view and act on their own bookings.
+
++-----------------+--------------+----------------------------------------------+
+| Model           | Admin type   | Member permissions                           |
++=================+==============+==============================================+
+| Booking (own)   | `ModelAdmin` | List own upcoming bookings; cancel (delete)  |
+|                 |              | own bookings before the cancellation         |
+|                 |              | deadline                                     |
++-----------------+--------------+----------------------------------------------+
 
 ### Volunteer (backoffice)
 
@@ -737,22 +776,19 @@ administration.
 
 Django admin registration:
 
-+--------------+--------------+-----------------------------------------------+
-| Model        | Admin type   | Inline children                               |
-+==============+==============+===============================================+
-| Resource     | `ModelAdmin` | —                                             |
-+--------------+--------------+-----------------------------------------------+
-| WeeklyOpening | `ModelAdmin` | `OpeningEntry` as `TabularInline`                |
-|              |              | (compact rows: weekday, start_time,           |
-|              |              | duration, count)                              |
-+--------------+--------------+-----------------------------------------------+
-| Calendar     | `ModelAdmin` | `ClosedPeriod` as `StackedInline`             |
-|              |              | (start_date, end_date, label need             |
-|              |              | vertical space)                               |
-+--------------+--------------+-----------------------------------------------+
-| Booking      | `ModelAdmin` | —                                             |
-+--------------+--------------+-----------------------------------------------+
-
++-----------------+--------------+-----------------------+
+| Model           | Admin type   | Inline children       |
++=================+==============+=======================+
+| ResourceGroup   | `ModelAdmin` | —                     |
++-----------------+--------------+-----------------------+
+| Resource        | `ModelAdmin` | —                     |
++-----------------+--------------+-----------------------+
+| WeeklyOpening   | `ModelAdmin` | OpeningEntry (inline) |
++-----------------+--------------+-----------------------+
+| Calendar        | `ModelAdmin` | ClosedPeriod (inline) |
++-----------------+--------------+-----------------------+
+| Booking         | `ModelAdmin` | —                     |
++-----------------+--------------+-----------------------+
 
 ## 8. Open Questions
 
@@ -787,6 +823,7 @@ should be discussed with the TiBillet core team.
 - Cross-tenant / federated resource sharing
 - Publication of bookable resources to the federated agenda
 - Waitlist when a slot is full
-- Native mobile app
+- Native mobile app (Web Rulez, web is king!)
 - QR code check-in at resource location
 - Usage analytics / reporting dashboard
+- Free form booking (not constrainted by recurring slots) not planned
