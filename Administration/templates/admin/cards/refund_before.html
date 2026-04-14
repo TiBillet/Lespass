@@ -1,5 +1,10 @@
 {% load i18n unfold %}
 
+{# Ne rien afficher en mode ADD (pas d'original encore en DB).
+   Le panneau refund n'a de sens que sur la fiche d'une carte existante.
+   Do not render in ADD mode (no original persisted yet).
+   The refund panel only makes sense on an existing card's change form. #}
+{% if original %}
 <style>
     .refund-before-container {
         margin-bottom: 24px;
@@ -40,3 +45,4 @@
     {# Modal injection zone (HTMX targets #refund-modal-slot) #}
     <div id="refund-modal-slot"></div>
 </div>
+{% endif %}

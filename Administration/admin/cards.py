@@ -6,6 +6,9 @@ Filtre par detail.origine == tenant courant pour les non-superusers.
 Creation et suppression reservees aux superusers.
 Refund : integre dans change_form_before_template (panel + modal HTMX).
 """
+import uuid as uuid_module
+
+from django import forms
 from django.contrib import admin
 from django.db import connection
 
@@ -13,6 +16,7 @@ from django.urls import path
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
+from unfold.widgets import UnfoldAdminTextInputWidget, UnfoldAdminUUIDInputWidget
 
 from Administration.admin.site import staff_admin_site
 from Administration import views_cards
@@ -52,6 +56,129 @@ def _detail_nb_cartes(detail: Detail) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Formulaire d'ajout CarteCashless (superuser only)
+# CarteCashless add form (superuser only)
+#
+# tag_id, number et uuid sont editable=False sur le modele : par defaut
+# l'admin Django les ignore. On les reinjecte dans un ModelForm dedie pour
+# permettre leur saisie en mode ADD. En mode CHANGE, le form par defaut
+# reprend le relais (via ModelAdmin.form vs add_form).
+#
+# tag_id, number and uuid are editable=False on the model: Django admin
+# ignores them by default. We reinject them via a dedicated ModelForm
+# to allow input in ADD mode only.
+# ---------------------------------------------------------------------------
+
+class CarteCashlessAddForm(forms.ModelForm):
+    """
+    Saisie manuelle du tag_id (obligatoire). Number et uuid optionnels :
+    si vides, generes automatiquement.
+
+    Manual input of tag_id (required). Number and uuid optional:
+    if empty, auto-generated.
+
+    Note : tag_id, number et uuid sont editable=False sur le modele, donc
+    Django interdit de les inclure via Meta.fields. On les reinjecte dans
+    __init__ et on override save() pour creer l'objet manuellement.
+
+    Note: tag_id, number and uuid are editable=False on the model, so Django
+    forbids including them via Meta.fields. We reinject them in __init__
+    and override save() to create the object manually.
+    """
+
+    class Meta:
+        model = CarteCashless
+        fields = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["tag_id"] = forms.CharField(
+            max_length=8,
+            required=True,
+            label=_("Tag NFC"),
+            widget=UnfoldAdminTextInputWidget(
+                attrs={"placeholder": "ex : A49E8E2A"},
+            ),
+            help_text=_(
+                "Identifiant NFC grave dans la carte (8 caracteres hex, majuscules)."
+            ),
+        )
+        self.fields["number"] = forms.CharField(
+            max_length=8,
+            required=False,
+            label=_("Numero imprime"),
+            widget=UnfoldAdminTextInputWidget(
+                attrs={"placeholder": _("Auto-genere si vide")},
+            ),
+            help_text=_(
+                "Numero visible imprime sur la carte. Si vide : genere depuis "
+                "les 8 premiers caracteres du QR code."
+            ),
+        )
+        self.fields["uuid"] = forms.UUIDField(
+            required=False,
+            label=_("UUID (QR code)"),
+            widget=UnfoldAdminUUIDInputWidget(
+                attrs={"placeholder": _("Auto-genere si vide")},
+            ),
+            help_text=_(
+                "UUID du QR code scannable. Si vide : genere automatiquement."
+            ),
+        )
+
+    def clean_tag_id(self):
+        tag_id = self.cleaned_data["tag_id"].upper()
+        # Unicite : pas d'autre carte avec le meme tag_id.
+        # Uniqueness: no other card has the same tag_id.
+        if CarteCashless.objects.filter(tag_id=tag_id).exists():
+            raise forms.ValidationError(
+                _("Une carte avec ce Tag NFC existe deja.")
+            )
+        return tag_id
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Generer l'UUID si absent.
+        # Generate UUID if missing.
+        if not cleaned_data.get("uuid"):
+            cleaned_data["uuid"] = uuid_module.uuid4()
+
+        # Generer le number depuis les 8 premiers chars hex de l'UUID si absent.
+        # Generate number from first 8 hex chars of UUID if missing.
+        if not cleaned_data.get("number"):
+            uuid_hex = str(cleaned_data["uuid"]).replace("-", "")
+            cleaned_data["number"] = uuid_hex[:8].upper()
+
+        # Verifier l'unicite du number et de l'uuid (puisque Django ne le fait
+        # pas automatiquement — les champs ne viennent pas du ModelForm).
+        # Check uniqueness of number and uuid (Django does not do it
+        # automatically — fields do not come from ModelForm).
+        if CarteCashless.objects.filter(number=cleaned_data["number"]).exists():
+            self.add_error("number", _("Ce numero imprime est deja utilise."))
+        if CarteCashless.objects.filter(uuid=cleaned_data["uuid"]).exists():
+            self.add_error("uuid", _("Cet UUID est deja utilise."))
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        # Save manuel : on instancie CarteCashless avec les 3 champs saisis
+        # (Django ne peut pas le faire automatiquement puisqu'ils sont
+        # editable=False sur le modele).
+        # Manual save: we instantiate CarteCashless with the 3 entered fields
+        # (Django cannot do it automatically since they are editable=False
+        # on the model).
+        carte = CarteCashless(
+            tag_id=self.cleaned_data["tag_id"],
+            number=self.cleaned_data["number"],
+            uuid=self.cleaned_data["uuid"],
+        )
+        if commit:
+            carte.save()
+        return carte
+
+
+# ---------------------------------------------------------------------------
 # CarteCashlessAdmin
 # ---------------------------------------------------------------------------
 
@@ -69,15 +196,37 @@ class CarteCashlessAdmin(ModelAdmin):
     )
     search_fields = ("tag_id", "number", "user__email")
     list_filter = ("detail__origine",)
-    readonly_fields = ("tag_id", "number", "uuid")
+
+    # Formulaire custom uniquement en mode ADD (tag_id + number + uuid saisissables).
+    # En mode CHANGE, get_form() retombe sur le form par defaut.
+    # Custom form only in ADD mode (tag_id + number + uuid editable).
+    # In CHANGE mode, get_form() falls back to the default form.
+    add_form = CarteCashlessAddForm
+
+    def get_form(self, request, obj=None, **kwargs):
+        # En mode ADD : on court-circuite le factory Django (modelform_factory
+        # crasherait sur les champs editable=False) et on retourne directement
+        # notre form custom.
+        # In ADD mode: short-circuit Django's factory (modelform_factory would
+        # crash on editable=False fields) and return our custom form directly.
+        if obj is None:
+            return self.add_form
+        return super().get_form(request, obj, **kwargs)
+
+    def get_fieldsets(self, request, obj=None):
+        if obj is None:
+            # Mode ADD : 3 champs saisissables uniquement.
+            # ADD mode: only 3 editable fields.
+            return ((None, {"fields": ("tag_id", "number", "uuid")}),)
+        return super().get_fieldsets(request, obj)
 
     def get_readonly_fields(self, request, obj=None):
         if obj is None:
-            # Formulaire de creation : seuls les champs de base en readonly.
-            # Add form: only base fields are read-only.
-            return self.readonly_fields
-        # En mode change : tous les champs en lecture seule.
-        # In change mode: all fields read-only (form is purely informational).
+            # Mode ADD : tout saisissable (geré par CarteCashlessAddForm).
+            # ADD mode: all editable (handled by CarteCashlessAddForm).
+            return ()
+        # Mode CHANGE : tous les champs en lecture seule.
+        # CHANGE mode: all fields read-only (form is purely informational).
         return [field.name for field in self.model._meta.fields]
 
     change_form_before_template = "admin/cards/refund_before.html"
