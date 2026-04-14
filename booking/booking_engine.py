@@ -353,12 +353,18 @@ def compute_slots(resource, date_from, date_to, reference_date=None):
 
 
 def validate_new_booking(resource, start_datetime, slot_duration_minutes,
-                         slot_count, member, reference_date=None):
+                         slot_count, member, reference_date=None,
+                         reference_now=None):
     """
     Valide B ⊆ E' et crée la réservation de manière atomique (finding §14).
     / Validates B ⊆ E' and creates the booking atomically (finding §14).
 
     LOCALISATION : booking/booking_engine.py
+
+    Étape 0 — garde temporelle (§5 Availability) :
+      Un créneau déjà commencé (start_datetime <= maintenant) est refusé.
+      Pas de délai minimum : un créneau démarrant dans quelques minutes
+      est accepté.
 
     Étape 1 — pré-validation rapide (non atomique) :
       compute_slots → vérifie que chaque créneau de B existe dans E'
@@ -370,10 +376,17 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
       avec des données fraîches avant d'insérer.
 
     reference_date : date fixe pour les tests (finding §13).
+    reference_now  : datetime fixe pour les tests (finding §13).
 
     :return: (True, Booking) si créé, (False, str) avec le message d'erreur
     """
     from booking.models import Booking, Resource
+
+    # Refuse tout créneau dont le début est passé ou est maintenant.
+    # / Reject any slot whose start time is in the past or right now.
+    now = reference_now or timezone.now()
+    if start_datetime <= now:
+        return False, str(_('Cannot book a slot that has already started.'))
 
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count

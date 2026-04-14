@@ -1990,3 +1990,93 @@ def test_validate_booking_rejects_slot_bleeding_into_closed_next_day():
 
         finally:
             _cleanup()
+
+
+@pytest.mark.django_db
+def test_validate_booking_accepts_slot_starting_in_a_few_minutes():
+    """
+    Un créneau qui commence dans quelques minutes est réservable (§5 Availability).
+    Pas de délai minimum : start_datetime > now suffit.
+    / A slot starting in a few minutes is bookable (§5 Availability).
+    No minimum notice: start_datetime > now is sufficient.
+
+    LOCALISATION : booking/tests/test_booking_engine.py
+
+    Scénario : ouverture 10:00, reference_now = 09:55 (5 min avant).
+    Le créneau 10:00 est strictement dans le futur → (True, Booking).
+    """
+    from booking.booking_engine import validate_new_booking
+
+    with schema_context(TENANT_SCHEMA):
+        try:
+            cal      = _make_calendar('val_near_future')
+            wop      = _make_weekly_opening('val_near_future')
+            resource = _make_resource('val_near_future', cal, wop,
+                                      capacity=1, horizon=28)
+            _add_opening_entry(wop, weekday=0,
+                               start_time=datetime.time(10, 0),
+                               slot_duration_minutes=60, slot_count=1)
+
+            # « maintenant » est 09:55 → le créneau 10:00 est dans 5 minutes
+            # / « now » is 09:55 → the 10:00 slot starts in 5 minutes
+            reference_now = _make_aware_dt(MONDAY_NEAR, datetime.time(9, 55))
+
+            is_valid, result = validate_new_booking(
+                resource=resource,
+                start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
+                slot_duration_minutes=60,
+                slot_count=1,
+                member=_get_test_user(),
+                reference_date=REFERENCE_DATE,
+                reference_now=reference_now,
+            )
+
+            assert is_valid is True
+            assert result is not None
+
+        finally:
+            _cleanup()
+
+
+@pytest.mark.django_db
+def test_validate_booking_rejects_slot_that_has_already_started():
+    """
+    Un créneau dont le début est passé ne peut plus être réservé (§5 Availability).
+    / A slot whose start time is in the past cannot be booked (§5 Availability).
+
+    LOCALISATION : booking/tests/test_booking_engine.py
+
+    Scénario : ouverture 10:00, reference_now = 10:05 (5 min après).
+    Le créneau 10:00 a déjà commencé → (False, str).
+    """
+    from booking.booking_engine import validate_new_booking
+
+    with schema_context(TENANT_SCHEMA):
+        try:
+            cal      = _make_calendar('val_past_slot')
+            wop      = _make_weekly_opening('val_past_slot')
+            resource = _make_resource('val_past_slot', cal, wop,
+                                      capacity=1, horizon=28)
+            _add_opening_entry(wop, weekday=0,
+                               start_time=datetime.time(10, 0),
+                               slot_duration_minutes=60, slot_count=1)
+
+            # « maintenant » est 10:05 → le créneau 10:00 a déjà commencé
+            # / « now » is 10:05 → the 10:00 slot has already started
+            reference_now = _make_aware_dt(MONDAY_NEAR, datetime.time(10, 5))
+
+            is_valid, error = validate_new_booking(
+                resource=resource,
+                start_datetime=_make_aware_dt(MONDAY_NEAR, datetime.time(10, 0)),
+                slot_duration_minutes=60,
+                slot_count=1,
+                member=_get_test_user(),
+                reference_date=REFERENCE_DATE,
+                reference_now=reference_now,
+            )
+
+            assert is_valid is False
+            assert error is not None
+
+        finally:
+            _cleanup()
