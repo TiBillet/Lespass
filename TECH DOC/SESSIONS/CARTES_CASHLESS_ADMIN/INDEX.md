@@ -57,6 +57,12 @@ Travail découpé en 3 phases indépendantes. Chaque phase est livrable et testa
 - Spec : [`2026-04-13-phase2-bank-transfer-design.md`](2026-04-13-phase2-bank-transfer-design.md)
 - Plan : à venir après validation du spec
 
+### Refactor wallet-only (design à valider)
+- Suppression du champ `CarteCashless.user` et `wallet_ephemere`, remplacés par `wallet` FK unique.
+- Élimine la dualité `user.wallet | wallet_ephemere` et fusionne les 3 helpers dupliqués (`_wallet_de_la_carte`, `_obtenir_ou_creer_wallet`, `obtenir_contexte_cashless`).
+- Effort révisé à 6-10h (au lieu de 16-24h) car V2 pas encore en production — pas de data migration zero-downtime nécessaire.
+- Design : [`2026-04-14-refactor-carte-wallet-only-design.md`](2026-04-14-refactor-carte-wallet-only-design.md)
+
 ### Phase 3 — Bouton POS Cashless « Vider Carte »
 - Tile POS auto-générée via Product `methode_caisse=VC` (créé par Phase 1) dans le M2M du PV.
 - Flow dédié qui court-circuite le panier : clic tile → overlay scan NFC → récap tokens
