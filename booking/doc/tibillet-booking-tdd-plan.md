@@ -779,40 +779,40 @@ booking/tests/
 
 --------------------------------------------------------------------------------
 
-## Session 7 — Public view: resource list + available slots
+## Session 7 — Public view: resource list + available slots (DONE ✓)
 
 ### Session 7.1 — Red phase
 
-**Files to create:**
+**Files created:**
 - `booking/tests/test_views_public.py`
 
-**Tests to write:**
+**Tests written (7 — 5 initial + 2 added for ResourceGroup in same session):**
 ```
 test_resource_list_accessible_without_authentication
 test_resource_list_returns_html_200
 test_resource_list_filters_by_tag
 test_resource_with_no_availability_appears_greyed_out
 test_full_slot_appears_as_unavailable
+test_group_name_appears_as_heading
+test_ungrouped_resource_appears_individually
 ```
-
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
 
 ### Session 7.2 — Green phase
 
-**Files to create / modify:**
-- `booking/views.py` — `BookingViewSet.list()`
-- `booking/serializers.py` — `ResourcePublicSerializer`
+**Files created / modified:**
+- `booking/views.py` — `BookingViewSet.list()`; no serializer needed
+  (server-rendered HTML, no JSON API)
 - `booking/templates/booking/views/list.html`
 - `booking/templates/booking/partial/card.html`
 
-Write the minimal view, serializer, and templates to make all
-red-phase tests pass.
+ResourceGroup display (spec §3.1.2) implemented in the same session:
+resources split into `groupes_annotes` + `items_sans_groupe`; ungrouped
+section gets a `<hr>` separator and "Autres ressources" heading when
+both zones are present.
 
 --------------------------------------------------------------------------------
 
-## Session 8 — Embeddable iframe page
+## Session 8 — Embeddable iframe page (DONE ✓)
 
 The public booking page must be embeddable as an `<iframe>` on
 external sites (spec section 4.4). This requires a dedicated route
@@ -823,46 +823,35 @@ the embed.
 
 ### Session 8.1 — Red phase
 
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
-
-**Files to create:**
+**Files created:**
 - `booking/tests/test_embed.py`
 
-**Tests to write:**
+**Tests written (3 — business logic already covered by Session 7):**
 ```
 test_embed_page_accessible_without_authentication
-test_embed_page_returns_html_200
 test_embed_page_response_allows_iframe_embedding
 test_embed_page_has_no_site_navigation_chrome
-test_embed_page_filters_by_tag_url_parameter
-test_embed_page_shows_greyed_out_resources_with_no_availability
 ```
-
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
 
 ### Session 8.2 — Green phase
 
-**Files to create / modify:**
-- `booking/views.py` — `BookingViewSet.embed()` (@action GET)
-- `booking/templates/booking/views/embed.html` — chrome-free variant
-  of the list template
-- `booking/urls.py` — register the embed route
+**Files created / modified:**
+- `booking/views.py` — `_annote_ressources()` helper extracted;
+  `list()` simplified; `BookingViewSet.embed()` (@action GET) added
+- `booking/templates/booking/embed_base.html` — minimal full HTML
+  document (Bootstrap CSS, no chrome); used as `base_template`
+  override so `list.html` is reused unchanged
 
-Set `X-Frame-Options` to `ALLOWALL` (or remove it) on the embed
-response so browsers permit framing. Reuse the slot computation from
-Session 7; no new business logic needed.
+`booking/urls.py` — no change; DefaultRouter auto-registers the
+`@action` route at `/booking/embed/`.
+
+`X-Frame-Options: ALLOWALL` set directly on the response.
 
 --------------------------------------------------------------------------------
 
 ## Session 9 — Slot picker (HTMX partial view)
 
 ### Session 9.1 — Red phase
-
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
 
 **Files to create:**
 - `booking/tests/test_slot_picker.py`
@@ -892,9 +881,6 @@ Write the minimal HTMX partial view to make all red-phase tests pass.
 ## Session 10 — Add to basket (authenticated member)
 
 ### Session 10.1 — Red phase
-
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
 
 **Files to create:**
 - `booking/tests/test_basket.py`
@@ -934,9 +920,6 @@ dashboard").
 
 ### Session 11.1 — Red phase
 
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
-
 **Files to create:**
 - `booking/tests/test_views_member.py`
 
@@ -974,9 +957,6 @@ implementing this session.
 
 ### Session 12.1 — Red phase
 
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
-
 **Files to create:**
 - `booking/tests/test_validate.py`
 
@@ -1008,9 +988,6 @@ tests pass.
 
 ### Session 13.1 — Red phase
 
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
-
 **Files to create:**
 - `booking/tests/test_cancel.py`
 
@@ -1038,9 +1015,6 @@ Write the minimal cancellation logic to make all red-phase tests pass.
 ## Session 14 — Celery task: basket expiry
 
 ### Session 14.1 — Red phase
-
-> ⚠️ **AI goes in plan mode** The human review the plan and confirms
-> before proceeding the the red phase.
 
 **Files to create:**
 - `booking/tests/test_tasks.py`

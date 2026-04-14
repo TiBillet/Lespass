@@ -1,40 +1,15 @@
 <!--
-CARD RESSOURCE
-/ Resource card
-
 LOCALISATION : booking/templates/booking/partial/card.html
-
-Inclus depuis booking/templates/booking/views/list.html.
-Affiche une ressource avec ses créneaux à venir.
-
-Deux états possibles (spec §4.4) :
-  1. Ressource avec créneaux → card normale, créneaux listés
-     Les créneaux complets ont data-testid="booking-slot-unavailable".
-  2. Ressource sans créneaux futurs → card grisée
-     La card porte data-testid="booking-resource-card-greyed".
-
-/ Included from booking/templates/booking/views/list.html.
-Shows a resource with its upcoming slots.
-
-Two possible states (spec §4.4):
-  1. Resource with slots → normal card, slots listed
-     Full slots carry data-testid="booking-slot-unavailable".
-  2. Resource with no future slots → greyed card
-     The card carries data-testid="booking-resource-card-greyed".
 
 Variables attendues / Expected variables:
   item.ressource      — objet Resource (name, description, image, tags)
   item.creneaux       — list[BookableInterval] triée par start
-  item.a_des_creneaux — bool : True si la ressource a des créneaux futurs
+  item.a_des_creneaux — bool
 -->
 {% load i18n %}
 
 {% if item.a_des_creneaux %}
 
-    <!--
-    ÉTAT 1 — Ressource avec des créneaux à venir.
-    / STATE 1 — Resource with upcoming slots.
-    -->
     <div class="col">
         <div class="card h-100" data-testid="booking-resource-card">
 
@@ -56,10 +31,6 @@ Variables attendues / Expected variables:
                 {% endif %}
 
                 {% if item.ressource.tags %}
-                    <!--
-                    Tags de la ressource — servent aussi au filtre URL.
-                    / Resource tags — also used for URL filtering.
-                    -->
                     <p class="mb-2" aria-label="{% translate 'Tags' %}">
                         {% for tag in item.ressource.tags %}
                             <a class="badge bg-secondary text-decoration-none me-1"
@@ -75,21 +46,11 @@ Variables attendues / Expected variables:
                     </p>
                 {% endif %}
 
-                <!--
-                Liste des créneaux à venir — limités aux 5 premiers.
-                Chaque créneau complet est marqué avec data-testid="booking-slot-unavailable".
-                / Upcoming slots list — capped at the first 5.
-                Each full slot is marked with data-testid="booking-slot-unavailable".
-                -->
                 <ul class="list-unstyled mt-2 mb-0 flex-fill"
                     aria-label="{% translate 'Créneaux' %}">
                     {% for creneau in item.creneaux|slice:":5" %}
 
                         {% if creneau.remaining_capacity == 0 %}
-                            <!--
-                            Créneau complet : remaining_capacity = 0.
-                            / Full slot: remaining_capacity = 0.
-                            -->
                             <li class="d-flex align-items-center gap-2 mb-1 text-muted small"
                                 data-testid="booking-slot-unavailable"
                                 aria-label="{% translate 'Créneau complet' %}">
@@ -101,10 +62,6 @@ Variables attendues / Expected variables:
                             </li>
 
                         {% else %}
-                            <!--
-                            Créneau disponible : remaining_capacity > 0.
-                            / Available slot: remaining_capacity > 0.
-                            -->
                             <li class="d-flex align-items-center gap-2 mb-1 small"
                                 data-testid="booking-slot-available">
                                 <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
@@ -126,10 +83,8 @@ Variables attendues / Expected variables:
 {% else %}
 
     <!--
-    ÉTAT 2 — Ressource sans créneau à venir : card grisée (spec §4.4).
-    La ressource est affichée mais non cliquable.
-    / STATE 2 — Resource with no upcoming slots: greyed card (spec §4.4).
-    The resource is displayed but not clickable.
+    Ressource sans créneau à venir : affichée grisée, non cliquable (spec §4.4).
+    / Resource with no upcoming slots: greyed out, not clickable (spec §4.4).
     -->
     <div class="col">
         <div class="card h-100 opacity-50"
