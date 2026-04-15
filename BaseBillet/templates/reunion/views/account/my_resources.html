@@ -1,0 +1,71 @@
+{% extends 'reunion/account_base.html' %}
+{% load i18n %}
+
+<!--
+LOCALISATION : BaseBillet/templates/reunion/views/account/my_resources.html
+
+Page "Mes ressources" dans l'espace membre /my_account/my_resources/.
+Affiche les réservations 'confirmed' à venir du membre connecté.
+/ "My resources" page in the member area /my_account/my_resources/.
+Shows the logged-in member's upcoming 'confirmed' bookings.
+
+Variables attendues / Expected variables:
+  reservations_confirmees — QuerySet[Booking] status='confirmed' + start_datetime > now
+  account_tab             — 'my_resources' (pour le bouton actif dans index.html)
+-->
+
+{% block title %}{% translate "Mes ressources" %}{% endblock %}
+
+{% block account_page %}
+
+<section>
+    <h1 class="h4 mb-4">
+        <i class="bi bi-chair me-2" aria-hidden="true"></i>
+        {% translate "Mes ressources" %}
+    </h1>
+
+    {% if reservations_confirmees %}
+
+        <ul class="list-group mb-4">
+            {% for reservation in reservations_confirmees %}
+                <li class="list-group-item"
+                    data-testid="my-resource-{{ reservation.pk }}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ reservation.resource.name }}</strong>
+                            <br>
+                            <span class="text-muted">
+                                {{ reservation.start_datetime|date:"D d/m/Y H:i" }}
+                            </span>
+                            {% if reservation.slot_count > 1 %}
+                                <span class="badge bg-secondary ms-1">
+                                    {{ reservation.slot_count }}
+                                    {% translate "créneaux" %}
+                                </span>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-success">
+                            {% translate "Confirmée" %}
+                        </span>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+
+    {% else %}
+
+        <p class="text-muted">
+            {% translate "Aucune réservation confirmée à venir." %}
+        </p>
+
+    {% endif %}
+
+    <a href="/booking/"
+       class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-chair me-1" aria-hidden="true"></i>
+        {% translate "Voir les ressources disponibles" %}
+    </a>
+
+</section>
+
+{% endblock %}

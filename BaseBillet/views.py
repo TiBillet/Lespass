@@ -217,7 +217,7 @@ def get_context(request):
     if config.module_booking:
         navbar.append(
             {'name': 'booking-list', 'url': '/booking/',
-             'label': _('Booking'), 'icon': 'calendar-check'}
+             'label': _('Ressources'), 'icon': 'chair'}
         )
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
@@ -1102,6 +1102,38 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
 
         return redirect('/my_account/')
+
+    @action(detail=False, methods=['GET'])
+    def my_resources(self, request: HttpRequest):
+        """
+        Liste les réservations 'confirmed' à venir du membre connecté.
+        / Lists the logged-in member's upcoming 'confirmed' bookings.
+
+        LOCALISATION : BaseBillet/views.py
+
+        N'affiche que les réservations futures avec le statut 'confirmed'.
+        Les réservations 'new' sont gérées dans le panier (booking app).
+        / Only shows future bookings with status 'confirmed'.
+        'new' bookings are managed in the basket (booking app).
+        """
+        from booking.models import Booking
+
+        reservations_confirmees = (
+            Booking.objects
+            .filter(
+                user           = request.user,
+                status         = Booking.STATUS_CONFIRMED,
+                start_datetime__gt = timezone.now(),
+            )
+            .select_related('resource')
+            .order_by('start_datetime')
+        )
+
+        contexte = get_context(request)
+        contexte['header']                 = False
+        contexte['account_tab']            = 'my_resources'
+        contexte['reservations_confirmees'] = reservations_confirmees
+        return render(request, 'reunion/views/account/my_resources.html', contexte)
 
 
 class QrCodeScanPay(viewsets.ViewSet):

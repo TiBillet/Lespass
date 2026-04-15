@@ -84,6 +84,16 @@
             <span class="d-block">{% trans 'My bookings' %}</span>
         </a>
     </div>
+    {% if config.module_booking %}
+    <div class="col">
+        <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'my_resources' %} active" aria-current="page{% endif %}"
+            href="/my_account/my_resources/"
+            data-testid="btn-my-resources">
+            <i class="bi bi-chair fs-1" aria-hidden="true"></i>
+            <span class="d-block">{% trans 'Mes ressources' %}</span>
+        </a>
+    </div>
+    {% endif %}
     <div class="col">
         <a class="w-100 btn btn-lg btn-outline-secondary{% if account_tab == 'card' %} active" aria-current="page{% endif %}"
             href="/my_account/card/">
