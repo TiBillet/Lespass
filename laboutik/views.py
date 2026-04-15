@@ -1535,9 +1535,17 @@ class CaisseViewSet(viewsets.ViewSet):
                 (dernier_seq.numero_sequentiel + 1) if dernier_seq else 1
             )
 
-            # Total perpetuel : mise a jour atomique avec F() puis refresh
-            # / Perpetual total: atomic update with F() then refresh
-            config = LaboutikConfiguration.get_solo()
+            # Total perpetuel : mise a jour atomique avec F() puis refresh.
+            # On utilise update_or_create pour garantir que la ligne existe
+            # meme si django-solo a cache un objet non persiste
+            # (piege 9.86 : get_solo peut retourner pk=1 sans ligne en DB).
+            # Attention : variable `_created` (pas `_`) — `_` est reserve a gettext
+            # plus loin dans cette fonction (piege 9.36).
+            # / Perpetual total: atomic update with F() then refresh.
+            # update_or_create guarantees the row exists even if django-solo
+            # cached a non-persisted object (trap 9.86).
+            # Use `_created` (not `_`) — `_` shadows gettext below (trap 9.36).
+            config, _created = LaboutikConfiguration.objects.update_or_create(pk=1)
             LaboutikConfiguration.objects.filter(pk=config.pk).update(
                 total_perpetuel=F("total_perpetuel") + total_general
             )

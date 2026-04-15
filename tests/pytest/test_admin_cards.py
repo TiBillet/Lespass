@@ -79,6 +79,14 @@ def _login_admin_lespass():
     user = User.objects.filter(email='admin@admin.com').first()
     if user is None:
         pytest.skip("User admin@admin.com introuvable")
+    # Signal pre_save peut mettre is_active=False. Forcer a True avant login,
+    # sinon Django admin redirige vers /admin/login/ avec 302.
+    # / Pre_save signal may set is_active=False. Force True before login,
+    # otherwise Django admin redirects to /admin/login/ with 302.
+    # Cf. tests/PIEGES.md piege 9.88.
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields=['is_active'])
     client.force_login(user)
     return client, user
 

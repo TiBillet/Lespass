@@ -326,7 +326,39 @@ def test_rembourser_carte_vide_raise_no_eligible(tenant_lespass, wallet_lieu_les
 
 @pytest.fixture(scope="module", autouse=True)
 def cleanup_refund_test_data():
-    """Nettoyage en fin de module."""
+    """Nettoyage AVANT et APRES le module : si un run precedent a crashe
+    en milieu, des cartes RFT* orphelines peuvent rester en base et bloquer
+    les INSERT suivants avec UniqueViolation sur tag_id.
+    / Cleanup before AND after module: if a previous run crashed mid-way,
+    orphan RFT* cards may remain and block next INSERTs with UniqueViolation.
+    """
+    def _purge():
+        with schema_context('lespass'):
+            from BaseBillet.models import LigneArticle, Price, Product
+            wallets_test = Wallet.objects.filter(name__startswith=REFUND_TEST_PREFIX)
+            assets_test = Asset.objects.filter(name__startswith=REFUND_TEST_PREFIX)
+            LigneArticle.objects.filter(carte__tag_id__startswith='RFT').delete()
+            # Transaction.card et .primary_card sont PROTECTED : il faut les
+            # supprimer AVANT les cartes, en filtrant par les deux FK.
+            # / Transaction.card and .primary_card are PROTECTED: delete them
+            # BEFORE the cards, filtering on both FKs.
+            Transaction.objects.filter(card__tag_id__startswith='RFT').delete()
+            Transaction.objects.filter(primary_card__tag_id__startswith='RFT').delete()
+            Transaction.objects.filter(asset__in=assets_test).delete()
+            Token.objects.filter(wallet__in=wallets_test).delete()
+            CarteCashless.objects.filter(tag_id__startswith='RFT').delete()
+            Detail.objects.filter(base_url=f'{REFUND_TEST_PREFIX}_TEST').delete()
+            for asset in assets_test:
+                from BaseBillet.models import Price, Product
+                Price.objects.filter(product__name=f'Recharge {asset.name}').delete()
+                Product.objects.filter(name=f'Recharge {asset.name}').delete()
+            assets_test.delete()
+            wallets_test.delete()
+
+    try:
+        _purge()
+    except Exception:
+        pass
     yield
     try:
         with schema_context('lespass'):

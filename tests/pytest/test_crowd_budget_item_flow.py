@@ -6,9 +6,11 @@ import pytest
 
 
 def _ensure_initiative(api_client, auth_headers, request):
-    cached_uuid = request.config.cache.get("api_v2_crowd_initiative_uuid", None)
-    if cached_uuid:
-        return cached_uuid
+    # Ne pas utiliser pytest cache : l'UUID cache peut pointer vers une
+    # Initiative supprimee entre 2 runs (par test_crowd_initiative_delete
+    # ou un cleanup module). Toujours creer une Initiative fraiche.
+    # / Don't use pytest cache: cached UUID may point to an Initiative
+    # deleted between runs. Always create a fresh one.
     payload = {
         "@context": "https://schema.org",
         "@type": "Project",
@@ -27,7 +29,6 @@ def _ensure_initiative(api_client, auth_headers, request):
     data = resp.json()
     identifier = data.get("identifier")
     assert identifier
-    request.config.cache.set("api_v2_crowd_initiative_uuid", identifier)
     return identifier
 
 

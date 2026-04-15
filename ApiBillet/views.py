@@ -1292,10 +1292,10 @@ class Webhook_stripe(APIView):
                                 logger.info((f'    facture déja créée et comptabilisée : {invoice}'))
 
                     except Membership.DoesNotExist:
-                        logger.info((f'    Nouvelle adhésion, facture pas encore comptabilisée : {invoice}'))
-                    except Exception:
-                        logger.error((f'    erreur dans Webhook_stripe customer.subscription.updated : {Exception}'))
-                        raise Exception
+                        logger.info(f'    Membership introuvable : uuid={membership_uuid}, subscription={stripe_id_subscription}, price={price_uuid}')
+                    except Exception as exc:
+                        logger.error(f'    erreur dans Webhook_stripe invoice.paid : {exc}')
+                        raise exc
 
         # Réponse pour l'api stripe qui envoie des webhook pour tout autre que la validation de paiement.
         # Si on renvoie une erreur, ils suppriment le webhook de leur côté.

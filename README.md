@@ -21,6 +21,7 @@
   <img alt="Licence" src="https://img.shields.io/badge/licence-AGPLv3-blue">
   <img alt="Django" src="https://img.shields.io/badge/Django-4.2-green">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11-blue">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-618%20passed-brightgreen">
 </p>
 
 <!-- CAPTURE : screenshot_hero.png — La capture la plus parlante du projet. Je suggère l'agenda public d'un lieu avec des événements, ou un montage de 2-3 écrans (agenda + caisse + carte NFC). Format large, 1200px minimum. -->

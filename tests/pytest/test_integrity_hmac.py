@@ -36,7 +36,15 @@ class TestCleHMAC:
             from laboutik.models import LaboutikConfiguration
             config = LaboutikConfiguration.get_solo()
             config.hmac_key = None
-            config.save(update_fields=['hmac_key'])
+            # Pas de update_fields sur un singleton django-solo : si le
+            # singleton n'existe pas encore (count=0), get_solo() retourne
+            # un objet en memoire et save(update_fields=[...]) leve
+            # DatabaseError "Save with update_fields did not affect any rows".
+            # Cf. tests/PIEGES.md piege 9.86.
+            # / No update_fields on a django-solo singleton: if the singleton
+            # doesn't exist yet, get_solo() returns an in-memory object and
+            # save(update_fields=[...]) raises DatabaseError. See PIEGES.md 9.86.
+            config.save()
 
             cle = config.get_or_create_hmac_key()
 
@@ -54,7 +62,8 @@ class TestCleHMAC:
             from laboutik.models import LaboutikConfiguration
             config = LaboutikConfiguration.get_solo()
             config.hmac_key = None
-            config.save(update_fields=['hmac_key'])
+            # Cf. tests/PIEGES.md piege 9.86 — pas de update_fields sur singleton.
+            config.save()
 
             cle_1 = config.get_or_create_hmac_key()
             cle_2 = config.get_or_create_hmac_key()

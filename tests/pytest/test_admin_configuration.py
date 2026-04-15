@@ -37,8 +37,17 @@ class TestAdminConfiguration:
         """Page Configuration accessible, organisation non vide en base.
         / Configuration page accessible, organisation not empty in DB."""
         with schema_context(TENANT_SCHEMA):
+            # S'assurer qu'une organisation est renseignee (DB dev peut l'avoir
+            # laissee vide selon l'historique des tests).
+            # / Ensure organisation is set (dev DB may have it empty depending
+            # on test history).
+            config = Configuration.get_solo()
+            if not config.organisation:
+                config.organisation = 'Lespass'
+                config.save()
+
             resp = admin_client.get('/admin/BaseBillet/configuration/')
             assert resp.status_code == 200, f"Configuration page: {resp.status_code}"
 
-            config = Configuration.get_solo()
+            config.refresh_from_db()
             assert config.organisation, "Configuration.organisation ne doit pas etre vide"

@@ -87,44 +87,48 @@ def api_client(_inject_cli_env):
 
 @pytest.fixture
 def auth_headers(_inject_cli_env):
-    """En-tetes d'auth pour le test client Django (**auth_headers dans chaque appel).
-    / Auth headers for Django test client (**auth_headers in each call).
+    """En-tetes d'auth pour le test client Django.
+    Scope=function : verifie que l'APIKey stockee dans env pointe toujours
+    vers une ligne existante en DB (lespass). Si elle a ete purgee par
+    un test intermediaire, on en regenere une via `manage.py test_api_key`.
+    Chaque test obtient ainsi des en-tetes auth valides, independamment de
+    ce que les tests precedents ont fait.
 
-    Scope=function (pas session) : certains tests de la suite purgent l'APIKey
-    (flushs, cleanups trop zeles). On verifie a chaque test que la clé existe
-    encore en base, sinon on la re-genere via `manage.py test_api_key`.
-    Evite le 403 "APIKey matching query does not exist" cross-file.
-
-    / Function scope (not session): some tests in the suite purge the APIKey
-    (flushes, over-eager cleanups). We check on every test that the key still
-    exists, otherwise re-generate it via `manage.py test_api_key`. Avoids
-    cross-file "APIKey matching query does not exist" 403s.
+    / Function-scoped: verifies the APIKey stored in env still points to
+    an existing DB row (lespass). If a previous test purged it, regenerate
+    via `manage.py test_api_key`. Each test thus gets valid auth headers,
+    independent of prior tests.
     """
     from django_tenants.utils import tenant_context
     from rest_framework_api_key.models import APIKey
     from Customers.models import Client as TenantClient
 
-    api_key = os.environ["API_KEY"]
-    tenant = TenantClient.objects.get(schema_name="lespass")
-    with tenant_context(tenant):
+    api_key = os.environ.get("API_KEY")
+    needs_regen = not api_key
+    if not needs_regen:
         try:
-            APIKey.objects.get_from_key(api_key)
+            tenant = TenantClient.objects.get(schema_name="lespass")
+            with tenant_context(tenant):
+                APIKey.objects.get_from_key(api_key)
         except APIKey.DoesNotExist:
-            # La cle a ete supprimee (flush, cleanup intrusif). On en regenere
-            # une neuve via la management command.
-            # / Key was deleted (flush, intrusive cleanup). Regenerate via cmd.
-            import subprocess
-            try:
-                result = subprocess.run(
-                    ["python", "manage.py", "test_api_key"],
-                    capture_output=True, text=True, cwd="/DjangoFiles",
-                    env={**os.environ, "TEST": "1"},
-                )
-                if result.returncode == 0:
-                    api_key = result.stdout.strip()
-                    os.environ["API_KEY"] = api_key
-            except Exception:
-                pass
+            needs_regen = True
+        except Exception:
+            needs_regen = True
+
+    if needs_regen:
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["python", "manage.py", "test_api_key"],
+                capture_output=True, text=True, cwd="/DjangoFiles",
+                env={**os.environ, "TEST": "1"},
+            )
+            if result.returncode == 0:
+                api_key = result.stdout.strip()
+                os.environ["API_KEY"] = api_key
+        except Exception:
+            pass
+
     return {"HTTP_AUTHORIZATION": f"Api-Key {api_key}"}
 
 
@@ -230,6 +234,31 @@ def mock_stripe():
             mock_retrieve=mock_retrieve,
             mock_pi=mock_pi,
         )
+
+
+def pytest_runtest_setup(item):
+    """
+    Avant chaque test qui herite de FastTenantTestCase, force
+    connection.schema_name = 'public'. FastTenantTestCase.setUpClass exige
+    le schema public pour creer le test tenant — si un test precedent a
+    laisse connection dans un schema tenant via un tenant_context/schema_context
+    mal restaure, setUpClass crashe avec :
+      "Can't create tenant outside the public schema. Current schema is X"
+
+    / Before each FastTenantTestCase, force connection.schema_name = 'public'.
+    FastTenantTestCase.setUpClass requires public schema to create the test
+    tenant. If a previous test leaked a tenant schema via an improperly
+    restored tenant_context/schema_context, setUpClass crashes.
+    """
+    try:
+        from django.db import connection
+        from django_tenants.test.cases import FastTenantTestCase
+        cls = getattr(item, "cls", None)
+        if cls is not None and issubclass(cls, FastTenantTestCase):
+            if connection.schema_name != "public":
+                connection.set_schema_to_public()
+    except Exception:
+        pass
 
 
 def pytest_collection_modifyitems(config, items):

@@ -31,6 +31,11 @@ def _login_as_admin():
     user = User.objects.filter(email='admin@admin.com').first()
     if user is None:
         pytest.skip("User admin@admin.com introuvable")
+    # Signal pre_save peut mettre is_active=False (cf. PIEGES.md 9.88).
+    # / Pre_save signal may set is_active=False (see PIEGES.md 9.88).
+    if not user.is_active:
+        user.is_active = True
+        user.save(update_fields=['is_active'])
     client.force_login(user)
     return client, user
 

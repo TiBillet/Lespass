@@ -24,11 +24,17 @@ class TestSEOCacheModel:
     def test_unique_together_constraint(self):
         """Pas de doublon (cache_type, tenant) / No duplicate (cache_type, tenant)"""
         from seo.models import SEOCache
-        from django.db import IntegrityError
+        from django.db import IntegrityError, transaction
 
         client = Client.objects.filter(categorie=Client.ROOT).first()
         SEOCache.objects.create(cache_type="tenant_summary", tenant=client, data={})
-        with pytest.raises(IntegrityError):
+        # IntegrityError doit etre dans un savepoint atomic sinon la transaction
+        # courante devient "broken" et contamine TOUS les tests suivants avec
+        # "current transaction is aborted" (PostgreSQL).
+        # / IntegrityError must be inside an atomic savepoint, otherwise the
+        # current transaction becomes "broken" and contaminates ALL following
+        # tests with "current transaction is aborted" (PostgreSQL).
+        with pytest.raises(IntegrityError), transaction.atomic():
             SEOCache.objects.create(cache_type="tenant_summary", tenant=client, data={})
 
     def test_global_cache_tenant_null(self):
