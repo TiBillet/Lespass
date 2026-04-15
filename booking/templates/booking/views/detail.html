@@ -11,6 +11,15 @@ LOCALISATION : booking/templates/booking/views/detail.html
 Variables attendues / Expected variables:
   ressource  — objet Resource
   creneaux   — list[BookableInterval] triée par start, sans slice
+
+Flux HTMX / HTMX flow:
+  1. Clic sur un créneau disponible
+     → hx-get vers /booking/<pk>/booking_form/?...
+     → le formulaire se charge dans #booking-form-container
+
+  2. Soumission du formulaire (hx-post vers add_to_basket)
+     → succès : HX-Redirect recharge la page (panier + dispo mis à jour)
+     → erreur 422 : le formulaire d'erreur remplace le contenu du container
 -->
 <main class="container-lg py-4" data-testid="booking-resource-detail">
 
@@ -53,10 +62,25 @@ Variables attendues / Expected variables:
         </p>
     {% endif %}
 
-    {% if reservations_en_cours %}
-        {% include "booking/partial/basket.html" %}
-        <hr class="my-4">
-    {% endif %}
+    <!--
+    Panier — toujours affiché, même vide.
+    Il se met à jour automatiquement après un HX-Redirect (rechargement de page).
+    / Basket — always displayed, even when empty.
+    It updates automatically after an HX-Redirect (page reload).
+    -->
+    {% include "booking/partial/basket.html" %}
+    <hr class="my-4">
+
+    <!--
+    Zone de formulaire inline — vide au chargement initial.
+    Un clic sur un créneau y charge le formulaire via hx-get.
+    / Inline form zone — empty on initial load.
+    Clicking a slot loads the form here via hx-get.
+    -->
+    <div id="booking-form-container"
+         class="booking-form-container mb-4"
+         aria-live="polite">
+    </div>
 
     <h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
 
@@ -77,18 +101,23 @@ Variables attendues / Expected variables:
 
                 {% else %}
                     <!--
-                    Créneau disponible — lien <a href> classique (pas de hx-get).
-                    Sans hx-get, htmx ne capture pas la requête : si le membre
-                    n'est pas connecté, le navigateur suit la redirection 302
-                    vers la page de connexion normalement.
-                    / Available slot — plain <a href> link (no hx-get).
-                    Without hx-get, htmx doesn't intercept: if the member is
-                    not logged in, the browser follows the 302 redirect to
-                    the login page natively.
+                    Créneau disponible — hx-get charge le formulaire inline dans
+                    #booking-form-container. Le href classique reste pour le fallback
+                    sans JS (redirige vers la page de connexion si non authentifié).
+                    Si la requête HTMX arrive non authentifiée, la vue renvoie
+                    HX-Redirect vers la page de connexion (navigation complète).
+                    / Available slot — hx-get loads the form inline in
+                    #booking-form-container. The plain href remains for no-JS
+                    fallback (redirects to login if unauthenticated).
+                    If the HTMX request arrives unauthenticated, the view sends
+                    HX-Redirect to the login page (full navigation).
                     -->
                     <li class="d-flex align-items-center gap-2 mb-2"
                         data-testid="booking-slot-available">
                         <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                           hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                           hx-target="#booking-form-container"
+                           hx-swap="innerHTML"
                            class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
                             <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
                             <span>{{ creneau.start|date:"D d/m H:i" }}</span>
@@ -111,4 +140,24 @@ Variables attendues / Expected variables:
     {% endif %}
 
 </main>
+
+<!--
+Configure HTMX pour swapper le contenu même sur les réponses HTTP 422.
+Par défaut HTMX ignore les erreurs 4xx et ne remplace pas le DOM.
+/ Configure HTMX to swap content even on HTTP 422 responses.
+By default HTMX ignores 4xx errors and does not replace the DOM.
+-->
+<script>
+document.addEventListener("htmx:beforeOnLoad", function(event) {
+    var code_reponse = event.detail.xhr.status;
+
+    // On accepte le swap pour les erreurs de validation (422).
+    // / Allow swap for validation errors (422).
+    if (code_reponse === 422) {
+        event.detail.shouldSwap = true;
+        event.detail.isError    = false;
+    }
+});
+</script>
+
 {% endblock %}

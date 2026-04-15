@@ -5,6 +5,15 @@ Variables attendues / Expected variables:
   item.ressource      — objet Resource (name, description, image, tags)
   item.creneaux       — list[BookableInterval] triée par start
   item.a_des_creneaux — bool
+
+Flux HTMX / HTMX flow:
+  1. Clic sur un créneau disponible
+     → hx-get vers /booking/<pk>/booking_form/?...
+     → le formulaire se charge dans #booking-form-<pk>
+
+  2. Soumission du formulaire (hx-post vers add_to_basket)
+     → succès : HX-Redirect recharge la page (panier + dispo mis à jour)
+     → erreur 422 : le formulaire d'erreur remplace le contenu du container
 -->
 {% load i18n %}
 
@@ -70,18 +79,23 @@ Variables attendues / Expected variables:
 
                         {% else %}
                             <!--
-                            Créneau disponible — lien <a href> classique (pas de hx-get).
-                            Sans hx-get, htmx ne capture pas la requête : si le membre
-                            n'est pas connecté, le navigateur suit la redirection 302
-                            vers la page de connexion normalement.
-                            / Available slot — plain <a href> link (no hx-get).
-                            Without hx-get, htmx doesn't intercept: if the member is
-                            not logged in, the browser follows the 302 redirect to
-                            the login page natively.
+                            Créneau disponible — hx-get charge le formulaire inline dans
+                            #booking-form-<pk>. Le href classique reste pour le fallback
+                            sans JS et la redirection 302 vers login si non authentifié.
+                            Si la requête HTMX arrive non authentifiée, la vue renvoie
+                            HX-Redirect vers la page de connexion (navigation complète).
+                            / Available slot — hx-get loads the form inline in
+                            #booking-form-<pk>. The plain href remains for no-JS
+                            fallback and 302 redirect to login if unauthenticated.
+                            If the HTMX request arrives unauthenticated, the view sends
+                            HX-Redirect to the login page (full navigation).
                             -->
                             <li class="d-flex align-items-center gap-2 mb-1 small"
                                 data-testid="booking-slot-available">
                                 <a href="/booking/{{ item.ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                                   hx-get="/booking/{{ item.ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                                   hx-target="#booking-form-{{ item.ressource.pk }}"
+                                   hx-swap="innerHTML"
                                    class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
                                     <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
                                     <span>{{ creneau.start|date:"D d/m H:i" }}</span>
@@ -95,6 +109,21 @@ Variables attendues / Expected variables:
 
                     {% endfor %}
                 </ul>
+
+                <!--
+                Zone de formulaire inline par carte — vide au chargement initial.
+                Un clic sur un créneau y charge le formulaire via hx-get.
+                La classe .booking-form-container est utilisée par hx-target
+                dans booking_form.html pour cibler le container le plus proche.
+                / Per-card inline form zone — empty on initial load.
+                Clicking a slot loads the form here via hx-get.
+                The .booking-form-container class is used by hx-target in
+                booking_form.html to target the closest container.
+                -->
+                <div id="booking-form-{{ item.ressource.pk }}"
+                     class="booking-form-container mt-3"
+                     aria-live="polite">
+                </div>
 
             </div>
         </div>

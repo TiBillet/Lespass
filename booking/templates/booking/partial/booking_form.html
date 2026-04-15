@@ -4,6 +4,15 @@ LOCALISATION : booking/templates/booking/partial/booking_form.html
 Formulaire de réservation d'un créneau.
 / Booking form for a single slot.
 
+Ce partial est chargé dans une .booking-form-container via hx-get.
+Il est soumis en hx-post ; en cas de succès le serveur renvoie HX-Redirect
+qui recharge la page. En cas d'erreur (422), le contenu de la .booking-form-container
+est remplacé par le partial d'erreur.
+/ This partial is loaded into a .booking-form-container via hx-get.
+It is submitted via hx-post; on success the server returns HX-Redirect
+which reloads the page. On error (422), the .booking-form-container content
+is replaced by the error partial.
+
 Variables attendues / Expected variables:
   ressource             — objet Resource
   creneau               — BookableInterval | None (si slot_indisponible=True)
@@ -48,7 +57,15 @@ Variables attendues / Expected variables:
 
     <!--
     Formulaire principal — affiche les détails du créneau et le sélecteur de durée.
+    hx-post soumet le formulaire sans navigation de page.
+    hx-target="closest .booking-form-container" : en cas d'erreur 422, le partial
+    d'erreur remplace le contenu du container qui a chargé ce formulaire.
+    En cas de succès, le serveur renvoie HX-Redirect → rechargement complet de page.
     / Main form — shows slot details and the duration selector.
+    hx-post submits the form without page navigation.
+    hx-target="closest .booking-form-container": on 422 error, the error partial
+    replaces the content of the container that loaded this form.
+    On success, the server returns HX-Redirect → full page reload.
     -->
     <div class="mb-3"
          data-testid="booking-form-slot-start">
@@ -60,6 +77,9 @@ Variables attendues / Expected variables:
 
     <form method="post"
           action="/booking/{{ ressource.pk }}/add_to_basket/"
+          hx-post="/booking/{{ ressource.pk }}/add_to_basket/"
+          hx-target="closest .booking-form-container"
+          hx-swap="innerHTML"
           class="row g-3">
         {% csrf_token %}
 
@@ -87,7 +107,9 @@ Variables attendues / Expected variables:
         </div>
 
         <div class="col-auto">
-            <button type="submit" class="btn btn-primary">
+            <button type="submit"
+                    class="btn btn-primary"
+                    data-loading-disable>
                 {% translate "Ajouter au panier" %}
             </button>
         </div>
