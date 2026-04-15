@@ -1122,10 +1122,6 @@ test_my_bookings_excludes_past_bookings
 
 ### Session 11.2 — Green phase
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
-
 **Files to create / modify:**
 - `booking/views.py` — `BookingViewSet.my_bookings()` (@action GET)
 - `booking/templates/booking/views/my_bookings.html`
@@ -1152,39 +1148,8 @@ test_cancel_rejects_booking_owned_by_another_member
 
 ### Session 13.2 — Green phase
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
-
 **Files to create / modify:**
 - `booking/views.py` — `BookingViewSet.cancel()` (@action POST)
 
 Write the minimal cancellation logic to make all red-phase tests pass.
 
---------------------------------------------------------------------------------
-
-## Session 14 — Celery task: basket expiry
-
-### Session 14.1 — Red phase
-
-**Files to create:**
-- `booking/tests/test_tasks.py`
-
-**Tests to write:**
-```
-test_expire_new_bookings_deletes_new_booking_after_timeout
-test_expire_new_bookings_keeps_validated_booking
-test_expire_new_bookings_keeps_confirmed_booking
-test_expire_new_bookings_does_not_delete_before_timeout
-```
-
-### Session 14.2 — Green phase
-
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
-
-**Files to create / modify:**
-- `booking/tasks.py` — `expire_new_bookings_task()`
-
-Write the minimal Celery task to make all red-phase tests pass.
