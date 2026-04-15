@@ -18,7 +18,11 @@ from booking.booking_engine import (
     validate_new_booking,
 )
 from booking.models import Resource
-from booking.serializers import BookingCreateSerializer, BookingFormQuerySerializer
+from booking.serializers import (
+    BookingCreateSerializer,
+    BookingFormQuerySerializer,
+    RemoveFromBasketSerializer,
+)
 
 
 class BookingViewSet(viewsets.ViewSet):
@@ -305,3 +309,130 @@ class BookingViewSet(viewsets.ViewSet):
             'show_back_link':        True,
         })
         return render(request, 'booking/partial/basket.html', contexte)
+
+    @action(detail=True, methods=['POST'], permission_classes=[permissions.AllowAny])
+    def remove_from_basket(self, request, pk=None):
+        """
+        Supprime une réservation 'new' du panier de l'utilisateur.
+        / Removes a 'new' booking from the user's basket.
+
+        LOCALISATION : booking/views.py
+
+        Corps de la requête :
+          booking_pk — clé primaire de la réservation à retirer
+
+        Réponses :
+          HTTP 200 — réservation supprimée, renvoie le partial panier mis à jour
+          HTTP 401 — utilisateur non authentifié
+          HTTP 422 — réservation introuvable, non 'new', ou appartenant à un autre membre
+        / Responses:
+          HTTP 200 — booking deleted, returns updated basket partial
+          HTTP 401 — unauthenticated user
+          HTTP 422 — booking not found, not 'new', or owned by another member
+        """
+        if not request.user.is_authenticated:
+            return HttpResponse(status=401)
+
+        ressource = get_object_or_404(Resource, pk=pk)
+
+        serializer_corps = RemoveFromBasketSerializer(data=request.data)
+        if not serializer_corps.is_valid():
+            contexte = get_context(request)
+            contexte.update({'erreur': serializer_corps.errors})
+            return render(
+                request, 'booking/partial/basket.html', contexte, status=422,
+            )
+
+        from booking.models import Booking
+
+        # Cherche la réservation appartenant à cet utilisateur.
+        # / Look up the booking owned by this user.
+        try:
+            reservation_a_supprimer = Booking.objects.get(
+                pk   = serializer_corps.validated_data['booking_pk'],
+                user = request.user,
+            )
+        except Booking.DoesNotExist:
+            contexte = get_context(request)
+            contexte.update({'erreur': 'Réservation introuvable.'})
+            return render(
+                request, 'booking/partial/basket.html', contexte, status=422,
+            )
+
+        # Seules les réservations 'new' peuvent être retirées du panier.
+        # Les réservations 'confirmed' passent par le flux d'annulation.
+        # / Only 'new' bookings can be removed from the basket.
+        # 'Confirmed' bookings go through the cancellation flow.
+        if reservation_a_supprimer.status != Booking.STATUS_NEW:
+            contexte = get_context(request)
+            contexte.update({'erreur': 'Seules les réservations en attente peuvent être retirées.'})
+            return render(
+                request, 'booking/partial/basket.html', contexte, status=422,
+            )
+
+        reservation_a_supprimer.delete()
+
+        # Recharge la page courante pour mettre à jour à la fois le panier
+        # et les disponibilités des créneaux (capacité restante).
+        # HX-Redirect est intercepté par HTMX : il déclenche window.location
+        # sans passer par la cascade de swap normale.
+        # / Reload the current page to update both the basket and slot
+        # availability (remaining capacity).
+        # HX-Redirect is intercepted by HTMX: it triggers window.location
+        # without going through the normal swap cascade.
+        url_de_retour = request.META.get('HTTP_REFERER', '/booking/')
+        reponse = HttpResponse(status=200)
+        reponse['HX-Redirect'] = url_de_retour
+        return reponse
+
+    @action(detail=False, methods=['POST'], permission_classes=[permissions.AllowAny])
+    def validate_basket(self, request):
+        """
+        Valide toutes les réservations 'new' de l'utilisateur → statut 'confirmed'.
+        / Validates all 'new' bookings for the user → status 'confirmed'.
+
+        LOCALISATION : booking/views.py
+
+        Le paiement est reporté à une session ultérieure.
+        La transition directe new → confirmed s'applique pour l'instant.
+        / Payment is deferred to a later session.
+        The direct new → confirmed transition applies for now.
+
+        Réponses :
+          HTTP 200 — réservations confirmées, renvoie le partial de confirmation
+          HTTP 401 — utilisateur non authentifié
+          HTTP 422 — panier vide
+        / Responses:
+          HTTP 200 — bookings confirmed, returns the confirmation partial
+          HTTP 401 — unauthenticated user
+          HTTP 422 — empty basket
+        """
+        if not request.user.is_authenticated:
+            return HttpResponse(status=401)
+
+        from booking.models import Booking
+
+        reservations_new = list(
+            Booking.objects.filter(
+                user   = request.user,
+                status = Booking.STATUS_NEW,
+            )
+        )
+
+        if not reservations_new:
+            contexte = get_context(request)
+            contexte.update({'erreur': 'Votre panier est vide.'})
+            return render(
+                request, 'booking/partial/basket.html', contexte, status=422,
+            )
+
+        # Passe toutes les réservations 'new' à 'confirmed'.
+        # / Move all 'new' bookings to 'confirmed'.
+        nombre_de_reservations = len(reservations_new)
+        for reservation in reservations_new:
+            reservation.status = Booking.STATUS_CONFIRMED
+            reservation.save(update_fields=['status'])
+
+        contexte = get_context(request)
+        contexte.update({'nombre_de_reservations': nombre_de_reservations})
+        return render(request, 'booking/partial/basket_confirmed.html', contexte)

@@ -30,12 +30,40 @@ Variables attendues / Expected variables:
                             </span>
                         {% endif %}
                     </span>
-                    <span class="badge bg-warning text-dark">
-                        {% translate "En attente" %}
-                    </span>
+                    <!--
+                    Bouton "Retirer" — supprime cette réservation du panier.
+                    hx-post envoie le booking_pk via hx-vals (form data).
+                    hx-target remplace tout le composant panier.
+                    / "Remove" button — deletes this booking from the basket.
+                    hx-post sends booking_pk via hx-vals (form data).
+                    hx-target replaces the whole basket component.
+                    -->
+                    <button type="button"
+                            class="btn btn-outline-danger btn-sm ms-2"
+                            hx-post="/booking/{{ reservation.resource.pk }}/remove_from_basket/"
+                            hx-vals='{"booking_pk": {{ reservation.pk }}}'
+                            hx-target="[data-testid='booking-basket']"
+                            hx-swap="outerHTML"
+                            data-testid="basket-remove-{{ reservation.pk }}"
+                            aria-label="{% translate "Retirer" %} {{ reservation.resource.name }}">
+                        {% translate "Retirer" %}
+                    </button>
                 </li>
             {% endfor %}
         </ul>
+
+        <!--
+        Bouton "Confirmer mes réservations" — valide toutes les réservations 'new'.
+        / "Confirm my bookings" button — validates all 'new' bookings.
+        -->
+        <button type="button"
+                class="btn btn-success btn-sm mb-3"
+                hx-post="/booking/validate_basket/"
+                hx-target="[data-testid='booking-basket']"
+                hx-swap="outerHTML"
+                data-testid="basket-validate">
+            {% translate "Confirmer mes réservations" %}
+        </button>
 
     {% else %}
 
