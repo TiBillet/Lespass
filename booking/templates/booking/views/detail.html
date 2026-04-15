@@ -53,6 +53,11 @@ Variables attendues / Expected variables:
         </p>
     {% endif %}
 
+    {% if reservations_en_cours %}
+        {% include "booking/partial/basket.html" %}
+        <hr class="my-4">
+    {% endif %}
+
     <h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
 
     {% if creneaux %}
@@ -71,14 +76,27 @@ Variables attendues / Expected variables:
                     </li>
 
                 {% else %}
+                    <!--
+                    Créneau disponible — lien <a href> classique (pas de hx-get).
+                    Sans hx-get, htmx ne capture pas la requête : si le membre
+                    n'est pas connecté, le navigateur suit la redirection 302
+                    vers la page de connexion normalement.
+                    / Available slot — plain <a href> link (no hx-get).
+                    Without hx-get, htmx doesn't intercept: if the member is
+                    not logged in, the browser follows the 302 redirect to
+                    the login page natively.
+                    -->
                     <li class="d-flex align-items-center gap-2 mb-2"
                         data-testid="booking-slot-available">
-                        <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
-                        <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                        <span class="badge bg-success ms-auto">
-                            {{ creneau.remaining_capacity }}
-                            {% translate "place(s)" %}
-                        </span>
+                        <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                           class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
+                            <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
+                            <span>{{ creneau.start|date:"D d/m H:i" }}</span>
+                            <span class="badge bg-success ms-auto">
+                                {{ creneau.remaining_capacity }}
+                                {% translate "place(s)" %}
+                            </span>
+                        </a>
                     </li>
                 {% endif %}
 

@@ -6,13 +6,19 @@ LOCALISATION : booking/views.py
 """
 from collections import defaultdict
 
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 
 from BaseBillet.views import get_context
-from booking.booking_engine import compute_slots
+from booking.booking_engine import (
+    compute_max_consecutive_slots,
+    compute_slots,
+    validate_new_booking,
+)
 from booking.models import Resource
+from booking.serializers import BookingCreateSerializer, BookingFormQuerySerializer
 
 
 class BookingViewSet(viewsets.ViewSet):
@@ -66,14 +72,30 @@ class BookingViewSet(viewsets.ViewSet):
 
         return groupes_annotes, items_sans_groupe, tag_filtre
 
+    def _reservations_en_cours(self, request):
+        """
+        Retourne les réservations 'new' de l'utilisateur connecté, ou [] sinon.
+        / Returns the authenticated user's 'new' bookings, or [] otherwise.
+
+        LOCALISATION : booking/views.py
+        """
+        if not request.user.is_authenticated:
+            return []
+        from booking.models import Booking
+        return Booking.objects.filter(
+            user   = request.user,
+            status = Booking.STATUS_NEW,
+        ).select_related('resource')
+
     def list(self, request):
         contexte = get_context(request)
         groupes_annotes, items_sans_groupe, tag_filtre = self._annote_ressources(request)
 
         contexte.update({
-            'groupes_annotes':   groupes_annotes,
-            'items_sans_groupe': items_sans_groupe,
-            'tag_filtre':        tag_filtre,
+            'groupes_annotes':    groupes_annotes,
+            'items_sans_groupe':  items_sans_groupe,
+            'tag_filtre':         tag_filtre,
+            'reservations_en_cours': self._reservations_en_cours(request),
         })
 
         return render(request, 'booking/views/list.html', contexte)
@@ -108,7 +130,178 @@ class BookingViewSet(viewsets.ViewSet):
         creneaux = compute_slots(ressource)
         contexte = get_context(request)
         contexte.update({
-            'ressource': ressource,
-            'creneaux':  creneaux,
+            'ressource':             ressource,
+            'creneaux':              creneaux,
+            'reservations_en_cours': self._reservations_en_cours(request),
         })
         return render(request, 'booking/views/detail.html', contexte)
+
+    @action(detail=True, methods=['GET'])
+    def booking_form(self, request, pk=None):
+        """
+        Affiche le formulaire de réservation pour un créneau donné.
+        / Shows the booking form for a given slot.
+
+        LOCALISATION : booking/views.py
+
+        Paramètres GET (query string) :
+          start_datetime        — datetime ISO 8601 tz-aware du créneau
+          slot_duration_minutes — durée en minutes
+
+        Accès :
+          Authentifié   → HTTP 200 avec le formulaire
+          Non authentifié → HTTP 302 vers LOGIN_URL?next=<url courante>
+        / Access:
+          Authenticated   → HTTP 200 with the form
+          Unauthenticated → HTTP 302 to LOGIN_URL?next=<current url>
+        """
+        # Redirige les visiteurs non connectés vers la page de connexion.
+        # Ce projet utilise /connexion/ (name='connexion') — pas django.contrib.auth.urls.
+        # Django définit toujours LOGIN_URL='/accounts/login/' dans global_settings.py,
+        # donc on ne peut pas utiliser settings.LOGIN_URL comme détection d'absence.
+        # / Redirect unauthenticated visitors to the login page.
+        # This project uses /connexion/ (name='connexion') — not django.contrib.auth.urls.
+        # Django always sets LOGIN_URL='/accounts/login/' via global_settings.py,
+        # so we cannot use settings.LOGIN_URL to detect its absence.
+        if not request.user.is_authenticated:
+            from django.urls import reverse
+            login_url = reverse('connexion')
+            return redirect(f'{login_url}?next={request.get_full_path()}')
+
+        ressource = get_object_or_404(
+            Resource.objects.select_related('calendar', 'weekly_opening'),
+            pk=pk,
+        )
+
+        # Valide les paramètres de créneau fournis dans la query string.
+        # / Validates slot parameters from the query string.
+        serializer_params = BookingFormQuerySerializer(data=request.GET)
+        if not serializer_params.is_valid():
+            contexte = get_context(request)
+            contexte.update({
+                'ressource':        ressource,
+                'slot_indisponible': True,
+            })
+            return render(request, 'booking/partial/booking_form.html', contexte)
+
+        start_datetime        = serializer_params.validated_data['start_datetime']
+        slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
+
+        creneaux = compute_slots(ressource)
+
+        # Cherche le créneau demandé dans E (même début et même durée).
+        # / Looks up the requested slot in E (matching start and duration).
+        creneau_demande = None
+        for creneau in creneaux:
+            if (creneau.start == start_datetime
+                    and creneau.duration_minutes() == slot_duration_minutes):
+                creneau_demande = creneau
+                break
+
+        # Créneau absent de E ou capacité épuisée → affiche le message d'indisponibilité.
+        # / Slot not in E or capacity exhausted → show unavailability message.
+        if creneau_demande is None or creneau_demande.remaining_capacity <= 0:
+            contexte = get_context(request)
+            contexte.update({
+                'ressource':        ressource,
+                'start_datetime':   start_datetime,
+                'slot_indisponible': True,
+            })
+            return render(request, 'booking/partial/booking_form.html', contexte)
+
+        max_slot_count = compute_max_consecutive_slots(
+            creneaux, start_datetime, slot_duration_minutes
+        )
+
+        contexte = get_context(request)
+        contexte.update({
+            'ressource':            ressource,
+            'creneau':              creneau_demande,
+            'max_slot_count':       max_slot_count,
+            'slot_duration_minutes': slot_duration_minutes,
+        })
+        return render(request, 'booking/partial/booking_form.html', contexte)
+
+    @action(detail=True, methods=['POST'], permission_classes=[permissions.AllowAny])
+    def add_to_basket(self, request, pk=None):
+        """
+        Crée une réservation avec le statut 'new' (ajout au panier).
+        / Creates a booking with status 'new' (add to basket).
+
+        LOCALISATION : booking/views.py
+
+        Corps de la requête (JSON) :
+          start_datetime        — datetime ISO 8601 tz-aware du premier créneau
+          slot_duration_minutes — durée de chaque créneau en minutes
+          slot_count            — nombre de créneaux consécutifs à réserver
+
+        Réponses :
+          HTTP 200 — réservation créée, renvoie le partial panier
+          HTTP 401 — utilisateur non authentifié
+          HTTP 422 — validation échouée (créneau complet, hors horizon, passé, etc.)
+        / Responses:
+          HTTP 200 — booking created, returns the basket partial
+          HTTP 401 — unauthenticated user
+          HTTP 422 — validation failed (full slot, beyond horizon, past, etc.)
+        """
+        # Refuse les requêtes non authentifiées avec HTTP 401.
+        # / Reject unauthenticated requests with HTTP 401.
+        if not request.user.is_authenticated:
+            return HttpResponse(status=401)
+
+        ressource = get_object_or_404(Resource, pk=pk)
+
+        # request.data est parsé automatiquement par DRF selon le Content-Type.
+        # Pour application/json, JSONParser décode le corps de la requête.
+        # / request.data is parsed automatically by DRF based on Content-Type.
+        # For application/json, JSONParser decodes the request body.
+        serializer_corps = BookingCreateSerializer(data=request.data)
+        if not serializer_corps.is_valid():
+            contexte = get_context(request)
+            contexte.update({'erreur': serializer_corps.errors})
+            return render(
+                request,
+                'booking/partial/booking_form.html',
+                contexte,
+                status=422,
+            )
+
+        is_valid, resultat = validate_new_booking(
+            resource              = ressource,
+            start_datetime        = serializer_corps.validated_data['start_datetime'],
+            slot_duration_minutes = serializer_corps.validated_data['slot_duration_minutes'],
+            slot_count            = serializer_corps.validated_data['slot_count'],
+            member                = request.user,
+        )
+
+        if not is_valid:
+            contexte = get_context(request)
+            contexte.update({'erreur': resultat})
+            return render(
+                request,
+                'booking/partial/booking_form.html',
+                contexte,
+                status=422,
+            )
+
+        # Réservation créée — renvoie la liste des réservations en cours.
+        # / Booking created — return the list of pending bookings.
+        from booking.models import Booking
+        reservations_en_cours = Booking.objects.filter(
+            user   = request.user,
+            status = Booking.STATUS_NEW,
+        ).select_related('resource')
+
+        contexte = get_context(request)
+        contexte.update({
+            'ressource':             ressource,
+            'reservations_en_cours': reservations_en_cours,
+            # show_back_link=True : le bouton "Réserver un autre créneau" s'affiche
+            # ici car l'utilisateur vient de soumettre le formulaire et n'est plus
+            # sur la page de détail de la ressource.
+            # / show_back_link=True: the "book another slot" button shows here
+            # because the user just submitted the form and is no longer on the
+            # resource detail page.
+            'show_back_link':        True,
+        })
+        return render(request, 'booking/partial/basket.html', contexte)

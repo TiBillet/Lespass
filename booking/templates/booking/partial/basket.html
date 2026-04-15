@@ -1,0 +1,72 @@
+<!--
+LOCALISATION : booking/templates/booking/partial/basket.html
+
+Liste des réservations en attente de paiement (statut 'new').
+/ List of bookings pending payment (status 'new').
+
+Variables attendues / Expected variables:
+  ressource             — objet Resource (pour le lien "retour aux créneaux")
+  reservations_en_cours — QuerySet[Booking] avec status='new'
+-->
+{% load i18n %}
+
+<div data-testid="booking-basket" class="mt-4">
+
+    <h3 class="h5 mb-3">{% translate "Votre panier" %}</h3>
+
+    {% if reservations_en_cours %}
+
+        <ul class="list-group mb-3">
+            {% for reservation in reservations_en_cours %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>
+                        <strong>{{ reservation.resource.name }}</strong>
+                        —
+                        {{ reservation.start_datetime|date:"D d/m/Y H:i" }}
+                        {% if reservation.slot_count > 1 %}
+                            <span class="badge bg-secondary ms-1">
+                                {{ reservation.slot_count }}
+                                {% translate "créneaux" %}
+                            </span>
+                        {% endif %}
+                    </span>
+                    <span class="badge bg-warning text-dark">
+                        {% translate "En attente" %}
+                    </span>
+                </li>
+            {% endfor %}
+        </ul>
+
+    {% else %}
+
+        <p class="text-muted">
+            {% translate "Aucune réservation en cours." %}
+        </p>
+
+    {% endif %}
+
+    <!--
+    Le bouton "Réserver un autre créneau" s'affiche uniquement quand show_back_link
+    est vrai — c'est-à-dire après un add_to_basket, pas sur les pages liste/détail
+    où le membre est déjà sur la bonne ressource.
+    / The "book another slot" button only shows when show_back_link is True —
+    i.e. after add_to_basket, not on the list/detail pages where the member
+    is already viewing that resource.
+    -->
+    <div class="d-flex flex-column gap-2 mt-3">
+
+        {% if ressource and show_back_link %}
+            <a href="/booking/{{ ressource.pk }}/"
+               class="btn btn-primary btn-sm">
+                {% translate "Réserver un autre créneau" %} — {{ ressource.name }}
+            </a>
+        {% endif %}
+
+        <a href="/booking/"
+           class="btn btn-outline-secondary btn-sm">
+            {% translate "Toutes les ressources" %}
+        </a>
+
+    </div>
+
+</div>
