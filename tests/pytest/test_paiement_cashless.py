@@ -68,9 +68,19 @@ def tenant():
 @pytest.fixture(scope="module")
 def test_data(tenant):
     """Lance create_test_pos_data pour s'assurer que les donnees existent.
-    / Runs create_test_pos_data to ensure test data exists."""
+    / Runs create_test_pos_data to ensure test data exists.
+
+    On force le schema_context vers 'lespass' : sinon la commande, lancee
+    depuis le schema 'public', bascule sur le premier tenant non-public
+    (ordre SQL aleatoire — souvent un tenant `waiting_*`), et les donnees
+    ne sont pas creees dans 'lespass'.
+    / Force schema_context to 'lespass': otherwise the command, called from
+    the 'public' schema, falls back to the first non-public tenant (random
+    SQL order — often a `waiting_*` tenant), so data wouldn't land in 'lespass'.
+    """
     from django.core.management import call_command
-    call_command('create_test_pos_data')
+    with schema_context(TENANT_SCHEMA):
+        call_command('create_test_pos_data')
     return True
 
 

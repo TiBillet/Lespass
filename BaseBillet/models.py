@@ -956,9 +956,14 @@ class Configuration(SingletonModel):
         verbose_name_plural = _("Settings")
 
     def __str__(self):
+        # __str__ doit retourner une vraie `str`, pas un proxy lazy.
+        # Django admin (et d'autres consommateurs) appellent str(obj) avec TypeError
+        # si on retourne un __proxy__ brut.
+        # / __str__ must return a real `str`, not a lazy proxy. Django admin (and
+        # other consumers) call str(obj) which raises TypeError on raw __proxy__.
         if self.organisation:
-            return _("Settings for ") + self.organisation
-        return _("Settings")
+            return f"{_('Settings for ')}{self.organisation}"
+        return str(_("Settings"))
 
 
 class Tva(models.Model):

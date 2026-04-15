@@ -93,7 +93,23 @@
 		<!-- footer : pills + badge — PAS de width:100% ici (conflit avec left/right absolus)
 		     / footer: pills + badge — NO width:100% here (conflicts with absolute left/right) -->
 		<div class="article-footer-layer">
-			{% if article.multi_tarif %}
+			{% if article.methode_caisse == 'VC' %}
+			<!-- Methode VC (Vider Carte / remboursement) : le montant depend de la carte scannee.
+			     On affiche "Solde" + icone NFC au lieu d'un prix bidon (0,00 €).
+			     / VC method (empty card / refund): amount depends on the scanned card.
+			     Shows "Solde" + NFC icon instead of a dummy price (0.00 €). -->
+			<div class="article-tarifs-pills">
+				<span class="article-tarif-pill"
+				      aria-label="{% translate 'solde de la carte scannée' %}"
+				      data-testid="article-solde-pill-{{ article.id }}">
+					<span class="material-symbols-outlined"
+					      aria-hidden="true"
+					      style="font-size:14px;vertical-align:middle;">nfc</span>
+					{% translate "Solde" %}
+				</span>
+			</div>
+
+			{% elif article.multi_tarif %}
 			<!-- pills tarifs : un badge par tarif disponible / one badge per available rate -->
 			<div class="article-tarifs-pills">
 				{% for tarif in article.tarifs %}

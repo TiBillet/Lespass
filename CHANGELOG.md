@@ -45,7 +45,7 @@ Chantier en 3 phases livre l'administration complete des cartes NFC cashless :
 ### Limites connues / Known limitations
 
 - **Admin web** : pas de bouton « Rembourser » sur la fiche carte (URL `/refund/` a saisir manuellement). `change_view` enrichi avec tokens + transactions recentes pas encore implemente — Phase 1.5 a livrer separement.
-- **Admin web** : pas de colonne « Solde » dans la liste des cartes (Phase 1.5).
+- **Admin web** : pas de colonne « Solde » dans la liste des cartes — **choix assume** (decision 2026-04-14) : cout de calcul prohibitif sur grande volumetrie (plusieurs millions de cartes a terme → `SUM(Token.value)` par ligne rendue inutilisable). Le solde reste visible dans la fiche carte (panel refund).
 - **Affichage des montants** : tout est affiche en « centimes » au lieu d'euros formates (`20,00 €`). Templatetag `centimes_en_euros` a creer pour Phase 1.5.
 - **Phase 2** : message Django flash `messages.success` ne s'affiche pas apres refund admin (integration `admin_site.admin_view()` wrapping). L'operation DB reussit, seul le toast UX manque.
 - **Cross-file test pollution** : Products auto-crees par signal `send_membership_product_to_fedow` quand on cree des Assets. Workaround : exécuter chaque fichier de test en isolation.

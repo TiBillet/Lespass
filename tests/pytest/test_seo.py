@@ -210,7 +210,11 @@ class TestRootViews:
         response = self.root_client.get("/")
         content = response.content.decode()
         assert "Lieux" in content
-        assert "Evenements" in content or "venir" in content
+        # Le template utilise "Événements" (avec accents). Accepter les 2
+        # variantes pour robustesse i18n.
+        # / The template uses "Événements" (with accents). Accept both
+        # variants for i18n robustness.
+        assert any(s in content for s in ("Événements", "Evenements", "événements", "evenements"))
 
     def test_lieux_page_returns_200(self):
         """La page lieux retourne 200 / Venues page returns 200"""

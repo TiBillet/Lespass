@@ -1280,12 +1280,38 @@ dans le teardown, le 2e run du test cross-file echoue avec `IntegrityError` sur
 
 **Workaround** : 
 - Lancer chaque fichier de test en isolation (pas en suite combinee).
-- Ou ajouter un cleanup explicit dans la fixture autouse de teardown :
-  ```python
-  Product.objects.filter(name__startswith='Recharge MyTestPrefix').delete()
-  ```
+- Ou ajouter un cleanup explicit dans la fixture autouse de teardown.
 
-Pre-existant — pollue depuis la creation du signal Asset post_save.
+**Fixture pretes a copier dans ton `conftest.py`** :
+
+```python
+import pytest
+from django_tenants.utils import tenant_context
+from BaseBillet.models import Product
+from Customers.models import Client
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_recharge_products_pollution():
+    """
+    Purge les Products 'Recharge *' crees par le signal post_save d'Asset
+    (send_membership_product_to_fedow). Evite les collisions cross-file.
+    Cleans up 'Recharge *' Products created by Asset post_save signal.
+    """
+    yield
+    # Preferer un prefixe de test pour limiter le rayon d'action :
+    # Prefer a test-specific prefix to limit blast radius:
+    tenant = Client.objects.get(schema_name='lespass')  # adapter si besoin
+    with tenant_context(tenant):
+        Product.objects.filter(name__startswith='Recharge TEST_').delete()
+```
+
+**Bonne pratique** : prefixer les noms d'Asset de test par `TEST_` (ex. `Asset.objects.create(name='TEST_TLF_run42')`) pour que le cleanup ne touche jamais un Product metier legitime cree par un autre test ou un fixture durable.
+
+**Pourquoi pas un `delete()` global sans prefixe ?** Risque de casser un fixture session-scope qui aurait cree un Asset legitime (donc un Product `Recharge X` metier). Le prefixe `TEST_` garantit que le cleanup reste localise.
+
+Pre-existant — pollue depuis la creation du signal Asset post_save. Fix structurel
+(desactivation conditionnelle du signal en test) hors scope Phase 1.5.
 
 #### `page.request.post` Playwright + DRF ViewSet : besoin du X-CSRFToken header
 

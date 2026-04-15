@@ -143,7 +143,7 @@ def get_or_create_product_remboursement() -> Product:
 
 ### `CarteCashlessAdmin`
 
-- `list_display` : `tag_id`, `number`, `user_link`, `detail_origine`, `wallet_status` (badge identifié/anonyme/vierge), `solde_total_euros` (annotation Sum sur Token).
+- `list_display` : `tag_id`, `number`, `user_link`, `detail_origine`, `wallet_status` (badge identifié/anonyme/vierge). ~~`solde_total_euros` (annotation Sum sur Token)~~ **abandonné 2026-04-14** : coût de calcul prohibitif sur grande volumétrie (plusieurs millions de cartes à terme → `SUM(Token.value)` par ligne rendue inutilisable). Le solde reste visible dans la fiche carte (panel refund) où il est calculé une seule fois.
 - `search_fields` : `tag_id`, `number`, `user__email`.
 - `list_filter` : `detail__origine` (caché pour les non-superusers), filtre custom « identifiée / anonyme / vierge ».
 - `get_queryset()` : filtre `detail__origine=request.tenant` si `not request.user.is_superuser`.

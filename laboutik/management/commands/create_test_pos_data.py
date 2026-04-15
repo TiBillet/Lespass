@@ -143,9 +143,15 @@ class Command(BaseCommand):
             if fedow_config.wallet:
                 wallet_du_lieu = fedow_config.wallet
             else:
+                # IMPORTANT : inclure `name` dans la lookup (pas en defaults),
+                # sinon `get_or_create(origin=...)` crash avec MultipleObjectsReturned
+                # des qu'un autre Wallet (ephemere, user…) partage le meme tenant origin.
+                # / IMPORTANT: include `name` in lookup (not defaults), otherwise
+                # `get_or_create(origin=...)` crashes with MultipleObjectsReturned
+                # as soon as another Wallet (ephemeral, user…) shares the same tenant origin.
                 wallet_du_lieu, _ = Wallet.objects.get_or_create(
                     origin=tenant_client,
-                    defaults={"name": f"Wallet {tenant_client.name}"},
+                    name=f"Wallet {tenant_client.name}",
                 )
 
             # Creer les 3 Assets si inexistants
@@ -1251,16 +1257,32 @@ class Command(BaseCommand):
                     wallet=None,
                 ):
                     """Cree ProductSold + PriceSold + LigneArticle."""
-                    product_sold, _ = ProductSold.objects.get_or_create(
+                    # Tolerant aux doublons existants en base (tests precedents
+                    # ont pu laisser plusieurs ProductSold/PriceSold) : on prend
+                    # le 1er match, sinon on cree.
+                    # / Tolerant to existing duplicates in DB (previous tests may
+                    # have left multiple ProductSold/PriceSold): take first match,
+                    # create otherwise.
+                    product_sold = ProductSold.objects.filter(
                         product=produit,
                         event=None,
-                        defaults={"categorie_article": produit.categorie_article},
-                    )
-                    price_sold, _ = PriceSold.objects.get_or_create(
+                    ).first()
+                    if product_sold is None:
+                        product_sold = ProductSold.objects.create(
+                            product=produit,
+                            event=None,
+                            categorie_article=produit.categorie_article,
+                        )
+                    price_sold = PriceSold.objects.filter(
                         productsold=product_sold,
                         price=prix_obj,
-                        defaults={"prix": prix_obj.prix},
-                    )
+                    ).first()
+                    if price_sold is None:
+                        price_sold = PriceSold.objects.create(
+                            productsold=product_sold,
+                            price=prix_obj,
+                            prix=prix_obj.prix,
+                        )
                     prix_centimes = int(round(float(prix_obj.prix) * 100))
                     ligne = LigneArticle.objects.create(
                         pricesold=price_sold,

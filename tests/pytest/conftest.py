@@ -85,12 +85,46 @@ def api_client(_inject_cli_env):
     return Client(HTTP_HOST='lespass.tibillet.localhost')
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def auth_headers(_inject_cli_env):
     """En-tetes d'auth pour le test client Django (**auth_headers dans chaque appel).
     / Auth headers for Django test client (**auth_headers in each call).
+
+    Scope=function (pas session) : certains tests de la suite purgent l'APIKey
+    (flushs, cleanups trop zeles). On verifie a chaque test que la clé existe
+    encore en base, sinon on la re-genere via `manage.py test_api_key`.
+    Evite le 403 "APIKey matching query does not exist" cross-file.
+
+    / Function scope (not session): some tests in the suite purge the APIKey
+    (flushes, over-eager cleanups). We check on every test that the key still
+    exists, otherwise re-generate it via `manage.py test_api_key`. Avoids
+    cross-file "APIKey matching query does not exist" 403s.
     """
+    from django_tenants.utils import tenant_context
+    from rest_framework_api_key.models import APIKey
+    from Customers.models import Client as TenantClient
+
     api_key = os.environ["API_KEY"]
+    tenant = TenantClient.objects.get(schema_name="lespass")
+    with tenant_context(tenant):
+        try:
+            APIKey.objects.get_from_key(api_key)
+        except APIKey.DoesNotExist:
+            # La cle a ete supprimee (flush, cleanup intrusif). On en regenere
+            # une neuve via la management command.
+            # / Key was deleted (flush, intrusive cleanup). Regenerate via cmd.
+            import subprocess
+            try:
+                result = subprocess.run(
+                    ["python", "manage.py", "test_api_key"],
+                    capture_output=True, text=True, cwd="/DjangoFiles",
+                    env={**os.environ, "TEST": "1"},
+                )
+                if result.returncode == 0:
+                    api_key = result.stdout.strip()
+                    os.environ["API_KEY"] = api_key
+            except Exception:
+                pass
     return {"HTTP_AUTHORIZATION": f"Api-Key {api_key}"}
 
 

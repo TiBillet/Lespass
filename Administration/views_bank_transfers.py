@@ -11,11 +11,9 @@ Patterns FALC /djc :
 """
 import logging
 
-from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.shortcuts import render
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -61,17 +59,32 @@ class BankTransfersViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsAuthenticated]
 
+    def _render_dashboard(self, request, flash=None):
+        """
+        Rend le dashboard avec un flash message optionnel injecte dans le contexte.
+        Contourne le bug des `messages.success` invisibles apres redirect depuis
+        une vue wrappee par `admin_site.admin_view()` (cf. tests/PIEGES.md).
+
+        / Renders the dashboard with an optional flash message in context.
+        Workaround for `messages.success` swallowed after a redirect from a view
+        wrapped by `admin_site.admin_view()` (see tests/PIEGES.md).
+
+        `flash` format : {"type": "success"|"error", "msg": str}
+        """
+        dettes = BankTransferService.obtenir_dettes_par_tenant_et_asset()
+        contexte = {
+            "dettes": dettes,
+            "total_global_centimes": sum(d["dette_centimes"] for d in dettes),
+            "flash": flash,
+        }
+        return render(request, "admin/bank_transfers/dashboard.html", contexte)
+
     def list(self, request):
         """GET /admin/bank-transfers/ : dashboard superuser (table de toutes les dettes)."""
         forbidden = _check_superuser(request)
         if forbidden is not None:
             return forbidden
-        dettes = BankTransferService.obtenir_dettes_par_tenant_et_asset()
-        contexte = {
-            "dettes": dettes,
-            "total_global_centimes": sum(d["dette_centimes"] for d in dettes),
-        }
-        return render(request, "admin/bank_transfers/dashboard.html", contexte)
+        return self._render_dashboard(request)
 
     def create(self, request):
         """POST /admin/bank-transfers/ : enregistre un virement bancaire recu."""
@@ -93,20 +106,18 @@ class BankTransfersViewSet(viewsets.ViewSet):
                 admin_email=request.user.email,
             )
         except MontantSuperieurDette:
-            messages.error(
-                request,
-                _("Sur-versement detecte. Verifier la dette actuelle."),
-            )
-            return redirect(reverse("staff_admin:bank_transfers_dashboard"))
+            return self._render_dashboard(request, flash={
+                "type": "error",
+                "msg": _("Sur-versement detecte. Verifier la dette actuelle."),
+            })
 
-        messages.success(
-            request,
-            _("Virement enregistre : %(amount)s EUR vers %(tenant)s.") % {
-                "amount": tx.amount / 100,
+        return self._render_dashboard(request, flash={
+            "type": "success",
+            "msg": _("Virement enregistre : %(amount)s vers %(tenant)s.") % {
+                "amount": f"{tx.amount / 100:.2f} EUR",
                 "tenant": tx.tenant.name,
             },
-        )
-        return redirect(reverse("staff_admin:bank_transfers_dashboard"))
+        })
 
     @action(detail=False, methods=["GET"], url_path="historique")
     def historique(self, request):
