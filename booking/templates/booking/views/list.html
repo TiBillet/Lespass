@@ -10,15 +10,24 @@ LOCALISATION : booking/templates/booking/views/list.html
 
 Spec §3.1.2 : les groupes sont purement présentationnels.
 Spec §4.4 : ressources sans créneaux → grisées ; créneaux complets → indisponibles.
+
+Le panier est toujours affiché en haut de page, même vide.
+Les formulaires inline s'ouvrent dans chaque carte (card.html).
+/ The basket is always shown at the top of the page, even when empty.
+/ Inline forms open inside each card (card.html).
 -->
 <main class="container-lg py-4" data-testid="booking-resource-list">
 
     <h1 class="mb-4">{% translate "Réservation de ressources" %}</h1>
 
-    {% if reservations_en_cours %}
-        {% include "booking/partial/basket.html" %}
-        <hr class="my-4">
-    {% endif %}
+    <!--
+    Panier — toujours affiché, même vide.
+    Se met à jour automatiquement après un HX-Redirect (rechargement de page).
+    / Basket — always displayed, even when empty.
+    Updates automatically after an HX-Redirect (page reload).
+    -->
+    {% include "booking/partial/basket.html" %}
+    <hr class="my-4">
 
     {% if tag_filtre %}
         <!--
@@ -87,4 +96,24 @@ Spec §4.4 : ressources sans créneaux → grisées ; créneaux complets → ind
     {% endif %}
 
 </main>
+
+<!--
+Configure HTMX pour swapper le contenu même sur les réponses HTTP 422.
+Par défaut HTMX ignore les erreurs 4xx et ne remplace pas le DOM.
+/ Configure HTMX to swap content even on HTTP 422 responses.
+By default HTMX ignores 4xx errors and does not replace the DOM.
+-->
+<script>
+document.addEventListener("htmx:beforeOnLoad", function(event) {
+    var code_reponse = event.detail.xhr.status;
+
+    // On accepte le swap pour les erreurs de validation (422).
+    // / Allow swap for validation errors (422).
+    if (code_reponse === 422) {
+        event.detail.shouldSwap = true;
+        event.detail.isError    = false;
+    }
+});
+</script>
+
 {% endblock %}

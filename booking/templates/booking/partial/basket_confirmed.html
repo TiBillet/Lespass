@@ -20,9 +20,19 @@ Variables attendues / Expected variables:
         {% endblocktrans %}
     </div>
 
-    <a href="/booking/"
-       class="btn btn-outline-secondary btn-sm">
-        {% translate "Toutes les ressources" %}
-    </a>
+    <!--
+    N'affiche ce bouton que si la page courante n'est pas déjà /booking/.
+    / Only show this button when the current page is not already /booking/.
+    -->
+    {% if request.path != '/booking/' %}
+        <a href="/booking/"
+           hx-get="/booking/"
+           hx-target="body"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           class="btn btn-outline-secondary btn-sm">
+            {% translate "Toutes les ressources" %}
+        </a>
+    {% endif %}
 
 </div>

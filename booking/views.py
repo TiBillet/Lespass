@@ -171,7 +171,21 @@ class BookingViewSet(viewsets.ViewSet):
         if not request.user.is_authenticated:
             from django.urls import reverse
             login_url = reverse('connexion')
-            return redirect(f'{login_url}?next={request.get_full_path()}')
+            url_de_retour = f'{login_url}?next={request.get_full_path()}'
+
+            # Requête HTMX : renvoie HX-Redirect pour forcer une navigation
+            # complète vers la connexion. Sans cela, Django renverrait un 302
+            # que le navigateur suivrait en chargeant la page de connexion
+            # DANS la div cible — mauvaise UX.
+            # / HTMX request: send HX-Redirect to force full navigation to
+            # login. Without this, Django would return a 302 that the browser
+            # follows by loading the login page INSIDE the target div — bad UX.
+            if request.htmx:
+                reponse = HttpResponse()
+                reponse['HX-Redirect'] = url_de_retour
+                return reponse
+
+            return redirect(url_de_retour)
 
         ressource = get_object_or_404(
             Resource.objects.select_related('calendar', 'weekly_opening'),
@@ -289,27 +303,18 @@ class BookingViewSet(viewsets.ViewSet):
                 status=422,
             )
 
-        # Réservation créée — renvoie la liste des réservations en cours.
-        # / Booking created — return the list of pending bookings.
-        from booking.models import Booking
-        reservations_en_cours = Booking.objects.filter(
-            user   = request.user,
-            status = Booking.STATUS_NEW,
-        ).select_related('resource')
-
-        contexte = get_context(request)
-        contexte.update({
-            'ressource':             ressource,
-            'reservations_en_cours': reservations_en_cours,
-            # show_back_link=True : le bouton "Réserver un autre créneau" s'affiche
-            # ici car l'utilisateur vient de soumettre le formulaire et n'est plus
-            # sur la page de détail de la ressource.
-            # / show_back_link=True: the "book another slot" button shows here
-            # because the user just submitted the form and is no longer on the
-            # resource detail page.
-            'show_back_link':        True,
-        })
-        return render(request, 'booking/partial/basket.html', contexte)
+        # Réservation créée — redirige vers la page courante pour recharger
+        # le panier et les disponibilités des créneaux en une seule opération.
+        # On utilise HTTP_REFERER pour retourner à la page d'où vient la requête
+        # (page liste ou page détail), avec /booking/<pk>/ comme repli.
+        # / Booking created — redirect to the current page to reload
+        # the basket and slot availability in one operation.
+        # HTTP_REFERER returns to the originating page (list or detail),
+        # with /booking/<pk>/ as fallback.
+        url_de_retour = request.META.get('HTTP_REFERER') or f'/booking/{ressource.pk}/'
+        reponse = HttpResponse(status=200)
+        reponse['HX-Redirect'] = url_de_retour
+        return reponse
 
     @action(detail=True, methods=['POST'], permission_classes=[permissions.AllowAny])
     def remove_from_basket(self, request, pk=None):

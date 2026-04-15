@@ -4,8 +4,14 @@ LOCALISATION : booking/templates/booking/partial/basket.html
 Liste des réservations en attente de paiement (statut 'new').
 / List of bookings pending payment (status 'new').
 
+Ce partial est inclus systématiquement dans list.html et detail.html,
+même quand le panier est vide. Il constitue la cible HTMX des mises à
+jour après ajout ou retrait d'une réservation.
+/ This partial is always included in list.html and detail.html,
+even when the basket is empty. It is the HTMX target for updates
+after adding or removing a booking.
+
 Variables attendues / Expected variables:
-  ressource             — objet Resource (pour le lien "retour aux créneaux")
   reservations_en_cours — QuerySet[Booking] avec status='new'
 -->
 {% load i18n %}
@@ -74,27 +80,20 @@ Variables attendues / Expected variables:
     {% endif %}
 
     <!--
-    Le bouton "Réserver un autre créneau" s'affiche uniquement quand show_back_link
-    est vrai — c'est-à-dire après un add_to_basket, pas sur les pages liste/détail
-    où le membre est déjà sur la bonne ressource.
-    / The "book another slot" button only shows when show_back_link is True —
-    i.e. after add_to_basket, not on the list/detail pages where the member
-    is already viewing that resource.
+    N'affiche ce bouton que si la page courante n'est pas déjà /booking/.
+    Sur la liste des ressources, le lien pointerait sur la page courante — inutile.
+    / Only show this button when the current page is not already /booking/.
+    On the resource list, the link would point to the current page — useless.
     -->
-    <div class="d-flex flex-column gap-2 mt-3">
-
-        {% if ressource and show_back_link %}
-            <a href="/booking/{{ ressource.pk }}/"
-               class="btn btn-primary btn-sm">
-                {% translate "Réserver un autre créneau" %} — {{ ressource.name }}
-            </a>
-        {% endif %}
-
+    {% if request.path != '/booking/' %}
         <a href="/booking/"
+           hx-get="/booking/"
+           hx-target="body"
+           hx-swap="innerHTML"
+           hx-push-url="true"
            class="btn btn-outline-secondary btn-sm">
             {% translate "Toutes les ressources" %}
         </a>
-
-    </div>
+    {% endif %}
 
 </div>
