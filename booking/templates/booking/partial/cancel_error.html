@@ -1,0 +1,43 @@
+<!--
+LOCALISATION : booking/templates/booking/partial/cancel_error.html
+
+Affiche un message d'erreur inline quand l'annulation d'une réservation
+est refusée.
+/ Shows an inline error message when a booking cancellation is refused.
+
+Ce partial remplace le contenu du span#cancel-result-{pk} via
+hx-swap="innerHTML" depuis my_resources.html.
+/ This partial replaces the content of span#cancel-result-{pk} via
+hx-swap="innerHTML" from my_resources.html.
+
+Variables attendues / Expected variables :
+  erreur_deadline  — bool : True si la deadline d'annulation est dépassée
+  deadline_datetime — datetime de la deadline (si erreur_deadline=True)
+  erreur           — str | None : message d'erreur générique
+-->
+{% load i18n %}
+
+{% if erreur_deadline %}
+
+    <!--
+    Délai d'annulation dépassé — affiche la date limite.
+    / Cancellation deadline exceeded — shows the deadline date.
+    -->
+    <span class="badge bg-warning text-dark">
+        {% translate "Annulation impossible" %}
+    </span>
+    <small class="d-block text-muted mt-1">
+        {% blocktrans with deadline=deadline_datetime|date:"d/m/Y H:i" %}
+            Délai dépassé — annulation avant le {{ deadline }}
+        {% endblocktrans %}
+    </small>
+
+{% else %}
+
+    <!--
+    Erreur générique (réservation introuvable, statut invalide, etc.).
+    / Generic error (booking not found, invalid status, etc.).
+    -->
+    <span class="badge bg-danger">{{ erreur }}</span>
+
+{% endif %}

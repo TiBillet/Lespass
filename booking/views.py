@@ -21,6 +21,7 @@ from booking.models import Resource
 from booking.serializers import (
     BookingCreateSerializer,
     BookingFormQuerySerializer,
+    CancelBookingSerializer,
     RemoveFromBasketSerializer,
 )
 
@@ -436,3 +437,101 @@ class BookingViewSet(viewsets.ViewSet):
         contexte = get_context(request)
         contexte.update({'nombre_de_reservations': nombre_de_reservations})
         return render(request, 'booking/partial/basket_confirmed.html', contexte)
+
+    @action(detail=False, methods=['POST'], permission_classes=[permissions.AllowAny])
+    def cancel(self, request):
+        """
+        Annule une réservation 'confirmed' si la deadline n'est pas dépassée.
+        / Cancels a 'confirmed' booking if the cancellation deadline has not passed.
+
+        LOCALISATION : booking/views.py
+
+        L'annulation est modélisée par la suppression de la ligne Booking —
+        aucun statut 'cancelled' n'est stocké (spec §5).
+        / Cancellation is modelled as deletion of the Booking row —
+        no 'cancelled' status is stored (spec §5).
+
+        Corps de la requête :
+          booking_pk — clé primaire (entier) de la réservation à annuler
+
+        Réponses :
+          HTTP 200 — réservation supprimée ; HX-Redirect vers /my_account/my_resources/
+          HTTP 401 — utilisateur non authentifié
+          HTTP 422 — réservation introuvable, deadline dépassée, ou statut invalide
+        / Responses:
+          HTTP 200 — booking deleted; HX-Redirect to /my_account/my_resources/
+          HTTP 401 — unauthenticated user
+          HTTP 422 — booking not found, deadline exceeded, or invalid status
+        """
+        import datetime
+        from django.utils.translation import gettext as _
+        from booking.models import Booking
+        from django.utils import timezone
+
+        # Refuse les requêtes non authentifiées avec HTTP 401.
+        # / Reject unauthenticated requests with HTTP 401.
+        if not request.user.is_authenticated:
+            return HttpResponse(status=401)
+
+        serializer_corps = CancelBookingSerializer(data=request.data)
+        if not serializer_corps.is_valid():
+            contexte = get_context(request)
+            contexte.update({'erreur': serializer_corps.errors})
+            return render(
+                request, 'booking/partial/cancel_error.html', contexte, status=422,
+            )
+
+        # Cherche la réservation appartenant à cet utilisateur.
+        # Un booking d'un autre membre lève DoesNotExist — pas de fuite d'information.
+        # / Look up the booking owned by this user.
+        # Another member's booking raises DoesNotExist — no information leak.
+        try:
+            reservation = Booking.objects.select_related('resource').get(
+                pk   = serializer_corps.validated_data['booking_pk'],
+                user = request.user,
+            )
+        except Booking.DoesNotExist:
+            contexte = get_context(request)
+            contexte.update({'erreur': _('Réservation introuvable.')})
+            return render(
+                request, 'booking/partial/cancel_error.html', contexte, status=422,
+            )
+
+        # Seules les réservations 'confirmed' sont annulables par ce flux.
+        # Les réservations 'new' se suppriment via remove_from_basket.
+        # / Only 'confirmed' bookings are cancellable through this flow.
+        # 'new' bookings are removed via remove_from_basket.
+        if reservation.status != Booking.STATUS_CONFIRMED:
+            contexte = get_context(request)
+            contexte.update({
+                'erreur': _('Seules les réservations confirmées peuvent être annulées.'),
+            })
+            return render(
+                request, 'booking/partial/cancel_error.html', contexte, status=422,
+            )
+
+        # Calcule la deadline : start_datetime − cancellation_deadline_hours.
+        # Si now() > deadline, l'annulation est refusée.
+        # / Compute the deadline: start_datetime − cancellation_deadline_hours.
+        # If now() > deadline, cancellation is refused.
+        deadline = reservation.start_datetime - datetime.timedelta(
+            hours=reservation.resource.cancellation_deadline_hours,
+        )
+        if timezone.now() > deadline:
+            contexte = get_context(request)
+            contexte.update({
+                'erreur_deadline':  True,
+                'reservation':      reservation,
+                'deadline_datetime': deadline,
+            })
+            return render(
+                request, 'booking/partial/cancel_error.html', contexte, status=422,
+            )
+
+        # Annulation autorisée — supprime la ligne Booking.
+        # / Cancellation allowed — delete the Booking row.
+        reservation.delete()
+
+        reponse = HttpResponse(status=200)
+        reponse['HX-Redirect'] = '/my_account/my_resources/'
+        return reponse

@@ -1149,25 +1149,51 @@ test_my_resources_button_hidden_when_module_disabled
 
 --------------------------------------------------------------------------------
 
-## Session 13 — Cancellation
+## Session 13 — Annulation depuis /my_account/ (DONE ✓)
 
-### Session 13.1 — Red phase
+Spec §4.2 « Member — Cancel a Booking » et §5 « Cancellation ».
+L'annulation est modélisée par la suppression de la ligne `Booking` —
+aucun statut `cancelled` n'est stocké. Seules les réservations
+`confirmed` sont annulables par ce flux ; les réservations `new` se
+suppriment via `remove_from_basket`. La deadline est configurée par
+ressource (`cancellation_deadline_hours`, défaut 24h).
 
-**Files to create:**
+Le bouton "Annuler" est ajouté à chaque ligne de `my_resources.html`.
+Il poste en HTMX vers `POST /booking/cancel/` avec `booking_pk`. En cas
+de succès, `HX-Redirect` recharge la page. En cas d'erreur (deadline
+dépassée), `cancel_error.html` remplace le bouton inline (422 swappé
+grâce à `htmx:beforeOnLoad`).
+
+### Session 13.1 — Phase rouge ✓
+
+**Fichiers créés :**
 - `booking/tests/test_cancel.py`
 
-**Tests to write:**
+**Tests écrits :**
 ```
+test_cancel_requires_authentication
 test_cancel_before_deadline_deletes_booking
 test_cancel_after_deadline_returns_error_with_deadline_info
-test_cancel_refunds_wallet_payment
 test_cancel_rejects_booking_owned_by_another_member
 ```
 
-### Session 13.2 — Green phase
+Note : `test_cancel_refunds_wallet_payment` écarté — le paiement est
+reporté à une session ultérieure (spec open question §8).
 
-**Files to create / modify:**
-- `booking/views.py` — `BookingViewSet.cancel()` (@action POST)
+### Session 13.2 — Phase verte ✓
 
-Write the minimal cancellation logic to make all red-phase tests pass.
+**Fichiers créés / modifiés :**
+- `booking/serializers.py` — `CancelBookingSerializer` : valide
+  `booking_pk` (entier)
+- `booking/views.py` — `BookingViewSet.cancel()` :
+  `@action(detail=False, methods=['POST'])` ; vérifie auth, ownership,
+  statut `confirmed`, deadline ; supprime la ligne ou renvoie 422
+- `booking/templates/booking/partial/cancel_error.html` (créé) —
+  affiche deadline dépassée ou erreur générique ; remplace le bouton
+  via `hx-swap="innerHTML"`
+- `BaseBillet/templates/reunion/views/account/my_resources.html` —
+  bouton "Annuler" par réservation (`data-testid="btn-cancel-{pk}"`) ;
+  `htmx:beforeOnLoad` pour swapper les 422
+
+**Résultat final : 155 tests, tous verts.**
 
