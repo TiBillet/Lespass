@@ -1098,36 +1098,54 @@ la page liste et la page détail.
 
 --------------------------------------------------------------------------------
 
-## Session 12 — Member booking list (authenticated member dashboard)
+## Session 12 — Mes ressources dans /my_account/ (DONE ✓)
 
-The page where a member sees their upcoming confirmed bookings and
-accesses cancellation. Referenced in spec section 4.2 ("Member views
-their upcoming confirmed bookings in their TiBillet account
-dashboard").
+Spec §7 « Booking list ». Un membre authentifié consulte ses
+réservations `confirmed` à venir sur `/my_account/my_resources/`.
+La page s'intègre dans le `MyAccount` viewset existant
+(`BaseBillet/views.py`) : une action `@action GET`, un template
+étendant `reunion/account_base.html`, et un bouton conditionnel dans
+`index.html`. Le bouton n'apparaît que si `config.module_booking` est
+`True` ; `config` est déjà dans le contexte via `get_context()`.
 
-### Session 11.1 — Red phase
+Vocabulaire unifié en parallèle : libellé de la navbar publique
+(`Ressources`, icône `chair`) et titre de la section admin Unfold
+corrigés — « Booking » remplacé par « Ressources » pour éviter la
+confusion avec les billets d'événements.
 
-**Files to create:**
-- `booking/tests/test_views_member.py`
+### Session 12.1 — Phase rouge ✓
 
-**Tests to write:**
+**Fichiers créés :**
+- `booking/tests/test_my_resources.py`
+
+**Tests écrits :**
 ```
-test_my_bookings_requires_authentication
-test_my_bookings_shows_only_confirmed_bookings
-test_my_bookings_does_not_show_other_members_bookings
-test_my_bookings_shows_cancellation_button_before_deadline
-test_my_bookings_hides_cancellation_button_after_deadline
-test_my_bookings_excludes_past_bookings
+test_my_resources_requires_authentication
+test_my_resources_shows_confirmed_bookings
+test_my_resources_excludes_new_bookings
+test_my_resources_excludes_other_members_bookings
+test_my_resources_button_visible_when_module_enabled
+test_my_resources_button_hidden_when_module_disabled
 ```
 
-### Session 11.2 — Green phase
+### Session 12.2 — Phase verte ✓
 
-**Files to create / modify:**
-- `booking/views.py` — `BookingViewSet.my_bookings()` (@action GET)
-- `booking/templates/booking/views/my_bookings.html`
-- `booking/templates/booking/partial/booking_row.html`
+**Fichiers créés / modifiés :**
+- `BaseBillet/views.py` — `MyAccount.my_resources()` : filtre
+  `STATUS_CONFIRMED`, `start_datetime__gt=now()`, `select_related`
+  sur `resource`
+- `BaseBillet/templates/reunion/views/account/my_resources.html`
+  (créé) — étend `account_base.html` ; chaque ligne porte
+  `data-testid="my-resource-{pk}"`
+- `BaseBillet/templates/reunion/views/account/index.html` — bouton
+  `data-testid="btn-my-resources"` conditionné par
+  `{% if config.module_booking %}`
+- `BaseBillet/views.py` `get_context()` — libellé navbar `Ressources`,
+  icône `chair`
+- `Administration/admin/dashboard.py` — titre section Unfold
+  `Ressources`
 
-Write the minimal view and templates to make all red-phase tests pass.
+**Résultat final : 151 tests, tous verts.**
 
 --------------------------------------------------------------------------------
 

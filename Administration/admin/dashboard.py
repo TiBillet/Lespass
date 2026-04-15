@@ -502,7 +502,7 @@ def get_sidebar_navigation(request):
     if configuration.module_booking:
         navigation.append(
             {
-                "title": _("Booking"),
+                "title": _("Ressources"),
                 "separator": True,
                 "collapsible": True,
                 "items": [
