@@ -1,0 +1,96 @@
+<!--
+LOCALISATION : booking/templates/booking/partial/booking_form.html
+
+Formulaire de réservation d'un créneau.
+/ Booking form for a single slot.
+
+Variables attendues / Expected variables:
+  ressource             — objet Resource
+  creneau               — BookableInterval | None (si slot_indisponible=True)
+  max_slot_count        — int : nombre de créneaux consécutifs disponibles
+  slot_duration_minutes — int : durée de chaque créneau en minutes
+  slot_indisponible     — bool : True si le créneau est complet ou inexistant
+  start_datetime        — datetime : début du créneau (si slot_indisponible=True)
+  erreur                — str | dict | None : message d'erreur de validation
+-->
+{% load i18n %}
+
+{% if slot_indisponible %}
+
+    <!--
+    Créneau complet ou hors plage ouverte — on informe le membre.
+    / Slot full or outside open range — inform the member.
+    -->
+    <div class="alert alert-danger"
+         data-testid="booking-form-slot-unavailable"
+         role="alert">
+        <i class="bi bi-x-circle" aria-hidden="true"></i>
+        {% translate "Ce créneau n'est plus disponible." %}
+    </div>
+
+    <a href="/booking/{{ ressource.pk }}/"
+       class="btn btn-outline-secondary btn-sm mt-2">
+        {% translate "Retour aux créneaux" %}
+    </a>
+
+{% elif erreur %}
+
+    <!--
+    Erreur de validation du serializer — les clés sont les noms de champs.
+    / Serializer validation error — keys are field names.
+    -->
+    <div class="alert alert-danger" role="alert">
+        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+        {{ erreur }}
+    </div>
+
+{% else %}
+
+    <!--
+    Formulaire principal — affiche les détails du créneau et le sélecteur de durée.
+    / Main form — shows slot details and the duration selector.
+    -->
+    <div class="mb-3"
+         data-testid="booking-form-slot-start">
+        <span class="fw-semibold">{{ creneau.start|date:"l d/m/Y H:i" }}</span>
+        <span class="text-muted small ms-1">
+            ({{ slot_duration_minutes }} {% translate "min" %})
+        </span>
+    </div>
+
+    <form method="post"
+          action="/booking/{{ ressource.pk }}/add_to_basket/"
+          class="row g-3">
+        {% csrf_token %}
+
+        <input type="hidden"
+               name="start_datetime"
+               value="{{ creneau.start|date:"Y-m-d\TH:i:s" }}">
+        <input type="hidden"
+               name="slot_duration_minutes"
+               value="{{ slot_duration_minutes }}">
+
+        <div class="col-auto">
+            <label for="slot-count-input" class="col-form-label">
+                {% translate "Nombre de créneaux" %}
+            </label>
+        </div>
+        <div class="col-auto">
+            <input type="number"
+                   id="slot-count-input"
+                   name="slot_count"
+                   value="1"
+                   min="1"
+                   max="{{ max_slot_count }}"
+                   class="form-control"
+                   required>
+        </div>
+
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">
+                {% translate "Ajouter au panier" %}
+            </button>
+        </div>
+    </form>
+
+{% endif %}

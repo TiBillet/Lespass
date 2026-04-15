@@ -890,36 +890,162 @@ test_resource_detail_marks_full_slots_as_unavailable
 
 --------------------------------------------------------------------------------
 
-## Session 10 — Add to basket (authenticated member)
+## Session 10 — Formulaire de réservation et ajout au panier
 
-### Session 10.1 — Red phase
+Spec §4.1 steps 3–6 : après avoir sélectionné un créneau sur la page de
+détail, le membre choisit combien de créneaux consécutifs il souhaite
+réserver, puis valide. Le système crée une réservation avec le statut
+`new`.
 
-**Files to create:**
-- `booking/tests/test_basket.py`
+Deux actions HTTP sont nécessaires :
 
-**Tests to write:**
+- `booking_form` — GET : affiche le formulaire permettant de choisir
+  `slot_count`. Calcule le nombre maximum de créneaux consécutifs
+  disponibles à partir du créneau choisi. Nécessite une
+  authentification.
+- `add_to_basket` — POST : reçoit `start_datetime`,
+  `slot_duration_minutes` et `slot_count`, délègue la validation
+  métier à `validate_new_booking()`, crée la réservation avec le
+  statut `new` et renvoie le partiel panier mis à jour.
+
+**Gestion de l'authentification sur les pages publiques :**
+
+Les pages liste (`/booking/`) et détail (`/booking/<pk>/`) sont
+publiques (aucune authentification requise pour les consulter).
+
+Les créneaux disponibles sur ces deux pages portent des `<a href>`
+simples (sans `hx-get`) pointant vers `booking_form`. Si
+l'utilisateur n'est pas authentifié, Django redirige vers la page de
+connexion avec `?next=<url>` via une redirection 302 classique. Après
+la connexion, l'utilisateur est renvoyé sur le formulaire de
+réservation.
+
+Ce comportement s'applique à deux templates :
+- `booking/templates/booking/partial/card.html` — créneaux de la
+  carte sur la page liste (actuellement des `<li>` sans lien)
+- `booking/templates/booking/views/detail.html` — créneaux de la
+  page de détail (actuellement des `<li>` sans lien)
+
+Ce choix évite le problème de redirection HTMX : les redirections 302
+serveur ne sont pas suivies par htmx dans une requête XHR. Avec un
+`<a href>` ordinaire, le navigateur suit la redirection normalement.
+
+**Routes :**
+
 ```
-test_add_to_basket_creates_booking_with_status_new
-test_add_to_basket_rejects_unauthenticated_user
-test_add_to_basket_rejects_full_slot
-test_add_to_basket_rejects_slot_beyond_horizon
-test_add_to_basket_rejects_slot_in_closed_period
-test_add_to_basket_slot_count_gt_1_checks_all_slots
+GET  /booking/<pk>/booking_form/
+     ?start_datetime=<iso>&slot_duration_minutes=<int>
+     → @action(detail=True, methods=['GET'], url_path='booking_form')
+     → IsAuthenticated — 302 vers login si non authentifié
+     → calcule max_slot_count depuis E'
+     → si max_slot_count == 0 : partiel d'erreur (créneau indisponible)
+     → sinon : partiel booking_form.html avec sélecteur slot_count
+
+POST /booking/<pk>/add_to_basket/
+     → @action(detail=True, methods=['POST'], url_path='add_to_basket')
+     → IsAuthenticated — 401 si non authentifié
+     → corps : start_datetime, slot_duration_minutes, slot_count
+     → succès (200) : partiel basket.html avec la nouvelle réservation
+     → erreur (422) : partiel avec message d'erreur
 ```
 
-### Session 10.2 — Green phase
+**`BookingCreateSerializer` :**
 
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
+```python
+start_datetime        = DateTimeField()       # timezone-aware, futur
+slot_duration_minutes = IntegerField(min_value=1)
+slot_count            = IntegerField(min_value=1)
+```
 
-**Files to create / modify:**
-- `booking/views.py` — `BookingViewSet.add_to_basket()` (@action POST)
-- `booking/serializers.py` — `BookingCreateSerializer`
-- `booking/templates/booking/partial/basket.html`
+La validation métier (B ⊆ E', horizon, capacité, concurrence) est
+entièrement déléguée à `validate_new_booking()` déjà implémentée dans
+`booking_engine.py`. Le serializer ne valide que la structure et les
+types.
 
-Write the minimal view, serializer, and template to make all
-red-phase tests pass.
+**`compute_max_consecutive_slots` (nouvelle fonction pure dans
+`booking_engine.py`) :**
+
+Prend E (liste de `BookableInterval` déjà calculée), `start_datetime`
+et `slot_duration_minutes`. Parcourt les créneaux consécutifs depuis
+`start_datetime` par pas de `slot_duration_minutes` et s'arrête dès
+qu'un créneau est absent de E' (`remaining_capacity == 0` ou absent).
+Retourne l'entier `max_slot_count`.
+
+### Session 10.1 — Red phase ✓
+
+**Files created:**
+- `booking/tests/test_basket.py` — 14 tests, tous en échec avant la
+  phase verte
+- `booking/tests/test_booking_engine.py` — 6 tests unitaires purs
+  pour `compute_max_consecutive_slots`, ajoutés à la suite existante
+
+**20 tests au total en phase rouge.**
+
+### Session 10.2 — Green phase ✓
+
+**Files created / modified:**
+
+- `booking/booking_engine.py` — `compute_max_consecutive_slots()`
+  ajouté : parcourt E depuis `start_datetime` par pas de
+  `slot_duration_minutes`, retourne le nombre de créneaux
+  consécutifs disponibles (0 si le premier est absent ou complet)
+
+- `booking/serializers.py` — `BookingFormQuerySerializer`
+  (`start_datetime` + `slot_duration_minutes`) et
+  `BookingCreateSerializer` (ajoute `slot_count`)
+
+- `booking/views.py` :
+  - `_reservations_en_cours()` — helper privé, retourne les
+    réservations `STATUS_NEW` de l'utilisateur connecté (ou `[]`)
+  - `booking_form()` — @action GET ; redirige vers `/connexion/`
+    (pas `/accounts/login/` — ce projet n'inclut pas
+    `django.contrib.auth.urls`) avec `?next=` si non authentifié ;
+    affiche `booking_form.html` avec `max_slot_count` ou le partiel
+    d'erreur si le créneau est indisponible
+  - `add_to_basket()` — @action POST avec
+    `permission_classes=[AllowAny]` pour que le contrôle manuel
+    renvoie 401 (DRF renverrait 403 avec `IsAuthenticatedOrReadOnly`
+    avant d'atteindre la vue) ; délègue à `validate_new_booking()` ;
+    422 sur toute erreur métier
+  - `list()` et `retrieve()` — passent maintenant
+    `reservations_en_cours` au contexte pour afficher le panier
+    sur les pages publiques
+
+- `booking/templates/booking/partial/card.html` — créneaux
+  disponibles : `<li>` → `<a href>` sans `hx-get` ; URL avec
+  `{{ creneau.start|date:"Y-m-d\TH:i:s" }}` (format naïf, sans
+  fuseau horaire) pour éviter que le `+` de l'offset UTC ne soit
+  interprété comme une espace dans la query string
+
+- `booking/templates/booking/views/detail.html` — même correction
+  de format + panier inclus en haut de page si
+  `reservations_en_cours`
+
+- `booking/templates/booking/views/list.html` — panier inclus en
+  haut de page si `reservations_en_cours`
+
+- `booking/templates/booking/partial/booking_form.html` (créé) —
+  `data-testid="booking-form-slot-start"`, `<input type="number"
+  max="{{ max_slot_count }}">`, branche
+  `data-testid="booking-form-slot-unavailable"`
+
+- `booking/templates/booking/partial/basket.html` (créé) — liste
+  des réservations `new` ; bouton "Réserver un autre créneau —
+  {nom}" conditionné par `show_back_link` (affiché uniquement
+  après `add_to_basket`, masqué sur les pages liste/détail) ;
+  bouton "Toutes les ressources" toujours visible
+
+**Points de mise en œuvre notables :**
+
+- `LOGIN_URL` ne peut pas servir de détection d'absence : Django
+  le définit toujours à `/accounts/login/` via `global_settings.py`.
+  La vue utilise `reverse('connexion')` directement.
+- `datetime.isoformat()` produit un `+` dans l'offset UTC que les
+  navigateurs ne percent-encodent pas dans un `href`. Solution :
+  format naïf `Y-m-d\TH:i:s` dans les templates ; DRF reconstitue
+  le fuseau via `get_current_timezone()`.
+
+**Résultat final : 69 tests, tous verts.**
 
 --------------------------------------------------------------------------------
 
