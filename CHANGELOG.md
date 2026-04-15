@@ -1,5 +1,41 @@
 # Changelog / Journal des modifications
 
+## Authentification hardware via TermUser / Hardware auth via TermUser
+
+**Quoi / What:** Refactor de l'auth des terminaux LaBoutik (POS + Android) via
+un pont `/laboutik/auth/bridge/` qui échange une clé API contre un cookie de
+session Django. Création automatique d'un TermUser à l'appairage, révocation
+instantanée via `is_active=False`.
+
+**Pourquoi / Why:** Simplifier le flow côté client (plus de hack HTML injection),
+aligner avec le pattern Pi controlvanne, permettre une révocation instantanée
+native Django.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| AuthBillet/models.py | +terminal_role, +TERMINAL_ROLE_CHOICES, TermUser.save(), TermUserManager scoping |
+| discovery/models.py | +terminal_role sur PairingDevice |
+| discovery/views.py | ClaimPinView route selon terminal_role, +_create_laboutik_terminal |
+| BaseBillet/models.py | LaBoutikAPIKey.user OneToOneField nullable |
+| BaseBillet/permissions.py | +HasLaBoutikTerminalAccess (HasLaBoutikAccess inchangée) |
+| laboutik/views.py | +LaBoutikAuthBridgeView |
+| laboutik/urls.py | +path auth/bridge/ |
+| Administration/admin/users.py | +TermUserAdmin |
+| Administration/admin/dashboard.py | +sidebar entry Terminals |
+| Administration/templates/admin/termuser/change_form_before.html | Bannière révocation |
+| tests/pytest/conftest.py | +fixture terminal_client |
+
+### Migration
+- **Migration nécessaire / Migration required:** Oui / Yes
+- 3 migrations AddField (non-destructives) :
+  - `AuthBillet.0025_tibilletuser_terminal_role`
+  - `discovery.0003_pairingdevice_terminal_role`
+  - `BaseBillet.0212_laboutikapikey_user`
+- Commande : `docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing`
+
+---
+
 ## Cartes NFC : admin web + remboursement + virements pot central + bouton POS / NFC cards: admin + refund + central pot transfers + POS button
 
 **Date :** 13-14 avril 2026

@@ -26,6 +26,7 @@ from laboutik.views import (
     ArticlePanelViewSet,
     CaisseViewSet,
     CommandeViewSet,
+    LaBoutikAuthBridgeView,
     PaiementViewSet,
 )
 
@@ -42,6 +43,11 @@ _stock_action = ArticlePanelViewSet.as_view({"post": "stock_action"})
 _toggle_bloquant = ArticlePanelViewSet.as_view({"post": "toggle_bloquant"})
 
 urlpatterns = [
+    path(
+        "auth/bridge/",
+        LaBoutikAuthBridgeView.as_view(),
+        name="laboutik-auth-bridge",
+    ),
     path(
         "article-panel/<uuid:product_uuid>/panel/",
         _panel,

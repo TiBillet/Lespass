@@ -269,6 +269,35 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- Section terminaux hardware : visible si caisse, monnaie locale ou tireuse ---
+    # --- Hardware terminals section: visible if caisse, local currency or taps ---
+    # Les TermUser couvrent caisse (CA), tireuses (TI) et kiosques (KI) ;
+    # on affiche donc l'entree des que l'un des modules hardware est actif.
+    # / TermUsers cover cash register (CA), taps (TI) and kiosks (KI);
+    # so we show the entry as soon as any hardware module is active.
+    if (
+        configuration.module_caisse
+        or configuration.module_monnaie_locale
+        or configuration.module_tireuse
+    ):
+        navigation.append(
+            {
+                "title": _("Hardware terminals"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Terminals"),
+                        "icon": "tablet",
+                        "link": reverse_lazy(
+                            "staff_admin:AuthBillet_termuser_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
     # --- module_monnaie_locale : Fedow (monnaies, tokens, transactions) ---
     # --- module_monnaie_locale: Fedow (currencies, tokens, transactions) ---
     if configuration.module_monnaie_locale:

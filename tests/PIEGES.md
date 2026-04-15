@@ -1380,5 +1380,37 @@ et bank-transfers.
 
 ---
 
+### Auth hardware TermUser (session 30, avril 2026)
+
+**9.95 — `TermUser.save()` force `espece=TE` systematiquement.**
+Si un test passe `espece='HU'` a `TermUser.objects.create(...)`, la valeur est
+ecrasee par `TYPE_TERM`. Pour tester un user humain, utiliser `HumanUser` ou
+`TibilletUser` directement, pas le proxy `TermUser`.
+
+**9.96 — `TermUser.save()` detecte la creation via `_state.adding`, pas `not self.pk`.**
+`TibilletUser.id` est un `UUIDField(default=uuid4)`, donc `self.pk` est toujours
+truthy meme pour un nouvel objet. `_state.adding` est le pattern Django canonique
+et est utilise dans `TermUser.save()` pour remplir `client_source` uniquement
+a la creation. Le meme bug silencieux existe dans `HumanUser.save()` — a
+corriger dans un futur ticket.
+
+**9.97 — `LaBoutikAPIKey.user` est `OneToOneField` : un user = une cle max.**
+Deux `LaBoutikAPIKey.objects.create_key(user=same_user)` levent `IntegrityError`
+sur la contrainte unique. En test, toujours creer un user dedie par cle.
+
+**9.98 — `client.force_login(term_user)` ne pose PAS `set_expiry(12h)`.**
+La fixture `terminal_client` utilise `force_login` pour la rapidite, mais
+cela ne simule pas exactement le bridge. Pour tester l'expiration de session,
+faire un vrai POST sur `/laboutik/auth/bridge/`. Aussi : `term_user.backend` doit
+etre defini explicitement avant `force_login()` car le projet a plusieurs
+backends d'authentification.
+
+**9.99 — `/laboutik/auth/bridge/` a un throttle AnonRateThrottle 10/min.**
+Dans les tests, `from django.core.cache import cache; cache.clear()` avant
+chaque appel pour reinitialiser. Attention : clear() vide TOUT le cache,
+acceptable uniquement sur dev DB.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

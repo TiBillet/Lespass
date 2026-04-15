@@ -14,6 +14,7 @@ import typing
 
 from django.db import connection
 from django.http import HttpRequest
+from rest_framework import permissions
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_api_key.permissions import BaseHasAPIKey
 
@@ -116,3 +117,36 @@ class HasLaBoutikAccess(BaseHasAPIKey):
         # Attach the key to the request for use in views
         request.laboutik_api_key = api_key
         return super().has_permission(request, view)
+
+
+class HasLaBoutikTerminalAccess(permissions.BasePermission):
+    """
+    Permission V2 : accepte les TermUser authentifiés via le bridge (session),
+    avec fallback V1 sur HasLaBoutikAccess (admin session OU header Api-Key).
+    / V2 permission: accepts bridge-authenticated TermUsers (session),
+    with V1 fallback on HasLaBoutikAccess (admin session OR Api-Key header).
+
+    LOCALISATION : BaseBillet/permissions.py
+
+    Utilisée sur les routes Laboutik V2 qui adoptent le pattern bridge→session.
+    Les routes V1 legacy continuent d'utiliser HasLaBoutikAccess directement.
+    / Used on V2 Laboutik routes that adopt the bridge→session pattern.
+    Legacy V1 routes keep using HasLaBoutikAccess directly.
+    """
+
+    def has_permission(self, request, view):
+        from AuthBillet.models import TibilletUser
+
+        user = request.user
+
+        # Chemin V2 : TermUser avec rôle LaBoutik lié à ce tenant
+        # / V2 path: TermUser with LaBoutik role linked to this tenant
+        if user and user.is_authenticated:
+            if user.espece == TibilletUser.TYPE_TERM:
+                if user.terminal_role == TibilletUser.ROLE_LABOUTIK:
+                    if user.client_source_id == connection.tenant.pk:
+                        return True
+
+        # Fallback V1 : délègue à HasLaBoutikAccess
+        # / V1 fallback: delegate to HasLaBoutikAccess
+        return HasLaBoutikAccess().has_permission(request, view)

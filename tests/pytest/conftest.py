@@ -171,6 +171,50 @@ def tenant():
     return Client.objects.get(schema_name='lespass')
 
 
+@pytest.fixture
+def terminal_client(tenant):
+    """
+    Client Django authentifie comme TermUser Laboutik (session posee).
+    / Django Client authenticated as a Laboutik TermUser (session set).
+
+    Remplace auth_headers (header Api-Key V1) pour les tests V2 qui utilisent
+    les routes protegees par HasLaBoutikTerminalAccess.
+    / Replaces auth_headers (V1 Api-Key header) for V2 tests using routes
+    protected by HasLaBoutikTerminalAccess.
+
+    Usage :
+        def test_something(terminal_client):
+            response = terminal_client.get('/laboutik/caisse/')
+            assert response.status_code == 200
+    """
+    import uuid
+    from django.test import Client
+    from django_tenants.utils import tenant_context
+    from AuthBillet.models import TermUser
+
+    email = f'test-{uuid.uuid4()}@terminals.local'
+    with tenant_context(tenant):
+        term_user = TermUser.objects.create(
+            email=email,
+            username=email,
+            terminal_role='LB',
+            accept_newsletter=False,
+        )
+        # Backend explicite pour force_login (plusieurs backends peuvent etre configures).
+        # / Explicit backend for force_login (multiple backends may be configured).
+        term_user.backend = 'django.contrib.auth.backends.ModelBackend'
+
+    client = Client(HTTP_HOST=f'{tenant.schema_name}.tibillet.localhost')
+    client.force_login(term_user)
+
+    yield client
+
+    # Cleanup : supprimer le TermUser cree pour ce test.
+    # / Cleanup: delete the TermUser created for this test.
+    with tenant_context(tenant):
+        term_user.delete()
+
+
 @pytest.fixture(scope="session")
 def django_db_setup():
     """Pas de creation de test database — les tests utilisent la base dev existante.

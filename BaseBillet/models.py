@@ -3130,6 +3130,22 @@ class ScannerAPIKey(AbstractAPIKey):
 
 
 class LaBoutikAPIKey(AbstractAPIKey):
+    """
+    Clé API LaBoutik liée à un TermUser (V2 flow bridge).
+    / LaBoutik API key linked to a TermUser (V2 bridge flow).
+
+    Le champ `user` est nullable pour compat V1 (clés créées avant le bridge).
+    / The `user` field is nullable for V1 compat (keys created before bridge).
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='laboutik_api_key',
+        null=True, blank=True,
+        verbose_name=_("Terminal user"),
+        help_text=_("TermUser linked (V2 bridge flow). Null for legacy V1 keys."),
+    )
+
     class Meta:
         ordering = ("-created",)
         verbose_name = "LaBoutik API Key"

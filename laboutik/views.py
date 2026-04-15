@@ -15,14 +15,20 @@ from decimal import Decimal
 from json import dumps
 
 from django.conf import settings
+from django.contrib.auth import login
 from django.db import transaction as db_transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
+from django.views.decorators.csrf import csrf_exempt
 from django_htmx.http import HttpResponseClientRedirect
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
 
 from django.core.exceptions import PermissionDenied
 from django.db import connection
@@ -50,7 +56,7 @@ from BaseBillet.models import (
     PaymentMethod,
     Ticket,
 )
-from BaseBillet.permissions import HasLaBoutikAccess
+from BaseBillet.permissions import HasLaBoutikAccess, HasLaBoutikTerminalAccess
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
     LaboutikConfiguration,
@@ -1112,7 +1118,7 @@ class CaisseViewSet(viewsets.ViewSet):
     - point_de_vente()  → interface POS (service direct, tables, kiosk) / POS interface
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     def list(self, request):
         """
@@ -4560,7 +4566,7 @@ class PaiementViewSet(viewsets.ViewSet):
     - retour_carte()   → affiche le solde de la carte scannée / shows the scanned card balance
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     # ----------------------------------------------------------------------- #
     #  Étape 1 : afficher les moyens de paiement disponibles                   #
@@ -7630,7 +7636,7 @@ class CommandeViewSet(viewsets.ViewSet):
     5. annuler_commande()   → annule la commande / cancels the order
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     # ----------------------------------------------------------------------- #
     #  1. Ouvrir une commande                                                  #
@@ -8310,7 +8316,7 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         laboutik/partial/article_panel_stock.html  → vue stock détaillée
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     ACTIONS_AUTORISEES = ["reception", "perte", "ajustement"]
 
@@ -8481,3 +8487,122 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         response = render(request, "laboutik/partial/article_panel_stock.html", context)
         response["HX-Trigger"] = "stockUpdated"
         return response
+
+
+class BridgeThrottle(AnonRateThrottle):
+    """
+    Anti-brute-force sur le bridge : 10 requêtes/minute par IP.
+    / Brute-force protection on bridge: 10 req/min per IP.
+    """
+    rate = '10/min'
+    scope = 'laboutik_auth_bridge'
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LaBoutikAuthBridgeView(APIView):
+    """
+    Pont d'authentification hardware : échange une clé API contre un cookie session.
+    / Hardware auth bridge: trades an API key for a session cookie.
+
+    LOCALISATION : laboutik/views.py
+
+    Flux :
+    1. Client POST avec header Authorization: Api-Key xxx
+    2. Validation de la clé (401 si invalide)
+    3. Si la clé n'a pas de user lié (legacy V1) : 400
+    4. Si user.is_active=False (révoqué) : 401
+    5. django.contrib.auth.login() pose le cookie sessionid
+    6. set_expiry(12h) — session courte par hygiène
+
+    CSRF exempt : légitime car
+    - la clé API joue l'auth forte pour cette seule requête
+    - le client Cordova/WebView n'a pas encore de cookie CSRF
+    - les requêtes suivantes (avec cookie session) auront la protection CSRF normale
+
+    Les bodies 401 sont intentionnellement vides : aucune info leak pour
+    distinguer missing/invalid/revoked (side-channel évité). Seul le 400
+    (legacy V1) renvoie un message explicite car cet état n'est pas
+    sensible pour la sécurité (juste un flag de dette de code).
+    / 401 bodies are intentionally empty: no info leak to distinguish
+    missing/invalid/revoked (avoids side-channels). Only 400 (legacy V1)
+    returns a descriptive message because that state is not security-
+    sensitive (just a code-debt flag).
+
+    COMMUNICATION :
+    Reçoit : Header Authorization: Api-Key <key>
+    Émet : 204 No Content + Set-Cookie: sessionid=<key>
+    Erreurs : 401 si clé absente/invalide/révoquée, 400 si clé V1, 429 si throttle
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [BridgeThrottle]
+
+    def post(self, request):
+        # Extraction de la clé depuis le header Authorization
+        # / Extract key from Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Api-Key '):
+            # Log : tentative d'accès sans header Api-Key
+            # / Log: access attempt without Api-Key header
+            logger.warning(
+                "laboutik bridge: missing/malformed Authorization header from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
+
+        api_key_string = auth_header[len('Api-Key '):].strip()
+        if not api_key_string:
+            logger.warning(
+                "laboutik bridge: empty API key from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
+
+        # Validation de la clé
+        # / Key validation
+        from BaseBillet.models import LaBoutikAPIKey
+        try:
+            api_key = LaBoutikAPIKey.objects.get_from_key(api_key_string)
+        except LaBoutikAPIKey.DoesNotExist:
+            # Log : clé API inconnue (possibly brute-force)
+            # / Log: unknown API key (possibly brute-force)
+            logger.warning(
+                "laboutik bridge: unknown API key attempt from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
+
+        # Clé V1 sans user lié : non bridgeable
+        # / V1 key without linked user: cannot be bridged
+        if api_key.user is None:
+            logger.info(
+                "laboutik bridge: legacy V1 key used (name=%s), bridge refused",
+                api_key.name,
+            )
+            return HttpResponse(
+                _("Legacy API key, bridge flow not available. Please re-pair the device."),
+                status=400,
+            )
+
+        # User révoqué ?
+        # / User revoked?
+        term_user = api_key.user
+        if not term_user.is_active:
+            logger.warning(
+                "laboutik bridge: revoked TermUser %s attempted bridge",
+                term_user.email,
+            )
+            return HttpResponse(status=401)
+
+        # Login Django natif : pose le cookie sessionid
+        # / Native Django login: sets sessionid cookie
+        login(request, term_user)
+
+        # Session courte pour les terminaux (12h)
+        # / Short session for terminals (12h)
+        request.session.set_expiry(60 * 60 * 12)
+
+        logger.info(
+            "laboutik bridge: session opened for terminal %s",
+            term_user.email,
+        )
+        return HttpResponse(status=204)
