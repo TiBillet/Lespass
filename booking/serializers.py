@@ -49,3 +49,18 @@ class BookingCreateSerializer(serializers.Serializer):
     start_datetime = serializers.DateTimeField()
     slot_duration_minutes = serializers.IntegerField(min_value=1)
     slot_count = serializers.IntegerField(min_value=1)
+
+
+class RemoveFromBasketSerializer(serializers.Serializer):
+    """
+    Valide le corps de la vue remove_from_basket.
+    / Validates the body for the remove_from_basket view.
+
+    LOCALISATION : booking/serializers.py
+
+    Champ attendu :
+      booking_pk — clé primaire (entier) de la réservation à retirer
+    / Expected field:
+      booking_pk — primary key (integer) of the booking to remove
+    """
+    booking_pk = serializers.IntegerField()

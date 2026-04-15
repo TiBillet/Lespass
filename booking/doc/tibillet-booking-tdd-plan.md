@@ -1049,7 +1049,56 @@ Retourne l'entier `max_slot_count`.
 
 --------------------------------------------------------------------------------
 
-## Session 11 — Member booking list (authenticated member dashboard)
+## Session 11 — Retirer du panier + valider le panier (sans paiement) (DONE ✓)
+
+Spec §4.1 étapes 6–7. Le paiement TiBillet (`pricing_rule` FK,
+statut `validated`) est reporté à une session ultérieure. La
+validation passe les réservations directement de `new` à `confirmed`.
+
+### Session 11.1 — Phase rouge ✓
+
+**Fichiers créés :**
+- `booking/tests/test_validate.py`
+
+**Tests à écrire :**
+```
+test_remove_from_basket_deletes_new_booking
+test_remove_from_basket_rejects_confirmed_booking
+test_remove_from_basket_rejects_booking_owned_by_another_member
+test_remove_from_basket_requires_authentication
+test_validate_basket_moves_new_bookings_to_confirmed
+test_validate_empty_basket_returns_error
+test_validate_basket_requires_authentication
+```
+
+### Session 11.2 — Phase verte ✓
+
+**Fichiers créés / modifiés :**
+- `booking/serializers.py` — `RemoveFromBasketSerializer` (champ
+  `booking_pk`)
+- `booking/views.py` — `remove_from_basket()` et `validate_basket()`
+  (@action POST, `permission_classes=[AllowAny]` + contrôle manuel
+  401)
+- `booking/templates/booking/partial/basket.html` — bouton "Retirer"
+  par ligne `new` (hx-post + hx-vals) + bouton "Confirmer mes
+  réservations"
+- `booking/templates/booking/partial/basket_confirmed.html` (créé) —
+  partiel de confirmation affiché après `validate_basket`
+
+**Point de mise en œuvre notable :**
+
+`remove_from_basket` retourne `HX-Redirect` vers `HTTP_REFERER` au
+lieu d'un swap partiel. Cela recharge la page entière via
+`window.location`, ce qui met à jour à la fois le panier et les
+disponibilités des créneaux (capacité restante). Un swap limité au
+composant panier laissait les indicateurs de capacité obsolètes sur
+la page liste et la page détail.
+
+**Résultat final : 145 tests, tous verts.**
+
+--------------------------------------------------------------------------------
+
+## Session 12 — Member booking list (authenticated member dashboard)
 
 The page where a member sees their upcoming confirmed bookings and
 accesses cancellation. Referenced in spec section 4.2 ("Member views
@@ -1083,42 +1132,6 @@ test_my_bookings_excludes_past_bookings
 - `booking/templates/booking/partial/booking_row.html`
 
 Write the minimal view and templates to make all red-phase tests pass.
-
---------------------------------------------------------------------------------
-
-## Session 12 — Basket validation + payment (TiBillet Price integration)
-
-This is where the `pricing_rule` FK on Resource is added, pointing to
-TiBillet's existing `Price` model. Resolve the open question in the
-spec (correct `categorie_article` value) with the core team before
-implementing this session.
-
-### Session 12.1 — Red phase
-
-**Files to create:**
-- `booking/tests/test_validate.py`
-
-**Tests to write:**
-```
-test_validate_basket_free_slot_goes_directly_to_confirmed
-test_validate_basket_paid_slot_moves_to_validated
-test_validate_basket_insufficient_payment_deletes_bookings
-test_validate_empty_basket_returns_error
-```
-
-### Session 12.2 — Green phase
-
-> ⚠️ **AI stops here.** The human reviews the tests, completes or
-> adjusts them if needed, and confirms before proceeding to the green
-> phase.
-
-**Files to create / modify:**
-- `booking/models.py` — add `pricing_rule = FK(Price)` on Resource
-- `booking/migrations/` — migration for the new FK
-- `booking/views.py` — `BookingViewSet.validate_basket()` (@action POST)
-
-Write the minimal payment integration logic to make all red-phase
-tests pass.
 
 --------------------------------------------------------------------------------
 
