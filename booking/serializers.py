@@ -64,3 +64,18 @@ class RemoveFromBasketSerializer(serializers.Serializer):
       booking_pk — primary key (integer) of the booking to remove
     """
     booking_pk = serializers.IntegerField()
+
+
+class CancelBookingSerializer(serializers.Serializer):
+    """
+    Valide le corps de la vue cancel.
+    / Validates the body for the cancel view.
+
+    LOCALISATION : booking/serializers.py
+
+    Champ attendu :
+      booking_pk — clé primaire (entier) de la réservation à annuler
+    / Expected field:
+      booking_pk — primary key (integer) of the booking to cancel
+    """
+    booking_pk = serializers.IntegerField()
