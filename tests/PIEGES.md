@@ -1148,5 +1148,269 @@ Rencontre sur : spinner avant redirection Stripe, session 2026-04-10.
 
 ---
 
+### Piege 74 : `Asset.federated_with` vs `Federation.tenants` — 3 chemins d'acceptation
+
+Dans `fedow_core/models.py`, un `Asset` peut etre accepte par un `Client` (tenant)
+via **3 mecanismes differents** :
+
+1. `Asset.tenant_origin` — le tenant createur de la monnaie
+2. `Asset.federated_with` — M2M **directe** Asset↔Client (flow invitation 1-to-1)
+3. `Federation.assets` + `Federation.tenants` — M2M via le groupe Federation
+
+Quand on calcule "qui accepte cette monnaie", il faut **unir les 3**. Un SQL qui ne
+regarde qu'un seul chemin donnera un resultat incomplet.
+
+Piege supplementaire : `fedow_core_asset_federated_with` a les colonnes
+`(asset_id, client_id)` — **pas** `federation_id`. C'est une M2M directe vers Client.
+Ne pas confondre avec `fedow_core_federation_tenants` qui lui a `(federation_id, client_id)`.
+
+Voir `seo/services.py:get_all_assets()` pour une requete CTE qui fait les 3 unions.
+
+Rencontre sur : enrichissement du cache SEO pour la page `/explorer/`, session 2026-04-12.
+
+---
+
+### Piege 75 : Animer `max-height` avec `scrollHeight` en JS — hack fragile
+
+Le pattern courant pour animer l'ouverture d'un accordeon :
+```js
+panel.style.maxHeight = panel.scrollHeight + 'px';  // ouverture
+panel.style.maxHeight = null;  // fermeture
+```
+Ca marche mais : si le contenu change apres ouverture la hauteur reste figee, il
+faut recalculer scrollHeight a chaque toggle, et le `null` ne redevient pas
+exactement `0` instantanement.
+
+**Meilleure technique : `grid-template-rows: 0fr → 1fr`** (pas de JS, anime
+n'importe quelle hauteur) :
+
+```css
+.accordion-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.accordion-panel > .panel-inner {
+    overflow: hidden;
+    min-height: 0;
+}
+.accordion-panel.open {
+    grid-template-rows: 1fr;
+}
+```
+
+Le JS devient trivial : `panel.classList.toggle('open')`. Requiere un wrapper
+`.panel-inner` avec `overflow: hidden` et `min-height: 0`.
+
+Rencontre sur : accordeon des cards lieu et monnaies de `/explorer/`, session 2026-04-12.
+
+---
+
+### Pieges chantier Cartes NFC admin (sessions 2026-04-13/14)
+
+#### `tag_id_cm` est le nom canonique du tag caissier au POS, pas `tag_id_primary`
+
+Le tag NFC du caissier (carte primaire) est propage dans tout le POS sous le nom
+`tag_id_cm` (tag id carte manager). On le trouve :
+- En URL query param : `?uuid_pv=X&tag_id_cm=Y` entre toutes les pages POS
+- En hidden field dans `#addition-form` (`addition.html:31`) : `<input name="tag_id_cm">`
+- Disponible dans tous les templates POS via `{{ card.tag_id }}`
+
+Ne pas inventer `tag_id_primary` ou autre — utiliser `tag_id_cm`.
+
+#### `StaffAdminSite.get_urls()` override : custom AVANT super
+
+Pour ajouter des URLs custom au scope `/admin/` :
+
+```python
+def get_urls(self):
+    custom_urls = [path('mon-truc/', view, name='mon_truc'), ...]
+    return custom_urls + super().get_urls()  # custom AVANT super
+```
+
+Si on inverse l'ordre, les URLs Django Admin captureront `mon-truc/` en 404 si
+le format ressemble a un app_label.
+
+#### Tile POS et `data-methode-caisse`
+
+Le template `cotton/articles.html` rend les tiles POS avec `data-uuid`, `data-name`,
+`data-price`, `data-group` mais PAS `data-methode-caisse` par defaut. Pour qu'un
+JS handler puisse intercepter les clics par categorie metier (ex: `methode_caisse=VC`),
+il faut ajouter cet attribut au template.
+
+C'est fait depuis Phase 3 du chantier Cartes NFC : `data-methode-caisse="{{ article.methode_caisse }}"`
+sur la `<div data-uuid=...>` ligne 18.
+
+#### `_check_superuser` qui `raise PermissionDenied` dans une DRF ViewSet → JSON brut
+
+Dans une vue HTML, il faut renvoyer un `HttpResponse` avec un template d'erreur,
+PAS lever `PermissionDenied` qui est interceptee par DRF Browsable API et rendue
+en JSON brut "HTTP 403 Forbidden".
+
+```python
+# MAUVAIS — affiche le rendu DRF JSON 403 brut
+def _check_superuser(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied(_('...'))
+
+# BON — render un partial HTML d'erreur
+def _check_superuser(request):
+    if request.user.is_superuser:
+        return None
+    return render(request, 'partial/hx_messages.html', {...}, status=403)
+
+# Caller :
+forbidden = _check_superuser(request)
+if forbidden is not None:
+    return forbidden
+```
+
+Decouvert sur `Administration/views_bank_transfers.py` (Phase 2 chantier Cartes NFC).
+
+#### Signal `send_membership_product_to_fedow` cree un Product a chaque Asset
+
+Quand `AssetService.creer_asset(...)` est appele, un signal `post_save` cree
+automatiquement un Product `Recharge {asset.name}` (categorie_article=NONE,
+methode_caisse=RE). Ce Product a une contrainte unique sur (categorie_article, name).
+
+**Consequences pour les tests** : si plusieurs fichiers de tests creent des Assets
+avec des noms qui pourraient se chevaucher, ou si les Products ne sont pas nettoyes
+dans le teardown, le 2e run du test cross-file echoue avec `IntegrityError` sur
+`BaseBillet_product_categorie_article_name_fa9da1c7_uniq`.
+
+**Workaround** : 
+- Lancer chaque fichier de test en isolation (pas en suite combinee).
+- Ou ajouter un cleanup explicit dans la fixture autouse de teardown.
+
+**Fixture pretes a copier dans ton `conftest.py`** :
+
+```python
+import pytest
+from django_tenants.utils import tenant_context
+from BaseBillet.models import Product
+from Customers.models import Client
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_recharge_products_pollution():
+    """
+    Purge les Products 'Recharge *' crees par le signal post_save d'Asset
+    (send_membership_product_to_fedow). Evite les collisions cross-file.
+    Cleans up 'Recharge *' Products created by Asset post_save signal.
+    """
+    yield
+    # Preferer un prefixe de test pour limiter le rayon d'action :
+    # Prefer a test-specific prefix to limit blast radius:
+    tenant = Client.objects.get(schema_name='lespass')  # adapter si besoin
+    with tenant_context(tenant):
+        Product.objects.filter(name__startswith='Recharge TEST_').delete()
+```
+
+**Bonne pratique** : prefixer les noms d'Asset de test par `TEST_` (ex. `Asset.objects.create(name='TEST_TLF_run42')`) pour que le cleanup ne touche jamais un Product metier legitime cree par un autre test ou un fixture durable.
+
+**Pourquoi pas un `delete()` global sans prefixe ?** Risque de casser un fixture session-scope qui aurait cree un Asset legitime (donc un Product `Recharge X` metier). Le prefixe `TEST_` garantit que le cleanup reste localise.
+
+Pre-existant — pollue depuis la creation du signal Asset post_save. Fix structurel
+(desactivation conditionnelle du signal en test) hors scope Phase 1.5.
+
+#### `page.request.post` Playwright + DRF ViewSet : besoin du X-CSRFToken header
+
+Pour POST une form via `page.request.post(url, form={...})` apres un `login_as_admin`,
+DRF exige le header CSRF. Le cookie `csrftoken` est defini apres `page.goto('/')`,
+mais `page.request.post` ne le passe pas automatiquement.
+
+```python
+# Recuperer le token apres login + visite d'une page Django
+page.goto('/laboutik/caisse/')
+cookies = page.context.cookies()
+csrf = next((c['value'] for c in cookies if c['name'] == 'csrftoken'), None)
+
+response = page.request.post('/laboutik/paiement/vider_carte/',
+    form={'tag_id': 'X', ...},
+    headers={'X-CSRFToken': csrf, 'Referer': 'https://lespass.tibillet.localhost/'},
+)
+```
+
+Decouvert sur `tests/e2e/test_pos_vider_carte.py` (Phase 3 chantier Cartes NFC).
+
+#### Order de delete pour cleanup avec FK PROTECTED
+
+`Transaction.primary_card` (FK PROTECTED) et `Token.asset` (FK PROTECTED) imposent
+un ordre strict de cleanup en fin de test :
+
+```
+Transactions → Tokens → Cartes → Assets → Wallets
+```
+
+Si on supprime un Wallet ou un Asset avant les Transactions/Tokens qui les referencent,
+django leve `ProtectedError`. Le `try/except Exception: pass` qui enrobe le cleanup
+masque parfois ce probleme — preferer un ordre explicite.
+
+#### `Asset.objects.get(category=Asset.FED)` peut lever MultipleObjectsReturned
+
+Convention "1 seul FED dans le systeme" non enforced en DB. Si plusieurs FED ont ete
+crees par accident (ex: tests successifs sans cleanup), l'appel `.get()` echoue.
+
+Preferer :
+```python
+fed_asset = Asset.objects.filter(category=Asset.FED).first()
+if fed_asset is None:
+    raise RuntimeError('Aucun asset FED dans le systeme')
+```
+
+Decouvert sur `WalletService.rembourser_en_especes()` (Phase 1 chantier Cartes NFC).
+
+#### `messages.success` apres `redirect()` depuis vue wrappee `admin_site.admin_view()`
+
+Les messages Django flash (`messages.success`, `messages.warning`) ne sont PAS rendus
+sur la page admin de redirect quand la vue source est wrappee par `admin_site.admin_view()`.
+
+Symptomes :
+- Le message est ajoute en session (vu via `request.session['_messages']`).
+- La page de redirect (admin /change/) ne le rend pas.
+
+Cause probable : Unfold ne rend pas le bloc messages dans son base template, ou le
+contexte n'est pas peuple par le message middleware sur les vues custom.
+
+**Workaround temporaire** : afficher le succes via le contenu du template render
+(pas via `messages` framework). Ou utiliser un toast HTMX via `HX-Trigger` header.
+
+A investiguer pour Phase 1.5 du chantier Cartes NFC. Touche les flows refund admin
+et bank-transfers.
+
+---
+
+### Auth hardware TermUser (session 30, avril 2026)
+
+**9.95 — `TermUser.save()` force `espece=TE` systematiquement.**
+Si un test passe `espece='HU'` a `TermUser.objects.create(...)`, la valeur est
+ecrasee par `TYPE_TERM`. Pour tester un user humain, utiliser `HumanUser` ou
+`TibilletUser` directement, pas le proxy `TermUser`.
+
+**9.96 — `TermUser.save()` detecte la creation via `_state.adding`, pas `not self.pk`.**
+`TibilletUser.id` est un `UUIDField(default=uuid4)`, donc `self.pk` est toujours
+truthy meme pour un nouvel objet. `_state.adding` est le pattern Django canonique
+et est utilise dans `TermUser.save()` pour remplir `client_source` uniquement
+a la creation. Le meme bug silencieux existe dans `HumanUser.save()` — a
+corriger dans un futur ticket.
+
+**9.97 — `LaBoutikAPIKey.user` est `OneToOneField` : un user = une cle max.**
+Deux `LaBoutikAPIKey.objects.create_key(user=same_user)` levent `IntegrityError`
+sur la contrainte unique. En test, toujours creer un user dedie par cle.
+
+**9.98 — `client.force_login(term_user)` ne pose PAS `set_expiry(12h)`.**
+La fixture `terminal_client` utilise `force_login` pour la rapidite, mais
+cela ne simule pas exactement le bridge. Pour tester l'expiration de session,
+faire un vrai POST sur `/laboutik/auth/bridge/`. Aussi : `term_user.backend` doit
+etre defini explicitement avant `force_login()` car le projet a plusieurs
+backends d'authentification.
+
+**9.99 — `/laboutik/auth/bridge/` a un throttle AnonRateThrottle 10/min.**
+Dans les tests, `from django.core.cache import cache; cache.clear()` avant
+chaque appel pour reinitialiser. Attention : clear() vide TOUT le cache,
+acceptable uniquement sur dev DB.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

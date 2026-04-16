@@ -51,9 +51,15 @@ def _get_or_create_wallet_lieu(tenant_obj):
         fedow_config = FedowConfig.get_solo()
         if fedow_config.wallet:
             return fedow_config.wallet
+        # IMPORTANT : inclure `name` dans la lookup (pas en defaults),
+        # sinon MultipleObjectsReturned des qu'un autre Wallet (ephemere,
+        # user, autres tests…) partage le meme `origin`.
+        # / IMPORTANT: include `name` in lookup (not defaults), otherwise
+        # MultipleObjectsReturned as soon as another Wallet (ephemeral,
+        # user, other tests…) shares the same `origin`.
         wallet_lieu, _ = Wallet.objects.get_or_create(
             origin=tenant_obj,
-            defaults={"name": f"[test_cascade] Lieu {tenant_obj.name}"},
+            name=f"[test_cascade] Lieu {tenant_obj.name}",
         )
         return wallet_lieu
 

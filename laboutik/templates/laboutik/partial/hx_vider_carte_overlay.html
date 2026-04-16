@@ -1,0 +1,31 @@
+{% load static i18n %}
+{# Overlay plein écran qui propose le scan NFC de la carte client. #}
+{# Full-screen overlay inviting the NFC scan of the client card. #}
+
+<div id="vider-carte-overlay"
+     class="overlay overlay-fullscreen"
+     data-testid="vider-carte-overlay">
+    <div class="overlay-content">
+        <h2>{% translate "Vider la carte" %}</h2>
+        <p>{% translate "Scannez la carte du client." %}</p>
+
+        {# Form cache avec hidden fields tag_id (rempli par NFC), tag_id_cm, uuid_pv. #}
+        {# Hidden form with hidden fields tag_id (filled by NFC), tag_id_cm, uuid_pv. #}
+        <form id="vider-carte-form" style="display: none;">
+            {% csrf_token %}
+            <input type="hidden" name="tag_id" id="nfc-tag-id" value="">
+            <input type="hidden" name="tag_id_cm" value="{{ card.tag_id }}">
+            <input type="hidden" name="uuid_pv" value="{{ pv.uuid }}">
+        </form>
+
+        <c-read-nfc event-manage-form="viderCarteManageForm"
+                    submit-url="{% url 'laboutik-paiement-vider_carte_preview' %}">
+            <button type="button"
+                    class="btn btn-secondary"
+                    onclick="document.getElementById('vider-carte-overlay').remove();"
+                    data-testid="vider-carte-cancel">
+                {% translate "Annuler" %}
+            </button>
+        </c-read-nfc>
+    </div>
+</div>

@@ -14,3 +14,4 @@ from Administration.admin import (  # noqa: F401
     membership, sales, events, reservations, settings_apps, fedow, crowds,
     inventaire,
 )
+from Administration.admin import cards  # noqa: F401

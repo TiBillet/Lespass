@@ -388,7 +388,14 @@ def get_all_assets():
     with connection.cursor() as cursor:
         cursor.execute(sql)
         for row in cursor.fetchall():
-            asset_uuid, asset_name, asset_category, origin_uuid, origin_name, accepting_uuids = row
+            (
+                asset_uuid,
+                asset_name,
+                asset_category,
+                origin_uuid,
+                origin_name,
+                accepting_uuids,
+            ) = row
 
             # Union : tenant_origin + lieux federes (direct + federation) = lieux acceptants
             # / Union: tenant_origin + federated venues (direct + federation) = accepting venues
@@ -396,16 +403,18 @@ def get_all_assets():
             if origin_uuid:
                 accepting.add(origin_uuid)
 
-            results.append({
-                "uuid": asset_uuid,
-                "name": asset_name,
-                "category": asset_category,
-                "tenant_origin_id": origin_uuid,
-                "tenant_origin_name": origin_name,
-                "accepting_tenant_ids": sorted(accepting),
-                "accepting_count": len(accepting),
-                "is_federation_primary": asset_category == "FED",
-            })
+            results.append(
+                {
+                    "uuid": asset_uuid,
+                    "name": asset_name,
+                    "category": asset_category,
+                    "tenant_origin_id": origin_uuid,
+                    "tenant_origin_name": origin_name,
+                    "accepting_tenant_ids": sorted(accepting),
+                    "accepting_count": len(accepting),
+                    "is_federation_primary": asset_category == "FED",
+                }
+            )
 
     return results
 
@@ -537,7 +546,9 @@ def build_tenant_config_data(client):
     """
     accepted_ids = []
     with connection.cursor() as cursor:
-        cursor.execute(sql_accepted, [str(client.uuid), str(client.uuid), str(client.uuid)])
+        cursor.execute(
+            sql_accepted, [str(client.uuid), str(client.uuid), str(client.uuid)]
+        )
         for row in cursor.fetchall():
             accepted_ids.append(row[0])
     data["accepted_asset_ids"] = sorted(accepted_ids)
@@ -619,6 +630,7 @@ def get_global_counts(tenant_schemas):
     # / fedow_core Assets: table in the PUBLIC schema (SHARED_APPS),
     # no UNION ALL needed — a simple COUNT is enough.
     from fedow_core.models import Asset
+
     result["assets"] = Asset.objects.filter(active=True).count()
 
     return result

@@ -2,6 +2,7 @@ import logging
 from datetime import timedelta
 
 from django.conf import settings
+from django.db import connection
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -268,6 +269,35 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- Section terminaux hardware : visible si caisse, monnaie locale ou tireuse ---
+    # --- Hardware terminals section: visible if caisse, local currency or taps ---
+    # Les TermUser couvrent caisse (CA), tireuses (TI) et kiosques (KI) ;
+    # on affiche donc l'entree des que l'un des modules hardware est actif.
+    # / TermUsers cover cash register (CA), taps (TI) and kiosks (KI);
+    # so we show the entry as soon as any hardware module is active.
+    if (
+        configuration.module_caisse
+        or configuration.module_monnaie_locale
+        or configuration.module_tireuse
+    ):
+        navigation.append(
+            {
+                "title": _("Hardware terminals"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Terminals"),
+                        "icon": "tablet",
+                        "link": reverse_lazy(
+                            "staff_admin:AuthBillet_termuser_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
     # --- module_monnaie_locale : Fedow (monnaies, tokens, transactions) ---
     # --- module_monnaie_locale: Fedow (currencies, tokens, transactions) ---
     if configuration.module_monnaie_locale:
@@ -284,12 +314,6 @@ def get_sidebar_navigation(request):
                         "permission": admin_permission,
                     },
                     {
-                        "title": _("Soldes"),
-                        "icon": "account_balance_wallet",
-                        "link": reverse_lazy("staff_admin:fedow_core_token_changelist"),
-                        "permission": admin_permission,
-                    },
-                    {
                         "title": _("Transactions"),
                         "icon": "receipt_long",
                         "link": reverse_lazy(
@@ -302,6 +326,14 @@ def get_sidebar_navigation(request):
                         "icon": "hub",
                         "link": reverse_lazy(
                             "staff_admin:fedow_core_federation_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Cartes NFC"),
+                        "icon": "credit_card",
+                        "link": reverse_lazy(
+                            "staff_admin:QrcodeCashless_cartecashless_changelist"
                         ),
                         "permission": admin_permission,
                     },
@@ -602,6 +634,12 @@ def get_sidebar_navigation(request):
                     "link": reverse_lazy("staff_admin:Customers_client_changelist"),
                     "permission": root_permission,
                 },
+                {
+                    "title": _("Virements pot central"),
+                    "icon": "account_balance",
+                    "link": reverse_lazy("staff_admin:bank_transfers_dashboard"),
+                    "permission": root_permission,
+                },
             ],
         }
     )
@@ -702,5 +740,21 @@ def dashboard_callback(request, context):
             "modules": _build_modules_context(configuration),
         }
     )
+
+    # --- Phase 2 : injecter la dette du pot central pour le widget tenant ---
+    # / Phase 2: inject central pot debt for the tenant widget
+    # Cf. tests/PIEGES.md 9.1b : verifier isinstance(connection.tenant, Client)
+    # car en contexte de test connection.tenant peut etre un FakeTenant.
+    try:
+        config_phase2 = Configuration.get_solo()
+    except Exception:
+        config_phase2 = None
+    if config_phase2 is not None and getattr(config_phase2, "module_monnaie_locale", False):
+        from fedow_core.services import BankTransferService
+        from Customers.models import Client as CustomersClient
+        if isinstance(connection.tenant, CustomersClient):
+            context["dettes_pot_central"] = BankTransferService.obtenir_dette_pour_tenant(
+                connection.tenant
+            )
 
     return context

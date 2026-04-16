@@ -1,5 +1,156 @@
 # Changelog / Journal des modifications
 
+## Authentification hardware via TermUser / Hardware auth via TermUser
+
+**Quoi / What:** Refactor de l'auth des terminaux LaBoutik (POS + Android) via
+un pont `/laboutik/auth/bridge/` qui échange une clé API contre un cookie de
+session Django. Création automatique d'un TermUser à l'appairage, révocation
+instantanée via `is_active=False`.
+
+**Pourquoi / Why:** Simplifier le flow côté client (plus de hack HTML injection),
+aligner avec le pattern Pi controlvanne, permettre une révocation instantanée
+native Django.
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| AuthBillet/models.py | +terminal_role, +TERMINAL_ROLE_CHOICES, TermUser.save(), TermUserManager scoping |
+| discovery/models.py | +terminal_role sur PairingDevice |
+| discovery/views.py | ClaimPinView route selon terminal_role, +_create_laboutik_terminal |
+| BaseBillet/models.py | LaBoutikAPIKey.user OneToOneField nullable |
+| BaseBillet/permissions.py | +HasLaBoutikTerminalAccess (HasLaBoutikAccess inchangée) |
+| laboutik/views.py | +LaBoutikAuthBridgeView |
+| laboutik/urls.py | +path auth/bridge/ |
+| Administration/admin/users.py | +TermUserAdmin |
+| Administration/admin/dashboard.py | +sidebar entry Terminals |
+| Administration/templates/admin/termuser/change_form_before.html | Bannière révocation |
+| tests/pytest/conftest.py | +fixture terminal_client |
+
+### Migration
+- **Migration nécessaire / Migration required:** Oui / Yes
+- 3 migrations AddField (non-destructives) :
+  - `AuthBillet.0025_tibilletuser_terminal_role`
+  - `discovery.0003_pairingdevice_terminal_role`
+  - `BaseBillet.0212_laboutikapikey_user`
+- Commande : `docker exec lespass_django poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing`
+
+---
+
+## Cartes NFC : admin web + remboursement + virements pot central + bouton POS / NFC cards: admin + refund + central pot transfers + POS button
+
+**Date :** 13-14 avril 2026
+**Migration necessaire / Migration required :** Oui (2 alter choices)
+
+**Quoi / What:**
+
+Chantier en 3 phases livre l'administration complete des cartes NFC cashless :
+
+### Phase 1 — Admin web Cartes + page de remboursement
+- Admin Unfold pour `CarteCashless` et `Detail` (filtre tenant via `detail.origine`, creation/suppression superuser only).
+- Page dediee `/admin/QrcodeCashless/cartecashless/<uuid>/refund/` qui rembourse en especes les TLF du tenant + FED.
+- Service metier `WalletService.rembourser_en_especes()` atomic : Transaction REFUND par asset + LigneArticle FED + LigneArticle CASH negative + reset carte optionnel (VV).
+- README `fedow_core/REFUND.md` documente le mecanisme TLF + FED + dette pot central.
+
+### Phase 2 — Suivi de la dette pot central → tenant pour les FED rembourses
+- Nouvelle action `Transaction.BANK_TRANSFER = 'BTR'` (immutable, sans mutation Token).
+- `BankTransferService` (4 methodes) + page dediee `/admin/bank-transfers/` (superuser only).
+- Validation hard `montant <= dette_actuelle` (rejet sur-versement).
+- Widget « Dette du pot central » sur le dashboard tenant.
+- LigneArticle d'encaissement `payment_method=TRANSFER` pour les rapports comptables.
+- Nouveau code `Product.VIREMENT_RECU = "VR"`.
+
+### Phase 3 — Bouton POS Cashless « Vider Carte »
+- Tile auto-generee via Product `methode_caisse=VC` dans le M2M du PV.
+- Flow dedie : clic tile → overlay scan NFC → recap tokens → checkbox VV → execution + ecran succes + impression recu optionnelle.
+- Patch additif `primary_card=None` sur `WalletService.rembourser_en_especes()` (audit trail caissier).
+- Protection self-refund + controle d'acces via M2M `pv.cartes_primaires`.
+- Formatter `formatter_recu_vider_carte()` pour impression thermique.
+
+**Pourquoi / Why:** centralise et trace toutes les operations cashless dans `fedow_core` (Phase 1 du plan mono-repo), elimine la dependance HTTP au serveur Fedow distant pour les nouveaux tenants, expose les flows d'admin web et POS dans la meme infrastructure.
+
+### Migration / Migration
+
+- `fedow_core/migrations/0002_alter_transaction_action.py` : ajout choix `BTR`
+- `BaseBillet/migrations/0211_alter_product_methode_caisse.py` : ajout choix `VR`
+
+### Tests / Tests
+
+- **34 tests pytest DB-only** + **3 tests E2E Playwright** (1 SKIP Playwright si admin non-superuser).
+- Tous PASS en isolation.
+
+### Limites connues / Known limitations
+
+- **Admin web** : pas de bouton « Rembourser » sur la fiche carte (URL `/refund/` a saisir manuellement). `change_view` enrichi avec tokens + transactions recentes pas encore implemente — Phase 1.5 a livrer separement.
+- **Admin web** : pas de colonne « Solde » dans la liste des cartes — **choix assume** (decision 2026-04-14) : cout de calcul prohibitif sur grande volumetrie (plusieurs millions de cartes a terme → `SUM(Token.value)` par ligne rendue inutilisable). Le solde reste visible dans la fiche carte (panel refund).
+- **Affichage des montants** : tout est affiche en « centimes » au lieu d'euros formates (`20,00 €`). Templatetag `centimes_en_euros` a creer pour Phase 1.5.
+- **Phase 2** : message Django flash `messages.success` ne s'affiche pas apres refund admin (integration `admin_site.admin_view()` wrapping). L'operation DB reussit, seul le toast UX manque.
+- **Cross-file test pollution** : Products auto-crees par signal `send_membership_product_to_fedow` quand on cree des Assets. Workaround : exécuter chaque fichier de test en isolation.
+
+### Reference complete / Full reference
+
+Voir `TECH DOC/SESSIONS/CARTES_CASHLESS_ADMIN/INDEX.md` et les 6 fichiers design/plan associes.
+
+---
+
+## Explorer : visualisation monnaies et federations / Explorer: currencies and federations visualization
+
+**Date :** 12 avril 2026
+**Migration necessaire / Migration required :** Non
+
+**Quoi / What:**
+
+### Page `/explorer/` enrichie / Enriched `/explorer/` page
+
+- **Mode focus monnaie** : clic sur une card monnaie ou un badge monnaie d'un lieu active le mode focus :
+  - Highlight des lieux acceptants + dim des autres (opacity 0.3)
+  - Style B (polygone convex hull) pour la monnaie federee primaire (`category=FED`)
+  - Style C (arcs Bezier depuis origine) pour les assets federes partiellement
+  - Legende contextuelle en bas-droit de la carte
+  - Clic a nouveau sur la meme monnaie = reset (toggle)
+- **Badges monnaies** sur chaque card lieu (sous la description)
+- **Accordeon des lieux acceptants** dans chaque card monnaie
+- **Animation accordeon smooth** via `grid-template-rows: 0fr → 1fr`
+- **Loading state** : spinner pendant l'init de Leaflet
+- **Filtres reordonnes** : Tous / Lieux / Evenements / Initiatives / Monnaies / Adhesions
+- **Mobile** : filtres a la ligne (`flex-wrap`) au lieu de scroll horizontal
+
+### Backend / Backend
+
+- `get_all_assets()` enrichi : 3 chemins d'acceptation (`tenant_origin`, `Asset.federated_with`, `Federation.assets+tenants`) unis via CTE
+- `build_tenant_config_data()` : ajoute `accepted_asset_ids` pour chaque tenant
+- `build_explorer_data()` : propage les champs de federation aux lieux
+- Filtre `active=TRUE AND archive=FALSE` sur toutes les queries assets
+
+### Fixture demo / Demo fixture
+
+- `_create_federations_demo()` dans `demo_data_v2` : 2 Federations ("Reseau TiBillet Lyon" + "Echange local") + asset "Monnaie Coeur" pour le-coeur-en-or
+- Filtre `SCHEMAS_DEMO` pour exclure les schemas UUID de tests
+
+**Pourquoi / Why:** permettre aux visiteurs de `/explorer/` de comprendre visuellement les relations entre lieux et monnaies du reseau. Deux mental models : diversite des outils + perspective utilisateur.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `get_all_assets()` CTE 3 unions + `build_tenant_config_data` +`accepted_asset_ids` + `build_explorer_data` propagation |
+| `seo/static/seo/explorer.js` | Mode focus asset, hull/arcs Bezier, accordeon asset, badges lieu, loading spinner |
+| `seo/static/seo/explorer.css` | Styles badges, accordeon grid-template-rows, legende asset, loading spinner |
+| `seo/templates/seo/explorer.html` | +DOM legende + spinner, reordre des pills |
+| `seo/README.md` | Doc mode focus monnaie |
+| `Administration/management/commands/demo_data_v2.py` | +`_create_federations_demo()` |
+| `tests/pytest/test_seo_explorer_assets.py` | +6 tests unitaires (nouveau) |
+| `tests/e2e/test_explorer_assets_focus.py` | +3 tests E2E Playwright (nouveau) |
+| `tests/PIEGES.md` | +Pieges 74 (3 chemins acceptation) et 75 (grid-template-rows) |
+| `A TESTER et DOCUMENTER/explorer-monnaies-federation.md` | Doc test manuel (nouveau) |
+| `TECH DOC/SESSIONS/ROOT_VIEW/2026-04-12-*.md` | Spec + plan (nouveaux) |
+
+### Tests
+
+- 6 pytest + 3 E2E Playwright : PASS
+- ERROR teardown FK `fedow_connect_fedowconfig → AuthBillet_wallet` documentees comme piege preexistant (a investiguer)
+
+---
+
 ## Review skin Faire Festival + SEO + securite emails / Faire Festival skin review + SEO + email security
 
 **Date :** 10 avril 2026

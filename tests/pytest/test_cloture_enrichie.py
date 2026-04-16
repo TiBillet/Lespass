@@ -130,7 +130,11 @@ def _nettoyer_clotures_et_perpetuel(pv=None):
     ClotureCaisse.objects.all().delete()
     config = LaboutikConfiguration.get_solo()
     config.total_perpetuel = 0
-    config.save(update_fields=['total_perpetuel'])
+    # Pas de update_fields sur un singleton django-solo (piege 9.86) :
+    # si le singleton n'existe pas encore, save(update_fields=[...]) leve
+    # DatabaseError "Save with update_fields did not affect any rows".
+    # / No update_fields on a django-solo singleton (trap 9.86).
+    config.save()
 
 
 # ---------------------------------------------------------------------------
@@ -241,9 +245,19 @@ class TestClotureMensuelle:
     ):
         with schema_context(TENANT_SCHEMA):
             from laboutik.tasks import _generer_cloture_agregee
+            from BaseBillet.models import Configuration
             from datetime import date
 
             produit, prix = premier_produit_et_prix
+
+            # Activer module_caisse : _generer_cloture_agregee court-circuite
+            # silencieusement si le module n'est pas actif sur le tenant.
+            # / Enable module_caisse: _generer_cloture_agregee silently returns
+            # if the module is not active on the tenant.
+            config_base = Configuration.get_solo()
+            if not config_base.module_caisse:
+                config_base.module_caisse = True
+                config_base.save()
 
             # Cloturer tout ce qui traine / Close any pending sales
             client = _make_client(admin_user, tenant)

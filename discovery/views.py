@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
-from BaseBillet.models import LaBoutikAPIKey
 from discovery.serializers import PinClaimSerializer
 
 logger = logging.getLogger(__name__)
@@ -50,36 +49,65 @@ class ClaimPinView(APIView):
 
         server_url = f"https://{primary_domain.domain}"
 
-        # Basculer dans le schéma du tenant pour créer la clé API
-        # Le type de clé dépend de l'association du device :
-        # - TireuseAPIKey si le PairingDevice est lié à une TireuseBec
-        # - LaBoutikAPIKey sinon (terminal de caisse)
-        # / Switch to tenant schema to create the API key
-        # Key type depends on device association:
-        # - TireuseAPIKey if PairingDevice is linked to a TireuseBec
-        # - LaBoutikAPIKey otherwise (cash register terminal)
+        # Basculer dans le schéma du tenant pour créer les credentials.
+        # Le type de credentials dépend du rôle du terminal (terminal_role) :
+        # - LB (LaBoutik POS) : TermUser + LaBoutikAPIKey liée
+        # - TI (Tireuse)      : TireuseAPIKey (flow inchangé)
+        # - KI (Kiosque)      : TermUser + LaBoutikAPIKey liée (même pipeline que LB)
+        # / Switch to tenant schema to create credentials.
+        # Credential type depends on terminal_role:
+        # - LB (LaBoutik POS): TermUser + linked LaBoutikAPIKey
+        # - TI (Tireuse)     : TireuseAPIKey (unchanged flow)
+        # - KI (Kiosk)       : TermUser + linked LaBoutikAPIKey (same pipeline as LB)
         tireuse_uuid = None
         try:
             with tenant_context(tenant_for_this_device):
-                # Vérifier si une tireuse est liée à ce PairingDevice
-                # / Check if a tap is linked to this PairingDevice
-                from controlvanne.models import TireuseBec, TireuseAPIKey
-                tireuse = TireuseBec.objects.filter(
-                    pairing_device=pairing_device
-                ).first()
+                # Routage selon terminal_role du PairingDevice
+                # / Routing based on PairingDevice.terminal_role
+                from AuthBillet.models import TibilletUser
 
-                if tireuse:
+                if pairing_device.terminal_role == TibilletUser.ROLE_LABOUTIK:
+                    # Flow Laboutik V2 : TermUser + clé liée
+                    # / Laboutik V2 flow: TermUser + linked key
+                    api_key_string = _create_laboutik_terminal(pairing_device)
+
+                elif pairing_device.terminal_role == TibilletUser.ROLE_TIREUSE:
+                    # Flow Tireuse INCHANGÉ pour cette phase
+                    # / Tireuse flow UNCHANGED for this phase
+                    from controlvanne.models import TireuseBec, TireuseAPIKey
+                    tireuse = TireuseBec.objects.filter(
+                        pairing_device=pairing_device
+                    ).first()
+                    if not tireuse:
+                        raise ValueError(
+                            "Pairing role TIREUSE but no TireuseBec linked"
+                        )
                     _key_obj, api_key_string = TireuseAPIKey.objects.create_key(
                         name=f"discovery-{pairing_device.uuid}"
                     )
                     tireuse_uuid = str(tireuse.uuid)
+
+                elif pairing_device.terminal_role == TibilletUser.ROLE_KIOSQUE:
+                    # Flow Kiosque : pour l'instant on réutilise le helper Laboutik
+                    # (TermUser + LaBoutikAPIKey). Une spécialisation pourra
+                    # venir dans une phase ultérieure si les besoins divergent.
+                    # / Kiosk flow: for now we reuse the Laboutik helper
+                    # (TermUser + LaBoutikAPIKey). A dedicated flow may come
+                    # later if kiosk requirements diverge.
+                    api_key_string = _create_laboutik_terminal(pairing_device)
+
                 else:
-                    _key_obj, api_key_string = LaBoutikAPIKey.objects.create_key(
-                        name=f"discovery-{pairing_device.uuid}"
+                    # Filet de sécurité : rôle inconnu (non prévu dans le modèle).
+                    # Ne JAMAIS laisser passer silencieusement un rôle inattendu.
+                    # / Safety net: unknown role (not expected in the model).
+                    # NEVER silently accept an unexpected role.
+                    raise ValueError(
+                        f"Unknown PairingDevice.terminal_role: "
+                        f"{pairing_device.terminal_role!r}"
                     )
         except Exception as error:
             logger.error(
-                f"Discovery claim: failed to create API key "
+                f"Discovery claim: failed to create credentials "
                 f"for tenant {tenant_for_this_device.name}: {error}"
             )
             return Response(
@@ -106,3 +134,48 @@ class ClaimPinView(APIView):
             response_data["tireuse_uuid"] = tireuse_uuid
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+
+def _create_laboutik_terminal(pairing_device):
+    """
+    Crée un TermUser (rôle LaBoutik ou Kiosque) et sa clé API liée.
+    / Creates a TermUser (LaBoutik or Kiosk role) and its linked API key.
+
+    LOCALISATION : discovery/views.py
+
+    Appelée dans tenant_context() par ClaimPinView.
+    / Called inside tenant_context() by ClaimPinView.
+
+    :param pairing_device: L'objet PairingDevice en cours de claim
+    :return: La clé API string (à retourner au client)
+    """
+    from AuthBillet.models import TermUser
+    from BaseBillet.models import LaBoutikAPIKey
+
+    # Email synthétique : <pairing_uuid>@terminals.local
+    # Format filtrable, jamais confondu avec un vrai email humain
+    # / Synthetic email: <pairing_uuid>@terminals.local
+    # Filterable format, never confused with a real human email
+    email_synthetique = f"{pairing_device.uuid}@terminals.local"
+
+    # NOTE : TibilletUser.username est unique — on le synchronise avec l'email
+    # synthétique (TibilletManager._create_user fait pareil, mais on n'utilise
+    # pas create_user ici car un TermUser n'a ni mot de passe ni workflow
+    # d'activation).
+    # / NOTE: TibilletUser.username is unique — we sync it with the synthetic
+    # email (TibilletManager._create_user does the same, but we don't call
+    # create_user here because a TermUser has no password nor activation flow).
+    term_user = TermUser.objects.create(
+        email=email_synthetique,
+        username=email_synthetique,
+        terminal_role=pairing_device.terminal_role,
+        accept_newsletter=False,
+    )
+    # espece=TE et client_source=tenant auto-posés par TermUser.save()
+    # / espece=TE and client_source=tenant auto-set by TermUser.save()
+
+    _key_obj, api_key_string = LaBoutikAPIKey.objects.create_key(
+        name=f"discovery-{pairing_device.uuid}",
+        user=term_user,
+    )
+    return api_key_string

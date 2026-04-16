@@ -156,6 +156,25 @@ class TibilletUser(AbstractUser):
                               choices=ESPECE_CHOICES,
                               default=TYPE_HUM)
 
+    # Rôles des terminaux hardware (uniquement renseigné si espece=TE)
+    # Hardware terminal roles (only set when espece=TE)
+    ROLE_LABOUTIK = 'LB'
+    ROLE_TIREUSE = 'TI'
+    ROLE_KIOSQUE = 'KI'
+    TERMINAL_ROLE_CHOICES = (
+        (ROLE_LABOUTIK, _('LaBoutik POS')),
+        (ROLE_TIREUSE, _('Connected tap')),
+        (ROLE_KIOSQUE, _('Kiosk / self-service')),
+    )
+
+    terminal_role = models.CharField(
+        max_length=2,
+        choices=TERMINAL_ROLE_CHOICES,
+        null=True, blank=True,
+        verbose_name=_("Terminal role"),
+        help_text=_("Only set for espece=TE. Drives permission checks."),
+    )
+
     PUBLIC, FREE, PREMIUM, ENTREPRISE, CUSTOM = 'PU', 'FR', 'PR', 'EN', 'CU'
     OFFRE_CHOICES = (
         (PUBLIC, _('Public')),
@@ -343,9 +362,16 @@ class TibilletUser(AbstractUser):
 
 class TermUserManager(TibilletManager):
     def get_queryset(self):
-        return super().get_queryset().filter(espece=TibilletUser.TYPE_TERM,
-                                             client_admin__pk__in=[connection.tenant.pk, ],
-                                             )
+        # Filtre par client_source (tenant d'origine du terminal).
+        # On n'utilise PAS client_admin : un TermUser n'est pas un admin humain,
+        # il ne doit pas passer is_tenant_admin() sans raison.
+        # / Filter by client_source (terminal's origin tenant).
+        # We do NOT use client_admin: a TermUser is not a human admin,
+        # it must not pass is_tenant_admin() accidentally.
+        return super().get_queryset().filter(
+            espece=TibilletUser.TYPE_TERM,
+            client_source__pk=connection.tenant.pk,
+        )
 
 
 class TermUser(TibilletUser):
@@ -357,8 +383,22 @@ class TermUser(TibilletUser):
     objects = TermUserManager()
 
     def save(self, *args, **kwargs):
-        # Si création :
+        # À la création, on force client_source = tenant courant.
+        # Un TermUser appartient toujours au tenant dans lequel il est créé :
+        # un client_source explicite passé via create() sera écrasé (c'est voulu).
+        # / On creation, we force client_source = current tenant.
+        # A TermUser always belongs to the tenant where it is created:
+        # any explicit client_source passed via create() will be overwritten (by design).
+        #
+        # Note : self.pk est pré-rempli par uuid4(), donc `not self.pk` ne fonctionne
+        # pas ici. On utilise _state.adding, pattern Django canonique.
+        # / Note: self.pk is pre-filled by uuid4(), so `not self.pk` doesn't work here.
+        # We use _state.adding, the canonical Django pattern.
+        if self._state.adding:
+            self.client_source = connection.tenant
 
+        # Force espece=TE systématiquement pour les TermUser
+        # / Always force espece=TE for TermUsers
         self.espece = TibilletUser.TYPE_TERM
         self.email = self.email.lower()
 

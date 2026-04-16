@@ -15,14 +15,20 @@ from decimal import Decimal
 from json import dumps
 
 from django.conf import settings
+from django.contrib.auth import login
 from django.db import transaction as db_transaction
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
+from django.views.decorators.csrf import csrf_exempt
 from django_htmx.http import HttpResponseClientRedirect
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny
+from rest_framework.throttling import AnonRateThrottle
+from rest_framework.views import APIView
 
 from django.core.exceptions import PermissionDenied
 from django.db import connection
@@ -30,7 +36,7 @@ from django.db.models import F, Max, Prefetch, Sum, Count, Q
 from django.db.models.functions import Coalesce
 
 from fedow_core.exceptions import SoldeInsuffisant
-from fedow_core.models import Asset
+from fedow_core.models import Asset, Transaction
 from fedow_core.services import AssetService, TransactionService, WalletService
 
 from AuthBillet.models import Wallet
@@ -50,7 +56,7 @@ from BaseBillet.models import (
     PaymentMethod,
     Ticket,
 )
-from BaseBillet.permissions import HasLaBoutikAccess
+from BaseBillet.permissions import HasLaBoutikAccess, HasLaBoutikTerminalAccess
 from QrcodeCashless.models import CarteCashless
 from laboutik.models import (
     LaboutikConfiguration,
@@ -975,6 +981,19 @@ def _obtenir_ou_creer_wallet(carte):
     return wallet
 
 
+def _render_erreur_toast(request, msg):
+    """
+    Rend un partial d'erreur compatible avec le pattern POS (toast dans #messages).
+    / Renders an error partial compatible with POS toast pattern (in #messages).
+    """
+    contexte = {
+        "msg_type": "warning",
+        "msg_content": str(msg),
+        "selector_bt_retour": "#messages",
+    }
+    return render(request, "laboutik/partial/hx_messages.html", contexte)
+
+
 def _valider_carte_primaire_pour_pv(tag_id_carte_manager, uuid_pv):
     """
     Vérifie que la carte primaire a accès au point de vente demandé.
@@ -1099,7 +1118,7 @@ class CaisseViewSet(viewsets.ViewSet):
     - point_de_vente()  → interface POS (service direct, tables, kiosk) / POS interface
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     def list(self, request):
         """
@@ -1522,9 +1541,17 @@ class CaisseViewSet(viewsets.ViewSet):
                 (dernier_seq.numero_sequentiel + 1) if dernier_seq else 1
             )
 
-            # Total perpetuel : mise a jour atomique avec F() puis refresh
-            # / Perpetual total: atomic update with F() then refresh
-            config = LaboutikConfiguration.get_solo()
+            # Total perpetuel : mise a jour atomique avec F() puis refresh.
+            # On utilise update_or_create pour garantir que la ligne existe
+            # meme si django-solo a cache un objet non persiste
+            # (piege 9.86 : get_solo peut retourner pk=1 sans ligne en DB).
+            # Attention : variable `_created` (pas `_`) — `_` est reserve a gettext
+            # plus loin dans cette fonction (piege 9.36).
+            # / Perpetual total: atomic update with F() then refresh.
+            # update_or_create guarantees the row exists even if django-solo
+            # cached a non-persisted object (trap 9.86).
+            # Use `_created` (not `_`) — `_` shadows gettext below (trap 9.36).
+            config, _created = LaboutikConfiguration.objects.update_or_create(pk=1)
             LaboutikConfiguration.objects.filter(pk=config.pk).update(
                 total_perpetuel=F("total_perpetuel") + total_general
             )
@@ -4495,6 +4522,28 @@ def _executer_recharges(
         )
 
 
+# -------------------------------------------------------------------------- #
+#  ViderCarteSerializer — validation du POST /laboutik/paiement/vider_carte/  #
+#  / ViderCarteSerializer — validation for POST /laboutik/paiement/vider_carte/ #
+# -------------------------------------------------------------------------- #
+
+class ViderCarteSerializer(serializers.Serializer):
+    """
+    Valide le POST de saisie d'un vider carte au POS.
+    Validates the POST form for a POS card refund.
+    """
+    tag_id = serializers.CharField(max_length=8)
+    tag_id_cm = serializers.CharField(max_length=8)
+    uuid_pv = serializers.UUIDField()
+    vider_carte = serializers.BooleanField(required=False, default=False)
+
+    def validate_tag_id(self, value):
+        return value.strip().upper()
+
+    def validate_tag_id_cm(self, value):
+        return value.strip().upper()
+
+
 # --------------------------------------------------------------------------- #
 #  PaiementViewSet — HTMX partials du flux de paiement                        #
 # --------------------------------------------------------------------------- #
@@ -4517,7 +4566,7 @@ class PaiementViewSet(viewsets.ViewSet):
     - retour_carte()   → affiche le solde de la carte scannée / shows the scanned card balance
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     # ----------------------------------------------------------------------- #
     #  Étape 1 : afficher les moyens de paiement disponibles                   #
@@ -6952,6 +7001,221 @@ class PaiementViewSet(viewsets.ViewSet):
         }
         return render(request, "laboutik/partial/hx_card_feedback.html", context)
 
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="vider_carte/overlay",
+        url_name="vider_carte_overlay",
+    )
+    def vider_carte_overlay(self, request):
+        """
+        GET /laboutik/paiement/vider_carte/overlay/
+        Rend l'overlay de scan NFC pour vider carte.
+        / Renders the NFC scan overlay for card refund.
+        """
+        uuid_pv = request.GET.get("uuid_pv", "")
+        tag_id_cm = request.GET.get("tag_id_cm", "")
+
+        pv = None
+        if uuid_pv:
+            pv = PointDeVente.objects.filter(uuid=uuid_pv).first()
+
+        # Contexte minimal : pv + card.tag_id via tag_id_cm query param.
+        # / Minimal context: pv + card.tag_id via tag_id_cm query param.
+        contexte = {
+            "pv": pv,
+            "card": {"tag_id": tag_id_cm},
+        }
+        return render(
+            request, "laboutik/partial/hx_vider_carte_overlay.html", contexte,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vider_carte/preview",
+        url_name="vider_carte_preview",
+    )
+    def vider_carte_preview(self, request):
+        """
+        POST /laboutik/paiement/vider_carte/preview/
+        Calcule les tokens eligibles pour la carte client scannee et renvoie
+        l'overlay de confirmation. Pas de mutation DB.
+        / Computes eligible tokens for the scanned client card and returns
+        the confirmation overlay. No DB mutation.
+        """
+        from django.db.models import Q
+        from fedow_core.models import Asset, Token
+
+        tag_id = request.POST.get("tag_id", "").strip().upper()
+        tag_id_cm = request.POST.get("tag_id_cm", "").strip().upper()
+        uuid_pv = request.POST.get("uuid_pv", "")
+
+        # Protection self-refund.
+        if tag_id and tag_id == tag_id_cm:
+            return _render_erreur_toast(
+                request, _("Ne peut pas vider une carte primaire."),
+            )
+
+        try:
+            carte = CarteCashless.objects.get(tag_id=tag_id)
+        except CarteCashless.DoesNotExist:
+            return _render_erreur_toast(request, _("Carte client inconnue."))
+
+        wallet = _obtenir_ou_creer_wallet(carte)
+        if wallet is None:
+            return _render_erreur_toast(request, _("Carte vierge."))
+
+        tokens = list(
+            Token.objects.filter(
+                wallet=wallet, value__gt=0,
+            ).filter(
+                Q(asset__category=Asset.TLF, asset__tenant_origin=connection.tenant)
+                | Q(asset__category=Asset.FED)
+            ).select_related('asset', 'asset__tenant_origin').order_by('asset__category')
+        )
+
+        if not tokens:
+            return _render_erreur_toast(
+                request, _("Aucun solde remboursable sur cette carte."),
+            )
+
+        total_tlf = sum(t.value for t in tokens if t.asset.category == Asset.TLF)
+        total_fed = sum(t.value for t in tokens if t.asset.category == Asset.FED)
+
+        contexte = {
+            "carte": carte,
+            "tokens": tokens,
+            "total_centimes": total_tlf + total_fed,
+            "total_tlf_centimes": total_tlf,
+            "total_fed_centimes": total_fed,
+            "tag_id": tag_id,
+            "tag_id_cm": tag_id_cm,
+            "uuid_pv": uuid_pv,
+        }
+        return render(
+            request, "laboutik/partial/hx_vider_carte_confirm.html", contexte,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vider_carte",
+        url_name="vider_carte",
+    )
+    def vider_carte(self, request):
+        """
+        POST /laboutik/paiement/vider_carte/
+        Execute le remboursement via WalletService.rembourser_en_especes.
+        Renvoie l'ecran de succes ou un toast d'erreur.
+        / Executes the refund via WalletService.rembourser_en_especes.
+        Returns the success screen or an error toast.
+        """
+        from fedow_core.exceptions import NoEligibleTokens
+
+        serializer = ViderCarteSerializer(data=request.POST)
+        serializer.is_valid(raise_exception=True)
+
+        tag_id_client = serializer.validated_data["tag_id"]
+        tag_id_cm = serializer.validated_data["tag_id_cm"]
+        uuid_pv = serializer.validated_data["uuid_pv"]
+        vider_carte_flag = serializer.validated_data["vider_carte"]
+
+        # Protection self-refund (meme check qu'en preview).
+        # / Self-refund protection (same check as preview).
+        if tag_id_client == tag_id_cm:
+            return _render_erreur_toast(
+                request, _("Ne peut pas vider une carte primaire."),
+            )
+
+        try:
+            carte_client = CarteCashless.objects.get(tag_id=tag_id_client)
+        except CarteCashless.DoesNotExist:
+            return _render_erreur_toast(request, _("Carte client inconnue."))
+
+        carte_primaire_obj, erreur_cp = _charger_carte_primaire(tag_id_cm)
+        if erreur_cp:
+            return _render_erreur_toast(request, erreur_cp)
+
+        pv = PointDeVente.objects.filter(uuid=uuid_pv).first()
+        if pv is None:
+            return _render_erreur_toast(request, _("PV introuvable."))
+
+        # Controle d'acces : la carte primaire doit pouvoir operer sur ce PV.
+        # / Access control: primary card must have access to this POS.
+        if not pv.cartes_primaires.filter(pk=carte_primaire_obj.pk).exists():
+            return _render_erreur_toast(
+                request, _("Cette carte caissier n'a pas acces a ce PV."),
+            )
+
+        receiver_wallet = WalletService.get_or_create_wallet_tenant(connection.tenant)
+
+        try:
+            resultat = WalletService.rembourser_en_especes(
+                carte=carte_client,
+                tenant=connection.tenant,
+                receiver_wallet=receiver_wallet,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+                vider_carte=vider_carte_flag,
+                primary_card=carte_primaire_obj.carte,
+            )
+        except NoEligibleTokens:
+            return _render_erreur_toast(
+                request, _("Aucun solde remboursable (solde a pu changer)."),
+            )
+
+        contexte = {
+            "total_centimes": resultat["total_centimes"],
+            "total_tlf_centimes": resultat["total_tlf_centimes"],
+            "total_fed_centimes": resultat["total_fed_centimes"],
+            "lignes_articles": resultat["lignes_articles"],
+            "transaction_uuids": [str(tx.uuid) for tx in resultat["transactions"]],
+            "uuid_pv": uuid_pv,
+            "vider_carte": vider_carte_flag,
+        }
+        return render(
+            request, "laboutik/partial/hx_vider_carte_success.html", contexte,
+        )
+
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="vider_carte/imprimer_recu",
+        url_name="vider_carte_imprimer_recu",
+    )
+    def vider_carte_imprimer_recu(self, request):
+        """
+        POST /laboutik/paiement/vider_carte/imprimer_recu/
+        Lance l'impression Celery du recu pour les transactions_uuids donnees.
+        / Launches the Celery receipt print for the given transaction UUIDs.
+        """
+        transaction_uuids = request.POST.getlist("transaction_uuids")
+        uuid_pv = request.POST.get("uuid_pv", "")
+
+        if not transaction_uuids or not uuid_pv:
+            return _render_erreur_toast(request, _("Parametres manquants."))
+
+        pv = PointDeVente.objects.select_related("printer").filter(uuid=uuid_pv).first()
+        if pv is None or pv.printer is None or not pv.printer.active:
+            return _render_erreur_toast(
+                request, _("Pas d'imprimante configuree sur ce PV."),
+            )
+
+        transactions = Transaction.objects.filter(
+            uuid__in=transaction_uuids,
+        ).select_related("asset")
+
+        from laboutik.printing.formatters import formatter_recu_vider_carte
+        from laboutik.printing.tasks import imprimer_async
+
+        recu_data = formatter_recu_vider_carte(list(transactions))
+        imprimer_async.delay(
+            str(pv.printer.pk),
+            recu_data,
+            connection.schema_name,
+        )
+        return render(request, "laboutik/partial/hx_impression_ok.html")
+
     # ------------------------------------------------------------------ #
     #  Impression ticket de vente (bouton sur l'ecran de succes)           #
     #  Sale receipt printing (button on the success screen)                #
@@ -7372,7 +7636,7 @@ class CommandeViewSet(viewsets.ViewSet):
     5. annuler_commande()   → annule la commande / cancels the order
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     # ----------------------------------------------------------------------- #
     #  1. Ouvrir une commande                                                  #
@@ -8052,7 +8316,7 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         laboutik/partial/article_panel_stock.html  → vue stock détaillée
     """
 
-    permission_classes = [HasLaBoutikAccess]
+    permission_classes = [HasLaBoutikTerminalAccess]
 
     ACTIONS_AUTORISEES = ["reception", "perte", "ajustement"]
 
@@ -8223,3 +8487,122 @@ class ArticlePanelViewSet(viewsets.ViewSet):
         response = render(request, "laboutik/partial/article_panel_stock.html", context)
         response["HX-Trigger"] = "stockUpdated"
         return response
+
+
+class BridgeThrottle(AnonRateThrottle):
+    """
+    Anti-brute-force sur le bridge : 10 requêtes/minute par IP.
+    / Brute-force protection on bridge: 10 req/min per IP.
+    """
+    rate = '10/min'
+    scope = 'laboutik_auth_bridge'
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class LaBoutikAuthBridgeView(APIView):
+    """
+    Pont d'authentification hardware : échange une clé API contre un cookie session.
+    / Hardware auth bridge: trades an API key for a session cookie.
+
+    LOCALISATION : laboutik/views.py
+
+    Flux :
+    1. Client POST avec header Authorization: Api-Key xxx
+    2. Validation de la clé (401 si invalide)
+    3. Si la clé n'a pas de user lié (legacy V1) : 400
+    4. Si user.is_active=False (révoqué) : 401
+    5. django.contrib.auth.login() pose le cookie sessionid
+    6. set_expiry(12h) — session courte par hygiène
+
+    CSRF exempt : légitime car
+    - la clé API joue l'auth forte pour cette seule requête
+    - le client Cordova/WebView n'a pas encore de cookie CSRF
+    - les requêtes suivantes (avec cookie session) auront la protection CSRF normale
+
+    Les bodies 401 sont intentionnellement vides : aucune info leak pour
+    distinguer missing/invalid/revoked (side-channel évité). Seul le 400
+    (legacy V1) renvoie un message explicite car cet état n'est pas
+    sensible pour la sécurité (juste un flag de dette de code).
+    / 401 bodies are intentionally empty: no info leak to distinguish
+    missing/invalid/revoked (avoids side-channels). Only 400 (legacy V1)
+    returns a descriptive message because that state is not security-
+    sensitive (just a code-debt flag).
+
+    COMMUNICATION :
+    Reçoit : Header Authorization: Api-Key <key>
+    Émet : 204 No Content + Set-Cookie: sessionid=<key>
+    Erreurs : 401 si clé absente/invalide/révoquée, 400 si clé V1, 429 si throttle
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [BridgeThrottle]
+
+    def post(self, request):
+        # Extraction de la clé depuis le header Authorization
+        # / Extract key from Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Api-Key '):
+            # Log : tentative d'accès sans header Api-Key
+            # / Log: access attempt without Api-Key header
+            logger.warning(
+                "laboutik bridge: missing/malformed Authorization header from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
+
+        api_key_string = auth_header[len('Api-Key '):].strip()
+        if not api_key_string:
+            logger.warning(
+                "laboutik bridge: empty API key from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
+
+        # Validation de la clé
+        # / Key validation
+        from BaseBillet.models import LaBoutikAPIKey
+        try:
+            api_key = LaBoutikAPIKey.objects.get_from_key(api_key_string)
+        except LaBoutikAPIKey.DoesNotExist:
+            # Log : clé API inconnue (possibly brute-force)
+            # / Log: unknown API key (possibly brute-force)
+            logger.warning(
+                "laboutik bridge: unknown API key attempt from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
+
+        # Clé V1 sans user lié : non bridgeable
+        # / V1 key without linked user: cannot be bridged
+        if api_key.user is None:
+            logger.info(
+                "laboutik bridge: legacy V1 key used (name=%s), bridge refused",
+                api_key.name,
+            )
+            return HttpResponse(
+                _("Legacy API key, bridge flow not available. Please re-pair the device."),
+                status=400,
+            )
+
+        # User révoqué ?
+        # / User revoked?
+        term_user = api_key.user
+        if not term_user.is_active:
+            logger.warning(
+                "laboutik bridge: revoked TermUser %s attempted bridge",
+                term_user.email,
+            )
+            return HttpResponse(status=401)
+
+        # Login Django natif : pose le cookie sessionid
+        # / Native Django login: sets sessionid cookie
+        login(request, term_user)
+
+        # Session courte pour les terminaux (12h)
+        # / Short session for terminals (12h)
+        request.session.set_expiry(60 * 60 * 12)
+
+        logger.info(
+            "laboutik bridge: session opened for terminal %s",
+            term_user.email,
+        )
+        return HttpResponse(status=204)

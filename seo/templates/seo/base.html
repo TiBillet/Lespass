@@ -13,18 +13,30 @@
     <meta name="robots" content="index, follow">
     <title>{{ page_title|default:"TiBillet" }}</title>
 
+    {# Social card : image par defaut pour Open Graph et Twitter. #}
+    {# Chaque vue peut surcharger via la variable `social_card_url`. #}
+    {# / Social card: default image for Open Graph and Twitter. #}
+    {# Views can override with the `social_card_url` context variable. #}
+    {% with social_image=social_card_url|default:request.scheme|add:"://"|add:request.get_host|add:"/static/seo/social-card.png" %}
+
     {# Open Graph / Facebook #}
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ request.build_absolute_uri }}">
     <meta property="og:title" content="{{ page_title|default:'TiBillet' }}">
     <meta property="og:description" content="{{ page_description|default:'Logiciel libre de billetterie et monnaie locale' }}">
     <meta property="og:site_name" content="TiBillet">
+    <meta property="og:image" content="{{ social_image }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="675">
+    <meta property="og:image:alt" content="TiBillet">
 
     {# Twitter #}
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:url" content="{{ request.build_absolute_uri }}">
     <meta name="twitter:title" content="{{ page_title|default:'TiBillet' }}">
     <meta name="twitter:description" content="{{ page_description|default:'Logiciel libre de billetterie et monnaie locale' }}">
+    <meta name="twitter:image" content="{{ social_image }}">
+    {% endwith %}
 
     {# Canonical #}
     <link rel="canonical" href="{{ canonical_url|default:request.build_absolute_uri }}">
@@ -44,7 +56,11 @@
     <link rel="preload" as="style" href="{% static 'reunion/css/tibillet.css' %}">
     <link rel="modulepreload" href="{% static 'reunion/js/theme-switcher.mjs' %}">
 
-    <link rel="icon" type="image/png" href="{% static 'reunion/img/favicon.png' %}">
+    {# Favicons : SVG (modernes) + PNG 192 (Android) + apple-touch-icon (iOS). #}
+    {# / Favicons: SVG (modern browsers) + PNG 192 (Android) + apple-touch-icon (iOS). #}
+    <link rel="icon" type="image/svg+xml" href="{% static 'seo/favicon.svg' %}">
+    <link rel="icon" type="image/png" sizes="192x192" href="{% static 'seo/favicon-192.png' %}">
+    <link rel="apple-touch-icon" href="{% static 'seo/apple-touch-icon.png' %}">
     <link data-bs-stylesheet="bootstrap" href="{% static 'reunion/css/bootstrap.min.5.3.3.css' %}" rel="stylesheet">
     <link data-bs-stylesheet="bootstrap-icons" rel="stylesheet"
           href="{% static 'reunion/css/bootstrap-icons.min.css' %}">
@@ -64,8 +80,12 @@
 {# Barre de navigation ROOT / ROOT navigation bar #}
 <nav class="navbar navbar-expand-xl bg-body">
     <div class="container-lg justify-content-between">
-        <a class="navbar-brand flex-grow-1" href="/">
-            TiBillet
+        <a class="navbar-brand flex-grow-1 d-flex align-items-center gap-2" href="/">
+            {# Logo couleur (SVG depuis le kit graphique) + texte accessible. #}
+            {# / Color logo (SVG from graphical kit) + accessible text. #}
+            <img src="{% static 'seo/favicon.svg' %}" alt=""
+                 width="32" height="32" class="navbar-brand-logo">
+            <span>TiBillet</span>
         </a>
         <button class="navbar-toggler" type="button"
                 data-bs-toggle="collapse" data-bs-target="#mainMenu"
@@ -74,30 +94,27 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="mainMenu">
+            {# Navbar humaine : Explorer couvre Lieux/Événements/Adhésions via filtres. #}
+            {# Les pages dediees restent accessibles via footer + sitemap (SEO). #}
+            {# / Human navbar: Explorer covers Lieux/Events/Memberships via filters. #}
+            {# Standalone pages stay reachable via footer + sitemap (SEO). #}
             <ul class="navbar-nav me-auto">
-                <li class="nav-item">
-                    <a class="nav-link" href="/lieux/">
-                        <i class="bi bi-geo-alt"></i> {% translate "Lieux" %}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/evenements/">
-                        <i class="bi bi-calendar-event"></i> {% translate "Événements" %}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/adhesions/">
-                        <i class="bi bi-people"></i> {% translate "Adhésions" %}
-                    </a>
-                </li>
                 <li class="nav-item">
                     <a class="nav-link" href="/explorer/">
                         <i class="bi bi-map"></i> {% translate "Explorer" %}
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="https://tibillet.github.io/documentation_v3/"
+                       target="_blank" rel="noopener">
+                        <i class="bi bi-book"></i> {% translate "Documentation" %}
+                    </a>
+                </li>
             </ul>
             <div class="navbar-nav d-flex mb-0">
-                <form class="d-flex" action="/recherche/" method="get">
+                {# Recherche globale : soumet vers Explorer qui gere le filtre texte. #}
+                {# / Global search: submits to Explorer which handles the text filter. #}
+                <form class="d-flex" action="/explorer/" method="get">
                     <input class="form-control me-2" type="search" name="q"
                            placeholder="{% translate 'Rechercher...' %}" aria-label="{% translate 'Rechercher' %}"
                            value="{{ query|default:'' }}">
@@ -168,7 +185,7 @@
                     <div class="col-md-4 col-lg-3">
                         <ul class="nav flex-column">
                             <li class="nav-item"><a class="nav-link" href="https://tibillet.org" target="_blank">TiBillet.org</a></li>
-                            <li class="nav-item"><a class="nav-link" href="https://tibillet.org/fr/docs/category/documentation-utilisateur/" target="_blank">{% translate "Documentation" %}</a></li>
+                            <li class="nav-item"><a class="nav-link" href="https://tibillet.github.io/documentation_v3/" target="_blank" rel="noopener">{% translate "Documentation" %}</a></li>
                             <li class="nav-item"><a class="nav-link" href="https://pouet.chapril.org/@tibillet" target="_blank">Mastodon</a></li>
                             <li class="nav-item"><a class="nav-link" href="https://github.com/TiBillet/" target="_blank">Github</a></li>
                         </ul>

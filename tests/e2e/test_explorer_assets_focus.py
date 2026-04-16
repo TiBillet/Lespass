@@ -41,9 +41,11 @@ def test_click_tibillet_asset_card_draws_hull_polygon(page):
 
     # Clic sur la premiere card asset contenant "TiBillet".
     # / Click on the first asset card containing "TiBillet".
-    tibillet_card = page.locator('.explorer-card[data-type="asset"]').filter(
-        has_text="TiBillet"
-    ).first
+    tibillet_card = (
+        page.locator('.explorer-card[data-type="asset"]')
+        .filter(has_text="TiBillet")
+        .first
+    )
     expect(tibillet_card).to_be_visible(timeout=5_000)
     tibillet_card.click()
 
@@ -79,9 +81,11 @@ def test_click_active_asset_card_clears_focus(page):
 
     page.get_by_role("button", name="Monnaies").click()
 
-    tibillet_card = page.locator('.explorer-card[data-type="asset"]').filter(
-        has_text="TiBillet"
-    ).first
+    tibillet_card = (
+        page.locator('.explorer-card[data-type="asset"]')
+        .filter(has_text="TiBillet")
+        .first
+    )
     tibillet_card.click()
     expect(tibillet_card).to_have_class(
         re.compile(r"explorer-card--active"), timeout=3_000

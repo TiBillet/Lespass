@@ -17,7 +17,11 @@
 {# Barre de recherche + pills / Search bar + category pills #}
 <div class="explorer-toolbar">
     <div class="explorer-search-row">
+        {# name="q" + value pre-rempli : la navbar globale soumet vers /explorer/?q=... #}
+        {# / name="q" + pre-filled value: the global navbar submits to /explorer/?q=... #}
         <input type="search" class="explorer-search" id="explorer-search"
+               name="q"
+               value="{{ request.GET.q|default:'' }}"
                placeholder="{% translate 'Rechercher un lieu, événement, adhésion...' %}"
                aria-label="{% translate 'Rechercher' %}">
         <div class="explorer-pills" id="explorer-pills">
@@ -42,6 +46,15 @@
     {# / Leaflet map + floating legend inside. Having the legend INSIDE .explorer-map #}
     {# ensures position:absolute is relative to the map, not the list. #}
     <div class="explorer-map" id="explorer-map">
+        {# Loading state : spinner visible jusqu'a l'init de Leaflet et le #}
+        {# premier fit-bounds. Retire par JS apres l'ajout des marqueurs. #}
+        {# / Loading state: spinner visible until Leaflet init and first #}
+        {# fit-bounds complete. Removed by JS after markers are added. #}
+        <div class="explorer-map-loading" id="explorer-map-loading" role="status" aria-live="polite">
+            <div class="explorer-map-loading-spinner" aria-hidden="true"></div>
+            <span class="visually-hidden">{% translate "Chargement de la carte…" %}</span>
+        </div>
+
         <div class="explorer-asset-legend" id="explorer-asset-legend" hidden>
             <div class="explorer-asset-legend-content"></div>
             <button type="button" class="explorer-asset-legend-close"

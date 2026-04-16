@@ -1,0 +1,81 @@
+{% load i18n billet_filters %}
+
+<div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); z-index: 10000; display: flex; justify-content: center; align-items: flex-start; padding-top: 80px;"
+     data-testid="refund-modal"
+     onclick="if (event.target === this) document.getElementById('refund-modal-slot').innerHTML='';">
+    <div style="background: white; max-width: 560px; width: 90%; padding: 24px; border-radius: 10px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
+        <h2 style="margin: 0 0 16px; font-size: 1.25rem;">
+            {% translate "Confirmer le remboursement en espèces" %}
+        </h2>
+
+        <p style="margin: 0 0 12px; font-size: 0.95em;">
+            {% translate "Vous allez rembourser :" %}
+        </p>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+            <tbody>
+                {% for token in tokens_eligibles %}
+                <tr style="border-bottom: 1px solid #F3F4F6;">
+                    <td style="padding: 6px 8px;">{{ token.asset.name }}</td>
+                    <td style="padding: 6px 8px; text-align: right; font-weight: 600;">
+                        {{ token.value|cents_to_asset:token.asset }}
+                    </td>
+                </tr>
+                {% endfor %}
+                <tr style="background: #F3F4F6;">
+                    <td style="padding: 10px 8px; font-weight: 600;">
+                        {% translate "Total en espèces" %}
+                    </td>
+                    <td style="padding: 10px 8px; text-align: right; font-weight: 700; color: #16a34a;"
+                        data-testid="modal-total-fiduciaire">
+                        {{ total_fiduciaire_centimes|cents_to_euros }}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <form hx-post="{% url 'staff_admin:QrcodeCashless_cartecashless_refund_confirm' carte.uuid %}"
+              hx-target="#refund-modal-slot"
+              hx-swap="innerHTML"
+              data-testid="refund-modal-form">
+            {% csrf_token %}
+
+            {# --- Checkbox VV + aide FALC --- #}
+            <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 12px; border-radius: 4px; margin-bottom: 16px;">
+                <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" name="vider_carte" value="true"
+                           style="margin-top: 3px;"
+                           data-testid="modal-checkbox-vider">
+                    <div>
+                        <strong>{% translate "Réinitialiser la carte après remboursement" %}</strong>
+                        <p style="margin: 6px 0 0; font-size: 0.88em; line-height: 1.4; color: #78350F;">
+                            {% blocktranslate %}
+                            Si vous cochez cette case, la carte sera complètement vidée :
+                            elle ne sera plus liée à un·e utilisateur·ice, son wallet anonyme sera
+                            détaché, et elle pourra être réattribuée à une autre personne.
+                            {% endblocktranslate %}
+                        </p>
+                        <p style="margin: 6px 0 0; font-size: 0.88em; line-height: 1.4; color: #78350F;">
+                            <strong>{% translate "Si vous ne cochez pas" %}</strong> :
+                            {% translate "la carte reste attribuée, mais son solde est mis à zéro." %}
+                        </p>
+                    </div>
+                </label>
+            </div>
+
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button"
+                        onclick="document.getElementById('refund-modal-slot').innerHTML='';"
+                        style="padding: 10px 18px; background: #6B7280; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer;"
+                        data-testid="modal-btn-cancel">
+                    {% translate "Annuler" %}
+                </button>
+                <button type="submit"
+                        style="padding: 10px 20px; background: #16a34a; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;"
+                        data-testid="modal-btn-confirm">
+                    {% translate "Confirmer le remboursement" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

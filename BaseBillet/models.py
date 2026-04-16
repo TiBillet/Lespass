@@ -956,9 +956,14 @@ class Configuration(SingletonModel):
         verbose_name_plural = _("Settings")
 
     def __str__(self):
+        # __str__ doit retourner une vraie `str`, pas un proxy lazy.
+        # Django admin (et d'autres consommateurs) appellent str(obj) avec TypeError
+        # si on retourne un __proxy__ brut.
+        # / __str__ must return a real `str`, not a lazy proxy. Django admin (and
+        # other consumers) call str(obj) which raises TypeError on raw __proxy__.
         if self.organisation:
-            return _("Settings for ") + self.organisation
-        return _("Settings")
+            return f"{_('Settings for ')}{self.organisation}"
+        return str(_("Settings"))
 
 
 class Tva(models.Model):
@@ -1281,6 +1286,7 @@ class Product(models.Model):
     FRACTIONNE_POS = "FR"
     BILLET_POS = "BI"
     FIDELITE = "FD"
+    VIREMENT_RECU = "VR"
 
     METHODE_CAISSE_CHOICES = [
         (VENTE, _("Sale")),
@@ -1293,6 +1299,7 @@ class Product(models.Model):
         (FRACTIONNE_POS, _("Split payment")),
         (BILLET_POS, _("Ticket")),
         (FIDELITE, _("Loyalty")),
+        (VIREMENT_RECU, _("Bank transfer received")),
     ]
 
     methode_caisse = models.CharField(
@@ -3123,6 +3130,22 @@ class ScannerAPIKey(AbstractAPIKey):
 
 
 class LaBoutikAPIKey(AbstractAPIKey):
+    """
+    Clé API LaBoutik liée à un TermUser (V2 flow bridge).
+    / LaBoutik API key linked to a TermUser (V2 bridge flow).
+
+    Le champ `user` est nullable pour compat V1 (clés créées avant le bridge).
+    / The `user` field is nullable for V1 compat (keys created before bridge).
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='laboutik_api_key',
+        null=True, blank=True,
+        verbose_name=_("Terminal user"),
+        help_text=_("TermUser linked (V2 bridge flow). Null for legacy V1 keys."),
+    )
+
     class Meta:
         ordering = ("-created",)
         verbose_name = "LaBoutik API Key"

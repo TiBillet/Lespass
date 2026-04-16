@@ -367,6 +367,7 @@ class Transaction(models.Model):
     VOID = 'VOI'          # Vidage de carte (tout remettre a zero)
     DEPOSIT = 'DEP'       # Depot bancaire (lieu → wallet primaire, retrait)
     TRANSFER = 'TRF'      # Virement direct entre wallets
+    BANK_TRANSFER = 'BTR' # Virement bancaire pot central → tenant (mouvement externe au systeme, no token mutation)
 
     ACTION_CHOICES = [
         (FIRST, _('Genesis')),
@@ -379,6 +380,7 @@ class Transaction(models.Model):
         (VOID, _('Annulation')),
         (DEPOSIT, _('Depot bancaire')),
         (TRANSFER, _('Virement')),
+        (BANK_TRANSFER, _('Virement bancaire pot central')),
     ]
 
     # --- Cle primaire ---
