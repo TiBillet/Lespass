@@ -68,28 +68,14 @@ let NfcReader = class {
 		}
 	}
 
-	listenCordovaNfc() {
-		console.log('-> listenCordovaNfc,', new Date())
-		try {
-			nfc.addTagDiscoveredListener((nfcEvent) => {
-				let tag = nfcEvent.tag
-				if (this.cordovaLecture === true) {
-					this.verificationTagId(nfc.bytesToHexString(tag.id), this.uuidConnexion)
-				}
-			})
-			clearInterval(this.intervalIDVerifApiCordova)
-		} catch (error) {
-			console.log('-> listenCordovaNfc :', error)
-		}
-	}
 
 	/**
 	* Gestion de la réception du tagIDS et de l'uuidConnexion
 	* @param mode
 	*/
-	gestionModeLectureNfc(mode) {
+	async gestionModeLectureNfc(mode) {
 		const conf = this.conf
-		// console.log('1 -> gestionModeLectureNfc, mode =', mode)
+		console.log('1 -> gestionModeLectureNfc, mode =', mode)
 		this.uuidConnexion = crypto.randomUUID()
 
 		// nfc serveur socket_io + front sur le même appareil (pi ou desktop)
@@ -114,10 +100,8 @@ let NfcReader = class {
 
 		// cordova
 		if (mode === 'NFCMC') {
-			this.cordovaLecture = true
-			this.intervalIDVerifApiCordova = setInterval(() => {
-				this.listenCordovaNfc(conf)
-			}, 500)
+			const tagId = await nfcPlugin.startListening()
+      this.verificationTagId(tagId, this.uuidConnexion)
 		}
 
 		// simulation
@@ -147,7 +131,7 @@ let NfcReader = class {
 		}
 	}
 
-	start(conf) {
+	async start(conf) {
 		// console.log('0 -> startLecture  --  DEMO =', state.demo.active)
 		this.conf = conf
 		try {
@@ -156,8 +140,11 @@ let NfcReader = class {
 				this.modeNfc = 'NFCSIMU'
 			} else {
 				// hardware: récupère le nfcMode
-				const storage = JSON.parse(localStorage.getItem('laboutik'))
-				this.modeNfc = storage.mode_nfc
+        const cordovaNfcPlugin = await nfcPlugin.available()
+        if(cordovaNfcPlugin === 1) {
+          this.modeNfc="NFCMC"
+        }
+				// TODO: ajouter le  pi(mfc...) et desktop(usb)
 			}
 			this.gestionModeLectureNfc(this.modeNfc)
 		} catch (err) {
@@ -165,7 +152,7 @@ let NfcReader = class {
 		}
 	}
 
-	stop() {
+	async stop() {
 		// console.log('1 -> stopLecture')
 		let modeNfc = this.modeNfc
 
@@ -177,8 +164,7 @@ let NfcReader = class {
 
 		// cordova
 		if (modeNfc === 'NFCMC') {
-			this.cordovaLecture = false
-			clearInterval(this.intervalIDVerifApiCordova)
+			await nfcPlugin.stopListening()
 		}
 
 		// simulation
