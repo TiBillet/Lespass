@@ -181,7 +181,7 @@ docker-compose-filaos.yml
 dev-filaos
 
 # Cordova
-**/node_modules/
-**/plugins/
-**/platforms/
+**/mobile-app/node_modules/
+**/mobile-app/plugins/
+**/mobile-app/platforms/
 env.js
