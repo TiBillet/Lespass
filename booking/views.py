@@ -105,7 +105,8 @@ class BookingViewSet(viewsets.ViewSet):
 
         return render(request, 'booking/views/home.html', contexte)
 
-    def retrieve(self, request, pk=None):
+    @action(detail=False, methods=['GET'], url_path=r'resource/(?P<pk>[^/.]+)', url_name='resource')
+    def resource_page(self, request, pk=None):
         ressource = get_object_or_404(
             Resource.objects.select_related('calendar', 'weekly_opening', 'group'),
             pk=pk,
@@ -117,7 +118,7 @@ class BookingViewSet(viewsets.ViewSet):
             'creneaux':              creneaux,
             'reservations_en_cours': self._reservations_en_cours(request),
         })
-        return render(request, 'booking/views/detail.html', contexte)
+        return render(request, 'booking/views/resource.html', contexte)
 
     @action(detail=True, methods=['GET'])
     def booking_form(self, request, pk=None):
@@ -284,12 +285,12 @@ class BookingViewSet(viewsets.ViewSet):
         # Réservation créée — redirige vers la page courante pour recharger
         # le panier et les disponibilités des créneaux en une seule opération.
         # On utilise HTTP_REFERER pour retourner à la page d'où vient la requête
-        # (page liste ou page détail), avec /booking/<pk>/ comme repli.
+        # (page liste ou page ressource), avec /booking/resource/<pk>/ comme repli.
         # / Booking created — redirect to the current page to reload
         # the basket and slot availability in one operation.
-        # HTTP_REFERER returns to the originating page (list or detail),
-        # with /booking/<pk>/ as fallback.
-        url_de_retour = request.META.get('HTTP_REFERER') or f'/booking/{ressource.pk}/'
+        # HTTP_REFERER returns to the originating page (list or resource),
+        # with /booking/resource/<pk>/ as fallback.
+        url_de_retour = request.META.get('HTTP_REFERER') or f'/booking/resource/{ressource.pk}/'
         reponse = HttpResponse(status=200)
         reponse['HX-Redirect'] = url_de_retour
         return reponse

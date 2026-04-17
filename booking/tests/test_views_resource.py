@@ -2,7 +2,7 @@
 Tests de la vue de détail d'une ressource de réservation.
 / Tests for the resource booking detail view.
 
-LOCALISATION : booking/tests/test_views_detail.py
+LOCALISATION : booking/tests/test_views_resource.py
 
 Couvre les cas définis dans le plan de test session 8b :
 - Accès public sans authentification
@@ -20,7 +20,7 @@ Couvre les cas définis dans le plan de test session 8b :
 
 Lancement / Run:
     docker exec lespass_django poetry run pytest \
-        booking/tests/test_views_detail.py -v
+        booking/tests/test_views_resource.py -v
 """
 import datetime
 import sys
@@ -106,7 +106,7 @@ def ressource_avec_creneaux(tenant):
     Ressource avec plus de 5 créneaux disponibles dans l'horizon.
     / Resource with more than 5 available slots within the horizon.
 
-    LOCALISATION : booking/tests/test_views_detail.py
+    LOCALISATION : booking/tests/test_views_resource.py
 
     Un OpeningEntry lundi avec slot_count=6 génère 6 créneaux par lundi.
     Sur un horizon de 28 jours (4 lundis), cela donne 24 créneaux > 5.
@@ -153,7 +153,7 @@ def ressource_complete(tenant):
     Ressource avec un créneau entièrement réservé (capacity=1, 1 réservation).
     / Resource with one fully booked slot (capacity=1, 1 confirmed booking).
 
-    LOCALISATION : booking/tests/test_views_detail.py
+    LOCALISATION : booking/tests/test_views_resource.py
 
     Permet de vérifier que data-testid="booking-slot-unavailable" est présent
     sur la page de détail quand remaining_capacity == 0.
@@ -228,7 +228,7 @@ def nettoyage_donnees_de_test(tenant):
     Supprime toutes les données de test après le module.
     / Deletes all test data after the module.
 
-    LOCALISATION : booking/tests/test_views_detail.py
+    LOCALISATION : booking/tests/test_views_resource.py
 
     Ordre : Booking → Resource → OpeningEntry → WeeklyOpening → Calendar
     """
@@ -268,7 +268,7 @@ def test_resource_detail_accessible_without_authentication(
     with schema_context(TENANT_SCHEMA):
         pk = ressource_avec_creneaux.pk
 
-    reponse = client_anonyme.get(f'/booking/{pk}/')
+    reponse = client_anonyme.get(f'/booking/resource/{pk}/')
 
     assert reponse.status_code == 200
 
@@ -278,7 +278,7 @@ def test_resource_detail_returns_404_for_unknown_resource(client_anonyme):
     Une ressource inexistante retourne HTTP 404.
     / An unknown resource returns HTTP 404.
     """
-    reponse = client_anonyme.get('/booking/99999/')
+    reponse = client_anonyme.get('/booking/resource/99999/')
 
     assert reponse.status_code == 404
 
@@ -295,7 +295,7 @@ def test_resource_detail_shows_resource_name(
         pk  = ressource_avec_creneaux.pk
         nom = ressource_avec_creneaux.name
 
-    reponse = client_anonyme.get(f'/booking/{pk}/')
+    reponse = client_anonyme.get(f'/booking/resource/{pk}/')
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -318,7 +318,7 @@ def test_resource_detail_shows_all_slots_within_horizon(
     with schema_context(TENANT_SCHEMA):
         pk = ressource_avec_creneaux.pk
 
-    reponse = client_anonyme.get(f'/booking/{pk}/')
+    reponse = client_anonyme.get(f'/booking/resource/{pk}/')
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -345,7 +345,7 @@ def test_resource_detail_marks_full_slots_as_unavailable(
     with schema_context(TENANT_SCHEMA):
         pk = ressource_complete.pk
 
-    reponse = client_anonyme.get(f'/booking/{pk}/')
+    reponse = client_anonyme.get(f'/booking/resource/{pk}/')
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
