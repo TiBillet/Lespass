@@ -729,13 +729,16 @@ triggered by an HTMX navigation request.
   tag filtering via URL parameter `?tag=`. Resources with no upcoming
   availability are shown but greyed out.
 
-#### Resource Detail
+#### Resource Page
 
-- URL: `GET /booking/{pk}/`
+The page dedicated to a single bookable resource: image, description,
+tag badges, basket, and slot list. Available slots load the booking
+form inline via HTMX; full slots are shown as inert badges. Clicking a
+slot while unauthenticated redirects to login.
+
+- URL: `GET /booking/resource/{pk}/`
 - Auth: public
-- Template: `booking/views/detail.html`
-- Returns the detail page for one resource with its slot picker. Clicking a
-  slot prompts login if not authenticated.
+- Template: `booking/views/resource.html`
 
 ### 7.2 Web Components
 

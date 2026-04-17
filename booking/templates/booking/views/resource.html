@@ -6,7 +6,7 @@
 
 {% block main %}
 <!--
-LOCALISATION : booking/templates/booking/views/detail.html
+LOCALISATION : booking/templates/booking/views/resource.html
 
 Variables attendues / Expected variables:
   ressource  — objet Resource
@@ -15,6 +15,7 @@ Variables attendues / Expected variables:
 Flux HTMX / HTMX flow:
   1. Clic sur un créneau disponible
      → hx-get vers /booking/<pk>/booking_form/?...
+     (la page elle-même est sur /booking/resource/<pk>/)
      → le formulaire se charge dans #booking-form-container
 
   2. Soumission du formulaire (hx-post vers add_to_basket)

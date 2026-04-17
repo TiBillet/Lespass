@@ -397,13 +397,13 @@ def test_slot_link_present_on_detail_page(
 
     LOCALISATION : booking/tests/test_basket.py
 
-    Vérifie que detail.html génère des liens de réservation (et non des <li> inertes).
-    / Verifies that detail.html generates booking links (not inert <li> items).
+    Vérifie que resource.html génère des liens de réservation (et non des <li> inertes).
+    / Verifies that resource.html generates booking links (not inert <li> items).
     """
     with schema_context(TENANT_SCHEMA):
         pk = ressource_avec_creneaux.pk
 
-    reponse = client_anonyme.get(f'/booking/{pk}/')
+    reponse = client_anonyme.get(f'/booking/resource/{pk}/')
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -447,11 +447,11 @@ def test_booking_form_redirects_to_login_when_unauthenticated(
 
     LOCALISATION : booking/tests/test_basket.py
 
-    Le lien <a href> sur detail.html/card.html déclenche une requête GET
+    Le lien <a href> sur resource.html/card.html déclenche une requête GET
     navigateur classique. Django renvoie 302 vers LOGIN_URL?next=<url>.
     Sans hx-get, htmx ne capture pas la requête — le navigateur suit la
     redirection normalement.
-    / The <a href> link on detail.html/card.html triggers a regular browser
+    / The <a href> link on resource.html/card.html triggers a regular browser
     GET. Django returns 302 to LOGIN_URL?next=<url>.
     Without hx-get, htmx doesn't intercept — the browser follows the
     redirect normally.

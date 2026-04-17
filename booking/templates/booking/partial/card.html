@@ -31,8 +31,8 @@ Flux HTMX / HTMX flow:
 
             <div class="card-body d-flex flex-column">
 
-                <a href="/booking/{{ item.ressource.pk }}/"
-                   hx-get="/booking/{{ item.ressource.pk }}/"
+                <a href="/booking/resource/{{ item.ressource.pk }}/"
+                   hx-get="/booking/resource/{{ item.ressource.pk }}/"
                    hx-target="body"
                    hx-swap="innerHTML"
                    hx-push-url="true"
