@@ -1,119 +1,87 @@
-{% extends base_template %}
+{% extends "booking/booking_base.html" %}
 {% load i18n %}
 
 {% block title %}{% translate "Réservation" %}{% endblock %}
 {% block meta_description %}{% translate "Réservez une ressource en ligne." %}{% endblock %}
 
-{% block main %}
+{% block booking_content %}
 <!--
 LOCALISATION : booking/templates/booking/views/home.html
 
 Spec §3.1.2 : les groupes sont purement présentationnels.
 Spec §4.4 : ressources sans créneaux → grisées ; créneaux complets → indisponibles.
 
-Le panier est toujours affiché en haut de page, même vide.
+Le panier et le séparateur sont rendus par booking_base.html.
 Les formulaires inline s'ouvrent dans chaque carte (card.html).
-/ The basket is always shown at the top of the page, even when empty.
+/ The basket and separator are rendered by booking_base.html.
 / Inline forms open inside each card (card.html).
 -->
-<main class="container-lg py-4" data-testid="booking-resource-list">
+<h1 class="mb-4" data-testid="booking-resource-list">{% translate "Réservation de ressources" %}</h1>
 
-    <h1 class="mb-4">{% translate "Réservation de ressources" %}</h1>
-
+{% if tag_filtre %}
     <!--
-    Panier — toujours affiché, même vide.
-    Se met à jour automatiquement après un HX-Redirect (rechargement de page).
-    / Basket — always displayed, even when empty.
-    Updates automatically after an HX-Redirect (page reload).
+    aria-live="polite" : le lecteur d'écran annonce le changement de filtre.
+    / aria-live="polite": screen reader announces the filter change.
     -->
-    {% include "booking/partial/basket.html" %}
-    <hr class="my-4">
-
-    {% if tag_filtre %}
-        <!--
-        aria-live="polite" : le lecteur d'écran annonce le changement de filtre.
-        / aria-live="polite": screen reader announces the filter change.
-        -->
-        <div class="mb-3 d-flex align-items-center gap-2" aria-live="polite">
-            <i class="bi bi-funnel" aria-hidden="true"></i>
-            <span class="badge bg-primary" data-testid="booking-tag-filter-active">
-                {{ tag_filtre }}
-            </span>
-            <a class="small text-decoration-none"
-               href="/booking/"
-               hx-get="/booking/"
-               hx-target="body"
-               hx-swap="innerHTML"
-               hx-push-url="true"
-               aria-label="{% translate 'Effacer le filtre de tag' %}">
-                <i class="bi bi-x-circle" aria-hidden="true"></i>
-                {% translate "Effacer le filtre" %}
-            </a>
-        </div>
-    {% endif %}
-
-    {% for section in groupes_annotes %}
-    <section class="mb-5" aria-label="{{ section.groupe.name }}">
-
-        <h2 class="mb-3">{{ section.groupe.name }}</h2>
-
-        {% if section.groupe.description %}
-            <p class="text-muted mb-3">{{ section.groupe.description }}</p>
-        {% endif %}
-
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            {% for item in section.items %}
-                {% include "booking/partial/card.html" with item=item %}
-            {% endfor %}
-        </div>
-
-    </section>
-    {% endfor %}
-
-    {% if items_sans_groupe %}
-    {% if groupes_annotes %}<hr class="my-5">{% endif %}
-    <section class="mb-5" aria-label="{% translate 'Autres ressources' %}">
-
-        {% if groupes_annotes %}
-            <h2 class="mb-3">{% translate "Autres ressources" %}</h2>
-        {% endif %}
-
-        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-            {% for item in items_sans_groupe %}
-                {% include "booking/partial/card.html" with item=item %}
-            {% endfor %}
-        </div>
-
-    </section>
-    {% endif %}
-
-    {% if not groupes_annotes and not items_sans_groupe %}
-    <div class="col-12">
-        <p class="text-muted" data-testid="booking-empty-list">
-            {% translate "Aucune ressource disponible." %}
-        </p>
+    <div class="mb-3 d-flex align-items-center gap-2" aria-live="polite">
+        <i class="bi bi-funnel" aria-hidden="true"></i>
+        <span class="badge bg-primary" data-testid="booking-tag-filter-active">
+            {{ tag_filtre }}
+        </span>
+        <a class="small text-decoration-none"
+           href="/booking/"
+           hx-get="/booking/"
+           hx-target="body"
+           hx-swap="innerHTML"
+           hx-push-url="true"
+           aria-label="{% translate 'Effacer le filtre de tag' %}">
+            <i class="bi bi-x-circle" aria-hidden="true"></i>
+            {% translate "Effacer le filtre" %}
+        </a>
     </div>
+{% endif %}
+
+{% for section in groupes_annotes %}
+<section class="mb-5" aria-label="{{ section.groupe.name }}">
+
+    <h2 class="mb-3">{{ section.groupe.name }}</h2>
+
+    {% if section.groupe.description %}
+        <p class="text-muted mb-3">{{ section.groupe.description }}</p>
     {% endif %}
 
-</main>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for item in section.items %}
+            {% include "booking/partial/card.html" with item=item %}
+        {% endfor %}
+    </div>
 
-<!--
-Configure HTMX pour swapper le contenu même sur les réponses HTTP 422.
-Par défaut HTMX ignore les erreurs 4xx et ne remplace pas le DOM.
-/ Configure HTMX to swap content even on HTTP 422 responses.
-By default HTMX ignores 4xx errors and does not replace the DOM.
--->
-<script>
-document.addEventListener("htmx:beforeOnLoad", function(event) {
-    var code_reponse = event.detail.xhr.status;
+</section>
+{% endfor %}
 
-    // On accepte le swap pour les erreurs de validation (422).
-    // / Allow swap for validation errors (422).
-    if (code_reponse === 422) {
-        event.detail.shouldSwap = true;
-        event.detail.isError    = false;
-    }
-});
-</script>
+{% if items_sans_groupe %}
+{% if groupes_annotes %}<hr class="my-5">{% endif %}
+<section class="mb-5" aria-label="{% translate 'Autres ressources' %}">
 
-{% endblock %}
+    {% if groupes_annotes %}
+        <h2 class="mb-3">{% translate "Autres ressources" %}</h2>
+    {% endif %}
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {% for item in items_sans_groupe %}
+            {% include "booking/partial/card.html" with item=item %}
+        {% endfor %}
+    </div>
+
+</section>
+{% endif %}
+
+{% if not groupes_annotes and not items_sans_groupe %}
+<div class="col-12">
+    <p class="text-muted" data-testid="booking-empty-list">
+        {% translate "Aucune ressource disponible." %}
+    </p>
+</div>
+{% endif %}
+
+{% endblock booking_content %}

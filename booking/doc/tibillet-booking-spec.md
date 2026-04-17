@@ -714,6 +714,25 @@ fragments; interactions are driven by HTTP requests with HTML responses via htmx
 There is no JSON API layer for the booking module. All views follow the existing
 TiBillet HDA conventions.
 
+### 7.0 Booking Base Template
+
+All booking views extend `booking/booking_base.html` via
+`{% block booking_content %}`. This template owns everything shared across
+booking pages: `<main>` wrapper, basket (consistent position, always at
+the top), `<hr>` separator, and the HTMX 422 swap handler. The booking
+app never modifies `BaseBillet` skin templates (finding §17).
+
+`booking_base.html` extends `base_template` itself — the skin's full or
+headless template depending on whether the request is a direct page load
+or an HTMX navigation.
+
+```
+skin/base.html  (or headless.html for HTMX navigation)
+    └── booking/booking_base.html  (main, basket, 422 handler)
+            └── booking/views/home.html
+            └── booking/views/resource.html
+```
+
 ### 7.1 Web Pages
 
 Full-page renders. Accessible to everyone; actions within the page require

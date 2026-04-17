@@ -332,6 +332,38 @@ def test_resource_detail_shows_all_slots_within_horizon(
     )
 
 
+def test_htmx_422_handler_present_in_response(
+    client_anonyme,
+    ressource_avec_creneaux,
+):
+    """
+    Le gestionnaire htmx:beforeOnLoad est présent dans la réponse complète.
+    / The htmx:beforeOnLoad handler is present in the full response.
+
+    LOCALISATION : booking/tests/test_views_resource.py
+
+    Ce gestionnaire est déclaré dans les templates de base (finding §17),
+    pas dans le template de vue resource.html.
+    Ce test vérifie que la factorisation est correcte : la réponse HTTP
+    complète inclut bien le gestionnaire hérité du template de base.
+    / This handler is declared in the base templates (finding §17),
+    not in the resource.html view template.
+    This test verifies the refactoring: the full HTTP response includes
+    the handler inherited from the base template.
+    """
+    with schema_context(TENANT_SCHEMA):
+        pk = ressource_avec_creneaux.pk
+
+    reponse = client_anonyme.get(f'/booking/resource/{pk}/')
+
+    assert reponse.status_code == 200
+    contenu = reponse.content.decode('utf-8')
+
+    # Le gestionnaire doit être présent — hérité du template de base.
+    # / The handler must be present — inherited from the base template.
+    assert 'htmx:beforeOnLoad' in contenu
+
+
 def test_resource_detail_marks_full_slots_as_unavailable(
     client_anonyme,
     ressource_complete,

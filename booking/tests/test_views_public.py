@@ -558,6 +558,32 @@ def test_group_name_appears_as_heading(client_anonyme, groupe_avec_ressource):
     assert groupe_avec_ressource.name in contenu
 
 
+def test_htmx_422_handler_present_in_response(client_anonyme):
+    """
+    Le gestionnaire htmx:beforeOnLoad est présent dans la réponse complète.
+    / The htmx:beforeOnLoad handler is present in the full response.
+
+    LOCALISATION : booking/tests/test_views_public.py
+
+    Ce gestionnaire est déclaré dans les templates de base (reunion/base.html,
+    faire_festival/base.html) et non dans les templates de vue booking (finding §17).
+    Ce test vérifie que la factorisation est correcte : le HTML rendu par la
+    vue inclut bien le gestionnaire hérité du template de base.
+    / This handler is declared in the base templates (reunion/base.html,
+    faire_festival/base.html) and not in the booking view templates (finding §17).
+    This test verifies the refactoring is correct: the HTML rendered by the view
+    includes the handler inherited from the base template.
+    """
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
+
+    assert reponse.status_code == 200
+    contenu = reponse.content.decode('utf-8')
+
+    # Le gestionnaire doit être présent — hérité du template de base.
+    # / The handler must be present — inherited from the base template.
+    assert 'htmx:beforeOnLoad' in contenu
+
+
 def test_ungrouped_resource_appears_individually(
     client_anonyme,
     ressource_sans_creneaux,

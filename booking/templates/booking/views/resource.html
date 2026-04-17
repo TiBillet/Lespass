@@ -1,16 +1,19 @@
-{% extends base_template %}
+{% extends "booking/booking_base.html" %}
 {% load i18n %}
 
 {% block title %}{{ ressource.name }}{% endblock %}
 {% block meta_description %}{{ ressource.description|truncatewords:20 }}{% endblock %}
 
-{% block main %}
+{% block booking_content %}
 <!--
 LOCALISATION : booking/templates/booking/views/resource.html
 
 Variables attendues / Expected variables:
   ressource  — objet Resource
   creneaux   — list[BookableInterval] triée par start, sans slice
+
+Le panier et le séparateur sont rendus par booking_base.html.
+/ The basket and separator are rendered by booking_base.html.
 
 Flux HTMX / HTMX flow:
   1. Clic sur un créneau disponible
@@ -22,143 +25,112 @@ Flux HTMX / HTMX flow:
      → succès : HX-Redirect recharge la page (panier + dispo mis à jour)
      → erreur 422 : le formulaire d'erreur remplace le contenu du container
 -->
-<main class="container-lg py-4" data-testid="booking-resource-detail">
+<a href="/booking/"
+   hx-get="/booking/"
+   hx-target="body"
+   hx-swap="innerHTML"
+   hx-push-url="true"
+   class="text-decoration-none small text-muted d-inline-flex align-items-center gap-1 mb-4"
+   data-testid="booking-resource-detail">
+    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+    {% translate "Retour aux ressources" %}
+</a>
 
-    <a href="/booking/"
-       hx-get="/booking/"
-       hx-target="body"
-       hx-swap="innerHTML"
-       hx-push-url="true"
-       class="text-decoration-none small text-muted d-inline-flex align-items-center gap-1 mb-4">
-        <i class="bi bi-arrow-left" aria-hidden="true"></i>
-        {% translate "Retour aux ressources" %}
-    </a>
+{% if ressource.image %}
+    <img src="{{ ressource.image }}"
+         class="img-fluid rounded mb-4"
+         alt="{{ ressource.name }}"
+         style="max-height: 300px; object-fit: cover; width: 100%;">
+{% endif %}
 
-    {% if ressource.image %}
-        <img src="{{ ressource.image }}"
-             class="img-fluid rounded mb-4"
-             alt="{{ ressource.name }}"
-             style="max-height: 300px; object-fit: cover; width: 100%;">
-    {% endif %}
+<h1 class="mb-2">{{ ressource.name }}</h1>
 
-    <h1 class="mb-2">{{ ressource.name }}</h1>
+{% if ressource.description %}
+    <p class="text-muted mb-3">{{ ressource.description }}</p>
+{% endif %}
 
-    {% if ressource.description %}
-        <p class="text-muted mb-3">{{ ressource.description }}</p>
-    {% endif %}
-
-    {% if ressource.tags %}
-        <p class="mb-4" aria-label="{% translate 'Tags' %}">
-            {% for tag in ressource.tags %}
-                <a class="badge bg-secondary text-decoration-none me-1"
-                   href="/booking/?tag={{ tag }}"
-                   hx-get="/booking/?tag={{ tag }}"
-                   hx-target="body"
-                   hx-swap="innerHTML"
-                   hx-push-url="true"
-                   aria-label="{% blocktrans with t=tag %}Filtrer par tag {{ t }}{% endblocktrans %}">
-                    {{ tag }}
-                </a>
-            {% endfor %}
-        </p>
-    {% endif %}
-
-    <!--
-    Panier — toujours affiché, même vide.
-    Il se met à jour automatiquement après un HX-Redirect (rechargement de page).
-    / Basket — always displayed, even when empty.
-    It updates automatically after an HX-Redirect (page reload).
-    -->
-    {% include "booking/partial/basket.html" %}
-    <hr class="my-4">
-
-    <!--
-    Zone de formulaire inline — vide au chargement initial.
-    Un clic sur un créneau y charge le formulaire via hx-get.
-    / Inline form zone — empty on initial load.
-    Clicking a slot loads the form here via hx-get.
-    -->
-    <div id="booking-form-container"
-         class="booking-form-container mb-4"
-         aria-live="polite">
-    </div>
-
-    <h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
-
-    {% if creneaux %}
-        <ul class="list-unstyled" aria-label="{% translate 'Créneaux' %}">
-            {% for creneau in creneaux %}
-
-                {% if creneau.remaining_capacity == 0 %}
-                    <li class="d-flex align-items-center gap-2 mb-2 text-muted"
-                        data-testid="booking-slot-unavailable"
-                        aria-label="{% translate 'Créneau complet' %}">
-                        <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
-                        <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                        <span class="badge bg-danger ms-auto">
-                            {% translate "Complet" %}
-                        </span>
-                    </li>
-
-                {% else %}
-                    <!--
-                    Créneau disponible — hx-get charge le formulaire inline dans
-                    #booking-form-container. Le href classique reste pour le fallback
-                    sans JS (redirige vers la page de connexion si non authentifié).
-                    Si la requête HTMX arrive non authentifiée, la vue renvoie
-                    HX-Redirect vers la page de connexion (navigation complète).
-                    / Available slot — hx-get loads the form inline in
-                    #booking-form-container. The plain href remains for no-JS
-                    fallback (redirects to login if unauthenticated).
-                    If the HTMX request arrives unauthenticated, the view sends
-                    HX-Redirect to the login page (full navigation).
-                    -->
-                    <li class="d-flex align-items-center gap-2 mb-2"
-                        data-testid="booking-slot-available">
-                        <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
-                           hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
-                           hx-target="#booking-form-container"
-                           hx-swap="innerHTML"
-                           class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
-                            <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
-                            <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                            <span class="badge bg-success ms-auto">
-                                {{ creneau.remaining_capacity }}
-                                {% translate "place(s)" %}
-                            </span>
-                        </a>
-                    </li>
-                {% endif %}
-
-            {% endfor %}
-        </ul>
-
-    {% else %}
-        <p class="text-muted" aria-live="polite">
-            <i class="bi bi-calendar-x" aria-hidden="true"></i>
-            {% translate "Aucun créneau disponible prochainement." %}
-        </p>
-    {% endif %}
-
-</main>
+{% if ressource.tags %}
+    <p class="mb-4" aria-label="{% translate 'Tags' %}">
+        {% for tag in ressource.tags %}
+            <a class="badge bg-secondary text-decoration-none me-1"
+               href="/booking/?tag={{ tag }}"
+               hx-get="/booking/?tag={{ tag }}"
+               hx-target="body"
+               hx-swap="innerHTML"
+               hx-push-url="true"
+               aria-label="{% blocktrans with t=tag %}Filtrer par tag {{ t }}{% endblocktrans %}">
+                {{ tag }}
+            </a>
+        {% endfor %}
+    </p>
+{% endif %}
 
 <!--
-Configure HTMX pour swapper le contenu même sur les réponses HTTP 422.
-Par défaut HTMX ignore les erreurs 4xx et ne remplace pas le DOM.
-/ Configure HTMX to swap content even on HTTP 422 responses.
-By default HTMX ignores 4xx errors and does not replace the DOM.
+Zone de formulaire inline — vide au chargement initial.
+Un clic sur un créneau y charge le formulaire via hx-get.
+/ Inline form zone — empty on initial load.
+Clicking a slot loads the form here via hx-get.
 -->
-<script>
-document.addEventListener("htmx:beforeOnLoad", function(event) {
-    var code_reponse = event.detail.xhr.status;
+<div id="booking-form-container"
+     class="booking-form-container mb-4"
+     aria-live="polite">
+</div>
 
-    // On accepte le swap pour les erreurs de validation (422).
-    // / Allow swap for validation errors (422).
-    if (code_reponse === 422) {
-        event.detail.shouldSwap = true;
-        event.detail.isError    = false;
-    }
-});
-</script>
+<h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
 
-{% endblock %}
+{% if creneaux %}
+    <ul class="list-unstyled" aria-label="{% translate 'Créneaux' %}">
+        {% for creneau in creneaux %}
+
+            {% if creneau.remaining_capacity == 0 %}
+                <li class="d-flex align-items-center gap-2 mb-2 text-muted"
+                    data-testid="booking-slot-unavailable"
+                    aria-label="{% translate 'Créneau complet' %}">
+                    <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
+                    <span>{{ creneau.start|date:"D d/m H:i" }}</span>
+                    <span class="badge bg-danger ms-auto">
+                        {% translate "Complet" %}
+                    </span>
+                </li>
+
+            {% else %}
+                <!--
+                Créneau disponible — hx-get charge le formulaire inline dans
+                #booking-form-container. Le href classique reste pour le fallback
+                sans JS (redirige vers la page de connexion si non authentifié).
+                Si la requête HTMX arrive non authentifiée, la vue renvoie
+                HX-Redirect vers la page de connexion (navigation complète).
+                / Available slot — hx-get loads the form inline in
+                #booking-form-container. The plain href remains for no-JS
+                fallback (redirects to login if unauthenticated).
+                If the HTMX request arrives unauthenticated, the view sends
+                HX-Redirect to the login page (full navigation).
+                -->
+                <li class="d-flex align-items-center gap-2 mb-2"
+                    data-testid="booking-slot-available">
+                    <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                       hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
+                       hx-target="#booking-form-container"
+                       hx-swap="innerHTML"
+                       class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
+                        <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
+                        <span>{{ creneau.start|date:"D d/m H:i" }}</span>
+                        <span class="badge bg-success ms-auto">
+                            {{ creneau.remaining_capacity }}
+                            {% translate "place(s)" %}
+                        </span>
+                    </a>
+                </li>
+            {% endif %}
+
+        {% endfor %}
+    </ul>
+
+{% else %}
+    <p class="text-muted" aria-live="polite">
+        <i class="bi bi-calendar-x" aria-hidden="true"></i>
+        {% translate "Aucun créneau disponible prochainement." %}
+    </p>
+{% endif %}
+
+{% endblock booking_content %}
