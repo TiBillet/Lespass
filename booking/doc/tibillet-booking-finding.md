@@ -349,3 +349,21 @@ Sans ce verrou, la contrainte de capacité n'est pas garantie sous
 charge concurrente.
 
 Obsolète : Cela a été implémenté.
+
+## §15 - problème de performance sur calcul de dispo
+
+les réservations (Booking) peuvent avoir des durées arbitraires.
+Dans le modèle, il y a juste le datetime du début. Donc
+Pour calculer les créneaux libres, il faut charger la totalité
+des réservations puis calculer leur datetime de fin.
+
+On peut éviter cela en ajouter la datetime de fin de chaque
+réservation en BDD. Attention : c'est une donnée qui sera redondante
+avec la durée des slot et leur nombre.
+
+## §16 - problème début des créneaux à l'heure pret
+
+Il faut prendre en compte l'heure dans la fenetre de calcul
+des créneaux ouvert.
+
+## §16 - manque des tags dans le fixture
