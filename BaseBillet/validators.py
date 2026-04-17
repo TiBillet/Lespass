@@ -771,6 +771,10 @@ class MembershipValidator(serializers.Serializer):
         if self.price.free_price:
             amount = attrs.get('custom_amount') or self.price.prix or Decimal('0.00')
 
+            # Validation du montant : jamais négatif / Amount must never be negative
+            if amount < Decimal('0.00'):
+                raise serializers.ValidationError(_('The amount must be a positive number.'))
+
             # Validation du montant minimum / Minimum amount validation
             if self.price.prix and amount < self.price.prix:
                 logger.info(f"Open price {amount} below minimum {self.price.prix}")
