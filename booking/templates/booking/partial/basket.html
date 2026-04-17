@@ -79,21 +79,5 @@ Variables attendues / Expected variables:
 
     {% endif %}
 
-    <!--
-    N'affiche ce bouton que si la page courante n'est pas déjà /booking/.
-    Sur la liste des ressources, le lien pointerait sur la page courante — inutile.
-    / Only show this button when the current page is not already /booking/.
-    On the resource list, the link would point to the current page — useless.
-    -->
-    {% if request.path != '/booking/' %}
-        <a href="/booking/"
-           hx-get="/booking/"
-           hx-target="body"
-           hx-swap="innerHTML"
-           hx-push-url="true"
-           class="btn btn-outline-secondary btn-sm">
-            {% translate "Toutes les ressources" %}
-        </a>
-    {% endif %}
 
 </div>
