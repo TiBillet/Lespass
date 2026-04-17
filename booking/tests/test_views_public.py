@@ -45,7 +45,7 @@ from django_tenants.utils import schema_context
 TEST_PREFIX    = '[test_booking_views_public]'
 TENANT_SCHEMA  = 'lespass'
 HOST           = 'lespass.tibillet.localhost'
-URL_LISTE      = '/booking/'
+URL_PAGE_ACCUEIL = '/booking/'
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────────
@@ -354,7 +354,7 @@ def test_resource_list_accessible_without_authentication(client_anonyme):
     """
     # Requête GET anonyme sur la liste des ressources.
     # / Anonymous GET request on the resource list.
-    reponse = client_anonyme.get(URL_LISTE)
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
 
     # La page doit répondre 200, pas 302 (redirect vers login).
     # / Page must respond 200, not 302 (redirect to login).
@@ -373,7 +373,7 @@ def test_resource_list_returns_html_200(client_anonyme):
     / Verifies Content-Type is text/html and the response contains
     an <html> tag.
     """
-    reponse = client_anonyme.get(URL_LISTE)
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
 
     assert reponse.status_code == 200
 
@@ -407,7 +407,7 @@ def test_resource_list_filters_by_tag(
     """
     # Requête filtrée sur le tag 'salle'.
     # / Request filtered on the 'salle' tag.
-    reponse = client_anonyme.get(URL_LISTE, {'tag': 'salle'})
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL, {'tag': 'salle'})
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -441,7 +441,7 @@ def test_resource_with_no_availability_appears_greyed_out(
     The resource is present (not hidden), but its card carries
     the attribute data-testid="booking-resource-card-greyed".
     """
-    reponse = client_anonyme.get(URL_LISTE)
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -476,7 +476,7 @@ def test_full_slot_appears_as_unavailable(
     The slot is visible in the page, but carries the attribute
     data-testid="booking-slot-unavailable".
     """
-    reponse = client_anonyme.get(URL_LISTE)
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -548,7 +548,7 @@ def test_group_name_appears_as_heading(client_anonyme, groupe_avec_ressource):
     / Spec §3.1.2: "the public page shows resources grouped together".
     The group name must be visible in the rendered HTML.
     """
-    reponse = client_anonyme.get(URL_LISTE)
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
@@ -577,7 +577,7 @@ def test_ungrouped_resource_appears_individually(
     After refactoring view/template to handle groups, ungrouped resources
     must still appear.
     """
-    reponse = client_anonyme.get(URL_LISTE)
+    reponse = client_anonyme.get(URL_PAGE_ACCUEIL)
 
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
