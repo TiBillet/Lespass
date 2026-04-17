@@ -664,7 +664,7 @@ class MembershipValidator(serializers.Serializer):
     price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
-    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.00'))
     firstname = serializers.CharField(max_length=200)
     lastname = serializers.CharField(max_length=200)
     email = serializers.EmailField()

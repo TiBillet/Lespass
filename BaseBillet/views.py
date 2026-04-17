@@ -371,7 +371,7 @@ def connexion(request):
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
                 messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
 
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         logger.error(validator.errors)
     messages.add_message(request, messages.WARNING, "Email validation error")
@@ -486,7 +486,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             for error in validator.errors:
                 logger.error(f"{error} : {validator.errors[error][0]}")
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le mail est envoyé
         email = validator.validated_data['email']
@@ -500,7 +500,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             messages.add_message(request, messages.ERROR, f"{_('Invalid email')}")
             logger.error("email validé par validateur DRF mais pas par get_or_create_user "
                          "-> email de confirmation a renvoyé une erreur")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         if validator.data.get('lastname') and not user.last_name:
             user.last_name = validator.data.get('lastname')
@@ -527,7 +527,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 messages.add_message(request, messages.ERROR,
                                      _("You seem to already have a TiBillet card linked to your wallet. "
                                        "Please revoke it first in your profile area to link a new one."))
-                return HttpResponseClientRedirect(request.headers['Referer'])
+                return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
         qrcode_uuid = validator.validated_data['qrcode_uuid']
@@ -551,7 +551,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 membership.last_name = user.last_name
                 membership.save()
 
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
@@ -885,7 +885,7 @@ class MyAccount(viewsets.ViewSet):
                 logger.error(f"admin_lost_my_card error: {e}")
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
@@ -1671,7 +1671,7 @@ class HomeViewset(viewsets.ViewSet):
         if not validator.is_valid():
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         contact_mailer.delay(
             sender=validator.validated_data['email'],
@@ -1680,7 +1680,7 @@ class HomeViewset(viewsets.ViewSet):
         )
 
         messages.add_message(request, messages.SUCCESS, _("Message sent, you have been sent a copy. Thank you!"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         # if self.action in ['create']:
@@ -2131,11 +2131,11 @@ class EventMVT(viewsets.ViewSet):
         if Ticket.objects.filter(reservation__user_commande=user, reservation__event__in=event.children.all()).exists():
             messages.add_message(request, messages.ERROR,
                                  _("You have already checked for an action on this event."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         if not user:
             messages.add_message(request, messages.ERROR, _("Please log in first."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         validator = ReservationValidator(data={
             "email": user.email,
@@ -2146,10 +2146,10 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         messages.add_message(request, messages.SUCCESS, _("Thank you! You are going to receive a validation email.."))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):
@@ -2162,7 +2162,7 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -2453,7 +2453,7 @@ class Badge(viewsets.ViewSet):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
         messages.add_message(request, messages.SUCCESS, _(f"Check out registered!"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         if self.action in ['retrieve']:
@@ -2473,7 +2473,7 @@ class MembershipMVT(viewsets.ViewSet):
             logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
