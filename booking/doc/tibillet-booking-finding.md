@@ -367,3 +367,18 @@ Il faut prendre en compte l'heure dans la fenetre de calcul
 des créneaux ouvert.
 
 ## §16 - manque des tags dans le fixture
+
+Il faut ajouter les tags "salle" et "machine" par exemple.
+
+
+## §17 — Template de base propre au module booking (Fait)
+
+`booking/templates/booking/booking_base.html` centralise les éléments
+communs à toutes les vues booking : `<main>`, panier, séparateur, et
+gestionnaire HTMX 422. Toutes les vues étendent ce fichier via
+`{% block booking_content %}`.
+
+Ce template étend lui-même `base_template` (skin plein ou headless).
+Le module booking ne touche pas à `BaseBillet/templates/`.
+/ booking_base.html centralises shared booking view elements. It extends
+base_template itself — the booking module never modifies BaseBillet templates.
