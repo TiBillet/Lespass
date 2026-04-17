@@ -105,28 +105,6 @@ class BookingViewSet(viewsets.ViewSet):
 
         return render(request, 'booking/views/list.html', contexte)
 
-    @action(detail=False, methods=['GET'])
-    def embed(self, request):
-        """
-        Page intégrable en iframe — sans chrome (spec §4.4).
-        Réutilise list.html en remplaçant base_template par embed_base.html.
-        / iframe-embeddable page — chrome-free (spec §4.4).
-        Reuses list.html by swapping base_template for embed_base.html.
-        """
-        contexte = get_context(request)
-        groupes_annotes, items_sans_groupe, tag_filtre = self._annote_ressources(request)
-
-        contexte['base_template'] = 'booking/embed_base.html'
-        contexte.update({
-            'groupes_annotes':   groupes_annotes,
-            'items_sans_groupe': items_sans_groupe,
-            'tag_filtre':        tag_filtre,
-        })
-
-        reponse = render(request, 'booking/views/list.html', contexte)
-        reponse['X-Frame-Options'] = 'ALLOWALL'
-        return reponse
-
     def retrieve(self, request, pk=None):
         ressource = get_object_or_404(
             Resource.objects.select_related('calendar', 'weekly_opening', 'group'),
