@@ -1,6 +1,6 @@
 # TiBillet — Booking Module Specification
 
-**Version:** v0.7
+**Version:** v0.8 (draft)
 **Status:**  Ready for review by TiBillet core team
 **Date:**    2026-04-14
 **Author:**  Joris REHM
@@ -8,6 +8,7 @@
 
 Changes:
 
+  - 0.8 Work on the UI specification
   - 0.7 §2 Member actor updated. §3.1.6 Booking status updated.
          §4.2 Member cancel flow clarified. §4.3 Volunteer flow updated.
          §5 Availability, Pricing, Cancellation rules updated.
@@ -713,47 +714,61 @@ fragments; interactions are driven by HTTP requests with HTML responses via htmx
 There is no JSON API layer for the booking module. All views follow the existing
 TiBillet HDA conventions.
 
-### Public (no auth)
+### 7.1 Web Pages
 
-+-----------------+----------------------------------+------------------------------+
-| View            | Trigger                          | Returns                      |
-+=================+==================================+==============================+
-| Resource list   | GET — page load or tag filter    | Full page or partial: list   |
-|                 |                                  | of resources with their next |
-|                 |                                  | available slots              |
-+-----------------+----------------------------------+------------------------------+
-| Slot picker     | GET — member selects a resource  | Partial: calendar view of    |
-|                 |                                  | computed available slots for |
-|                 |                                  | the resource                 |
-+-----------------+----------------------------------+------------------------------+
+Full-page renders. Accessible to everyone; actions within the page require
+login. Each can also be returned as an HTMX partial (replacing `<body>`) when
+triggered by an HTMX navigation request.
 
-### Member (authenticated)
+#### Home — Resource Catalogue
 
-+-----------------+------------------------------------+------------------------------+
-| View            | Trigger                            | Returns                      |
-+=================+====================================+==============================+
-| Booking form    | GET — member selects a slot        | Partial: form to choose      |
-|                 |                                    | `slot_count`                 |
-+-----------------+------------------------------------+------------------------------+
-| Add to basket   | POST — member submits booking form | Partial: updated basket;     |
-|                 |                                    | prompt to add more or        |
-|                 |                                    | proceed to validation        |
-+-----------------+------------------------------------+------------------------------+
-| Basket view     | GET                                | Partial: list of `new` and   |
-|                 |                                    | `validated` bookings with    |
-|                 |                                    | total price                  |
-+-----------------+------------------------------------+------------------------------+
-| Remove from     | POST — member removes a booking    | Partial: updated basket;     |
-| basket          | from basket                        | booking deleted (no refund   |
-|                 |                                    | as no payment collected)     |
-+-----------------+------------------------------------+------------------------------+
-| Validate basket | POST — member confirms basket      | Redirect to TiBillet payment |
-|                 |                                    | flow; bookings move to       |
-|                 |                                    | `validated`                  |
-+-----------------+------------------------------------+------------------------------+
-| Booking list    | GET                                | Full page: member's upcoming |
-|                 |                                    | `confirmed` bookings         |
-+-----------------+------------------------------------+------------------------------+
+- URL: `GET /booking/`
+- Auth: public
+- Template: `booking/views/home.html`
+- Returns the list of all resources with their next available slots. Supports
+  tag filtering via URL parameter `?tag=`. Resources with no upcoming
+  availability are shown but greyed out.
+
+#### Resource Detail
+
+- URL: `GET /booking/{pk}/`
+- Auth: public
+- Template: `booking/views/detail.html`
+- Returns the detail page for one resource with its slot picker. Clicking a
+  slot prompts login if not authenticated.
+
+### 7.2 Web Components
+
+HTMX partials — replace a specific DOM fragment, never the full page.
+
+#### Booking Form
+
+- URL: `GET /booking/{pk}/booking_form/`
+- Auth: member
+- Template: `booking/partial/booking_form.html`
+- Returns the date and slot selection form for the resource.
+
+#### Basket
+
+- URL: `POST /booking/{pk}/add_to_basket/`
+- URL: `POST /booking/{pk}/remove_from_basket/`
+- Auth: member
+- Template: `booking/partial/basket.html`
+- Returns the updated basket with current bookings and total price.
+
+#### Basket Confirmed
+
+- URL: `POST /booking/validate_basket/`
+- Auth: member
+- Template: `booking/partial/basket_confirmed.html`
+- Returns the confirmation of all bookings in the basket.
+
+#### Cancel Booking
+
+- URL: `POST /booking/cancel/`
+- Auth: member
+- Template: `booking/partial/cancel_error.html` (on error only)
+- Returns empty HTML on success; error partial on failure.
 
 ### Member (account administration)
 

@@ -103,7 +103,7 @@ class BookingViewSet(viewsets.ViewSet):
             'reservations_en_cours': self._reservations_en_cours(request),
         })
 
-        return render(request, 'booking/views/list.html', contexte)
+        return render(request, 'booking/views/home.html', contexte)
 
     def retrieve(self, request, pk=None):
         ressource = get_object_or_404(
