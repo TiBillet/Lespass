@@ -1412,5 +1412,105 @@ acceptable uniquement sur dev DB.
 
 ---
 
+### Panier multi-events (sessions 01-06, 2026-04-17)
+
+**10.1 — `django-stdimage` bug au cleanup `.delete()` sur `Product`/`Event`.**
+La lib `django-stdimage` a un `post_delete_callback` qui plante sur `img=None`
+(courant en test quand on cree un Product sans image). Consequence : un
+`product.delete()` au teardown de fixture leve une exception non bloquante.
+
+Solution : ne PAS appeler `.delete()` sur `Product`/`Event` dans les tests pytest.
+Compter sur le rollback transactionnel de `@pytest.mark.django_db`. Si le projet
+n'a pas de rollback (DB dev partagee), envelopper le teardown dans `try/except`.
+
+```python
+# Dans la fixture user_acheteur
+yield user
+try:
+    # cleanup cross-FK
+    LigneArticle.objects.filter(...).delete()
+    user.delete()
+except Exception:
+    pass  # stdimage ou FK PROTECT — rollback prend le relais
+```
+
+**10.2 — `django.test.RequestFactory` ne pose pas `request.user` par defaut.**
+Les vues `PanierSession` testent `self.request.user.is_authenticated`. Sans user,
+AttributeError. Il faut poser `AnonymousUser()` manuellement :
+
+```python
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.middleware import SessionMiddleware
+factory = RequestFactory()
+request = factory.get('/')
+middleware = SessionMiddleware(lambda r: None)
+middleware.process_request(request)
+request.session.save()
+request.user = AnonymousUser()  # <-- OBLIGATOIRE
+```
+
+**10.3 — `RequestFactory` ne pose pas `request.data`, utilise par DRF.**
+Si le validator fait `self.context.get('request').data`, le test plante.
+Solution : utiliser `SimpleNamespace` qui permet de poser data librement :
+
+```python
+from types import SimpleNamespace
+from django.http import QueryDict
+qd = QueryDict('', mutable=True)
+qd.update({'email': '...', 'event': str(event.uuid)})
+request = SimpleNamespace(user=user, data=qd)
+validator = ReservationValidator(data=qd, context={'request': request})
+```
+
+**10.4 — `Configuration.save()` declenche validation Stripe sur `stripe_accept_sepa`.**
+En env test, le compte Stripe n'a pas SEPA → `ValidationError`. Pour bypasser
+lors de tests :
+
+```python
+# ❌ ValidationError en test
+config.stripe_accept_sepa = True
+config.save()
+
+# ✅ Bypasse le save() custom
+Configuration.objects.filter(pk=config.pk).update(stripe_accept_sepa=True)
+```
+
+**10.5 — Les signaux Django `activate(lang)` sans `deactivate()` fuient le locale.**
+`Reservation/Membership.save()` lance `activate(config.language)` (FR par defaut)
+dans un signal. Si un test pytest attend un message `match="Invalid"` (EN), le
+message est traduit en FR et le match echoue. Workaround : fixture autouse :
+
+```python
+@pytest.fixture(autouse=True)
+def _reset_translation_after_test():
+    from django.utils import translation
+    yield
+    translation.deactivate()
+```
+
+**10.6 — `RouterDefault` DRF avec `@action(detail=True, url_path='X')` genere `/<pk>/<X>/`, pas `/<X>/<pk>/`.**
+Le plan papier utilisait `/panier/remove/<pk>/` mais l'URL reelle est `/panier/<pk>/remove/`.
+Toujours verifier avec `manage.py show_urls | grep <basename>` avant d'ecrire les tests.
+
+**10.7 — `Reservation.uuid_8()` n'existe pas (seuls `Commande`, `Paiement_stripe`, `LigneArticle` l'ont).**
+Fallback : `str(reservation.uuid)[:8]` dans les logs.
+
+**10.8 — Templates `htmx/views/event.html` et `htmx/components/cardTickets.html` sont morts (legacy).**
+La vraie page event utilise `reunion/views/event/retrieve.html` qui inclut
+`reunion/views/event/partial/booking_form.html`. Le skin `faire_festival` fait
+pareil via `{% include 'reunion/views/event/partial/booking_form.html' %}`. Pour
+toute modif visible en prod, viser `booking_form.html`.
+
+**10.9 — DRF router `url_path='promo_code'` genere `/panier/promo_code/`, pas `/panier/promo-code/`.**
+Le trailing slash et les underscores vs hyphens dependent de la chaine exacte
+passee a `url_path`. Utiliser `show_urls` pour verifier.
+
+**10.10 — Playwright Chromium n'est pas installe dans le container `lespass_django`.**
+Les tests `tests/e2e/*.py` doivent etre lances depuis l'hote ou dans un container
+dedie avec `playwright install chromium`. Tester la syntaxe via `--collect-only`
+est possible dans le container.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

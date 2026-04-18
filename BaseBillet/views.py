@@ -28,7 +28,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
@@ -3804,3 +3804,349 @@ class Tenant(viewsets.ViewSet):
 
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")
+
+
+class PanierMVT(viewsets.ViewSet):
+    """
+    ViewSet du panier d'achat. Toutes les actions manipulent PanierSession
+    ou delegue a CommandeService pour le checkout. Toute validation metier
+    est dans les services — cette vue est un thin wrapper.
+
+    / Cart ViewSet. All actions manipulate PanierSession or delegate to
+    CommandeService for checkout. All business validation is in the services
+    — this view is a thin wrapper.
+    """
+    authentication_classes = [SessionAuthentication, ]
+
+    def get_permissions(self):
+        # Panier accessible aux anonymes (matérialisation demande un user)
+        # / Cart is accessible to anonymous users (materialization requires a user)
+        return [permissions.AllowAny()]
+
+    # --- Helpers internes ---
+    # --- Internal helpers ---
+
+    def _render_badge_and_toast(self, request, message=None, level='success'):
+        """
+        Rend les partials HTMX pour refresh du badge + toast de feedback.
+        hx-swap-oob sur le badge → auto-update dans le header sans refresh.
+        / Render HTMX partials for badge refresh + feedback toast.
+        hx-swap-oob on the badge → auto-update in header without refresh.
+        """
+        context = {
+            'toast_message': message,
+            'toast_level': level,
+        }
+        return render(request, 'htmx/components/panier_toast.html', context=context)
+
+    # --- GET /panier/ ---
+    def list(self, request):
+        """Page panier : récap complet, modif, total, bouton checkout."""
+        template_context = get_context(request)
+        return render(request, 'htmx/views/panier.html', context=template_context)
+
+    # --- POST /panier/add/ticket/ ---
+    @action(detail=False, methods=['POST'], url_path='add/ticket')
+    def add_ticket(self, request):
+        """
+        Ajoute N billets au panier. Params POST attendus :
+          event_uuid, price_uuid, qty, custom_amount (opt), options (opt, liste),
+          form__<field> (opt, ProductFormField).
+        """
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        event_uuid = request.POST.get('event_uuid')
+        price_uuid = request.POST.get('price_uuid')
+        qty = request.POST.get('qty', 1)
+        custom_amount = request.POST.get('custom_amount') or None
+        options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        # Extraire le custom_form (fields prefixes par form__)
+        # / Extract custom_form (fields prefixed by form__)
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        panier = PanierSession(request)
+        try:
+            panier.add_ticket(
+                event_uuid=event_uuid,
+                price_uuid=price_uuid,
+                qty=int(qty),
+                custom_amount=custom_amount,
+                options=options,
+                custom_form=custom_form,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"add_ticket unexpected error: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Unable to add ticket."), level='error'
+            )
+        return self._render_badge_and_toast(request, message=_("Ticket added to cart."))
+
+    # --- POST /panier/add/membership/ ---
+    @action(detail=False, methods=['POST'], url_path='add/membership')
+    def add_membership(self, request):
+        """Ajoute une adhesion au panier."""
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        price_uuid = request.POST.get('price_uuid')
+        custom_amount = request.POST.get('custom_amount') or None
+        options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        panier = PanierSession(request)
+        try:
+            panier.add_membership(
+                price_uuid=price_uuid,
+                custom_amount=custom_amount,
+                options=options,
+                custom_form=custom_form,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"add_membership unexpected error: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Unable to add membership."), level='error'
+            )
+        return self._render_badge_and_toast(request, message=_("Membership added to cart."))
+
+    # --- POST /panier/remove/<int:pk>/ ---
+    @action(detail=True, methods=['POST'], url_path='remove')
+    def remove(self, request, pk=None):
+        """Retire un item a l'index donne (pk = index en string)."""
+        from BaseBillet.services_panier import PanierSession
+
+        try:
+            index = int(pk)
+        except (TypeError, ValueError):
+            return self._render_badge_and_toast(
+                request, message=_("Invalid index."), level='error'
+            )
+        panier = PanierSession(request)
+        panier.remove_item(index)
+        return self._render_badge_and_toast(request, message=_("Item removed."))
+
+    # --- POST /panier/update_quantity/<int:pk>/ ---
+    @action(detail=True, methods=['POST'], url_path='update_quantity')
+    def update_quantity(self, request, pk=None):
+        """Change la qty d'un item billet. Si qty<=0, retire l'item."""
+        from BaseBillet.services_panier import PanierSession
+
+        try:
+            index = int(pk)
+            qty = int(request.POST.get('qty', 0))
+        except (TypeError, ValueError):
+            return self._render_badge_and_toast(
+                request, message=_("Invalid parameters."), level='error'
+            )
+        panier = PanierSession(request)
+        panier.update_quantity(index, qty)
+        return self._render_badge_and_toast(request, message=_("Cart updated."))
+
+    # --- POST /panier/promo_code/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code')
+    def set_promo_code(self, request):
+        """Applique un code promo au panier."""
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        code_name = request.POST.get('code_name', '').strip()
+        if not code_name:
+            return self._render_badge_and_toast(
+                request, message=_("Missing code."), level='error'
+            )
+        panier = PanierSession(request)
+        try:
+            panier.set_promo_code(code_name)
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        return self._render_badge_and_toast(request, message=_("Promo code applied."))
+
+    # --- POST /panier/promo_code/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code/clear')
+    def clear_promo_code(self, request):
+        """Retire le code promo du panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear_promo_code()
+        return self._render_badge_and_toast(request, message=_("Promo code removed."))
+
+    # --- POST /panier/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='clear')
+    def clear(self, request):
+        """Vide completement le panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear()
+        return self._render_badge_and_toast(request, message=_("Cart cleared."))
+
+    # --- POST /panier/checkout/ ---
+    @action(detail=False, methods=['POST'], url_path='checkout')
+    def checkout(self, request):
+        """
+        Materialise le panier en Commande + redirect Stripe ou page confirmation.
+        Pour un panier gratuit : redirect vers /my_account/my_reservations/.
+        Pour un panier payant : redirect vers l'URL de checkout Stripe.
+        """
+        from AuthBillet.utils import get_or_create_user
+        from BaseBillet.services_commande import CommandeService, CommandeServiceError
+        from BaseBillet.services_panier import PanierSession
+
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip().lower()
+
+        if not (first_name and last_name and email):
+            return self._render_badge_and_toast(
+                request, message=_("First name, last name and email are required."),
+                level='error',
+            )
+
+        # Resolution user (cree si besoin, identique au flow direct).
+        # / User resolution (create if needed, same as direct flow).
+        user = get_or_create_user(email)
+
+        panier = PanierSession(request)
+        try:
+            commande = CommandeService.materialiser(
+                panier, user, first_name, last_name, email,
+            )
+        except CommandeServiceError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"CommandeService.materialiser failed: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Checkout failed. Please try again."), level='error'
+            )
+
+        # Le panier est vide apres materialisation reussie.
+        # / Cart is empty after successful materialization.
+        panier.clear()
+
+        # Redirection selon le cas (payant/gratuit).
+        # / Redirect based on case (paid/free).
+        if commande.paiement_stripe:
+            checkout_session_url = commande.paiement_stripe.checkout_session_id_stripe
+            # L'URL complete est dans le stripe.Session retourne par CreationPaiementStripe,
+            # on la reconstruit depuis Paiement_stripe.get_checkout_session(). Simplifie :
+            # redirect vers /my_account/ (le flow Stripe s'est deja fait en Phase 3).
+            # En v1 : confiance aux redirects internes, Stripe est initie en amont.
+            # / v1: trust internal redirects, Stripe was initiated upstream.
+            from BaseBillet.models import Paiement_stripe
+            # Recupere l'URL du checkout Stripe via Stripe API
+            try:
+                checkout_session = commande.paiement_stripe.get_checkout_session()
+                return HttpResponseClientRedirect(checkout_session.url)
+            except Exception as exc:
+                logger.error(f"Unable to retrieve Stripe checkout URL: {exc}")
+                return HttpResponseClientRedirect('/my_account/my_reservations/')
+        else:
+            # Commande gratuite : messages success + redirect vers my_account
+            messages.success(
+                request,
+                _("Order confirmed. You will receive an email shortly."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+
+    # --- GET /panier/badge/ ---
+    @action(detail=False, methods=['GET'], url_path='badge')
+    def badge(self, request):
+        """Partial HTMX : le badge compteur seul."""
+        return render(request, 'htmx/components/panier_badge.html')
+
+    # --- POST /panier/add/tickets_batch/ ---
+    @action(detail=False, methods=['POST'], url_path='add/tickets_batch')
+    def add_tickets_batch(self, request):
+        """
+        Ajoute plusieurs billets au panier à partir du formulaire page event
+        (format legacy : price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback si erreur (on retire tous les items ajoutés dans cette requête).
+
+        / Add multiple tickets to the cart from the event page form (legacy
+        format: price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback on error (remove all items added in this request).
+        """
+        from BaseBillet.models import Event
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+        from decimal import Decimal
+
+        # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
+        # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
+        slug = request.POST.get('slug')
+        event_uuid_param = request.POST.get('event')
+        event = None
+        if event_uuid_param:
+            try:
+                event = Event.objects.get(uuid=event_uuid_param)
+            except (Event.DoesNotExist, ValueError):
+                event = None
+        if event is None and slug:
+            try:
+                event = Event.objects.get(slug=slug)
+            except Event.DoesNotExist:
+                event = None
+        if event is None:
+            return self._render_badge_and_toast(
+                request, message=_("Event not found."), level='error',
+            )
+
+        panier = PanierSession(request)
+        added_count_before = len(panier.items())
+
+        # Extraire options de l'event / Extract event options
+        options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        # Custom form fields (prefix form__) / Custom form fields
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        items_added = 0
+        try:
+            for product in event.products.all():
+                for price in product.prices.all():
+                    price_key = str(price.uuid)
+                    raw_qty = request.POST.get(price_key)
+                    if not raw_qty:
+                        continue
+                    try:
+                        qty = int(Decimal(str(raw_qty).replace(',', '.')))
+                    except (TypeError, ValueError):
+                        continue
+                    if qty <= 0:
+                        continue
+
+                    # Custom amount si free_price / Custom amount if free_price
+                    custom_amount = None
+                    if price.free_price:
+                        custom_amount_raw = request.POST.get(f"custom_amount_{price.uuid}")
+                        if custom_amount_raw not in [None, '', 'null']:
+                            custom_amount = custom_amount_raw
+
+                    panier.add_ticket(
+                        event_uuid=event.uuid,
+                        price_uuid=price.uuid,
+                        qty=qty,
+                        custom_amount=custom_amount,
+                        options=options_ids,
+                        custom_form=custom_form,
+                    )
+                    items_added += 1
+        except InvalidItemError as exc:
+            # Rollback : retirer les items ajoutés pendant cette requête
+            # / Rollback: remove items added during this request
+            added_after = len(panier.items())
+            for _idx in range(added_after - added_count_before):
+                panier.remove_item(added_count_before)
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error',
+            )
+
+        if items_added == 0:
+            return self._render_badge_and_toast(
+                request, message=_("No tickets selected."), level='error',
+            )
+
+        message = ngettext(
+            "%(count)d ticket added to cart.",
+            "%(count)d tickets added to cart.",
+            items_added,
+        ) % {'count': items_added}
+        return self._render_badge_and_toast(request, message=message)

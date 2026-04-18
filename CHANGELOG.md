@@ -1,5 +1,69 @@
 # Changelog / Journal des modifications
 
+## Panier d'achat multi-events / Multi-event shopping cart
+
+**Date :** 2026-04-17
+**Migration :** Oui (`BaseBillet.0213_commande_and_fks`)
+
+**Quoi / What :** Nouveau panier d'achat permettant de cumuler en une seule
+commande des billets de plusieurs events + des adhesions. Nouveau modele pivot
+`Commande` avec FK nullable sur `Reservation`/`Membership`. Matérialisation
+atomique. Cart-aware : une adhesion dans le panier débloque les tarifs gates.
+Modal "Ajouter au panier / Payer maintenant" sur la page event.
+
+**Pourquoi / Why :** Avant, chaque achat était scoped à un seul event. Pour
+acheter 2 events + 1 adhésion, il fallait 3 parcours distincts et 3 paiements.
+Le panier unifie l'expérience, apporte un seul checkout Stripe, et débloque
+le cas métier "achat adhésion + billet adhérent en même temps".
+
+### Fichiers créés / Created files
+| Fichier / File | Changement / Change |
+|---|---|
+| BaseBillet/services_panier.py | Gestionnaire session Django, validations, overlap, cart-aware adhesions, code promo |
+| BaseBillet/services_commande.py | Orchestrateur atomique (Commande + Reservations + Memberships + Paiement_stripe) |
+| BaseBillet/context_processors.py | Expose `{{ panier }}` a tous les templates |
+| BaseBillet/migrations/0213_commande_and_fks.py | Modele Commande + FK sur Reservation/Membership |
+| BaseBillet/templates/htmx/components/panier_item.html | Partial item panier (ticket/membership) |
+| BaseBillet/templates/htmx/components/panier_badge.html | Badge compteur (page + navbar, via hx-swap-oob) |
+| BaseBillet/templates/htmx/components/panier_toast.html | Toast feedback post-action |
+| BaseBillet/templates/htmx/views/panier.html | Page panier Bootstrap 5 |
+| tests/pytest/test_commande_model.py | 13 tests modele |
+| tests/pytest/test_panier_session.py | 28 tests PanierSession |
+| tests/pytest/test_commande_service.py | 4 tests orchestrateur |
+| tests/pytest/test_ticket_creator_no_checkout.py | 2 tests flag create_checkout |
+| tests/pytest/test_signals_cascade_multi_reservations.py | 3 tests cascade signals |
+| tests/pytest/test_commande_post_save_paid.py | 4 tests post_save Commande.PAID |
+| tests/pytest/test_accept_sepa_flag.py | 5 tests accept_sepa flag |
+| tests/pytest/test_reservation_validator_cart_aware.py | 6 tests cart-aware + fix overlap |
+| tests/pytest/test_panier_context_processor.py | 4 tests context processor |
+| tests/pytest/test_panier_mvt.py | 13 tests PanierMVT |
+| tests/pytest/test_panier_batch.py | 5 tests batch endpoint |
+| tests/e2e/test_panier_flow.py | 2 tests E2E Playwright |
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| BaseBillet/models.py | +modele Commande, +FK `commande` sur Reservation/Membership |
+| BaseBillet/signals.py | Patch `set_ligne_article_paid()` iteration sur lignes + post_save Commande.PAID |
+| BaseBillet/validators.py | +param `create_checkout` sur TicketCreator, cart-aware `ReservationValidator`, fix bug overlap (BLOCKING_STATUSES) |
+| BaseBillet/views.py | +classe `PanierMVT` (11 actions dont batch) |
+| BaseBillet/urls.py | +router.register panier |
+| BaseBillet/templatetags/tibitags.py | +filter `in_cart` |
+| PaiementStripe/views.py | +param `accept_sepa` sur CreationPaiementStripe |
+| TiBillet/settings.py | +context_processor panier |
+| BaseBillet/templates/reunion/partials/navbar.html | +icone panier + badge + a11y |
+| BaseBillet/templates/faire_festival/partials/navbar.html | +icone panier + badge + a11y |
+| BaseBillet/templates/reunion/views/event/partial/booking_form.html | +bouton Add to cart + cart-aware tarifs gates + a11y |
+| TECH DOC/SESSIONS/LESPASS/PLAN_LESPASS.md | +section 8 Panier TERMINE |
+
+### Bilan
+- 87 tests pytest + 2 tests E2E Playwright
+- Zéro régression sur les 700+ tests existants
+- Flow direct existant préservé (pas de breaking change UX)
+- Correction incidente du bug `ReservationValidator` overlap (filtre statut manquant)
+
+---
+
 ## Authentification hardware via TermUser / Hardware auth via TermUser
 
 **Quoi / What:** Refactor de l'auth des terminaux LaBoutik (POS + Android) via

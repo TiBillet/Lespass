@@ -1,0 +1,146 @@
+{# Page panier — refonte Session 05 (Bootstrap 5). #}
+{# Cart page — Session 05 rework (Bootstrap 5). #}
+{% extends base_template %}
+{% load i18n %}
+
+{% block main %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12 col-lg-8 mx-auto">
+
+            {# --- Entete : icone + titre + compteur --- #}
+            {# --- Header: icon + title + counter --- #}
+            <div class="d-flex align-items-center mb-4" role="banner">
+                <i class="bi bi-bag fs-1 me-3 text-primary" aria-hidden="true"></i>
+                <h1 class="mb-0">{% trans "Your cart" %}</h1>
+                {% if not panier.is_empty %}
+                    <span class="badge bg-primary ms-3 fs-6">{{ panier.count }}</span>
+                {% endif %}
+            </div>
+
+            {% if panier.is_empty %}
+                {# --- Etat vide : message + CTA browse events --- #}
+                {# --- Empty state: message + browse events CTA --- #}
+                <div class="card shadow-sm">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-bag-x fs-1 text-muted"></i>
+                        <p class="mt-3 mb-4 text-muted">{% trans "Your cart is empty." %}</p>
+                        <a href="/" class="btn btn-primary">
+                            <i class="bi bi-calendar-event me-2"></i>
+                            {% trans "Browse events" %}
+                        </a>
+                    </div>
+                </div>
+            {% else %}
+                {# --- Liste des items --- #}
+                {# --- Items list --- #}
+                <div class="card shadow-sm mb-4" role="region" aria-label="{% trans 'Cart items' %}">
+                    <ul class="list-group list-group-flush" aria-live="polite">
+                        {% for detail in panier.items_with_details %}
+                            {% include "htmx/components/panier_item.html" with detail=detail forloop=forloop %}
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                {# --- Code promo --- #}
+                {# --- Promotional code --- #}
+                <div class="card shadow-sm mb-4" role="region" aria-label="{% trans 'Promotional code' %}">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="bi bi-tag me-2" aria-hidden="true"></i>
+                            {% trans "Promotional code" %}
+                        </h5>
+                        {% if panier.promo_code_name %}
+                            <div class="d-flex align-items-center justify-content-between">
+                                <span class="badge bg-success fs-6">
+                                    <i class="bi bi-check2-circle me-1"></i>
+                                    {{ panier.promo_code_name }}
+                                </span>
+                                <form method="post" action="{% url 'panier-clear-promo-code' %}"
+                                      hx-post="{% url 'panier-clear-promo-code' %}"
+                                      hx-swap="none">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-link text-danger">
+                                        {% trans "Remove" %}
+                                    </button>
+                                </form>
+                            </div>
+                        {% else %}
+                            <form method="post" action="{% url 'panier-set-promo-code' %}"
+                                  hx-post="{% url 'panier-set-promo-code' %}"
+                                  hx-swap="none"
+                                  class="d-flex gap-2">
+                                {% csrf_token %}
+                                <input type="text" name="code_name" class="form-control"
+                                       placeholder="{% trans 'Enter code' %}" required>
+                                <button type="submit" class="btn btn-outline-primary">
+                                    {% trans "Apply" %}
+                                </button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# --- Total + checkout --- #}
+                {# --- Total + checkout --- #}
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <span class="h5 mb-0">{% trans "Total" %}</span>
+                            <span class="h4 mb-0 text-primary fw-bold">{{ panier.total_ttc|floatformat:2 }} €</span>
+                        </div>
+
+                        <form method="post" action="{% url 'panier-checkout' %}"
+                              hx-post="{% url 'panier-checkout' %}"
+                              class="vstack gap-3">
+                            {% csrf_token %}
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">{% trans "First name" %}</label>
+                                    <input type="text" name="first_name" class="form-control"
+                                           required autocomplete="given-name">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">{% trans "Last name" %}</label>
+                                    <input type="text" name="last_name" class="form-control"
+                                           required autocomplete="family-name">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="form-label">{% trans "Email" %}</label>
+                                <input type="email" name="email" class="form-control"
+                                       {% if user.is_authenticated %}value="{{ user.email }}"{% endif %}
+                                       required autocomplete="email">
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-credit-card me-2"></i>
+                                {% trans "Proceed to payment" %}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                {# --- Bouton vider le panier --- #}
+                {# --- Empty cart button --- #}
+                <div class="text-center mt-3">
+                    <form method="post" action="{% url 'panier-clear' %}"
+                          hx-post="{% url 'panier-clear' %}"
+                          hx-confirm="{% trans 'Empty the cart?' %}"
+                          hx-swap="none"
+                          class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-link text-muted">
+                            <i class="bi bi-x-circle me-1"></i>
+                            {% trans "Empty cart" %}
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{# Container pour toasts HTMX (mis a jour via OOB) #}
+{# HTMX toast container (updated via OOB) #}
+<div id="panier-toasts" hx-swap-oob="true"></div>
+{% endblock main %}

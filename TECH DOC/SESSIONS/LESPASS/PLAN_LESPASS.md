@@ -52,6 +52,7 @@ Un système de rapports pour la billetterie, décomposé en 3 sous-projets indé
 | 1 | **Bilan billetterie interne** | — | ⏳ Design validé |
 | 2 | **Export SIBIL** | Sous-projet 1 (réutilise le service) | 📋 Exploré (spec SIBIL reconstituée) |
 | 3 | **Calculs fiscaux** (CNM/ASTP/TVA) | Sous-projet 1 (réutilise les montants) | 📋 À concevoir |
+| 4 | **Panier d'achat multi-events** | — (feature indépendante) | ✅ **TERMINÉ (6 sessions, 87 tests pytest + 2 E2E, zéro régression)** |
 
 Chaque sous-projet suit le cycle : spec → plan → sessions → tests.
 
@@ -157,3 +158,34 @@ Mêmes règles que le chantier laboutik (cf. `PLAN_LABOUTIK.md` section 14) :
 - **S'arrêter et demander** : avant de toucher `settings.py`, `urls.py`, `PaiementStripe`, `AuthBillet`, JS, ou ajouter une dépendance.
 - **FALC** : code verbeux, commentaires bilingues FR/EN, noms explicites.
 - **Tests** : lancer pytest après chaque session.
+
+---
+
+## 8. Panier multi-events — livré (2026-04-17)
+
+**Design spec :** `TECH DOC/SESSIONS/LESPASS/specs/2026-04-17-panier-multi-events-design.md`
+
+**Plans d'implémentation (6 sessions) :**
+- Session 01 — Modèle `Commande` + FK : `plans/2026-04-17-panier-session-01-modele-commande.md`
+- Session 02 — `PanierSession` + `CommandeService` : `plans/2026-04-17-panier-session-02-services.md`
+- Session 03 — Signaux + `accept_sepa` + cart-aware validator : `plans/2026-04-17-panier-session-03-signals-validators.md`
+- Session 04 — Vues HTMX + context processor : `plans/2026-04-17-panier-session-04-views-htmx.md`
+- Session 05 — Polish UX (modal, page, navbar, cart-aware) : `plans/2026-04-17-panier-session-05-polish-ux.md`
+- Session 06 — E2E Playwright + A11y : `plans/2026-04-17-panier-session-06-e2e-polish.md`
+
+**Bilan :**
+- 87 tests pytest + 2 tests E2E Playwright
+- Zéro régression sur les ~700 tests existants
+- Backend + frontend (skins `reunion` + `faire_festival`) entièrement câblés
+- Flow direct existant préservé (zéro régression UX)
+- 1 migration DB appliquée sur tous les tenants
+
+**Fonctionnalités livrées :**
+- Panier session Django (ajout/retrait billets + adhésions, code promo, validations cart-aware)
+- Matérialisation atomique `Commande` → N `Reservation` + M `Membership` + 1 `Paiement_stripe`
+- Stripe checkout consolidé, SEPA intelligemment activé/refusé selon contenu panier
+- Modal "Ajouter au panier / Payer maintenant" (inline button adapté à la structure réelle)
+- Tarifs gatés débloqués si l'adhésion requise est dans le panier
+- Correction incidente du bug `ReservationValidator` overlap (filtre `BLOCKING_STATUSES` + fenêtre 15 min)
+- Icône panier + badge compteur dans les navbars reunion et faire-festival
+- Accessibilité WCAG AA minimal (ARIA labels, roles, aria-hidden)

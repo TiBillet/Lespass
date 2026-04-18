@@ -1,0 +1,20 @@
+{% load i18n %}
+{# Badges compteur du panier — rendus partout (page panier + navbar). #}
+{# Cart counter badges — rendered everywhere (cart page + navbar). #}
+
+{# Badge pour la page panier / Cart page badge #}
+<span id="panier-badge" hx-swap-oob="true">
+    {% if panier.count > 0 %}
+        <span class="badge bg-primary">{{ panier.count }}</span>
+    {% endif %}
+</span>
+
+{# Badge pour la navbar / Navbar badge #}
+<span id="panier-badge-nav" hx-swap-oob="true">
+    {% if panier.count > 0 %}
+        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+            {{ panier.count }}
+            <span class="visually-hidden">{% trans "items" %}</span>
+        </span>
+    {% endif %}
+</span>

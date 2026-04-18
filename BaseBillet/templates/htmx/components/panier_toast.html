@@ -1,0 +1,12 @@
+{# Toast de feedback post-action panier. Le badge est aussi rendu pour refresh. #}
+{# Feedback toast after cart action. Badge is also rendered for refresh. #}
+{% if toast_message %}
+    <div class="toast-container position-fixed top-0 end-0 p-3">
+        <div class="toast show" role="alert">
+            <div class="toast-body text-{{ toast_level|default:'success' }}">
+                {{ toast_message }}
+            </div>
+        </div>
+    </div>
+{% endif %}
+{% include 'htmx/components/panier_badge.html' %}

@@ -41,10 +41,20 @@ class CreationPaiementStripe():
                  success_url: (str, None) = None,
                  cancel_url: (str, None) = None,
                  invoice=None,
+                 accept_sepa: (bool, None) = None,
                  ) -> None:
+        """
+        accept_sepa : None = comportement legacy (SEPA si reservation=None + config ON)
+                      True = forcer SEPA autorisé (cas adhésion-only)
+                      False = forcer SEPA refusé (cas panier avec billets)
+        / accept_sepa: None = legacy (SEPA if reservation=None + config ON)
+                       True = force allow SEPA (standalone membership case)
+                       False = force deny SEPA (cart-with-tickets case)
+        """
 
         # On va chercher les informations de configuration
         # et test si tout est ok pour créer un paiement
+        self.accept_sepa = accept_sepa
         self.user = user
         self.email_paiement = user.email
         self.invoice = invoice
@@ -156,7 +166,17 @@ class CreationPaiementStripe():
         cancel_url = f"{self.absolute_domain}{self.paiement_stripe_db.uuid}/{self.cancel_url}"
 
         payment_method_types = ["card",]
-        if not self.reservation and self.config.stripe_accept_sepa:
+        # SEPA autorisé si :
+        # - Flag explicite True (cas adhésion-only via panier), OU
+        # - Flag None (legacy) + pas de reservation FK (cas adhésion directe).
+        # SEPA refusé si flag explicite False (cas panier avec billets).
+        # / SEPA authorized if explicit True, or legacy (None) with no reservation FK.
+        # SEPA refused if explicit False (cart-with-tickets).
+        if self.accept_sepa is not None:
+            sepa_authorized = self.accept_sepa
+        else:
+            sepa_authorized = not self.reservation
+        if sepa_authorized and self.config.stripe_accept_sepa:
             payment_method_types.append("sepa_debit")
 
         data_checkout = {

@@ -101,33 +101,53 @@
                             {% trans "This price is no longer available." %}
                         </div>
                     {% elif price.adhesions_obligatoires.exists %}
-                        {% if not user.is_authenticated %}
-                            <div class="alert alert-danger" role="alert">
-                                {% trans "Log in to access this rate." %}
-                            </div>
-                        {% elif not user|is_membership:price.adhesions_obligatoires %}
-                            <!-- Adhésion obligatoire pour selectionner ce produit ! -->
-                            <div class="alert alert-info" role="alert">
-                                {% trans "You must have" %}
-                                {% for adhesion in price.adhesions_obligatoires.all %}
-                                    <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
-                                    {% trans "or" %}{% endif %}
-                                {% endfor %}
-                                {% trans "to book this rate." %}
-                            </div>
-                        {% else %}
-                            <span class="d-flex align-items-baseline gap-3">
-                                <bs-counter
-                                        id="amount-{{ price.uuid }}"
-                                        name="{{ price.uuid }}"
-                                        step="1" min="0"
-                                        max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
-                                        class="flex-grow-1 js-order-amount"
-                                        data-testid="booking-amount-{{ price.uuid }}">
-                                </bs-counter>
-                                {% trans 'ticket(s)' %}
-                            </span>
-                        {% endif %}
+                        {% with is_in_cart=price.adhesions_obligatoires.all|in_cart:panier.adhesions_product_ids %}
+                            {% if is_in_cart %}
+                                {# --- Adhesion requise est dans le panier → tarif selectionnable --- #}
+                                {# --- Required membership in cart → rate selectable --- #}
+                                <div class="alert alert-info small py-2 mb-2" role="alert">
+                                    <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
+                                    {% trans "Accessible via the membership in your cart." %}
+                                </div>
+                                <span class="d-flex align-items-baseline gap-3">
+                                    <bs-counter
+                                            id="amount-{{ price.uuid }}"
+                                            name="{{ price.uuid }}"
+                                            step="1" min="0"
+                                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                            class="flex-grow-1 js-order-amount"
+                                            data-testid="booking-amount-{{ price.uuid }}">
+                                    </bs-counter>
+                                    {% trans 'ticket(s)' %}
+                                </span>
+                            {% elif not user.is_authenticated %}
+                                <div class="alert alert-danger" role="alert">
+                                    {% trans "Log in to access this rate." %}
+                                </div>
+                            {% elif not user|is_membership:price.adhesions_obligatoires %}
+                                <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                                <div class="alert alert-info" role="alert">
+                                    {% trans "You must have" %}
+                                    {% for adhesion in price.adhesions_obligatoires.all %}
+                                        <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
+                                        {% trans "or" %}{% endif %}
+                                    {% endfor %}
+                                    {% trans "to book this rate." %}
+                                </div>
+                            {% else %}
+                                <span class="d-flex align-items-baseline gap-3">
+                                    <bs-counter
+                                            id="amount-{{ price.uuid }}"
+                                            name="{{ price.uuid }}"
+                                            step="1" min="0"
+                                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                            class="flex-grow-1 js-order-amount"
+                                            data-testid="booking-amount-{{ price.uuid }}">
+                                    </bs-counter>
+                                    {% trans 'ticket(s)' %}
+                                </span>
+                            {% endif %}
+                        {% endwith %}
                     {% else %}
                         <span class="d-flex align-items-baseline gap-3">
                             <bs-counter
@@ -447,6 +467,16 @@
 
 
         <button type="submit" class="btn btn-primary w-100 mb-3" data-testid="booking-submit">{% trans 'Send booking request' %}</button>
+        <button type="button"
+                class="btn btn-outline-primary w-100 mb-3"
+                hx-post="/panier/add/tickets_batch/"
+                hx-include="closest form"
+                hx-swap="none"
+                data-testid="booking-add-to-cart"
+                aria-label="{% trans 'Add these tickets to your cart' %}">
+            <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+            {% trans "Add to cart" %}
+        </button>
         <a href="." class="btn btn-danger d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
     </div>
 </form>

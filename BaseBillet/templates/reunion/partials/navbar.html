@@ -56,6 +56,23 @@
             </button>
           </div>
           <div class="nav-item">
+            <a class="nav-link position-relative" href="/panier/"
+               hx-get="/panier/" hx-target="body" hx-push-url="true"
+               title="{% trans 'Your cart' %}"
+               aria-label="{% blocktrans count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktrans %}">
+              <i class="bi bi-bag" aria-hidden="true"></i>
+              <span class="d-xl-none">{% trans "Cart" %}</span>
+              <span id="panier-badge-nav" hx-swap-oob="true">
+                {% if panier.count > 0 %}
+                  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                    {{ panier.count }}
+                    <span class="visually-hidden">{% trans "items" %}</span>
+                  </span>
+                {% endif %}
+              </span>
+            </a>
+          </div>
+          <div class="nav-item">
             {% if user.is_authenticated == False %}
             <button
                 class="nav-link"

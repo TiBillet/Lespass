@@ -185,7 +185,8 @@ class LoginEmailValidator(serializers.Serializer):
 class TicketCreator():
 
     def __init__(self, reservation: Reservation, products_dict: dict, promo_code: PromotionalCode = None, custom_amounts: dict = None,
-                 sale_origin: str = SaleOrigin.LESPASS):
+                 sale_origin: str = SaleOrigin.LESPASS,
+                 create_checkout: bool = True):
         self.products_dict = products_dict
         self.reservation = reservation
         self.user = reservation.user_commande
@@ -193,6 +194,13 @@ class TicketCreator():
         self.custom_amounts = custom_amounts or {}
         # Source de vente (ex: LESPASS, API) / Sale source (e.g., LESPASS, API)
         self.sale_origin = sale_origin
+        # Si False, on ne déclenche pas get_checkout_stripe() à la fin de method_B.
+        # Utilisé par CommandeService.materialiser() qui consolide toutes les
+        # LigneArticle puis crée UN SEUL checkout Stripe pour la commande entière.
+        # / If False, skip get_checkout_stripe() at the end of method_B.
+        # Used by CommandeService.materialiser() which consolidates all
+        # LigneArticle then creates ONE Stripe checkout for the entire order.
+        self.create_checkout = create_checkout
         # La liste des objets a vendre pour la création du paiement stripe
         self.list_line_article_sold = []
 
@@ -310,7 +318,12 @@ class TicketCreator():
                 )
                 tickets.append(ticket)
 
-        self.checkout_link = self.get_checkout_stripe()
+        if self.create_checkout:
+            self.checkout_link = self.get_checkout_stripe()
+        # Si create_checkout=False : le caller (CommandeService) appellera
+        # lui-même CreationPaiementStripe avec toutes les lignes consolidées.
+        # / If create_checkout=False: caller (CommandeService) will call
+        # CreationPaiementStripe itself with all consolidated lines.
         return tickets
 
     def get_checkout_stripe(self):
@@ -576,12 +589,27 @@ class ReservationValidator(serializers.Serializer):
                             _(f'Bookings exceed capacity for this rate.'))
                 total_ticket_qty += qty
 
-                # Check adhésion
+                # Check adhésion — cart-aware
+                # L'adhésion requise peut être déjà active en DB, OU présente dans
+                # la commande en cours (flow panier via current_commande injecté).
+                # / Cart-aware check: required membership can be already active in DB,
+                # OR in the current order (cart flow via injected current_commande).
                 if price.adhesions_obligatoires.exists():
-                    if not user.memberships.filter(
-                        price__product__in=price.adhesions_obligatoires.all(),
+                    required_products = list(price.adhesions_obligatoires.all())
+                    has_active_membership = user.memberships.filter(
+                        price__product__in=required_products,
                         deadline__gte=timezone.now(),
-                    ).exists():
+                    ).exists()
+
+                    # Nouveau : vérifier la commande en cours si injectée
+                    # / New: check current order if injected
+                    has_in_current_order = False
+                    if hasattr(self, 'current_commande') and self.current_commande is not None:
+                        has_in_current_order = self.current_commande.memberships_commande.filter(
+                            price__product__in=required_products,
+                        ).exists()
+
+                    if not (has_active_membership or has_in_current_order):
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
 
@@ -602,22 +630,38 @@ class ReservationValidator(serializers.Serializer):
             remains = event.jauge_max - valid_tickets_count - under_purchase
             raise serializers.ValidationError(_('Number of places available : ') + f"{remains}")
 
-        # Vérification que l'utilisateur peut reserer une place s'il est déja inscrit sur un horaire
+        # Vérification overlap — fix bug : ne compte que les reservations réellement bloquantes.
+        # Ancien comportement : TOUTES les reservations du user (même CANCELED, UNPAID
+        # abandonnées) bloquaient. Nouveau : BLOCKING_STATUSES (toujours) +
+        # UNPAID/CREATED récents (< 15 min) uniquement.
+        # / Overlap check — bug fix: only count truly blocking reservations.
+        # Old behavior: ALL user's reservations (even CANCELED, abandoned UNPAID)
+        # blocked. New: BLOCKING_STATUSES (always) + UNPAID/CREATED recent (< 15 min) only.
         if not Configuration.get_solo().allow_concurrent_bookings:
+            from BaseBillet.services_panier import (
+                _blocking_statuses, reservations_bloquantes_pour_user,
+            )
             start_this_event = event.datetime
             end_this_event = event.end_datetime
             if not end_this_event:
-                end_this_event = start_this_event + timedelta(
-                    hours=1)  # Si ya pas de fin sur l'event, on rajoute juste une heure.
+                end_this_event = start_this_event + timedelta(hours=1)
 
-            if Reservation.objects.filter(
-                    user_commande=user,
-            ).filter(
-                Q(event__datetime__range=(start_this_event, end_this_event)) |
-                Q(event__end_datetime__range=(start_this_event, end_this_event)) |
-                Q(event__datetime__lte=start_this_event, event__end_datetime__gte=end_this_event)
-            ).exists():
-                raise serializers.ValidationError(_(f'You have already booked this slot.'))
+            conflit = reservations_bloquantes_pour_user(
+                user, start_this_event, end_this_event,
+            ).first()
+            if conflit:
+                if conflit.status in _blocking_statuses():
+                    raise serializers.ValidationError(
+                        _("You have already booked this slot: %(name)s")
+                        % {"name": conflit.event.name}
+                    )
+                # Blocage récent (UNPAID/CREATED < 15 min) → message explicite
+                # / Recent block (UNPAID/CREATED < 15 min) → explicit message
+                raise serializers.ValidationError(
+                    _("You have a payment in progress for this slot: %(name)s. "
+                      "Please complete it or wait 15 minutes.")
+                    % {"name": conflit.event.name}
+                )
 
         # Build validated custom_form from dynamic fields (prefixed with 'form__') across selected products
         request = self.context.get('request')

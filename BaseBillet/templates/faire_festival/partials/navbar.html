@@ -96,7 +96,29 @@
                      BOUTON CONNEXION : Section droite de la navbar
                      Affiche soit "Connexion" soit le nom d'utilisateur si connecté
                      ============================================================ -->
-                <div class="navbar-nav ms-0 mt-3 mt-md-0">
+                <div class="navbar-nav ms-0 mt-3 mt-md-0 gap-2 align-items-center">
+
+                    <!-- ============================================================
+                         LIEN PANIER : Icone + badge compteur (mis a jour via hx-swap-oob)
+                         / CART LINK: icon + counter badge (updated via hx-swap-oob)
+                         ============================================================ -->
+                    <a class="btn bouton-pilule bg-white texte-bleu position-relative"
+                       href="/panier/"
+                       hx-get="/panier/"
+                       hx-target="body"
+                       hx-push-url="true"
+                       title="{% translate 'Your cart' %}"
+                       aria-label="{% blocktranslate count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktranslate %}">
+                        <i class="bi bi-bag" aria-hidden="true"></i>
+                        <span id="panier-badge-nav" hx-swap-oob="true">
+                            {% if panier.count > 0 %}
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill fond-bleu text-white">
+                                    {{ panier.count }}
+                                    <span class="visually-hidden">{% translate "items" %}</span>
+                                </span>
+                            {% endif %}
+                        </span>
+                    </a>
 
                     {% if user.is_authenticated %}
                         <!-- Utilisateur connecté : affiche son email avec un menu déroulant -->
