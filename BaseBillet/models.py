@@ -926,6 +926,8 @@ class Product(models.Model):
             return user.memberships.filter(
                 deadline__gte=timezone.now(),
                 price__product__pk=self.pk,
+            ).exclude(
+                status__in=['C', 'AC'] # Membership.CANCELED, Membership.ADMIN_CANCELED
             ).count() >= self.max_per_user
 
         # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
@@ -1115,7 +1117,9 @@ class Price(models.Model):
             # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
             return user.memberships.filter(
                 deadline__gte=timezone.now(),
-                price__product__pk=self.pk,
+                price__pk=self.pk,
+            ).exclude(
+                status__in=['C', 'AC'] # Membership.CANCELED, Membership.ADMIN_CANCELED
             ).count() >= self.max_per_user
 
         # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)

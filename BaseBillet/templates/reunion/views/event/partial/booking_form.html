@@ -7,7 +7,12 @@
 </style>
 
 
-<form id="reservation_form" hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
+<form id="reservation_form"
+      hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}"
+      class="d-flex flex-column justify-content-between h-100"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active"
+      data-testid="booking-form">
     <div>
         <input type="hidden" name="event" value="{{ event.uuid }}">
         {% if user.is_anonymous %}
@@ -446,7 +451,7 @@
         {% endif %}
 
 
-        <button type="submit" class="btn btn-primary w-100 mb-3" data-testid="booking-submit">{% trans 'Send booking request' %}</button>
+        <button type="submit" class="btn btn-primary w-100 mb-3" data-loading-disable data-testid="booking-submit">{% trans 'Send booking request' %}</button>
         <a href="." class="btn btn-danger d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
     </div>
 </form>
@@ -455,9 +460,9 @@
     import * as BookingCalculator from '{% static "reunion/js/booking-calculator.mjs" %}'
     import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
 
-    // show spinner on form submission
+    // Spinner initialisé par loading-states (HTMX)
+    // / Spinner initialized by loading-states (HTMX)
     const form = document.getElementById('reservation_form')
-    Spinner.init(form)
     BookingCalculator.init()
 
     // Prevent HTMX request if no quantity selected (> 0 required)

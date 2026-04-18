@@ -2591,9 +2591,18 @@ class MembershipMVT(viewsets.ViewSet):
             context['published_prices_count'] = published_prices.count()
 
             # On check que l'user n'a pas déja prix un abonnement limité
+            price_max_per_user_reached = []
             if request.user.is_authenticated:
                 if product.max_per_user_reached(user=request.user):
                     return render(request, "reunion/views/membership/already_has_membership.html", context=context)
+
+                # Vérification des limites par tarif (Price)
+                # / Check per-rate (Price) limits
+                for price in published_prices:
+                    if price.max_per_user_reached(user=request.user):
+                        price_max_per_user_reached.append(price)
+
+            context['price_max_per_user_reached'] = price_max_per_user_reached
 
             # Pré-remplissage du formulaire dynamique si l'user a déjà une adhésion avec custom_form
             # Pre-fill dynamic form if user already has a membership with custom_form data
