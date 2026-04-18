@@ -16,7 +16,10 @@ Variables attendues / Expected variables:
 -->
 {% load i18n %}
 
-<div data-testid="booking-basket" class="mt-4">
+<div id="basket-container"
+     data-testid="booking-basket"
+     class="mt-4"
+     {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
 
     <h3 class="h5 mb-3">{% translate "Votre panier" %}</h3>
 

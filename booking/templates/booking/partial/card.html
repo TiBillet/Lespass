@@ -7,13 +7,8 @@ Variables attendues / Expected variables:
   item.a_des_creneaux — bool
 
 Flux HTMX / HTMX flow:
-  1. Clic sur un créneau disponible
-     → hx-get vers /booking/<pk>/booking_form/?...
-     → le formulaire se charge dans #booking-form-<pk>
-
-  2. Soumission du formulaire (hx-post vers add_to_basket)
-     → succès : HX-Redirect recharge la page (panier + dispo mis à jour)
-     → erreur 422 : le formulaire d'erreur remplace le contenu du container
+  Clic sur un créneau → slot_list.html → hx-get booking_form → #booking-form-<pk>
+  Soumission → add_to_basket → succès : HX-Redirect, erreur 422 : form inline
 -->
 {% load i18n %}
 
@@ -62,67 +57,14 @@ Flux HTMX / HTMX flow:
                     </p>
                 {% endif %}
 
-                <ul class="list-unstyled mt-2 mb-0 flex-fill"
-                    aria-label="{% translate 'Créneaux' %}">
-                    {% for creneau in item.creneaux|slice:":5" %}
-
-                        {% if creneau.remaining_capacity == 0 %}
-                            <li class="d-flex align-items-center gap-2 mb-1 text-muted small"
-                                data-testid="booking-slot-unavailable"
-                                aria-label="{% translate 'Créneau complet' %}">
-                                <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
-                                <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                                <span class="badge bg-danger ms-auto">
-                                    {% translate "Complet" %}
-                                </span>
-                            </li>
-
-                        {% else %}
-                            <!--
-                            Créneau disponible — hx-get charge le formulaire inline dans
-                            #booking-form-<pk>. Le href classique reste pour le fallback
-                            sans JS et la redirection 302 vers login si non authentifié.
-                            Si la requête HTMX arrive non authentifiée, la vue renvoie
-                            HX-Redirect vers la page de connexion (navigation complète).
-                            / Available slot — hx-get loads the form inline in
-                            #booking-form-<pk>. The plain href remains for no-JS
-                            fallback and 302 redirect to login if unauthenticated.
-                            If the HTMX request arrives unauthenticated, the view sends
-                            HX-Redirect to the login page (full navigation).
-                            -->
-                            <li class="d-flex align-items-center gap-2 mb-1 small"
-                                data-testid="booking-slot-available">
-                                <a href="/booking/{{ item.ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
-                                   hx-get="/booking/{{ item.ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
-                                   hx-target="#booking-form-{{ item.ressource.pk }}"
-                                   hx-swap="innerHTML"
-                                   class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
-                                    <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
-                                    <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                                    <span class="badge bg-success ms-auto">
-                                        {{ creneau.remaining_capacity }}
-                                        {% translate "place(s)" %}
-                                    </span>
-                                </a>
-                            </li>
-                        {% endif %}
-
-                    {% endfor %}
-                </ul>
-
                 <!--
-                Zone de formulaire inline par carte — vide au chargement initial.
-                Un clic sur un créneau y charge le formulaire via hx-get.
-                La classe .booking-form-container est utilisée par hx-target
-                dans booking_form.html pour cibler le container le plus proche.
-                / Per-card inline form zone — empty on initial load.
-                Clicking a slot loads the form here via hx-get.
-                The .booking-form-container class is used by hx-target in
-                booking_form.html to target the closest container.
+                Liste des créneaux — rendue par slot_list.html.
+                Cliquer sur un créneau le transforme en formulaire inline.
+                / Slot list — rendered by slot_list.html.
+                Clicking a slot transforms it into an inline form.
                 -->
-                <div id="booking-form-{{ item.ressource.pk }}"
-                     class="booking-form-container mt-3"
-                     aria-live="polite">
+                <div class="flex-fill mt-2 mb-0">
+                    {% include "booking/partial/slot_list.html" with ressource=item.ressource creneaux=item.creneaux|slice:":5" %}
                 </div>
 
             </div>

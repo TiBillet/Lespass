@@ -374,8 +374,12 @@ def test_slot_link_present_on_list_page(
 
     LOCALISATION : booking/tests/test_basket.py
 
-    Vérifie que card.html génère des liens de réservation (et non des <li> inertes).
-    / Verifies that card.html generates booking links (not inert <li> items).
+    Les créneaux sont rendus par le partial partagé slot_list.html inclus
+    dans card.html. Ce test vérifie que le partial est bien inclus et que
+    le lien de réservation est présent.
+    / Slots are rendered by the shared slot_list.html partial included in
+    card.html. This test verifies the partial is included and the booking
+    link is present.
     """
     with schema_context(TENANT_SCHEMA):
         pk = ressource_avec_creneaux.pk
@@ -385,6 +389,7 @@ def test_slot_link_present_on_list_page(
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
     assert f'/booking/{pk}/booking_form/' in contenu
+    assert 'data-testid="booking-slot-available"' in contenu
 
 
 def test_slot_link_present_on_detail_page(
@@ -397,8 +402,12 @@ def test_slot_link_present_on_detail_page(
 
     LOCALISATION : booking/tests/test_basket.py
 
-    Vérifie que resource.html génère des liens de réservation (et non des <li> inertes).
-    / Verifies that resource.html generates booking links (not inert <li> items).
+    Les créneaux sont rendus par le partial partagé slot_list.html inclus
+    dans resource.html. Ce test vérifie que le partial est bien inclus et
+    que le lien de réservation est présent.
+    / Slots are rendered by the shared slot_list.html partial included in
+    resource.html. This test verifies the partial is included and the
+    booking link is present.
     """
     with schema_context(TENANT_SCHEMA):
         pk = ressource_avec_creneaux.pk
@@ -408,6 +417,7 @@ def test_slot_link_present_on_detail_page(
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
     assert f'/booking/{pk}/booking_form/' in contenu
+    assert 'data-testid="booking-slot-available"' in contenu
 
 
 # ─── Tests : booking_form GET ───────────────────────────────────────────────
