@@ -19,11 +19,25 @@ the <li> returns to its normal state.
 -->
 {% load i18n %}
 
+<!--
+Séparateur de semaine — affiché uniquement quand on change de semaine ISO.
+Le premier créneau de la liste ne déclenche jamais ce séparateur.
+/ Week separator — shown only when crossing an ISO week boundary.
+The very first slot in the list never triggers this separator.
+-->
+{% if creneau.is_new_week %}
+    <li class="text-muted small fw-semibold mt-3 mb-1 border-top pt-2"
+        aria-hidden="true"
+        data-testid="booking-week-separator">
+        {% translate "Semaine" %} {{ creneau.start|date:"W" }}
+    </li>
+{% endif %}
+
 {% if creneau.remaining_capacity == 0 %}
 
     <li id="slot-{{ ressource.pk }}-{{ creneau.start|date:'Ymd-Hi' }}"
-        class="d-flex align-items-center gap-2 mb-2 text-muted"
-        data-testid="booking-slot-unavailable"
+        class="d-flex align-items-center gap-2 text-muted {% if creneau.is_in_group %}border-start border-2 border-secondary-subtle ps-2{% endif %} {% if creneau.is_in_group and creneau.is_group_end %}mb-2{% elif creneau.is_in_group %}mb-0{% else %}mb-2{% endif %}"
+        data-testid="booking-slot-unavailable{% if creneau.is_in_group %} booking-slot-grouped{% endif %}"
         aria-label="{% translate 'Créneau complet' %}">
         <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
         <span>{{ creneau.start|date:"D d/m H:i" }}</span>
@@ -43,8 +57,8 @@ the <li> returns to its normal state.
     to swap itself back after submission.
     -->
     <li id="slot-{{ ressource.pk }}-{{ creneau.start|date:'Ymd-Hi' }}"
-        class="d-flex align-items-center gap-2 mb-2"
-        data-testid="booking-slot-available">
+        class="d-flex align-items-center gap-2 {% if creneau.is_in_group %}border-start border-2 border-secondary-subtle ps-2{% endif %} {% if creneau.is_in_group and creneau.is_group_end %}mb-2{% elif creneau.is_in_group %}mb-0{% else %}mb-2{% endif %}"
+        data-testid="booking-slot-available{% if creneau.is_in_group %} booking-slot-grouped{% endif %}">
         <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ creneau.duration_minutes }}"
            hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ creneau.duration_minutes }}"
            hx-target="#slot-{{ ressource.pk }}-{{ creneau.start|date:'Ymd-Hi' }}"

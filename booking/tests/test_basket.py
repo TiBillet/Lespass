@@ -389,7 +389,7 @@ def test_slot_link_present_on_list_page(
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
     assert f'/booking/{pk}/booking_form/' in contenu
-    assert 'data-testid="booking-slot-available"' in contenu
+    assert 'data-testid="booking-slot-available' in contenu
 
 
 def test_slot_link_present_on_detail_page(
@@ -417,7 +417,7 @@ def test_slot_link_present_on_detail_page(
     assert reponse.status_code == 200
     contenu = reponse.content.decode('utf-8')
     assert f'/booking/{pk}/booking_form/' in contenu
-    assert 'data-testid="booking-slot-available"' in contenu
+    assert 'data-testid="booking-slot-available' in contenu
 
 
 # ─── Tests : booking_form GET ───────────────────────────────────────────────

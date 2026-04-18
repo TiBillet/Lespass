@@ -62,6 +62,7 @@ class BookableInterval:
     interval:           Interval
     max_capacity:       int
     remaining_capacity: int
+    group_id:           int  = 0      # même id = même OpeningEntry × date / same OpeningEntry × date
 
     @property
     def start(self) -> datetime.datetime:
@@ -193,6 +194,10 @@ def generate_theoretical_slots(opening_entries, open_intervals,
     bookable_intervals = []
     current_date = date_from
 
+    # Compteur incrémenté pour chaque paire (entry, date) — identifie le groupe.
+    # / Counter incremented for each (entry, date) pair — identifies the group.
+    group_counter = 0
+
     while current_date <= date_to:
         for entry in opening_entries:
             if entry.weekday != current_date.weekday():
@@ -201,6 +206,11 @@ def generate_theoretical_slots(opening_entries, open_intervals,
             base_dt = timezone.make_aware(
                 datetime.datetime.combine(current_date, entry.start_time), tz
             )
+
+            # Nouveau groupe : chaque (entry, date) reçoit un group_id unique.
+            # / New group: each (entry, date) pair gets a unique group_id.
+            group_counter += 1
+            current_group_id = group_counter
 
             for i in range(entry.slot_count):
                 start_dt = base_dt + datetime.timedelta(
@@ -219,6 +229,7 @@ def generate_theoretical_slots(opening_entries, open_intervals,
                     interval=slot_interval,
                     max_capacity=0,
                     remaining_capacity=0,
+                    group_id=current_group_id,
                 ))
 
         current_date += datetime.timedelta(days=1)

@@ -288,6 +288,34 @@ W     = theoretical-slots wop O
 assert W == []
 
 
+# test_group_id_same_for_slots_from_same_entry_and_date
+# one OpeningEntry slot_count=3 on Monday → 3 slots, all same group_id
+
+wop = WeeklyOpening "wop" [OpeningEntry MONDAY "10:00" 60 3]
+O   = open-day "2026-06-01" "2026-06-01" "Europe/Paris" (Calendar "cal" [])
+W   = theoretical-slots wop O
+
+assert len W == 3
+assert W[0].group_id == W[1].group_id == W[2].group_id
+
+
+# test_group_id_differs_across_entries_and_across_weeks
+# two entries on Monday, two-week window → 4 distinct group_id values
+# entry A: MONDAY 09:00 60 2; entry B: MONDAY 14:00 60 2
+# (A, Jun 1), (A, Jun 8), (B, Jun 1), (B, Jun 8) → 4 distinct group_id
+
+wop = WeeklyOpening "wop" [
+    OpeningEntry MONDAY "09:00" 60 2,
+    OpeningEntry MONDAY "14:00" 60 2,
+]
+O = open-day "2026-06-01" "2026-06-08" "Europe/Paris" (Calendar "cal" [])
+W = theoretical-slots wop O
+# 2 entries × 2 slots × 2 Mondays = 8 slots total
+
+group_ids = { w.group_id for w in W }
+assert len group_ids == 4
+
+
 # ---------------------------------------------------------------------------
 # Tests — bookable-intervals
 # bookable-intervals :: [Interval] → Int → [Interval] → [BookableInterval]
@@ -523,6 +551,26 @@ E = bookable-intervals W capacity=1 B
 assert len E == 3
 assert all (bi.max == 1)       for bi in E
 assert all (bi.remaining == 1) for bi in E
+
+
+# test_is_in_group_true_for_multi_slot_opening_entry
+# OpeningEntry slot_count=3 on Monday → all 3 resulting slots have is_in_group=True
+
+resource = Resource (Calendar "multi" []) (WeeklyOpening "multi" [OpeningEntry MONDAY "10:00" 60 3]) capacity=2 horizon=28
+E = compute_slots resource "2026-06-01" "2026-06-07"
+
+assert len E == 3
+assert all (bi.is_in_group == True) for bi in E
+
+
+# test_is_in_group_false_for_single_slot_opening_entry
+# OpeningEntry slot_count=1 on Monday → the single resulting slot has is_in_group=False
+
+resource = Resource (Calendar "single" []) (WeeklyOpening "single" [OpeningEntry MONDAY "10:00" 60 1]) capacity=2 horizon=28
+E = compute_slots resource "2026-06-01" "2026-06-07"
+
+assert len E == 1
+assert E[0].is_in_group == False
 
 
 # ---------------------------------------------------------------------------
