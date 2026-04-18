@@ -4,7 +4,56 @@ Vues de l'app booking.
 
 LOCALISATION : booking/views.py
 """
-from collections import defaultdict
+from collections import Counter, defaultdict
+
+
+def annoter_creneaux_pour_affichage(creneaux):
+    """
+    Annote chaque créneau avec les indicateurs visuels d'affichage.
+    / Annotates each slot with visual display indicators.
+
+    LOCALISATION : booking/views.py
+
+    Ces propriétés ne font pas partie de la logique métier (booking_engine.py).
+    Elles sont calculées ici, dans la couche vue, car elles servent uniquement
+    au rendu HTML (slot_row.html).
+    / These properties are not part of the booking logic (booking_engine.py).
+    They are computed here, in the view layer, because they only serve
+    HTML rendering (slot_row.html).
+
+    Propriétés ajoutées / Added properties:
+      is_in_group  — True si le créneau appartient à un groupe de ≥ 2 créneaux
+                     consécutifs issus du même OpeningEntry × date
+      is_group_end — True si dernier (ou seul) créneau du groupe
+      is_new_week  — True si ce créneau démarre une nouvelle semaine ISO
+                     (jamais True pour le tout premier créneau de la liste)
+
+    :param creneaux: list[BookableInterval]
+    :return: list[BookableInterval] — mêmes objets, annotés en place
+    """
+    group_id_counts = Counter(creneau.group_id for creneau in creneaux)
+
+    for i, creneau in enumerate(creneaux):
+        creneau.is_in_group = group_id_counts[creneau.group_id] > 1
+
+        suivant_meme_groupe = (
+            i < len(creneaux) - 1
+            and creneaux[i + 1].group_id == creneau.group_id
+        )
+        creneau.is_group_end = not suivant_meme_groupe
+
+        # is_new_week : vrai si la semaine ISO change par rapport au créneau précédent.
+        # Le tout premier créneau ne déclenche jamais de séparateur de semaine.
+        # / is_new_week: True when the ISO week changes from the previous slot.
+        # The very first slot never triggers a week separator.
+        if i > 0:
+            semaine_courante   = creneau.start.isocalendar()[:2]
+            semaine_precedente = creneaux[i - 1].start.isocalendar()[:2]
+            creneau.is_new_week = semaine_courante != semaine_precedente
+        else:
+            creneau.is_new_week = False
+
+    return creneaux
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -124,7 +173,7 @@ class BookingViewSet(viewsets.ViewSet):
             Resource.objects.select_related('calendar', 'weekly_opening', 'group'),
             pk=pk,
         )
-        creneaux = compute_slots(ressource)
+        creneaux = annoter_creneaux_pour_affichage(compute_slots(ressource))
         contexte = get_context(request)
         contexte.update({
             'ressource':             ressource,
@@ -333,8 +382,12 @@ class BookingViewSet(viewsets.ViewSet):
         # slot_row.html replaces the form <li> via outerHTML.
 
         # Recompute le créneau pour obtenir la capacité après réservation.
+        # Les annotations d'affichage sont ajoutées pour que slot_row.html
+        # rende correctement les indicateurs visuels du créneau mis à jour.
         # / Recompute the slot to get capacity after booking.
-        creneaux_mis_a_jour = compute_slots(ressource)
+        # Display annotations are added so slot_row.html renders the updated
+        # slot's visual indicators correctly.
+        creneaux_mis_a_jour = annoter_creneaux_pour_affichage(compute_slots(ressource))
         creneau_mis_a_jour = None
         for creneau in creneaux_mis_a_jour:
             if (creneau.start == start_datetime
