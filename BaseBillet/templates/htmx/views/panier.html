@@ -94,28 +94,27 @@
                               hx-post="{% url 'panier-checkout' %}"
                               class="vstack gap-3">
                             {% csrf_token %}
-                            <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label class="form-label">{% trans "First name" %}</label>
-                                    <input type="text" name="first_name" class="form-control"
-                                           required autocomplete="given-name">
+                            {% if user.is_authenticated and user.first_name and user.last_name %}
+                                <p class="text-muted small">
+                                    {% blocktrans with name=user.first_name %}Checkout as {{ name }}{% endblocktrans %}
+                                    <span class="text-muted">({{ user.email }})</span>
+                                </p>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-credit-card me-2" aria-hidden="true"></i>
+                                    {% trans "Proceed to payment" %}
+                                </button>
+                            {% elif user.is_authenticated %}
+                                <div class="alert alert-warning" role="alert">
+                                    {% trans "Please complete your profile (first name, last name) before checkout." %}
+                                    <a href="/my_account/" class="alert-link">{% trans "Complete my profile" %}</a>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">{% trans "Last name" %}</label>
-                                    <input type="text" name="last_name" class="form-control"
-                                           required autocomplete="family-name">
+                            {% else %}
+                                <div class="alert alert-warning" role="alert">
+                                    {% trans "Please log in to proceed to payment." %}
+                                    <a href="#" data-bs-toggle="offcanvas" data-bs-target="#loginPanel"
+                                       class="alert-link">{% trans "Log in" %}</a>
                                 </div>
-                            </div>
-                            <div>
-                                <label class="form-label">{% trans "Email" %}</label>
-                                <input type="email" name="email" class="form-control"
-                                       {% if user.is_authenticated %}value="{{ user.email }}"{% endif %}
-                                       required autocomplete="email">
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="bi bi-credit-card me-2"></i>
-                                {% trans "Proceed to payment" %}
-                            </button>
+                            {% endif %}
                         </form>
                     </div>
                 </div>

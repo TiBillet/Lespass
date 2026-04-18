@@ -119,67 +119,6 @@ def test_validator_refuse_tarif_gate_sans_adhesion_ni_commande(
         validator.is_valid(raise_exception=True)
 
 
-@pytest.mark.django_db
-def test_validator_accepte_tarif_gate_si_current_commande_avec_adhesion(
-    user_acheteur, tenant_context_lespass, mock_stripe,
-):
-    """
-    Flow panier : current_commande injectée + Membership en Phase 1 → tarif gaté accepté.
-    / Cart flow: current_commande injected + Membership in Phase 1 → gated rate accepted.
-    """
-    from BaseBillet.models import Commande, Event, Membership, Price, Product
-    from BaseBillet.validators import ReservationValidator
-
-    event = Event.objects.create(
-        name=f"OKGate-{uuid.uuid4()}", datetime=timezone.now() + timedelta(days=2),
-        jauge_max=50,
-    )
-    prod_billet = Product.objects.create(
-        name=f"B {uuid.uuid4()}", categorie_article=Product.BILLET,
-    )
-    event.products.add(prod_billet)
-    prod_adh = Product.objects.create(
-        name=f"A {uuid.uuid4()}", categorie_article=Product.ADHESION,
-    )
-    price_adh = Price.objects.create(
-        product=prod_adh, name="Std", prix=Decimal("10.00"), publish=True,
-    )
-    price_gated = Price.objects.create(
-        product=prod_billet, name="Gated", prix=Decimal("5.00"), publish=True,
-    )
-    price_gated.adhesions_obligatoires.add(prod_adh)
-
-    # Simulation Phase 1 : Membership déjà créé dans la Commande
-    # / Simulation Phase 1: Membership already created in the Commande
-    commande = Commande.objects.create(
-        user=user_acheteur, email_acheteur=user_acheteur.email,
-        first_name="X", last_name="Y", status=Commande.PENDING,
-    )
-    Membership.objects.create(
-        user=user_acheteur, price=price_adh, commande=commande,
-        status=Membership.WAITING_PAYMENT,
-        first_name="X", last_name="Y",
-        contribution_value=Decimal("10.00"),
-    )
-
-    payload = {
-        "email": user_acheteur.email, "event": str(event.uuid),
-        str(price_gated.uuid): "1",
-    }
-    request = _make_request(user_acheteur, payload)
-    validator = ReservationValidator(
-        data=payload,
-        context={"request": request},
-    )
-    # Injection de current_commande (comme le fera CommandeService en Phase 2)
-    # / Inject current_commande (as CommandeService Phase 2 will do)
-    validator.current_commande = commande
-
-    # Le validator doit passer sans ValidationError
-    # / Validator must pass without ValidationError
-    assert validator.is_valid() is True
-
-
 # ==========================================================================
 # Tests fix bug overlap
 # ==========================================================================

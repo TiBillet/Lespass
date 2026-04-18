@@ -1,6 +1,6 @@
 """
 Tests du endpoint add_tickets_batch sur PanierMVT.
-Session 05 — Tâche 5.1.
+Session 05 — Tâche 5.1. Session 07 — Tâche 7.3 : auth-only (PanierMVT IsAuthenticated).
 
 Run:
     poetry run pytest -q tests/pytest/test_panier_batch.py
@@ -32,7 +32,23 @@ def tenant_context_lespass():
 
 @pytest.fixture
 def http_client(tenant_context_lespass):
-    return Client(HTTP_HOST='lespass.tibillet.localhost')
+    """Django test client authentifié (PanierMVT exige IsAuthenticated depuis Session 07).
+    / Django test client authenticated (PanierMVT requires IsAuthenticated since Session 07)."""
+    from AuthBillet.models import TibilletUser
+    user = TibilletUser.objects.create(
+        email=f"batch-{uuid.uuid4()}@example.org",
+        username=f"batch-{uuid.uuid4()}",
+        first_name="Batch",
+        last_name="Tester",
+        is_active=True,
+    )
+    client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    client.force_login(user)
+    yield client
+    try:
+        user.delete()
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -132,7 +148,6 @@ def test_batch_rollback_si_un_item_echoue(http_client, tenant_context_lespass):
     price_invalid = Price.objects.create(
         product=product, name="KO", prix=Decimal("5.00"), publish=False,
     )
-    http_client = Client(HTTP_HOST='lespass.tibillet.localhost')
 
     response = http_client.post('/panier/add/tickets_batch/', {
         'slug': event.slug,

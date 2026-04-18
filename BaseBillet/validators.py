@@ -589,27 +589,17 @@ class ReservationValidator(serializers.Serializer):
                             _(f'Bookings exceed capacity for this rate.'))
                 total_ticket_qty += qty
 
-                # Check adhésion — cart-aware
-                # L'adhésion requise peut être déjà active en DB, OU présente dans
-                # la commande en cours (flow panier via current_commande injecté).
-                # / Cart-aware check: required membership can be already active in DB,
-                # OR in the current order (cart flow via injected current_commande).
+                # Check adhésion : user doit avoir une adhésion active en DB.
+                # Le flow panier est géré en amont par PanierSession.add_ticket
+                # qui applique son propre cart-aware check.
+                # / Check membership: user must have an active membership in DB.
+                # Cart flow is handled upstream by PanierSession.add_ticket which
+                # applies its own cart-aware check.
                 if price.adhesions_obligatoires.exists():
-                    required_products = list(price.adhesions_obligatoires.all())
-                    has_active_membership = user.memberships.filter(
-                        price__product__in=required_products,
+                    if not user.memberships.filter(
+                        price__product__in=price.adhesions_obligatoires.all(),
                         deadline__gte=timezone.now(),
-                    ).exists()
-
-                    # Nouveau : vérifier la commande en cours si injectée
-                    # / New: check current order if injected
-                    has_in_current_order = False
-                    if hasattr(self, 'current_commande') and self.current_commande is not None:
-                        has_in_current_order = self.current_commande.memberships_commande.filter(
-                            price__product__in=required_products,
-                        ).exists()
-
-                    if not (has_active_membership or has_in_current_order):
+                    ).exists():
                         logger.warning(_(f"User is not subscribed."))
                         raise serializers.ValidationError(_(f"User is not subscribed."))
 

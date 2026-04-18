@@ -570,3 +570,61 @@ class PanierSession:
         self._data['promo_code_name'] = None
         self._save()
         return None
+
+    # --- Total + revalidation (Session 07 — S5 + S6) ---
+    # --- Total + revalidation (Session 07 — S5 + S6) ---
+
+    def calcul_total_centimes(self):
+        """
+        Total TTC du panier en centimes (int). Source de vérité unique pour
+        les totaux pré-matérialisation. Utilisé par le context processor et
+        par materialiser() pour la détection "panier gratuit".
+        / Cart TTC total in cents (int). Single source of truth for
+        pre-materialization totals.
+        """
+        from BaseBillet.models import Price
+        total = 0
+        for item in self._data.get('items', []):
+            try:
+                price = Price.objects.get(uuid=item['price_uuid'])
+            except Price.DoesNotExist:
+                continue
+            if price.free_price and item.get('custom_amount'):
+                amount_eur = Decimal(str(item['custom_amount']))
+            else:
+                amount_eur = price.prix or Decimal("0.00")
+            qty = int(item.get('qty', 1))
+            total += int(amount_eur * qty * 100)
+        return total
+
+    def revalidate_all(self):
+        """
+        Re-applique toutes les validations d'add sur les items présents.
+        Appelé par CommandeService.materialiser() en Phase 0.
+        Lève InvalidItemError sur le premier item invalide (stock épuisé,
+        price dépublié, adhésion obligatoire plus disponible, etc.).
+        / Re-apply all add validations on present items. Called by
+        materialiser() in Phase 0. Raises InvalidItemError on first invalid.
+        """
+        # Copie des items (on va les re-injecter un par un)
+        # / Copy items (we'll re-inject one by one)
+        items_snapshot = list(self._data.get('items', []))
+        self._data['items'] = []
+        self._save()
+        for item in items_snapshot:
+            if item['type'] == 'ticket':
+                self.add_ticket(
+                    event_uuid=item['event_uuid'],
+                    price_uuid=item['price_uuid'],
+                    qty=item['qty'],
+                    custom_amount=item.get('custom_amount'),
+                    options=item.get('options', []),
+                    custom_form=item.get('custom_form', {}),
+                )
+            elif item['type'] == 'membership':
+                self.add_membership(
+                    price_uuid=item['price_uuid'],
+                    custom_amount=item.get('custom_amount'),
+                    options=item.get('options', []),
+                    custom_form=item.get('custom_form', {}),
+                )

@@ -3819,9 +3819,11 @@ class PanierMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def get_permissions(self):
-        # Panier accessible aux anonymes (matérialisation demande un user)
-        # / Cart is accessible to anonymous users (materialization requires a user)
-        return [permissions.AllowAny()]
+        # Panier = feature auth-only (simplifie l'UX, derive buyer de request.user).
+        # Le flow direct (event/membership sans panier) reste anonyme, ailleurs.
+        # / Cart = auth-only feature (simpler UX, buyer derived from request.user).
+        # Direct flow (event/membership without cart) stays anonymous elsewhere.
+        return [permissions.IsAuthenticated()]
 
     # --- Helpers internes ---
     # --- Internal helpers ---
@@ -3844,44 +3846,6 @@ class PanierMVT(viewsets.ViewSet):
         """Page panier : récap complet, modif, total, bouton checkout."""
         template_context = get_context(request)
         return render(request, 'htmx/views/panier.html', context=template_context)
-
-    # --- POST /panier/add/ticket/ ---
-    @action(detail=False, methods=['POST'], url_path='add/ticket')
-    def add_ticket(self, request):
-        """
-        Ajoute N billets au panier. Params POST attendus :
-          event_uuid, price_uuid, qty, custom_amount (opt), options (opt, liste),
-          form__<field> (opt, ProductFormField).
-        """
-        from BaseBillet.services_panier import PanierSession, InvalidItemError
-
-        event_uuid = request.POST.get('event_uuid')
-        price_uuid = request.POST.get('price_uuid')
-        qty = request.POST.get('qty', 1)
-        custom_amount = request.POST.get('custom_amount') or None
-        options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
-        # Extraire le custom_form (fields prefixes par form__)
-        # / Extract custom_form (fields prefixed by form__)
-        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
-
-        panier = PanierSession(request)
-        try:
-            panier.add_ticket(
-                event_uuid=event_uuid,
-                price_uuid=price_uuid,
-                qty=int(qty),
-                custom_amount=custom_amount,
-                options=options,
-                custom_form=custom_form,
-            )
-        except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
-        except Exception as exc:
-            logger.error(f"add_ticket unexpected error: {exc}")
-            return self._render_badge_and_toast(
-                request, message=_("Unable to add ticket."), level='error'
-            )
-        return self._render_badge_and_toast(request, message=_("Ticket added to cart."))
 
     # --- POST /panier/add/membership/ ---
     @action(detail=False, methods=['POST'], url_path='add/membership')
@@ -3984,32 +3948,31 @@ class PanierMVT(viewsets.ViewSet):
     @action(detail=False, methods=['POST'], url_path='checkout')
     def checkout(self, request):
         """
-        Materialise le panier en Commande + redirect Stripe ou page confirmation.
-        Pour un panier gratuit : redirect vers /my_account/my_reservations/.
-        Pour un panier payant : redirect vers l'URL de checkout Stripe.
+        Matérialise le panier en Commande → redirect Stripe (payant) ou
+        my_account (gratuit). Utilise request.user comme buyer (auth required).
+        / Materialize cart → Stripe redirect (paid) or my_account (free).
+        Uses request.user as buyer (auth required).
         """
-        from AuthBillet.utils import get_or_create_user
         from BaseBillet.services_commande import CommandeService, CommandeServiceError
         from BaseBillet.services_panier import PanierSession
 
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        email = request.POST.get('email', '').strip().lower()
-
-        if not (first_name and last_name and email):
-            return self._render_badge_and_toast(
-                request, message=_("First name, last name and email are required."),
-                level='error',
+        user = request.user
+        # Si infos user incomplètes (ancien compte), renvoyer vers my_account.
+        # / If user info incomplete (old account), redirect to my_account.
+        if not (user.first_name and user.last_name):
+            messages.warning(
+                request,
+                _("Please complete your profile (first name, last name) before checkout."),
             )
-
-        # Resolution user (cree si besoin, identique au flow direct).
-        # / User resolution (create if needed, same as direct flow).
-        user = get_or_create_user(email)
+            return HttpResponseClientRedirect('/my_account/')
 
         panier = PanierSession(request)
         try:
             commande = CommandeService.materialiser(
-                panier, user, first_name, last_name, email,
+                panier, user,
+                first_name=user.first_name,
+                last_name=user.last_name,
+                email=user.email,
             )
         except CommandeServiceError as exc:
             return self._render_badge_and_toast(request, message=str(exc), level='error')
@@ -4025,23 +3988,22 @@ class PanierMVT(viewsets.ViewSet):
 
         # Redirection selon le cas (payant/gratuit).
         # / Redirect based on case (paid/free).
-        if commande.paiement_stripe:
-            checkout_session_url = commande.paiement_stripe.checkout_session_id_stripe
-            # L'URL complete est dans le stripe.Session retourne par CreationPaiementStripe,
-            # on la reconstruit depuis Paiement_stripe.get_checkout_session(). Simplifie :
-            # redirect vers /my_account/ (le flow Stripe s'est deja fait en Phase 3).
-            # En v1 : confiance aux redirects internes, Stripe est initie en amont.
-            # / v1: trust internal redirects, Stripe was initiated upstream.
-            from BaseBillet.models import Paiement_stripe
-            # Recupere l'URL du checkout Stripe via Stripe API
-            try:
-                checkout_session = commande.paiement_stripe.get_checkout_session()
-                return HttpResponseClientRedirect(checkout_session.url)
-            except Exception as exc:
-                logger.error(f"Unable to retrieve Stripe checkout URL: {exc}")
-                return HttpResponseClientRedirect('/my_account/my_reservations/')
+        if commande.paiement_stripe and commande.paiement_stripe.checkout_session_url:
+            # C3 : URL persistee en DB — plus besoin d'appeler Stripe.
+            # / C3: URL persisted in DB — no Stripe API call needed.
+            return HttpResponseClientRedirect(commande.paiement_stripe.checkout_session_url)
+        elif commande.paiement_stripe:
+            logger.error(
+                f"Commande {commande.uuid_8()} has Paiement_stripe but no checkout_session_url"
+            )
+            messages.error(
+                request,
+                _("Payment link unavailable. Please contact support."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
         else:
             # Commande gratuite : messages success + redirect vers my_account
+            # / Free order: success message + redirect to my_account
             messages.success(
                 request,
                 _("Order confirmed. You will receive an email shortly."),

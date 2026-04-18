@@ -652,3 +652,49 @@ def test_add_ticket_refuse_overlap_contre_panier(
     finally:
         config.allow_concurrent_bookings = True
         config.save()
+
+
+# ==========================================================================
+# Tests Session 07 — revalidate_all() + calcul_total_centimes()
+# / Session 07 tests — revalidate_all() + calcul_total_centimes()
+# ==========================================================================
+
+
+@pytest.mark.django_db
+def test_revalidate_all_detecte_price_depublie(
+    request_with_session, event_avec_tarif,
+):
+    """
+    revalidate_all() detecte un price qui a ete depublie apres ajout.
+    / revalidate_all() detects a price unpublished after add.
+    """
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+    event, price = event_avec_tarif
+    panier = PanierSession(request_with_session)
+    panier.add_ticket(event.uuid, price.uuid, qty=1)
+
+    # Simuler un depubliage entre add et checkout
+    # / Simulate unpublishing between add and checkout
+    price.publish = False
+    price.save()
+
+    with pytest.raises(InvalidItemError, match="not available"):
+        panier.revalidate_all()
+
+
+@pytest.mark.django_db
+def test_calcul_total_centimes(request_with_session, event_avec_tarif):
+    """
+    calcul_total_centimes() retourne le total en int centimes.
+    / calcul_total_centimes() returns total in int cents.
+    """
+    from BaseBillet.services_panier import PanierSession
+
+    event, price = event_avec_tarif  # price = 10.00 EUR
+    panier = PanierSession(request_with_session)
+    panier.add_ticket(event.uuid, price.uuid, qty=3)
+
+    assert panier.calcul_total_centimes() == 3000  # 3 x 10€ = 3000 centimes
+
+

@@ -59,6 +59,12 @@ class CommandeService:
         if panier.is_empty():
             raise CommandeServiceError(_("Cart is empty."))
 
+        # Phase 0 : re-validation complète des items contre la DB.
+        # Si stock épuisé, price dépublié, adhésion supprimée, etc. → InvalidItemError
+        # qui remonte naturellement (atomic rollback → aucune écriture DB).
+        # / Phase 0: full re-validation of items against DB.
+        panier.revalidate_all()
+
         # -- Création de la Commande pivot (status=PENDING) --
         # -- Create the pivot Commande (status=PENDING) --
         promo_code = panier.promo_code()
@@ -137,12 +143,26 @@ class CommandeService:
                 if it.get('custom_amount'):
                     custom_amounts[price.uuid] = Decimal(str(it['custom_amount']))
 
+            # Tous les items de cet event partagent options + custom_form
+            # (une seule soumission de booking_form.html par event).
+            # / All items from this event share options + custom_form
+            # (single submission of booking_form.html per event).
+            first_item = items_event[0]
+            custom_form = first_item.get('custom_form') or None
+            options_uuids = first_item.get('options') or []
+
             reservation = Reservation.objects.create(
                 user_commande=user,
                 event=event,
                 commande=commande,
+                custom_form=custom_form,
                 status=Reservation.CREATED,
             )
+            if options_uuids:
+                from BaseBillet.models import OptionGenerale
+                opts = OptionGenerale.objects.filter(uuid__in=options_uuids)
+                if opts.exists():
+                    reservation.options.set(opts)
 
             # TicketCreator gère Tickets + LigneArticle. On bloque son Stripe.
             # / TicketCreator handles Tickets + LigneArticle. We disable its Stripe.

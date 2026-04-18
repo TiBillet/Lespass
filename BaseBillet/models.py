@@ -1649,36 +1649,6 @@ class Commande(models.Model):
         """Raccourci d'affichage. / Display shortcut."""
         return f"{self.uuid}".partition("-")[0]
 
-    def total_lignes(self):
-        """
-        Somme des montants TTC des LigneArticle de cette commande.
-        Parcours : reservations → lignearticles + memberships → lignearticles.
-        / Sum of TTC amounts for this order's LigneArticle.
-        Walk: reservations → lignearticles + memberships → lignearticles.
-
-        Retourne des centimes (int) pour cohérence avec LigneArticle.amount.
-        / Returns cents (int) matching LigneArticle.amount.
-
-        ATTENTION : aucun filtre de statut. Toutes les lignes rattachées sont
-        incluses (y compris CANCELED, REFUNDED, FAILED si présentes). Au code
-        appelant d'appliquer un filtre selon son besoin.
-        / WARNING: no status filter. All linked lines are included (including
-        CANCELED, REFUNDED, FAILED if present). Caller is responsible for
-        applying a status filter as needed.
-        """
-        total = 0
-        # Lignes rattachées via les reservations du panier
-        # / Lines attached via the order's reservations
-        for reservation in self.reservations.all():
-            for ligne in reservation.lignearticles.all():
-                total += int(ligne.amount * ligne.qty)
-        # Lignes rattachées via les memberships du panier
-        # / Lines attached via the order's memberships
-        for membership in self.memberships_commande.all():
-            for ligne in membership.lignearticles.all():
-                total += int(ligne.amount * ligne.qty)
-        return total
-
 
 @receiver(post_save, sender=Product)
 def post_save_Product(sender, instance: Product, created, **kwargs):
@@ -3524,6 +3494,18 @@ class Paiement_stripe(models.Model):
     datetime = models.DateTimeField(auto_now=True)
 
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    checkout_session_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name=_("Stripe checkout URL"),
+        help_text=_(
+            "URL Stripe Checkout persistée après création — permet de rediriger "
+            "l'utilisateur vers le paiement sans rappeler Stripe. "
+            "/ Stripe Checkout URL persisted after creation — allows redirecting "
+            "the user to payment without recalling Stripe."
+        ),
+    )
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
     customer_stripe = models.CharField(

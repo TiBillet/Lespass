@@ -189,3 +189,18 @@ Mêmes règles que le chantier laboutik (cf. `PLAN_LABOUTIK.md` section 14) :
 - Correction incidente du bug `ReservationValidator` overlap (filtre `BLOCKING_STATUSES` + fenêtre 15 min)
 - Icône panier + badge compteur dans les navbars reunion et faire-festival
 - Accessibilité WCAG AA minimal (ARIA labels, roles, aria-hidden)
+
+**Session 07 (2026-04-17) — Fixes blockers + simplifications :**
+- **C1** (data loss) : `options` + `custom_form` propagés à Phase 2 — plus de perte silencieuse
+- **C3** (fragilité redirect) : URL Stripe checkout persistée dans `Paiement_stripe.checkout_session_url`
+- **S1** : branche cart-aware de `ReservationValidator` supprimée (dead code, jamais injectée en prod)
+- **S2** : `PanierMVT` auth-only (flow direct anonyme conservé)
+- **S3** : 8 templates morts supprimés (`htmx/views/event.html`, `htmx/components/card*.html`)
+- **S4** : endpoint `/panier/add/ticket/` single supprimé (batch suffit)
+- **S5** : `PanierSession.revalidate_all()` appelé en Phase 0 de `materialiser()` — anti-races
+- **S6** : source de vérité unique pour le total (`PanierSession.calcul_total_centimes`)
+- **S9** : page `/panier/` sans form buyer (dérivé de `request.user`)
+
+Migration Session 07 : `BaseBillet.0214_paiement_stripe_checkout_url`
+
+**Bilan final : 89 tests pytest + 2 tests E2E Playwright, zéro blocker résiduel, zéro régression.**

@@ -230,6 +230,9 @@ class CreationPaiementStripe():
 
         self.paiement_stripe_db.payment_intent_id = checkout_session.payment_intent
         self.paiement_stripe_db.checkout_session_id_stripe = checkout_session.id
+        # C3 : persistance URL Stripe Checkout pour redirect fiable (pas d'appel Stripe a chaque redirect)
+        # / C3: persist Stripe Checkout URL for reliable redirect (no Stripe API call per redirect)
+        self.paiement_stripe_db.checkout_session_url = checkout_session.url
         self.paiement_stripe_db.status = Paiement_stripe.PENDING
         self.paiement_stripe_db.save()
 

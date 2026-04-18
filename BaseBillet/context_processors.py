@@ -30,13 +30,18 @@ def panier_context(request):
     try:
         from BaseBillet.services_panier import PanierSession
         panier = PanierSession(request)
+        # Source de verite unique : PanierSession.calcul_total_centimes().
+        # On convertit en Decimal euros pour l'affichage template.
+        # / Single source of truth: PanierSession.calcul_total_centimes().
+        # Convert to Decimal euros for template display.
+        total_ttc = Decimal(panier.calcul_total_centimes()) / Decimal(100)
         return {
             'panier': {
                 'count': panier.count(),
                 'is_empty': panier.is_empty(),
                 'items': panier.items(),
                 'items_with_details': _build_items_with_details(panier),
-                'total_ttc': _compute_total_ttc(panier),
+                'total_ttc': total_ttc,
                 'adhesions_product_ids': panier.adhesions_product_ids(),
                 'promo_code_name': panier.data.get('promo_code_name'),
             }
@@ -94,25 +99,3 @@ def _build_items_with_details(panier):
     return result
 
 
-def _compute_total_ttc(panier):
-    """
-    Calcule le total TTC du panier (Decimal, en euros) sans tenir compte
-    du code promo. Utilise prix.prix ou custom_amount selon free_price.
-
-    / Compute the cart's total TTC (Decimal, in euros) without applying
-    the promo code. Uses prix.prix or custom_amount depending on free_price.
-    """
-    from BaseBillet.models import Price
-    total = Decimal('0.00')
-    for item in panier.items():
-        try:
-            price = Price.objects.get(uuid=item['price_uuid'])
-        except Price.DoesNotExist:
-            continue
-        if price.free_price and item.get('custom_amount'):
-            amount = Decimal(str(item['custom_amount']))
-        else:
-            amount = price.prix or Decimal('0.00')
-        qty = int(item.get('qty', 1))
-        total += amount * qty
-    return total

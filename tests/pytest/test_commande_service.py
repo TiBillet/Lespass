@@ -112,7 +112,13 @@ def test_materialiser_commande_gratuite_multi_events(
     # / Each reservation must be in FREERES or FREERES_USERACTIV
     for r in commande.reservations.all():
         assert r.status in [Reservation.FREERES, Reservation.FREERES_USERACTIV]
-    assert commande.total_lignes() == 0
+    # Panier gratuit : somme des LigneArticle via reservations = 0 centimes.
+    # / Free cart: sum of LigneArticle via reservations = 0 cents.
+    total_lignes_centimes = 0
+    for r in commande.reservations.all():
+        for ligne in r.lignearticles.all():
+            total_lignes_centimes += int(ligne.amount * ligne.qty)
+    assert total_lignes_centimes == 0
 
     # Cleanup : @pytest.mark.django_db rollback s'occupe de tout.
     # django-stdimage lève des erreurs sur .delete() (trap connu).
@@ -234,3 +240,56 @@ def test_materialiser_rollback_si_erreur(
 
     # Cleanup : @pytest.mark.django_db rollback s'occupe de tout.
     # / Cleanup: @pytest.mark.django_db rollback handles everything.
+
+
+@pytest.mark.django_db
+def test_materialiser_propage_options_et_custom_form(
+    request_authentifie, user_acheteur, tenant_context_lespass,
+):
+    """
+    C1 fix : les options et custom_form des items panier sont propagés
+    sur la Reservation créée en Phase 2.
+    / C1 fix: options and custom_form from cart items are propagated to
+    the Reservation created in Phase 2.
+    """
+    from BaseBillet.models import (
+        Commande, Event, OptionGenerale, Price, Product, Reservation,
+    )
+    from BaseBillet.services_commande import CommandeService
+    from BaseBillet.services_panier import PanierSession
+
+    # Setup event + product FREERES + option
+    prod = Product.objects.create(
+        name=f"C1-{uuid.uuid4()}", categorie_article=Product.FREERES,
+    )
+    event = Event.objects.create(
+        name=f"C1evt-{uuid.uuid4()}",
+        datetime=timezone.now() + timedelta(days=3),
+        jauge_max=50,
+    )
+    event.products.add(prod)
+    price = prod.prices.filter(prix=0).first()
+    option = OptionGenerale.objects.create(name=f"Opt-{uuid.uuid4().hex[:6]}")
+    event.options_radio.add(option)
+
+    panier = PanierSession(request_authentifie)
+    panier.add_ticket(
+        event.uuid, price.uuid, qty=1,
+        options=[str(option.uuid)],
+        custom_form={"dietary": "vegan"},
+    )
+
+    commande = CommandeService.materialiser(
+        panier, user_acheteur,
+        first_name="C1", last_name="Test",
+        email=user_acheteur.email,
+    )
+
+    reservation = commande.reservations.first()
+    assert reservation is not None
+    assert reservation.custom_form == {"dietary": "vegan"}, (
+        f"custom_form lost: {reservation.custom_form}"
+    )
+    assert option in reservation.options.all(), (
+        "option not propagated to reservation"
+    )

@@ -1,6 +1,6 @@
 """
 Tests d'integration du ViewSet PanierMVT.
-Session 04 — Tâche 4.3.
+Session 04 — Tâche 4.3. Session 07 — Tâche 7.3 : auth-only + /panier/ sans form buyer.
 
 Run:
     poetry run pytest -q tests/pytest/test_panier_mvt.py
@@ -31,10 +31,24 @@ def tenant_context_lespass():
 
 
 @pytest.fixture
-def http_client(tenant_context_lespass):
-    """Django test client pour le tenant lespass.
-    / Django test client for the lespass tenant."""
-    return Client(HTTP_HOST='lespass.tibillet.localhost')
+def http_client_auth(tenant_context_lespass):
+    """Django test client authentifié comme un user de test.
+    / Django test client authenticated as a test user."""
+    from AuthBillet.models import TibilletUser
+    user = TibilletUser.objects.create(
+        email=f"mvt-{uuid.uuid4()}@example.org",
+        username=f"mvt-{uuid.uuid4()}",
+        first_name="Test",
+        last_name="User",
+        is_active=True,
+    )
+    client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    client.force_login(user)
+    yield client, user
+    try:
+        user.delete()
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -68,184 +82,149 @@ def adhesion_standard(tenant_context_lespass):
 
 
 @pytest.mark.django_db
-def test_GET_panier_list_renvoie_page(http_client):
+def test_GET_panier_list_renvoie_page(http_client_auth):
     """GET /panier/ → page 200, panier vide visible.
     / GET /panier/ → 200 page, empty cart visible."""
-    response = http_client.get('/panier/')
+    client, _user = http_client_auth
+    response = client.get('/panier/')
     assert response.status_code == 200
     assert b"cart" in response.content.lower() or b"panier" in response.content.lower()
 
 
 @pytest.mark.django_db
-def test_GET_panier_badge_renvoie_partial(http_client):
+def test_GET_panier_badge_renvoie_partial(http_client_auth):
     """GET /panier/badge/ → partial HTMX (id panier-badge)."""
-    response = http_client.get('/panier/badge/')
+    client, _user = http_client_auth
+    response = client.get('/panier/badge/')
     assert response.status_code == 200
     assert b"panier-badge" in response.content
 
 
 @pytest.mark.django_db
-def test_POST_add_ticket_ajoute_au_panier(http_client, event_avec_tarif):
-    """POST /panier/add/ticket/ → toast success + item en session."""
-    event, price = event_avec_tarif
-    response = http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price.uuid),
-        'qty': 2,
-    })
-    assert response.status_code == 200
-    assert b"added" in response.content.lower() or b"ajout" in response.content.lower()
-    # Verifier la session / Check session
-    session = http_client.session
-    panier = session.get('panier', {})
-    assert len(panier.get('items', [])) == 1
-    assert panier['items'][0]['type'] == 'ticket'
-    assert int(panier['items'][0]['qty']) == 2
-
-
-@pytest.mark.django_db
-def test_POST_add_ticket_event_inexistant_retourne_erreur(http_client):
-    """POST avec event_uuid invalide → toast error, pas d'ajout."""
-    response = http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(uuid.uuid4()),
-        'price_uuid': str(uuid.uuid4()),
-        'qty': 1,
-    })
-    assert response.status_code == 200  # Toast, pas exception
-    assert b"Event not found" in response.content or b"not found" in response.content.lower()
-
-
-@pytest.mark.django_db
-def test_POST_add_membership_ajoute_au_panier(http_client, adhesion_standard):
+def test_POST_add_membership_ajoute_au_panier(http_client_auth, adhesion_standard):
     """POST /panier/add/membership/ → adhesion en session."""
+    client, _user = http_client_auth
     _product, price = adhesion_standard
-    response = http_client.post('/panier/add/membership/', {
+    response = client.post('/panier/add/membership/', {
         'price_uuid': str(price.uuid),
     })
     assert response.status_code == 200
-    session = http_client.session
+    session = client.session
     panier = session.get('panier', {})
     assert any(i['type'] == 'membership' for i in panier.get('items', []))
 
 
 @pytest.mark.django_db
-def test_POST_remove_retire_item(http_client, event_avec_tarif):
+def test_POST_remove_retire_item(http_client_auth, event_avec_tarif):
     """POST /panier/0/remove/ → item retire."""
+    client, _user = http_client_auth
     event, price = event_avec_tarif
-    http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price.uuid),
-        'qty': 1,
+    client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price.uuid): 1,
     })
-    assert len(http_client.session.get('panier', {}).get('items', [])) == 1
+    assert len(client.session.get('panier', {}).get('items', [])) == 1
 
-    response = http_client.post('/panier/0/remove/')
+    response = client.post('/panier/0/remove/')
     assert response.status_code == 200
-    assert len(http_client.session.get('panier', {}).get('items', [])) == 0
+    assert len(client.session.get('panier', {}).get('items', [])) == 0
 
 
 @pytest.mark.django_db
-def test_POST_update_quantity_change_qty(http_client, event_avec_tarif):
+def test_POST_update_quantity_change_qty(http_client_auth, event_avec_tarif):
     """POST /panier/0/update_quantity/ avec qty=5 → qty change."""
+    client, _user = http_client_auth
     event, price = event_avec_tarif
-    http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price.uuid),
-        'qty': 1,
+    client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price.uuid): 1,
     })
 
-    response = http_client.post('/panier/0/update_quantity/', {'qty': 5})
+    response = client.post('/panier/0/update_quantity/', {'qty': 5})
     assert response.status_code == 200
-    session = http_client.session
+    session = client.session
     assert session['panier']['items'][0]['qty'] == 5
 
 
 @pytest.mark.django_db
-def test_POST_clear_vide_panier(http_client, event_avec_tarif):
+def test_POST_clear_vide_panier(http_client_auth, event_avec_tarif):
     """POST /panier/clear/ → panier vide."""
+    client, _user = http_client_auth
     event, price = event_avec_tarif
-    http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price.uuid),
-        'qty': 3,
+    client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price.uuid): 3,
     })
-    assert len(http_client.session.get('panier', {}).get('items', [])) == 1
+    assert len(client.session.get('panier', {}).get('items', [])) == 1
 
-    response = http_client.post('/panier/clear/')
+    response = client.post('/panier/clear/')
     assert response.status_code == 200
-    assert len(http_client.session.get('panier', {}).get('items', [])) == 0
+    assert len(client.session.get('panier', {}).get('items', [])) == 0
 
 
 @pytest.mark.django_db
-def test_POST_promo_code_applique(http_client, event_avec_tarif):
+def test_POST_promo_code_applique(http_client_auth, event_avec_tarif):
     """POST /panier/promo_code/ avec code valide → applique."""
     from BaseBillet.models import PromotionalCode
+    client, _user = http_client_auth
     event, price = event_avec_tarif
     promo = PromotionalCode.objects.create(
         name=f"TESTMVT-{uuid.uuid4().hex[:8]}",
         discount_rate=Decimal("10.00"),
         product=price.product,
     )
-    http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price.uuid),
-        'qty': 1,
+    client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price.uuid): 1,
     })
 
-    response = http_client.post('/panier/promo_code/', {'code_name': promo.name})
+    response = client.post('/panier/promo_code/', {'code_name': promo.name})
     assert response.status_code == 200
-    session = http_client.session
+    session = client.session
     assert session['panier']['promo_code_name'] == promo.name
 
 
 @pytest.mark.django_db
-def test_POST_promo_code_clear(http_client, event_avec_tarif):
+def test_POST_promo_code_clear(http_client_auth, event_avec_tarif):
     """POST /panier/promo_code/clear/ → retire le code promo."""
     from BaseBillet.models import PromotionalCode
+    client, _user = http_client_auth
     event, price = event_avec_tarif
     promo = PromotionalCode.objects.create(
         name=f"CLRMVT-{uuid.uuid4().hex[:8]}",
         discount_rate=Decimal("5.00"),
         product=price.product,
     )
-    http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price.uuid),
-        'qty': 1,
+    client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price.uuid): 1,
     })
-    http_client.post('/panier/promo_code/', {'code_name': promo.name})
+    client.post('/panier/promo_code/', {'code_name': promo.name})
 
-    response = http_client.post('/panier/promo_code/clear/')
+    response = client.post('/panier/promo_code/clear/')
     assert response.status_code == 200
-    session = http_client.session
+    session = client.session
     assert session['panier'].get('promo_code_name') is None
 
 
 @pytest.mark.django_db
-def test_POST_checkout_panier_vide_retourne_erreur(http_client):
-    """POST /panier/checkout/ sur panier vide → erreur 200 + toast."""
-    response = http_client.post('/panier/checkout/', {
-        'first_name': 'A', 'last_name': 'B', 'email': 'test@example.org',
-    })
+def test_POST_checkout_panier_vide_retourne_erreur(http_client_auth):
+    """POST /panier/checkout/ sur panier vide → erreur 200 + toast.
+    / POST /panier/checkout/ on empty cart → 200 error + toast."""
+    client, _user = http_client_auth
+    response = client.post('/panier/checkout/')
     assert response.status_code == 200
     assert b"empty" in response.content.lower() or b"vide" in response.content.lower()
 
 
 @pytest.mark.django_db
-def test_POST_checkout_manque_infos_acheteur_retourne_erreur(http_client):
-    """POST /panier/checkout/ sans first_name/last_name/email → erreur."""
-    response = http_client.post('/panier/checkout/', {})
-    assert response.status_code == 200
-    assert b"required" in response.content.lower() or b"required" in response.content.lower()
-
-
-@pytest.mark.django_db
-def test_POST_checkout_panier_gratuit_redirige(http_client, tenant_context_lespass):
+def test_POST_checkout_panier_gratuit_redirige(http_client_auth, tenant_context_lespass):
     """
     POST /panier/checkout/ avec panier gratuit → redirect vers my_account.
     / POST /panier/checkout/ with free cart → redirect to my_account.
     """
     from BaseBillet.models import Event, Product
+    client, _user = http_client_auth
     # Setup : un event FREERES → price 0€ auto-créé
     prod_free = Product.objects.create(
         name=f"FreeMVT-{uuid.uuid4()}", categorie_article=Product.FREERES,
@@ -259,21 +238,53 @@ def test_POST_checkout_panier_gratuit_redirige(http_client, tenant_context_lespa
     price_free = prod_free.prices.filter(prix=0).first()
     assert price_free is not None
 
-    http_client.post('/panier/add/ticket/', {
-        'event_uuid': str(event.uuid),
-        'price_uuid': str(price_free.uuid),
-        'qty': 1,
+    client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price_free.uuid): 1,
     })
 
-    response = http_client.post('/panier/checkout/', {
-        'first_name': 'Gratis',
-        'last_name': 'Mvt',
-        'email': f'mvt-{uuid.uuid4()}@example.org',
-    })
+    response = client.post('/panier/checkout/')
     # HTMXResponseClientRedirect retourne 200 avec header HX-Redirect
     assert response.status_code == 200
     # Le header HX-Redirect doit pointer vers /my_account/
     assert 'HX-Redirect' in response or b'HX-Redirect' in response.content or response.status_code in [200, 302]
     # Le panier doit être vide apres materialisation
-    session = http_client.session
+    session = client.session
     assert len(session.get('panier', {}).get('items', [])) == 0
+
+
+@pytest.mark.django_db
+def test_POST_checkout_anonyme_retourne_403(tenant_context_lespass):
+    """Sans login, PanierMVT actions retournent 403.
+    / Without login, PanierMVT actions return 403."""
+    anon_client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    response = anon_client.post('/panier/checkout/')
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_POST_checkout_profil_incomplet_redirige_my_account(
+    tenant_context_lespass,
+):
+    """User authentifié sans first_name → redirect vers /my_account/.
+    / Authenticated user without first_name → redirect to /my_account/."""
+    from AuthBillet.models import TibilletUser
+    user = TibilletUser.objects.create(
+        email=f"incomplete-{uuid.uuid4()}@example.org",
+        username=f"incomplete-{uuid.uuid4()}",
+        first_name="",
+        last_name="",
+        is_active=True,
+    )
+    client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    client.force_login(user)
+
+    response = client.post('/panier/checkout/')
+    # HTMX redirect → 200 avec HX-Redirect header
+    assert response.status_code == 200
+    hx_redirect = response.get('HX-Redirect', '')
+    assert '/my_account/' in hx_redirect
+    try:
+        user.delete()
+    except Exception:
+        pass
