@@ -1,25 +1,24 @@
 <!--
 LOCALISATION : booking/templates/booking/partial/booking_form.html
 
-Formulaire de réservation d'un créneau.
-/ Booking form for a single slot.
+Formulaire de réservation d'un créneau — rendu inline dans la liste.
+/ Booking form for a slot — rendered inline in the slot list.
 
-Ce partial est chargé dans une .booking-form-container via hx-get.
-Il est soumis en hx-post ; en cas de succès le serveur renvoie HX-Redirect
-qui recharge la page. En cas d'erreur (422), le contenu de la .booking-form-container
-est remplacé par le partial d'erreur.
-/ This partial is loaded into a .booking-form-container via hx-get.
-It is submitted via hx-post; on success the server returns HX-Redirect
-which reloads the page. On error (422), the .booking-form-container content
-is replaced by the error partial.
+Ce partial remplace le <li> du créneau via hx-swap="outerHTML".
+Il porte le même id que le <li> d'origine (slot_li_id), ce qui permet
+au formulaire de se ré-échanger avec slot_row.html après soumission.
+/ This partial replaces the slot <li> via hx-swap="outerHTML".
+It carries the same id as the original <li> (slot_li_id), which allows
+the form to swap back with slot_row.html after submission.
 
 Variables attendues / Expected variables:
   ressource             — objet Resource
+  slot_li_id            — str : id DOM "slot-<pk>-<Ymd-Hi>"
   creneau               — BookableInterval | None (si slot_indisponible=True)
-  max_slot_count        — int : nombre de créneaux consécutifs disponibles
+  max_slot_count        — int : créneaux consécutifs disponibles depuis ce début
   slot_duration_minutes — int : durée de chaque créneau en minutes
   slot_indisponible     — bool : True si le créneau est complet ou inexistant
-  start_datetime        — datetime : début du créneau (si slot_indisponible=True)
+  start_datetime        — datetime : début du créneau (toujours présent)
   erreur                — str | dict | None : message d'erreur de validation
 -->
 {% load i18n %}
@@ -27,92 +26,110 @@ Variables attendues / Expected variables:
 {% if slot_indisponible %}
 
     <!--
-    Créneau complet ou hors plage ouverte — on informe le membre.
-    / Slot full or outside open range — inform the member.
+    Créneau complet ou hors plage ouverte.
+    / Slot full or outside open range.
     -->
-    <div class="alert alert-danger"
-         data-testid="booking-form-slot-unavailable"
-         role="alert">
-        <i class="bi bi-x-circle" aria-hidden="true"></i>
-        {% translate "Ce créneau n'est plus disponible." %}
-    </div>
-
-    <a href="/booking/resource/{{ ressource.pk }}/"
-       class="btn btn-outline-secondary btn-sm mt-2">
-        {% translate "Retour aux créneaux" %}
-    </a>
+    <li id="{{ slot_li_id }}"
+        class="d-flex flex-column gap-2 mb-2 p-2 border rounded border-danger-subtle bg-danger-subtle"
+        data-testid="booking-form-slot-unavailable"
+        role="alert"
+        aria-live="polite">
+        <span class="text-danger small">
+            <i class="bi bi-x-circle" aria-hidden="true"></i>
+            {% translate "Ce créneau n'est plus disponible." %}
+        </span>
+    </li>
 
 {% elif erreur %}
 
     <!--
-    Erreur de validation du serializer — les clés sont les noms de champs.
-    / Serializer validation error — keys are field names.
+    Erreur de validation renvoyée par add_to_basket (422).
+    Le bouton "Réessayer" recharge le formulaire via hx-get.
+    / Validation error returned by add_to_basket (422).
+    The "Réessayer" button reloads the form via hx-get.
     -->
-    <div class="alert alert-danger" role="alert">
-        <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-        {{ erreur }}
-    </div>
+    <li id="{{ slot_li_id }}"
+        class="d-flex flex-column gap-2 mb-2 p-2 border rounded border-danger-subtle bg-danger-subtle"
+        data-testid="booking-form-error"
+        aria-live="polite">
+        <span class="text-danger small">
+            <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+            {{ erreur }}
+        </span>
+        <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}"
+           hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}"
+           hx-target="#{{ slot_li_id }}"
+           hx-swap="outerHTML"
+           class="btn btn-outline-secondary btn-sm align-self-start">
+            {% translate "Réessayer" %}
+        </a>
+    </li>
 
 {% else %}
 
     <!--
-    Formulaire principal — affiche les détails du créneau et le sélecteur de durée.
+    Formulaire principal — affiché inline à la place du <li> du créneau.
     hx-post soumet le formulaire sans navigation de page.
-    hx-target="closest .booking-form-container" : en cas d'erreur 422, le partial
-    d'erreur remplace le contenu du container qui a chargé ce formulaire.
-    En cas de succès, le serveur renvoie HX-Redirect → rechargement complet de page.
-    / Main form — shows slot details and the duration selector.
+    hx-target="#{{ slot_li_id }}" hx-swap="outerHTML" : la réponse
+    (slot_row.html mis à jour + panier OOB) remplace ce <li> entier.
+    En cas d'erreur 422, le serveur renvoie ce même template avec erreur.
+    / Main form — displayed inline in place of the slot <li>.
     hx-post submits the form without page navigation.
-    hx-target="closest .booking-form-container": on 422 error, the error partial
-    replaces the content of the container that loaded this form.
-    On success, the server returns HX-Redirect → full page reload.
+    hx-target="#{{ slot_li_id }}" hx-swap="outerHTML": the response
+    (updated slot_row.html + OOB basket) replaces this entire <li>.
+    On 422 error, the server returns this same template with an error.
     -->
-    <div class="mb-3"
-         data-testid="booking-form-slot-start">
-        <span class="fw-semibold">{{ creneau.start|date:"l d/m/Y H:i" }}</span>
-        <span class="text-muted small ms-1">
-            ({{ slot_duration_minutes }} {% translate "min" %})
-        </span>
-    </div>
+    <li id="{{ slot_li_id }}"
+        class="mb-2 p-3 border rounded border-primary-subtle bg-primary-subtle"
+        data-testid="booking-form-slot-start"
+        aria-live="polite">
 
-    <form method="post"
-          action="/booking/{{ ressource.pk }}/add_to_basket/"
-          hx-post="/booking/{{ ressource.pk }}/add_to_basket/"
-          hx-target="closest .booking-form-container"
-          hx-swap="innerHTML"
-          class="row g-3">
-        {% csrf_token %}
-
-        <input type="hidden"
-               name="start_datetime"
-               value="{{ creneau.start|date:"Y-m-d\TH:i:s" }}">
-        <input type="hidden"
-               name="slot_duration_minutes"
-               value="{{ slot_duration_minutes }}">
-
-        <div class="col-auto">
-            <label for="slot-count-input" class="col-form-label">
-                {% translate "Nombre de créneaux" %}
-            </label>
-        </div>
-        <div class="col-auto">
-            <input type="number"
-                   id="slot-count-input"
-                   name="slot_count"
-                   value="1"
-                   min="1"
-                   max="{{ max_slot_count }}"
-                   class="form-control"
-                   required>
+        <div class="mb-3">
+            <span class="fw-semibold">{{ creneau.start|date:"l d/m/Y H:i" }}</span>
+            <span class="text-muted small ms-1">
+                ({{ slot_duration_minutes }} {% translate "min" %})
+            </span>
         </div>
 
-        <div class="col-auto">
-            <button type="submit"
-                    class="btn btn-primary"
-                    data-loading-disable>
-                {% translate "Ajouter au panier" %}
-            </button>
-        </div>
-    </form>
+        <form method="post"
+              action="/booking/{{ ressource.pk }}/add_to_basket/"
+              hx-post="/booking/{{ ressource.pk }}/add_to_basket/"
+              hx-target="#{{ slot_li_id }}"
+              hx-swap="outerHTML"
+              class="row g-2 align-items-center">
+            {% csrf_token %}
+
+            <input type="hidden"
+                   name="start_datetime"
+                   value="{{ creneau.start|date:'Y-m-d\TH:i:s' }}">
+            <input type="hidden"
+                   name="slot_duration_minutes"
+                   value="{{ slot_duration_minutes }}">
+
+            <div class="col-auto">
+                <label for="slot-count-input-{{ slot_li_id }}" class="col-form-label">
+                    {% translate "Nombre de créneaux" %}
+                </label>
+            </div>
+            <div class="col-auto">
+                <input type="number"
+                       id="slot-count-input-{{ slot_li_id }}"
+                       name="slot_count"
+                       value="1"
+                       min="1"
+                       max="{{ max_slot_count }}"
+                       class="form-control"
+                       required>
+            </div>
+            <div class="col-auto">
+                <button type="submit"
+                        class="btn btn-primary btn-sm"
+                        data-loading-disable>
+                    {% translate "Ajouter au panier" %}
+                </button>
+            </div>
+        </form>
+
+    </li>
 
 {% endif %}

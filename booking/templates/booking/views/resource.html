@@ -16,14 +16,8 @@ Le panier et le séparateur sont rendus par booking_base.html.
 / The basket and separator are rendered by booking_base.html.
 
 Flux HTMX / HTMX flow:
-  1. Clic sur un créneau disponible
-     → hx-get vers /booking/<pk>/booking_form/?...
-     (la page elle-même est sur /booking/resource/<pk>/)
-     → le formulaire se charge dans #booking-form-container
-
-  2. Soumission du formulaire (hx-post vers add_to_basket)
-     → succès : HX-Redirect recharge la page (panier + dispo mis à jour)
-     → erreur 422 : le formulaire d'erreur remplace le contenu du container
+  Clic sur un créneau → slot_list.html → hx-get booking_form → #booking-form-container
+  Soumission → add_to_basket → succès : HX-Redirect, erreur 422 : form inline
 -->
 <a href="/booking/"
    hx-get="/booking/"
@@ -65,66 +59,16 @@ Flux HTMX / HTMX flow:
     </p>
 {% endif %}
 
-<!--
-Zone de formulaire inline — vide au chargement initial.
-Un clic sur un créneau y charge le formulaire via hx-get.
-/ Inline form zone — empty on initial load.
-Clicking a slot loads the form here via hx-get.
--->
-<div id="booking-form-container"
-     class="booking-form-container mb-4"
-     aria-live="polite">
-</div>
-
 <h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
 
 {% if creneaux %}
-    <ul class="list-unstyled" aria-label="{% translate 'Créneaux' %}">
-        {% for creneau in creneaux %}
-
-            {% if creneau.remaining_capacity == 0 %}
-                <li class="d-flex align-items-center gap-2 mb-2 text-muted"
-                    data-testid="booking-slot-unavailable"
-                    aria-label="{% translate 'Créneau complet' %}">
-                    <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
-                    <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                    <span class="badge bg-danger ms-auto">
-                        {% translate "Complet" %}
-                    </span>
-                </li>
-
-            {% else %}
-                <!--
-                Créneau disponible — hx-get charge le formulaire inline dans
-                #booking-form-container. Le href classique reste pour le fallback
-                sans JS (redirige vers la page de connexion si non authentifié).
-                Si la requête HTMX arrive non authentifiée, la vue renvoie
-                HX-Redirect vers la page de connexion (navigation complète).
-                / Available slot — hx-get loads the form inline in
-                #booking-form-container. The plain href remains for no-JS
-                fallback (redirects to login if unauthenticated).
-                If the HTMX request arrives unauthenticated, the view sends
-                HX-Redirect to the login page (full navigation).
-                -->
-                <li class="d-flex align-items-center gap-2 mb-2"
-                    data-testid="booking-slot-available">
-                    <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
-                       hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:"Y-m-d\TH:i:s" }}&slot_duration_minutes={{ creneau.duration_minutes }}"
-                       hx-target="#booking-form-container"
-                       hx-swap="innerHTML"
-                       class="text-decoration-none d-flex align-items-center gap-2 w-100 text-reset">
-                        <i class="bi bi-check-circle text-success" aria-hidden="true"></i>
-                        <span>{{ creneau.start|date:"D d/m H:i" }}</span>
-                        <span class="badge bg-success ms-auto">
-                            {{ creneau.remaining_capacity }}
-                            {% translate "place(s)" %}
-                        </span>
-                    </a>
-                </li>
-            {% endif %}
-
-        {% endfor %}
-    </ul>
+    <!--
+    Liste des créneaux — rendue par le partial partagé slot_list.html.
+    form_container_id="container" → cible #booking-form-container.
+    / Slot list — rendered by the shared slot_list.html partial.
+    form_container_id="container" → target #booking-form-container.
+    -->
+    {% include "booking/partial/slot_list.html" with ressource=ressource creneaux=creneaux %}
 
 {% else %}
     <p class="text-muted" aria-live="polite">

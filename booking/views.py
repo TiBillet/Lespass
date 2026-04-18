@@ -8,6 +8,8 @@ from collections import defaultdict
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 
@@ -91,6 +93,17 @@ class BookingViewSet(viewsets.ViewSet):
             user   = request.user,
             status = Booking.STATUS_NEW,
         ).select_related('resource')
+
+    def _slot_li_id(self, ressource_pk, start_datetime):
+        """
+        Construit l'id DOM d'une ligne de créneau.
+        Doit correspondre au format "slot-<pk>-<Ymd-Hi>" des templates.
+        / Builds the DOM id of a slot row.
+        Must match the "slot-<pk>-<Ymd-Hi>" format used in templates.
+        """
+        if start_datetime:
+            return f"slot-{ressource_pk}-{start_datetime.strftime('%Y%m%d-%H%M')}"
+        return f"slot-{ressource_pk}-unknown"
 
     def list(self, request):
         contexte = get_context(request)
@@ -178,12 +191,15 @@ class BookingViewSet(viewsets.ViewSet):
             contexte = get_context(request)
             contexte.update({
                 'ressource':        ressource,
+                'slot_li_id':       self._slot_li_id(ressource.pk, None),
+                'start_datetime':   None,
                 'slot_indisponible': True,
             })
             return render(request, 'booking/partial/booking_form.html', contexte)
 
         start_datetime        = serializer_params.validated_data['start_datetime']
         slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
+        slot_li_id            = self._slot_li_id(ressource.pk, start_datetime)
 
         creneaux = compute_slots(ressource)
 
@@ -202,6 +218,7 @@ class BookingViewSet(viewsets.ViewSet):
             contexte = get_context(request)
             contexte.update({
                 'ressource':        ressource,
+                'slot_li_id':       slot_li_id,
                 'start_datetime':   start_datetime,
                 'slot_indisponible': True,
             })
@@ -214,9 +231,11 @@ class BookingViewSet(viewsets.ViewSet):
         contexte = get_context(request)
         contexte.update({
             'ressource':            ressource,
+            'slot_li_id':           slot_li_id,
             'creneau':              creneau_demande,
             'max_slot_count':       max_slot_count,
             'slot_duration_minutes': slot_duration_minutes,
+            'start_datetime':       start_datetime,
         })
         return render(request, 'booking/partial/booking_form.html', contexte)
 
@@ -249,14 +268,28 @@ class BookingViewSet(viewsets.ViewSet):
 
         ressource = get_object_or_404(Resource, pk=pk)
 
+        # Essaie de lire start_datetime depuis les données brutes pour le slot_li_id,
+        # même si le serializer échoue plus tard.
+        # / Try to read start_datetime from raw data for slot_li_id,
+        # even if the serializer fails later.
+        start_datetime_brut = parse_datetime(
+            request.data.get('start_datetime', '')
+        )
+        slot_duration_brut = request.data.get('slot_duration_minutes')
+        slot_li_id = self._slot_li_id(ressource.pk, start_datetime_brut)
+
         # request.data est parsé automatiquement par DRF selon le Content-Type.
-        # Pour application/json, JSONParser décode le corps de la requête.
         # / request.data is parsed automatically by DRF based on Content-Type.
-        # For application/json, JSONParser decodes the request body.
         serializer_corps = BookingCreateSerializer(data=request.data)
         if not serializer_corps.is_valid():
             contexte = get_context(request)
-            contexte.update({'erreur': serializer_corps.errors})
+            contexte.update({
+                'ressource':            ressource,
+                'slot_li_id':           slot_li_id,
+                'start_datetime':       start_datetime_brut,
+                'slot_duration_minutes': slot_duration_brut,
+                'erreur':               serializer_corps.errors,
+            })
             return render(
                 request,
                 'booking/partial/booking_form.html',
@@ -264,17 +297,27 @@ class BookingViewSet(viewsets.ViewSet):
                 status=422,
             )
 
+        start_datetime        = serializer_corps.validated_data['start_datetime']
+        slot_duration_minutes = serializer_corps.validated_data['slot_duration_minutes']
+        slot_li_id            = self._slot_li_id(ressource.pk, start_datetime)
+
         is_valid, resultat = validate_new_booking(
             resource              = ressource,
-            start_datetime        = serializer_corps.validated_data['start_datetime'],
-            slot_duration_minutes = serializer_corps.validated_data['slot_duration_minutes'],
+            start_datetime        = start_datetime,
+            slot_duration_minutes = slot_duration_minutes,
             slot_count            = serializer_corps.validated_data['slot_count'],
             member                = request.user,
         )
 
         if not is_valid:
             contexte = get_context(request)
-            contexte.update({'erreur': resultat})
+            contexte.update({
+                'ressource':            ressource,
+                'slot_li_id':           slot_li_id,
+                'start_datetime':       start_datetime,
+                'slot_duration_minutes': slot_duration_minutes,
+                'erreur':               resultat,
+            })
             return render(
                 request,
                 'booking/partial/booking_form.html',
@@ -282,18 +325,40 @@ class BookingViewSet(viewsets.ViewSet):
                 status=422,
             )
 
-        # Réservation créée — redirige vers la page courante pour recharger
-        # le panier et les disponibilités des créneaux en une seule opération.
-        # On utilise HTTP_REFERER pour retourner à la page d'où vient la requête
-        # (page liste ou page ressource), avec /booking/resource/<pk>/ comme repli.
-        # / Booking created — redirect to the current page to reload
-        # the basket and slot availability in one operation.
-        # HTTP_REFERER returns to the originating page (list or resource),
-        # with /booking/resource/<pk>/ as fallback.
-        url_de_retour = request.META.get('HTTP_REFERER') or f'/booking/resource/{ressource.pk}/'
-        reponse = HttpResponse(status=200)
-        reponse['HX-Redirect'] = url_de_retour
-        return reponse
+        # Réservation créée — renvoie la ligne du créneau mise à jour (capacité
+        # décrémentée) + le panier mis à jour en OOB swap.
+        # Le slot_row.html remplace le <li> du formulaire via outerHTML.
+        # / Booking created — return the updated slot row (decremented capacity)
+        # + the updated basket as an OOB swap.
+        # slot_row.html replaces the form <li> via outerHTML.
+
+        # Recompute le créneau pour obtenir la capacité après réservation.
+        # / Recompute the slot to get capacity after booking.
+        creneaux_mis_a_jour = compute_slots(ressource)
+        creneau_mis_a_jour = None
+        for creneau in creneaux_mis_a_jour:
+            if (creneau.start == start_datetime
+                    and creneau.duration_minutes() == slot_duration_minutes):
+                creneau_mis_a_jour = creneau
+                break
+
+        contexte_slot = {
+            'ressource': ressource,
+            'creneau':   creneau_mis_a_jour,
+        }
+        contexte_panier = get_context(request)
+        contexte_panier.update({
+            'reservations_en_cours': self._reservations_en_cours(request),
+            'oob': True,
+        })
+
+        slot_html   = render_to_string(
+            'booking/partial/slot_row.html', contexte_slot, request=request,
+        )
+        panier_html = render_to_string(
+            'booking/partial/basket.html', contexte_panier, request=request,
+        )
+        return HttpResponse(slot_html + panier_html)
 
     @action(detail=True, methods=['POST'], permission_classes=[permissions.AllowAny])
     def remove_from_basket(self, request, pk=None):

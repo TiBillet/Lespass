@@ -710,54 +710,67 @@ steps 6–7) with no refund, as no payment has been collected.
 ## 7. Server-side Views & Hypermedia Interactions
 
 TiBillet is a Hypermedia-Driven Application (HDA). The server returns HTML
-fragments; interactions are driven by HTTP requests with HTML responses via htmx.
-There is no JSON API layer for the booking module. All views follow the existing
-TiBillet HDA conventions.
+fragments; interactions are driven by HTTP requests with HTML responses via
+htmx. There is no JSON API layer for the booking module. All views follow
+the existing TiBillet HDA conventions.
 
-### 7.0 Booking Base Template
-
-All booking views extend `booking/booking_base.html` via
-`{% block booking_content %}`. This template owns everything shared across
-booking pages: `<main>` wrapper, basket (consistent position, always at
-the top), `<hr>` separator, and the HTMX 422 swap handler. The booking
-app never modifies `BaseBillet` skin templates (finding §17).
-
-`booking_base.html` extends `base_template` itself — the skin's full or
-headless template depending on whether the request is a direct page load
-or an HTMX navigation.
+### 7.0 Page Structure
 
 ```
-skin/base.html  (or headless.html for HTMX navigation)
-    └── booking/booking_base.html  (main, basket, 422 handler)
-            └── booking/views/home.html
-            └── booking/views/resource.html
+booking/booking_base.html
+    ├── #basket-container       (always at top — OOB-updated after every booking)
+    ├── {% block booking_content %}
+    │       ├── home.html
+    │       │       └── partial/card.html  (one per resource)
+    │       │               └── partial/slot_list.html
+    │       │                       └── partial/slot_row.html  (one per slot)
+    │       └── resource.html
+    │               └── partial/slot_list.html
+    │                       └── partial/slot_row.html  (one per slot)
+    └── HTMX 422 swap handler
 ```
+
+Each slot row has a stable DOM id `slot-<resource_pk>-<YmdHi>`. Clicking
+an available row replaces it (outerHTML) with `booking_form.html`, which
+carries the same id. On submit, the form is replaced back by the updated
+`slot_row.html` (via outerHTML); `#basket-container` is updated in the
+same response via HTMX OOB swap. No page reload is needed.
 
 ### 7.1 Web Pages
-
-Full-page renders. Accessible to everyone; actions within the page require
-login. Each can also be returned as an HTMX partial (replacing `<body>`) when
-triggered by an HTMX navigation request.
 
 #### Home — Resource Catalogue
 
 - URL: `GET /booking/`
 - Auth: public
 - Template: `booking/views/home.html`
-- Returns the list of all resources with their next available slots. Supports
-  tag filtering via URL parameter `?tag=`. Resources with no upcoming
-  availability are shown but greyed out.
+- List of all resources with their next available slot. Tag filter via
+  `?tag=`. Resources with no upcoming availability are shown greyed out.
 
 #### Resource Page
 
-The page dedicated to a single bookable resource: image, description,
-tag badges, basket, and slot list. Available slots load the booking
-form inline via HTMX; full slots are shown as inert badges. Clicking a
-slot while unauthenticated redirects to login.
-
-- URL: `GET /booking/resource/{pk}/`
+- URL: `GET /booking/resource/{resource_pk}/`
 - Auth: public
 - Template: `booking/views/resource.html`
+
+**What the member sees:**
+
+The slot list is grouped by date. For each date, every slot is shown:
+
++---------------------+---------------------------------------------------+
+| Slot state          | Presentation & action                             |
++=====================+===================================================+
+| Available           | Clickable link showing the time range.            |
+|                     | Click → `GET booking_form` → the slot row         |
+|                     | (`<li id="slot-<pk>-<YmdHi>">`) is replaced       |
+|                     | in-place by the booking form (outerHTML swap).    |
+|                     | Rendered by `partial/slot_row.html` (shared).     |
+|                     | If not logged in → redirect to login.             |
++---------------------+---------------------------------------------------+
+| Full                | Inert badge "Complet". Not clickable.             |
++---------------------+---------------------------------------------------+
+| Past / beyond       | Not shown.                                        |
+| horizon             |                                                   |
++---------------------+---------------------------------------------------+
 
 ### 7.2 Web Components
 
@@ -765,34 +778,75 @@ HTMX partials — replace a specific DOM fragment, never the full page.
 
 #### Booking Form
 
-- URL: `GET /booking/{pk}/booking_form/`
+- URL: `GET /booking/resource/{resource_pk}/booking_form/?start=<ISO-tz>`
 - Auth: member
-- Template: `booking/partial/booking_form.html`
-- Returns the date and slot selection form for the resource.
+- Target: `#slot-<resource_pk>-<YmdHi>` (the slot row, outerHTML swap)
+
+**What the member sees:** the booking form rendered inline in place of the
+slot row. Shows the chosen start time, a `slot_count` picker (1 to max
+consecutive available slots), and the total price.
+
+**Action:** submit → `POST add_to_basket`.
+
+- Success → the form `<li>` is replaced by the updated `slot_row.html`
+  (same outerHTML target); `#basket-container` is updated via OOB swap
+  in the same response. No page reload.
+- Error (422) → the form `<li>` is replaced by itself with an error
+  message and a "Réessayer" link that re-opens the booking form.
+
+#### Add to Basket
+
+- URL: `POST /booking/resource/{resource_pk}/add_to_basket/`
+- Auth: member
+- Target (success): `#slot-<resource_pk>-<YmdHi>` (outerHTML) + OOB
+  `#basket-container`
+- Target (error): `#slot-<resource_pk>-<YmdHi>` (outerHTML, form with
+  error)
+
+Creates a `new` booking for the chosen slot(s) and returns the updated
+basket. On validation failure returns the form with an error message.
+
+#### Remove from Basket
+
+- URL: `POST /booking/{booking_pk}/remove_from_basket/`
+- Auth: member
+- Target: `#basket-container`
+
+Deletes the `new` booking and returns the refreshed basket.
 
 #### Basket
 
-- URL: `POST /booking/{pk}/add_to_basket/`
-- URL: `POST /booking/{pk}/remove_from_basket/`
+- URL: `GET /booking/basket/`
 - Auth: member
-- Template: `booking/partial/basket.html`
-- Returns the updated basket with current bookings and total price.
+- Target: `#basket-container`
+
+**What the member sees:** list of `new` bookings (resource, time range,
+price per line), total, a remove button per line, and a "Confirmer"
+button.
+
+**Action:** "Confirmer" → `POST validate_basket`.
 
 #### Basket Confirmed
 
 - URL: `POST /booking/validate_basket/`
 - Auth: member
-- Template: `booking/partial/basket_confirmed.html`
-- Returns the confirmation of all bookings in the basket.
+- Target: `#basket-container`
+
+Moves all `new` bookings to `confirmed` (via payment if `prix > 0`) and
+returns a confirmation partial. On payment failure returns an error
+partial and the bookings are deleted.
 
 #### Cancel Booking
 
 - URL: `POST /booking/cancel/`
 - Auth: member
-- Template: `booking/partial/cancel_error.html` (on error only)
-- Returns empty HTML on success; error partial on failure.
+- Target: `#basket-container` (empty on success)
 
-### Member (account administration)
+**Action:** member clicks "Annuler" on a `confirmed` booking in their
+account. Returns empty HTML on success; error partial if past the
+cancellation deadline.
+
+### 7.3 Member Account Administration
 
 Members have access to a restricted area of the Django admin panel.
 Unlike volunteers, a member can only view and act on their own bookings.
@@ -805,11 +859,11 @@ Unlike volunteers, a member can only view and act on their own bookings.
 |                 |              | deadline                                     |
 +-----------------+--------------+----------------------------------------------+
 
-### Volunteer (backoffice)
+### 7.4 Volunteer Backoffice
 
-The volunteer backoffice is managed entirely by the Django admin panel. No custom
-views are required for resource management, weekly openings, calendars, or booking
-administration.
+The volunteer backoffice is managed entirely by the Django admin panel.
+No custom views are required for resource management, weekly openings,
+calendars, or booking administration.
 
 Django admin registration:
 
