@@ -283,13 +283,19 @@ class TestPanierMembershipFlow:
         # / Offcanvas loaded via HTMX.
         page.wait_for_selector('#membership-form', timeout=10_000)
 
-        # 3. Selectionner le premier radio prix dispo + remplir nom/prenom.
-        # / Select first available price radio + fill name/firstname.
-        price_radio = page.locator(
-            'input[type="radio"][name="price"]:not([disabled])'
+        # 3. Selectionner un radio de prix FIXE (pas free_price, pas recurring).
+        # / Select a FIXED-price radio (not free_price, not recurring).
+        # Match par texte "Solidaire" dans le label — c'est le tarif fixe de
+        # l'adhesion Tiers Lustre (seeded par demo_data_v2.py). Le 1er radio
+        # est "Prix libre" qui exige custom_amount et echoue la validation
+        # HTML5 required → add-to-cart bloque → badge reste 0.
+        # / Match by text "Solidaire" in label — fixed rate of Tiers Lustre
+        # (seeded). Default .first is "Prix libre" which fails validation.
+        price_label = page.locator(
+            'label.custom-control-label:has-text("Solidaire")'
         ).first
-        price_radio.wait_for(state="visible", timeout=5_000)
-        price_radio.check()
+        price_label.wait_for(state="visible", timeout=5_000)
+        price_label.click()
 
         # firstname/lastname sont required sur le form d'adhesion (collectes
         # et stockes sur l'item panier pour prioriser a la materialisation).
@@ -303,12 +309,12 @@ class TestPanierMembershipFlow:
 
         # 4. Le badge navbar doit passer a au moins 1 apres swap OOB.
         # / Navbar badge should reach at least 1 after OOB swap.
-        # C'est le signal fiable que l'ajout a reussi. Le toast Swal peut
-        # deja etre dismissed (timer 3500ms) au moment de l'assert — on
-        # le verifie donc pas en E2E (couvert par le test manuel Chrome).
-        # / Reliable success signal. Swal toast may already be dismissed
-        # by the time of assert — verified manually in Chrome instead.
-        badge_nav = page.locator("#panier-badge-nav")
+        # Scoper sur .navbar pour eviter le strict mode violation (cf. PIEGES 9.39) —
+        # si le partial panier_content etait aussi dans la page, il y aurait
+        # un 2eme #panier-badge-nav. Avec le fix Session 09, le badge n'est
+        # plus duplique mais on scope quand meme pour robustesse.
+        # / Scope to .navbar to avoid strict mode violation (PIEGES 9.39).
+        badge_nav = page.locator(".navbar #panier-badge-nav")
         expect(badge_nav).to_contain_text("1", timeout=5_000)
 
         # 6. Naviguer vers /panier/ et verifier l'item dans #panier-content.
@@ -328,5 +334,6 @@ class TestPanierMembershipFlow:
         clear_btn.click()
         page.wait_for_selector('text=/Votre panier vous attend|Your cart is waiting/', timeout=5_000)
         # Apres le swap, le badge navbar ne doit plus contenir de chiffre.
+        # Scope `.navbar` obligatoire (cf. PIEGES 9.39).
         # / After swap, navbar badge should no longer contain a digit.
-        expect(page.locator("#panier-badge-nav")).not_to_contain_text("1", timeout=3_000)
+        expect(page.locator(".navbar #panier-badge-nav")).not_to_contain_text("1", timeout=3_000)

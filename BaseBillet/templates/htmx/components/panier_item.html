@@ -22,21 +22,19 @@
                 {% if detail.price.prix %}&middot; {{ detail.price.prix }} €{% endif %}
             </small>
         </div>
-        {# --- Controle qty (billet uniquement) --- #}
-        {# --- Quantity control (ticket only) --- #}
-        <div class="input-group input-group-sm" style="width: 120px;">
-            <form method="post" action="{% url 'panier-update-quantity' pk=forloop.counter0 %}"
-                  hx-post="{% url 'panier-update-quantity' pk=forloop.counter0 %}"
-                  hx-target="#panier-content"
-                  hx-swap="outerHTML"
-                  class="d-flex w-100">
-                {% csrf_token %}
-                <input type="number" name="qty" value="{{ detail.qty }}" min="1"
-                       class="form-control form-control-sm text-center"
-                       data-testid="panier-item-qty"
-                       onchange="this.form.requestSubmit();">
-            </form>
-        </div>
+        {# --- Affichage qty (lecture seule, billet uniquement) --- #}
+        {# La modification de quantite n'est pas supportee dans le panier : #}
+        {# pour changer la quantite, retirer l'item et re-ajouter via l'event. #}
+        {# Cela garantit que toutes les validations (max_per_user, jauge) sont #}
+        {# appliquees via add_ticket, sans risque de contournement via edit UI. #}
+        {# / Read-only qty display (ticket only). Quantity changes are not #}
+        {# supported in cart: to change qty, remove + re-add via event page. #}
+        {# This ensures all validations go through add_ticket — no UI bypass. #}
+        <span class="badge bg-secondary-subtle text-body fs-6 tab-nums"
+              data-testid="panier-item-qty"
+              aria-label="{% blocktrans count n=detail.qty %}{{ n }} ticket{% plural %}{{ n }} tickets{% endblocktrans %}">
+            × {{ detail.qty }}
+        </span>
     {% else %}
         {# --- Adhesion : image product ou placeholder badge --- #}
         {# --- Membership: product image or badge placeholder --- #}

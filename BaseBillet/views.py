@@ -3872,13 +3872,26 @@ class PanierMVT(viewsets.ViewSet):
         :return: HttpResponse avec le partial + headers HX-Trigger.
         """
         if swap_cart_content:
-            # Rend le contenu panier (items + code promo + total + checkout).
-            # Le partial inclut panier_badge.html en fin (pour l'OOB badge).
-            # / Renders the cart content (items + promo + total + checkout).
-            # The partial includes panier_badge.html at the end (for OOB badge).
+            # Rend 2 partials concatenes : le contenu panier (swap sur
+            # #panier-content via hx-swap="outerHTML") + le badge navbar
+            # (OOB swap sur #panier-badge-nav). Ils sont separes pour
+            # eviter la duplication d'id #panier-badge-nav dans le DOM
+            # initial (navbar rend deja un span avec ce id).
+            # / Render 2 concatenated partials: cart content (swap into
+            # #panier-content) + navbar badge (OOB). Separate to avoid
+            # duplicate #panier-badge-nav id in initial DOM.
+            from django.template.loader import render_to_string
+            from django.http import HttpResponse
             template_context = get_context(request)
-            response = render(request, 'htmx/components/panier_content.html',
-                              context=template_context)
+            content_html = render_to_string(
+                'htmx/components/panier_content.html',
+                context=template_context, request=request,
+            )
+            badge_html = render_to_string(
+                'htmx/components/panier_badge.html',
+                context=template_context, request=request,
+            )
+            response = HttpResponse(content_html + badge_html)
         else:
             response = render(request, 'htmx/components/panier_toast.html')
 
@@ -3944,6 +3957,25 @@ class PanierMVT(viewsets.ViewSet):
         firstname = request.POST.get('firstname') or None
         lastname = request.POST.get('lastname') or None
 
+        # Code promo : lie a un Product specifique (FK). On ne passe que si
+        # ce code existe pour le product de l'adhesion cible — sinon None.
+        # Validation complete (actif, is_usable, match) dans add_membership.
+        # / Promo code linked to a specific Product (FK). Passed only if it
+        # matches target product; else None. Full validation in add_membership.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+        item_promo = None
+        if promotional_code_name and price_uuid:
+            from BaseBillet.models import PromotionalCode, Price as PriceModel
+            try:
+                _target_price = PriceModel.objects.get(uuid=price_uuid)
+                if PromotionalCode.objects.filter(
+                    name=promotional_code_name,
+                    product=_target_price.product,
+                ).exists():
+                    item_promo = promotional_code_name
+            except PriceModel.DoesNotExist:
+                pass  # add_membership levera l'erreur Price not found
+
         panier = PanierSession(request)
         try:
             panier.add_membership(
@@ -3953,6 +3985,7 @@ class PanierMVT(viewsets.ViewSet):
                 custom_form=custom_form,
                 firstname=firstname,
                 lastname=lastname,
+                promotional_code_name=item_promo,
             )
         except InvalidItemError as exc:
             return self._render_badge_and_toast(request, message=str(exc), level='error')
@@ -3961,6 +3994,12 @@ class PanierMVT(viewsets.ViewSet):
             return self._render_badge_and_toast(
                 request, message=_("Unable to add membership."), level='error'
             )
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
+        # / If the "Add to cart and pay" button sent `then=checkout`, chain
+        # directly to checkout (Stripe redirect or free order).
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
         return self._render_badge_and_toast(request, message=_("Membership added to cart."))
 
     # --- POST /panier/remove/<int:pk>/ ---
@@ -3981,24 +4020,10 @@ class PanierMVT(viewsets.ViewSet):
             request, message=_("Item removed."), swap_cart_content=True,
         )
 
-    # --- POST /panier/update_quantity/<int:pk>/ ---
-    @action(detail=True, methods=['POST'], url_path='update_quantity')
-    def update_quantity(self, request, pk=None):
-        """Change la qty d'un item billet. Si qty<=0, retire l'item."""
-        from BaseBillet.services_panier import PanierSession
-
-        try:
-            index = int(pk)
-            qty = int(request.POST.get('qty', 0))
-        except (TypeError, ValueError):
-            return self._render_badge_and_toast(
-                request, message=_("Invalid parameters."), level='error'
-            )
-        panier = PanierSession(request)
-        panier.update_quantity(index, qty)
-        return self._render_badge_and_toast(
-            request, message=_("Cart updated."), swap_cart_content=True,
-        )
+    # Note : l'endpoint update_quantity a ete supprime volontairement (refactor
+    # 2026-04). Pour changer la quantite, l'user retire l'item et le re-ajoute
+    # via booking_form, garantissant que toutes les validations sont appliquees.
+    # / update_quantity endpoint removed: user must remove + re-add to change qty.
 
     # --- POST /panier/promo_code/ ---
     @action(detail=False, methods=['POST'], url_path='promo_code')
@@ -4054,7 +4079,7 @@ class PanierMVT(viewsets.ViewSet):
         Uses request.user as buyer (auth required).
         """
         from BaseBillet.services_commande import CommandeService, CommandeServiceError
-        from BaseBillet.services_panier import PanierSession
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
 
         user = request.user
         # Les prenom/nom de l'acheteur sont collectes :
@@ -4065,6 +4090,14 @@ class PanierMVT(viewsets.ViewSet):
         # / Buyer first/last name collected via booking/membership forms or Stripe.
         # We pass user.first_name/last_name as fallback, or empty string — Stripe fills in.
         panier = PanierSession(request)
+        # InvalidItemError est leve par revalidate_all() en Phase 0 de
+        # materialiser() — ex : user a retire une adhesion obligatoire du
+        # panier entre temps. On remonte le message precis a l'utilisateur
+        # ("This rate requires a membership: X") plutot qu'un generique
+        # "Checkout failed" via le fallback Exception.
+        # / InvalidItemError raised by revalidate_all() in Phase 0 — e.g.
+        # user removed a required membership from cart. Surface the precise
+        # message instead of the generic "Checkout failed".
         try:
             commande = CommandeService.materialiser(
                 panier, user,
@@ -4072,6 +4105,8 @@ class PanierMVT(viewsets.ViewSet):
                 last_name=user.last_name or '',
                 email=user.email,
             )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
         except CommandeServiceError as exc:
             return self._render_badge_and_toast(request, message=str(exc), level='error')
         except Exception as exc:
@@ -4157,6 +4192,11 @@ class PanierMVT(viewsets.ViewSet):
         options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
         # Custom form fields (prefix form__) / Custom form fields
         custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+        # Code promo saisi dans booking_form (champ `promotional_code`).
+        # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
+        # is_usable, lie au produit). Le front n'envoie que le nom.
+        # / Promo code from booking_form. Server-validated in add_ticket.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
 
         items_added = 0
         try:
@@ -4180,6 +4220,25 @@ class PanierMVT(viewsets.ViewSet):
                         if custom_amount_raw not in [None, '', 'null']:
                             custom_amount = custom_amount_raw
 
+                    # Le code promo est lie a UN product specifique (FK). Le
+                    # booking_form a un champ global `promotional_code` pour
+                    # tout l'event, mais l'event peut avoir plusieurs products.
+                    # On ne passe le code que pour les prices dont le product
+                    # correspond — pour les autres, on passe None (silent skip,
+                    # pas d'erreur). Validation complete (actif, is_usable,
+                    # product match) faite dans add_ticket.
+                    # / Promo code is linked to ONE product (FK). The form
+                    # has a global field but events may have multiple products.
+                    # We pass the code only for matching-product prices;
+                    # others get None (silent skip, no error).
+                    item_promo = None
+                    if promotional_code_name:
+                        from BaseBillet.models import PromotionalCode
+                        if PromotionalCode.objects.filter(
+                            name=promotional_code_name,
+                            product=price.product,
+                        ).exists():
+                            item_promo = promotional_code_name
                     panier.add_ticket(
                         event_uuid=event.uuid,
                         price_uuid=price.uuid,
@@ -4187,6 +4246,7 @@ class PanierMVT(viewsets.ViewSet):
                         custom_amount=custom_amount,
                         options=options_ids,
                         custom_form=custom_form,
+                        promotional_code_name=item_promo,
                     )
                     items_added += 1
         except InvalidItemError as exc:
@@ -4209,4 +4269,9 @@ class PanierMVT(viewsets.ViewSet):
             "%(count)d tickets added to cart.",
             items_added,
         ) % {'count': items_added}
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout.
+        # / If "Add to cart and pay" button sent `then=checkout`, chain to checkout.
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
         return self._render_badge_and_toast(request, message=message)

@@ -635,6 +635,10 @@
         {% endcomment %}
         {% if user.is_authenticated %}
             {% if panier.count > 0 %}
+                {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
+                {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
+                {# / Cart non-empty: both buttons end at cart. #}
+                {# 1) Add to cart. 2) Add + pay: chain to checkout. #}
                 <button type="button"
                         class="btn btn-primary w-100 mb-2"
                         hx-post="/panier/add/membership/"
@@ -646,14 +650,17 @@
                     <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
                     {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
                 </button>
-                <button id="membership-submit" type="submit"
+                <button type="button"
                         class="btn btn-outline-primary w-100"
+                        hx-post="/panier/add/membership/"
+                        hx-include="closest form"
+                        hx-vals='{"then": "checkout"}'
+                        hx-swap="none"
                         data-loading-disable
-                        data-testid="membership-submit"
-                        aria-label="{% translate 'Pay this membership now' %}">
+                        data-testid="membership-add-and-pay"
+                        aria-label="{% translate 'Add to cart and pay all items' %}">
                     <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
-                    {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}
-                        {% translate 'Pay now' %}{% endif %}
+                    {% translate "Add to cart and pay" %}
                 </button>
             {% else %}
                 <button id="membership-submit" type="submit"

@@ -136,8 +136,9 @@ def test_POST_remove_retire_item(http_client_auth, event_avec_tarif):
 
 
 @pytest.mark.django_db
-def test_POST_update_quantity_change_qty(http_client_auth, event_avec_tarif):
-    """POST /panier/0/update_quantity/ avec qty=5 → qty change."""
+def test_POST_update_quantity_endpoint_retire(http_client_auth, event_avec_tarif):
+    """POST /panier/0/update_quantity/ → 404 (endpoint supprime refactor 2026-04).
+    / Endpoint removed — POST returns 404."""
     client, _user = http_client_auth
     event, price = event_avec_tarif
     client.post('/panier/add/tickets_batch/', {
@@ -146,9 +147,13 @@ def test_POST_update_quantity_change_qty(http_client_auth, event_avec_tarif):
     })
 
     response = client.post('/panier/0/update_quantity/', {'qty': 5})
-    assert response.status_code == 200
+    # L'endpoint n'existe plus — DRF renvoie 404.
+    # / Endpoint no longer exists — DRF returns 404.
+    assert response.status_code == 404
+    # Le panier reste intact (qty inchangee)
+    # / Cart untouched (qty unchanged).
     session = client.session
-    assert session['panier']['items'][0]['qty'] == 5
+    assert session['panier']['items'][0]['qty'] == 1
 
 
 @pytest.mark.django_db

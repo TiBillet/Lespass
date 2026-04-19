@@ -1139,6 +1139,13 @@
     text-wrap: balance;
 }
 
+/* Badge compteur du panier dans la navbar — ajustement optique */
+/* / Cart navbar badge — optical fine-tuning */
+.skin-faire-festival #panier-badge-nav .badge {
+    margin-top: 0.25rem;
+    margin-left: -0.3rem;
+}
+
 /* ==========================================================================
    FIN DU FICHIER CSS FAIRE FESTIVAL
    ========================================================================== */

@@ -201,51 +201,9 @@ def test_remove_item_index_invalide_silencieux(request_with_session, event_avec_
     assert len(panier.items()) == 1
 
 
-@pytest.mark.django_db
-def test_update_quantity_change_qty(request_with_session, event_avec_tarif):
-    """update_quantity modifie la qty d'un item billet.
-    / update_quantity changes the qty of a ticket item."""
-    from BaseBillet.services_panier import PanierSession
-    event, price = event_avec_tarif
-    panier = PanierSession(request_with_session)
-    panier.add_ticket(event.uuid, price.uuid, qty=1)
-
-    panier.update_quantity(0, 5)
-
-    assert panier.items()[0]['qty'] == 5
-    assert panier.count() == 5
-
-
-@pytest.mark.django_db
-def test_update_quantity_zero_retire_item(request_with_session, event_avec_tarif):
-    """update_quantity avec qty=0 retire l'item.
-    / update_quantity with qty=0 removes the item."""
-    from BaseBillet.services_panier import PanierSession
-    event, price = event_avec_tarif
-    panier = PanierSession(request_with_session)
-    panier.add_ticket(event.uuid, price.uuid, qty=3)
-
-    panier.update_quantity(0, 0)
-
-    assert panier.is_empty() is True
-
-
-@pytest.mark.django_db
-def test_update_quantity_ignore_membership(request_with_session, adhesion_standard):
-    """update_quantity sur un membership n'a aucun effet.
-    / update_quantity on a membership has no effect."""
-    from BaseBillet.services_panier import PanierSession
-    _product, price = adhesion_standard
-    panier = PanierSession(request_with_session)
-    panier.add_membership(price.uuid)
-
-    panier.update_quantity(0, 5)  # ignoré pour membership
-
-    # L'item membership est toujours là, sans modif
-    items = panier.items()
-    assert len(items) == 1
-    assert items[0]['type'] == 'membership'
-    assert 'qty' not in items[0]  # pas de qty sur membership
+# Note : les tests update_quantity ont ete supprimes (refactor 2026-04).
+# La methode n'existe plus — pour changer une qty, l'user retire + re-ajoute.
+# / update_quantity tests removed (2026-04 refactor). Method no longer exists.
 
 
 @pytest.mark.django_db
@@ -696,5 +654,398 @@ def test_calcul_total_centimes(request_with_session, event_avec_tarif):
     panier.add_ticket(event.uuid, price.uuid, qty=3)
 
     assert panier.calcul_total_centimes() == 3000  # 3 x 10€ = 3000 centimes
+
+
+# ==========================================================================
+# Tests validate_ticket_cart_limits (Validation 5bis cart-aware)
+# / Tests for validate_ticket_cart_limits (Validation 5bis cart-aware)
+# ==========================================================================
+
+
+@pytest.fixture
+def event_avec_limites(tenant_context_lespass):
+    """
+    Event configure avec limites : jauge_max=10, max_per_user=4.
+    Product max_per_user=3, Price Plein max_per_user=2.
+    / Event with limits configured for max_per_user testing.
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+    from django.utils import timezone
+    from BaseBillet.models import Event, Price, Product
+
+    event = Event.objects.create(
+        name=f"EvtLim {uuid.uuid4()}",
+        datetime=timezone.now() + timedelta(days=7),
+        jauge_max=10,
+        max_per_user=4,
+    )
+    product = Product.objects.create(
+        name=f"Billet {uuid.uuid4()}",
+        categorie_article=Product.BILLET,
+        max_per_user=3,
+    )
+    event.products.add(product)
+    price = Price.objects.create(
+        product=product, name="Plein", prix=Decimal("10.00"),
+        publish=True, max_per_user=2,
+    )
+    yield event, product, price
+
+
+@pytest.mark.django_db
+def test_add_ticket_refuse_si_panier_seul_depasse_event_max_per_user(
+    request_with_session, event_avec_limites,
+):
+    """
+    Panier anonyme : 2 items qty=2 chacun = 4 tickets. Event max_per_user=4.
+    Un 3e add (qty=1) ferait 5 → refuse.
+    / Cart alone > event.max_per_user → rejected.
+    """
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+    from decimal import Decimal
+    from BaseBillet.models import Price
+
+    event, product, price = event_avec_limites
+    # Pour isoler le check event.max_per_user, on desactive product.max_per_user
+    # (qui vaut 3) sinon il serait hit avant event.max_per_user (=4).
+    # On cree aussi un 2eme price pour bypass price.max_per_user=2.
+    # / To isolate event.max_per_user check, relax product.max_per_user (=3)
+    # otherwise it triggers before event.max_per_user (=4). Add 2nd price too.
+    product.max_per_user = None
+    product.save()
+    price2 = Price.objects.create(
+        product=product, name="Plein 2", prix=Decimal("10.00"),
+        publish=True, max_per_user=2,
+    )
+    panier = PanierSession(request_with_session)
+    panier.add_ticket(event.uuid, price.uuid, qty=2)
+    panier.add_ticket(event.uuid, price2.uuid, qty=2)  # total 4 = max_per_user
+
+    # 5e ticket → dépasse event.max_per_user
+    # / 5th ticket → exceeds event.max_per_user
+    with pytest.raises(InvalidItemError) as exc_info:
+        panier.add_ticket(event.uuid, price.uuid, qty=1)
+    assert "per-user limit" in str(exc_info.value).lower() or \
+           "event" in str(exc_info.value).lower()
+
+
+@pytest.mark.django_db
+def test_add_ticket_refuse_si_panier_depasse_product_max_per_user(
+    request_with_session, event_avec_limites,
+):
+    """
+    Panier avec 3 billets (= product.max_per_user=3). Un 4e add → refuse.
+    / Cart reaches product.max_per_user → next add rejected.
+    """
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+    from decimal import Decimal
+    from BaseBillet.models import Price
+
+    event, product, price = event_avec_limites
+    # 2nd price sur le meme product pour pouvoir atteindre product.max_per_user=3
+    # sans etre limite par price.max_per_user=2.
+    # / 2nd price on same product to reach product limit without price limit.
+    price2 = Price.objects.create(
+        product=product, name="Plein 2", prix=Decimal("10.00"),
+        publish=True, max_per_user=2,
+    )
+    panier = PanierSession(request_with_session)
+    panier.add_ticket(event.uuid, price.uuid, qty=2)  # 2 sur price1
+    panier.add_ticket(event.uuid, price2.uuid, qty=1)  # 1 sur price2 = 3 total product
+
+    with pytest.raises(InvalidItemError) as exc_info:
+        panier.add_ticket(event.uuid, price2.uuid, qty=1)  # 4 total product
+    assert "product" in str(exc_info.value).lower()
+
+
+@pytest.mark.django_db
+def test_add_ticket_refuse_si_panier_depasse_price_max_per_user(
+    request_with_session, event_avec_limites,
+):
+    """
+    Panier avec 2 billets sur price (= price.max_per_user=2). 3e → refuse.
+    / Cart reaches price.max_per_user → next add rejected.
+    """
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+    event, _product, price = event_avec_limites
+    panier = PanierSession(request_with_session)
+    panier.add_ticket(event.uuid, price.uuid, qty=2)  # = price.max_per_user
+
+    with pytest.raises(InvalidItemError) as exc_info:
+        panier.add_ticket(event.uuid, price.uuid, qty=1)
+    assert "rate" in str(exc_info.value).lower() or \
+           "per-user" in str(exc_info.value).lower()
+
+
+@pytest.mark.django_db
+def test_add_ticket_accepte_exactement_a_la_limite(
+    request_with_session, event_avec_limites,
+):
+    """
+    Ajout pile a la limite (max_per_user=2, qty=2) → accepte.
+    Cas "edge" : limite inclusive.
+    / Adding exactly at limit (qty=max) → accepted. Edge case: inclusive limit.
+    """
+    from BaseBillet.services_panier import PanierSession
+
+    event, _product, price = event_avec_limites  # price.max_per_user=2
+    panier = PanierSession(request_with_session)
+    panier.add_ticket(event.uuid, price.uuid, qty=2)  # exactement 2
+
+    assert panier.count() == 2
+
+
+@pytest.mark.django_db
+def test_add_ticket_refuse_si_jauge_event_depassee(
+    request_with_session, tenant_context_lespass,
+):
+    """
+    Jauge event=5, pas de tickets existants, panier vide. Ajout qty=6 → refuse.
+    / Event jauge=5, empty cart, adding qty=6 → rejected.
+    """
+    from datetime import timedelta
+    from decimal import Decimal
+    from django.utils import timezone
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+    from BaseBillet.models import Event, Price, Product
+
+    event = Event.objects.create(
+        name=f"EvtJauge {uuid.uuid4()}",
+        datetime=timezone.now() + timedelta(days=7),
+        jauge_max=5,
+        max_per_user=10,  # desactive pour isoler la jauge
+    )
+    product = Product.objects.create(
+        name=f"Billet {uuid.uuid4()}", categorie_article=Product.BILLET,
+    )
+    event.products.add(product)
+    price = Price.objects.create(
+        product=product, name="Plein", prix=Decimal("10.00"),
+        publish=True, max_per_user=10,
+    )
+    panier = PanierSession(request_with_session)
+
+    with pytest.raises(InvalidItemError) as exc_info:
+        panier.add_ticket(event.uuid, price.uuid, qty=6)  # > jauge_max
+    assert "seat" in str(exc_info.value).lower() or \
+           "available" in str(exc_info.value).lower() or \
+           "place" in str(exc_info.value).lower()
+
+
+@pytest.mark.django_db
+def test_add_ticket_user_auth_refuse_si_db_plus_cart_depasse_event_max(
+    tenant_context_lespass, event_avec_limites,
+):
+    """
+    User auth avec 2 tickets VALID en DB + 2 dans panier = 4 (event.max_per_user=4).
+    5e ticket → refuse.
+    / Auth user with 2 DB tickets + 2 cart = event.max. Next → rejected.
+    """
+    import uuid as uuid_mod
+    from decimal import Decimal
+    from datetime import timedelta
+    from django.utils import timezone
+    from django.test import RequestFactory
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+    from BaseBillet.models import (
+        Event, Price, Product, Reservation, Ticket, ProductSold, PriceSold,
+    )
+    from AuthBillet.models import TibilletUser
+
+    event, product, price = event_avec_limites
+    # Desactiver product.max_per_user (=3) pour isoler event.max_per_user (=4).
+    # / Relax product.max_per_user to isolate event check.
+    product.max_per_user = None
+    product.save()
+
+    user = TibilletUser.objects.create(
+        email=f"limit-{uuid_mod.uuid4()}@example.org",
+        username=f"limit-{uuid_mod.uuid4()}",
+        is_active=True,
+    )
+    # Creer 2 tickets VALID en DB pour ce user/event/price
+    # / Create 2 VALID tickets in DB for this user/event/price
+    product_sold = ProductSold.objects.create(product=product)
+    price_sold = PriceSold.objects.create(
+        productsold=product_sold, price=price, prix=price.prix,
+    )
+    reservation = Reservation.objects.create(
+        user_commande=user, event=event, status=Reservation.PAID,
+    )
+    for _i in range(2):
+        Ticket.objects.create(
+            reservation=reservation, pricesold=price_sold,
+            status=Ticket.NOT_SCANNED,
+        )
+
+    # Creer request avec user auth
+    # / Create request with auth user
+    factory = RequestFactory()
+    request = factory.post('/')
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+    request.user = user
+
+    panier = PanierSession(request)
+    # Ajouter 2 dans le panier → DB (2) + cart (2) = 4 = event.max_per_user
+    # Mais price.max_per_user=2 limite aussi → on change de price pour bypass
+    from BaseBillet.models import Price as PriceModel
+    price2 = PriceModel.objects.create(
+        product=product, name="Plein 2", prix=Decimal("10.00"),
+        publish=True, max_per_user=2,
+    )
+    panier.add_ticket(event.uuid, price2.uuid, qty=2)  # DB 2 + cart 2 = 4 OK
+
+    # 5e ticket → depasse event.max_per_user=4
+    # / 5th ticket → exceeds event.max_per_user
+    with pytest.raises(InvalidItemError):
+        panier.add_ticket(event.uuid, price2.uuid, qty=1)
+
+
+@pytest.mark.django_db
+def test_add_ticket_jauge_compte_under_purchase(
+    tenant_context_lespass, event_avec_limites,
+):
+    """
+    Jauge=10. Autre user a 8 tickets CREATED (<15min = under_purchase).
+    Panier courant 2 tickets → total 10 = jauge. Un 3e → refuse (11 > 10).
+    / Jauge 10 with 8 under-purchase tickets from another user. Cart 2 ok,
+    but next add would exceed.
+    """
+    import uuid as uuid_mod
+    from decimal import Decimal
+    from django.utils import timezone
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+    from BaseBillet.models import (
+        Event, Price, Product, Reservation, Ticket, ProductSold, PriceSold,
+    )
+    from AuthBillet.models import TibilletUser
+
+    event, product, price = event_avec_limites
+    # Pousser max_per_user pour isoler la jauge
+    # / Relax max_per_user to isolate jauge check
+    event.max_per_user = 100
+    event.save()
+    price.max_per_user = 100
+    price.save()
+    product.max_per_user = 100
+    product.save()
+
+    # Autre user avec 8 tickets CREATED (under_purchase)
+    # / Other user with 8 under_purchase tickets
+    other = TibilletUser.objects.create(
+        email=f"other-{uuid_mod.uuid4()}@example.org",
+        username=f"other-{uuid_mod.uuid4()}",
+        is_active=True,
+    )
+    product_sold = ProductSold.objects.create(product=product)
+    price_sold = PriceSold.objects.create(
+        productsold=product_sold, price=price, prix=price.prix,
+    )
+    reservation = Reservation.objects.create(
+        user_commande=other, event=event, status=Reservation.UNPAID,
+    )
+    # Force datetime recent pour que under_purchase() les compte
+    # / Force recent datetime so under_purchase() counts them
+    reservation.datetime = timezone.now()
+    reservation.save()
+    for _i in range(8):
+        Ticket.objects.create(
+            reservation=reservation, pricesold=price_sold,
+            status=Ticket.CREATED,
+        )
+
+    # Panier courant (user anonyme) : 2 tickets OK (8 + 2 = 10 = jauge)
+    # / Current cart (anon): 2 tickets OK
+    from django.test import RequestFactory
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from django.contrib.auth.models import AnonymousUser
+    factory = RequestFactory()
+    request = factory.post('/')
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+    request.user = AnonymousUser()
+    panier = PanierSession(request)
+    panier.add_ticket(event.uuid, price.uuid, qty=2)
+
+    # 3e → 11 > 10 jauge
+    # / 3rd → 11 > 10 jauge
+    with pytest.raises(InvalidItemError) as exc_info:
+        panier.add_ticket(event.uuid, price.uuid, qty=1)
+    assert "seat" in str(exc_info.value).lower() or \
+           "available" in str(exc_info.value).lower() or \
+           "place" in str(exc_info.value).lower()
+
+
+@pytest.mark.django_db
+def test_revalidate_all_detecte_limite_depassee_entre_ajout_et_checkout(
+    tenant_context_lespass, event_avec_limites,
+):
+    """
+    Scenario : user ajoute 2 billets, entre l'ajout et le checkout un autre
+    user fait saturer la jauge de l'event. revalidate_all() doit detecter.
+    / User adds 2 tickets, another user fills the jauge, then revalidate_all
+    detects the overflow at checkout.
+    """
+    import uuid as uuid_mod
+    from decimal import Decimal
+    from django.utils import timezone
+    from django.test import RequestFactory
+    from django.contrib.sessions.middleware import SessionMiddleware
+    from django.contrib.auth.models import AnonymousUser
+    from BaseBillet.services_panier import PanierSession, InvalidItemError
+    from BaseBillet.models import (
+        Event, Price, Product, Reservation, Ticket, ProductSold, PriceSold,
+    )
+    from AuthBillet.models import TibilletUser
+
+    event, product, price = event_avec_limites
+    event.max_per_user = 100
+    event.save()
+    price.max_per_user = 100
+    price.save()
+    product.max_per_user = 100
+    product.save()
+    event.jauge_max = 3
+    event.save()
+
+    # 1. User 1 (anonyme) ajoute 2 billets — jauge=3, DB vide, cart 2 → OK
+    # / User 1 (anon) adds 2 tickets — jauge=3, DB empty, cart 2 → OK
+    factory = RequestFactory()
+    request = factory.post('/')
+    SessionMiddleware(lambda r: None).process_request(request)
+    request.session.save()
+    request.user = AnonymousUser()
+    panier = PanierSession(request)
+    panier.add_ticket(event.uuid, price.uuid, qty=2)
+    assert panier.count() == 2
+
+    # 2. Entre-temps, un autre user fait 2 reservations VALID
+    # / Meanwhile, another user makes 2 VALID reservations
+    other = TibilletUser.objects.create(
+        email=f"o-{uuid_mod.uuid4()}@example.org",
+        username=f"o-{uuid_mod.uuid4()}",
+        is_active=True,
+    )
+    product_sold = ProductSold.objects.create(product=product)
+    price_sold = PriceSold.objects.create(
+        productsold=product_sold, price=price, prix=price.prix,
+    )
+    reservation = Reservation.objects.create(
+        user_commande=other, event=event, status=Reservation.PAID,
+    )
+    for _i in range(2):
+        Ticket.objects.create(
+            reservation=reservation, pricesold=price_sold,
+            status=Ticket.NOT_SCANNED,
+        )
+
+    # 3. Au checkout, revalidate_all() re-injecte le panier : 2 DB + 2 cart = 4 > 3
+    # / At checkout, revalidate_all() re-injects cart: 2 DB + 2 cart > jauge
+    with pytest.raises(InvalidItemError):
+        panier.revalidate_all()
 
 

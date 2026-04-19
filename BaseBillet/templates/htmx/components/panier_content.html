@@ -73,49 +73,11 @@ replace themselves with the updated cart in a single request.
             </ul>
         </div>
 
-        {# --- Code promo --- #}
-        {# --- Promotional code --- #}
-        <div class="card shadow-sm mb-4" role="region" aria-label="{% trans 'Promotional code' %}">
-            <div class="card-body">
-                <h5 class="card-title">
-                    <i class="bi bi-tag me-2" aria-hidden="true"></i>
-                    {% trans "Promotional code" %}
-                </h5>
-                {% if panier.promo_code_name %}
-                    <div class="d-flex align-items-center justify-content-between">
-                        <span class="badge bg-success fs-6">
-                            <i class="bi bi-check2-circle me-1"></i>
-                            {{ panier.promo_code_name }}
-                        </span>
-                        <form method="post" action="{% url 'panier-clear-promo-code' %}"
-                              hx-post="{% url 'panier-clear-promo-code' %}"
-                              hx-target="#panier-content"
-                              hx-swap="outerHTML">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-sm btn-link text-danger"
-                                    data-testid="panier-remove-promo">
-                                {% trans "Remove" %}
-                            </button>
-                        </form>
-                    </div>
-                {% else %}
-                    <form method="post" action="{% url 'panier-set-promo-code' %}"
-                          hx-post="{% url 'panier-set-promo-code' %}"
-                          hx-target="#panier-content"
-                          hx-swap="outerHTML"
-                          class="d-flex gap-2">
-                        {% csrf_token %}
-                        <input type="text" name="code_name" class="form-control"
-                               placeholder="{% trans 'Enter code' %}" required
-                               data-testid="panier-promo-input">
-                        <button type="submit" class="btn btn-outline-primary"
-                                data-testid="panier-apply-promo">
-                            {% trans "Apply" %}
-                        </button>
-                    </form>
-                {% endif %}
-            </div>
-        </div>
+        {# Le code promo est lie a un Product specifique (FK PromotionalCode.product). #}
+        {# Il est saisi directement dans le formulaire d'event/adhesion (booking_form.html) #}
+        {# et stocke sur l'item du panier — pas au niveau du panier global. #}
+        {# / Promotional code is linked to a specific Product (FK). It's entered in the #}
+        {# event/membership form and stored on the cart item — not at cart level. #}
 
         {# --- Total + checkout --- #}
         {# --- Total + checkout --- #}
@@ -173,8 +135,9 @@ replace themselves with the updated cart in a single request.
     {% endif %}
 </div>
 
-{# MAJ badge navbar via OOB — le partial panier_content est rendu a la fois #}
-{# au chargement initial (dans panier.html) ET en reponse HTMX (swap). #}
-{# / Navbar badge OOB refresh — this partial is rendered both on initial #}
-{# page load (inside panier.html) AND as HTMX response (swap). #}
-{% include 'htmx/components/panier_badge.html' %}
+{# Le badge navbar OOB N'EST PAS inclus ici — sinon duplicate id #panier-badge-nav #}
+{# au chargement initial (navbar.html rend deja le span). #}
+{# En mode swap HTMX (_render_badge_and_toast(swap_cart_content=True)), la vue #}
+{# rend panier_content + panier_badge en deux partials concatenes. #}
+{# / Navbar OOB badge NOT included here to avoid duplicate #panier-badge-nav id. #}
+{# HTMX swap mode: view renders panier_content + panier_badge as two concatenated partials. #}

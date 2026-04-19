@@ -65,6 +65,181 @@ def _recent_blocking_statuses():
 RECENT_BLOCKING_WINDOW = timedelta(minutes=15)
 
 
+# --------------------------------------------------------------------------
+# Helpers pour validation cart-aware des limites (max_per_user, jauge)
+# / Helpers for cart-aware limit validation (max_per_user, jauge)
+# --------------------------------------------------------------------------
+
+
+def _cart_qty_for_event(cart_items, event_uuid):
+    """Somme des qty des items ticket du panier pour cet event.
+    / Sum of ticket item qty in cart for this event."""
+    return sum(
+        int(i.get('qty', 0))
+        for i in cart_items
+        if i.get('type') == 'ticket' and i.get('event_uuid') == str(event_uuid)
+    )
+
+
+def _cart_qty_for_product(cart_items, event_uuid, product_uuid):
+    """Somme des qty des items ticket pour ce product dans cet event.
+    / Sum of ticket item qty for this product in this event."""
+    from BaseBillet.models import Price
+    total = 0
+    for i in cart_items:
+        if i.get('type') != 'ticket' or i.get('event_uuid') != str(event_uuid):
+            continue
+        try:
+            p = Price.objects.get(uuid=i['price_uuid'])
+        except Price.DoesNotExist:
+            continue
+        if str(p.product.uuid) == str(product_uuid):
+            total += int(i.get('qty', 0))
+    return total
+
+
+def _cart_qty_for_price(cart_items, price_uuid):
+    """Somme des qty des items ticket pour ce price (tous events).
+    / Sum of ticket item qty for this price (any event)."""
+    return sum(
+        int(i.get('qty', 0))
+        for i in cart_items
+        if i.get('type') == 'ticket' and i.get('price_uuid') == str(price_uuid)
+    )
+
+
+def validate_ticket_cart_limits(user, event, product, price, qty_to_add, cart_items):
+    """
+    Valide que l'ajout de `qty_to_add` billets ne depasse aucune limite.
+    / Validate that adding `qty_to_add` tickets does not exceed any limit.
+
+    Cette fonction est appelee depuis PanierSession.add_ticket (Validation 5bis)
+    avant de stocker l'item. Elle reproduit les checks de ReservationValidator
+    en prenant en compte le panier courant (cart-aware), pas uniquement la DB.
+
+    / Called from PanierSession.add_ticket (Validation 5bis) before storing.
+    Mirrors ReservationValidator checks, cart-aware (not only DB).
+
+    Verifications (5 au total) :
+    1. event.max_per_user — tickets user en DB + panier event + qty_to_add
+    2. product.max_per_user — tickets user en DB + panier product + qty_to_add
+    3. price.max_per_user — tickets user en DB + panier price + qty_to_add
+    4. Jauge event : valid + under_purchase + cart event + qty_to_add <= jauge_max
+    5. price.max_per_user vs qty_to_add seul (sanity check)
+
+    / 5 checks: event/product/price max_per_user + jauge + sanity.
+
+    Pour l'utilisateur anonyme, les checks DB (1-3) sont skippes — seuls les
+    checks cart-level (panier courant) sont faits. En flow panier, l'user doit
+    de toute facon etre authentifie (PanierMVT permission IsAuthenticated).
+
+    / Anonymous users skip DB checks (1-3) — only cart-level. Anyway cart flow
+    requires auth (PanierMVT IsAuthenticated permission).
+
+    :param user: TibilletUser ou AnonymousUser
+    :param event: Event instance
+    :param product: Product instance (doit etre dans event.products)
+    :param price: Price instance (doit appartenir au product)
+    :param qty_to_add: int > 0 — nombre de billets a ajouter
+    :param cart_items: list[dict] — items deja presents dans le panier
+
+    :raises InvalidItemError: avec message clair si une limite est franchie.
+    """
+    from BaseBillet.models import Ticket
+
+    cart_qty_event = _cart_qty_for_event(cart_items, event.uuid)
+    cart_qty_product = _cart_qty_for_product(cart_items, event.uuid, product.uuid)
+    cart_qty_price = _cart_qty_for_price(cart_items, price.uuid)
+
+    if user.is_authenticated:
+        # Count des tickets du user sur cet event (status valides).
+        # Utilise les memes statuts que ReservationValidator pour coherence.
+        # / User's ticket count on this event (valid statuses), same as ResValidator.
+        db_qty_event = Ticket.objects.filter(
+            reservation__user_commande=user,
+            reservation__event=event,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+        ).count()
+        db_qty_product = Ticket.objects.filter(
+            reservation__user_commande=user,
+            reservation__event=event,
+            pricesold__price__product=product,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+        ).count()
+        db_qty_price = Ticket.objects.filter(
+            reservation__user_commande=user,
+            reservation__event=event,
+            pricesold__price=price,
+            status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED],
+        ).count()
+
+        # 1. event.max_per_user — total tickets user pour cet event
+        # / event.max_per_user — total tickets for this event
+        if event.max_per_user:
+            total_event = db_qty_event + cart_qty_event + qty_to_add
+            if total_event > event.max_per_user:
+                raise InvalidItemError(
+                    _("Adding these tickets would exceed the per-user limit "
+                      "of %(max)s for this event. You already have %(db)s "
+                      "confirmed + %(cart)s in cart.")
+                    % {"max": event.max_per_user, "db": db_qty_event, "cart": cart_qty_event}
+                )
+
+        # 2. product.max_per_user
+        if product.max_per_user:
+            total_product = db_qty_product + cart_qty_product + qty_to_add
+            if total_product > product.max_per_user:
+                raise InvalidItemError(
+                    _("Adding these tickets would exceed the per-user limit "
+                      "of %(max)s for this product.")
+                    % {"max": product.max_per_user}
+                )
+
+        # 3. price.max_per_user — aussi en cart-aware (sur-set du check qty seul)
+        # / price.max_per_user — cart-aware (supersedes qty-alone check)
+        if price.max_per_user:
+            total_price = db_qty_price + cart_qty_price + qty_to_add
+            if total_price > price.max_per_user:
+                raise InvalidItemError(
+                    _("Adding these tickets would exceed the per-user limit "
+                      "of %(max)s for this rate.")
+                    % {"max": price.max_per_user}
+                )
+    else:
+        # Anonyme : checks uniquement cart-level (pas de user en DB).
+        # / Anonymous: cart-level checks only (no DB user).
+        if event.max_per_user and cart_qty_event + qty_to_add > event.max_per_user:
+            raise InvalidItemError(
+                _("Your cart would exceed the per-user limit of %(max)s tickets "
+                  "for this event.")
+                % {"max": event.max_per_user}
+            )
+        if product.max_per_user and cart_qty_product + qty_to_add > product.max_per_user:
+            raise InvalidItemError(
+                _("Your cart would exceed the per-user limit of %(max)s for this product.")
+                % {"max": product.max_per_user}
+            )
+        if price.max_per_user and cart_qty_price + qty_to_add > price.max_per_user:
+            raise InvalidItemError(
+                _("Your cart would exceed the per-user limit of %(max)s for this rate.")
+                % {"max": price.max_per_user}
+            )
+
+    # 4. Jauge globale de l'event — prend en compte tous les tickets pending + valid
+    # + les items panier (de cet event, toutes users confondues) + qty_to_add.
+    # / Event capacity — account for all valid + pending tickets + cart items + qty_to_add.
+    valid_count = event.valid_tickets_count()
+    under_purchase = event.under_purchase()
+    if event.jauge_max:
+        total_occupation = valid_count + under_purchase + cart_qty_event + qty_to_add
+        if total_occupation > event.jauge_max:
+            remains = event.jauge_max - valid_count - under_purchase - cart_qty_event
+            raise InvalidItemError(
+                _("Not enough seats available. Remaining: %(n)s")
+                % {"n": max(0, remains)}
+            )
+
+
 def reservations_bloquantes_pour_user(user, start, end):
     """
     Retourne les reservations du user qui chevauchent [start, end] et qui
@@ -195,14 +370,25 @@ class PanierSession:
     # --- Public writes (skeleton — validations in later tasks) ---
 
     def add_ticket(self, event_uuid, price_uuid, qty,
-                   custom_amount=None, options=None, custom_form=None):
+                   custom_amount=None, options=None, custom_form=None,
+                   promotional_code_name=None):
         """
         Ajoute un item billet au panier après validation.
         / Adds a ticket item to the cart after validation.
 
+        `promotional_code_name` (optionnel) : nom du code promo saisi dans
+        le booking_form. Valide que le code existe, actif, utilisable, et
+        lie au product du tarif. Stocke le nom sur l'item pour application
+        par CommandeService.materialiser() — chaque item porte son propre
+        code, pas de code global au panier.
+        / `promotional_code_name` (optional): code name from booking_form.
+        Validates existence, active, usable, linked to product's Price.
+        Stored per-item for application in materialiser() — each item
+        carries its own code, no global cart-level code.
+
         Raises:
             InvalidItemError: si le price/event est invalide, épuisé, non publié,
-                ou si la qty dépasse les limites.
+                ou si la qty dépasse les limites, ou code promo invalide.
         """
         from BaseBillet.models import Event, Price
 
@@ -236,10 +422,31 @@ class PanierSession:
         if price.product not in event.products.all():
             raise InvalidItemError(_("This rate is not available for this event."))
 
-        # Validation 5 : max_per_user sur le price (si défini)
-        # Validation 5: max_per_user on the price (if defined)
+        # Validation 5 : max_per_user sur le price (si défini) — sanity check
+        # sur la qty de la requete seule. Le check cart-aware complet (qui
+        # inclut les items panier existants + les tickets DB du user) est
+        # fait dans validate_ticket_cart_limits (Validation 5bis).
+        # / Validation 5: max_per_user on price — sanity check on request qty.
+        # Full cart-aware check (cart + DB tickets) in validate_ticket_cart_limits.
         if price.max_per_user and int(qty) > price.max_per_user:
             raise InvalidItemError(_("Quantity exceeds the per-user limit for this rate."))
+
+        # Validation 5bis : limites cart-aware (event/product/price.max_per_user
+        # + jauge_max). Verifie que l'ajout, combine avec ce qui est deja en DB
+        # pour ce user + ce qui est deja dans le panier + qty_to_add, ne depasse
+        # aucune limite. Reproduit les checks de ReservationValidator en mode
+        # panier.
+        # / Validation 5bis: cart-aware limits. Checks that adding qty combined
+        # with user's DB tickets + cart items doesn't breach any limit. Mirrors
+        # ReservationValidator in cart mode.
+        validate_ticket_cart_limits(
+            user=self.request.user,
+            event=event,
+            product=price.product,
+            price=price,
+            qty_to_add=int(qty),
+            cart_items=self._data.get('items', []),
+        )
 
         # Validation 6 : stock disponible
         # Validation 6: stock available
@@ -355,6 +562,27 @@ class PanierSession:
                         % {"name": conflit.event.name}
                     )
 
+        # Validation 9 : code promo (si fourni) — doit etre actif, utilisable,
+        # et lie au product du prix selectionne.
+        # / Validation 9: promo code (if provided) — must be active, usable,
+        # and linked to the selected price's product.
+        validated_promo_name = None
+        if promotional_code_name:
+            from BaseBillet.models import PromotionalCode
+            try:
+                promo = PromotionalCode.objects.get(
+                    name=promotional_code_name, is_active=True,
+                )
+            except PromotionalCode.DoesNotExist:
+                raise InvalidItemError(_("Invalid or inactive promotional code."))
+            if not promo.is_usable():
+                raise InvalidItemError(_("This promotional code is no longer available."))
+            if promo.product_id != price.product_id:
+                raise InvalidItemError(
+                    _("This promotional code does not apply to this product.")
+                )
+            validated_promo_name = promo.name
+
         # Toutes les validations passent — on stocke en session
         # All validations passed — store in session
         item = {
@@ -365,6 +593,7 @@ class PanierSession:
             'custom_amount': str(custom_amount) if custom_amount is not None else None,
             'options': [str(o) for o in (options or [])],
             'custom_form': dict(custom_form or {}),
+            'promotional_code_name': validated_promo_name,
         }
         self._data['items'].append(item)
         self._save()
@@ -372,7 +601,8 @@ class PanierSession:
 
     def add_membership(self, price_uuid,
                        custom_amount=None, options=None, custom_form=None,
-                       firstname=None, lastname=None):
+                       firstname=None, lastname=None,
+                       promotional_code_name=None):
         """
         Ajoute un item adhésion au panier après validation.
         / Adds a membership item to the cart after validation.
@@ -446,6 +676,26 @@ class PanierSession:
             if amount_dec > Decimal("999999.99"):
                 raise InvalidItemError(_("The amount is too high."))
 
+        # Validation 7 : code promo (si fourni) — doit etre actif, utilisable,
+        # et lie au product de l'adhesion. Meme regle que add_ticket.
+        # / Validation 7: promo code (if provided) — active, usable, linked to product.
+        validated_promo_name = None
+        if promotional_code_name:
+            from BaseBillet.models import PromotionalCode
+            try:
+                promo = PromotionalCode.objects.get(
+                    name=promotional_code_name, is_active=True,
+                )
+            except PromotionalCode.DoesNotExist:
+                raise InvalidItemError(_("Invalid or inactive promotional code."))
+            if not promo.is_usable():
+                raise InvalidItemError(_("This promotional code is no longer available."))
+            if promo.product_id != price.product_id:
+                raise InvalidItemError(
+                    _("This promotional code does not apply to this product.")
+                )
+            validated_promo_name = promo.name
+
         # Nettoyage des noms : trim, fallback a chaine vide si None.
         # Stockes sur l'item pour etre prioritaires a la materialisation.
         # / Clean names: trim, fallback to empty string if None.
@@ -461,6 +711,7 @@ class PanierSession:
             'custom_form': dict(custom_form or {}),
             'firstname': clean_firstname,
             'lastname': clean_lastname,
+            'promotional_code_name': validated_promo_name,
         }
         self._data['items'].append(item)
         self._save()
@@ -476,24 +727,15 @@ class PanierSession:
             items.pop(index)
             self._save()
 
-    def update_quantity(self, index, qty):
-        """
-        Met à jour la quantité d'un item billet. Si qty <= 0, retire l'item.
-        Ignore les items membership (leur qty est toujours 1).
-        / Updates a ticket item's quantity. If qty <= 0, removes it.
-        Ignores membership items (qty always 1).
-        """
-        items = self._data.get('items', [])
-        if not (0 <= index < len(items)):
-            return
-        item = items[index]
-        if item['type'] != 'ticket':
-            return
-        if qty <= 0:
-            self.remove_item(index)
-            return
-        item['qty'] = int(qty)
-        self._save()
+    # Note : update_quantity a ete supprime volontairement (refactor 2026-04).
+    # Raison : impossible de garantir que la nouvelle qty respecte les limites
+    # (event.max_per_user, product.max_per_user, price.max_per_user, jauge,
+    # stock) sans re-appliquer toute la logique de add_ticket. Plutot que de
+    # dupliquer, on force l'user a retirer + re-ajouter via le booking_form
+    # qui passe par add_ticket avec toutes les validations.
+    # / Note: update_quantity was intentionally removed (2026-04 refactor).
+    # Reason: impossible to guarantee new qty respects limits without
+    # duplicating add_ticket logic. User must remove + re-add via booking_form.
 
     def clear(self):
         """Vide complètement le panier.

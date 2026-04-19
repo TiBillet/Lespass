@@ -87,16 +87,46 @@ class CommandeService:
                 buyer_lastname = item_ln
                 break
 
+        # Resolution des promo codes : chaque item porte son propre
+        # `promotional_code_name` (stocke par PanierSession.add_* apres
+        # validation stricte : actif, is_usable, lie au product du price).
+        # Helper qui transforme le nom en instance PromotionalCode, ou None.
+        # On charge en batch les codes necessaires pour limiter les queries.
+        # / Per-item promo codes: each item carries `promotional_code_name`
+        # (server-validated at add time). Helper maps name→instance. Batch load.
+        from BaseBillet.models import PromotionalCode
+        needed_names = {
+            item.get('promotional_code_name')
+            for item in panier.items()
+            if item.get('promotional_code_name')
+        }
+        promo_by_name = {
+            p.name: p
+            for p in PromotionalCode.objects.filter(name__in=needed_names)
+        } if needed_names else {}
+
+        def _resolve_promo(item):
+            name = item.get('promotional_code_name')
+            return promo_by_name.get(name) if name else None
+
         # -- Création de la Commande pivot (status=PENDING) --
-        # -- Create the pivot Commande (status=PENDING) --
-        promo_code = panier.promo_code()
+        # Le Commande.promo_code pivot prend le premier code rencontre (il
+        # est purement informatif — l'application se fait ligne par ligne).
+        # / The Commande.promo_code pivot takes the first code found (purely
+        # informative — actual application is done line-by-line).
+        pivot_promo_code = None
+        for item in panier.items():
+            pivot_promo_code = _resolve_promo(item)
+            if pivot_promo_code:
+                break
+
         commande = Commande.objects.create(
             user=user,
             email_acheteur=email,
             first_name=buyer_firstname,
             last_name=buyer_lastname,
             status=Commande.PENDING,
-            promo_code=promo_code,
+            promo_code=pivot_promo_code,
         )
 
         all_lines = []
@@ -109,6 +139,10 @@ class CommandeService:
                 continue
             price = Price.objects.get(uuid=item['price_uuid'])
             amount_dec = CommandeService._resolve_amount(price, item)
+
+            # Code promo de cet item specifiquement (pas du panier global).
+            # / Promo code for this specific item (not cart-global).
+            item_promo_code = _resolve_promo(item)
 
             # Prenom/nom : priorite aux valeurs de l'item (collectees par
             # membership/form.html), puis fallback sur les args de la fonction
@@ -141,6 +175,12 @@ class CommandeService:
 
             price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
             amount_cts = dec_to_int(amount_dec)
+            # Le code n'est applique que si lie au product (double-check
+            # redondant avec la validation a l'ajout, mais safe).
+            # / Code applied only if linked to the product (redundant safety check).
+            applicable_promo = item_promo_code if (
+                item_promo_code and item_promo_code.product_id == price.product_id
+            ) else None
             line = LigneArticle.objects.create(
                 pricesold=price_sold,
                 membership=membership,
@@ -148,7 +188,7 @@ class CommandeService:
                 amount=amount_cts,
                 qty=1,
                 sale_origin=SaleOrigin.LESPASS,
-                promotional_code=(promo_code if promo_code and promo_code.product == price.product else None),
+                promotional_code=applicable_promo,
             )
             all_lines.append(line)
             total_centimes += amount_cts
@@ -184,6 +224,19 @@ class CommandeService:
             custom_form = first_item.get('custom_form') or None
             options_uuids = first_item.get('options') or []
 
+            # Code promo pour ce batch d'event : premier code trouve parmi les
+            # items. En pratique tous les items d'un meme event ont le meme
+            # code (un seul champ `promotional_code` par submission) mais ce
+            # resolveur est defensif au cas ou. TicketCreator applique ensuite
+            # le code au product matching via get_or_create_price_sold.
+            # / Promo code for this event batch: first found among items.
+            # TicketCreator applies it to matching product via get_or_create_price_sold.
+            event_promo_code = None
+            for it in items_event:
+                event_promo_code = _resolve_promo(it)
+                if event_promo_code:
+                    break
+
             reservation = Reservation.objects.create(
                 user_commande=user,
                 event=event,
@@ -203,7 +256,7 @@ class CommandeService:
             creator = TicketCreator(
                 reservation=reservation,
                 products_dict=products_dict,
-                promo_code=promo_code,
+                promo_code=event_promo_code,
                 custom_amounts=custom_amounts,
                 sale_origin=SaleOrigin.LESPASS,
                 create_checkout=False,  # <-- clé : pas de Stripe ici
@@ -258,6 +311,15 @@ class CommandeService:
             line.reservation is not None for line in lignes
         )
 
+        # Le success_url pointe vers l'action `stripe_return` sur EventMVT
+        # (`/event/<paiement_stripe_uuid>/stripe_return/`) — meme flow que
+        # pour une reservation directe (validators.py:345). Pas d'action
+        # stripe_return sur PanierMVT, donc on reutilise celle d'EventMVT
+        # qui est generique : update checkout status + redirect vers
+        # `/my_account/my_reservations/` (ou `/event/` si anonyme).
+        # / success_url → EventMVT.stripe_return (same pattern as direct
+        # reservations). PanierMVT has no stripe_return action, so we reuse
+        # the generic one which updates status + redirects to user account.
         new_paiement = CreationPaiementStripe(
             user=user,
             liste_ligne_article=lignes,
@@ -266,7 +328,7 @@ class CommandeService:
             source=Paiement_stripe.FRONT_BILLETTERIE,
             success_url="stripe_return/",
             cancel_url="stripe_return/",
-            absolute_domain=f"https://{tenant.get_primary_domain()}/panier/",
+            absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
             accept_sepa=(not contains_tickets),
         )
         if not new_paiement.is_valid():

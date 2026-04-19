@@ -373,7 +373,11 @@ class Command(BaseCommand):
                                     {
                                         "name": "Tarif adhérent",
                                         "prix": 10,
-                                        "adhesion_obligatoire": "Adhésion Tiers Lustre",
+                                        # Nom exact du product ADHESION defini plus bas
+                                        # (ligne ~533). Avant : "Adhésion Tiers Lustre"
+                                        # → mismatch silencieux, liaison non creee.
+                                        # / Exact ADHESION product name (line ~533).
+                                        "adhesion_obligatoire": "Adhésion associative Tiers Lustre",
                                         "short_description": "Réservé aux adhérent·es",
                                     },
                                 ],
@@ -2244,7 +2248,12 @@ class Command(BaseCommand):
                                 name=pr["name"],
                                 defaults=defaults,
                             )
-                            if adhesion_name and _created:
+                            # Idempotent : on ajoute la liaison meme si _created=False
+                            # (ex: re-run apres correction du nom d'adhesion). M2M.add
+                            # ne duplique pas les liaisons existantes.
+                            # / Idempotent: add link even if _created=False (e.g. re-run
+                            # after fixing adhesion name). M2M.add doesn't duplicate.
+                            if adhesion_name:
                                 try:
                                     adhesion_prod = Product.objects.get(
                                         name=adhesion_name
