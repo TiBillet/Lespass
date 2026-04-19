@@ -373,7 +373,11 @@ class Command(BaseCommand):
                                     {
                                         "name": "Tarif adhérent",
                                         "prix": 10,
-                                        "adhesion_obligatoire": "Adhésion Tiers Lustre",
+                                        # Nom exact du product ADHESION defini plus bas
+                                        # (ligne ~533). Avant : "Adhésion Tiers Lustre"
+                                        # → mismatch silencieux, liaison non creee.
+                                        # / Exact ADHESION product name (line ~533).
+                                        "adhesion_obligatoire": "Adhésion associative Tiers Lustre",
                                         "short_description": "Réservé aux adhérent·es",
                                     },
                                 ],
@@ -2244,7 +2248,12 @@ class Command(BaseCommand):
                                 name=pr["name"],
                                 defaults=defaults,
                             )
-                            if adhesion_name and _created:
+                            # Idempotent : on ajoute la liaison meme si _created=False
+                            # (ex: re-run apres correction du nom d'adhesion). M2M.add
+                            # ne duplique pas les liaisons existantes.
+                            # / Idempotent: add link even if _created=False (e.g. re-run
+                            # after fixing adhesion name). M2M.add doesn't duplicate.
+                            if adhesion_name:
                                 try:
                                     adhesion_prod = Product.objects.get(
                                         name=adhesion_name
@@ -2864,6 +2873,52 @@ class Command(BaseCommand):
                         call_command("create_test_pos_data")
 
         # -----------------------------
+        # 4a) Regeneration des Products Recharge manquants (fedow_core)
+        # Le signal post_save Asset ne cree le Product Recharge qu'a la
+        # creation de l'Asset (created=True). Or `--flush` purge les Products
+        # mais `get_or_create_token_asset` retourne created=False au re-seed
+        # → les Products Recharge orphelins ne sont PAS regeneres.
+        # On repare ici en declenchant manuellement la logique du signal pour
+        # chaque Asset TLF/TNF/TIM actif sans Product associe.
+        # / Re-create missing Recharge Products. Asset post_save only creates
+        # on `created=True`. `--flush` purges Products, but re-seed returns
+        # existing assets (created=False). We repair by triggering the signal
+        # logic manually for each active TLF/TNF/TIM Asset without Product.
+        # -----------------------------
+        from fedow_core.models import Asset as _FedowAsset
+        from fedow_core.signals import creer_ou_mettre_a_jour_product_recharge
+        for tenant in created_tenants:
+            with tenant_context(tenant):
+                assets_sans_product = _FedowAsset.objects.filter(
+                    tenant_origin=tenant,
+                    category__in=["TLF", "TNF", "TIM"],
+                    active=True,
+                )
+                for asset in assets_sans_product:
+                    if Product.objects.filter(asset=asset).exists():
+                        continue
+                    creer_ou_mettre_a_jour_product_recharge(
+                        sender=_FedowAsset,
+                        instance=asset,
+                        created=True,
+                    )
+                    self.stdout.write(
+                        f"  Recharge Product recree pour {tenant.name}/{asset.name}"
+                    )
+
+        # -----------------------------
+        # 4b) Fixtures E2E Playwright (tenant lespass uniquement)
+        # Les tests E2E ne peuvent pas creer d'objets en DB (pas de rollback
+        # possible contre un serveur reel via Traefik). On seed donc ici un
+        # jeu de donnees minimal, stable et prefixe "E2E Test —".
+        # / E2E Playwright fixtures (lespass tenant only)
+        # E2E tests cannot create DB objects (no rollback possible against
+        # a real server behind Traefik). We seed a minimal, stable dataset
+        # prefixed "E2E Test —".
+        # -----------------------------
+        self._seed_e2e_fixtures(created_tenants)
+
+        # -----------------------------
         # 5) Images de demo (logos tenants, events, initiatives)
         # Les images sont pre-telechargees dans Administration/fixtures/
         # et assignees aux objets via StdImageField.save().
@@ -3139,6 +3194,184 @@ class Command(BaseCommand):
 
         # Export du dump SQL pour --quick
         # self._dump_database()
+
+    def _seed_e2e_fixtures(self, tenants):
+        """
+        Seed des fixtures E2E : data stable pour les tests Playwright.
+        / E2E fixtures seed: stable data for Playwright tests.
+
+        LOCALISATION : Administration/management/commands/demo_data_v2.py
+
+        Objectif : les tests E2E ne peuvent PAS creer d'objets en DB (pas de
+        rollback possible contre un serveur reel derriere Traefik). On prepare
+        donc ici un jeu de donnees minimal, stable, idempotent, et facilement
+        identifiable (prefixe "E2E Test —" pour que l'admin les repere au
+        premier coup d'oeil et evite de les supprimer).
+
+        / Goal: E2E tests cannot create DB objects (no rollback possible
+        against a real server behind Traefik). We seed a minimal, stable,
+        idempotent dataset (prefix "E2E Test —" so admin spots them instantly
+        and avoids deleting them).
+
+        Data seedee (tenant lespass uniquement) :
+        - "E2E Test — Event gratuit" : FREERES publie, jauge 100, Price 0 auto
+        - "E2E Test — Event payant"  : BILLET publie, jauge 100, Price 10 EUR
+        - "E2E Test — Adhesion"      : ADHESION, Price 0 EUR, publish=True
+        - "E2E Test — Event gated"   : BILLET publie, Price gated par l'adhesion
+
+        / Seeded data (lespass tenant only):
+        - "E2E Test — Event gratuit" : FREERES published, jauge 100, Price 0 auto
+        - "E2E Test — Event payant"  : BILLET published, jauge 100, Price 10 EUR
+        - "E2E Test — Adhesion"      : ADHESION, Price 0 EUR, publish=True
+        - "E2E Test — Event gated"   : BILLET published, Price gated by adhesion
+
+        Idempotent via get_or_create — si on relance demo_data_v2, pas de doublons.
+        / Idempotent via get_or_create — re-running demo_data_v2 never duplicates.
+
+        :param tenants: liste de Client (on filtre pour lespass uniquement)
+        """
+        # Import local pour rester coherent avec le pattern du reste du fichier.
+        # / Local import to stay consistent with the rest of the file's pattern.
+        from django.utils import timezone
+
+        # Etape 1 : on recupere le tenant lespass uniquement.
+        # Les autres tenants n'ont pas besoin de ces fixtures.
+        # / Step 1: get lespass tenant only. Other tenants don't need these.
+        lespass_tenant = None
+        for tenant in tenants:
+            if tenant.schema_name == "lespass":
+                lespass_tenant = tenant
+                break
+        if lespass_tenant is None:
+            self.stdout.write("  [E2E] Tenant lespass introuvable — skip seed E2E")
+            return
+
+        self.stdout.write("  [E2E] Seed des fixtures E2E (tenant lespass)…")
+
+        with tenant_context(lespass_tenant):
+            # Datetime fixe dans le futur (+180j) pour eviter les events "dans
+            # le passe" qui ne sont plus reservables. On ne cherche pas un slug
+            # identique d'un run a l'autre : le test recupere les slugs actuels
+            # via la fixture conftest e2e_slugs.
+            # / Fixed datetime in the future (+180d). Slug stability not required
+            # (test reads current slugs via conftest fixture e2e_slugs).
+            datetime_futur = timezone.now() + timedelta(days=180)
+
+            # -----------------------------------------------------------
+            # 1) Event gratuit (FREERES)
+            # Le signal post_save sur Product FREERES cree automatiquement
+            # un Price a 0 EUR (voir BaseBillet/models.py ligne ~1665).
+            # / Event 1: free FREERES. Product post_save auto-creates a 0 EUR Price.
+            # -----------------------------------------------------------
+            event_gratuit, _ = Event.objects.get_or_create(
+                name="E2E Test — Event gratuit",
+                defaults={
+                    "datetime": datetime_futur,
+                    "jauge_max": 100,
+                    # Pas de limite par user — evite que les tests E2E
+                    # atteignent le plafond apres quelques runs (cf. PIEGES 9.111).
+                    # / No per-user limit — prevents E2E tests hitting the cap
+                    # after a few runs (see PIEGES 9.111).
+                    "max_per_user": None,
+                    "published": True,
+                    "short_description": "Fixture E2E — ne pas supprimer",
+                },
+            )
+            prod_freeres, _ = Product.objects.get_or_create(
+                name="E2E Test — Billet gratuit",
+                defaults={"categorie_article": Product.FREERES},
+            )
+            event_gratuit.products.add(prod_freeres)
+
+            # -----------------------------------------------------------
+            # 2) Event payant (BILLET 10 EUR)
+            # / Event 2: paid BILLET 10 EUR.
+            # -----------------------------------------------------------
+            event_payant, _ = Event.objects.get_or_create(
+                name="E2E Test — Event payant",
+                defaults={
+                    "datetime": datetime_futur,
+                    "jauge_max": 100,
+                    # Pas de limite par user — evite que les tests E2E
+                    # atteignent le plafond apres quelques runs (cf. PIEGES 9.111).
+                    # / No per-user limit — prevents E2E tests hitting the cap
+                    # after a few runs (see PIEGES 9.111).
+                    "max_per_user": None,
+                    "published": True,
+                    "short_description": "Fixture E2E — ne pas supprimer",
+                },
+            )
+            prod_billet, _ = Product.objects.get_or_create(
+                name="E2E Test — Billet payant",
+                defaults={"categorie_article": Product.BILLET},
+            )
+            Price.objects.get_or_create(
+                product=prod_billet,
+                name="Plein tarif",
+                defaults={"prix": Decimal("10.00"), "publish": True},
+            )
+            event_payant.products.add(prod_billet)
+
+            # -----------------------------------------------------------
+            # 3) Adhesion requise (ADHESION gratuite)
+            # Utilisee pour tester le flow cart-aware : quand elle est dans
+            # le panier, le tarif gated de l'event gated devient selectionnable.
+            # / Product 3: required free ADHESION. Used for cart-aware flow:
+            # when in cart, gated event's gated rate becomes selectable.
+            # -----------------------------------------------------------
+            prod_adhesion, _ = Product.objects.get_or_create(
+                name="E2E Test — Adhesion",
+                defaults={
+                    "categorie_article": Product.ADHESION,
+                    "short_description": "Fixture E2E — ne pas supprimer",
+                },
+            )
+            Price.objects.get_or_create(
+                product=prod_adhesion,
+                name="Gratuite",
+                defaults={
+                    "prix": Decimal("0.00"),
+                    "publish": True,
+                    "subscription_type": Price.YEAR,
+                },
+            )
+
+            # -----------------------------------------------------------
+            # 4) Event gated (BILLET dont le tarif exige l'adhesion)
+            # / Event 4: BILLET whose rate requires the adhesion above.
+            # -----------------------------------------------------------
+            event_gated, _ = Event.objects.get_or_create(
+                name="E2E Test — Event gated",
+                defaults={
+                    "datetime": datetime_futur,
+                    "jauge_max": 100,
+                    # Pas de limite par user — evite que les tests E2E
+                    # atteignent le plafond apres quelques runs (cf. PIEGES 9.111).
+                    # / No per-user limit — prevents E2E tests hitting the cap
+                    # after a few runs (see PIEGES 9.111).
+                    "max_per_user": None,
+                    "published": True,
+                    "short_description": "Fixture E2E — ne pas supprimer",
+                },
+            )
+            prod_gated, _ = Product.objects.get_or_create(
+                name="E2E Test — Billet gated",
+                defaults={"categorie_article": Product.BILLET},
+            )
+            price_gated, _ = Price.objects.get_or_create(
+                product=prod_gated,
+                name="Tarif adherent",
+                defaults={"prix": Decimal("0.00"), "publish": True},
+            )
+            # M2M.add ne duplique pas si la liaison existe deja → idempotent.
+            # / M2M.add doesn't duplicate if link exists → idempotent.
+            price_gated.adhesions_obligatoires.add(prod_adhesion)
+            event_gated.products.add(prod_gated)
+
+            self.stdout.write(
+                f"  [E2E] OK : events={event_gratuit.slug}, "
+                f"{event_payant.slug}, {event_gated.slug}"
+            )
 
     def _create_federations_demo(self):
         """

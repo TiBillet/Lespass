@@ -66,6 +66,43 @@ DEMO_TAGID_CLIENT4 = os.environ.get("DEMO_TAGID_CLIENT4", "E85C2C6E")
 # ──────────────────────────────────────────────────────────────────────
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _ensure_tireuse_exists(django_shell):
+    """Assure qu'au moins une TireuseBec existe dans lespass pour les vues kiosk,
+    avec un fut actif (Product categorie FUT). Idempotent.
+    Executee une fois par module.
+
+    / Ensure at least one TireuseBec exists in lespass for kiosk views, with
+    an active keg (Product category FUT). Idempotent. Run once per module.
+
+    Le fut actif est necessaire pour test_02 (vue detail) — sans lui, le test
+    se skippe car `_obtenir_uuid_tireuse_avec_fut` boucle sans rien trouver.
+    / Active keg needed for test_02 (detail view) — without it, test skips
+    because `_obtenir_uuid_tireuse_avec_fut` loops without finding anything.
+    """
+    django_shell(
+        "from controlvanne.models import TireuseBec\n"
+        "from BaseBillet.models import Product\n"
+        "# Produit FUT (categorie 'U') — attache comme fut actif.\n"
+        "# / FUT Product (category 'U') — attached as active keg.\n"
+        "fut, _ = Product.objects.get_or_create(\n"
+        "    name='E2E Test — Fut kiosk',\n"
+        "    defaults={'categorie_article': Product.FUT},\n"
+        ")\n"
+        "tireuse, created = TireuseBec.objects.get_or_create(\n"
+        "    nom_tireuse='E2E Test — Tireuse kiosk',\n"
+        "    defaults={'enabled': True, 'fut_actif': fut},\n"
+        ")\n"
+        "# Si la tireuse existait sans fut_actif (seed precedent), on le pose.\n"
+        "# / If tireuse existed without fut_actif (previous seed), set it.\n"
+        "if not tireuse.fut_actif:\n"
+        "    tireuse.fut_actif = fut\n"
+        "    tireuse.save()\n"
+        "print(f'OK tireuse={tireuse.nom_tireuse} fut={tireuse.fut_actif}')",
+        schema="lespass",
+    )
+
+
 @pytest.mark.usefixtures("page")
 class TestKioskVues:
     """

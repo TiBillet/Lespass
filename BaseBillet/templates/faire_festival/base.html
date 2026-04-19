@@ -208,5 +208,9 @@
     {% block scripts %}{% endblock %}
     {% block extra_scripts %}{% endblock %}
 
+    {# Scripts globaux panier : toast + catch 403. Partage avec reunion. #}
+    {# / Global cart scripts: toast + 403 catch. Shared with reunion. #}
+    {% include "htmx/components/panier_scripts.html" %}
+
 </body>
 </html>

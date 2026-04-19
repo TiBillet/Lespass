@@ -21,7 +21,8 @@
   <img alt="Licence" src="https://img.shields.io/badge/licence-AGPLv3-blue">
   <img alt="Django" src="https://img.shields.io/badge/Django-4.2-green">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11-blue">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-618%20passed-brightgreen">
+  <img alt="Tests unitaires" src="https://img.shields.io/badge/pytest-618%20passed-brightgreen">
+  <img alt="Tests E2E" src="https://img.shields.io/badge/E2E%20Playwright-117%20passed-brightgreen">
 </p>
 
 <!-- CAPTURE : screenshot_hero.png — La capture la plus parlante du projet. Je suggère l'agenda public d'un lieu avec des événements, ou un montage de 2-3 écrans (agenda + caisse + carte NFC). Format large, 1200px minimum. -->
@@ -111,17 +112,23 @@ Pour les détails d'installation, de configuration et de déploiement en product
 
 ## Tests
 
+**618 tests pytest + 117 tests E2E Playwright, 100% verts.**
+
 ```bash
-# Tests unitaires et intégration (pytest)
+# Tests unitaires et integration (pytest DB-only, ~3 min)
 docker exec lespass_django poetry run pytest tests/pytest/ -v
 
-# Tests API v2
-docker exec lespass_django poetry run pytest -m integration tests/pytest/
-
-# Tests End-to-End (Playwright — un fichier à la fois, toujours workers=1)
-cd tests/playwright
-yarn playwright test --project=chromium --headed --workers=1 tests/01-login.spec.ts
+# Tests End-to-End (Playwright Python, ~12 min)
+# Prerequis : serveur Django ASGI via Traefik (alias `rsp` dans le pane byobu,
+# lance `manage.py runserver` en mode daphne pour le support WebSocket).
+docker exec \
+  -e ADMIN_EMAIL=admin@admin.com \
+  -e E2E_TEST_TOKEN='<voir .env>' \
+  lespass_django poetry run pytest tests/e2e/ -v
 ```
+
+Voir `tests/TESTS_README.md` pour la documentation complete (architecture, pieges,
+variables d'environnement).
 
 Carte Stripe de test : `4242 4242 4242 4242`, exp `12/42`, CVC `424`.
 

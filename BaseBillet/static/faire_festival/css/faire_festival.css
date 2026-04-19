@@ -1109,5 +1109,43 @@
 }
 
 /* ==========================================================================
+   POLISH UI — details qui font la difference
+   / UI polish — small details that matter
+   ========================================================================== */
+
+/* Chiffres tabulaires sur badges/compteurs — empeche le saut visuel */
+/* / Tabular numbers on badges/counters — prevents visual jumping */
+.skin-faire-festival .badge,
+.skin-faire-festival .js-total-amount,
+.skin-faire-festival .js-total-price,
+.skin-faire-festival .js-order-price,
+.skin-faire-festival .js-order-amount,
+.skin-faire-festival .js-max-amount,
+.skin-faire-festival .tab-nums {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Titres courts equilibres — evite les mots orphelins */
+/* / Balanced short titles — avoid orphan words */
+.skin-faire-festival h1,
+.skin-faire-festival h2,
+.skin-faire-festival h3,
+.skin-faire-festival h4,
+.skin-faire-festival .h1,
+.skin-faire-festival .h2,
+.skin-faire-festival .h3,
+.skin-faire-festival .h4,
+.skin-faire-festival .balance {
+    text-wrap: balance;
+}
+
+/* Badge compteur du panier dans la navbar — ajustement optique */
+/* / Cart navbar badge — optical fine-tuning */
+.skin-faire-festival #panier-badge-nav .badge {
+    margin-top: 0.25rem;
+    margin-left: -0.3rem;
+}
+
+/* ==========================================================================
    FIN DU FICHIER CSS FAIRE FESTIVAL
    ========================================================================== */

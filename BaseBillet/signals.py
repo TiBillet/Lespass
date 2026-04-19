@@ -48,13 +48,25 @@ def set_ligne_article_paid(old_instance: Paiement_stripe, new_instance: Paiement
         ligne_article.status = LigneArticle.PAID
         ligne_article.save()
 
-    # s'il y a une réservation, on la met aussi en payée :
+    # On rassemble toutes les reservations à valider : la FK legacy (flow mono-event)
+    # + les FK sur les LigneArticle (nouveau : flow panier multi-events).
+    # Le set() dédoublonne automatiquement : flow mono-event = 1 seule reservation.
+    # / Gather all reservations to validate: legacy FK (mono-event flow) + FKs on
+    # LigneArticle (new: multi-event cart flow). set() dedupes: mono-event = 1 single reservation.
+    reservations_a_valider = set()
     if new_instance.reservation:
+        reservations_a_valider.add(new_instance.reservation)
+    for ligne in new_instance.lignearticles.all():
+        if ligne.reservation:
+            reservations_a_valider.add(ligne.reservation)
+
+    if reservations_a_valider:
         logger.info(
-            f"        PAIEMENT_STRIPE set_ligne_article_paid : Toutes les ligne_article on été passé en {LigneArticle.PAID} et on été save()")
-        logger.info(f"        On passe la reservation en PAID et save()")
-        new_instance.reservation.status = Reservation.PAID
-        new_instance.reservation.save()
+            f"        PAIEMENT_STRIPE set_ligne_article_paid : {len(reservations_a_valider)} reservation(s) à valider")
+        for reservation in reservations_a_valider:
+            logger.info(f"        On passe la reservation {str(reservation.uuid)[:8]} en PAID et save()")
+            reservation.status = Reservation.PAID
+            reservation.save()
 
     logger.info(f"    END PAIEMENT_STRIPE set_ligne_article_paid\n")
 
@@ -522,4 +534,39 @@ def broadcast_jauge_apres_ticket_save(sender, instance, **kwargs):
     transaction.on_commit(
         lambda: _safe_broadcast_jauge(event_pk)
     )
+
+
+######################## SIGNAL COMMANDE ########################
+
+
+@receiver(post_save, sender=Paiement_stripe)
+def commande_mark_paid_when_paiement_valid(sender, instance: Paiement_stripe, **kwargs):
+    """
+    Dès qu'un Paiement_stripe passe à VALID, on marque la Commande liée
+    comme PAID + paid_at=now. Utilisé par le flow panier multi-events.
+
+    / As soon as a Paiement_stripe goes to VALID, mark the linked Commande
+    as PAID + paid_at=now. Used by the multi-event cart flow.
+
+    Rétrocompat : les Paiement_stripe sans Commande (flow legacy) ne
+    déclenchent aucune action (commande_obj n'existe pas → AttributeError attrapée).
+    / Backward compat: Paiement_stripe without Commande (legacy flow) trigger
+    no action (commande_obj doesn't exist → AttributeError caught).
+    """
+    if instance.status != Paiement_stripe.VALID:
+        return
+    try:
+        commande = instance.commande_obj  # OneToOne reverse
+    except Exception:
+        return
+    if commande is None:
+        return
+    from BaseBillet.models import Commande
+    if commande.status != Commande.PAID:
+        commande.status = Commande.PAID
+        commande.paid_at = timezone.now()
+        commande.save(update_fields=["status", "paid_at"])
+        logger.info(
+            f"    SIGNAL COMMANDE : Commande {commande.uuid_8()} → PAID (paiement {instance.uuid_8()} VALID)"
+        )
 

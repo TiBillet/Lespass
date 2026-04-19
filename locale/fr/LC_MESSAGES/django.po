@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-15 19:15+0000\n"
+"POT-Creation-Date: 2026-04-19 08:56+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -180,7 +180,7 @@ msgstr "Tableau de bord"
 
 #: Administration/admin/dashboard.py:44 BaseBillet/models.py:955
 #: BaseBillet/models.py:956 BaseBillet/models.py:966 MetaBillet/models.py:198
-#: MetaBillet/models.py:199 TiBillet/settings.py:559
+#: MetaBillet/models.py:199 TiBillet/settings.py:560
 msgid "Settings"
 msgstr "Paramètres"
 
@@ -192,8 +192,9 @@ msgstr "Comptes utilisateur·ice"
 #: Administration/templates/admin/cloture/rapport_before.html:271
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:344
 #: Administration/templates/admin/cloture_detail.html:253
-#: BaseBillet/models.py:4318
+#: BaseBillet/models.py:4498
 #: BaseBillet/templates/htmx/components/navbar.html:78
+#: BaseBillet/templates/htmx/components/panier_content.html:60
 #: BaseBillet/templates/htmx/views/my_account/my_account.html:53
 #: BaseBillet/templates/htmx/views/my_account/my_account_membership.html:3
 #: BaseBillet/templates/reunion/views/membership/list.html:10
@@ -203,12 +204,12 @@ msgstr "Comptes utilisateur·ice"
 msgid "Memberships"
 msgstr "Adhésions"
 
-#: Administration/admin/dashboard.py:76 BaseBillet/models.py:1436
+#: Administration/admin/dashboard.py:76 BaseBillet/models.py:1440
 msgid "Membership products"
 msgstr "Produits d'adhésion"
 
 #: Administration/admin/dashboard.py:84 Administration/admin/membership.py:71
-#: Administration/admin/users.py:190 BaseBillet/models.py:4077
+#: Administration/admin/users.py:189 BaseBillet/models.py:4257
 #: BaseBillet/templates/faire_festival/views/membership/list.html:4
 #: BaseBillet/templates/faire_festival/views/membership/list.html:47
 #: BaseBillet/templates/reunion/views/home.html:31
@@ -225,7 +226,7 @@ msgstr "Adhésions"
 msgid "Ticketing"
 msgstr "Billetterie"
 
-#: Administration/admin/dashboard.py:112 BaseBillet/models.py:1425
+#: Administration/admin/dashboard.py:112 BaseBillet/models.py:1429
 msgid "Ticket products"
 msgstr "Produits de billetterie"
 
@@ -236,12 +237,12 @@ msgstr "Carrousel"
 #: Administration/admin/dashboard.py:128
 #: Administration/templates/admin/event/partials/codes_promo.html:2
 #: Administration/templates/admin/event/partials/codes_promo.html:4
-#: BaseBillet/models.py:1532
+#: BaseBillet/models.py:1536
 msgid "Promotional codes"
 msgstr "Codes promotionnels"
 
 #: Administration/admin/dashboard.py:136 BaseBillet/models.py:182
-#: BaseBillet/models.py:1976 crowds/models.py:116
+#: BaseBillet/models.py:2103 crowds/models.py:116
 msgid "Tags"
 msgstr "Tags"
 
@@ -249,13 +250,13 @@ msgstr "Tags"
 msgid "Addresses"
 msgstr "Adresses"
 
-#: Administration/admin/dashboard.py:150 BaseBillet/models.py:2457
-#: BaseBillet/models.py:4313
+#: Administration/admin/dashboard.py:150 BaseBillet/models.py:2584
+#: BaseBillet/models.py:4493
 msgid "Events"
 msgstr "Évènements"
 
 #: Administration/admin/dashboard.py:156 Administration/admin/events.py:311
-#: BaseBillet/models.py:4316
+#: BaseBillet/models.py:4496
 msgid "Bookings"
 msgstr "Réservations"
 
@@ -265,7 +266,7 @@ msgstr "Réservations"
 #: Administration/templates/admin/cloture_detail.html:361
 #: Administration/templates/admin/event/partials/canaux_vente.html:13
 #: Administration/templates/admin/event/partials/moyens_paiement.html:15
-#: BaseBillet/models.py:3338 BaseBillet/models.py:4317
+#: BaseBillet/models.py:3484 BaseBillet/models.py:4497
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:328
 msgid "Tickets"
 msgstr "Billets"
@@ -278,7 +279,7 @@ msgstr "Application de Scan"
 msgid "Caisse LaBoutik"
 msgstr "Caisse LaBoutik"
 
-#: Administration/admin/dashboard.py:193 BaseBillet/models.py:1449
+#: Administration/admin/dashboard.py:193 BaseBillet/models.py:1453
 msgid "POS products"
 msgstr "Produits de caisse"
 
@@ -372,7 +373,7 @@ msgstr "Tableau de bord billetterie"
 msgid "Taps"
 msgstr "Tireuses"
 
-#: Administration/admin/dashboard.py:395 BaseBillet/models.py:1462
+#: Administration/admin/dashboard.py:395 BaseBillet/models.py:1466
 msgid "Keg products"
 msgstr "Produits fûts"
 
@@ -510,7 +511,8 @@ msgstr "Billetterie"
 msgid "Events, reservations, and ticket sales"
 msgstr "Événements, réservations et billetterie"
 
-#: Administration/admin/dashboard.py:664 BaseBillet/models.py:1296
+#: Administration/admin/dashboard.py:664 BaseBillet/models.py:1300
+#: BaseBillet/templates/htmx/components/panier_item.html:55
 msgid "Membership"
 msgstr "Adhésions"
 
@@ -585,7 +587,7 @@ msgstr "Date de fin (date de l'événement)"
 msgid "Start date must be before end date."
 msgstr "La date de début doit être antérieure à la date de fin."
 
-#: Administration/admin/events.py:63 BaseBillet/models.py:2160
+#: Administration/admin/events.py:63 BaseBillet/models.py:2287
 msgid "Volunteering"
 msgstr "Volontariat"
 
@@ -611,7 +613,7 @@ msgid "Archived"
 msgstr "Archivé"
 
 #: Administration/admin/events.py:321 BaseBillet/models.py:1133
-#: BaseBillet/models.py:1602 BaseBillet/models.py:1965
+#: BaseBillet/models.py:1723 BaseBillet/models.py:2092
 msgid "Publish"
 msgstr "Publier"
 
@@ -637,7 +639,7 @@ msgstr "Billets valides"
 
 #: Administration/admin/events.py:1377 Administration/admin/fedow.py:69
 #: Administration/admin/products.py:1048 BaseBillet/models.py:1226
-#: BaseBillet/models.py:1966 fedow_core/models.py:169
+#: BaseBillet/models.py:2093 fedow_core/models.py:169
 msgid "Archive"
 msgstr "Archiver"
 
@@ -851,7 +853,7 @@ msgid "General"
 msgstr "General"
 
 #: Administration/admin/laboutik.py:144 BaseBillet/models.py:201
-#: BaseBillet/models.py:4583
+#: BaseBillet/models.py:4763
 #: BaseBillet/templates/emails/membership_renewal_reminder.html:57
 msgid "Options"
 msgstr "Options"
@@ -906,7 +908,7 @@ msgstr "Numéro"
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:550
 #: Administration/templates/admin/cloture_detail.html:23
 #: Administration/templates/admin/cloture_detail.html:461
-#: BaseBillet/models.py:3689 controlvanne/models.py:198
+#: BaseBillet/models.py:3847 controlvanne/models.py:198
 #: laboutik/excel_export.py:111 laboutik/models.py:497 laboutik/models.py:1296
 #: laboutik/models.py:1493
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:35
@@ -953,8 +955,8 @@ msgstr "Totaux par mode de paiement"
 #: Administration/templates/admin/cloture_detail.html:62
 #: Administration/templates/admin/cloture_detail.html:223
 #: Administration/templates/admin/cloture_detail.html:259
-#: BaseBillet/models.py:3223 BaseBillet/models.py:3667
-#: BaseBillet/models.py:3976 laboutik/excel_export.py:119
+#: BaseBillet/models.py:3369 BaseBillet/models.py:3825
+#: BaseBillet/models.py:4156 laboutik/excel_export.py:119
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:48
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:198
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:232
@@ -1036,7 +1038,7 @@ msgstr "Carte bancaire"
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:108
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:62
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:369
-#: laboutik/views.py:115 laboutik/views.py:2779
+#: laboutik/views.py:121 laboutik/views.py:2785
 msgid "Cashless"
 msgstr "Cashless"
 
@@ -1079,6 +1081,7 @@ msgstr "Chèque bancaire"
 #: Administration/templates/admin/cloture_detail.html:383
 #: Administration/templates/admin/cloture_detail.html:406
 #: Administration/templates/admin/event/partials/ventes_tarif.html:42
+#: BaseBillet/templates/htmx/components/panier_content.html:125
 #: BaseBillet/templates/invoice/invoice.html:177
 #: BaseBillet/templates/invoice/invoice.html:207
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:46
@@ -1124,9 +1127,9 @@ msgstr "Catégorie"
 #: Administration/templates/admin/cloture_detail.html:113
 #: Administration/templates/admin/cloture_detail.html:221
 #: Administration/templates/admin/cloture_detail.html:257
-#: BaseBillet/models.py:1412 BaseBillet/models.py:1488
-#: BaseBillet/models.py:1569 BaseBillet/models.py:2626
-#: BaseBillet/models.py:4552 BaseBillet/tasks.py:247 api_v2/serializers.py:594
+#: BaseBillet/models.py:1416 BaseBillet/models.py:1492
+#: BaseBillet/models.py:1690 BaseBillet/models.py:2753
+#: BaseBillet/models.py:4732 BaseBillet/tasks.py:247 api_v2/serializers.py:594
 #: laboutik/models.py:771
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:96
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:196
@@ -1188,7 +1191,7 @@ msgstr "HT"
 #: Administration/templates/admin/cloture_detail.html:118
 #: Administration/templates/admin/cloture_detail.html:161
 #: Administration/templates/admin/event/partials/ventes_tarif.html:17
-#: BaseBillet/models.py:3618 BaseBillet/templates/invoice/invoice.html:176
+#: BaseBillet/models.py:3776 BaseBillet/templates/invoice/invoice.html:176
 #: laboutik/excel_export.py:143
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:101
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:142
@@ -1241,7 +1244,7 @@ msgstr "Ventilation TVA"
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:250
 #: Administration/templates/admin/cloture_detail.html:159
 #: Administration/templates/admin/event/partials/ventes_tarif.html:12
-#: BaseBillet/models.py:1898 laboutik/excel_export.py:143
+#: BaseBillet/models.py:2025 laboutik/excel_export.py:143
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:140
 msgid "Rate"
 msgstr "Tarif"
@@ -1391,8 +1394,8 @@ msgstr "Recharge médiane"
 #: Administration/templates/admin/cloture/rapport_before.html:383
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:456
 #: Administration/templates/admin/cloture_detail.html:365
-#: BaseBillet/models.py:2456 BaseBillet/models.py:3299
-#: BaseBillet/models.py:4368
+#: BaseBillet/models.py:2583 BaseBillet/models.py:3445
+#: BaseBillet/models.py:4548
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:332
 msgid "Event"
 msgstr "Évènement"
@@ -1520,7 +1523,8 @@ msgstr "Attente de validation"
 msgid "Attente de paiement"
 msgstr "Attente de paiement"
 
-#: Administration/admin/membership.py:221 BaseBillet/models.py:3200
+#: Administration/admin/membership.py:221 BaseBillet/models.py:1600
+#: BaseBillet/models.py:3346
 msgid "Canceled"
 msgstr "Annulé"
 
@@ -1548,7 +1552,7 @@ msgstr "Ventes / Lignes comptables"
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:406
 #: Administration/templates/admin/cloture_detail.html:315
 #: Administration/templates/admin/membership/wallet_info.html:95
-#: ApiBillet/templates/ticket/ticket.html:199 BaseBillet/models.py:3614
+#: ApiBillet/templates/ticket/ticket.html:199 BaseBillet/models.py:3772
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:40
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:8
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:284
@@ -1874,7 +1878,7 @@ msgstr "Wallet / solde"
 
 #: Administration/admin/products.py:144 laboutik/printing/formatters.py:419
 #: laboutik/printing/formatters.py:516 laboutik/printing/formatters.py:622
-#: laboutik/serializers.py:358 laboutik/views.py:7392
+#: laboutik/serializers.py:358 laboutik/views.py:7398
 msgid "Especes"
 msgstr "Espèces"
 
@@ -1884,12 +1888,12 @@ msgstr "Espèces"
 #: laboutik/templates/laboutik/partial/hx_cloture_rapport.html:21
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:125
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:104
-#: laboutik/views.py:113 laboutik/views.py:2778 laboutik/views.py:7396
+#: laboutik/views.py:119 laboutik/views.py:2784 laboutik/views.py:7402
 msgid "Carte bancaire"
 msgstr ""
 
 #: Administration/admin/products.py:146 laboutik/printing/formatters.py:446
-#: laboutik/serializers.py:360 laboutik/views.py:7400
+#: laboutik/serializers.py:360 laboutik/views.py:7406
 msgid "Cheque"
 msgstr ""
 
@@ -2214,8 +2218,8 @@ msgstr "Réservation de billets"
 
 #: Administration/admin/products.py:749 Administration/admin/products.py:1146
 #: Administration/management/commands/batch_new_tenant.py:225
-#: BaseBillet/models.py:1197 BaseBillet/models.py:3711
-#: BaseBillet/validators.py:1019
+#: BaseBillet/models.py:1197 BaseBillet/models.py:3869
+#: BaseBillet/validators.py:1057
 msgid "Free booking"
 msgstr "Réservation gratuite"
 
@@ -2227,7 +2231,7 @@ msgstr "Adhésion ou abonnement"
 #: Administration/admin/products.py:753 Administration/admin/products.py:1149
 #: Administration/admin/products.py:1166 Administration/admin/products.py:1246
 #: Administration/admin/products.py:1543 BaseBillet/models.py:1215
-#: BaseBillet/models.py:2530
+#: BaseBillet/models.py:2657
 msgid "Product type"
 msgstr "Catégorie de produit"
 
@@ -2283,7 +2287,7 @@ msgstr ""
 msgid "{obj.name} Archived"
 msgstr "{obj.name} Archivé"
 
-#: Administration/admin/products.py:1256 BaseBillet/models.py:1310
+#: Administration/admin/products.py:1256 BaseBillet/models.py:1314
 msgid "POS method"
 msgstr "Mode de caisse"
 
@@ -2311,7 +2315,7 @@ msgstr ""
 "champs couleur ci-dessous."
 
 #: Administration/admin/products.py:1282 Administration/admin/products.py:1569
-#: BaseBillet/models.py:1328
+#: BaseBillet/models.py:1332
 msgid "POS text color"
 msgstr ""
 
@@ -2321,12 +2325,12 @@ msgid "Par défaut, couleur de la catégorie. / Default: category color."
 msgstr ""
 
 #: Administration/admin/products.py:1292 Administration/admin/products.py:1579
-#: BaseBillet/models.py:1335
+#: BaseBillet/models.py:1339
 msgid "POS background color"
 msgstr "Couleur de fond de la caisse"
 
 #: Administration/admin/products.py:1302 Administration/admin/products.py:1589
-#: BaseBillet/models.py:1360
+#: BaseBillet/models.py:1364
 msgid "POS icon"
 msgstr ""
 
@@ -2489,8 +2493,8 @@ msgstr "Ré-envoyer les billets par mail"
 msgid "Tickets sent to {reservation.user_commande.email}"
 msgstr "Billets envoyés à {reservation.user_commande.email}"
 
-#: Administration/admin/reservations.py:376 Administration/admin/users.py:34
-#: Administration/admin/users.py:57 Administration/admin/users.py:89
+#: Administration/admin/reservations.py:376 Administration/admin/users.py:33
+#: Administration/admin/users.py:56 Administration/admin/users.py:88
 #: Administration/importers/membership_importers.py:66
 #: Administration/importers/ticket_exporter.py:29
 #: BaseBillet/templatetags/tibitags.py:170
@@ -2525,7 +2529,7 @@ msgstr "%(count)d billet(s) annulé(s) et remboursé(s)."
 msgid "Some items failed to cancel/refund: %(errors)s"
 msgstr "Certains articles n'ont pas pu être annulés/remboursés : %(errors)s"
 
-#: Administration/admin/reservations.py:518 BaseBillet/models.py:1579
+#: Administration/admin/reservations.py:518 BaseBillet/models.py:1700
 #: BaseBillet/templates/invoice/invoice.html:174 laboutik/models.py:776
 msgid "Price"
 msgstr "Prix"
@@ -2534,8 +2538,8 @@ msgstr "Prix"
 msgid "Booked at"
 msgstr "Réservé le"
 
-#: Administration/admin/reservations.py:552 BaseBillet/models.py:4030
-#: BaseBillet/models.py:4053
+#: Administration/admin/reservations.py:552 BaseBillet/models.py:4210
+#: BaseBillet/models.py:4233
 msgid "State"
 msgstr "Statut"
 
@@ -2569,7 +2573,7 @@ msgstr "Poids/Vol."
 msgid "Status"
 msgstr "Statut"
 
-#: Administration/admin/sales.py:174 BaseBillet/models.py:3708
+#: Administration/admin/sales.py:174 BaseBillet/models.py:3866
 msgid "Credit note"
 msgstr "Avoir"
 
@@ -2601,7 +2605,7 @@ msgstr "Voir le site"
 msgid "Included tags"
 msgstr "Labels inclus"
 
-#: Administration/admin/settings_apps.py:155 BaseBillet/models.py:4392
+#: Administration/admin/settings_apps.py:155 BaseBillet/models.py:4572
 msgid "Excluded tags"
 msgstr "Labels exclus"
 
@@ -2643,7 +2647,7 @@ msgstr ""
 msgid "Error testing Ghost API: {type(e).__name__} - {str(e)}"
 msgstr "Erreur lors du test de l'API Ghost : {type(e).__name__} - {str(e)}"
 
-#: Administration/admin/settings_apps.py:321 BaseBillet/models.py:4343
+#: Administration/admin/settings_apps.py:321 BaseBillet/models.py:4523
 msgid "Api key"
 msgstr "Clé API"
 
@@ -2704,81 +2708,82 @@ msgstr "Synchroniser les tags fédérés"
 msgid "Synchronization complete: {} tags created, {} tags updated."
 msgstr "{} tags créés, {} tags mis à jour."
 
-#: Administration/admin/users.py:28
+#: Administration/admin/users.py:27
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:24
 #: AuthBillet/models.py:456 BaseBillet/templates/reunion/account_base.html:10
 msgid "Administrator"
 msgstr "Administrateur·ice"
 
-#: Administration/admin/users.py:34 Administration/admin/users.py:57
-#: Administration/admin/users.py:88
+#: Administration/admin/users.py:33 Administration/admin/users.py:56
+#: Administration/admin/users.py:87
 #: Administration/importers/membership_importers.py:66
 #: Administration/importers/ticket_exporter.py:29 BaseBillet/tasks.py:264
 #: BaseBillet/templatetags/tibitags.py:170
 msgid "Yes"
 msgstr "Oui"
 
-#: Administration/admin/users.py:51
+#: Administration/admin/users.py:50
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:54
 #: AuthBillet/models.py:217
 msgid "Can initiate payments"
 msgstr "Peut initier un paiement"
 
-#: Administration/admin/users.py:74
+#: Administration/admin/users.py:73
 msgid "Valid subscription"
 msgstr "Abonnement valide"
 
-#: Administration/admin/users.py:90
+#: Administration/admin/users.py:89
 msgid "Expires soon (2 weeks)"
 msgstr "Expire bientôt (2 semaines)"
 
-#: Administration/admin/users.py:197
+#: Administration/admin/users.py:196
 #, python-brace-format
 msgid "Valid: {count}"
 msgstr "Valides : {count}"
 
-#: Administration/admin/users.py:198
+#: Administration/admin/users.py:197
 msgid "None"
 msgstr "Aucun"
 
-#: Administration/admin/users.py:223
+#: Administration/admin/users.py:222
 msgid "Login as this user"
 msgstr "Se connecter en tant que cet utilisateur"
 
-#: Administration/admin/users.py:229
+#: Administration/admin/users.py:228
 msgid "You do not have permission to perform this action."
 msgstr "Vous n'avez pas la permission d'effectuer cette action."
 
-#: Administration/admin/users.py:282
+#: Administration/admin/users.py:281
 msgid "Tracking"
 msgstr ""
 
-#: Administration/admin/users.py:305
+#: Administration/admin/users.py:304
 #: Administration/templates/admin/cloture/rapport_before.html:526
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:599
 #: Administration/templates/admin/cloture_detail.html:510
 #: ApiBillet/templates/ticket/ticket.html:215 BaseBillet/tasks.py:360
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:66
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:15
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:71
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:22
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:78
 #: laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html:40
 #: laboutik/templates/laboutik/pdf/rapport_comptable.html:469
 msgid "Email"
 msgstr "Adresse mail"
 
-#: Administration/admin/users.py:314 BaseBillet/models.py:1492
+#: Administration/admin/users.py:313 BaseBillet/models.py:1496
 #: laboutik/models.py:341 laboutik/models.py:1676
 msgid "Active"
 msgstr "Actif"
 
-#: Administration/admin/users.py:318
+#: Administration/admin/users.py:317
 msgid "Revoke selected terminals (is_active=False)"
 msgstr "Révoquer les terminaux sélectionnés (is_active=False)"
 
-#: Administration/admin/users.py:341
+#: Administration/admin/users.py:340
 #, python-format
 msgid "%(count)d terminal(s) revoked. Their sessions are now anonymous."
-msgstr "%(count)d terminal(s) révoqué(s). Leurs sessions sont maintenant anonymes."
+msgstr ""
+"%(count)d terminal(s) révoqué(s). Leurs sessions sont maintenant anonymes."
 
 #: Administration/importers/lignearticle_exporter.py:18
 msgid "Référence paiement"
@@ -2793,7 +2798,7 @@ msgid "Prix Unitaire"
 msgstr ""
 
 #: Administration/importers/lignearticle_exporter.py:26
-#: BaseBillet/models.py:3721
+#: BaseBillet/models.py:3879
 msgid "Product entry status"
 msgstr "Statut des entrées comptables"
 
@@ -2802,7 +2807,7 @@ msgid "User Email"
 msgstr "Adresse mail"
 
 #: Administration/importers/lignearticle_exporter.py:28
-#: BaseBillet/models.py:3599
+#: BaseBillet/models.py:1623 BaseBillet/models.py:3757
 msgid "Stripe payment"
 msgstr "Paiement Stripe"
 
@@ -2812,7 +2817,7 @@ msgid "Carte cashless"
 msgstr ""
 
 #: Administration/importers/lignearticle_exporter.py:30
-#: BaseBillet/models.py:3678
+#: BaseBillet/models.py:3836
 msgid "Wallet from"
 msgstr "Tirelire"
 
@@ -2942,8 +2947,8 @@ msgstr "Tenant"
 #: Administration/templates/admin/bank_transfers/historique.html:35
 #: Administration/templates/admin/cards/refund_panel.html:43
 #: Administration/templates/admin/cards/refund_panel.html:93
-#: BaseBillet/models.py:1389 BaseBillet/models.py:1826
-#: BaseBillet/models.py:3669 crowds/models.py:111 fedow_core/models.py:215
+#: BaseBillet/models.py:1393 BaseBillet/models.py:1953
+#: BaseBillet/models.py:3827 crowds/models.py:111 fedow_core/models.py:215
 #: fedow_core/models.py:278 fedow_core/models.py:474
 #: laboutik/templates/laboutik/partial/hx_vider_carte_confirm.html:18
 msgid "Asset"
@@ -3016,7 +3021,7 @@ msgstr "Confirmer le virement"
 #: Administration/templates/admin/membership/partials/custom_form_add_field.html:62
 #: Administration/templates/admin/membership/partials/custom_form_edit.html:153
 #: Administration/templates/admin/membership/partials/renouveller_confirm.html:61
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:156
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:158
 #: crowds/templates/crowds/partial/summary.html:316
 #: crowds/templates/crowds/views/detail.html:320
 #: crowds/templates/crowds/views/detail.html:522
@@ -3143,7 +3148,7 @@ msgstr "Identifiée à"
 
 #: Administration/templates/admin/cards/refund_panel.html:15
 #: laboutik/templates/laboutik/partial/hx_card_feedback.html:29
-#: laboutik/views.py:6069
+#: laboutik/views.py:6075
 msgid "Carte anonyme"
 msgstr "Carte anonyme"
 
@@ -3274,10 +3279,10 @@ msgstr ""
 #: Administration/templates/admin/cloture/export_fiscal_form.html:80
 #: Administration/templates/admin/dashboard_module_modal.html:28
 #: Administration/templates/admin/event/partials/export_periode_form.html:90
-#: BaseBillet/templates/reunion/forms/contact.html:32
+#: BaseBillet/templates/reunion/forms/contact.html:34
 #: BaseBillet/templates/reunion/views/account/balance.html:85
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:450
-#: BaseBillet/templates/reunion/views/membership/form.html:620
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:570
+#: BaseBillet/templates/reunion/views/membership/form.html:708
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:358
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:32
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/payment_validation.html:33
@@ -3682,8 +3687,8 @@ msgid "Not scanned"
 msgstr "Non scannés"
 
 #: Administration/templates/admin/event/partials/scans.html:18
-#: BaseBillet/models.py:2736 BaseBillet/models.py:3400
-#: BaseBillet/models.py:3706 BaseBillet/models.py:4020 laboutik/models.py:722
+#: BaseBillet/models.py:2882 BaseBillet/models.py:3558
+#: BaseBillet/models.py:3864 BaseBillet/models.py:4200 laboutik/models.py:722
 #: laboutik/models.py:811
 msgid "Cancelled"
 msgstr "Annulés"
@@ -3727,7 +3732,7 @@ msgid "Excl. tax"
 msgstr "HT"
 
 #: Administration/templates/admin/event/partials/ventes_tarif.html:18
-#: BaseBillet/models.py:3401 BaseBillet/models.py:3707
+#: BaseBillet/models.py:3559 BaseBillet/models.py:3865
 msgid "Refunded"
 msgstr "Remboursés"
 
@@ -3828,7 +3833,7 @@ msgstr "Aide : comprendre les actions"
 #: inventaire/models.py:24 inventaire/serializers.py:88
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:116
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:165
-#: laboutik/views.py:8434
+#: laboutik/views.py:8440
 msgid "Réception"
 msgstr "Réception"
 
@@ -3844,7 +3849,7 @@ msgstr ""
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:105
 #: inventaire/models.py:25 inventaire/serializers.py:89
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:173
-#: laboutik/views.py:8436
+#: laboutik/views.py:8442
 msgid "Ajustement"
 msgstr "Ajustement"
 
@@ -3858,7 +3863,7 @@ msgstr ""
 
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:43
 #: Administration/templates/admin/inventaire/stock_actions_partial.html:116
-#: inventaire/models.py:26 inventaire/serializers.py:90 laboutik/views.py:117
+#: inventaire/models.py:26 inventaire/serializers.py:90 laboutik/views.py:123
 msgid "Offert"
 msgstr "Offert"
 
@@ -4098,7 +4103,7 @@ msgstr ""
 
 #: Administration/templates/admin/membership/partials/ajouter_paiement_form.html:99
 #: Administration/templates/admin/membership/partials/ajouter_paiement_success.html:23
-#: laboutik/views.py:3051
+#: laboutik/views.py:3057
 msgid "Ventes"
 msgstr ""
 
@@ -4178,7 +4183,7 @@ msgid ""
 msgstr ""
 
 #: Administration/templates/admin/membership/partials/cancel_form.html:98
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:120
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:122
 #: crowds/templates/crowds/views/detail.html:303
 #: laboutik/templates/cotton/categories.html:13
 #: laboutik/templates/laboutik/partial/article_panel_stock.html:10
@@ -4462,7 +4467,7 @@ msgstr "Accès administrateur requis."
 msgid "Cette carte n'appartient pas à votre lieu."
 msgstr "Cette carte n'appartient pas à votre lieu."
 
-#: Administration/views_cards.py:187 laboutik/views.py:7074
+#: Administration/views_cards.py:187 laboutik/views.py:7080
 msgid "Aucun solde remboursable sur cette carte."
 msgstr "Aucun solde remboursable sur cette carte."
 
@@ -4517,7 +4522,7 @@ msgstr "{value} sous le montant cashless minimum."
 msgid "Maximum capacity reached: event full."
 msgstr "Jauge maximale atteinte : évènement complet"
 
-#: ApiBillet/serializers.py:1012 BaseBillet/validators.py:465
+#: ApiBillet/serializers.py:1012 BaseBillet/validators.py:478
 msgid "Email does not match logged-in user."
 msgstr "Le mail ne correspond pas à celui de l'utilisateur·ice connecté·e."
 
@@ -4600,7 +4605,7 @@ msgstr "Encaissement Stripe non valide."
 msgid "Booking"
 msgstr "Réservation"
 
-#: ApiBillet/templates/ticket/ticket.html:193 BaseBillet/models.py:1575
+#: ApiBillet/templates/ticket/ticket.html:193 BaseBillet/models.py:1696
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:34
 msgid "Rate name"
 msgstr "Nom du tarif"
@@ -4721,15 +4726,17 @@ msgstr "Échec d'envoi du mail de confirmation si True"
 msgid "Email confirmed"
 msgstr "Adresse mail confirmée"
 
-#: AuthBillet/models.py:135 BaseBillet/models.py:3180 BaseBillet/models.py:3986
+#: AuthBillet/models.py:135 BaseBillet/models.py:1582 BaseBillet/models.py:3326
+#: BaseBillet/models.py:4166
 #: BaseBillet/templates/reunion/views/account/preferences.html:43
-#: BaseBillet/templates/reunion/views/membership/form.html:270
+#: BaseBillet/templates/reunion/views/membership/form.html:273
 #: BaseBillet/templates/reunion/views/register.html:41
 #: BaseBillet/templates/reunion/views/register.html:42
 msgid "First name"
 msgstr "Prénom"
 
-#: AuthBillet/models.py:136 BaseBillet/models.py:3183 BaseBillet/models.py:3992
+#: AuthBillet/models.py:136 BaseBillet/models.py:1586 BaseBillet/models.py:3329
+#: BaseBillet/models.py:4172
 #: BaseBillet/templates/reunion/views/account/preferences.html:51
 #: BaseBillet/templates/reunion/views/register.html:48
 #: BaseBillet/templates/reunion/views/register.html:50
@@ -4788,7 +4795,9 @@ msgstr "Rôle du terminal"
 
 #: AuthBillet/models.py:175
 msgid "Only set for espece=TE. Drives permission checks."
-msgstr "Défini uniquement pour espece=TE. Conditionne les vérifications de permissions."
+msgstr ""
+"Défini uniquement pour espece=TE. Conditionne les vérifications de "
+"permissions."
 
 #: AuthBillet/models.py:180
 msgid "Public"
@@ -5032,7 +5041,7 @@ msgstr "Nom de l'adresse"
 msgid "It will help with finding it quickly later."
 msgstr "Ça aidera à la retrouver facilement plus tard."
 
-#: BaseBillet/models.py:231 BaseBillet/models.py:2034 crowds/models.py:142
+#: BaseBillet/models.py:231 BaseBillet/models.py:2161 crowds/models.py:142
 msgid "Main image"
 msgstr "Image principale"
 
@@ -5044,7 +5053,7 @@ msgstr ""
 "L'image principale de l'adresse. S'affiche sur les évènements s'ils n'ont "
 "pas d'adresse."
 
-#: BaseBillet/models.py:250 BaseBillet/models.py:2053 crowds/models.py:180
+#: BaseBillet/models.py:250 BaseBillet/models.py:2180 crowds/models.py:180
 msgid "Sticker image"
 msgstr "Image vignette"
 
@@ -5146,14 +5155,14 @@ msgstr "URL du lien"
 msgid "Collective name"
 msgstr "Nom du collectif"
 
-#: BaseBillet/models.py:367 BaseBillet/models.py:1123 BaseBillet/models.py:1951
+#: BaseBillet/models.py:367 BaseBillet/models.py:1123 BaseBillet/models.py:2078
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:69
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:73
 #: MetaBillet/models.py:49 crowds/models.py:75
 msgid "Short description"
 msgstr "Description courte"
 
-#: BaseBillet/models.py:370 BaseBillet/models.py:1129 BaseBillet/models.py:1954
+#: BaseBillet/models.py:370 BaseBillet/models.py:1129 BaseBillet/models.py:2081
 #: MetaBillet/models.py:50
 msgid "Long description"
 msgstr "Description longue"
@@ -5438,8 +5447,8 @@ msgstr ""
 msgid "Hexadecimal color code for background (e.g. #000000)."
 msgstr ""
 
-#: BaseBillet/models.py:1037 BaseBillet/models.py:1584
-#: BaseBillet/models.py:4578 laboutik/models.py:458 laboutik/models.py:606
+#: BaseBillet/models.py:1037 BaseBillet/models.py:1705
+#: BaseBillet/models.py:4758 laboutik/models.py:458 laboutik/models.py:606
 msgid "Display order"
 msgstr "Ordre d'affichage"
 
@@ -5554,11 +5563,11 @@ msgstr "Réservation nominative"
 msgid "Intended recipient's first and last names required for each ticket."
 msgstr "Nom et prénom des destinataires des billets requis."
 
-#: BaseBillet/models.py:1231 BaseBillet/models.py:1667
+#: BaseBillet/models.py:1231 BaseBillet/models.py:1788
 msgid "Maximum per user"
 msgstr "Maximum par utilisateur·ice"
 
-#: BaseBillet/models.py:1233 BaseBillet/models.py:1669
+#: BaseBillet/models.py:1233 BaseBillet/models.py:1790
 msgid ""
 "Limit the quantity per user. Leave this field blank if the number is "
 "unlimited."
@@ -5566,60 +5575,60 @@ msgstr ""
 "Limitez la quantité par utilisateur. Laissez ce champ vide si le nombre est "
 "illimité."
 
-#: BaseBillet/models.py:1268
+#: BaseBillet/models.py:1272
 msgid "Validate button text for membership"
 msgstr "Texte personnalisé pour le bouton d'adhésion du produit"
 
-#: BaseBillet/models.py:1270
+#: BaseBillet/models.py:1274
 msgid ""
 "'Subscribe' If empty. Only useful for membership or subscription products."
 msgstr ""
 "'Adhérer' si laissé vide. Utile uniquement pour les produits d'adhésion ou "
 "d'abonnement."
 
-#: BaseBillet/models.py:1292
+#: BaseBillet/models.py:1296
 msgid "Sale"
 msgstr "Vente"
 
-#: BaseBillet/models.py:1293
+#: BaseBillet/models.py:1297
 msgid "Euro top-up"
 msgstr ""
 
-#: BaseBillet/models.py:1294
+#: BaseBillet/models.py:1298
 msgid "Gift top-up"
 msgstr ""
 
-#: BaseBillet/models.py:1295
+#: BaseBillet/models.py:1299
 msgid "Time top-up"
 msgstr "Recharge temps"
 
-#: BaseBillet/models.py:1297
+#: BaseBillet/models.py:1301
 msgid "Deposit return"
 msgstr ""
 
-#: BaseBillet/models.py:1298
+#: BaseBillet/models.py:1302
 msgid "Empty card"
 msgstr ""
 
-#: BaseBillet/models.py:1299
+#: BaseBillet/models.py:1303
 msgid "Split payment"
 msgstr "Paiement fractionné"
 
-#: BaseBillet/models.py:1300 BaseBillet/models.py:3337
+#: BaseBillet/models.py:1304 BaseBillet/models.py:3483
 #: BaseBillet/templates/reunion/partials/account/ticket_accordion.html:13
 #: BaseBillet/templates/reunion/views/account/reservations.html:21
 msgid "Ticket"
 msgstr "Billet"
 
-#: BaseBillet/models.py:1301
+#: BaseBillet/models.py:1305
 msgid "Loyalty"
 msgstr ""
 
-#: BaseBillet/models.py:1302
+#: BaseBillet/models.py:1306
 msgid "Bank transfer received"
 msgstr "Virement bancaire reçu"
 
-#: BaseBillet/models.py:1312
+#: BaseBillet/models.py:1316
 msgid ""
 "Payment/action method at the cash register. Leave empty if this product is "
 "not sold at the POS."
@@ -5627,48 +5636,48 @@ msgstr ""
 "Méthode de paiement/action en caisse. Laisser vide si ce produit n'est pas "
 "vendu au point de vente."
 
-#: BaseBillet/models.py:1321
+#: BaseBillet/models.py:1325
 msgid "POS category"
 msgstr "Catégorie caisse"
 
-#: BaseBillet/models.py:1322
+#: BaseBillet/models.py:1326
 msgid "Display category on the POS interface."
 msgstr "Catégorie d'affichage sur l'interface caisse."
 
-#: BaseBillet/models.py:1329
+#: BaseBillet/models.py:1333
 msgid "Hexadecimal color for the product button text (e.g. #FFFFFF)."
 msgstr "Couleur hexadécimale du texte du bouton produit (ex. #FFFFFF)."
 
-#: BaseBillet/models.py:1337
+#: BaseBillet/models.py:1341
 msgid "Hexadecimal color for the product button background (e.g. #3B82F6)."
 msgstr "Couleur hexadécimale du fond du bouton produit (ex. #3B82F6)."
 
-#: BaseBillet/models.py:1344
+#: BaseBillet/models.py:1348
 msgid "Split payment allowed"
 msgstr "Paiement fractionné autorisé"
 
-#: BaseBillet/models.py:1345
+#: BaseBillet/models.py:1349
 msgid "Allow partial/split payment for this product at the POS."
 msgstr "Autoriser le paiement partiel/fractionné pour ce produit en caisse."
 
-#: BaseBillet/models.py:1351
+#: BaseBillet/models.py:1355
 msgid "Requires NFC tag"
 msgstr ""
 
-#: BaseBillet/models.py:1353
+#: BaseBillet/models.py:1357
 msgid ""
 "An NFC card must be scanned before this product can be added to the cart."
 msgstr "Une carte NFC doit être scannée avant d'ajouter ce produit au panier."
 
-#: BaseBillet/models.py:1361
+#: BaseBillet/models.py:1365
 msgid "Icon name for the POS button (e.g. Bootstrap Icons class)."
 msgstr "Nom de l'icône pour le bouton caisse (ex. classe Bootstrap Icons)."
 
-#: BaseBillet/models.py:1370
+#: BaseBillet/models.py:1374
 msgid "Purchase price (cents)"
 msgstr "Prix d'achat (centimes)"
 
-#: BaseBillet/models.py:1372
+#: BaseBillet/models.py:1376
 msgid ""
 "Prix d'achat unitaire en centimes. Utilise pour le calcul du benefice "
 "estime. / Unit purchase price in cents. Used for estimated profit "
@@ -5676,58 +5685,58 @@ msgid ""
 msgstr ""
 "Prix d'achat unitaire en centimes. Utilisé pour le calcul du bénéfice estimé."
 
-#: BaseBillet/models.py:1391
+#: BaseBillet/models.py:1395
 msgid ""
 "Asset fedow lie a ce produit de recharge. / Fedow asset linked to this top-"
 "up product."
 msgstr ""
 
-#: BaseBillet/models.py:1413 BaseBillet/models.py:1973
-#: BaseBillet/models.py:4314 laboutik/models.py:482
+#: BaseBillet/models.py:1417 BaseBillet/models.py:2100
+#: BaseBillet/models.py:4494 laboutik/models.py:482
 msgid "Products"
 msgstr "Produits"
 
-#: BaseBillet/models.py:1424
+#: BaseBillet/models.py:1428
 msgid "Ticket product"
 msgstr "Produit billet"
 
-#: BaseBillet/models.py:1435
+#: BaseBillet/models.py:1439
 msgid "Membership product"
 msgstr "Produit adhésion"
 
-#: BaseBillet/models.py:1448
+#: BaseBillet/models.py:1452
 msgid "POS product"
 msgstr "Produit caisse"
 
-#: BaseBillet/models.py:1461
+#: BaseBillet/models.py:1465
 msgid "Keg product"
 msgstr "Produit fût"
 
-#: BaseBillet/models.py:1472
+#: BaseBillet/models.py:1476
 msgid "Coupon name"
 msgstr "Nom du coupon"
 
-#: BaseBillet/models.py:1473
+#: BaseBillet/models.py:1477
 msgid "Descriptive name for the discount coupon."
 msgstr "Nom du coupon de réduction."
 
-#: BaseBillet/models.py:1480
+#: BaseBillet/models.py:1484
 msgid "Discount rate (%)"
 msgstr "Taux de réduction (%)"
 
-#: BaseBillet/models.py:1481
+#: BaseBillet/models.py:1485
 msgid "Discount percentage to apply (0-100)."
 msgstr "Pourcentage de remise à appliquer (0-100)."
 
-#: BaseBillet/models.py:1489
+#: BaseBillet/models.py:1493
 msgid "Product to which this discount coupon applies."
 msgstr "Produit auquel s'applique ce bon de réduction."
 
-#: BaseBillet/models.py:1497
+#: BaseBillet/models.py:1501
 msgid "Usage limit"
 msgstr "Limite d'usage"
 
-#: BaseBillet/models.py:1499
+#: BaseBillet/models.py:1503
 msgid ""
 "Maximum number of times this code can be used. Leave empty for unlimited "
 "usage."
@@ -5735,45 +5744,106 @@ msgstr ""
 "Nombre maximal d'utilisations de ce code. Laissez vide pour une utilisation "
 "illimitée."
 
-#: BaseBillet/models.py:1505
+#: BaseBillet/models.py:1509
 msgid "Usage count"
 msgstr "Nombre d'utilisations"
 
-#: BaseBillet/models.py:1506
+#: BaseBillet/models.py:1510
 msgid "Number of times this code has been used."
 msgstr "Nombre de fois où ce code a été utilisé."
 
-#: BaseBillet/models.py:1510 laboutik/models.py:542 laboutik/models.py:709
+#: BaseBillet/models.py:1514 laboutik/models.py:542 laboutik/models.py:709
 msgid "Creation date"
 msgstr "Date de création"
 
-#: BaseBillet/models.py:1531 BaseBillet/models.py:3625
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:440
+#: BaseBillet/models.py:1535 BaseBillet/models.py:1634
+#: BaseBillet/models.py:3783
+#: BaseBillet/templates/htmx/components/panier_content.html:78
+#: BaseBillet/templates/htmx/components/panier_content.html:82
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:469
 msgid "Promotional code"
 msgstr "Code promotionnel"
 
-#: BaseBillet/models.py:1550
+#: BaseBillet/models.py:1568
+msgid "Buyer"
+msgstr ""
+
+#: BaseBillet/models.py:1570
+msgid ""
+"Utilisateur acheteur (résolu par email au checkout). / Buyer user (resolved "
+"by email at checkout)."
+msgstr ""
+
+#: BaseBillet/models.py:1578
+#, fuzzy
+#| msgid "User Email"
+msgid "Buyer email"
+msgstr "Adresse mail"
+
+#: BaseBillet/models.py:1597
+msgid "Draft"
+msgstr ""
+
+#: BaseBillet/models.py:1598
+#, fuzzy
+#| msgid "Recurring payment"
+msgid "Pending payment"
+msgstr "Paiement récurrent"
+
+#: BaseBillet/models.py:1599 BaseBillet/models.py:3552 laboutik/models.py:721
+msgid "Paid"
+msgstr "Payé"
+
+#: BaseBillet/models.py:1601 BaseBillet/models.py:3550
+#: BaseBillet/templates/reunion/views/account/membership/membership_card.html:117
+msgid "Expired"
+msgstr "A expiré"
+
+#: BaseBillet/models.py:1607 BaseBillet/models.py:2897
+msgid "Order status"
+msgstr "Statut de réservation"
+
+#: BaseBillet/models.py:1637 crowds/models.py:78 discovery/models.py:72
+msgid "Created at"
+msgstr "Créé le"
+
+#: BaseBillet/models.py:1641
+#, fuzzy
+#| msgid "Paid"
+msgid "Paid at"
+msgstr "Payé"
+
+#: BaseBillet/models.py:1646 BaseBillet/models.py:2863
+#: BaseBillet/models.py:4121 laboutik/models.py:766
+msgid "Order"
+msgstr ""
+
+#: BaseBillet/models.py:1647
+msgid "Orders"
+msgstr "Statut de réservation"
+
+#: BaseBillet/models.py:1671
 msgid "Free rate"
 msgstr "Tarif gratuit"
 
-#: BaseBillet/models.py:1581
+#: BaseBillet/models.py:1702
 msgid ""
 "If the free price is activated, the amount is the minimum accepted rate."
 msgstr "Si prix libre : le montant est le minimum accepté."
 
-#: BaseBillet/models.py:1588 fedow_connect/views.py:61
+#: BaseBillet/models.py:1709 fedow_connect/views.py:61
 msgid "Open price"
 msgstr "Prix libre"
 
-#: BaseBillet/models.py:1589
+#: BaseBillet/models.py:1710
 msgid "The amount will be asked on the Stripe checkout page."
 msgstr "Le montant sera demandé sur la page d'encaissement Stripe."
 
-#: BaseBillet/models.py:1594
+#: BaseBillet/models.py:1715
 msgid "Sale by weight/volume"
 msgstr "Vente au poids/volume"
 
-#: BaseBillet/models.py:1596
+#: BaseBillet/models.py:1717
 msgid ""
 "If checked, the cashier enters the weight or volume at each sale. The price "
 "is per kg (grams) or per liter (centiliters). Stock is decremented by the "
@@ -5783,35 +5853,35 @@ msgstr ""
 "est au kg (grammes) ou au litre (centilitres). Le stock est décrémenté de la "
 "quantité exacte saisie."
 
-#: BaseBillet/models.py:1606 BaseBillet/models.py:1729
+#: BaseBillet/models.py:1727 BaseBillet/models.py:1856
 msgid "Non applicable"
 msgstr "Non applicable"
 
-#: BaseBillet/models.py:1607
+#: BaseBillet/models.py:1728
 msgid "10 %"
 msgstr "10 %"
 
-#: BaseBillet/models.py:1608
+#: BaseBillet/models.py:1729
 msgid "20 %"
 msgstr "20 %"
 
-#: BaseBillet/models.py:1609
+#: BaseBillet/models.py:1730
 msgid "8.5 %"
 msgstr "8,5 %"
 
-#: BaseBillet/models.py:1610
+#: BaseBillet/models.py:1731
 msgid "2.2 %"
 msgstr "2,2 %"
 
-#: BaseBillet/models.py:1617
+#: BaseBillet/models.py:1738
 msgid "VAT rate"
 msgstr "Taux TVA"
 
-#: BaseBillet/models.py:1623 BaseBillet/models.py:1935
+#: BaseBillet/models.py:1744 BaseBillet/models.py:2062
 msgid "Maximum capacity"
 msgstr "Jauge maximale"
 
-#: BaseBillet/models.py:1625
+#: BaseBillet/models.py:1746
 msgid ""
 "Number of valid memberships possible simultaneously or maximum capacity for "
 "this price per event. Leave this field blank if the quantity is unlimited."
@@ -5819,11 +5889,11 @@ msgstr ""
 "Nombre d'adhésions valides possibles simultanément ou capacité maximale pour "
 "ce prix par événement. Laissez ce champ vide si la quantité est illimité."
 
-#: BaseBillet/models.py:1632
+#: BaseBillet/models.py:1753
 msgid "Contenance"
 msgstr "Contenance"
 
-#: BaseBillet/models.py:1634
+#: BaseBillet/models.py:1755
 msgid ""
 "Stock quantity consumed per unit sold (in stock unit). Use this when selling "
 "by unit but decrementing stock by weight/volume. E.g.: pint=50 (cl), half=25 "
@@ -5836,11 +5906,11 @@ msgstr ""
 "unité. Incompatible avec 'Vente au poids/volume' (où le caissier saisit la "
 "quantité exacte)."
 
-#: BaseBillet/models.py:1715
+#: BaseBillet/models.py:1842
 msgid "Subscriptions required"
 msgstr "Abonnements requis"
 
-#: BaseBillet/models.py:1717
+#: BaseBillet/models.py:1844
 msgid ""
 "Rate available to subscribers only (OR logic: having at least one of the "
 "selected subscriptions is enough). Only works for reservation-type products. "
@@ -5852,67 +5922,67 @@ msgstr ""
 "réservation. Le tarif sera visible si l'utilisateur·ice est connecté·e ET a "
 "payé au moins une de ces adhésions."
 
-#: BaseBillet/models.py:1730
+#: BaseBillet/models.py:1857
 msgid "1 hour"
 msgstr "1 heure"
 
-#: BaseBillet/models.py:1731
+#: BaseBillet/models.py:1858
 msgid "1 day"
 msgstr "1 jour"
 
-#: BaseBillet/models.py:1732
+#: BaseBillet/models.py:1859
 msgid "1 week"
 msgstr "1 semaine"
 
-#: BaseBillet/models.py:1733
+#: BaseBillet/models.py:1860
 msgid "1 Month"
 msgstr "1 Mois"
 
-#: BaseBillet/models.py:1734
+#: BaseBillet/models.py:1861
 msgid "1st of the month"
 msgstr "Le 1er du mois"
 
-#: BaseBillet/models.py:1735
+#: BaseBillet/models.py:1862
 msgid "365 days"
 msgstr "365 jours"
 
-#: BaseBillet/models.py:1736
+#: BaseBillet/models.py:1863
 msgid "Calendar year : 1st of January"
 msgstr "Année civile : 1er janvier"
 
-#: BaseBillet/models.py:1737
+#: BaseBillet/models.py:1864
 msgid "School year: 1st of September"
 msgstr "Année scolaire : 1er septembre"
 
-#: BaseBillet/models.py:1738
+#: BaseBillet/models.py:1865
 msgid "valid for life"
 msgstr "valable à vie"
 
-#: BaseBillet/models.py:1745
+#: BaseBillet/models.py:1872
 msgid "Subscription duration"
 msgstr "Durée d'adhésion"
 
-#: BaseBillet/models.py:1746
+#: BaseBillet/models.py:1873
 msgid "Valid membership period for each payment"
 msgstr "Période de validité de l'adhésion pour chaque paiement"
 
-#: BaseBillet/models.py:1751 BaseBillet/tasks.py:264
+#: BaseBillet/models.py:1878 BaseBillet/tasks.py:264
 #: BaseBillet/templates/reunion/views/account/membership/membership_card.html:38
-#: BaseBillet/templates/reunion/views/membership/form.html:47
-#: BaseBillet/templates/reunion/views/membership/form.html:134
+#: BaseBillet/templates/reunion/views/membership/form.html:45
+#: BaseBillet/templates/reunion/views/membership/form.html:132
 msgid "Recurring payment"
 msgstr "Paiement récurrent"
 
-#: BaseBillet/models.py:1753
+#: BaseBillet/models.py:1880
 msgid "Monthly payment through Stripe, limited to one product at checkout."
 msgstr ""
 "Paiement mensuel via Stripe, limité à un seul produit lors du paiement."
 
-#: BaseBillet/models.py:1759
+#: BaseBillet/models.py:1886
 msgid "Max number of recurrences"
 msgstr "Nombre de récurences maximales"
 
-#: BaseBillet/models.py:1761
+#: BaseBillet/models.py:1888
 msgid ""
 "A rate with a monthly period and iterations=2 will last two months with two "
 "payments: one on day D and another the following month."
@@ -5921,11 +5991,11 @@ msgstr ""
 "abonnement de deux mois avec deux paiements : un le jour J et un autre le "
 "mois suivant. Laissez vide pour ne pas limiter."
 
-#: BaseBillet/models.py:1766
+#: BaseBillet/models.py:1893
 msgid "Commitment to the duration of the iteration."
 msgstr "Engagement sur la durée de l'itération."
 
-#: BaseBillet/models.py:1768
+#: BaseBillet/models.py:1895
 msgid ""
 "If checked, the user will not be able to cancel the automatic debit from "
 "their account. You will always be able to interrupt the automatic debit on "
@@ -5935,11 +6005,11 @@ msgstr ""
 "prélèvement automatique sur son compte. Vous pourrez toujours interrompre le "
 "prélèvement automatique depuis l'interface Stripe."
 
-#: BaseBillet/models.py:1774
+#: BaseBillet/models.py:1901
 msgid "Need manual validation"
 msgstr "Validation manuelle requise"
 
-#: BaseBillet/models.py:1776
+#: BaseBillet/models.py:1903
 msgid ""
 "If selected, an administrator will have to manually approve the membership "
 "before sending the payment link by email. An email will be sent to the "
@@ -5949,45 +6019,45 @@ msgstr ""
 "manuellement l'adhésion. Un mail avec le lien de paiement par e-mail sera "
 "ensuite envoyé à l'utilisateur."
 
-#: BaseBillet/models.py:1783
+#: BaseBillet/models.py:1910
 msgid "Top-up user wallet on payment (Fedow)"
 msgstr "Charger le portefeuille de l'utilisateur.ice après le paiement."
 
-#: BaseBillet/models.py:1785
+#: BaseBillet/models.py:1912
 msgid ""
 "If enabled, after a successful payment, the user wallet will receive tokens."
 msgstr ""
 "Si cette option est activée, après un paiement réussi, le portefeuille de "
 "l'utilisateur sera crédité."
 
-#: BaseBillet/models.py:1791
+#: BaseBillet/models.py:1918
 msgid "Reward user wallet on ticket scanning"
 msgstr "Charger le portefeuille de l'utilisateur.ice après le scan du billet"
 
-#: BaseBillet/models.py:1793
+#: BaseBillet/models.py:1920
 msgid ""
 "If enabled, after scanning a ticket, the user wallet will receive tokens."
 msgstr ""
 "Si cette option est activée, après le scan du billet, le portefeuille de "
 "l'utilisateur sera crédité."
 
-#: BaseBillet/models.py:1802
+#: BaseBillet/models.py:1929
 msgid "Fedow Asset"
 msgstr "Type d'actif"
 
-#: BaseBillet/models.py:1803
+#: BaseBillet/models.py:1930
 msgid "Asset to send from the place to the user wallet."
 msgstr "Actif à envoyer au portfeuille de l'utilisateur.ice."
 
-#: BaseBillet/models.py:1811
+#: BaseBillet/models.py:1938
 msgid "Token amount to send"
 msgstr "Montant à créditer"
 
-#: BaseBillet/models.py:1812
+#: BaseBillet/models.py:1939
 msgid "Raw token amount."
 msgstr "Montant en décimale"
 
-#: BaseBillet/models.py:1828
+#: BaseBillet/models.py:1955
 msgid ""
 "If set, the price is in asset units (tokens). If empty, the price is in "
 "euros."
@@ -5995,112 +6065,112 @@ msgstr ""
 "Si renseigné, le prix est en unités d'actif (tokens). Si vide, le prix est "
 "en euros."
 
-#: BaseBillet/models.py:1842
+#: BaseBillet/models.py:1969
 msgid "Non-fiduciary price"
 msgstr ""
 
-#: BaseBillet/models.py:1844
+#: BaseBillet/models.py:1971
 msgid ""
 "If checked, the price is in tokens (time, loyalty, etc.) instead of euros. "
 "You must select the asset below."
 msgstr ""
 
-#: BaseBillet/models.py:1873
+#: BaseBillet/models.py:2000
 msgid "An asset is required for non-fiduciary prices."
 msgstr ""
 
-#: BaseBillet/models.py:1884
+#: BaseBillet/models.py:2011
 msgid ""
 "Fiduciary assets (local, gift, federated) use the automatic cascade. Select "
 "a non-fiduciary asset (time, loyalty)."
 msgstr ""
 
-#: BaseBillet/models.py:1899
+#: BaseBillet/models.py:2026
 msgid "Rates"
 msgstr "Tarifs"
 
-#: BaseBillet/models.py:1912
+#: BaseBillet/models.py:2039
 msgid "Event name"
 msgstr "Nom de l'évènement"
 
-#: BaseBillet/models.py:1917
+#: BaseBillet/models.py:2044
 msgid "Event start"
 msgstr "Début de l'évènement"
 
-#: BaseBillet/models.py:1921
+#: BaseBillet/models.py:2048
 msgid "Event end"
 msgstr "Fin de l'évènement"
 
-#: BaseBillet/models.py:1922
+#: BaseBillet/models.py:2049
 msgid "Second date / time optional"
 msgstr "Deuxième date / heure facultative"
 
-#: BaseBillet/models.py:1931
+#: BaseBillet/models.py:2058
 msgid "Created by"
 msgstr "Créé par"
 
-#: BaseBillet/models.py:1937
+#: BaseBillet/models.py:2064
 msgid "Show gauge"
 msgstr "Afficher la jauge"
 
-#: BaseBillet/models.py:1940
+#: BaseBillet/models.py:2067
 msgid "Maximum bookings per user"
 msgstr "Maximum de réservations par utilisateur·ice"
 
-#: BaseBillet/models.py:1941
+#: BaseBillet/models.py:2068
 msgid "The same email can be used for multiple tickets."
 msgstr "Le même email peut être utilisé pour plusieurs billets."
 
-#: BaseBillet/models.py:1958
+#: BaseBillet/models.py:2085
 msgid "External event"
 msgstr "Évènement externe"
 
-#: BaseBillet/models.py:1960
+#: BaseBillet/models.py:2087
 msgid "The event is handled outside of this platform (ex: Facebook event)."
 msgstr ""
 "L'évènement est géré en-dehors de cette plateforme (ex : évènement Facebook)."
 
-#: BaseBillet/models.py:1969
+#: BaseBillet/models.py:2096
 msgid "Non-federable event"
 msgstr "Évènement non fédéré"
 
-#: BaseBillet/models.py:1970
+#: BaseBillet/models.py:2097
 msgid "Will not be displayed on shared calendars."
 msgstr "Ne sera pas affiché sur les calendriers partagés."
 
-#: BaseBillet/models.py:1985
+#: BaseBillet/models.py:2112
 msgid "Thématique"
 msgstr ""
 
-#: BaseBillet/models.py:1986
+#: BaseBillet/models.py:2113
 msgid "Valide uniquement pour le thème graphique Faire Festival"
 msgstr ""
 
-#: BaseBillet/models.py:1993
+#: BaseBillet/models.py:2120
 msgid "Single choice menu"
 msgstr "Options à choix unique"
 
-#: BaseBillet/models.py:1995
+#: BaseBillet/models.py:2122
 msgid "Des cases à cocher pendant la reservation. Un seul choix possible."
 msgstr ""
 
-#: BaseBillet/models.py:2003
+#: BaseBillet/models.py:2130
 msgid "Des cases à cocher pendant la reservation. Plusieurs choix possibles."
 msgstr ""
 
-#: BaseBillet/models.py:2009
+#: BaseBillet/models.py:2136
 msgid "Minimum value of cashless refill"
 msgstr "Montant minimal de recharge cashless"
 
-#: BaseBillet/models.py:2016
+#: BaseBillet/models.py:2143
 msgid "Button name for reservation"
 msgstr "Nom du bouton pour la réservation"
 
-#: BaseBillet/models.py:2017
+#: BaseBillet/models.py:2144
 msgid "If empty : I want to reserve one or more seats."
 msgstr "Si vide : Je veux réserver une ou plusieurs places."
 
-#: BaseBillet/models.py:2036
+#: BaseBillet/models.py:2163
 msgid ""
 "The main image of the event, displayed in the head of the event page and for "
 "social shares. If empty, the address image is displayed."
@@ -6108,7 +6178,7 @@ msgstr ""
 "L'image principale de l'événement, affichée tout en haut de la page de "
 "l'événement. Si vide, l'image de l'adresse s'affiche."
 
-#: BaseBillet/models.py:2055 crowds/models.py:182
+#: BaseBillet/models.py:2182 crowds/models.py:182
 msgid ""
 "The small image displayed in the events list. If None, img will be "
 "displayed. 4x3 ratio."
@@ -6116,78 +6186,78 @@ msgstr ""
 "La petite image affichée dans la liste des événements. Si elle est nulle, "
 "c'est l'image principale qui sera affichée. Rapport 4x3."
 
-#: BaseBillet/models.py:2060
+#: BaseBillet/models.py:2187
 msgid "Afficher l'heure de l'évènement"
 msgstr ""
 
-#: BaseBillet/models.py:2141
+#: BaseBillet/models.py:2268
 msgid "Carousel slides"
 msgstr "Images du carrousel"
 
-#: BaseBillet/models.py:2143
+#: BaseBillet/models.py:2270
 msgid "Images that will be displayed in the program section."
 msgstr "Images qui seront affichées dans la section programme"
 
-#: BaseBillet/models.py:2154
+#: BaseBillet/models.py:2281
 msgid "Concert"
 msgstr "Concert"
 
-#: BaseBillet/models.py:2155 Customers/models.py:21 MetaBillet/models.py:165
+#: BaseBillet/models.py:2282 Customers/models.py:21 MetaBillet/models.py:165
 msgid "Festival"
 msgstr "Festival"
 
-#: BaseBillet/models.py:2156
+#: BaseBillet/models.py:2283
 msgid "Meeting"
 msgstr "Réunion"
 
-#: BaseBillet/models.py:2157
+#: BaseBillet/models.py:2284
 msgid "Conference"
 msgstr "Conférence"
 
-#: BaseBillet/models.py:2158
+#: BaseBillet/models.py:2285
 msgid "Catering"
 msgstr "Restauration"
 
-#: BaseBillet/models.py:2159
+#: BaseBillet/models.py:2286
 msgid "Workcamp"
 msgstr "Chantier"
 
-#: BaseBillet/models.py:2167
+#: BaseBillet/models.py:2294
 msgid "Event category"
 msgstr "Catégorie d'évènement"
 
-#: BaseBillet/models.py:2177
+#: BaseBillet/models.py:2304
 msgid "Refund deadline (days)"
 msgstr "Limite de remboursement (jours)"
 
-#: BaseBillet/models.py:2178
+#: BaseBillet/models.py:2305
 msgid "Number of days before the event to obtain a refund."
 msgstr ""
 "Nombre de jours limite avant l'événement pour obtenir un remboursement."
 
-#: BaseBillet/models.py:2183
+#: BaseBillet/models.py:2310
 msgid "Quick booking"
 msgstr "Réservation rapide"
 
-#: BaseBillet/models.py:2184
+#: BaseBillet/models.py:2311
 msgid "One-click booking for logged-in user."
 msgstr "Réservation en un clic pour les utilisateur·ices connecté·es."
 
-#: BaseBillet/models.py:2190
+#: BaseBillet/models.py:2317
 msgid "Personalized text in the booking confirmation e-mail."
 msgstr "Texte personnalisé dans l'e-mail de confirmation de la réservation."
 
-#: BaseBillet/models.py:2192
+#: BaseBillet/models.py:2319
 msgid "Not required: You can add additional information to be sent by e-mail."
 msgstr ""
 "Vous pouvez ajouter des informations supplémentaires qui seront envoyées "
 "dans le mail d'adhésion."
 
-#: BaseBillet/models.py:2198
+#: BaseBillet/models.py:2325
 msgid "Restaurant mode / scheduler"
 msgstr "Mode restaurant / booking"
 
-#: BaseBillet/models.py:2200
+#: BaseBillet/models.py:2327
 msgid ""
 "The event will be visible at the top of the home page, allowing the user to "
 "book a specific date."
@@ -6195,545 +6265,701 @@ msgstr ""
 "Si activé, l'évènement sera visible en haut de la page d'accueil. "
 "L'utilisateur·ice pourra sélectionner une date."
 
-#: BaseBillet/models.py:2737 BaseBillet/models.py:3196
+#: BaseBillet/models.py:2865
+msgid ""
+"Renseignée uniquement si la reservation a été créée via un panier multi-"
+"items. / Only set if the reservation was created via a multi-item cart."
+msgstr ""
+
+#: BaseBillet/models.py:2883 BaseBillet/models.py:3342
 msgid "Created"
 msgstr "Créé"
 
-#: BaseBillet/models.py:2738
+#: BaseBillet/models.py:2884
 msgid "Payment still pending"
 msgstr "Paiement en attente"
 
-#: BaseBillet/models.py:2739
+#: BaseBillet/models.py:2885
 msgid "Email verification still pending"
 msgstr "Vérification du mail en attente"
 
-#: BaseBillet/models.py:2740
+#: BaseBillet/models.py:2886
 msgid "Email verified"
 msgstr "Adresse mail vérifiée"
 
-#: BaseBillet/models.py:2741
+#: BaseBillet/models.py:2887
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/email/payment_success_user.html:14
 msgid "Payment confirmed"
 msgstr "Paiement confirmé"
 
-#: BaseBillet/models.py:2742
+#: BaseBillet/models.py:2888
 msgid "Payment confirmed but invalid email"
 msgstr "Paiement confirmé mais adresse mail non valide"
 
-#: BaseBillet/models.py:2743
+#: BaseBillet/models.py:2889
 msgid "Payment confirmed but email not sent"
 msgstr "Paiement confirmé mais mail non envoyé"
 
-#: BaseBillet/models.py:2744 BaseBillet/models.py:3713
+#: BaseBillet/models.py:2890 BaseBillet/models.py:3871
 msgid "Confirmed"
 msgstr "Confirmé"
 
-#: BaseBillet/models.py:2751
-msgid "Order status"
-msgstr "Statut de réservation"
-
-#: BaseBillet/models.py:2767 BaseBillet/models.py:4006
+#: BaseBillet/models.py:2913 BaseBillet/models.py:4186
 msgid "Custom Form"
 msgstr "Formulaire sur mesure"
 
-#: BaseBillet/models.py:2832
+#: BaseBillet/models.py:2978
 msgid "You will be refunded to the credit card used to make the reservation."
 msgstr ""
 "Le remboursement sera effectué sur la carte de crédit utilisée pour "
 "effectuer la réservation."
 
-#: BaseBillet/models.py:2835
+#: BaseBillet/models.py:2981
 msgid "The deadline for getting a refund has passed."
 msgstr "La date limite pour obtenir un remboursement est dépassée."
 
-#: BaseBillet/models.py:2915
+#: BaseBillet/models.py:3061
 msgid "You cannot cancel a reservation that has been scanned."
 msgstr "Vous ne pouvez pas annuler une réservation avec des billets scannés."
 
-#: BaseBillet/models.py:3002
+#: BaseBillet/models.py:3148
 msgid "Ticket does not belong to this reservation."
 msgstr "Le billet n'appartient pas à cette réservation."
 
-#: BaseBillet/models.py:3004
+#: BaseBillet/models.py:3150
 msgid "You cannot cancel a ticket that has been scanned."
 msgstr "Vous ne pouvez pas annuler une réservation avec des billets scannés."
 
-#: BaseBillet/models.py:3031
+#: BaseBillet/models.py:3177
 msgid "Ticket does not have a matching LigneArticle."
 msgstr "Le ticket n'a pas de LigneArticle correspondant."
 
-#: BaseBillet/models.py:3095
+#: BaseBillet/models.py:3241
 msgid "Ticket cancelled."
 msgstr "Ticket annulé avec succes"
 
-#: BaseBillet/models.py:3145
+#: BaseBillet/models.py:3291
 msgid "Terminal user"
 msgstr "Utilisateur terminal"
 
-#: BaseBillet/models.py:3146
+#: BaseBillet/models.py:3292
 msgid "TermUser linked (V2 bridge flow). Null for legacy V1 keys."
 msgstr "TermUser lié (flow bridge V2). Null pour les clés V1 legacy."
 
-#: BaseBillet/models.py:3197
+#: BaseBillet/models.py:3343
 msgid "Inactive"
 msgstr "Inactive"
 
-#: BaseBillet/models.py:3198
+#: BaseBillet/models.py:3344
 msgid "Valid and not scanned"
 msgstr "Valide et non scanné"
 
-#: BaseBillet/models.py:3199
+#: BaseBillet/models.py:3345
 msgid "Valid and scanned"
 msgstr "Valide et scanné"
 
-#: BaseBillet/models.py:3207
+#: BaseBillet/models.py:3353
 msgid "Scanning status"
 msgstr "État du scan"
 
-#: BaseBillet/models.py:3210
+#: BaseBillet/models.py:3356
 msgid "L"
 msgstr "L"
 
-#: BaseBillet/models.py:3216 BaseBillet/models.py:3660
+#: BaseBillet/models.py:3362 BaseBillet/models.py:3818
 msgid "Payment source"
 msgstr "Origine du paiement"
 
-#: BaseBillet/models.py:3235
+#: BaseBillet/models.py:3381
 msgid "Date et heure du scan / Date and time of scan"
 msgstr "Date et heure du scan"
 
-#: BaseBillet/models.py:3240
+#: BaseBillet/models.py:3386
 msgid "Metadata"
 msgstr ""
 
-#: BaseBillet/models.py:3241
+#: BaseBillet/models.py:3387
 msgid "Custom metadata"
 msgstr "Metadata"
 
-#: BaseBillet/models.py:3306
+#: BaseBillet/models.py:3452
 msgid "Booking date"
 msgstr "Date de réservation"
 
-#: BaseBillet/models.py:3389
+#: BaseBillet/models.py:3511
+#, fuzzy
+#| msgid "Invalid Stripe checkout."
+msgid "Stripe checkout URL"
+msgstr "Encaissement Stripe non valide."
+
+#: BaseBillet/models.py:3513
+msgid ""
+"URL Stripe Checkout persistée après création — permet de rediriger "
+"l'utilisateur vers le paiement sans rappeler Stripe. / Stripe Checkout URL "
+"persisted after creation — allows redirecting the user to payment without "
+"recalling Stripe."
+msgstr ""
+
+#: BaseBillet/models.py:3547
 msgid "Payment link not generated"
 msgstr "Le lien de paiement n'a pas pu être généré."
 
-#: BaseBillet/models.py:3390
+#: BaseBillet/models.py:3548
 msgid "Sent to Stripe"
 msgstr "Envoyé à Stripe"
 
-#: BaseBillet/models.py:3391 BaseBillet/models.py:4019
+#: BaseBillet/models.py:3549 BaseBillet/models.py:4199
 msgid "Waiting for payment"
 msgstr "En attente de paiement"
 
-#: BaseBillet/models.py:3392
-#: BaseBillet/templates/reunion/views/account/membership/membership_card.html:117
-msgid "Expired"
-msgstr "A expiré"
-
-#: BaseBillet/models.py:3393 BaseBillet/models.py:3714
+#: BaseBillet/models.py:3551 BaseBillet/models.py:3872
 msgid "Failed"
 msgstr ""
 
-#: BaseBillet/models.py:3394 laboutik/models.py:721
-msgid "Paid"
-msgstr "Payé"
-
-#: BaseBillet/models.py:3395
+#: BaseBillet/models.py:3553
 msgid "Paid and confirmed"
 msgstr "Payé et confirmé"
 
-#: BaseBillet/models.py:3398
+#: BaseBillet/models.py:3556
 msgid "Paid but issues with LaBoutik sync"
 msgstr "Payé mais problèmes avec la synchronisation LeBoutik"
 
-#: BaseBillet/models.py:3411
+#: BaseBillet/models.py:3569
 msgid "No processing ongoing"
 msgstr "Pas de traitement en cours"
 
-#: BaseBillet/models.py:3412
+#: BaseBillet/models.py:3570
 msgid "From Stripe webhook"
 msgstr "Depuis le webhook Stripe"
 
-#: BaseBillet/models.py:3413
+#: BaseBillet/models.py:3571
 msgid "From Get"
 msgstr "Depuis Get"
 
-#: BaseBillet/models.py:3414
+#: BaseBillet/models.py:3572
 msgid "From invoice webhook"
 msgstr "Depuis le webhook des factures"
 
-#: BaseBillet/models.py:3440
+#: BaseBillet/models.py:3598
 msgid "From QR code scan"
 msgstr "Depuis un scan de QR code"
 
-#: BaseBillet/models.py:3441
+#: BaseBillet/models.py:3599
 msgid "From API"
 msgstr "Depuis l'API"
 
-#: BaseBillet/models.py:3442
+#: BaseBillet/models.py:3600
 msgid "From ticketing app"
 msgstr "Depuis la billetterie"
 
-#: BaseBillet/models.py:3443
+#: BaseBillet/models.py:3601
 msgid "From Crowds app"
 msgstr "Depuis l'application Crowds"
 
-#: BaseBillet/models.py:3444
+#: BaseBillet/models.py:3602
 msgid "From invoice"
 msgstr "Depuis facture"
 
-#: BaseBillet/models.py:3445
+#: BaseBillet/models.py:3603
 msgid "Stripe Transfert"
 msgstr "Transfert"
 
-#: BaseBillet/models.py:3600
+#: BaseBillet/models.py:3758
 msgid "Stripe payments"
 msgstr "Paiements Stripe"
 
-#: BaseBillet/models.py:3609
+#: BaseBillet/models.py:3767
 msgid "Product sold"
 msgstr "Produit vendu"
 
-#: BaseBillet/models.py:3644
+#: BaseBillet/models.py:3802
 msgid "Reservation"
 msgstr "Réservation"
 
-#: BaseBillet/models.py:3651
+#: BaseBillet/models.py:3809
 msgid "Linked subscription"
 msgstr "Abonnement lié"
 
-#: BaseBillet/models.py:3691
+#: BaseBillet/models.py:3849
 msgid ""
 "Point de vente ou cette vente a ete realisee. / Point of sale where this "
 "sale was made."
 msgstr "Point de vente où cette vente a été réalisée."
 
-#: BaseBillet/models.py:3709
+#: BaseBillet/models.py:3867
 msgid "Not sent to payment"
 msgstr "Non envoyé en paiement"
 
-#: BaseBillet/models.py:3710
+#: BaseBillet/models.py:3868
 msgid "Not paid"
 msgstr "Impayé"
 
-#: BaseBillet/models.py:3712
+#: BaseBillet/models.py:3870
 msgid "Paid but not confirmed"
 msgstr "Payé mais non validé"
 
-#: BaseBillet/models.py:3725
+#: BaseBillet/models.py:3883
 msgid "Sended to LaBoutik"
 msgstr "Envoyé sur LaBoutik"
 
-#: BaseBillet/models.py:3740
+#: BaseBillet/models.py:3898
 msgid "Transaction ID"
 msgstr "Numéro de transaction"
 
-#: BaseBillet/models.py:3741
+#: BaseBillet/models.py:3899
 msgid "Groups all lines from the same payment for reprinting."
 msgstr "Regroupe toutes les lignes d'un même paiement pour la réimpression."
 
-#: BaseBillet/models.py:3751
+#: BaseBillet/models.py:3909
 msgid "Credit note for"
 msgstr "Avoir pour"
 
-#: BaseBillet/models.py:3764 laboutik/models.py:1448
+#: BaseBillet/models.py:3922 laboutik/models.py:1448
 msgid "HMAC hash"
 msgstr ""
 
-#: BaseBillet/models.py:3766
+#: BaseBillet/models.py:3924
 msgid ""
 "HMAC-SHA256 de cette ligne, chainee avec la precedente. / HMAC-SHA256 of "
 "this line, chained with the previous one."
 msgstr "HMAC-SHA256 de cette ligne, chaînée avec la précédente."
 
-#: BaseBillet/models.py:3774
+#: BaseBillet/models.py:3932
 msgid "Previous HMAC"
 msgstr "HMAC précédent"
 
-#: BaseBillet/models.py:3776
+#: BaseBillet/models.py:3934
 msgid ""
 "HMAC de la LigneArticle precedente dans la chaine. / HMAC of the previous "
 "LigneArticle in the chain."
 msgstr "HMAC de la LigneArticle précédente dans la chaîne."
 
-#: BaseBillet/models.py:3788
+#: BaseBillet/models.py:3946
 msgid "Total HT (cents)"
 msgstr "Total HT (centimes)"
 
-#: BaseBillet/models.py:3790
+#: BaseBillet/models.py:3948
 msgid ""
 "Total hors taxes en centimes. Calcule : TTC / (1 + taux_tva/100). / Total "
 "excluding tax in cents. Computed: TTC / (1 + vat_rate/100)."
 msgstr "Total hors taxes en centimes. Calculé : TTC / (1 + taux_tva/100)."
 
-#: BaseBillet/models.py:3806
+#: BaseBillet/models.py:3964
 msgid "Quantity by weight/volume"
 msgstr ""
 
-#: BaseBillet/models.py:3808
+#: BaseBillet/models.py:3966
 msgid ""
 "Amount entered by cashier in stock unit (g or cl). Null for standard sales."
 msgstr ""
 "Quantité saisie par le caissier en unité de stock (g ou cl). Nul pour les "
 "ventes standard."
 
-#: BaseBillet/models.py:3891
+#: BaseBillet/models.py:4049
 msgid "No Stripe send"
 msgstr "Pas d'envoi Stripe"
 
-#: BaseBillet/models.py:3943
+#: BaseBillet/models.py:4101
 msgid "Product / price"
 msgstr "Produit / prix"
 
-#: BaseBillet/models.py:3951
+#: BaseBillet/models.py:4123
+msgid ""
+"Renseignée uniquement si l'adhésion a été créée via un panier multi-items. / "
+"Only set if the membership was created via a multi-item cart."
+msgstr ""
+
+#: BaseBillet/models.py:4131
 msgid "Date added"
 msgstr "Date ajouté"
 
-#: BaseBillet/models.py:3954 BaseBillet/templates/invoice/invoice.html:205
+#: BaseBillet/models.py:4134 BaseBillet/templates/invoice/invoice.html:205
 msgid "Payment date"
 msgstr "Date de paiement"
 
-#: BaseBillet/models.py:3962
+#: BaseBillet/models.py:4142
 msgid "Presence"
 msgstr "Présence"
 
-#: BaseBillet/models.py:3968 BaseBillet/tasks.py:248 BaseBillet/tasks.py:359
+#: BaseBillet/models.py:4148 BaseBillet/tasks.py:248 BaseBillet/tasks.py:359
 #: BaseBillet/templates/reunion/views/account/membership/membership_card.html:54
 #: crowds/tasks.py:186
 msgid "Contribution"
 msgstr "Contribution"
 
-#: BaseBillet/models.py:3980
+#: BaseBillet/models.py:4160
 msgid "End of current subscription"
 msgstr "Fin de l'abonnement en cours"
 
-#: BaseBillet/models.py:3998
+#: BaseBillet/models.py:4178
 msgid "I want to receive the collective's newsletter."
 msgstr "Je veux recevoir la newsletter du collectif."
 
-#: BaseBillet/models.py:4021
+#: BaseBillet/models.py:4201
 msgid "Waiting for admin validation"
 msgstr "En attente de validation"
 
-#: BaseBillet/models.py:4022
+#: BaseBillet/models.py:4202
 msgid "Confirmed by admin, waiting for payment"
 msgstr "Confirmé par l'administrateur, en attente de paiement"
 
-#: BaseBillet/models.py:4023
+#: BaseBillet/models.py:4203
 msgid "Paid by user"
 msgstr "Payé par l'utilisateur"
 
-#: BaseBillet/models.py:4024
+#: BaseBillet/models.py:4204
 msgid "Confirmed by system"
 msgstr "Confirmé"
 
-#: BaseBillet/models.py:4039 crowds/models.py:343
+#: BaseBillet/models.py:4219 crowds/models.py:343
 #: crowds/templates/crowds/partial/contributions.html:43
 #: crowds/templates/crowds/partial/contributions.html:46
 #: crowds/templates/crowds/partial/contributions.html:49
 msgid "En attente de paiement"
 msgstr ""
 
-#: BaseBillet/models.py:4040
+#: BaseBillet/models.py:4220
 msgid "Créé via l'administration"
 msgstr ""
 
-#: BaseBillet/models.py:4041
+#: BaseBillet/models.py:4221
 msgid "Importé depuis un fichier"
 msgstr ""
 
-#: BaseBillet/models.py:4042
+#: BaseBillet/models.py:4222
 msgid "Créé via la caisse"
 msgstr ""
 
-#: BaseBillet/models.py:4044
+#: BaseBillet/models.py:4224
 msgid "En attente de validation par un admin"
 msgstr ""
 
-#: BaseBillet/models.py:4045
+#: BaseBillet/models.py:4225
 msgid "Confirmé par un admin, en attente de paiement"
 msgstr ""
 
-#: BaseBillet/models.py:4046
+#: BaseBillet/models.py:4226
 msgid "Payé en ligne"
 msgstr ""
 
-#: BaseBillet/models.py:4047
+#: BaseBillet/models.py:4227
 msgid "Payé en ligne (récurrent)"
 msgstr ""
 
-#: BaseBillet/models.py:4048
+#: BaseBillet/models.py:4228
 msgid "Annulé par l'utilisateur"
 msgstr ""
 
-#: BaseBillet/models.py:4049
+#: BaseBillet/models.py:4229
 msgid "Annulé par un admin"
 msgstr ""
 
-#: BaseBillet/models.py:4076 fedow_connect/validators.py:133
+#: BaseBillet/models.py:4256 fedow_connect/validators.py:133
 msgid "Subscription"
 msgstr "Abonnement"
 
-#: BaseBillet/models.py:4084
+#: BaseBillet/models.py:4264
 msgid "Anonymous "
 msgstr "Anonyme "
 
-#: BaseBillet/models.py:4289
+#: BaseBillet/models.py:4469
 msgid "User who created this key."
 msgstr "Utilisateur·ice qui a créé cette clé."
 
-#: BaseBillet/models.py:4298
+#: BaseBillet/models.py:4478
 msgid "Confirm to generate key. It will not appear before."
 msgstr "Confirmer pour générer la clé. Elle n'apparaîtra pas avant."
 
-#: BaseBillet/models.py:4304
+#: BaseBillet/models.py:4484
 msgid "Ip source"
 msgstr "Ip source"
 
-#: BaseBillet/models.py:4305
+#: BaseBillet/models.py:4485
 msgid "API key works with any IP unless specified."
 msgstr "La clé API fonctionne avec n'importe quelle IP si non définie."
 
-#: BaseBillet/models.py:4320
+#: BaseBillet/models.py:4500
 msgid "Wallets"
 msgstr "Tirelires"
 
-#: BaseBillet/models.py:4322
+#: BaseBillet/models.py:4502
 msgid "Sales"
 msgstr "Ventes"
 
-#: BaseBillet/models.py:4323
+#: BaseBillet/models.py:4503
 msgid "Crowds"
 msgstr ""
 
-#: BaseBillet/models.py:4344
+#: BaseBillet/models.py:4524
 msgid "Api keys"
 msgstr "Clés API"
 
-#: BaseBillet/models.py:4354
+#: BaseBillet/models.py:4534
 msgid ""
 "Astuce Dev' : pour tester un webhook, lancez un petit serveur HTTP qui "
 "affiche le contenu de la requete : https://gist.github.com/"
 "mdonkers/63e115cc0c79b4f6b8b3a6b797e485c7"
 msgstr ""
 
-#: BaseBillet/models.py:4360
+#: BaseBillet/models.py:4540
 msgid "Confirmed subscription"
 msgstr "Abonnement confirmé"
 
-#: BaseBillet/models.py:4361
+#: BaseBillet/models.py:4541
 msgid "Confirmed booking"
 msgstr "Réservation confirmée"
 
-#: BaseBillet/models.py:4384
+#: BaseBillet/models.py:4564
 msgid "Tag filters"
 msgstr "Filtrage de labels"
 
-#: BaseBillet/models.py:4385
+#: BaseBillet/models.py:4565
 msgid "Show only these tags."
 msgstr "Montrer seulement ces labels."
 
-#: BaseBillet/models.py:4393
+#: BaseBillet/models.py:4573
 msgid "Exclude those tags."
 msgstr "Labels exclus"
 
-#: BaseBillet/models.py:4398
+#: BaseBillet/models.py:4578
 msgid "Federate memberships and subscriptions"
 msgstr "Fédérer les adhésions et les abonnements"
 
-#: BaseBillet/models.py:4399
+#: BaseBillet/models.py:4579
 msgid "Display memberships and subscriptions for this site."
 msgstr ""
 "Affichez également les adhésions et les abonnements des structures fédérées."
 
-#: BaseBillet/models.py:4406
+#: BaseBillet/models.py:4586
 msgid "Federated space"
 msgstr "Espace fédéré"
 
-#: BaseBillet/models.py:4407
+#: BaseBillet/models.py:4587
 msgid "Federated spaces"
 msgstr "Espaces fédérés"
 
-#: BaseBillet/models.py:4479
+#: BaseBillet/models.py:4659
 msgid "Formbricks form"
 msgstr "Formulaire Formbricks"
 
-#: BaseBillet/models.py:4480
+#: BaseBillet/models.py:4660
 msgid "Formbricks forms"
 msgstr "Formulaires Formbricks"
 
-#: BaseBillet/models.py:4503 BaseBillet/models.py:4504
+#: BaseBillet/models.py:4683 BaseBillet/models.py:4684
 msgid "Formbrick settings"
 msgstr "Paramètres Formbricks"
 
-#: BaseBillet/models.py:4520
+#: BaseBillet/models.py:4700
 msgid "Brevo setting"
 msgstr "Paramètre Brevo"
 
-#: BaseBillet/models.py:4521
+#: BaseBillet/models.py:4701
 msgid "Brevo settings"
 msgstr "Paramètres Brevo"
 
-#: BaseBillet/models.py:4531
+#: BaseBillet/models.py:4711
 msgid "Short text"
 msgstr "Texte court"
 
-#: BaseBillet/models.py:4532
+#: BaseBillet/models.py:4712
 msgid "Long text"
 msgstr "Texte long"
 
-#: BaseBillet/models.py:4535
+#: BaseBillet/models.py:4715
 msgid "Single select (menu)"
 msgstr "Sélection simple (menu)"
 
-#: BaseBillet/models.py:4539
+#: BaseBillet/models.py:4719
 msgid "Single select (radio)"
 msgstr "Sélection simple (bouton radio)"
 
-#: BaseBillet/models.py:4541
+#: BaseBillet/models.py:4721
 msgid "Multiple select"
 msgstr "Sélection multiple"
 
-#: BaseBillet/models.py:4542
+#: BaseBillet/models.py:4722
 msgid "Switch on/off"
 msgstr "Switch on/off"
 
-#: BaseBillet/models.py:4558
+#: BaseBillet/models.py:4738
 msgid "Key"
 msgstr "Clé"
 
-#: BaseBillet/models.py:4559
+#: BaseBillet/models.py:4739
 msgid "Unique per product"
 msgstr "Unique par produit"
 
-#: BaseBillet/models.py:4564
+#: BaseBillet/models.py:4744
 msgid "Label"
 msgstr "Nom du champ"
 
-#: BaseBillet/models.py:4567
+#: BaseBillet/models.py:4747
 msgid "Help text"
 msgstr "Texte d'aide"
 
-#: BaseBillet/models.py:4572
+#: BaseBillet/models.py:4752
 msgid "Field type"
 msgstr "Type de champ"
 
-#: BaseBillet/models.py:4574
+#: BaseBillet/models.py:4754
 msgid "Required"
 msgstr "Champ requis"
 
-#: BaseBillet/models.py:4587
+#: BaseBillet/models.py:4767
 msgid "Dynamic form field"
 msgstr "Formulaire dynamique"
 
-#: BaseBillet/models.py:4588
+#: BaseBillet/models.py:4768
 msgid "Dynamic form fields"
 msgstr "Formulaires dynamique"
 
 #: BaseBillet/reports.py:167
 msgid "Cumulative revenue (cents)"
 msgstr ""
+
+#: BaseBillet/services_commande.py:60
+#, fuzzy
+#| msgid "'Calendar' If empty."
+msgid "Cart is empty."
+msgstr "'Agenda' si laissé vide"
+
+#: BaseBillet/services_commande.py:282
+#, fuzzy
+#| msgid "Payment confirmed."
+msgid "Payment creation failed."
+msgstr "Paiement validé."
+
+#: BaseBillet/services_panier.py:212
+#, fuzzy
+#| msgid "Quantity must be greater than 0."
+msgid "Quantity must be positive."
+msgstr "La quantité doit être supérieure à 0."
+
+#: BaseBillet/services_panier.py:219 BaseBillet/views.py:4156
+#, fuzzy
+#| msgid "Page not found"
+msgid "Event not found."
+msgstr "Page introuvable"
+
+#: BaseBillet/services_panier.py:221
+#, fuzzy
+#| msgid "The event is now full."
+msgid "This event is full."
+msgstr "L'évènement est complet."
+
+#: BaseBillet/services_panier.py:228 BaseBillet/services_panier.py:402
+#, fuzzy
+#| msgid "Price not found: {e}."
+msgid "Price not found."
+msgstr "Prix inconnu : {e}."
+
+#: BaseBillet/services_panier.py:230 BaseBillet/services_panier.py:404
+#, fuzzy
+#| msgid "This name is not available"
+msgid "This rate is not available."
+msgstr "Ce nom n'est pas disponible"
+
+#: BaseBillet/services_panier.py:232 BaseBillet/services_panier.py:406
+#, fuzzy
+#| msgid "This field is required."
+msgid "This product is archived."
+msgstr "Ce champ est obligatoire."
+
+#: BaseBillet/services_panier.py:237
+#, fuzzy
+#| msgid "This name is not available"
+msgid "This rate is not available for this event."
+msgstr "Ce nom n'est pas disponible"
+
+#: BaseBillet/services_panier.py:242
+#, fuzzy
+#| msgid "Bookings exceed capacity for this rate."
+msgid "Quantity exceeds the per-user limit for this rate."
+msgstr "Les réservations dépassent la jauge pour ce tarif."
+
+#: BaseBillet/services_panier.py:247
+msgid "This rate is sold out."
+msgstr ""
+
+#: BaseBillet/services_panier.py:253 BaseBillet/services_panier.py:437
+msgid "An amount is required for the free price."
+msgstr ""
+
+#: BaseBillet/services_panier.py:257 BaseBillet/services_panier.py:441
+#: BaseBillet/validators.py:448 BaseBillet/validators.py:452
+#: crowds/views.py:232 crowds/views.py:342
+msgid "Invalid amount."
+msgstr "Montant non valide."
+
+#: BaseBillet/services_panier.py:260 BaseBillet/services_panier.py:444
+#, fuzzy
+#| msgid "The amount must be greater than the minimum amount."
+msgid "The amount must be greater than or equal to the minimum."
+msgstr "Le montant doit être supérieur au montant minimum."
+
+#: BaseBillet/services_panier.py:263 BaseBillet/services_panier.py:447
+#: BaseBillet/validators.py:442 BaseBillet/validators.py:819
+msgid "The amount is too high."
+msgstr "Le montant est trop élevé."
+
+#: BaseBillet/services_panier.py:304
+#, python-format
+msgid ""
+"This rate requires a membership: %(names)s. Please add the required "
+"membership to your cart first."
+msgstr ""
+
+#: BaseBillet/services_panier.py:333
+#, python-format
+msgid "This event overlaps with another event in your cart: %(name)s"
+msgstr ""
+
+#: BaseBillet/services_panier.py:347
+#, python-format
+msgid "You already have a booking that overlaps with this event: %(name)s"
+msgstr ""
+
+#: BaseBillet/services_panier.py:353
+#, python-format
+msgid ""
+"You have a payment in progress for an event that overlaps with this one: "
+"%(name)s. Please complete it or wait 15 minutes before trying another "
+"booking."
+msgstr ""
+
+#: BaseBillet/services_panier.py:411
+#, fuzzy
+#| msgid "This name is not available"
+msgid "This rate is not a membership."
+msgstr "Ce nom n'est pas disponible"
+
+#: BaseBillet/services_panier.py:417
+msgid ""
+"Recurring memberships require a direct payment and cannot be added to the "
+"cart."
+msgstr ""
+
+#: BaseBillet/services_panier.py:424
+msgid "Memberships with manual validation cannot be added to the cart."
+msgstr ""
+
+#: BaseBillet/services_panier.py:431
+#, fuzzy
+#| msgid "This card is already linked to a user."
+msgid "This membership is already in your cart."
+msgstr "Cette carte est déjà associée à un utilisateur."
+
+#: BaseBillet/services_panier.py:546 BaseBillet/services_panier.py:548
+#: BaseBillet/validators.py:511 BaseBillet/validators.py:519
+msgid "Invalid or inactive promotional code."
+msgstr "Code promotionnel invalide ou inactif."
+
+#: BaseBillet/services_panier.py:564
+#, fuzzy
+#| msgid "The promotional code is not valid for the selected products."
+msgid "This promotional code does not apply to any item in your cart."
+msgstr "Le code promotionnel n'est pas valable pour les produits sélectionnés."
 
 #: BaseBillet/services_refund.py:36
 msgid "Remboursement carte"
@@ -6743,11 +6969,11 @@ msgstr "Remboursement carte"
 msgid "Virement pot central"
 msgstr "Virement pot central"
 
-#: BaseBillet/signals.py:237
+#: BaseBillet/signals.py:249
 msgid "Your confirmation took more than 15 minutes. "
 msgstr "Votre confirmation a pris plus de 15 minutes. "
 
-#: BaseBillet/signals.py:239
+#: BaseBillet/signals.py:251
 #, python-format
 msgid ""
 "The event is almost full, only %(remains)d seat(s) left. Please make a new "
@@ -6756,7 +6982,7 @@ msgstr ""
 "L'évènement est presque complet, il ne reste que %(remains)d place(s). Merci "
 "de relancer votre réservation."
 
-#: BaseBillet/signals.py:241
+#: BaseBillet/signals.py:253
 msgid "The event is now full."
 msgstr "L'évènement est complet."
 
@@ -7253,7 +7479,7 @@ msgstr "Titulaire:"
 #: BaseBillet/templates/faire_festival/partials/footer.html:34
 #: BaseBillet/templates/reunion/partials/footer.html:25
 #: BaseBillet/templates/reunion/partials/navbar.html:36
-#: BaseBillet/templates/reunion/partials/navbar.html:82
+#: BaseBillet/templates/reunion/partials/navbar.html:103
 msgid "Contact and support"
 msgstr "Aide et contact"
 
@@ -7261,8 +7487,8 @@ msgstr "Aide et contact"
 #: BaseBillet/templates/faire_festival/base.html:189
 #: BaseBillet/templates/faire_festival/views/event/retrieve.html:114
 #: BaseBillet/templates/faire_festival/views/membership/list.html:19
-#: BaseBillet/templates/reunion/partials/navbar.html:83
-#: BaseBillet/templates/reunion/partials/navbar.html:95
+#: BaseBillet/templates/reunion/partials/navbar.html:104
+#: BaseBillet/templates/reunion/partials/navbar.html:116
 #: BaseBillet/templates/reunion/partials/toasts.html:13
 #: BaseBillet/templates/reunion/partials/toasts.html:18
 #: BaseBillet/templates/reunion/partials/toasts.html:23
@@ -7280,23 +7506,24 @@ msgid "Close"
 msgstr "Fermer"
 
 #: BaseBillet/templates/faire_festival/base.html:188
-#: BaseBillet/templates/faire_festival/partials/navbar.html:151
-#: BaseBillet/templates/reunion/partials/navbar.html:94
+#: BaseBillet/templates/faire_festival/partials/navbar.html:177
+#: BaseBillet/templates/reunion/partials/navbar.html:115
 #: BaseBillet/templates/reunion/views/login/fullpage.html:4
 #: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:2
 msgid "Login"
 msgstr "Connexion"
 
 #: BaseBillet/templates/faire_festival/partials/footer.html:60
+#: BaseBillet/templates/htmx/components/panier_content.html:149
 #: BaseBillet/templates/reunion/partials/footer.html:38
-#: BaseBillet/templates/reunion/partials/navbar.html:65
+#: BaseBillet/templates/reunion/partials/navbar.html:86
 msgid "Log in"
 msgstr "Connexion"
 
 #: BaseBillet/templates/faire_festival/partials/footer.html:64
-#: BaseBillet/templates/faire_festival/partials/navbar.html:120
+#: BaseBillet/templates/faire_festival/partials/navbar.html:146
 #: BaseBillet/templates/reunion/partials/footer.html:42
-#: BaseBillet/templates/reunion/partials/navbar.html:70
+#: BaseBillet/templates/reunion/partials/navbar.html:91
 #: BaseBillet/templates/reunion/views/account/index.html:4
 #: BaseBillet/templates/reunion/views/account/index.html:58
 msgid "My account"
@@ -7343,11 +7570,31 @@ msgstr "Basculer la navigation"
 msgid "Contact"
 msgstr "Contact"
 
-#: BaseBillet/templates/faire_festival/partials/navbar.html:130
+#: BaseBillet/templates/faire_festival/partials/navbar.html:111
+#: BaseBillet/templates/htmx/components/panier_content.html:22
+#: BaseBillet/templates/reunion/partials/navbar.html:61
+msgid "Your cart"
+msgstr "Votre panier"
+
+#: BaseBillet/templates/faire_festival/partials/navbar.html:112
+#: BaseBillet/templates/reunion/partials/navbar.html:62
+#, python-format
+msgid "Cart (%(n)s item)"
+msgid_plural "Cart (%(n)s items)"
+msgstr[0] "Panier (%(n)s article)"
+msgstr[1] "Panier (%(n)s articles)"
+
+#: BaseBillet/templates/faire_festival/partials/navbar.html:122
+#: BaseBillet/templates/htmx/components/panier_badge.html:13
+#: BaseBillet/templates/reunion/partials/navbar.html:73
+msgid "items"
+msgstr "articles"
+
+#: BaseBillet/templates/faire_festival/partials/navbar.html:156
 msgid "My tickets"
 msgstr "Mes billets"
 
-#: BaseBillet/templates/faire_festival/partials/navbar.html:138
+#: BaseBillet/templates/faire_festival/partials/navbar.html:164
 msgid "Logout"
 msgstr ""
 
@@ -7466,7 +7713,7 @@ msgstr "Jauge maximale atteinte : évènement complet."
 #: BaseBillet/templates/faire_festival/views/event/retrieve.html:223
 #: BaseBillet/templates/faire_festival/views/event/retrieve.html:249
 #: BaseBillet/templates/reunion/views/event/retrieve.html:147
-#: BaseBillet/validators.py:552
+#: BaseBillet/validators.py:565
 msgid "You have reached the maximum number of tickets for this event."
 msgstr ""
 "Vous avez atteint le nombre maximum de réservations possibles pour cet "
@@ -8065,6 +8312,68 @@ msgstr "Agenda"
 msgid "Créer un nouvel espace"
 msgstr ""
 
+#: BaseBillet/templates/htmx/components/panier_badge.html:19
+msgid "Log in to use your cart"
+msgstr "Connectez-vous pour utiliser votre panier"
+
+#: BaseBillet/templates/htmx/components/panier_badge.html:22
+msgid "items (login required)"
+msgstr "articles (connexion requise)"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:46
+msgid "Your cart is waiting"
+msgstr "Votre panier vous attend"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:48
+msgid "Browse events or memberships to fill it up."
+msgstr "Parcourez les événements ou les adhésions pour le remplir."
+
+#: BaseBillet/templates/htmx/components/panier_content.html:56
+msgid "Browse events"
+msgstr "Parcourir les événements"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:68
+#, fuzzy
+#| msgid "Carte"
+msgid "Cart items"
+msgstr "Carte"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:97
+#: BaseBillet/templates/htmx/components/panier_item.html:69
+msgid "Remove"
+msgstr "Retirer"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:109
+msgid "Enter code"
+msgstr "Saisir un code"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:113
+#: BaseBillet/templates/reunion/views/event/partial/volunteers.html:42
+msgid "Apply"
+msgstr "Appliquer"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:143
+msgid "Proceed to payment"
+msgstr "Passer au paiement"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:147
+#, fuzzy
+#| msgid "Please login to access this page."
+msgid "Please log in to proceed to payment."
+msgstr "Connectez-vous pour accéder à cette page."
+
+#: BaseBillet/templates/htmx/components/panier_content.html:161
+msgid "Empty the cart?"
+msgstr "Vider le panier ?"
+
+#: BaseBillet/templates/htmx/components/panier_content.html:169
+msgid "Empty cart"
+msgstr "Vider le panier"
+
+#: BaseBillet/templates/htmx/components/panier_scripts.html:79
+msgid "Please log in to use your cart."
+msgstr "Veuillez vous connecter pour utiliser votre panier."
+
 #: BaseBillet/templates/htmx/views/badge/list.html:42
 msgid "Badge"
 msgstr ""
@@ -8116,14 +8425,14 @@ msgid "Adhérez"
 msgstr ""
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:29
-#: BaseBillet/templates/reunion/views/membership/form.html:590
+#: BaseBillet/templates/reunion/views/membership/form.html:593
 msgid "I accept the "
 msgstr "J'accepte les"
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:34
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:37
-#: BaseBillet/templates/reunion/views/membership/form.html:596
 #: BaseBillet/templates/reunion/views/membership/form.html:599
+#: BaseBillet/templates/reunion/views/membership/form.html:602
 msgid "association rules and regulations."
 msgstr "règles et statuts associatifs."
 
@@ -8132,8 +8441,8 @@ msgid "Terms and conditions."
 msgstr "cgu / cgv"
 
 #: BaseBillet/templates/htmx/views/membership/modal_form.html:45
-#: BaseBillet/templates/reunion/views/membership/form.html:605
-#: BaseBillet/templates/reunion/views/membership/form.html:607
+#: BaseBillet/templates/reunion/views/membership/form.html:608
+#: BaseBillet/templates/reunion/views/membership/form.html:610
 msgid "terms and conditions."
 msgstr "cgu / cgv"
 
@@ -8296,63 +8605,63 @@ msgstr ""
 msgid "Back to my account"
 msgstr "Retour à mon compte"
 
-#: BaseBillet/templates/reunion/forms/contact.html:7
+#: BaseBillet/templates/reunion/forms/contact.html:9
 msgid "Contact email"
 msgstr "Mail de contact"
 
-#: BaseBillet/templates/reunion/forms/contact.html:8
+#: BaseBillet/templates/reunion/forms/contact.html:10
 msgid "We will reply to this address."
 msgstr "Nous vous répondrons à cette adresse."
 
-#: BaseBillet/templates/reunion/forms/contact.html:12
+#: BaseBillet/templates/reunion/forms/contact.html:14
 msgid "Subject"
 msgstr "Sujet"
 
-#: BaseBillet/templates/reunion/forms/contact.html:15
+#: BaseBillet/templates/reunion/forms/contact.html:17
 msgid "Message"
 msgstr "Message"
 
-#: BaseBillet/templates/reunion/forms/contact.html:21
+#: BaseBillet/templates/reunion/forms/contact.html:23
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:127
 msgid "Anti-spam"
 msgstr ""
 
-#: BaseBillet/templates/reunion/forms/contact.html:21
+#: BaseBillet/templates/reunion/forms/contact.html:23
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:127
 msgid "How much is"
 msgstr "Combien font"
 
-#: BaseBillet/templates/reunion/forms/contact.html:27
+#: BaseBillet/templates/reunion/forms/contact.html:29
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:133
 msgid "Please answer this simple question to prove you are human."
 msgstr ""
 "Veuillez répondre à cette question pour prouver que vous êtes un être humain."
 
-#: BaseBillet/templates/reunion/forms/contact.html:31
+#: BaseBillet/templates/reunion/forms/contact.html:33
 msgid "Send"
 msgstr "Envoyer"
 
-#: BaseBillet/templates/reunion/forms/login.html:5
+#: BaseBillet/templates/reunion/forms/login.html:7
 msgid "With an email"
 msgstr "Avec une adresse mail"
 
-#: BaseBillet/templates/reunion/forms/login.html:8
+#: BaseBillet/templates/reunion/forms/login.html:10
 #: BaseBillet/templates/reunion/views/account/preferences.html:59
 #: BaseBillet/templates/reunion/views/login/partials/fullpage_inner.html:21
-#: BaseBillet/templates/reunion/views/membership/form.html:199
-#: BaseBillet/templates/reunion/views/membership/form.html:201
-#: BaseBillet/templates/reunion/views/membership/form.html:260
-#: BaseBillet/templates/reunion/views/membership/form.html:261
+#: BaseBillet/templates/reunion/views/membership/form.html:202
+#: BaseBillet/templates/reunion/views/membership/form.html:204
+#: BaseBillet/templates/reunion/views/membership/form.html:263
+#: BaseBillet/templates/reunion/views/membership/form.html:264
 #: BaseBillet/templates/reunion/views/register.html:23
 #: BaseBillet/templates/reunion/views/register.html:24
 msgid "Email address"
 msgstr "Adresse mail"
 
-#: BaseBillet/templates/reunion/forms/login.html:9
+#: BaseBillet/templates/reunion/forms/login.html:11
 msgid "No need for a password, a login link will be sent by email."
 msgstr "Pas besoin de mot de passe, un lien de connexion sera envoyé par mail."
 
-#: BaseBillet/templates/reunion/forms/login.html:10
+#: BaseBillet/templates/reunion/forms/login.html:12
 msgid "Request login"
 msgstr "Demander la connexion"
 
@@ -8464,6 +8773,12 @@ msgstr "Basculer thème"
 #: BaseBillet/templates/reunion/partials/navbar.html:55
 msgid "Theme"
 msgstr ""
+
+#: BaseBillet/templates/reunion/partials/navbar.html:64
+#, fuzzy
+#| msgid "Carte"
+msgid "Cart"
+msgstr "Carte"
 
 #: BaseBillet/templates/reunion/partials/toasts.html:12
 msgid "Success"
@@ -8641,7 +8956,7 @@ msgid "Log out"
 msgstr "Déconnexion"
 
 #: BaseBillet/templates/reunion/views/account/membership/membership_card.html:30
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:423
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:450
 msgid "for"
 msgstr "pour"
 
@@ -8766,8 +9081,8 @@ msgid "Time and place"
 msgstr "Heure et lieu"
 
 #: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:7
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:62
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:63
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:64
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:65
 msgid "Créer un nouveau lieu"
 msgstr ""
 
@@ -8780,13 +9095,13 @@ msgid "Vous pourrez le réutiliser ensuite pour d'autres évènements."
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:14
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:48
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:78
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:92
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:103
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:50
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:80
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:94
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:105
 #: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:25
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:77
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:89
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:79
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:91
 msgid "Champ obligatoire"
 msgstr ""
 
@@ -8795,52 +9110,52 @@ msgstr ""
 msgid "signale un champ obligatoire."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:31
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:33
 msgid "Veuillez corriger les erreurs suivantes :"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:46
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:48
 msgid "Nom du lieu"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:51
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:53
 msgid ""
 "Exemple: Grande salle, Salle du bas, Accueil... Aide à retrouver le lieu."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:57
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:59
 msgid "Adresse principale"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:60
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:62
 msgid "Cocher si c'est l'adresse par défaut"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:66
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:68
 msgid "Image du lieu (optionnel)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:68
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:70
 msgid "Affichée si l'évènement n'a pas d'image. Formats standard acceptés."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:76
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:78
 msgid "Adresse (numéro et rue)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:81
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:83
 msgid "Exemple: 10 rue des Fleurs"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:90
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:92
 msgid "Ville"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:101
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:103
 msgid "Code postal"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:114
+#: BaseBillet/templates/reunion/views/event/partial/address_simple_add.html:116
 msgid "Créer le lieu"
 msgstr ""
 
@@ -8854,9 +9169,9 @@ msgstr "Prix allant de %(min)s à %(max)s euros par billet."
 msgid "Priced at %(price)s euros per ticket."
 msgstr "Prix fixé à %(price)s euros par billet."
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:19
-#: BaseBillet/templates/reunion/views/membership/form.html:208
-#: BaseBillet/templates/reunion/views/membership/form.html:210
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:26
+#: BaseBillet/templates/reunion/views/membership/form.html:211
+#: BaseBillet/templates/reunion/views/membership/form.html:213
 #: BaseBillet/templates/reunion/views/register.html:30
 #: BaseBillet/templates/reunion/views/register.html:31
 #: BaseBillet/templates/reunion/views/tenant/new_tenant.html:34
@@ -8864,113 +9179,165 @@ msgstr "Prix fixé à %(price)s euros par billet."
 msgid "Email confirmation"
 msgstr "Confirmation du mail"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:37
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:38
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:44
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:45
 msgid "Les emails ne correspondent pas."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:77
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:84
 msgid "Your email is not confirmed. Please check your spam folder :)"
 msgstr ""
 "Votre adresse mail n'est pas confirmée. Merci de vérifier votre dossier "
 "spam :)"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:88
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:95
 msgid "at an open price"
 msgstr "à prix libre"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:93
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:100
 msgid ""
 "You have reached the maximum number of reservations possible for this event."
 msgstr ""
 "Vous avez atteint le nombre maximum de réservations possibles pour cet "
 "événement."
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:97
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:104
 msgid ""
 "You have reached the maximum number of reservations possible for this price."
 msgstr ""
 "Vous avez atteint le nombre maximum de réservations possibles pour ce tarif."
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:101
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:108
 msgid "This price is no longer available."
 msgstr "Ce tarif n'est plus disponible"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:106
-msgid "Log in to access this rate."
-msgstr "Connectez-vous pour accéder à ce tarif."
-
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:111
-msgid "You must have"
-msgstr "Vous devez avoir"
-
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:114
-msgid "or"
-msgstr "ou"
-
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:116
-msgid "to book this rate."
-msgstr "pour réserver à ce tarif."
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:117
+msgid "Accessible via the membership in your cart."
+msgstr "Accessible via l’adhésion présente dans votre panier."
 
 #: BaseBillet/templates/reunion/views/event/partial/booking_form.html:128
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:141
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:421
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:154
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:168
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:448
 msgid "ticket(s)"
 msgstr "billet(s)"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:157
-#: BaseBillet/templates/reunion/views/membership/form.html:68
-#: BaseBillet/templates/reunion/views/membership/form.html:167
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:132
+msgid "Log in to access this rate."
+msgstr "Connectez-vous pour accéder à ce tarif."
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:137
+msgid "You must have"
+msgstr "Vous devez avoir"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:140
+msgid "or"
+msgstr "ou"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:142
+msgid "to book this rate."
+msgstr "pour réserver à ce tarif."
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:184
+#: BaseBillet/templates/reunion/views/membership/form.html:66
+#: BaseBillet/templates/reunion/views/membership/form.html:170
 msgid "Enter the amount (minimum"
 msgstr "Saisissez le montant (minimum"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:161
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:188
 msgid "Enter the desired amount per ticket"
 msgstr "Entrez le montant désiré par billet"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:199
-#: BaseBillet/templates/reunion/views/membership/form.html:321
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:226
+#: BaseBillet/templates/reunion/views/membership/form.html:324
 msgid "Additional information"
 msgstr "Informations supplémentaires"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:267
-#: BaseBillet/templates/reunion/views/membership/form.html:388
-#: BaseBillet/templates/reunion/views/membership/form.html:480
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:294
+#: BaseBillet/templates/reunion/views/membership/form.html:391
+#: BaseBillet/templates/reunion/views/membership/form.html:483
 msgid "Please check this box."
 msgstr "Veuillez cocher cette case."
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:287
-#: BaseBillet/templates/reunion/views/membership/form.html:409
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:314
+#: BaseBillet/templates/reunion/views/membership/form.html:412
 msgid "Please select at least one option."
 msgstr "Veuillez sélectionner au moins une option."
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:334
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:361
 msgid "Veuillez cocher au moins une option."
 msgstr "Veuillez cocher au moins une option."
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:359
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:386
 msgid "Veuillez cocher cette case."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:421
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:448
 msgid "Total&nbsp;:"
 msgstr "Total&nbsp;:"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:429
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:456
 msgid "Maximum capacity of tickets limited to"
 msgstr "Jauge maximale de billets limités à"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:430
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:457
 msgid "per buyer"
 msgstr "par personne"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:442
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:471
 msgid "Enter your promotional code"
 msgstr "Entrez votre code promotionnel"
 
-#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:449
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:511
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:543
+msgid "Add these tickets to your cart"
+msgstr "Ajouter ces billets à votre panier"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:513
+#: BaseBillet/templates/reunion/views/membership/form.html:652
+#, python-format
+msgid "Add to cart (%(n)s already in)"
+msgstr "Ajouter au panier (%(n)s déjà dedans)"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:523
+#: BaseBillet/templates/reunion/views/membership/form.html:662
+msgid "Add to cart and pay all items"
+msgstr "Ajouter au panier et payer tous les articles"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:525
+#: BaseBillet/templates/reunion/views/membership/form.html:664
+msgid "Add to cart and pay"
+msgstr "Ajouter au panier et payer"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:532
+msgid "Pay this event now"
+msgstr "Payer cet événement maintenant"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:534
+#: BaseBillet/templates/reunion/views/membership/form.html:674
+msgid "Pay now"
+msgstr "Payer maintenant"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:545
+#: BaseBillet/templates/reunion/views/membership/form.html:685
+msgid "Add to cart"
+msgstr "Ajouter au panier"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:557
 msgid "Send booking request"
 msgstr "Envoyer la demande de réservation"
+
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:564
+#, fuzzy
+#| msgid "Add these tickets to your cart"
+msgid "Log in to add these tickets to your cart"
+msgstr "Ajouter ces billets à votre panier"
+
+# Session 08 - ajouts anticipés (templates 8.2+)
+#: BaseBillet/templates/reunion/views/event/partial/booking_form.html:566
+#: BaseBillet/templates/reunion/views/membership/form.html:704
+msgid "Log in to add to cart"
+msgstr "Connectez-vous pour ajouter au panier"
 
 #: BaseBillet/templates/reunion/views/event/partial/carousel.html:20
 msgid "Previous"
@@ -9041,89 +9408,85 @@ msgid ""
 "merci d'aller dans l'administration."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:44
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:46
 msgid "Adresse"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:48
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:50
 msgid "Utiliser l'adresse par défaut"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:70
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:72
 msgid "Par défaut: l'adresse de la configuration du lieu."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:75
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:77
 msgid "Nom de l'évènement"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:81
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:83
 msgid "Ex: Réunion mensuelle"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:87
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:89
 msgid "Date et heure de début"
 msgstr "Date et heure de début"
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:95
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:97
 msgid "Date et heure de fin (optionnel)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:103
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:105
 msgid "Jauge maximale (capacité)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:115
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:117
 msgid "Laissez vide si pas besoin de réservation."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:120
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:122
 msgid "Description courte"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:123
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:125
 msgid "Quelques mots pour présenter"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:127
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:129
 msgid "Description détaillée"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:129
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:131
 msgid "Texte libre (programme, infos pratiques...)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:134
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:136
 msgid "Tags (séparés par des virgules)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:136
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:138
 msgid "Ex: Gratuit, Atelier, Enfants"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:142
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:144
 msgid "Les tags inexistants seront créés automatiquement."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:146
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:148
 msgid "Image de l'évènement (optionnel)"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:148
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:150
 msgid "Si vide, l'image de l'adresse s'affichera."
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:153
+#: BaseBillet/templates/reunion/views/event/partial/simple_add_event.html:155
 msgid "Créer l'évènement"
 msgstr ""
 
 #: BaseBillet/templates/reunion/views/event/partial/volunteers.html:17
 msgid "We are looking for volunteers to help with:"
 msgstr "Nous cherchons de volontaires pour nous aider avec :"
-
-#: BaseBillet/templates/reunion/views/event/partial/volunteers.html:42
-msgid "Apply"
-msgstr "Me proposer"
 
 #: BaseBillet/templates/reunion/views/event/partial/volunteers.html:49
 msgid "Login (and confirm your email address) to apply"
@@ -9294,84 +9657,84 @@ msgstr ""
 msgid "Voir mes adhésions"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/membership/form.html:37
-#: BaseBillet/templates/reunion/views/membership/form.html:124
+#: BaseBillet/templates/reunion/views/membership/form.html:35
+#: BaseBillet/templates/reunion/views/membership/form.html:122
 msgid "Monthly payment"
 msgstr "Paiement mensuel"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:39
-#: BaseBillet/templates/reunion/views/membership/form.html:126
+#: BaseBillet/templates/reunion/views/membership/form.html:37
+#: BaseBillet/templates/reunion/views/membership/form.html:124
 msgid "Annual payment"
 msgstr "Paiement annuel"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:41
-#: BaseBillet/templates/reunion/views/membership/form.html:128
+#: BaseBillet/templates/reunion/views/membership/form.html:39
+#: BaseBillet/templates/reunion/views/membership/form.html:126
 msgid "Daily payment"
 msgstr "Paiement quotidien"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:43
-#: BaseBillet/templates/reunion/views/membership/form.html:130
+#: BaseBillet/templates/reunion/views/membership/form.html:41
+#: BaseBillet/templates/reunion/views/membership/form.html:128
 msgid "Weekly payment"
 msgstr "Paiement hebdomadaire"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:45
-#: BaseBillet/templates/reunion/views/membership/form.html:132
+#: BaseBillet/templates/reunion/views/membership/form.html:43
+#: BaseBillet/templates/reunion/views/membership/form.html:130
 msgid "Hourly payment"
 msgstr "Paiement horaire"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:52
+#: BaseBillet/templates/reunion/views/membership/form.html:50
 msgid "iteration(s)"
 msgstr "récurrence(s)"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:57
+#: BaseBillet/templates/reunion/views/membership/form.html:55
 msgid "You are already subscribed to this rate."
 msgstr "Vous êtes déjà abonné à ce tarif."
 
-#: BaseBillet/templates/reunion/views/membership/form.html:75
-#: BaseBillet/templates/reunion/views/membership/form.html:173
+#: BaseBillet/templates/reunion/views/membership/form.html:73
+#: BaseBillet/templates/reunion/views/membership/form.html:176
 msgid "Monthly payment — Enter your desired amount"
 msgstr "Paiement mensuel - Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:77
-#: BaseBillet/templates/reunion/views/membership/form.html:175
+#: BaseBillet/templates/reunion/views/membership/form.html:75
+#: BaseBillet/templates/reunion/views/membership/form.html:178
 msgid "Annual payment — Enter your desired amount"
 msgstr "Paiement annuel - Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:79
-#: BaseBillet/templates/reunion/views/membership/form.html:177
+#: BaseBillet/templates/reunion/views/membership/form.html:77
+#: BaseBillet/templates/reunion/views/membership/form.html:180
 msgid "Daily payment — Enter your desired amount"
 msgstr "Paiement quotidien - Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:81
-#: BaseBillet/templates/reunion/views/membership/form.html:179
+#: BaseBillet/templates/reunion/views/membership/form.html:79
+#: BaseBillet/templates/reunion/views/membership/form.html:182
 msgid "Weekly payment — Enter your desired amount"
 msgstr "Paiement hebdomadaire - Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:83
-#: BaseBillet/templates/reunion/views/membership/form.html:181
+#: BaseBillet/templates/reunion/views/membership/form.html:81
+#: BaseBillet/templates/reunion/views/membership/form.html:184
 msgid "Hourly payment — Enter your desired amount"
 msgstr "Paiement horaire - Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:85
-#: BaseBillet/templates/reunion/views/membership/form.html:183
+#: BaseBillet/templates/reunion/views/membership/form.html:83
+#: BaseBillet/templates/reunion/views/membership/form.html:186
 msgid "Recurring payment — Enter your desired amount"
 msgstr "Paiement récurrent - Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:88
-#: BaseBillet/templates/reunion/views/membership/form.html:186
+#: BaseBillet/templates/reunion/views/membership/form.html:86
+#: BaseBillet/templates/reunion/views/membership/form.html:189
 msgid "Enter your desired amount"
 msgstr "Entrez le montant désiré"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:94
+#: BaseBillet/templates/reunion/views/membership/form.html:92
 msgid "This price will give you "
 msgstr "Ce tarif vous rajoutera "
 
-#: BaseBillet/templates/reunion/views/membership/form.html:95
-#: BaseBillet/templates/reunion/views/membership/form.html:150
+#: BaseBillet/templates/reunion/views/membership/form.html:93
+#: BaseBillet/templates/reunion/views/membership/form.html:148
 msgid "credited to your TiBillet wallet !"
 msgstr "sur votre portefeuille TiBillet !"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:140
+#: BaseBillet/templates/reunion/views/membership/form.html:138
 #, python-format
 msgid ""
 "Up to %(it)s\n"
@@ -9382,26 +9745,36 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: BaseBillet/templates/reunion/views/membership/form.html:149
+#: BaseBillet/templates/reunion/views/membership/form.html:147
 msgid " : This price will give you "
 msgstr " : Ce tarif vous rajoutera "
 
-#: BaseBillet/templates/reunion/views/membership/form.html:153
+#: BaseBillet/templates/reunion/views/membership/form.html:151
 msgid "Out of stock."
 msgstr "Rupture de stock."
 
-#: BaseBillet/templates/reunion/views/membership/form.html:198
-#: BaseBillet/templates/reunion/views/membership/form.html:206
-#: BaseBillet/templates/reunion/views/membership/form.html:258
+#: BaseBillet/templates/reunion/views/membership/form.html:154
+#, fuzzy
+#| msgid ""
+#| "You have reached the maximum number of reservations possible for this "
+#| "price."
+msgid ""
+"You have reached the maximum number of subscriptions possible for this rate."
+msgstr ""
+"Vous avez atteint le nombre maximum de réservations possibles pour ce tarif."
+
+#: BaseBillet/templates/reunion/views/membership/form.html:201
+#: BaseBillet/templates/reunion/views/membership/form.html:209
+#: BaseBillet/templates/reunion/views/membership/form.html:261
 msgid "address@example.com"
 msgstr ""
 
-#: BaseBillet/templates/reunion/views/membership/form.html:227
-#: BaseBillet/templates/reunion/views/membership/form.html:228
+#: BaseBillet/templates/reunion/views/membership/form.html:230
+#: BaseBillet/templates/reunion/views/membership/form.html:231
 msgid "Email addresses do not match."
 msgstr "Les adresses e-mail ne correspondent pas."
 
-#: BaseBillet/templates/reunion/views/membership/form.html:265
+#: BaseBillet/templates/reunion/views/membership/form.html:268
 msgid ""
 "You have not confirmed your email address. Please check your inbox (and just "
 "in case, your spam folder!)."
@@ -9409,21 +9782,34 @@ msgstr ""
 "Vous n'avez pas confirmé votre adresse mail. Merci de vérifier votre boîte "
 "de réception (et au cas où, votre dossier spam !)."
 
-#: BaseBillet/templates/reunion/views/membership/form.html:280
+#: BaseBillet/templates/reunion/views/membership/form.html:283
 msgid "Last name or organization"
 msgstr "Nom de famille ou organisation"
 
-#: BaseBillet/templates/reunion/views/membership/form.html:455
+#: BaseBillet/templates/reunion/views/membership/form.html:458
 msgid "Please check at least one option."
 msgstr "Veuillez sélectionner au moins une option."
 
-#: BaseBillet/templates/reunion/views/membership/form.html:581
+#: BaseBillet/templates/reunion/views/membership/form.html:584
 msgid "I do not want to receive the newsletter."
 msgstr "Je ne veux pas recevoir de newsletter."
 
-#: BaseBillet/templates/reunion/views/membership/form.html:618
+#: BaseBillet/templates/reunion/views/membership/form.html:650
+#: BaseBillet/templates/reunion/views/membership/form.html:683
+msgid "Add this membership to your cart"
+msgstr "Ajouter cette adhésion à votre panier"
+
+#: BaseBillet/templates/reunion/views/membership/form.html:671
+msgid "Pay this membership now"
+msgstr "Payer cette adhésion maintenant"
+
+#: BaseBillet/templates/reunion/views/membership/form.html:695
 msgid "Send my subscription request"
 msgstr "Envoyer ma demande d'adhésion"
+
+#: BaseBillet/templates/reunion/views/membership/form.html:702
+msgid "Log in to add this membership to your cart"
+msgstr "Connectez-vous pour ajouter cette adhésion au panier"
 
 #: BaseBillet/templates/reunion/views/membership/free_confirmed.html:7
 msgid "Adhésion confirmée !"
@@ -10144,11 +10530,11 @@ msgstr "Choix non valide."
 msgid "Duplicate field label. Please change the label."
 msgstr "Étiquette de champ en double. Veuillez modifier l'étiquette."
 
-#: BaseBillet/validators.py:149 BaseBillet/validators.py:918
+#: BaseBillet/validators.py:149 BaseBillet/validators.py:956
 msgid "Please answer the anti-spam question."
 msgstr "Merci de répondre à la question anti-spam."
 
-#: BaseBillet/validators.py:152 BaseBillet/validators.py:921
+#: BaseBillet/validators.py:152 BaseBillet/validators.py:959
 msgid "Wrong answer to the anti-spam question."
 msgstr "Réponse incorrecte à la question anti-spam."
 
@@ -10160,143 +10546,145 @@ msgstr ""
 "Échec de la confirmation mail : l'adresse mail et sa confirmation sont "
 "différentes. Une faute de frappe, peut-être ?"
 
-#: BaseBillet/validators.py:338
+#: BaseBillet/validators.py:351
 msgid "checkout strip not valid"
 msgstr "Encaissement Stripe non valide"
 
-#: BaseBillet/validators.py:396
+#: BaseBillet/validators.py:409
 msgid "Invalid quantity."
 msgstr "Quantitée invalide."
 
-#: BaseBillet/validators.py:423 BaseBillet/validators.py:777
+#: BaseBillet/validators.py:436 BaseBillet/validators.py:815
 msgid "The amount must be greater than the minimum amount."
 msgstr "Le montant doit être supérieur au montant minimum."
 
-#: BaseBillet/validators.py:429 BaseBillet/validators.py:781
-msgid "The amount is too high."
-msgstr "Le montant est trop élevé."
-
-#: BaseBillet/validators.py:435 BaseBillet/validators.py:439
-#: crowds/views.py:232 crowds/views.py:342
-msgid "Invalid amount."
-msgstr "Montant non valide."
-
-#: BaseBillet/validators.py:455
+#: BaseBillet/validators.py:468
 msgid "Max capacity reached: event full."
 msgstr "Jauge maximale atteinte : évènement complet."
 
-#: BaseBillet/validators.py:476
+#: BaseBillet/validators.py:489
 msgid "No event selected. Please retry."
 msgstr "Aucun événement n'a été sélectionné. Veuillez réessayer."
 
-#: BaseBillet/validators.py:481
+#: BaseBillet/validators.py:494
 #, python-brace-format
 msgid "Option {option.name} unavailable for event"
 msgstr "Option {option.name} non disponible pour l'évènement"
 
-#: BaseBillet/validators.py:498 BaseBillet/validators.py:506
-msgid "Invalid or inactive promotional code."
-msgstr "Code promotionnel invalide ou inactif."
-
-#: BaseBillet/validators.py:509
+#: BaseBillet/validators.py:522
 msgid "Invalid promotional code."
 msgstr "Code promo invalide."
 
-#: BaseBillet/validators.py:538
+#: BaseBillet/validators.py:551
 msgid "No products."
 msgstr "Aucun produit."
 
-#: BaseBillet/validators.py:547
+#: BaseBillet/validators.py:560
 msgid "The promotional code is not valid for the selected products."
 msgstr "Le code promotionnel n'est pas valable pour les produits sélectionnés."
 
-#: BaseBillet/validators.py:557
+#: BaseBillet/validators.py:570
 msgid "Maximum capacity reached for this product."
 msgstr "Jauge maximale atteinte pour ce produit."
 
-#: BaseBillet/validators.py:561
+#: BaseBillet/validators.py:574
 msgid "Invalid product."
 msgstr "Produit non valide."
 
-#: BaseBillet/validators.py:567 BaseBillet/validators.py:571
+#: BaseBillet/validators.py:580 BaseBillet/validators.py:584
 msgid "Maximum capacity reached for this price."
 msgstr "Jauge maximale atteinte pour ce tarif."
 
-#: BaseBillet/validators.py:576
+#: BaseBillet/validators.py:589
 msgid "Bookings exceed capacity for this rate."
 msgstr "Les réservations dépassent la jauge pour ce tarif."
 
-#: BaseBillet/validators.py:585 BaseBillet/validators.py:586
+#: BaseBillet/validators.py:603 BaseBillet/validators.py:604
 msgid "User is not subscribed."
 msgstr "L'utilisateur·ice n'est pas abonné·e."
 
-#: BaseBillet/validators.py:590
+#: BaseBillet/validators.py:608
 msgid "No ticket."
 msgstr "Aucun billet."
 
-#: BaseBillet/validators.py:595
+#: BaseBillet/validators.py:613
 msgid "Order quantity surpasses maximum allowed per user."
 msgstr "Quantité supérieure au maximum autorisé par personne."
 
-#: BaseBillet/validators.py:603
+#: BaseBillet/validators.py:621
 msgid "Number of places available : "
 msgstr "Nombre de places disponibles : "
 
-#: BaseBillet/validators.py:620
-msgid "You have already booked this slot."
+#: BaseBillet/validators.py:645
+#, fuzzy, python-format
+#| msgid "You have already booked this slot."
+msgid "You have already booked this slot: %(name)s"
 msgstr "Vous avez déjà réservé ce créneau."
 
-#: BaseBillet/validators.py:789 BaseBillet/validators.py:802
+#: BaseBillet/validators.py:651
+#, python-format
+msgid ""
+"You have a payment in progress for this slot: %(name)s. Please complete it "
+"or wait 15 minutes."
+msgstr ""
+
+#: BaseBillet/validators.py:810
+#, fuzzy
+#| msgid "Quantity must be greater than 0."
+msgid "The amount must be a positive number."
+msgstr "La quantité doit être supérieure à 0."
+
+#: BaseBillet/validators.py:827 BaseBillet/validators.py:840
 msgid "This product is limited in quantity per person."
 msgstr "Ce produit est disponible en quantité limitée par personne."
 
-#: BaseBillet/validators.py:898
+#: BaseBillet/validators.py:936
 msgid "Please accept terms and conditions."
 msgstr "Merci d'accepter les conditions d'utilisation"
 
-#: BaseBillet/validators.py:903 BaseBillet/validators.py:905
-#: BaseBillet/validators.py:907
+#: BaseBillet/validators.py:941 BaseBillet/validators.py:943
+#: BaseBillet/validators.py:945
 msgid "This name is not available"
 msgstr "Ce nom n'est pas disponible"
 
-#: BaseBillet/validators.py:1058
+#: BaseBillet/validators.py:1096
 msgid "le format du tag NFC n'est pas bon"
 msgstr ""
 
-#: BaseBillet/validators.py:1070
+#: BaseBillet/validators.py:1108
 msgid "La carte n'existe pas"
 msgstr ""
 
-#: BaseBillet/validators.py:1074
+#: BaseBillet/validators.py:1112
 msgid ""
 "La carte n'est pas liée à un.e utilisateur.ice. Merci de demander à la "
 "personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:1079
+#: BaseBillet/validators.py:1117
 msgid ""
 "Le portefeuille n'est pas liée à un.e utilisateur.ice. Merci de demander à "
 "la personne propriétaire de la lier en flashant le qrcode au dos de la carte."
 msgstr ""
 
-#: BaseBillet/validators.py:1090
+#: BaseBillet/validators.py:1128
 msgid "Paiement introuvable."
 msgstr ""
 
-#: BaseBillet/validators.py:1097
+#: BaseBillet/validators.py:1135
 msgid ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 msgstr ""
 
-#: BaseBillet/validators.py:1224 BaseBillet/views.py:2281
+#: BaseBillet/validators.py:1262 BaseBillet/views.py:2281
 msgid "Un évènement avec ce nom et cette date existe déjà."
 msgstr ""
 
-#: BaseBillet/validators.py:1299
+#: BaseBillet/validators.py:1337
 msgid "Le montant doit être positif."
 msgstr ""
 
-#: BaseBillet/validators.py:1309
+#: BaseBillet/validators.py:1347
 msgid "Impossible d'utiliser 'Offert' avec un montant positif."
 msgstr ""
 
@@ -10541,11 +10929,11 @@ msgstr "Merci de vous connecter d'abord."
 msgid "Thank you! You are going to receive a validation email.."
 msgstr "Merci ! Vous allez recevoir un mail de confirmation."
 
-#: BaseBillet/views.py:2196 BaseBillet/views.py:2816
+#: BaseBillet/views.py:2196 BaseBillet/views.py:2827
 msgid "Your payment is awaiting validation."
 msgstr "Votre paiement est en attente de validation."
 
-#: BaseBillet/views.py:2199 BaseBillet/views.py:2819
+#: BaseBillet/views.py:2199 BaseBillet/views.py:2830
 msgid "An error has occurred, please contact the administrator."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
@@ -10565,20 +10953,20 @@ msgstr "Pointage d'arrivée enregistré !"
 msgid "Check out registered!"
 msgstr "Pointage de départ enregistré !"
 
-#: BaseBillet/views.py:2773
+#: BaseBillet/views.py:2784
 msgid "Cette adhésion n'est pas en attente de validation."
 msgstr ""
 
-#: BaseBillet/views.py:2786
+#: BaseBillet/views.py:2797
 msgid "L'adhésion a été acceptée. Un email de paiement a été envoyé."
 msgstr ""
 
-#: BaseBillet/views.py:2811
+#: BaseBillet/views.py:2822
 msgid ""
 "Your payment has been validated and is being processed. Thank you very much!"
 msgstr "Votre paiement a été validé et est en cours de traitement. Merci !"
 
-#: BaseBillet/views.py:2814
+#: BaseBillet/views.py:2825
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
@@ -10586,59 +10974,59 @@ msgstr ""
 "Votre adhésion a été validé. Vous allez recevoir un mail de confirmation. "
 "Merci !"
 
-#: BaseBillet/views.py:2837
+#: BaseBillet/views.py:2848
 msgid "PDF generation error"
 msgstr "Erreur de génération PDF"
 
-#: BaseBillet/views.py:2990 BaseBillet/views.py:3011 BaseBillet/views.py:3028
-#: BaseBillet/views.py:3139 BaseBillet/views.py:3160
+#: BaseBillet/views.py:3001 BaseBillet/views.py:3022 BaseBillet/views.py:3039
+#: BaseBillet/views.py:3150 BaseBillet/views.py:3171
 msgid "Accès refusé"
 msgstr ""
 
-#: BaseBillet/views.py:3034
+#: BaseBillet/views.py:3045
 msgid "Produit non trouvé"
 msgstr ""
 
-#: BaseBillet/views.py:3068
+#: BaseBillet/views.py:3079
 #, python-brace-format
 msgid "Le champ '{field.label}' est obligatoire."
 msgstr ""
 
-#: BaseBillet/views.py:3114
+#: BaseBillet/views.py:3125
 msgid "Erreur lors de l'enregistrement : {str(e)}"
 msgstr ""
 
-#: BaseBillet/views.py:3174
+#: BaseBillet/views.py:3185
 msgid "Le nom du champ est obligatoire."
 msgstr ""
 
-#: BaseBillet/views.py:3180
+#: BaseBillet/views.py:3191
 #, python-brace-format
 msgid "Le champ '{field_label}' existe déjà."
 msgstr ""
 
-#: BaseBillet/views.py:3268
+#: BaseBillet/views.py:3279
 msgid "Cette adhésion n'est pas en attente de paiement."
 msgstr ""
 
-#: BaseBillet/views.py:3404
+#: BaseBillet/views.py:3415
 #, python-format
 msgid "Adhésion annulée. %(count)d avoir(s) créé(s)."
 msgstr ""
 
-#: BaseBillet/views.py:3407
+#: BaseBillet/views.py:3418
 msgid "Adhésion annulée."
 msgstr ""
 
-#: BaseBillet/views.py:3554
+#: BaseBillet/views.py:3565
 msgid "An error occurred. Please try again."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:3636
+#: BaseBillet/views.py:3647
 msgid "This space already exists. Redirecting you to it."
 msgstr "Cet espace existe déjà. Vous allez être redirigé·e."
 
-#: BaseBillet/views.py:3642
+#: BaseBillet/views.py:3653
 msgid ""
 "An error occurred while creating your space. It might be because the name is "
 "already taken or no free slot is available. Please contact us."
@@ -10647,9 +11035,99 @@ msgstr ""
 "être déjà pris ou aucun emplacement n'est disponible. Veuillez nous "
 "contacter."
 
-#: BaseBillet/views.py:3656
+#: BaseBillet/views.py:3667
 msgid "Invalid token. Please request a new confirmation email."
 msgstr "Token non valide. Merci de vous reconnecter."
+
+#: BaseBillet/views.py:3962
+#, fuzzy
+#| msgid "Users without membership"
+msgid "Unable to add membership."
+msgstr "Ulisateur·ice·s sans adhésions"
+
+#: BaseBillet/views.py:3970
+#, fuzzy
+#| msgid "Membership cancelled."
+msgid "Membership added to cart."
+msgstr "Adhésion annulée."
+
+#: BaseBillet/views.py:3982
+#, fuzzy
+#| msgid "Invalid choice."
+msgid "Invalid index."
+msgstr "Choix non valide."
+
+# DEPRECATED 2.0 old ui
+#: BaseBillet/views.py:3987
+#, fuzzy
+#| msgid "Card removed"
+msgid "Item removed."
+msgstr "Carte retirée"
+
+#: BaseBillet/views.py:4001
+#, fuzzy
+#| msgid "Invalid request."
+msgid "Invalid parameters."
+msgstr "Requete non valide."
+
+#: BaseBillet/views.py:4006
+#, fuzzy
+#| msgid "Last name"
+msgid "Cart updated."
+msgstr "Nom de famille"
+
+#: BaseBillet/views.py:4018
+#, fuzzy
+#| msgid "Missing QR code content"
+msgid "Missing code."
+msgstr "Erreur contenu Qr Code"
+
+#: BaseBillet/views.py:4028
+#, fuzzy
+#| msgid "Promotional codes usage"
+msgid "Promo code applied."
+msgstr "Utilisation des codes promo"
+
+# DEPRECATED 2.0 old ui
+#: BaseBillet/views.py:4039
+#, fuzzy
+#| msgid "Card removed"
+msgid "Promo code removed."
+msgstr "Carte retirée"
+
+#: BaseBillet/views.py:4050
+#, fuzzy
+#| msgid "Carte vierge."
+msgid "Cart cleared."
+msgstr "Carte vierge."
+
+#: BaseBillet/views.py:4086
+#, fuzzy
+#| msgid "An error occurred. Please try again."
+msgid "Checkout failed. Please try again."
+msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
+
+#: BaseBillet/views.py:4105
+msgid "Payment link unavailable. Please contact support."
+msgstr ""
+
+#: BaseBillet/views.py:4113
+msgid "Order confirmed. You will receive an email shortly."
+msgstr ""
+
+#: BaseBillet/views.py:4210
+#, fuzzy
+#| msgid "No right selected"
+msgid "No tickets selected."
+msgstr "Aucun droit selectionné"
+
+#: BaseBillet/views.py:4214
+#, fuzzy, python-format
+#| msgid "%(count)d ticket(s) cancelled and refunded."
+msgid "%(count)d ticket added to cart."
+msgid_plural "%(count)d tickets added to cart."
+msgstr[0] "%(count)d billet(s) annulé(s) et remboursé(s)."
+msgstr[1] "%(count)d billet(s) annulé(s) et remboursé(s)."
 
 #: Customers/models.py:19 MetaBillet/models.py:163
 msgid "Artist"
@@ -10703,19 +11181,19 @@ msgstr "Indian/Reunion"
 msgid "Europe/Paris"
 msgstr "Europe/Paris"
 
-#: PaiementStripe/views.py:85
+#: PaiementStripe/views.py:95
 msgid "No Stripe Api Key in configuration"
 msgstr "Pas de clé d'API Stripe dans les paramètres"
 
-#: TiBillet/settings.py:540
+#: TiBillet/settings.py:541
 msgid "TiBillet / Lèspass admin panel"
 msgstr "Panneau d'administration"
 
-#: TiBillet/settings.py:544
+#: TiBillet/settings.py:545
 msgid "TiBillet / Lèspass"
 msgstr "TiBillet / Lèspass"
 
-#: TiBillet/settings.py:554
+#: TiBillet/settings.py:555
 msgid "Forms"
 msgstr "Formulaires"
 
@@ -11143,20 +11621,20 @@ msgstr "Solde"
 msgid "Waiting..."
 msgstr "En attente"
 
-#: controlvanne/viewsets.py:719 laboutik/views.py:221
+#: controlvanne/viewsets.py:719 laboutik/views.py:227
 msgid "Carte client 1"
 msgstr ""
 
-#: controlvanne/viewsets.py:720 laboutik/views.py:222
+#: controlvanne/viewsets.py:720 laboutik/views.py:228
 msgid "Carte client 2"
 msgstr ""
 
-#: controlvanne/viewsets.py:721 laboutik/views.py:223
+#: controlvanne/viewsets.py:721 laboutik/views.py:229
 msgid "Carte client 3"
 msgstr ""
 
-#: controlvanne/viewsets.py:722 laboutik/views.py:224 laboutik/views.py:931
-#: laboutik/views.py:5259 laboutik/views.py:5825 laboutik/views.py:6931
+#: controlvanne/viewsets.py:722 laboutik/views.py:230 laboutik/views.py:937
+#: laboutik/views.py:5265 laboutik/views.py:5831 laboutik/views.py:6937
 msgid "Carte inconnue"
 msgstr "Carte inconnue"
 
@@ -11257,10 +11735,6 @@ msgstr "Nom du projet ou de l'initiative contributrice."
 #: crowds/models.py:76
 msgid "Short description for the cards view and social card."
 msgstr "Description courte pour la vue en cartes et le partage social."
-
-#: crowds/models.py:78 discovery/models.py:72
-msgid "Created at"
-msgstr "Créé le"
 
 #: crowds/models.py:79
 msgid "Clôturée"
@@ -12213,8 +12687,8 @@ msgstr ""
 msgid "Fiduciaire"
 msgstr ""
 
-#: fedow_connect/models.py:64 fedow_public/models.py:35 laboutik/views.py:116
-#: laboutik/views.py:2780
+#: fedow_connect/models.py:64 fedow_public/models.py:35 laboutik/views.py:122
+#: laboutik/views.py:2786
 msgid "Cadeau"
 msgstr ""
 
@@ -12851,7 +13325,7 @@ msgstr "Total (EUR)"
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:416
 #: laboutik/templates/laboutik/partial/hx_sortie_de_caisse.html:106
 #: laboutik/templates/laboutik/pdf/cloture_rapport_pdf.html:100
-#: laboutik/views.py:112 laboutik/views.py:2777
+#: laboutik/views.py:118 laboutik/views.py:2783
 msgid "Espèces"
 msgstr ""
 
@@ -13354,10 +13828,6 @@ msgstr "Commande sauvegardée"
 #: laboutik/models.py:749
 msgid "Saved orders"
 msgstr "Commandes sauvegardées"
-
-#: laboutik/models.py:766
-msgid "Order"
-msgstr ""
 
 #: laboutik/models.py:788
 msgid "Remaining to pay (cents)"
@@ -14287,7 +14757,7 @@ msgstr ""
 msgid "PARAMÈTRES"
 msgstr ""
 
-#: laboutik/templates/cotton/status_wallets.html:7 laboutik/views.py:105
+#: laboutik/templates/cotton/status_wallets.html:7 laboutik/views.py:111
 msgid "cadeau"
 msgstr ""
 
@@ -14773,7 +15243,7 @@ msgstr ""
 
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:139
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:419
-#: laboutik/views.py:114 laboutik/views.py:2781
+#: laboutik/views.py:120 laboutik/views.py:2787
 msgid "Chèque"
 msgstr ""
 
@@ -14963,7 +15433,7 @@ msgid "Remboursement effectué"
 msgstr "Remboursement effectué"
 
 #: laboutik/templates/laboutik/partial/hx_vider_carte_success.html:21
-#: laboutik/views.py:5604
+#: laboutik/views.py:5610
 msgid "Monnaie locale"
 msgstr "Monnaie locale"
 
@@ -15000,339 +15470,343 @@ msgstr ""
 msgid "SERVICE DIRECT"
 msgstr ""
 
-#: laboutik/views.py:101
+#: laboutik/views.py:107
 msgid "cashless"
 msgstr ""
 
-#: laboutik/views.py:102
+#: laboutik/views.py:108
 msgid "espèce"
 msgstr ""
 
-#: laboutik/views.py:103
+#: laboutik/views.py:109
 msgid "carte bancaire"
 msgstr ""
 
-#: laboutik/views.py:104
+#: laboutik/views.py:110
 msgid "chèque"
 msgstr ""
 
-#: laboutik/views.py:106
+#: laboutik/views.py:112
 msgid "inconnu"
 msgstr ""
 
-#: laboutik/views.py:220
+#: laboutik/views.py:226
 msgid "Carte primaire"
 msgstr ""
 
-#: laboutik/views.py:301
+#: laboutik/views.py:307
 msgid "pièces"
 msgstr "pièces"
 
-#: laboutik/views.py:936
+#: laboutik/views.py:942
 msgid "Carte non primaire"
 msgstr "Carte non primaire"
 
-#: laboutik/views.py:1016
+#: laboutik/views.py:1022
 msgid "Accès non autorisé à ce point de vente"
 msgstr ""
 
-#: laboutik/views.py:1195
+#: laboutik/views.py:1201
 msgid "Aucun point de vente configuré"
 msgstr ""
 
-#: laboutik/views.py:1243 laboutik/views.py:1442 laboutik/views.py:1783
-#: laboutik/views.py:2472 laboutik/views.py:4592 laboutik/views.py:4766
-#: laboutik/views.py:6186 laboutik/views.py:7269 laboutik/views.py:7683
-#: laboutik/views.py:8023
+#: laboutik/views.py:1249 laboutik/views.py:1448 laboutik/views.py:1789
+#: laboutik/views.py:2478 laboutik/views.py:4598 laboutik/views.py:4772
+#: laboutik/views.py:6192 laboutik/views.py:7275 laboutik/views.py:7689
+#: laboutik/views.py:8029
 msgid "Point de vente introuvable"
 msgstr ""
 
-#: laboutik/views.py:1286
+#: laboutik/views.py:1292
 msgid "Choisir une table"
 msgstr ""
 
-#: laboutik/views.py:1292
+#: laboutik/views.py:1298
 msgid "Service direct"
 msgstr ""
 
-#: laboutik/views.py:1303
+#: laboutik/views.py:1309
 msgid "Commande table "
 msgstr ""
 
-#: laboutik/views.py:1488
+#: laboutik/views.py:1494
 msgid "Aucune vente à clôturer"
 msgstr ""
 
-#: laboutik/views.py:1745
+#: laboutik/views.py:1751
 msgid "Rapport envoyé par email"
 msgstr ""
 
-#: laboutik/views.py:1795 laboutik/views.py:7281
+#: laboutik/views.py:1801 laboutik/views.py:7287
 msgid "Aucune imprimante configuree pour ce point de vente"
 msgstr ""
 
-#: laboutik/views.py:1809
+#: laboutik/views.py:1815
 msgid "Aucune vente en cours — rien a imprimer"
 msgstr ""
 
-#: laboutik/views.py:1840
+#: laboutik/views.py:1846
 msgid "Ticket X envoye a l'imprimante"
 msgstr ""
 
-#: laboutik/views.py:1919
+#: laboutik/views.py:1925
 msgid "Cle HMAC non configuree. Export impossible."
 msgstr ""
 
-#: laboutik/views.py:1940 laboutik/views.py:2042 laboutik/views.py:2155
+#: laboutik/views.py:1946 laboutik/views.py:2048 laboutik/views.py:2161
 msgid "Format de date invalide."
 msgstr ""
 
-#: laboutik/views.py:2063 laboutik/views.py:2176
+#: laboutik/views.py:2069 laboutik/views.py:2182
 msgid "Aucune cloture journaliere trouvee pour la periode."
 msgstr ""
 
-#: laboutik/views.py:2131
+#: laboutik/views.py:2137
 #, python-format
 msgid "Profil inconnu. Choix : %(profils)s"
 msgstr ""
 
-#: laboutik/views.py:2222
+#: laboutik/views.py:2228
 msgid "Jeu de comptes invalide."
 msgstr ""
 
-#: laboutik/views.py:2253
+#: laboutik/views.py:2259
 msgid "Plan comptable charge avec succes."
 msgstr ""
 
-#: laboutik/views.py:2256
+#: laboutik/views.py:2262
 #, python-format
 msgid ""
 "Plan comptable remplace avec succes (%(nb)s comptes precedents supprimes)."
 msgstr ""
 
-#: laboutik/views.py:2506
+#: laboutik/views.py:2512
 msgid "Aucune coupure saisie"
 msgstr ""
 
-#: laboutik/views.py:2809 laboutik/views.py:2856
+#: laboutik/views.py:2815 laboutik/views.py:2862
 msgid "Transaction introuvable"
 msgstr "Transaction introuvable"
 
-#: laboutik/views.py:3364
+#: laboutik/views.py:3370
 #, python-format
 msgid "Montant libre (%(montant)s€) inférieur au minimum (%(minimum)s€)"
 msgstr ""
 
-#: laboutik/views.py:3446
+#: laboutik/views.py:3452
 #, python-format
 msgid "Recharge %(montant)s€ → carte de %(prenom)s"
 msgstr ""
 
-#: laboutik/views.py:3451
+#: laboutik/views.py:3457
 #, python-format
 msgid "%(nom_prix)s → rattachée à %(prenom)s %(nom)s"
 msgstr ""
 
-#: laboutik/views.py:3458
+#: laboutik/views.py:3464
 #, python-format
 msgid "Billet %(nom)s — %(event)s"
 msgstr ""
 
-#: laboutik/views.py:4125
+#: laboutik/views.py:4131
 msgid "Identification du membre obligatoire pour les adhesions"
 msgstr ""
 
-#: laboutik/views.py:4285
+#: laboutik/views.py:4291
 msgid "Identification du client obligatoire pour les billets"
 msgstr ""
 
-#: laboutik/views.py:4342
+#: laboutik/views.py:4348
 #, python-format
 msgid "Evenement %(event)s complet"
 msgstr ""
 
-#: laboutik/views.py:4357
+#: laboutik/views.py:4363
 #, python-format
 msgid "Plus de places pour le tarif %(tarif)s"
 msgstr ""
 
-#: laboutik/views.py:4872 laboutik/views.py:5189
+#: laboutik/views.py:4878 laboutik/views.py:5195
 msgid "Il y a une erreur !"
 msgstr ""
 
-#: laboutik/views.py:4967 laboutik/views.py:5125
+#: laboutik/views.py:4973 laboutik/views.py:5131
 msgid "Tag NFC client requis pour les recharges"
 msgstr ""
 
-#: laboutik/views.py:5242
+#: laboutik/views.py:5248
 msgid "Les recharges ne peuvent pas être payées en cashless"
 msgstr ""
 
-#: laboutik/views.py:5342
+#: laboutik/views.py:5348
 msgid "Monnaie locale non configurée"
 msgstr ""
 
-#: laboutik/views.py:5935
+#: laboutik/views.py:5941
 msgid "crédit offert"
 msgstr ""
 
-#: laboutik/views.py:6224
+#: laboutik/views.py:6230
 #, fuzzy
 #| msgid "Carte inconnue"
 msgid "Carte 1 inconnue"
 msgstr "Carte inconnue"
 
-#: laboutik/views.py:6330
+#: laboutik/views.py:6336
 msgid "Le solde a changé, le paiement complet est possible. Réessayez."
 msgstr ""
 
-#: laboutik/views.py:6472 laboutik/views.py:6820
+#: laboutik/views.py:6478 laboutik/views.py:6826
 msgid "Solde insuffisant. Le solde a changé depuis la lecture."
 msgstr ""
 
-#: laboutik/views.py:6506 laboutik/views.py:6508 laboutik/views.py:6862
+#: laboutik/views.py:6512 laboutik/views.py:6514 laboutik/views.py:6868
 msgid "NFC"
 msgstr ""
 
-#: laboutik/views.py:6534
+#: laboutik/views.py:6540
 #, fuzzy
 #| msgid "Carte inconnue"
 msgid "Carte non lue"
 msgstr "Carte inconnue"
 
-#: laboutik/views.py:6547
+#: laboutik/views.py:6553
 msgid "La 2ème carte est la même que la 1ère. Utilisez une carte différente."
 msgstr ""
 
-#: laboutik/views.py:6561
+#: laboutik/views.py:6567
 #, fuzzy
 #| msgid "Carte inconnue"
 msgid "Carte 2 inconnue"
 msgstr "Carte inconnue"
 
-#: laboutik/views.py:6883
+#: laboutik/views.py:6889
 msgid "Moyen de complément non reconnu"
 msgstr ""
 
-#: laboutik/views.py:7051 laboutik/views.py:7122
+#: laboutik/views.py:7057 laboutik/views.py:7128
 msgid "Ne peut pas vider une carte primaire."
 msgstr "Ne peut pas vider une carte primaire."
 
-#: laboutik/views.py:7057 laboutik/views.py:7128
+#: laboutik/views.py:7063 laboutik/views.py:7134
 msgid "Carte client inconnue."
 msgstr "Carte client inconnue."
 
-#: laboutik/views.py:7061
+#: laboutik/views.py:7067
 msgid "Carte vierge."
 msgstr "Carte vierge."
 
-#: laboutik/views.py:7136
+#: laboutik/views.py:7142
 msgid "PV introuvable."
 msgstr "PV introuvable."
 
-#: laboutik/views.py:7142
+#: laboutik/views.py:7148
 msgid "Cette carte caissier n'a pas acces a ce PV."
 msgstr "Cette carte caissier n'a pas accès à ce PV."
 
-#: laboutik/views.py:7158
+#: laboutik/views.py:7164
 msgid "Aucun solde remboursable (solde a pu changer)."
 msgstr "Aucun solde remboursable (solde a pu changer)."
 
-#: laboutik/views.py:7190
+#: laboutik/views.py:7196
 msgid "Parametres manquants."
 msgstr "Paramètres manquants."
 
-#: laboutik/views.py:7195
+#: laboutik/views.py:7201
 msgid "Pas d'imprimante configuree sur ce PV."
 msgstr "Pas d'imprimante configurée sur ce PV."
 
-#: laboutik/views.py:7252
+#: laboutik/views.py:7258
 msgid "Donnees manquantes pour l'impression"
 msgstr ""
 
-#: laboutik/views.py:7299
+#: laboutik/views.py:7305
 msgid "Aucune ligne trouvee pour cette transaction"
 msgstr ""
 
-#: laboutik/views.py:7369 laboutik/views.py:7382 laboutik/views.py:7487
+#: laboutik/views.py:7375 laboutik/views.py:7388 laboutik/views.py:7493
 msgid "Ligne d'article introuvable"
 msgstr ""
 
-#: laboutik/views.py:7505
+#: laboutik/views.py:7511
 msgid "Les paiements cashless ne peuvent pas etre modifies"
 msgstr ""
 
-#: laboutik/views.py:7522
+#: laboutik/views.py:7528
 msgid "Cette vente est couverte par une cloture. Modification interdite."
 msgstr ""
 
-#: laboutik/views.py:7536
+#: laboutik/views.py:7542
 msgid "Le moyen de paiement est deja identique"
 msgstr ""
 
-#: laboutik/views.py:7699
+#: laboutik/views.py:7705
 msgid "Table introuvable"
 msgstr ""
 
-#: laboutik/views.py:7749
+#: laboutik/views.py:7755
 msgid "Aucun article valide dans la commande"
 msgstr ""
 
-#: laboutik/views.py:7790
+#: laboutik/views.py:7796
 msgid "Commande créée"
 msgstr ""
 
-#: laboutik/views.py:7819 laboutik/views.py:7916 laboutik/views.py:7998
-#: laboutik/views.py:8243
+#: laboutik/views.py:7825 laboutik/views.py:7922 laboutik/views.py:8004
+#: laboutik/views.py:8249
 msgid "Commande introuvable"
 msgstr ""
 
-#: laboutik/views.py:7831
+#: laboutik/views.py:7837
 msgid "Cette commande n'est plus ouverte"
 msgstr ""
 
-#: laboutik/views.py:7857
+#: laboutik/views.py:7863
 msgid "Aucun article fourni"
 msgstr ""
 
-#: laboutik/views.py:7889
+#: laboutik/views.py:7895
 msgid "Articles ajoutés"
 msgstr ""
 
-#: laboutik/views.py:7927
+#: laboutik/views.py:7933
 msgid "Cette commande ne peut pas être marquée comme servie"
 msgstr ""
 
-#: laboutik/views.py:7960
+#: laboutik/views.py:7966
 msgid "Commande servie"
 msgstr ""
 
-#: laboutik/views.py:8008
+#: laboutik/views.py:8014
 msgid "Cette commande ne peut pas être payée"
 msgstr ""
 
-#: laboutik/views.py:8056
+#: laboutik/views.py:8062
 msgid "Aucun article à payer dans cette commande"
 msgstr ""
 
-#: laboutik/views.py:8253
+#: laboutik/views.py:8259
 msgid "Une commande payée ne peut pas être annulée"
 msgstr ""
 
-#: laboutik/views.py:8288
+#: laboutik/views.py:8294
 msgid "Commande annulée"
 msgstr ""
 
-#: laboutik/views.py:8435
+#: laboutik/views.py:8441
 msgid "Perte"
 msgstr "Perte"
 
-#: laboutik/views.py:8476
+#: laboutik/views.py:8482
 msgid "autorisée"
 msgstr ""
 
-#: laboutik/views.py:8476
+#: laboutik/views.py:8482
 msgid "bloquée"
+msgstr ""
+
+#: laboutik/views.py:8582
+msgid "Legacy API key, bridge flow not available. Please re-pair the device."
 msgstr ""
 
 #: seo/models.py:27
@@ -15719,6 +16193,12 @@ msgstr ""
 msgid "Saisissez un terme pour lancer la recherche."
 msgstr ""
 
+#~ msgid "Login required"
+#~ msgstr "Connexion requise"
+
+#~ msgid "Your cart is empty."
+#~ msgstr "Votre panier est vide."
+
 #~ msgid "Soldes"
 #~ msgstr "Soldes"
 
@@ -15791,9 +16271,6 @@ msgstr ""
 #~ msgid "POS options"
 #~ msgstr "Options"
 
-#~ msgid "Orders"
-#~ msgstr "Statut de réservation"
-
 #~ msgid "Send an receipt through email"
 #~ msgstr "Envoyer un reçu par mail."
 
@@ -15810,9 +16287,6 @@ msgstr ""
 
 #~ msgid "Membership cancelled. No sale lines to cancel."
 #~ msgstr "Adhésion annulée. Aucune vente à annuler."
-
-#~ msgid "Membership cancelled."
-#~ msgstr "Adhésion annulée."
 
 #~ msgid "This membership has paid sale lines:"
 #~ msgstr "Cette adhésion a des lignes de vente payées :"
@@ -15861,3 +16335,11 @@ msgstr ""
 
 #~ msgid "Suscribe to access this rate."
 #~ msgstr "Abonnez-vous pour accéder à ce tarif."
+
+#~ msgid "Add this to your cart to combine it with other events, or pay now."
+#~ msgstr ""
+#~ "Ajoutez ceci à votre panier pour combiner avec d’autres événements, ou "
+#~ "payer maintenant."
+
+#~ msgid "How do you want to proceed?"
+#~ msgstr "Comment souhaitez-vous procéder ?"

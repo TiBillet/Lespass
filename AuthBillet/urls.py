@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import include, path
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenVerifyView
@@ -31,3 +32,20 @@ urlpatterns = [
 
     path('activate/<str:uid>/<str:token>', auth_view.activate, name='activate'),
 ]
+
+
+# Endpoint reserve aux tests E2E Playwright.
+# Charge UNIQUEMENT si DEBUG=True ET si un token est configure.
+# Triple garde-fou applique cote vue (voir AuthBillet/views_test_only.py).
+# / Endpoint reserved for Playwright E2E tests.
+# Loaded ONLY if DEBUG=True AND a token is configured.
+# Triple gate applied view-side (see AuthBillet/views_test_only.py).
+if settings.DEBUG:
+    from AuthBillet.views_test_only import force_login_for_e2e
+    urlpatterns += [
+        path(
+            '__test_only__/force_login/',
+            force_login_for_e2e,
+            name='e2e_force_login',
+        ),
+    ]

@@ -28,7 +28,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
@@ -360,7 +360,7 @@ def connexion(request):
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
                 messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
 
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         logger.error(validator.errors)
     messages.add_message(request, messages.WARNING, "Email validation error")
@@ -475,7 +475,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             for error in validator.errors:
                 logger.error(f"{error} : {validator.errors[error][0]}")
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le mail est envoyé
         email = validator.validated_data['email']
@@ -489,7 +489,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
             messages.add_message(request, messages.ERROR, f"{_('Invalid email')}")
             logger.error("email validé par validateur DRF mais pas par get_or_create_user "
                          "-> email de confirmation a renvoyé une erreur")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         if validator.data.get('lastname') and not user.last_name:
             user.last_name = validator.data.get('lastname')
@@ -516,7 +516,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 messages.add_message(request, messages.ERROR,
                                      _("You seem to already have a TiBillet card linked to your wallet. "
                                        "Please revoke it first in your profile area to link a new one."))
-                return HttpResponseClientRedirect(request.headers['Referer'])
+                return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
         qrcode_uuid = validator.validated_data['qrcode_uuid']
@@ -540,7 +540,7 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
                 membership.last_name = user.last_name
                 membership.save()
 
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
@@ -874,7 +874,7 @@ class MyAccount(viewsets.ViewSet):
                 logger.error(f"admin_lost_my_card error: {e}")
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
@@ -1660,7 +1660,7 @@ class HomeViewset(viewsets.ViewSet):
         if not validator.is_valid():
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         contact_mailer.delay(
             sender=validator.validated_data['email'],
@@ -1669,7 +1669,7 @@ class HomeViewset(viewsets.ViewSet):
         )
 
         messages.add_message(request, messages.SUCCESS, _("Message sent, you have been sent a copy. Thank you!"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         # if self.action in ['create']:
@@ -2120,11 +2120,11 @@ class EventMVT(viewsets.ViewSet):
         if Ticket.objects.filter(reservation__user_commande=user, reservation__event__in=event.children.all()).exists():
             messages.add_message(request, messages.ERROR,
                                  _("You have already checked for an action on this event."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         if not user:
             messages.add_message(request, messages.ERROR, _("Please log in first."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         validator = ReservationValidator(data={
             "email": user.email,
@@ -2135,10 +2135,10 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         messages.add_message(request, messages.SUCCESS, _("Thank you! You are going to receive a validation email.."))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):
@@ -2151,7 +2151,7 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -2442,7 +2442,9 @@ class Badge(viewsets.ViewSet):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
         messages.add_message(request, messages.SUCCESS, _("Check out registered!"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        # .get('Referer', '/') : fallback si le header Referer est absent
+        # / .get('Referer', '/'): fallback if Referer header is missing
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         if self.action in ['retrieve']:
@@ -2462,7 +2464,7 @@ class MembershipMVT(viewsets.ViewSet):
             logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -2580,9 +2582,18 @@ class MembershipMVT(viewsets.ViewSet):
             context['published_prices_count'] = published_prices.count()
 
             # On check que l'user n'a pas déja prix un abonnement limité
+            price_max_per_user_reached = []
             if request.user.is_authenticated:
                 if product.max_per_user_reached(user=request.user):
                     return render(request, "reunion/views/membership/already_has_membership.html", context=context)
+
+                # Vérification des limites par tarif (Price)
+                # / Check per-rate (Price) limits
+                for price in published_prices:
+                    if price.max_per_user_reached(user=request.user):
+                        price_max_per_user_reached.append(price)
+
+            context['price_max_per_user_reached'] = price_max_per_user_reached
 
             # Pré-remplissage du formulaire dynamique si l'user a déjà une adhésion avec custom_form
             # Pre-fill dynamic form if user already has a membership with custom_form data
@@ -3804,3 +3815,463 @@ class Tenant(viewsets.ViewSet):
 
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")
+
+
+class PanierMVT(viewsets.ViewSet):
+    """
+    ViewSet du panier d'achat. Toutes les actions manipulent PanierSession
+    ou delegue a CommandeService pour le checkout. Toute validation metier
+    est dans les services — cette vue est un thin wrapper.
+
+    / Cart ViewSet. All actions manipulate PanierSession or delegate to
+    CommandeService for checkout. All business validation is in the services
+    — this view is a thin wrapper.
+    """
+    authentication_classes = [SessionAuthentication, ]
+
+    def get_permissions(self):
+        # Lectures du panier (list + badge) : AllowAny — session-scoped, aucun data leak.
+        # Le template panier gère l'état auth (anonyme → message "log in to checkout").
+        # Écritures (add, remove, checkout, promo, clear) : IsAuthenticated — force le login.
+        # / Reads: AllowAny (session-scoped, no data leak). Template handles auth state.
+        # Writes: IsAuthenticated (force login via HTMX 403 catch + offcanvas).
+        if self.action in ['list', 'badge']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    # --- Helpers internes ---
+    # --- Internal helpers ---
+
+    def _render_badge_and_toast(self, request, message=None, level='success', swap_cart_content=False):
+        """
+        Rend les partials HTMX pour refresh du badge + envoie un toast via HX-Trigger.
+        / Render HTMX partials for badge refresh + send a toast via HX-Trigger.
+
+        LOCALISATION : BaseBillet/views.py (dans PanierMVT).
+
+        FLUX :
+        1. Le badge panier est rendu comme reponse HTMX (hx-swap-oob dans partial).
+        2. Le toast est signale au client via le header HX-Trigger avec un event
+           "panierToast". Un listener global dans base.html (reunion et
+           faire_festival) capte l'event et affiche un toast SweetAlert2.
+        3. Si swap_cart_content=True, le body de la reponse contient le partial
+           panier_content.html (le contenu de la page panier). Le bouton/form
+           doit cibler #panier-content via hx-target/hx-swap="outerHTML".
+           Sinon, le body est juste le partial badge (rien a swapper).
+
+        / FLOW:
+        1. Cart badge rendered as HTMX response (hx-swap-oob in partial).
+        2. Toast signaled via HX-Trigger header with event "panierToast".
+        3. If swap_cart_content=True, body contains the cart content partial.
+
+        :param request: Objet Request DRF.
+        :param message: Texte du toast (traduit cote serveur). Si None, pas de toast.
+        :param level: 'success' | 'error' | 'warning' | 'info'. Mappe sur icon Swal.
+        :param swap_cart_content: Si True, rend panier_content.html comme
+            corps de reponse (pour un swap HTMX direct du contenu panier).
+        :return: HttpResponse avec le partial + headers HX-Trigger.
+        """
+        if swap_cart_content:
+            # Rend 2 partials concatenes : le contenu panier (swap sur
+            # #panier-content via hx-swap="outerHTML") + le badge navbar
+            # (OOB swap sur #panier-badge-nav). Ils sont separes pour
+            # eviter la duplication d'id #panier-badge-nav dans le DOM
+            # initial (navbar rend deja un span avec ce id).
+            # / Render 2 concatenated partials: cart content (swap into
+            # #panier-content) + navbar badge (OOB). Separate to avoid
+            # duplicate #panier-badge-nav id in initial DOM.
+            from django.template.loader import render_to_string
+            from django.http import HttpResponse
+            template_context = get_context(request)
+            content_html = render_to_string(
+                'htmx/components/panier_content.html',
+                context=template_context, request=request,
+            )
+            badge_html = render_to_string(
+                'htmx/components/panier_badge.html',
+                context=template_context, request=request,
+            )
+            response = HttpResponse(content_html + badge_html)
+        else:
+            response = render(request, 'htmx/components/panier_toast.html')
+
+        if message:
+            # str() force l'evaluation d'un lazy _() en texte final,
+            # sinon json.dumps leve un TypeError.
+            # / str() forces evaluation of a lazy _() to final text.
+            response['HX-Trigger'] = json.dumps({
+                'panierToast': {
+                    'level': level,
+                    'text': str(message),
+                }
+            })
+        return response
+
+    # --- GET /panier/ ---
+    def list(self, request):
+        """Page panier : récap complet, modif, total, bouton checkout."""
+        template_context = get_context(request)
+        return render(request, 'htmx/views/panier.html', context=template_context)
+
+    # --- POST /panier/add/membership/ ---
+    @action(detail=False, methods=['POST'], url_path='add/membership')
+    def add_membership(self, request):
+        """
+        Ajoute une adhesion au panier.
+
+        Le formulaire d'adhesion (`membership/form.html`) poste :
+        - `price` (nom du radio/hidden) avec l'uuid du tarif choisi
+        - `custom_amount_{uuid}` pour les prix libres (un champ par prix)
+        - `options` (multi-valeur)
+        - `form__*` pour les champs custom
+
+        On accepte aussi `price_uuid` et `custom_amount` pour un appel direct
+        (tests, API). On recupere automatiquement le bon custom_amount en
+        cherchant la cle `custom_amount_{price_uuid}`.
+
+        / Adds a membership to the cart.
+        Accepts the membership form fields (`price`, `custom_amount_{uuid}`)
+        and also direct `price_uuid`/`custom_amount` (for tests/API).
+        """
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        # Support des deux conventions de nommage (form HTML + appel direct).
+        # / Support both naming conventions (HTML form + direct call).
+        price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
+
+        # Cherche d'abord custom_amount direct, puis custom_amount_{uuid}.
+        # / Look for direct custom_amount first, then custom_amount_{uuid}.
+        custom_amount = request.POST.get('custom_amount')
+        if not custom_amount and price_uuid:
+            custom_amount = request.POST.get(f'custom_amount_{price_uuid}')
+        custom_amount = custom_amount or None
+
+        options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        # Le formulaire d'adhesion collecte les noms (cf. membership/form.html).
+        # On les passe a PanierSession pour qu'ils soient stockes sur l'item et
+        # prioritaires sur user.first_name/last_name a la materialisation.
+        # / The membership form collects names. We pass them to PanierSession
+        # so they're stored on the item and prioritized at materialization.
+        firstname = request.POST.get('firstname') or None
+        lastname = request.POST.get('lastname') or None
+
+        # Code promo : lie a un Product specifique (FK). On ne passe que si
+        # ce code existe pour le product de l'adhesion cible — sinon None.
+        # Validation complete (actif, is_usable, match) dans add_membership.
+        # / Promo code linked to a specific Product (FK). Passed only if it
+        # matches target product; else None. Full validation in add_membership.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+        item_promo = None
+        if promotional_code_name and price_uuid:
+            from BaseBillet.models import PromotionalCode, Price as PriceModel
+            try:
+                _target_price = PriceModel.objects.get(uuid=price_uuid)
+                if PromotionalCode.objects.filter(
+                    name=promotional_code_name,
+                    product=_target_price.product,
+                ).exists():
+                    item_promo = promotional_code_name
+            except PriceModel.DoesNotExist:
+                pass  # add_membership levera l'erreur Price not found
+
+        panier = PanierSession(request)
+        try:
+            panier.add_membership(
+                price_uuid=price_uuid,
+                custom_amount=custom_amount,
+                options=options,
+                custom_form=custom_form,
+                firstname=firstname,
+                lastname=lastname,
+                promotional_code_name=item_promo,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"add_membership unexpected error: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Unable to add membership."), level='error'
+            )
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
+        # / If the "Add to cart and pay" button sent `then=checkout`, chain
+        # directly to checkout (Stripe redirect or free order).
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=_("Membership added to cart."))
+
+    # --- POST /panier/remove/<int:pk>/ ---
+    @action(detail=True, methods=['POST'], url_path='remove')
+    def remove(self, request, pk=None):
+        """Retire un item a l'index donne (pk = index en string)."""
+        from BaseBillet.services_panier import PanierSession
+
+        try:
+            index = int(pk)
+        except (TypeError, ValueError):
+            return self._render_badge_and_toast(
+                request, message=_("Invalid index."), level='error'
+            )
+        panier = PanierSession(request)
+        panier.remove_item(index)
+        return self._render_badge_and_toast(
+            request, message=_("Item removed."), swap_cart_content=True,
+        )
+
+    # Note : l'endpoint update_quantity a ete supprime volontairement (refactor
+    # 2026-04). Pour changer la quantite, l'user retire l'item et le re-ajoute
+    # via booking_form, garantissant que toutes les validations sont appliquees.
+    # / update_quantity endpoint removed: user must remove + re-add to change qty.
+
+    # --- POST /panier/promo_code/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code')
+    def set_promo_code(self, request):
+        """Applique un code promo au panier."""
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        code_name = request.POST.get('code_name', '').strip()
+        if not code_name:
+            return self._render_badge_and_toast(
+                request, message=_("Missing code."), level='error'
+            )
+        panier = PanierSession(request)
+        try:
+            panier.set_promo_code(code_name)
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error', swap_cart_content=True,
+            )
+        return self._render_badge_and_toast(
+            request, message=_("Promo code applied."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/promo_code/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code/clear')
+    def clear_promo_code(self, request):
+        """Retire le code promo du panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear_promo_code()
+        return self._render_badge_and_toast(
+            request, message=_("Promo code removed."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='clear')
+    def clear(self, request):
+        """Vide completement le panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear()
+        return self._render_badge_and_toast(
+            request, message=_("Cart cleared."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/checkout/ ---
+    @action(detail=False, methods=['POST'], url_path='checkout')
+    def checkout(self, request):
+        """
+        Matérialise le panier en Commande → redirect Stripe (payant) ou
+        my_account (gratuit). Utilise request.user comme buyer (auth required).
+        / Materialize cart → Stripe redirect (paid) or my_account (free).
+        Uses request.user as buyer (auth required).
+        """
+        from BaseBillet.services_commande import CommandeService, CommandeServiceError
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        user = request.user
+        # Les prenom/nom de l'acheteur sont collectes :
+        # - soit via les formulaires adhesion/reservation (custom_form data)
+        # - soit par Stripe Checkout (billing_address_collection)
+        # On passe user.first_name / user.last_name s'ils existent (fallback),
+        # sinon une chaine vide — Stripe completera.
+        # / Buyer first/last name collected via booking/membership forms or Stripe.
+        # We pass user.first_name/last_name as fallback, or empty string — Stripe fills in.
+        panier = PanierSession(request)
+        # InvalidItemError est leve par revalidate_all() en Phase 0 de
+        # materialiser() — ex : user a retire une adhesion obligatoire du
+        # panier entre temps. On remonte le message precis a l'utilisateur
+        # ("This rate requires a membership: X") plutot qu'un generique
+        # "Checkout failed" via le fallback Exception.
+        # / InvalidItemError raised by revalidate_all() in Phase 0 — e.g.
+        # user removed a required membership from cart. Surface the precise
+        # message instead of the generic "Checkout failed".
+        try:
+            commande = CommandeService.materialiser(
+                panier, user,
+                first_name=user.first_name or '',
+                last_name=user.last_name or '',
+                email=user.email,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except CommandeServiceError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"CommandeService.materialiser failed: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Checkout failed. Please try again."), level='error'
+            )
+
+        # Le panier est vide apres materialisation reussie.
+        # / Cart is empty after successful materialization.
+        panier.clear()
+
+        # Redirection selon le cas (payant/gratuit).
+        # / Redirect based on case (paid/free).
+        if commande.paiement_stripe and commande.paiement_stripe.checkout_session_url:
+            # C3 : URL persistee en DB — plus besoin d'appeler Stripe.
+            # / C3: URL persisted in DB — no Stripe API call needed.
+            return HttpResponseClientRedirect(commande.paiement_stripe.checkout_session_url)
+        elif commande.paiement_stripe:
+            logger.error(
+                f"Commande {commande.uuid_8()} has Paiement_stripe but no checkout_session_url"
+            )
+            messages.error(
+                request,
+                _("Payment link unavailable. Please contact support."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+        else:
+            # Commande gratuite : messages success + redirect vers my_account
+            # / Free order: success message + redirect to my_account
+            messages.success(
+                request,
+                _("Order confirmed. You will receive an email shortly."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+
+    # --- GET /panier/badge/ ---
+    @action(detail=False, methods=['GET'], url_path='badge')
+    def badge(self, request):
+        """Partial HTMX : le badge compteur seul."""
+        return render(request, 'htmx/components/panier_badge.html')
+
+    # --- POST /panier/add/tickets_batch/ ---
+    @action(detail=False, methods=['POST'], url_path='add/tickets_batch')
+    def add_tickets_batch(self, request):
+        """
+        Ajoute plusieurs billets au panier à partir du formulaire page event
+        (format legacy : price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback si erreur (on retire tous les items ajoutés dans cette requête).
+
+        / Add multiple tickets to the cart from the event page form (legacy
+        format: price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback on error (remove all items added in this request).
+        """
+        from BaseBillet.models import Event
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+        from decimal import Decimal
+
+        # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
+        # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
+        slug = request.POST.get('slug')
+        event_uuid_param = request.POST.get('event')
+        event = None
+        if event_uuid_param:
+            try:
+                event = Event.objects.get(uuid=event_uuid_param)
+            except (Event.DoesNotExist, ValueError):
+                event = None
+        if event is None and slug:
+            try:
+                event = Event.objects.get(slug=slug)
+            except Event.DoesNotExist:
+                event = None
+        if event is None:
+            return self._render_badge_and_toast(
+                request, message=_("Event not found."), level='error',
+            )
+
+        panier = PanierSession(request)
+        added_count_before = len(panier.items())
+
+        # Extraire options de l'event / Extract event options
+        options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        # Custom form fields (prefix form__) / Custom form fields
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+        # Code promo saisi dans booking_form (champ `promotional_code`).
+        # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
+        # is_usable, lie au produit). Le front n'envoie que le nom.
+        # / Promo code from booking_form. Server-validated in add_ticket.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+
+        items_added = 0
+        try:
+            for product in event.products.all():
+                for price in product.prices.all():
+                    price_key = str(price.uuid)
+                    raw_qty = request.POST.get(price_key)
+                    if not raw_qty:
+                        continue
+                    try:
+                        qty = int(Decimal(str(raw_qty).replace(',', '.')))
+                    except (TypeError, ValueError):
+                        continue
+                    if qty <= 0:
+                        continue
+
+                    # Custom amount si free_price / Custom amount if free_price
+                    custom_amount = None
+                    if price.free_price:
+                        custom_amount_raw = request.POST.get(f"custom_amount_{price.uuid}")
+                        if custom_amount_raw not in [None, '', 'null']:
+                            custom_amount = custom_amount_raw
+
+                    # Le code promo est lie a UN product specifique (FK). Le
+                    # booking_form a un champ global `promotional_code` pour
+                    # tout l'event, mais l'event peut avoir plusieurs products.
+                    # On ne passe le code que pour les prices dont le product
+                    # correspond — pour les autres, on passe None (silent skip,
+                    # pas d'erreur). Validation complete (actif, is_usable,
+                    # product match) faite dans add_ticket.
+                    # / Promo code is linked to ONE product (FK). The form
+                    # has a global field but events may have multiple products.
+                    # We pass the code only for matching-product prices;
+                    # others get None (silent skip, no error).
+                    item_promo = None
+                    if promotional_code_name:
+                        from BaseBillet.models import PromotionalCode
+                        if PromotionalCode.objects.filter(
+                            name=promotional_code_name,
+                            product=price.product,
+                        ).exists():
+                            item_promo = promotional_code_name
+                    panier.add_ticket(
+                        event_uuid=event.uuid,
+                        price_uuid=price.uuid,
+                        qty=qty,
+                        custom_amount=custom_amount,
+                        options=options_ids,
+                        custom_form=custom_form,
+                        promotional_code_name=item_promo,
+                    )
+                    items_added += 1
+        except InvalidItemError as exc:
+            # Rollback : retirer les items ajoutés pendant cette requête
+            # / Rollback: remove items added during this request
+            added_after = len(panier.items())
+            for _idx in range(added_after - added_count_before):
+                panier.remove_item(added_count_before)
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error',
+            )
+
+        if items_added == 0:
+            return self._render_badge_and_toast(
+                request, message=_("No tickets selected."), level='error',
+            )
+
+        message = ngettext(
+            "%(count)d ticket added to cart.",
+            "%(count)d tickets added to cart.",
+            items_added,
+        ) % {'count': items_added}
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout.
+        # / If "Add to cart and pay" button sent `then=checkout`, chain to checkout.
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=message)

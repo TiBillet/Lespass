@@ -1,0 +1,72 @@
+{% load i18n %}
+{# Partial d'un item du panier — reutilisable pour refresh HTMX. #}
+{# Cart item partial — reusable for HTMX refresh. #}
+<li id="panier-item-{{ forloop.counter0 }}" class="list-group-item d-flex align-items-center gap-3">
+    {% if detail.type == 'ticket' %}
+        {# --- Billet : image event ou placeholder ticket --- #}
+        {# --- Ticket: event image or ticket placeholder --- #}
+        {% if detail.event.img %}
+            <img src="{{ detail.event.img.med.url }}" alt="{{ detail.event.name }}"
+                 class="rounded" style="width: 64px; height: 64px; object-fit: cover;">
+        {% else %}
+            <div class="rounded bg-secondary bg-opacity-25 d-flex align-items-center justify-content-center"
+                 style="width: 64px; height: 64px;">
+                <i class="bi bi-ticket-perforated fs-4 text-secondary"></i>
+            </div>
+        {% endif %}
+        <div class="flex-grow-1">
+            <div class="fw-semibold">{{ detail.event.name }}</div>
+            <small class="text-muted">
+                {{ detail.event.datetime|date:"DATETIME_FORMAT" }}
+                &middot; {{ detail.price.name }}
+                {% if detail.price.prix %}&middot; {{ detail.price.prix }} €{% endif %}
+            </small>
+        </div>
+        {# --- Affichage qty (lecture seule, billet uniquement) --- #}
+        {# La modification de quantite n'est pas supportee dans le panier : #}
+        {# pour changer la quantite, retirer l'item et re-ajouter via l'event. #}
+        {# Cela garantit que toutes les validations (max_per_user, jauge) sont #}
+        {# appliquees via add_ticket, sans risque de contournement via edit UI. #}
+        {# / Read-only qty display (ticket only). Quantity changes are not #}
+        {# supported in cart: to change qty, remove + re-add via event page. #}
+        {# This ensures all validations go through add_ticket — no UI bypass. #}
+        <span class="badge bg-secondary-subtle text-body fs-6 tab-nums"
+              data-testid="panier-item-qty"
+              aria-label="{% blocktrans count n=detail.qty %}{{ n }} ticket{% plural %}{{ n }} tickets{% endblocktrans %}">
+            × {{ detail.qty }}
+        </span>
+    {% else %}
+        {# --- Adhesion : image product ou placeholder badge --- #}
+        {# --- Membership: product image or badge placeholder --- #}
+        {% if detail.product.img %}
+            <img src="{{ detail.product.img.med.url }}" alt="{{ detail.product.name }}"
+                 class="rounded" style="width: 64px; height: 64px; object-fit: cover;">
+        {% else %}
+            <div class="rounded bg-primary bg-opacity-25 d-flex align-items-center justify-content-center"
+                 style="width: 64px; height: 64px;">
+                <i class="bi bi-person-badge fs-4 text-primary"></i>
+            </div>
+        {% endif %}
+        <div class="flex-grow-1">
+            <div class="fw-semibold">{{ detail.product.name }}</div>
+            <small class="text-muted">
+                {% trans "Membership" %} &middot; {{ detail.price.name }}
+                {% if detail.price.prix %}&middot; {{ detail.price.prix }} €{% endif %}
+            </small>
+        </div>
+    {% endif %}
+
+    {# --- Bouton retirer --- #}
+    {# --- Remove button --- #}
+    <form method="post" action="{% url 'panier-remove' pk=forloop.counter0 %}"
+          hx-post="{% url 'panier-remove' pk=forloop.counter0 %}"
+          hx-target="#panier-content"
+          hx-swap="outerHTML">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-outline-danger"
+                aria-label="{% trans 'Remove' %}"
+                data-testid="panier-item-remove">
+            <i class="bi bi-trash"></i>
+        </button>
+    </form>
+</li>

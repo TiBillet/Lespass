@@ -1,0 +1,111 @@
+{% load i18n %}
+{# Scripts globaux pour le panier (inclus depuis reunion/base.html + faire_festival/base.html). #}
+{# - Ecoute l'event "panierToast" envoye par le serveur via HX-Trigger header #}
+{#   et affiche un toast SweetAlert2 non bloquant. #}
+{# - Catch HTMX 403 sur /panier/* : ouvre l'offcanvas login + toast informatif. #}
+{# / Global cart scripts (included from both skins' base.html). #}
+{# - Listens to "panierToast" event (HX-Trigger header) → SweetAlert2 toast. #}
+{# - Catches HTMX 403 on /panier/* : opens login offcanvas + info toast. #}
+<script>
+(function () {
+    // Mapping des niveaux (serveur) vers les icons SweetAlert2.
+    // / Map server-side levels to SweetAlert2 icons.
+    const iconByLevel = {
+        success: 'success',
+        error: 'error',
+        warning: 'warning',
+        info: 'info',
+    };
+
+    // Validation native HTML5 sur les boutons `type="button"` qui font hx-post
+    // vers /panier/add/*. Sans ce listener, les `required` du form sont
+    // ignores (seul `type="submit"` declenche reportValidity natif).
+    // On intercepte `htmx:configRequest` tot dans le cycle, on trouve le
+    // <form> parent, et on appelle reportValidity(). Si invalide → preventDefault.
+    // / Native HTML5 validation on `type="button"` hx-post buttons targeting
+    // /panier/add/*. Without this, form `required` fields are ignored. We
+    // find the parent <form> and call reportValidity() — invalid → preventDefault.
+    document.body.addEventListener('htmx:configRequest', function (evt) {
+        const path = evt.detail.path || '';
+        if (!path.startsWith('/panier/add/')) return;
+
+        const elt = evt.detail.elt;
+        const form = elt && elt.closest ? elt.closest('form') : null;
+        if (!form) return;
+
+        if (!form.reportValidity()) {
+            evt.preventDefault();
+        }
+    });
+
+    // Apres un ajout reussi au panier, fermer l'offcanvas parent du bouton.
+    // Sinon, l'user voit toujours le form booking/membership et peut cliquer
+    // "Payer maintenant" qui declenche le flow direct (sans panier) → double
+    // paiement / ticket duplique. On ne ferme QUE pour les add reussis (200)
+    // ET pas pour les `then=checkout` qui redirigent vers Stripe.
+    // / After a successful cart add, close the offcanvas parent of the button.
+    // Otherwise user could click "Pay now" which triggers direct-flow
+    // (bypassing the cart) → duplicate ticket. Only close on successful adds
+    // (200), not on `then=checkout` which redirects to Stripe.
+    document.body.addEventListener('htmx:afterRequest', function (evt) {
+        const path = evt.detail.pathInfo?.requestPath || evt.detail.xhr?.responseURL || '';
+        if (!path.includes('/panier/add/')) return;
+        if (evt.detail.xhr.status !== 200) return;
+        // Si HX-Redirect est present (cas "Ajouter + payer"), laisser faire.
+        // / If HX-Redirect is present ("Add + pay" case), don't interfere.
+        if (evt.detail.xhr.getResponseHeader('HX-Redirect')) return;
+
+        const elt = evt.detail.elt;
+        const offcanvasEl = elt && elt.closest ? elt.closest('.offcanvas') : null;
+        if (!offcanvasEl || typeof bootstrap === 'undefined') return;
+        const instance = bootstrap.Offcanvas.getInstance(offcanvasEl);
+        if (instance) instance.hide();
+    });
+
+    // Toast feedback apres action panier (ajout, retrait, code promo, etc.).
+    // showCloseButton : petite croix pour fermer le toast manuellement.
+    // / Toast feedback after cart action. showCloseButton: manual dismiss.
+    document.body.addEventListener('panierToast', function (evt) {
+        const payload = evt.detail || {};
+        const text = payload.text || '';
+        if (!text) return;
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: iconByLevel[payload.level] || 'success',
+            title: text,
+            showConfirmButton: false,
+            showCloseButton: true,
+            timer: 3500,
+            timerProgressBar: true,
+        });
+    });
+
+    // Catch global : 403 sur les actions panier qui exigent l'auth.
+    // / Global catch: 403 on auth-required cart actions.
+    // escapejs obligatoire : la traduction FR peut contenir une apostrophe
+    // qui casserait le litteral JS sans escape.
+    // / escapejs required: FR translation may contain an apostrophe that
+    // would break the JS string literal without escape.
+    document.body.addEventListener('htmx:responseError', function (evt) {
+        const status = evt.detail.xhr.status;
+        const path = evt.detail.pathInfo.requestPath || '';
+        if (status !== 403 || !path.startsWith('/panier/')) return;
+
+        const loginPanel = document.getElementById('loginPanel');
+        if (loginPanel && typeof bootstrap !== 'undefined') {
+            bootstrap.Offcanvas.getOrCreateInstance(loginPanel).show();
+        }
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            title: '{{ _("Please log in to use your cart.")|escapejs }}',
+            showConfirmButton: false,
+            showCloseButton: true,
+            timer: 5000,
+            timerProgressBar: true,
+        });
+    });
+})();
+</script>

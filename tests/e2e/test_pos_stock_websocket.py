@@ -65,6 +65,42 @@ def _sell_articles_especes(page, article_name, quantity=1):
 # ===========================================================================
 
 
+def _websocket_endpoint_available(page):
+    """Verifie si le serveur gere les WebSockets (Daphne/Channels actif).
+
+    On tente une connexion WebSocket reelle depuis le navigateur et on attend
+    l'event `open` ou `error` — 3s max. Un serveur Werkzeug (`runserver_plus`)
+    ferme la connexion avant l'upgrade → `error`. Daphne accepte → `open`.
+
+    / Verifies server handles WebSockets (Daphne/Channels active).
+
+    We try a real WebSocket connection from the browser and wait for `open`
+    or `error` — 3s max. Werkzeug (`runserver_plus`) closes before upgrade
+    → `error`. Daphne accepts → `open`.
+    """
+    # Necessite une page active pour que `location.host` existe.
+    # / Requires an active page so `location.host` exists.
+    page.goto("/")
+    result = page.evaluate("""
+    () => new Promise((resolve) => {
+        try {
+            const ws = new WebSocket('wss://' + location.host + '/ws/rfid/all/');
+            ws.onopen = () => { ws.close(); resolve(true); };
+            ws.onerror = () => resolve(false);
+            ws.onclose = (e) => {
+                // Close avant open → ws non supporte
+                // / Close before open → ws not supported
+                resolve(false);
+            };
+            setTimeout(() => resolve(false), 3000);
+        } catch (err) {
+            resolve(false);
+        }
+    })
+    """)
+    return bool(result)
+
+
 class TestPOSStockWebSocket:
     """Vérifie le flux complet WebSocket : vente → broadcast → OOB swap → badge
     mis à jour sur tous les onglets POS connectés.
@@ -73,8 +109,20 @@ class TestPOSStockWebSocket:
     """
 
     def test_stock_websocket_multi_onglet(
-        self, browser, login_as_admin, django_shell, ensure_pos_data
+        self, page, browser, login_as_admin, django_shell, ensure_pos_data
     ):
+        # Skip si le serveur n'est pas ASGI (ex: runserver_plus).
+        # Pour activer ce test : relancer le serveur via `runserver` (Daphne auto)
+        # ou `daphne TiBillet.asgi:application`.
+        # / Skip if server is not ASGI (e.g. runserver_plus). To enable:
+        # restart server with `runserver` (Daphne auto) or `daphne ...`.
+        login_as_admin(page)
+        if not _websocket_endpoint_available(page):
+            pytest.skip(
+                "Serveur non-ASGI detecte (runserver_plus probable). "
+                "Pour ce test, lancer le serveur via `runserver` (ASGI auto avec "
+                "Daphne) ou `daphne TiBillet.asgi:application`."
+            )
         """
         Stock 10, bloquant. Vendre 5 → pas bloquant. Vendre 5 → bloquant + grisé.
         Vérifie sur 2 onglets que le badge "Épuisé" et la classe article-bloquant

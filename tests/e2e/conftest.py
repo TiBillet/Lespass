@@ -101,43 +101,95 @@ def admin_email():
 
 
 @pytest.fixture(scope="session")
-def login_as():
-    """Factory fixture : retourne une callable (page, email) → void.
-    Exécute le flow de login complet via le lien TEST MODE.
-    / Factory fixture: returns a callable (page, email) → void.
-    Executes the full login flow via the TEST MODE link.
+def e2e_test_token():
+    """Token partage avec l'endpoint /api/user/__test_only__/force_login/.
+    Lu depuis la variable d'environnement E2E_TEST_TOKEN (voir .env).
+    / Shared token with the /api/user/__test_only__/force_login/ endpoint.
+    Read from the E2E_TEST_TOKEN environment variable (see .env).
+    """
+    token = os.environ.get("E2E_TEST_TOKEN")
+    if not token:
+        pytest.fail(
+            "E2E_TEST_TOKEN n'est pas defini dans l'environnement. "
+            "Voir la section 'test Playwright' du fichier .env."
+        )
+    return token
+
+
+@pytest.fixture(scope="session")
+def login_as(e2e_test_token):
+    """Factory fixture : retourne une callable (page, email) -> void.
+
+    Injecte un cookie de session authentifie via l'endpoint de test dedie
+    (`/api/user/__test_only__/force_login/`). Contourne entierement le flow UI
+    (pas de click sur navbar, pas de formulaire, pas de lien TEST MODE).
+
+    Gain : ~100ms au lieu de ~5s, et 6 points de rupture en moins.
+
+    / Factory fixture: returns a callable (page, email) -> void.
+
+    Injects an authenticated session cookie via the dedicated test endpoint.
+    Completely bypasses the UI flow (no navbar click, no form, no TEST MODE link).
+
+    Gain: ~100ms instead of ~5s, and 6 fewer failure points.
+
+    DEPENDANCES / DEPENDENCIES :
+    - AuthBillet/views_test_only.py (endpoint force_login_for_e2e)
+    - .env (E2E_TEST_TOKEN)
+    - settings.DEBUG=True (l'endpoint n'est monte que dans ce cas)
     """
 
     def _login_as(page, email):
-        # 1. Naviguer vers l'accueil / Navigate to home
-        page.goto("/")
-        page.wait_for_load_state("networkidle")
+        # Etape 1 : appel HTTP vers l'endpoint de force_login.
+        # Depuis le container : on passe par le Docker gateway + header Host
+        # (Chromium et localhost ne s'entendent pas — cf. conftest haut de fichier).
+        # Depuis l'hote : URL standard.
+        # / Step 1: HTTP call to the force_login endpoint.
+        # From container: via Docker gateway + Host header (Chromium vs localhost).
+        # From host: standard URL.
+        headers = {"X-Test-Token": e2e_test_token}
+        if API_HOST_HEADER:
+            headers["Host"] = API_HOST_HEADER
 
-        # 2. Ouvrir le panneau de connexion / Open the login panel
-        login_button = page.locator(
-            '.navbar button:has-text("Log in"), '
-            '.navbar button:has-text("Connexion")'
-        ).first
-        login_button.click()
+        force_login_url = f"{API_BASE_URL}/api/user/__test_only__/force_login/"
+        response = http_requests.post(
+            force_login_url,
+            headers=headers,
+            data={"email": email},
+            verify=False,
+            timeout=10,
+        )
+        if not response.ok:
+            pytest.fail(
+                f"force_login HTTP {response.status_code} pour {email} : "
+                f"{response.text[:300]}"
+            )
 
-        # 3. Remplir l'email / Fill the email
-        email_input = page.locator("#loginEmail")
-        email_input.fill(email)
+        try:
+            payload = response.json()
+        except ValueError:
+            pytest.fail(f"force_login a renvoye un body non-JSON : {response.text[:300]}")
 
-        # 4. Soumettre le formulaire / Submit the form
-        submit_button = page.locator('#loginForm button[type="submit"]')
-        submit_button.click()
+        session_key = payload.get("sessionid")
+        cookie_name = payload.get("session_cookie_name") or "sessionid"
+        if not session_key:
+            pytest.fail(f"force_login sans session_key : {payload}")
 
-        # 5. Cliquer sur le lien TEST MODE (apparaît via HTMX swap)
-        # / Click the TEST MODE link (appears via HTMX swap)
-        test_mode_link = page.locator('a:has-text("TEST MODE")')
-        test_mode_link.wait_for(state="visible", timeout=15_000)
-        test_mode_link.click()
-        page.wait_for_load_state("networkidle")
-
-        # 6. Vérifier que le login a fonctionné / Verify login worked
-        response = page.request.get("/my_account/")
-        assert response.ok, f"Login failed for {email}: {response.status}"
+        # Etape 2 : injecte le cookie dans le contexte Playwright.
+        # Le domaine doit matcher le subdomain complet du tenant — les cookies
+        # de session Django sont per-subdomain.
+        # / Step 2: inject cookie in Playwright context.
+        # Domain must match the full tenant subdomain — Django session cookies
+        # are per-subdomain.
+        page.context.add_cookies([{
+            "name": cookie_name,
+            "value": session_key,
+            "domain": f"{SUB}.{DOMAIN}",
+            "path": "/",
+            "httpOnly": True,
+            "secure": False,  # defaults Django : SESSION_COOKIE_SECURE=False
+            "sameSite": "Lax",
+        }])
 
     return _login_as
 
@@ -154,6 +206,202 @@ def login_as_admin(login_as, admin_email):
         login_as(page, admin_email)
 
     return _login_as_admin
+
+
+@pytest.fixture(scope="session")
+def login_as_admin_on_subdomain(e2e_test_token, admin_email):
+    """Factory fixture pour les tests cross-tenant : callable (page, subdomain) → void.
+
+    Connecte l'admin sur un tenant precis (identifie par son subdomain, ex:
+    "chantefrein") en appelant l'endpoint force_login avec le bon header Host,
+    puis en injectant le cookie sur le domaine correspondant.
+
+    Contrairement a `login_as_admin` qui cible toujours le tenant `SUB` (lespass),
+    cette fixture permet un login sur n'importe quel tenant existant —
+    indispensable pour les tests cross-tenant (ex: federation d'assets).
+
+    / Factory fixture for cross-tenant tests: callable (page, subdomain) → void.
+    Unlike `login_as_admin` (always targets `SUB` tenant), this logs the admin
+    on any existing tenant — essential for cross-tenant tests (asset federation).
+
+    Usage :
+        login_as_admin_on_subdomain(page, "chantefrein")
+        page.goto(f"https://chantefrein.{DOMAIN}/admin/fedow_core/asset/")
+    """
+
+    def _login_on_subdomain(page, subdomain):
+        host_header = f"{subdomain}.{DOMAIN}"
+
+        # Construction URL selon le contexte (container vs hote).
+        # Depuis le container, on passe par le Docker gateway + Host header.
+        # Depuis l'hote, on utilise l'URL complete du tenant.
+        # / URL construction depends on context (container vs host).
+        # From container: Docker gateway + Host header. From host: full tenant URL.
+        if INSIDE_CONTAINER:
+            force_login_url = (
+                f"https://{DOCKER_GATEWAY}/api/user/__test_only__/force_login/"
+            )
+            headers = {
+                "X-Test-Token": e2e_test_token,
+                "Host": host_header,
+            }
+        else:
+            force_login_url = (
+                f"https://{host_header}/api/user/__test_only__/force_login/"
+            )
+            headers = {"X-Test-Token": e2e_test_token}
+
+        response = http_requests.post(
+            force_login_url,
+            headers=headers,
+            data={"email": admin_email},
+            verify=False,
+            timeout=10,
+        )
+        if not response.ok:
+            pytest.fail(
+                f"force_login (subdomain={subdomain}) HTTP {response.status_code} "
+                f"pour {admin_email} : {response.text[:300]}"
+            )
+
+        try:
+            payload = response.json()
+        except ValueError:
+            pytest.fail(
+                f"force_login (subdomain={subdomain}) body non-JSON : "
+                f"{response.text[:300]}"
+            )
+
+        session_key = payload.get("sessionid")
+        cookie_name = payload.get("session_cookie_name") or "sessionid"
+        if not session_key:
+            pytest.fail(f"force_login (subdomain={subdomain}) sans session_key : {payload}")
+
+        # Cookie pose sur le subdomain cible (cookies session per-subdomain).
+        # / Cookie set on target subdomain (session cookies are per-subdomain).
+        page.context.add_cookies([{
+            "name": cookie_name,
+            "value": session_key,
+            "domain": host_header,
+            "path": "/",
+            "httpOnly": True,
+            "secure": False,
+            "sameSite": "Lax",
+        }])
+
+    return _login_on_subdomain
+
+
+# --- Fixtures E2E : donnees seedees / E2E fixtures: seeded data ---
+
+
+@pytest.fixture(scope="session")
+def e2e_slugs(django_db_blocker):
+    """Renvoie un dict avec les slugs et UUID des fixtures E2E seedees par
+    `demo_data_v2` (methode `_seed_e2e_fixtures`).
+
+    Pourquoi cette fixture : Event.save() regenere le slug a chaque appel
+    sous la forme `{name}-{datetime}-{pk.hex[:8]}`. Les 8 derniers caracteres
+    dependent de l'UUID genere par la DB — donc pas previsibles. On les lit
+    depuis la base au demarrage de la session de tests.
+
+    / Returns a dict with slugs and UUIDs of E2E fixtures seeded by
+    `demo_data_v2` (`_seed_e2e_fixtures` method).
+
+    Why this fixture: Event.save() regenerates the slug as
+    `{name}-{datetime}-{pk.hex[:8]}`. Last 8 chars depend on DB-generated UUID
+    — not predictable. We read them from DB at test session start.
+
+    Clefs renvoyees / Returned keys:
+    - event_gratuit_slug, event_gratuit_uuid
+    - event_payant_slug, event_payant_uuid, event_payant_price_uuid
+    - event_gated_slug, event_gated_uuid, event_gated_price_uuid
+    - adhesion_uuid, adhesion_price_uuid
+
+    Si une fixture E2E manque (seed pas encore lance), pytest.fail immediat
+    avec un message qui explique comment reseed.
+    / If a fixture is missing (seed not run yet), immediate pytest.fail with
+    a message explaining how to reseed.
+
+    Acces DB : pytest-django bloque les queries par defaut en E2E. On passe
+    par `django_db_blocker.unblock()` pour une lecture read-only, sans
+    activer le rollback transactionnel (qui casserait les E2E contre un
+    serveur reel).
+    / DB access: pytest-django blocks queries by default in E2E. We use
+    `django_db_blocker.unblock()` for a read-only query, without enabling
+    transactional rollback (which would break E2E against a real server).
+    """
+    from django_tenants.utils import tenant_context
+    from Customers.models import Client as TenantClient
+    from BaseBillet.models import Event, Product, Price
+
+    def _fail_missing(kind, name):
+        pytest.fail(
+            f"{kind} E2E '{name}' introuvable dans le tenant lespass. "
+            f"Relancer le seed : docker exec lespass_django poetry run "
+            f"python manage.py demo_data_v2"
+        )
+
+    # Helper : recupere un Event par nom exact ou fail explicite.
+    # / Helper: fetch an Event by exact name or fail explicitly.
+    def _get_event(name):
+        try:
+            return Event.objects.get(name=name)
+        except Event.DoesNotExist:
+            _fail_missing("Event", name)
+
+    # Helper : recupere (Product, Price) par nom exact ou fail explicite.
+    # / Helper: fetch (Product, Price) by exact names or fail explicitly.
+    def _get_product_and_price(product_name, price_name):
+        try:
+            product = Product.objects.get(name=product_name)
+        except Product.DoesNotExist:
+            _fail_missing("Product", product_name)
+        try:
+            price = product.prices.get(name=price_name)
+        except Price.DoesNotExist:
+            _fail_missing("Price", f"{product_name} / {price_name}")
+        return product, price
+
+    with django_db_blocker.unblock():
+        tenant = TenantClient.objects.get(schema_name="lespass")
+
+        with tenant_context(tenant):
+            event_gratuit = _get_event("E2E Test — Event gratuit")
+            event_payant = _get_event("E2E Test — Event payant")
+            event_gated = _get_event("E2E Test — Event gated")
+
+            # Le Price FREERES est auto-cree par le signal post_save
+            # (BaseBillet/models.py ligne ~1665). Son nom par defaut est
+            # "Tarif gratuit" (_("Free rate") en FR).
+            # / The FREERES Price is auto-created by post_save signal.
+            # Default name is "Tarif gratuit" ("Free rate" in FR).
+            _, price_gratuit = _get_product_and_price(
+                "E2E Test — Billet gratuit", "Tarif gratuit"
+            )
+            _, price_payant = _get_product_and_price(
+                "E2E Test — Billet payant", "Plein tarif"
+            )
+            _, price_gated = _get_product_and_price(
+                "E2E Test — Billet gated", "Tarif adherent"
+            )
+            adhesion, price_adhesion = _get_product_and_price(
+                "E2E Test — Adhesion", "Gratuite"
+            )
+
+            return {
+                "event_gratuit_slug": event_gratuit.slug,
+                "event_gratuit_uuid": str(event_gratuit.uuid),
+                "event_gratuit_price_uuid": str(price_gratuit.uuid),
+                "event_payant_slug": event_payant.slug,
+                "event_payant_uuid": str(event_payant.uuid),
+                "event_payant_price_uuid": str(price_payant.uuid),
+                "event_gated_slug": event_gated.slug,
+                "event_gated_uuid": str(event_gated.uuid),
+                "event_gated_price_uuid": str(price_gated.uuid),
+                "adhesion_uuid": str(adhesion.uuid),
+                "adhesion_price_uuid": str(price_adhesion.uuid),
+            }
 
 
 # --- Fixtures API et shell / API and shell fixtures ---

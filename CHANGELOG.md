@@ -1,5 +1,175 @@
 # Changelog / Journal des modifications
 
+## Stabilisation complete suite E2E / Full E2E suite stabilization
+
+**Date :** 2026-04-19
+**Migration :** Non / No
+
+**Quoi / What :** Elargissement du scope a TOUS les tests E2E (apres la
+stabilisation panier). La suite E2E complete passe maintenant a **117/117**
+tests verts, 0 skip, en ~12 min sans flake. Combinee aux 618 tests pytest
+DB-only, le projet est a 735/735 tests verts.
+
+**Pourquoi / Why :** Plusieurs tests E2E etaient casses pour des raisons
+variees (UI i18n, data manquante, WebSocket non supporte, fixtures trop
+larges). L'objectif de cette session elargie est d'amener la suite a 100%.
+
+### Corrections apportees
+
+| Test | Probleme | Fix |
+|---|---|---|
+| `test_pos_sortie_caisse_e2e::test_04_etat_caisse_affiche_dans_formulaire` | UI libelle `Solde` → `Balance` selon langue active | Assertion tolere FR/EN (PIEGES 9.34) |
+| `test_controlvanne_kiosk::test_01_kiosk_list_accessible` | 0 TireuseBec en DB | Fixture `_ensure_tireuse_exists` module-scoped, idempotente |
+| `test_controlvanne_kiosk::test_02_kiosk_detail_une_seule_carte` | Skip car pas de fut actif | Seed inclut un Product FUT attache a la tireuse |
+| `test_pos_stock_websocket::test_stock_websocket_multi_onglet` | `runserver_plus` ne gere pas les WebSockets | Skip conditionnel via `page.evaluate` (connexion WS reelle 3s timeout) |
+| `test_asset_federation::test_full_per_asset_invitation_flow` | Flow UI 6 etapes cross-tenant + admin pas granted chantefrein | Refactor via `login_as_admin_on_subdomain` + fixture `_grant_admin_on_chantefrein` setup/teardown |
+| `test_admin_card_refund::test_e2e_admin_refund_flow_complet` | Teardown `filter(name__icontains='E2E ')` matche les seeds panier → ProtectedError PriceSold | Exclude `name__startswith='E2E Test —'` |
+| `test_pos_recharge_cashless::test_01/02/03` | PV Cashless affiche plusieurs tuiles Recharge (TLF/TNF/TIM) — `.first` tombait sur un asset inactif | Filtre `has_text="Monnaie locale"` (TLF actif) |
+| `test_pos_recharge_cashless::test_04_vente_nfc_apres_recharge` | Cascade paiement NFC debite un autre asset que TLF (FID/TNF presents) → solde TLF inchange | `recharge_setup` purge tous les tokens du wallet (pas seulement TLF) |
+| `test_pos_adhesion_nfc::test_panier_mixte_vt_re_ad_nfc_puis_especes` | Meme ambiguite multi-Products Recharge | Filtre `has_text="Monnaie locale"` |
+| `test_explorer_assets_focus::test_click_tibillet_asset_card_draws_hull_polygon` | 2 assets "Fédéré TiBillet" seedes (1 federe, 1 local) — `.first` tombait sur celui a 1 lieu, pas de hull | Filtre `has_text="Accepté par"` cible l'asset avec > 1 lieu acceptant |
+| (Post-flush) Products Recharge non regeneres | Signal Asset post_save fire uniquement si `created=True` — flush purge les Products mais le re-seed est `get_or_create` → `created=False` | `demo_data_v2._handle_full` re-trigger le signal pour chaque Asset TLF/TNF/TIM actif sans Product |
+| (Seed events E2E) `max_per_user=10` atteint apres 10 runs | Limite basse sur l'event gratuit seede | `max_per_user=None` (pas de limite sur les fixtures test) |
+
+### Fichiers crees / Created files
+| Fichier / File | Changement / Change |
+|---|---|
+| (aucun — tous les changements sont dans les tests existants) | — |
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| tests/e2e/conftest.py | +fixture `login_as_admin_on_subdomain` (cross-tenant force_login) |
+| tests/e2e/test_pos_sortie_caisse_e2e.py | Assertions tolerantes i18n FR/EN |
+| tests/e2e/test_controlvanne_kiosk.py | +fixture `_ensure_tireuse_exists` module-scoped |
+| tests/e2e/test_pos_stock_websocket.py | Skip conditionnel si serveur non-ASGI |
+| tests/e2e/test_asset_federation.py | Suppression `_login_on_tenant` UI → `login_as_admin_on_subdomain` + `_grant_admin_on_chantefrein` |
+| tests/e2e/test_admin_card_refund.py | Teardown exclut seeds E2E Test — |
+| tests/e2e/test_pos_vider_carte.py | Commentaire "TEST MODE" corrige |
+
+### Prerequis dev pour run complet
+
+- **Serveur ASGI requis** (pour les tests WebSocket) : lancer `rsp` dans le pane byobu (alias pour `manage.py runserver` en mode ASGI auto avec daphne).
+- `runserver_plus` (Werkzeug) **ne suffit PAS** — il ne gere pas les WebSockets et `test_stock_websocket` se skippe.
+
+### Bilan
+- **117/117 tests E2E passent, 0 skip, 0 flake**
+- Combine avec pytest DB-only : **735/735 tests verts**
+- Temps total E2E : ~12 min (moyenne 6s/test)
+- Pieges documentes : 9.101 a 9.110 (force_login env, django_db_blocker, Event slug,
+  /panier/ auth, booking-add-and-pay conditionnel, wait_for_url string, runserver_plus
+  non-ASGI, env vars container, admin Lespass only, teardown wide-match)
+
+---
+
+## Stabilisation tests E2E panier / E2E cart tests stabilization
+
+**Date :** 2026-04-19
+**Migration :** Non / No
+
+**Quoi / What :** Refonte de la suite de tests E2E panier pour atteindre 5 tests
+fiables qui passent en &lt;25s (avant : 2/3 casses, 1 fragile, ~40s). Trois
+leviers : (1) force_login via endpoint de test dedie pour remplacer le flow
+UI 6 etapes ; (2) seed des fixtures E2E dans `demo_data_v2` (plus de
+`Event.objects.create()` dans les fixtures Python) ; (3) fixture `e2e_slugs`
+qui recupere les slugs/UUIDs depuis la DB via `django_db_blocker.unblock()`.
+
+**Pourquoi / Why :** Les 2 tests E2E panier initiaux etaient cassés
+(`RuntimeError: Database access not allowed` sans `@pytest.mark.django_db`, et
+`@pytest.mark.django_db` incompatible avec un serveur Django reel derriere
+Traefik car pas de rollback possible). Le test qui passait dependait d'un
+flow UI de login a 6 etapes (timing HTMX, lien TEST MODE, traductions) —
+fragile a tout changement non lie au code panier. Besoin d'une fondation
+stable pour ajouter les E2E critiques du checkout Stripe.
+
+### Fichiers crees / Created files
+| Fichier / File | Changement / Change |
+|---|---|
+| AuthBillet/views_test_only.py | Endpoint `force_login_for_e2e` triple-gate (DEBUG + token env + header match). Silent 404 si conditions manquantes. Jamais monte en production. |
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| .env | +`E2E_TEST_TOKEN` (secret dev, gate l'endpoint force_login) |
+| AuthBillet/urls.py | +URL conditionnelle `if settings.DEBUG` pour `/__test_only__/force_login/` |
+| Administration/management/commands/demo_data_v2.py | +methode `_seed_e2e_fixtures(tenants)` (4 objets seedes dans lespass : event gratuit FREERES, event payant BILLET 10€, adhesion gratuite, event gated par l'adhesion). Appel section 4b dans `_handle_full`. Idempotent via `get_or_create`. |
+| tests/e2e/conftest.py | Refonte fixture `login_as` : HTTP POST + injection cookie (~100ms au lieu de 5s). +fixture `e2e_slugs` session-scoped avec `django_db_blocker.unblock()`. +fixture `e2e_test_token`. |
+| tests/e2e/test_panier_flow.py | 2 tests casses reecrits (flow admin + slug seede), 2 nouveaux tests Stripe ajoutes (checkout direct + chainage add-and-pay). Suppression fixture `event_gratuit_publie`. |
+| tests/TESTS_README.md | Section "Variables d'environnement E2E" (ADMIN_EMAIL + E2E_TEST_TOKEN) |
+| tests/PIEGES.md | +pieges 9.101 a 9.106 (env container vs .env, django_db_blocker, slug Event, /panier/ sans firstname, booking-add-and-pay conditionnel, wait_for_url callback string) |
+
+### Bilan
+- 5 tests E2E panier, tous passent en 22.52s
+- 6 nouveaux pieges documentes
+- Endpoint test-only ajoute avec triple-gate de securite (DEBUG + token + header)
+- Seed E2E idempotent, prefixe "E2E Test —" pour identification admin
+
+---
+
+## Panier d'achat multi-events / Multi-event shopping cart
+
+**Date :** 2026-04-17
+**Migration :** Oui (`BaseBillet.0213_commande_and_fks`)
+
+**Quoi / What :** Nouveau panier d'achat permettant de cumuler en une seule
+commande des billets de plusieurs events + des adhesions. Nouveau modele pivot
+`Commande` avec FK nullable sur `Reservation`/`Membership`. Matérialisation
+atomique. Cart-aware : une adhesion dans le panier débloque les tarifs gates.
+Modal "Ajouter au panier / Payer maintenant" sur la page event.
+
+**Pourquoi / Why :** Avant, chaque achat était scoped à un seul event. Pour
+acheter 2 events + 1 adhésion, il fallait 3 parcours distincts et 3 paiements.
+Le panier unifie l'expérience, apporte un seul checkout Stripe, et débloque
+le cas métier "achat adhésion + billet adhérent en même temps".
+
+### Fichiers créés / Created files
+| Fichier / File | Changement / Change |
+|---|---|
+| BaseBillet/services_panier.py | Gestionnaire session Django, validations, overlap, cart-aware adhesions, code promo |
+| BaseBillet/services_commande.py | Orchestrateur atomique (Commande + Reservations + Memberships + Paiement_stripe) |
+| BaseBillet/context_processors.py | Expose `{{ panier }}` a tous les templates |
+| BaseBillet/migrations/0213_commande_and_fks.py | Modele Commande + FK sur Reservation/Membership |
+| BaseBillet/templates/htmx/components/panier_item.html | Partial item panier (ticket/membership) |
+| BaseBillet/templates/htmx/components/panier_badge.html | Badge compteur (page + navbar, via hx-swap-oob) |
+| BaseBillet/templates/htmx/components/panier_toast.html | Toast feedback post-action |
+| BaseBillet/templates/htmx/views/panier.html | Page panier Bootstrap 5 |
+| tests/pytest/test_commande_model.py | 13 tests modele |
+| tests/pytest/test_panier_session.py | 28 tests PanierSession |
+| tests/pytest/test_commande_service.py | 4 tests orchestrateur |
+| tests/pytest/test_ticket_creator_no_checkout.py | 2 tests flag create_checkout |
+| tests/pytest/test_signals_cascade_multi_reservations.py | 3 tests cascade signals |
+| tests/pytest/test_commande_post_save_paid.py | 4 tests post_save Commande.PAID |
+| tests/pytest/test_accept_sepa_flag.py | 5 tests accept_sepa flag |
+| tests/pytest/test_reservation_validator_cart_aware.py | 6 tests cart-aware + fix overlap |
+| tests/pytest/test_panier_context_processor.py | 4 tests context processor |
+| tests/pytest/test_panier_mvt.py | 13 tests PanierMVT |
+| tests/pytest/test_panier_batch.py | 5 tests batch endpoint |
+| tests/e2e/test_panier_flow.py | 2 tests E2E Playwright |
+
+### Fichiers modifiés / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| BaseBillet/models.py | +modele Commande, +FK `commande` sur Reservation/Membership |
+| BaseBillet/signals.py | Patch `set_ligne_article_paid()` iteration sur lignes + post_save Commande.PAID |
+| BaseBillet/validators.py | +param `create_checkout` sur TicketCreator, cart-aware `ReservationValidator`, fix bug overlap (BLOCKING_STATUSES) |
+| BaseBillet/views.py | +classe `PanierMVT` (11 actions dont batch) |
+| BaseBillet/urls.py | +router.register panier |
+| BaseBillet/templatetags/tibitags.py | +filter `in_cart` |
+| PaiementStripe/views.py | +param `accept_sepa` sur CreationPaiementStripe |
+| TiBillet/settings.py | +context_processor panier |
+| BaseBillet/templates/reunion/partials/navbar.html | +icone panier + badge + a11y |
+| BaseBillet/templates/faire_festival/partials/navbar.html | +icone panier + badge + a11y |
+| BaseBillet/templates/reunion/views/event/partial/booking_form.html | +bouton Add to cart + cart-aware tarifs gates + a11y |
+| TECH DOC/SESSIONS/LESPASS/PLAN_LESPASS.md | +section 8 Panier TERMINE |
+
+### Bilan
+- 87 tests pytest + 2 tests E2E Playwright
+- Zéro régression sur les 700+ tests existants
+- Flow direct existant préservé (pas de breaking change UX)
+- Correction incidente du bug `ReservationValidator` overlap (filtre statut manquant)
+
+---
+
 ## Authentification hardware via TermUser / Hardware auth via TermUser
 
 **Quoi / What:** Refactor de l'auth des terminaux LaBoutik (POS + Android) via

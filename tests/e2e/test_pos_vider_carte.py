@@ -166,7 +166,8 @@ def test_e2e_pos_vider_carte_flow_complet(
     3. Verify response contains success summary (total 1000c).
     4. Verify in DB: 1 REFUND Transaction + 1 CASH LigneArticle (-1000).
     """
-    # 1. Login admin via TEST MODE flow.
+    # 1. Login admin via force_login (endpoint test, cf. conftest).
+    # / Admin login via force_login (test endpoint, see conftest).
     login_as_admin(page)
 
     # 2. Recupere le pv_uuid via django_shell.

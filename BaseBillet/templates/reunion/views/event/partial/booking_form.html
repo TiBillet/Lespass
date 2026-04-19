@@ -7,8 +7,15 @@
 </style>
 
 
-<form id="reservation_form" hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}" class="d-flex flex-column justify-content-between h-100" data-testid="booking-form">
-    <div>
+<form id="reservation_form"
+      hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}"
+      class="d-flex flex-column h-100"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active"
+      data-testid="booking-form">
+    {# Body scrollable + footer sticky pour garantir que les 2 boutons restent visibles #}
+    {# / Scrollable body + sticky footer so both buttons stay visible #}
+    <div class="flex-grow-1 overflow-y-auto p-3">
         <input type="hidden" name="event" value="{{ event.uuid }}">
         {% if user.is_anonymous %}
             <div class="mb-3">
@@ -101,33 +108,53 @@
                             {% trans "This price is no longer available." %}
                         </div>
                     {% elif price.adhesions_obligatoires.exists %}
-                        {% if not user.is_authenticated %}
-                            <div class="alert alert-danger" role="alert">
-                                {% trans "Log in to access this rate." %}
-                            </div>
-                        {% elif not user|is_membership:price.adhesions_obligatoires %}
-                            <!-- Adhésion obligatoire pour selectionner ce produit ! -->
-                            <div class="alert alert-info" role="alert">
-                                {% trans "You must have" %}
-                                {% for adhesion in price.adhesions_obligatoires.all %}
-                                    <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
-                                    {% trans "or" %}{% endif %}
-                                {% endfor %}
-                                {% trans "to book this rate." %}
-                            </div>
-                        {% else %}
-                            <span class="d-flex align-items-baseline gap-3">
-                                <bs-counter
-                                        id="amount-{{ price.uuid }}"
-                                        name="{{ price.uuid }}"
-                                        step="1" min="0"
-                                        max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
-                                        class="flex-grow-1 js-order-amount"
-                                        data-testid="booking-amount-{{ price.uuid }}">
-                                </bs-counter>
-                                {% trans 'ticket(s)' %}
-                            </span>
-                        {% endif %}
+                        {% with is_in_cart=price.adhesions_obligatoires.all|in_cart:panier.adhesions_product_ids %}
+                            {% if is_in_cart %}
+                                {# --- Adhesion requise est dans le panier → tarif selectionnable --- #}
+                                {# --- Required membership in cart → rate selectable --- #}
+                                <div class="alert alert-info small py-2 mb-2" role="alert">
+                                    <i class="bi bi-bag-check me-1" aria-hidden="true"></i>
+                                    {% trans "Accessible via the membership in your cart." %}
+                                </div>
+                                <span class="d-flex align-items-baseline gap-3">
+                                    <bs-counter
+                                            id="amount-{{ price.uuid }}"
+                                            name="{{ price.uuid }}"
+                                            step="1" min="0"
+                                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                            class="flex-grow-1 js-order-amount"
+                                            data-testid="booking-amount-{{ price.uuid }}">
+                                    </bs-counter>
+                                    {% trans 'ticket(s)' %}
+                                </span>
+                            {% elif not user.is_authenticated %}
+                                <div class="alert alert-danger" role="alert">
+                                    {% trans "Log in to access this rate." %}
+                                </div>
+                            {% elif not user|is_membership:price.adhesions_obligatoires %}
+                                <!-- Adhésion obligatoire pour selectionner ce produit ! -->
+                                <div class="alert alert-info" role="alert">
+                                    {% trans "You must have" %}
+                                    {% for adhesion in price.adhesions_obligatoires.all %}
+                                        <a href="/memberships/?open={{ adhesion.uuid }}">{{ adhesion.name }}</a>{% if not forloop.last %}
+                                        {% trans "or" %}{% endif %}
+                                    {% endfor %}
+                                    {% trans "to book this rate." %}
+                                </div>
+                            {% else %}
+                                <span class="d-flex align-items-baseline gap-3">
+                                    <bs-counter
+                                            id="amount-{{ price.uuid }}"
+                                            name="{{ price.uuid }}"
+                                            step="1" min="0"
+                                            max="{% if price.max_per_user > event.max_per_user %}{{ event.max_per_user }}{% elif price.max_per_user %}{{ price.max_per_user }}{% else %}{{ event.max_per_user }}{% endif %}"
+                                            class="flex-grow-1 js-order-amount"
+                                            data-testid="booking-amount-{{ price.uuid }}">
+                                    </bs-counter>
+                                    {% trans 'ticket(s)' %}
+                                </span>
+                            {% endif %}
+                        {% endwith %}
                     {% else %}
                         <span class="d-flex align-items-baseline gap-3">
                             <bs-counter
@@ -431,7 +458,9 @@
         </p>
     </div>
 
-    <div class="p-3">
+    {# Footer sticky avec les boutons d'action — border-top pour separer visuellement #}
+    {# / Sticky footer with action buttons — border-top for visual separation #}
+    <div class="p-3 border-top bg-body flex-shrink-0">
         {# Promotional code input - show if any product has promotional codes #}
         {% if event.products.all %}
             {% for product in event.products.all %}
@@ -446,18 +475,110 @@
         {% endif %}
 
 
-        <button type="submit" class="btn btn-primary w-100 mb-3" data-testid="booking-submit">{% trans 'Send booking request' %}</button>
-        <a href="." class="btn btn-danger d-block" data-testid="booking-cancel">{% trans 'Cancel' %}</a>
+        {% comment %}
+        BOUTONS D'ACTION / ACTION BUTTONS
+
+        Deux intentions bien distinctes, toujours affichees comme deux vrais
+        boutons avec icones :
+        - "Payer maintenant" (ou "Envoyer la demande" si anonyme) : paiement
+          direct pour cet event uniquement.
+        - "Ajouter au panier" : cumule avec d'autres events et adhesions.
+        Pour un utilisateur non connecte, le second bouton ouvre l'offcanvas
+        login puisque le panier exige l'auth.
+        `data-loading-disable` sur les submit : anti double-clic via extension
+        HTMX loading-states (fix spinner merge main).
+        / Two separate intents, both shown as real buttons with icons.
+        `data-loading-disable` on submits: prevent double-click via HTMX
+        loading-states extension.
+        {% endcomment %}
+        {% if user.is_authenticated %}
+            {# Utilisateur connecte : le "Payer maintenant" et "Ajouter au panier" sont accessibles. #}
+            {# Si panier deja non vide, on met "Ajouter au panier" en primary pour favoriser le cumul. #}
+            {# / Authenticated: both actions available. If cart not empty, promote "Add to cart". #}
+            {% if panier.count > 0 %}
+                {# Panier non vide : 2 boutons qui finissent tous les deux au panier. #}
+                {# 1) Ajouter au panier (cumul). 2) Ajouter + payer : enchaine le checkout. #}
+                {# / Cart non-empty: both buttons end at cart. #}
+                {# 1) Add to cart (cumulate). 2) Add + pay: chain to checkout. #}
+                <button type="button"
+                        class="btn btn-primary w-100 mb-2"
+                        hx-post="/panier/add/tickets_batch/"
+                        hx-include="closest form"
+                        hx-swap="none"
+                        data-loading-disable
+                        data-testid="booking-add-to-cart"
+                        aria-label="{% trans 'Add these tickets to your cart' %}">
+                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                    {% blocktrans with n=panier.count %}Add to cart ({{ n }} already in){% endblocktrans %}
+                </button>
+                <button type="button"
+                        class="btn btn-outline-primary w-100"
+                        hx-post="/panier/add/tickets_batch/"
+                        hx-include="closest form"
+                        hx-vals='{"then": "checkout"}'
+                        hx-swap="none"
+                        data-loading-disable
+                        data-testid="booking-add-and-pay"
+                        aria-label="{% trans 'Add to cart and pay all items' %}">
+                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                    {% trans "Add to cart and pay" %}
+                </button>
+            {% else %}
+                <button type="submit"
+                        class="btn btn-primary w-100 mb-2"
+                        data-loading-disable
+                        data-testid="booking-submit"
+                        aria-label="{% trans 'Pay this event now' %}">
+                    <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
+                    {% trans "Pay now" %}
+                </button>
+                <button type="button"
+                        class="btn btn-outline-primary w-100"
+                        hx-post="/panier/add/tickets_batch/"
+                        hx-include="closest form"
+                        hx-swap="none"
+                        data-loading-disable
+                        data-testid="booking-add-to-cart"
+                        aria-label="{% trans 'Add these tickets to your cart' %}">
+                    <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                    {% trans "Add to cart" %}
+                </button>
+            {% endif %}
+        {% else %}
+            {# Anonyme : "Envoyer la demande" en primary (flow direct), bouton "Connexion" en vrai bouton secondaire. #}
+            {# Le panier exige l'auth → on ouvre l'offcanvas login au clic. #}
+            {# / Anonymous: direct booking primary + real secondary button that opens login offcanvas. #}
+            <button type="submit"
+                    class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
+                    data-testid="booking-submit">
+                <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
+                {% trans 'Send booking request' %}
+            </button>
+            <button type="button"
+                    class="btn btn-outline-primary w-100"
+                    data-bs-toggle="offcanvas"
+                    data-bs-target="#loginPanel"
+                    data-testid="booking-add-to-cart-login"
+                    aria-label="{% trans 'Log in to add these tickets to your cart' %}">
+                <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
+                {% trans "Log in to add to cart" %}
+            </button>
+        {% endif %}
+        <a href="." class="btn btn-link text-muted d-block mt-2" data-testid="booking-cancel">
+            {% trans 'Cancel' %}
+        </a>
     </div>
 </form>
 
 <script type="module">
     import * as BookingCalculator from '{% static "reunion/js/booking-calculator.mjs" %}'
-    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
 
-    // show spinner on form submission
+    // Spinner gere par l'extension HTMX loading-states
+    // (attributs data-loading-target / data-loading-class sur le <form>).
+    // / Spinner handled by HTMX loading-states extension
+    // (data-loading-target / data-loading-class attrs on the <form>).
     const form = document.getElementById('reservation_form')
-    Spinner.init(form)
     BookingCalculator.init()
 
     // Prevent HTMX request if no quantity selected (> 0 required)

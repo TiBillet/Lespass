@@ -1,0 +1,14 @@
+{# Page panier : layout + include du partial panier_content.html. #}
+{# Le partial est ce qui est swap par HTMX apres mutations du panier. #}
+{# / Cart page: layout + include of panier_content.html partial. #}
+{# The partial is what HTMX swaps after cart mutations. #}
+{% extends base_template %}
+{% load i18n %}
+
+{% block main %}
+<div class="container py-5">
+    <div class="row">
+        {% include "htmx/components/panier_content.html" %}
+    </div>
+</div>
+{% endblock main %}

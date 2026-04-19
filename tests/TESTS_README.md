@@ -21,6 +21,32 @@ docker exec lespass_django poetry run playwright install --with-deps chromium
 > **Note** : cette etape n'est necessaire que pour les tests E2E (`tests/e2e/`).
 > Les tests pytest DB-only (`tests/pytest/`) n'ont pas besoin de Playwright.
 
+## Variables d'environnement E2E
+
+Les tests E2E s'appuient sur 2 variables d'environnement qui sont lues par
+`tests/e2e/conftest.py` :
+
+| Variable | Role | Ou la definir |
+|---|---|---|
+| `ADMIN_EMAIL` | Email du user admin utilise par la fixture `login_as_admin`. | `.env` (racine) ou `-e` sur `docker exec`. Valeur dev : `admin@admin.com`. |
+| `E2E_TEST_TOKEN` | Token secret partage avec l'endpoint `/api/user/__test_only__/force_login/`. Permet a Playwright de forcer une session sans passer par le flow UI. | `.env` (racine). L'endpoint n'est monte que si `DEBUG=True` ET ce token est defini. |
+
+Si `.env` est charge au demarrage du container (`env_file: .env` dans
+`docker-compose.yml`), les deux variables sont automatiquement disponibles
+dans `lespass_django`. Pour un nouveau `.env` sans restart container, il faut
+passer explicitement les variables au `docker exec` (voir commande ci-dessous).
+
+### Pourquoi un endpoint de force_login ?
+
+Le flow UI de connexion en dev (click navbar → fill email → submit → click
+lien "TEST MODE") enchaine 6 etapes HTMX, chacune potentiellement instable
+(timing, traduction, layout). Avec `force_login`, on passe de ~5s a ~100ms
+par login et on supprime 6 points de rupture non lies au code metier.
+
+Securite : l'endpoint est triple-gate (cf. `AuthBillet/views_test_only.py`)
+— sans `DEBUG=True` ET sans le bon token, il repond 404 silencieux. Il
+n'existe tout simplement pas en production (url pattern conditionnel).
+
 ## Lancer les tests
 
 ```bash
@@ -28,7 +54,14 @@ docker exec lespass_django poetry run playwright install --with-deps chromium
 docker exec lespass_django poetry run pytest tests/pytest/ -q
 
 # --- Mode lent : tests E2E navigateur (~3 min) ---
-# Prerequis : serveur Django actif via Traefik
+# Prerequis : serveur Django actif via Traefik + ADMIN_EMAIL et E2E_TEST_TOKEN
+# presents dans l'env du container (charges via .env au `docker compose up`).
+# Si le container a ete demarre avant l'ajout de E2E_TEST_TOKEN, passer
+# explicitement les variables :
+#   docker exec -e ADMIN_EMAIL=admin@admin.com -e E2E_TEST_TOKEN='<token>' \
+#     lespass_django poetry run pytest tests/e2e/ -v -s
+# Le runserver doit egalement avoir E2E_TEST_TOKEN dans son process (sinon
+# l'endpoint /api/user/__test_only__/force_login/ renvoie 404 silencieux).
 docker exec lespass_django poetry run pytest tests/e2e/ -v -s
 
 # --- Tout d'un coup (~3.5 min) ---

@@ -110,9 +110,16 @@ def carte_avec_solde_e2e(django_shell):
         "[c.delete() for c in cartes]; "
         "[w.delete() for w in wallets_eph if Wallet.objects.filter(pk=w.pk).exists()]; "
         "Detail.objects.filter(base_url='E2E_REFUND').delete(); "
-        # Supprimer les Products crees par le signal Asset post_save
-        # / Delete Products created by Asset post_save signal
-        "prods_e2e = Product.objects.filter(name__icontains='E2E '); "
+        # Supprimer les Products crees par le signal Asset post_save.
+        # On exclut 'E2E Test —' pour ne pas toucher aux fixtures seedees par
+        # demo_data_v2._seed_e2e_fixtures (events/adhesions du panier), qui
+        # peuvent avoir des PriceSold rattaches apres un test_panier_flow.
+        # / Delete Products created by Asset post_save signal.
+        # Exclude 'E2E Test —' to skip fixtures seeded by demo_data_v2
+        # (panier events/adhesions), which may have PriceSold refs after
+        # test_panier_flow.
+        "prods_e2e = Product.objects.filter(name__icontains='E2E ')"
+        ".exclude(name__startswith='E2E Test —'); "
         "[Price.objects.filter(product=p).delete() for p in prods_e2e]; "
         "prods_e2e.delete(); "
         "Asset.objects.filter(name__startswith='E2E ').delete(); "
@@ -144,7 +151,8 @@ def test_e2e_admin_refund_flow_complet(page, login_as_admin, django_shell, carte
     open modal button -> confirm modal -> HX-Refresh reload ->
     verify empty panel + LigneArticle/Transaction state in DB.
     """
-    # 1. Login admin via le flow TEST MODE
+    # 1. Login admin via force_login (endpoint test, cf. conftest).
+    # / Admin login via force_login (test endpoint, see conftest).
     login_as_admin(page)
 
     # 2. Naviguer vers la fiche carte (/change/) — nouveau flow inline
