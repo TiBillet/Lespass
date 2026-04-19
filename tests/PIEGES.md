@@ -1101,6 +1101,184 @@ def _ma_methode_sync(self, ...):
     TireuseBec.objects.filter(...)
 ```
 
+**9.101 — `docker exec` ignore les changements de `.env` tant que le container n'est pas redemarre.**
+Le fichier `.env` est charge par `docker compose` au demarrage du container
+(`env_file: .env`). Ajouter une variable dans `.env` ne la rend PAS disponible
+dans le process du runserver ni dans les `docker exec` tant que le container
+tourne. Pour debloquer une session sans faire `docker compose restart` :
+
+```bash
+# Passer la variable explicitement au docker exec
+docker exec -e E2E_TEST_TOKEN='<valeur>' lespass_django ...
+```
+
+Et pour le runserver : le relancer avec la variable exportee dans le pane byobu.
+Sinon, redemarrage propre via `docker compose restart lespass_django`.
+
+**9.102 — `django_db_blocker.unblock()` pour une fixture E2E qui lit la DB.**
+Les tests E2E ne peuvent pas utiliser `@pytest.mark.django_db` (rollback
+incompatible avec un serveur Django reel derriere Traefik). Pytest-django
+bloque alors toutes les queries ORM par defaut — meme read-only. Une fixture
+session-scoped qui lit juste des slugs/UUIDs (ex: `e2e_slugs`) doit ouvrir
+le blocker avant la query :
+
+```python
+@pytest.fixture(scope="session")
+def e2e_slugs(django_db_blocker):
+    with django_db_blocker.unblock():
+        tenant = TenantClient.objects.get(schema_name="lespass")
+        with tenant_context(tenant):
+            event = Event.objects.get(name="E2E Test — Event gratuit")
+            return {"slug": event.slug}
+```
+
+`unblock()` est **read-only** : pas de rollback, pas de transaction wrapper
+— ce qui convient exactement au besoin de lire des donnees seedees.
+
+**9.103 — `Event.save()` regenere le slug a chaque appel → impossible de forcer un slug fixe en seed.**
+`Event.save()` fait `self.slug = slugify(f"{name} {datetime-fmt} {pk.hex[:8]}")`.
+Les 8 derniers caracteres viennent de `pk.hex[:8]` — genere par la DB a la
+premiere insertion. Donc pour des fixtures seedees via `get_or_create` :
+
+- Le slug est **stable** entre 2 runs (pk inchange sur les reads) ✓
+- Mais **imprevisible** sans lire la DB une fois ✗
+
+Pour un test E2E, ne pas tenter de deviner le slug — le recuperer via une
+fixture `e2e_slugs` qui query la DB (cf. 9.102).
+
+**9.104 — `/panier/` n'a PAS de champs `first_name` / `last_name` si `user.is_authenticated`.**
+Le template `panier_content.html` (ligne ~95) affiche juste l'email de l'user
+et un bouton `[data-testid="panier-checkout"]`. Les firstname/lastname sont
+collectes au niveau du booking_form (event) ou membership_form (adhesion),
+puis stockes sur les items panier — PAS saisis au moment du checkout.
+
+Les tests E2E qui tentent `page.fill("input[name='first_name']", ...)` sur
+`/panier/` timeout (element inexistant). Pour un user authenticated, cliquer
+directement `[data-testid="panier-checkout"]`.
+
+**9.105 — `booking-add-and-pay` n'apparait que si `panier.count > 0`.**
+Dans `booking_form.html` (ligne 498+), le template rend :
+- Panier vide : `booking-submit` (Pay now) + `booking-add-to-cart`
+- Panier non-vide : `booking-add-to-cart` + `booking-add-and-pay`
+
+Pour tester le chainage "Add to cart and pay" sans fragilite, **pre-remplir
+le panier** avec un item avant de naviguer vers l'event cible :
+
+```python
+# Pre-fill : add billet gratuit → badge = 1
+page.goto(f"/event/{gratuit_slug}/")
+# ... click booking-add-to-cart
+
+# Maintenant sur event payant, booking-add-and-pay est visible
+page.goto(f"/event/{payant_slug}/")
+# ... click booking-add-and-pay → redirect Stripe
+```
+
+**9.106 — `page.wait_for_url` en Playwright Python passe une `str` au callback.**
+Contrairement a Playwright JS qui passe un objet `URL`, la version Python
+passe directement une string. Pour matcher un domaine :
+
+```python
+# ✅ Correct
+page.wait_for_url(
+    lambda url: "checkout.stripe.com" in url,
+    timeout=15_000,
+    wait_until="domcontentloaded",  # PIEGES 9.28 : Stripe n'atteint jamais networkidle
+)
+
+# ❌ Incorrect (AttributeError: 'str' object has no attribute 'hostname')
+page.wait_for_url(lambda url: url.hostname == "checkout.stripe.com")
+```
+
+**9.107 — `runserver_plus` (Werkzeug) ne gere pas les WebSockets.**
+Le dev lance souvent `runserver_plus` pour le debugger Werkzeug (pin, PDB inline).
+Mais Werkzeug n'est pas ASGI — il repond 404 sur les routes `/ws/...` et ne
+gere aucun upgrade WebSocket. Pour les tests qui verifient un flow WebSocket
+(stock realtime, chat, notifications) :
+
+- **Lancer le serveur en mode ASGI** : `manage.py runserver` (Django 4+ bascule
+  automatiquement en ASGI si `daphne` est dans INSTALLED_APPS avant `django.contrib.staticfiles`).
+  Alias `rsp` defini dans `.bashrc` du container : `poetry run python manage.py runserver 0.0.0.0:8002`.
+- **Detection automatique cote test** : pattern `page.evaluate` qui tente une
+  vraie connexion WS et renvoie bool. Exemple :
+
+```python
+def _websocket_endpoint_available(page):
+    page.goto("/")
+    return bool(page.evaluate("""
+        () => new Promise((resolve) => {
+            try {
+                const ws = new WebSocket('wss://' + location.host + '/ws/rfid/all/');
+                ws.onopen = () => { ws.close(); resolve(true); };
+                ws.onerror = () => resolve(false);
+                ws.onclose = () => resolve(false);
+                setTimeout(() => resolve(false), 3000);
+            } catch { resolve(false); }
+        })
+    """))
+
+# Puis dans le test
+if not _websocket_endpoint_available(page):
+    pytest.skip("Serveur non-ASGI (runserver_plus probable).")
+```
+
+**9.108 — `runserver`/`runserver_plus` auto-reload perd les env vars inline.**
+Quand le serveur detecte un changement de fichier et se redemarre (StatReloader),
+il forke un nouveau process qui HERITE de l'env du parent — donc les variables
+exportees AVANT le lancement sont conservees. MAIS si la variable est passee
+inline au lancement (`E2E_TEST_TOKEN='...' manage.py runserver ...`), elle est
+dans l'env du shell au moment du fork → persiste au reload.
+
+Le piege : si tu lances via `docker exec` avec `-e E2E_TEST_TOKEN=...`, la
+variable est dans l'env du process `docker exec`. Un kill/restart du container
+ou un reload via `docker compose restart` perd cette variable (non dans `.env`
+tant qu'on n'a pas fait `docker compose up` ou equivalent).
+
+**Solution en dev :**
+- Ajouter la variable dans `.env` (charge via `env_file` dans docker-compose)
+- OU lancer toujours avec `-e VAR=value` sur le `docker exec`
+
+**9.109 — Admin de test `admin@admin.com` seede uniquement sur Lespass.**
+`demo_data_v2` cree `admin@admin.com` comme `client_admin` uniquement du
+tenant Lespass (cf. commande ligne ~1914). Pour les tests cross-tenant
+(ex: federation Lespass ↔ Chantefrein), il faut explicitement grant l'admin
+sur le 2e tenant via une fixture setup/teardown :
+
+```python
+@pytest.fixture
+def _grant_admin_on_chantefrein(admin_email, django_shell):
+    django_shell(
+        "from AuthBillet.models import TibilletUser\n"
+        "from django.db import connection\n"
+        f"u = TibilletUser.objects.get(email='{admin_email}')\n"
+        "u.client_admin.add(connection.tenant)\n"
+        "u.save()",
+        schema="chantefrein",
+    )
+    yield
+    # Teardown : retirer pour ne pas casser test_admin_permissions
+    # qui asserts client_admin_count=1.
+    django_shell(
+        "u.client_admin.remove(connection.tenant)\n...",
+        schema="chantefrein",
+    )
+```
+
+**9.110 — Teardown filter wide-match qui touche les seeds partages.**
+Un teardown `Product.objects.filter(name__icontains='E2E ')` (wide match) va
+matcher les seeds `E2E Test —` crees par `demo_data_v2._seed_e2e_fixtures`.
+Si un autre test a cree un `PriceSold` sur ces produits (flow panier), le
+teardown leve `ProtectedError` sur `Price.delete()`.
+
+**Regle :** les teardowns qui suppriment par nom doivent **exclure** les
+prefixes de seeds stables :
+```python
+prods_a_nettoyer = (
+    Product.objects.filter(name__icontains='E2E ')
+    .exclude(name__startswith='E2E Test —')  # preserve seeds panier
+)
+```
+
 ---
 
 ### Piege 71 : Locale francaise et DecimalField dans les templates JS

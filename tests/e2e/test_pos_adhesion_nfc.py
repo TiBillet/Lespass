@@ -496,7 +496,11 @@ class TestPOSPanierMixte:
         # The recharge_asset_setup fixture ensures the TLF asset is active.
         # The product is multi-rate (1, 5, 10, Free) → click opens an overlay.
         # We click the "10" rate then close the overlay.
-        recharge_tile = page.locator('#products .article-container').filter(has_text="Recharge")
+        # Cibler "Monnaie locale" (asset TLF actif) pour eviter l'ambiguite avec
+        # les autres Products Recharge (Cadeau TNF, Temps TIM) sur le meme PV.
+        # / Target "Monnaie locale" (active TLF asset) to avoid ambiguity with
+        # other Recharge Products (Cadeau TNF, Temps TIM) on the same POS.
+        recharge_tile = page.locator('#products .article-container').filter(has_text="Monnaie locale")
         expect(recharge_tile.first).to_be_visible(timeout=10_000)
         recharge_tile.first.click()
 

@@ -287,8 +287,14 @@ class TestSortieDeCaisseE2E:
         # Le panneau etat caisse est visible / Cash state panel is visible
         expect(page.locator('[data-testid="sortie-etat-caisse"]')).to_be_visible(timeout=10_000)
 
-        # Il contient au moins "Fond", "Espèces" ou "Especes", "Solde"
-        # / It contains at least "Fond", "Espèces"/"Especes", "Solde"
+        # Il contient au moins "Fond"/"Float" et "Solde"/"Balance" (selon langue
+        # active du tenant — i18n, cf. PIEGES 9.34).
+        # / It contains at least "Fond"/"Float" and "Solde"/"Balance" (depending
+        # on tenant's active language — i18n, see PIEGES 9.34).
         etat_texte = page.locator('[data-testid="sortie-etat-caisse"]').text_content()
-        assert "Fond" in etat_texte, f"'Fond' non trouvé dans: {etat_texte}"
-        assert "Solde" in etat_texte, f"'Solde' non trouvé dans: {etat_texte}"
+        assert "Fond" in etat_texte or "Float" in etat_texte, (
+            f"'Fond'/'Float' non trouvé dans: {etat_texte}"
+        )
+        assert "Solde" in etat_texte or "Balance" in etat_texte, (
+            f"'Solde'/'Balance' non trouvé dans: {etat_texte}"
+        )

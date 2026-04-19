@@ -39,11 +39,19 @@ def test_click_tibillet_asset_card_draws_hull_polygon(page):
     monnaies_pill = page.get_by_role("button", name="Monnaies")
     monnaies_pill.click()
 
-    # Clic sur la premiere card asset contenant "TiBillet".
-    # / Click on the first asset card containing "TiBillet".
+    # Clic sur la card asset "TiBillet" federee (au moins 2 lieux) — sinon
+    # le hull ne se dessine pas. Le seed `demo_data_v2` cree 2 assets
+    # "Fédéré TiBillet" : un dans la fédération principale (5 lieux) et un
+    # "Local à 1 lieu" (non-federe). On cible le premier via le texte
+    # "Accepté par" (affiche uniquement si accepting_count > 1).
+    # / Click on federated "TiBillet" asset card (at least 2 places) — otherwise
+    # hull isn't drawn. Seed creates 2 "Fédéré TiBillet" assets: one in main
+    # federation (5 places) and one "Local à 1 lieu" (unfederated). Target the
+    # first via "Accepté par" text (shown only if accepting_count > 1).
     tibillet_card = (
         page.locator('.explorer-card[data-type="asset"]')
         .filter(has_text="TiBillet")
+        .filter(has_text="Accepté par")
         .first
     )
     expect(tibillet_card).to_be_visible(timeout=5_000)

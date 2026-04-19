@@ -82,8 +82,14 @@ def recharge_setup(django_shell):
         "carte.wallet_ephemere = wallet_client\n"
         "carte.user = None\n"
         "carte.save(update_fields=['wallet_ephemere', 'user'])\n"
-        "# Remettre le solde a 0 / Reset balance to 0\n"
-        "Token.objects.filter(wallet=wallet_client, asset=asset_tlf).delete()\n"
+        "# Supprimer TOUS les tokens du wallet CLIENT1 pour un etat initial\n"
+        "# propre — sinon la cascade de paiement NFC peut piocher dans FID\n"
+        "# (fidelite) ou TNF (cadeau) avant TLF, et l'assertion 'solde TLF\n"
+        "# debite' echoue. Cf. test_04_vente_nfc_apres_recharge.\n"
+        "# / Delete ALL tokens from CLIENT1 wallet for a clean initial state —\n"
+        "# otherwise NFC payment cascade may use FID or TNF before TLF and the\n"
+        "# 'TLF balance debited' assertion fails. See test_04.\n"
+        "Token.objects.filter(wallet=wallet_client).delete()\n"
         "print(f'SETUP_OK asset={asset_tlf.name} wallet={wallet_client.name}')"
     )
     assert "SETUP_OK" in result, f"recharge_setup failed: {result}"
@@ -267,10 +273,14 @@ class TestPOSRechargeCashless:
         # Ouvrir le PV Cashless / Open Cashless POS
         pos_page(page, "Cashless")
 
-        # Cliquer la tuile recharge → overlay multi-tarif
-        # / Click top-up tile → multi-rate overlay
+        # Cliquer la tuile recharge "Monnaie locale" (asset TLF actif du setup).
+        # Le PV Cashless peut afficher plusieurs produits de recharge (TLF/TNF/TIM),
+        # on cible explicitement celui lie a l'asset actif.
+        # / Click "Monnaie locale" top-up tile (TLF active asset from setup).
+        # Cashless POS may show several top-up products (TLF/TNF/TIM), we target
+        # the one linked to the active asset explicitly.
         recharge_tile = page.locator("#products .article-container").filter(
-            has_text="Recharge"
+            has_text="Monnaie locale"
         ).first
         expect(recharge_tile).to_be_visible(timeout=10_000)
         recharge_tile.click()
@@ -355,10 +365,12 @@ class TestPOSRechargeCashless:
         # Ouvrir PV Cashless / Open Cashless POS
         pos_page(page, "Cashless")
 
-        # Cliquer la tuile recharge → overlay → tarif 5 → fermer
-        # / Click top-up tile → overlay → rate 5 → close
+        # Cliquer la tuile recharge "Monnaie locale" (asset TLF actif).
+        # Cf. test_02 pour explication du ciblage explicite.
+        # / Click "Monnaie locale" top-up tile (active TLF asset). See test_02
+        # for explanation of the explicit targeting.
         recharge_tile = page.locator("#products .article-container").filter(
-            has_text="Recharge"
+            has_text="Monnaie locale"
         ).first
         expect(recharge_tile).to_be_visible(timeout=10_000)
         recharge_tile.click()
