@@ -7,7 +7,12 @@
 </style>
 
 
-<form id="reservation_form" hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}" class="d-flex flex-column h-100" data-testid="booking-form">
+<form id="reservation_form"
+      hx-post="{% if reservation_url %}{{ reservation_url }}{% else %}reservation/{% endif %}"
+      class="d-flex flex-column h-100"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active"
+      data-testid="booking-form">
     {# Body scrollable + footer sticky pour garantir que les 2 boutons restent visibles #}
     {# / Scrollable body + sticky footer so both buttons stay visible #}
     <div class="flex-grow-1 overflow-y-auto p-3">
@@ -480,9 +485,11 @@
         - "Ajouter au panier" : cumule avec d'autres events et adhesions.
         Pour un utilisateur non connecte, le second bouton ouvre l'offcanvas
         login puisque le panier exige l'auth.
-        / Two separate intents, both shown as real buttons with icons:
-        pay directly vs add to cart. Anonymous users get a login offcanvas
-        on the second button.
+        `data-loading-disable` sur les submit : anti double-clic via extension
+        HTMX loading-states (fix spinner merge main).
+        / Two separate intents, both shown as real buttons with icons.
+        `data-loading-disable` on submits: prevent double-click via HTMX
+        loading-states extension.
         {% endcomment %}
         {% if user.is_authenticated %}
             {# Utilisateur connecte : le "Payer maintenant" et "Ajouter au panier" sont accessibles. #}
@@ -494,6 +501,7 @@
                         hx-post="/panier/add/tickets_batch/"
                         hx-include="closest form"
                         hx-swap="none"
+                        data-loading-disable
                         data-testid="booking-add-to-cart"
                         aria-label="{% trans 'Add these tickets to your cart' %}">
                     <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
@@ -501,6 +509,7 @@
                 </button>
                 <button type="submit"
                         class="btn btn-outline-primary w-100"
+                        data-loading-disable
                         data-testid="booking-submit"
                         aria-label="{% trans 'Pay this event now' %}">
                     <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
@@ -509,6 +518,7 @@
             {% else %}
                 <button type="submit"
                         class="btn btn-primary w-100 mb-2"
+                        data-loading-disable
                         data-testid="booking-submit"
                         aria-label="{% trans 'Pay this event now' %}">
                     <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
@@ -519,6 +529,7 @@
                         hx-post="/panier/add/tickets_batch/"
                         hx-include="closest form"
                         hx-swap="none"
+                        data-loading-disable
                         data-testid="booking-add-to-cart"
                         aria-label="{% trans 'Add these tickets to your cart' %}">
                     <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
@@ -531,6 +542,7 @@
             {# / Anonymous: direct booking primary + real secondary button that opens login offcanvas. #}
             <button type="submit"
                     class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
                     data-testid="booking-submit">
                 <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
                 {% trans 'Send booking request' %}
@@ -553,11 +565,12 @@
 
 <script type="module">
     import * as BookingCalculator from '{% static "reunion/js/booking-calculator.mjs" %}'
-    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
 
-    // show spinner on form submission
+    // Spinner gere par l'extension HTMX loading-states
+    // (attributs data-loading-target / data-loading-class sur le <form>).
+    // / Spinner handled by HTMX loading-states extension
+    // (data-loading-target / data-loading-class attrs on the <form>).
     const form = document.getElementById('reservation_form')
-    Spinner.init(form)
     BookingCalculator.init()
 
     // Prevent HTMX request if no quantity selected (> 0 required)

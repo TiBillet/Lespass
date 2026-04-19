@@ -1,6 +1,9 @@
 {% load i18n static tibitags %}
 <form id="membership-form" hx-post="/memberships/" hx-target="#target_formbricks"
-      class="d-flex flex-column h-100" data-testid="membership-form">
+      class="d-flex flex-column h-100"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active"
+      data-testid="membership-form">
     {# Body scrollable + footer sticky pour garantir que les 2 boutons restent visibles #}
     {# / Scrollable body + sticky footer so both buttons stay visible #}
     <div class="flex-grow-1 overflow-y-auto p-3">
@@ -13,14 +16,7 @@
             <p>{{ product.long_description | safe }}</p>
         {% endif %}
 
-        <div id="target_formbricks">
-            <script type="module">
-                import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
-
-                // show spinner on form submission
-                Spinner.init(document.getElementById('membership-form'))
-            </script>
-        </div>
+        <div id="target_formbricks"></div>
         <input type="hidden" name="product" value="{{ product.uuid }}">
 
         <!-- prix -->
@@ -54,7 +50,7 @@
                                 <span class="badge rounded-pill text-bg-info">{{ price.iteration }} {% trans "iteration(s)" %}</span>
                             {% endif %}
                         </div>
-                        {% if price.max_per_user_reached %}
+                        {% if price|in_list:price_max_per_user_reached %}
                             <div class="alert alert-danger" role="alert">
                                 {% trans "You are already subscribed to this rate." %}
                             </div>
@@ -107,7 +103,7 @@
                                type="radio" name="price"
                                value="{{ price.uuid }}"
                                required
-                               {% if price.out_of_stock %}disabled{% endif %}
+                               {% if price.out_of_stock or price|in_list:price_max_per_user_reached %}disabled{% endif %}
                                {% if published_prices_count == 1 %}checked{% endif %}
                                {% if price.free_price %}data-target="custom-amount-container-{{ price.uuid }}"{% endif %}
                                data-testid="membership-price-{{ price.uuid }}">
@@ -153,6 +149,11 @@
                                 </span>
                             {% endif %}
                             {% if price.out_of_stock %}({% trans "Out of stock." %}){% endif %}
+                            {% if price|in_list:price_max_per_user_reached %}
+                                <div class="alert alert-danger mt-1" role="alert">
+                                    {% trans "You have reached the maximum number of subscriptions possible for this rate." %}
+                                </div>
+                            {% endif %}
                         </label>
                     </div>
                     {% if price.free_price %}
@@ -614,8 +615,10 @@
         {% endif %}
     </div>
 
-    {# Footer sticky avec les boutons d'action — border-top pour separer visuellement #}
-    {# / Sticky footer with action buttons — border-top for visual separation #}
+    {# Footer sticky avec les boutons d'action — border-top pour separer visuellement. #}
+    {# data-loading-disable (sur submit) : anti double-clic via extension HTMX loading-states. #}
+    {# / Sticky footer with action buttons — border-top for visual separation. #}
+    {# data-loading-disable on submits: prevent double-click via HTMX loading-states. #}
     <div class="p-3 border-top bg-body flex-shrink-0">
         {% comment %}
         BOUTONS D'ACTION / ACTION BUTTONS
@@ -637,6 +640,7 @@
                         hx-post="/panier/add/membership/"
                         hx-include="closest form"
                         hx-swap="none"
+                        data-loading-disable
                         data-testid="membership-add-to-cart"
                         aria-label="{% translate 'Add this membership to your cart' %}">
                     <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
@@ -644,6 +648,7 @@
                 </button>
                 <button id="membership-submit" type="submit"
                         class="btn btn-outline-primary w-100"
+                        data-loading-disable
                         data-testid="membership-submit"
                         aria-label="{% translate 'Pay this membership now' %}">
                     <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
@@ -653,6 +658,7 @@
             {% else %}
                 <button id="membership-submit" type="submit"
                         class="btn btn-primary w-100 mb-2"
+                        data-loading-disable
                         data-testid="membership-submit"
                         aria-label="{% translate 'Pay this membership now' %}">
                     <i class="bi bi-lightning-fill me-2" aria-hidden="true"></i>
@@ -664,6 +670,7 @@
                         hx-post="/panier/add/membership/"
                         hx-include="closest form"
                         hx-swap="none"
+                        data-loading-disable
                         data-testid="membership-add-to-cart"
                         aria-label="{% translate 'Add this membership to your cart' %}">
                     <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>
@@ -673,6 +680,7 @@
         {% else %}
             <button id="membership-submit" type="submit"
                     class="btn btn-primary w-100 mb-2"
+                    data-loading-disable
                     data-testid="membership-submit">
                 <i class="bi bi-send-fill me-2" aria-hidden="true"></i>
                 {% if product.validate_button_text %}{{ product.validate_button_text }}{% else %}

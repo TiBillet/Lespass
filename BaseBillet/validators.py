@@ -698,7 +698,7 @@ class MembershipValidator(serializers.Serializer):
     price = serializers.PrimaryKeyRelatedField(
         queryset=Price.objects.filter(product__categorie_article=Product.ADHESION)
     )
-    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True)
+    custom_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, allow_null=True, min_value=Decimal('0.00'))
     firstname = serializers.CharField(max_length=200)
     lastname = serializers.CharField(max_length=200)
     email = serializers.EmailField()
@@ -804,6 +804,10 @@ class MembershipValidator(serializers.Serializer):
         # If it's an open price, retrieve the custom value
         if self.price.free_price:
             amount = attrs.get('custom_amount') or self.price.prix or Decimal('0.00')
+
+            # Validation du montant : jamais négatif / Amount must never be negative
+            if amount < Decimal('0.00'):
+                raise serializers.ValidationError(_('The amount must be a positive number.'))
 
             # Validation du montant minimum / Minimum amount validation
             if self.price.prix and amount < self.price.prix:

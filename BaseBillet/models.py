@@ -1240,11 +1240,15 @@ class Product(models.Model):
 
         if self.categorie_article == self.ADHESION:
             # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            # Exclut les adhesions annulees (CANCELED, ADMIN_CANCELED) du count.
+            # / Excludes canceled memberships from the count.
             return (
                 user.memberships.filter(
                     deadline__gte=timezone.now(),
                     price__product__pk=self.pk,
-                ).count()
+                )
+                .exclude(status__in=['C', 'AC'])
+                .count()
                 >= self.max_per_user
             )
 
@@ -1794,11 +1798,17 @@ class Price(models.Model):
 
         if self.product.categorie_article == self.product.ADHESION:
             # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            # Filtre par Price (self.pk = uuid du Price, pas du Product).
+            # Exclut les adhesions annulees du count.
+            # / Filter by Price (self.pk = Price uuid, not Product).
+            # Excludes canceled memberships from the count.
             return (
                 user.memberships.filter(
                     deadline__gte=timezone.now(),
-                    price__product__pk=self.pk,
-                ).count()
+                    price__pk=self.pk,
+                )
+                .exclude(status__in=['C', 'AC'])
+                .count()
                 >= self.max_per_user
             )
 
