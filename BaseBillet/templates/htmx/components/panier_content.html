@@ -1,0 +1,180 @@
+{% load i18n %}
+{% comment %}
+Partial : contenu de la page panier (sans layout base).
+Utilise en swap HTMX apres les actions de modification du panier
+(clear, remove, update_quantity, set_promo_code, clear_promo_code).
+
+Les forms de modification visent #panier-content en hx-swap="outerHTML"
+pour se remplacer par la nouvelle version du panier en une seule requete.
+
+/ Partial: cart page content (without base layout).
+Used as HTMX swap target after cart-mutating actions.
+Mutation forms target #panier-content with hx-swap="outerHTML" to
+replace themselves with the updated cart in a single request.
+{% endcomment %}
+
+<div id="panier-content" class="col-12 col-lg-8 mx-auto">
+
+    {# --- Entete : icone + titre + compteur --- #}
+    {# --- Header: icon + title + counter --- #}
+    <div class="d-flex align-items-center mb-4" role="banner">
+        <i class="bi bi-bag fs-1 me-3 text-primary" aria-hidden="true"></i>
+        <h1 class="mb-0">{% trans "Your cart" %}</h1>
+        {% if not panier.is_empty %}
+            <span class="badge bg-primary ms-3 fs-6">{{ panier.count }}</span>
+        {% endif %}
+    </div>
+
+    {% if panier.is_empty %}
+        {# --- Etat vide : SVG + copy chaleureux + 2 CTA --- #}
+        {# --- Empty state: SVG + warm copy + 2 CTAs --- #}
+        <div class="card shadow-sm border-0">
+            <div class="card-body text-center py-5 px-4">
+                {# SVG panier vide — sobre, coherent avec l'icone navbar bi-bag #}
+                {# Empty cart SVG — sober, matches navbar bi-bag icon #}
+                <svg width="120" height="120" viewBox="0 0 120 120"
+                     class="mb-4 text-muted opacity-50" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M25 45 L35 95 L85 95 L95 45 Z" stroke-linejoin="round"/>
+                    <path d="M40 45 L40 35 Q40 20 60 20 Q80 20 80 35 L80 45" stroke-linecap="round"/>
+                    {# Quelques points qui evoquent des items qui flottent #}
+                    {# A few floating dots evoking items #}
+                    <circle cx="48" cy="65" r="2" fill="currentColor" opacity="0.4" stroke="none"/>
+                    <circle cx="72" cy="75" r="2" fill="currentColor" opacity="0.4" stroke="none"/>
+                    <circle cx="60" cy="60" r="1.5" fill="currentColor" opacity="0.3" stroke="none"/>
+                </svg>
+
+                <h2 class="h4 mb-2">{% trans "Your cart is waiting" %}</h2>
+                <p class="text-muted mb-4">
+                    {% trans "Browse events or memberships to fill it up." %}
+                </p>
+
+                <div class="d-flex gap-2 justify-content-center flex-wrap">
+                    {# Liens classiques (full navigation) : simple et fiable. #}
+                    {# / Plain links (full navigation): simple and reliable. #}
+                    <a href="/event/" class="btn btn-primary" data-testid="panier-empty-events">
+                        <i class="bi bi-calendar-event me-2" aria-hidden="true"></i>
+                        {% trans "Browse events" %}
+                    </a>
+                    <a href="/memberships/" class="btn btn-outline-primary" data-testid="panier-empty-memberships">
+                        <i class="bi bi-person-badge me-2" aria-hidden="true"></i>
+                        {% trans "Memberships" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        {# --- Liste des items --- #}
+        {# --- Items list --- #}
+        <div class="card shadow-sm mb-4" role="region" aria-label="{% trans 'Cart items' %}">
+            <ul class="list-group list-group-flush" aria-live="polite">
+                {% for detail in panier.items_with_details %}
+                    {% include "htmx/components/panier_item.html" with detail=detail forloop=forloop %}
+                {% endfor %}
+            </ul>
+        </div>
+
+        {# --- Code promo --- #}
+        {# --- Promotional code --- #}
+        <div class="card shadow-sm mb-4" role="region" aria-label="{% trans 'Promotional code' %}">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-tag me-2" aria-hidden="true"></i>
+                    {% trans "Promotional code" %}
+                </h5>
+                {% if panier.promo_code_name %}
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="badge bg-success fs-6">
+                            <i class="bi bi-check2-circle me-1"></i>
+                            {{ panier.promo_code_name }}
+                        </span>
+                        <form method="post" action="{% url 'panier-clear-promo-code' %}"
+                              hx-post="{% url 'panier-clear-promo-code' %}"
+                              hx-target="#panier-content"
+                              hx-swap="outerHTML">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-link text-danger"
+                                    data-testid="panier-remove-promo">
+                                {% trans "Remove" %}
+                            </button>
+                        </form>
+                    </div>
+                {% else %}
+                    <form method="post" action="{% url 'panier-set-promo-code' %}"
+                          hx-post="{% url 'panier-set-promo-code' %}"
+                          hx-target="#panier-content"
+                          hx-swap="outerHTML"
+                          class="d-flex gap-2">
+                        {% csrf_token %}
+                        <input type="text" name="code_name" class="form-control"
+                               placeholder="{% trans 'Enter code' %}" required
+                               data-testid="panier-promo-input">
+                        <button type="submit" class="btn btn-outline-primary"
+                                data-testid="panier-apply-promo">
+                            {% trans "Apply" %}
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+
+        {# --- Total + checkout --- #}
+        {# --- Total + checkout --- #}
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <span class="h5 mb-0">{% trans "Total" %}</span>
+                    <span class="h4 mb-0 text-primary fw-bold">{{ panier.total_ttc|floatformat:2 }} €</span>
+                </div>
+
+                <form method="post" action="{% url 'panier-checkout' %}"
+                      hx-post="{% url 'panier-checkout' %}"
+                      class="vstack gap-3">
+                    {% csrf_token %}
+                    {% if user.is_authenticated %}
+                        {# Prenom/nom sont collectes via les formulaires adhesion/reservation #}
+                        {# ou via Stripe Checkout. Pas de verification profil ici. #}
+                        {# / First/last name collected via membership/booking forms or Stripe. #}
+                        <p class="text-muted small mb-0">
+                            <i class="bi bi-envelope me-1" aria-hidden="true"></i>
+                            {{ user.email }}
+                        </p>
+                        <button type="submit" class="btn btn-primary btn-lg" data-testid="panier-checkout">
+                            <i class="bi bi-credit-card me-2" aria-hidden="true"></i>
+                            {% trans "Proceed to payment" %}
+                        </button>
+                    {% else %}
+                        <div class="alert alert-warning mb-0" role="alert">
+                            {% trans "Please log in to proceed to payment." %}
+                            <a href="#" data-bs-toggle="offcanvas" data-bs-target="#loginPanel"
+                               class="alert-link">{% trans "Log in" %}</a>
+                        </div>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        {# --- Bouton vider le panier --- #}
+        {# --- Empty cart button --- #}
+        <div class="text-center mt-3">
+            <form method="post" action="{% url 'panier-clear' %}"
+                  hx-post="{% url 'panier-clear' %}"
+                  hx-confirm="{% trans 'Empty the cart?' %}"
+                  hx-target="#panier-content"
+                  hx-swap="outerHTML"
+                  class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-link text-muted"
+                        data-testid="panier-clear">
+                    <i class="bi bi-x-circle me-1"></i>
+                    {% trans "Empty cart" %}
+                </button>
+            </form>
+        </div>
+    {% endif %}
+</div>
+
+{# MAJ badge navbar via OOB — le partial panier_content est rendu a la fois #}
+{# au chargement initial (dans panier.html) ET en reponse HTMX (swap). #}
+{# / Navbar badge OOB refresh — this partial is rendered both on initial #}
+{# page load (inside panier.html) AND as HTMX response (swap). #}
+{% include 'htmx/components/panier_badge.html' %}

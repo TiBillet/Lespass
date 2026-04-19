@@ -371,10 +371,22 @@ class PanierSession:
         return item
 
     def add_membership(self, price_uuid,
-                       custom_amount=None, options=None, custom_form=None):
+                       custom_amount=None, options=None, custom_form=None,
+                       firstname=None, lastname=None):
         """
         Ajoute un item adhésion au panier après validation.
         / Adds a membership item to the cart after validation.
+
+        `firstname` / `lastname` sont collectés par le formulaire d'adhésion
+        (`membership/form.html`, champs `name="firstname"` et `name="lastname"`).
+        Ils sont stockés sur l'item et priorisés dans `CommandeService.materialiser`
+        sur `user.first_name` / `user.last_name` — ainsi un utilisateur sans profil
+        renseigné obtient quand même une Membership/Commande avec les vrais noms.
+
+        / `firstname` / `lastname` collected by the membership form
+        (`name="firstname"` / `name="lastname"` fields). Stored on the item and
+        prioritized in `CommandeService.materialiser` over `user.first_name` /
+        `user.last_name` — users without a filled profile still get proper names.
 
         Raises:
             InvalidItemError: si price invalide, categorie non ADHESION,
@@ -434,12 +446,21 @@ class PanierSession:
             if amount_dec > Decimal("999999.99"):
                 raise InvalidItemError(_("The amount is too high."))
 
+        # Nettoyage des noms : trim, fallback a chaine vide si None.
+        # Stockes sur l'item pour etre prioritaires a la materialisation.
+        # / Clean names: trim, fallback to empty string if None.
+        # Stored on the item to override user.first_name at materialization.
+        clean_firstname = (firstname or '').strip()
+        clean_lastname = (lastname or '').strip()
+
         item = {
             'type': 'membership',
             'price_uuid': str(price_uuid),
             'custom_amount': str(custom_amount) if custom_amount is not None else None,
             'options': [str(o) for o in (options or [])],
             'custom_form': dict(custom_form or {}),
+            'firstname': clean_firstname,
+            'lastname': clean_lastname,
         }
         self._data['items'].append(item)
         self._save()

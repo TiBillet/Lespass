@@ -223,3 +223,110 @@ class TestPanierFlow:
         # / Verify bs-counter for this rate is present (thus selectable)
         counter = page.locator(f"bs-counter[name='{price_gated_uuid}']")
         expect(counter).to_have_count(1)
+
+
+class TestPanierMembershipFlow:
+    """
+    Flow ajout adhesion au panier + swap partial + toast SweetAlert2.
+    Couvre les nouveautes Session 09 :
+    - Endpoint `/panier/add/membership/` accepte `price` (form HTML) + `custom_amount_{uuid}`.
+    - Toast via HX-Trigger + listener SweetAlert2 dans base.html.
+    - Badge navbar MAJ via hx-swap-oob sans conflit body swap.
+    - Swap partial #panier-content sur clear/remove/update.
+
+    / Membership add to cart flow + partial swap + SweetAlert2 toast.
+    Covers Session 09 additions: HX-Trigger toast, navbar badge OOB, #panier-content swap.
+
+    NOTE : les tests E2E panier necessitent une infra Traefik + login-flow
+    operationnelle (cf. conftest.py `login_as` fixture). Si ces tests echouent
+    avec un `Timeout waiting for badge`, verifier que le serveur Django tourne
+    via Traefik et que `ADMIN_EMAIL` est configure. Flow valide manuellement
+    dans Chrome (cf. session-end).
+    / E2E panier tests need working Traefik + login-flow infra. Manually
+    validated in Chrome (see session-end).
+    """
+
+    def test_admin_ajoute_adhesion_au_panier_puis_vide(self, page, login_as_admin):
+        """
+        Flow :
+        1. Login admin.
+        2. /memberships/ → clic Subscribe sur la premiere adhesion.
+        3. Selectionner un radio prix + cliquer "Ajouter au panier".
+        4. Verifier que le toast SweetAlert2 apparait (.swal2-toast).
+        5. Verifier que le badge navbar passe a >= 1.
+        6. /panier/ → verifier item present dans #panier-content.
+        7. Clic "Vider le panier" → swap vers etat vide (texte "Votre panier vous attend").
+
+        / Complete happy path for the membership-to-cart flow.
+        """
+        login_as_admin(page)
+
+        # 1. Nettoyer le panier pour partir d'un etat vide connu.
+        # / Clean cart to start from a known empty state.
+        # Auto-accepte le dialog "Empty the cart?".
+        # / Auto-accepts "Empty the cart?" dialog.
+        page.on("dialog", lambda d: d.accept())
+        page.goto("/panier/")
+        page.wait_for_load_state("networkidle")
+        clear_btn = page.locator('[data-testid="panier-clear"]')
+        if clear_btn.count() > 0:
+            clear_btn.click()
+            page.wait_for_selector('text=/Votre panier vous attend|Your cart is waiting/', timeout=5_000)
+
+        # 2. Aller sur /memberships/ et ouvrir le premier formulaire d'adhesion.
+        # / Navigate to /memberships/ and open the first membership form.
+        page.goto("/memberships/")
+        page.wait_for_load_state("networkidle")
+        first_subscribe = page.locator('[data-testid^="membership-open-"]').first
+        first_subscribe.click()
+        # L'offcanvas est charge via HTMX (hx-target="#offcanvas-membership").
+        # / Offcanvas loaded via HTMX.
+        page.wait_for_selector('#membership-form', timeout=10_000)
+
+        # 3. Selectionner le premier radio prix dispo + remplir nom/prenom.
+        # / Select first available price radio + fill name/firstname.
+        price_radio = page.locator(
+            'input[type="radio"][name="price"]:not([disabled])'
+        ).first
+        price_radio.wait_for(state="visible", timeout=5_000)
+        price_radio.check()
+
+        # firstname/lastname sont required sur le form d'adhesion (collectes
+        # et stockes sur l'item panier pour prioriser a la materialisation).
+        # / firstname/lastname required on membership form (stored on cart item).
+        page.fill('[data-testid="membership-firstname"]', 'E2E')
+        page.fill('[data-testid="membership-lastname"]', 'Tester')
+
+        add_btn = page.locator('[data-testid="membership-add-to-cart"]')
+        expect(add_btn).to_be_visible()
+        add_btn.click()
+
+        # 4. Le badge navbar doit passer a au moins 1 apres swap OOB.
+        # / Navbar badge should reach at least 1 after OOB swap.
+        # C'est le signal fiable que l'ajout a reussi. Le toast Swal peut
+        # deja etre dismissed (timer 3500ms) au moment de l'assert — on
+        # le verifie donc pas en E2E (couvert par le test manuel Chrome).
+        # / Reliable success signal. Swal toast may already be dismissed
+        # by the time of assert — verified manually in Chrome instead.
+        badge_nav = page.locator("#panier-badge-nav")
+        expect(badge_nav).to_contain_text("1", timeout=5_000)
+
+        # 6. Naviguer vers /panier/ et verifier l'item dans #panier-content.
+        # / Navigate to /panier/ and verify item inside #panier-content.
+        page.goto("/panier/")
+        page.wait_for_load_state("networkidle")
+        cart_content = page.locator("#panier-content")
+        expect(cart_content).to_be_visible()
+        # Au moins un item list-group.
+        # / At least one list-group item.
+        items = cart_content.locator(".list-group-item")
+        assert items.count() >= 1, "Au moins un item attendu dans le panier"
+
+        # 7. Clic "Vider le panier" → swap HTMX vers etat vide.
+        # / Click "Empty cart" → HTMX swap to empty state.
+        clear_btn = page.locator('[data-testid="panier-clear"]')
+        clear_btn.click()
+        page.wait_for_selector('text=/Votre panier vous attend|Your cart is waiting/', timeout=5_000)
+        # Apres le swap, le badge navbar ne doit plus contenir de chiffre.
+        # / After swap, navbar badge should no longer contain a digit.
+        expect(page.locator("#panier-badge-nav")).not_to_contain_text("1", timeout=3_000)

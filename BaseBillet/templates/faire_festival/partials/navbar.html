@@ -110,7 +110,11 @@
                        title="{% translate 'Your cart' %}"
                        aria-label="{% blocktranslate count n=panier.count %}Cart ({{ n }} item){% plural %}Cart ({{ n }} items){% endblocktranslate %}">
                         <i class="bi bi-bag" aria-hidden="true"></i>
-                        <span id="panier-badge-nav" hx-swap-oob="true">
+                        {# Badge compteur — rendu direct en Django (pas de OOB ici). #}
+                        {# Les MAJ via HTMX utilisent le meme id, rendu par panier_badge.html avec hx-swap-oob. #}
+                        {# / Counter badge — direct Django render (no OOB here). #}
+                        {# HTMX updates target the same id, rendered by panier_badge.html with hx-swap-oob. #}
+                        <span id="panier-badge-nav">
                             {% if panier.count > 0 %}
                                 <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill fond-bleu text-white">
                                     {{ panier.count }}

@@ -1,20 +1,26 @@
 {% load i18n %}
-{# Badges compteur du panier — rendus partout (page panier + navbar). #}
-{# Cart counter badges — rendered everywhere (cart page + navbar). #}
-
-{# Badge pour la page panier / Cart page badge #}
-<span id="panier-badge" hx-swap-oob="true">
-    {% if panier.count > 0 %}
-        <span class="badge bg-primary">{{ panier.count }}</span>
-    {% endif %}
-</span>
-
-{# Badge pour la navbar / Navbar badge #}
+{# Badge compteur de la navbar — mis a jour via hx-swap-oob apres les actions panier. #}
+{# Le badge visible sur la page panier elle-meme est rendu directement dans #}
+{# panier_content.html (pas d'OOB necessaire car on swap le partial entier). #}
+{# / Navbar cart counter — updated via hx-swap-oob after cart actions. #}
+{# The badge visible on the cart page itself is rendered directly in #}
+{# panier_content.html (no OOB needed since we swap the whole partial). #}
 <span id="panier-badge-nav" hx-swap-oob="true">
     {% if panier.count > 0 %}
-        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
-            {{ panier.count }}
-            <span class="visually-hidden">{% trans "items" %}</span>
-        </span>
+        {% if user.is_authenticated %}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary">
+                {{ panier.count }}
+                <span class="visually-hidden">{% trans "items" %}</span>
+            </span>
+        {% else %}
+            {# Anonyme avec items en session : badge grise + cadenas #}
+            {# / Anonymous with session items: greyed badge + lock #}
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-secondary opacity-75"
+                  title="{% trans 'Log in to use your cart' %}">
+                <i class="bi bi-lock-fill" style="font-size: 0.6em;" aria-hidden="true"></i>
+                {{ panier.count }}
+                <span class="visually-hidden">{% trans "items (login required)" %}</span>
+            </span>
+        {% endif %}
     {% endif %}
 </span>

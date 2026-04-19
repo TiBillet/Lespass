@@ -65,14 +65,36 @@ class CommandeService:
         # / Phase 0: full re-validation of items against DB.
         panier.revalidate_all()
 
+        # Resolution des prenom/nom finaux pour la Commande pivot :
+        # - priorite aux valeurs stockees sur le premier item membership qui en a
+        #   (collectees par membership/form.html),
+        # - sinon fallback sur les args de la fonction (user.first_name).
+        # Ainsi un utilisateur sans profil renseigne obtient une Commande
+        # avec de vrais prenom/nom des que le panier contient une adhesion.
+        # / Resolve final first/last name for the Commande pivot:
+        # - prioritize the first membership item with names (from the form),
+        # - fallback to function args (user.first_name) otherwise.
+        # Ensures users without a filled profile still get proper names.
+        buyer_firstname = first_name
+        buyer_lastname = last_name
+        for item in panier.items():
+            if item.get('type') != 'membership':
+                continue
+            item_fn = (item.get('firstname') or '').strip()
+            item_ln = (item.get('lastname') or '').strip()
+            if item_fn and item_ln:
+                buyer_firstname = item_fn
+                buyer_lastname = item_ln
+                break
+
         # -- Création de la Commande pivot (status=PENDING) --
         # -- Create the pivot Commande (status=PENDING) --
         promo_code = panier.promo_code()
         commande = Commande.objects.create(
             user=user,
             email_acheteur=email,
-            first_name=first_name,
-            last_name=last_name,
+            first_name=buyer_firstname,
+            last_name=buyer_lastname,
             status=Commande.PENDING,
             promo_code=promo_code,
         )
@@ -87,14 +109,25 @@ class CommandeService:
                 continue
             price = Price.objects.get(uuid=item['price_uuid'])
             amount_dec = CommandeService._resolve_amount(price, item)
+
+            # Prenom/nom : priorite aux valeurs de l'item (collectees par
+            # membership/form.html), puis fallback sur les args de la fonction
+            # (issus de user.first_name / user.last_name).
+            # / First/last name: prioritize item values (collected by the
+            # membership form), fallback to function args (user.first_name).
+            item_firstname = (item.get('firstname') or '').strip()
+            item_lastname = (item.get('lastname') or '').strip()
+            resolved_firstname = item_firstname or first_name
+            resolved_lastname = item_lastname or last_name
+
             membership = Membership.objects.create(
                 user=user,
                 price=price,
                 commande=commande,
                 contribution_value=amount_dec,
                 status=Membership.WAITING_PAYMENT,
-                first_name=first_name,
-                last_name=last_name,
+                first_name=resolved_firstname,
+                last_name=resolved_lastname,
                 newsletter=False,
                 custom_form=item.get('custom_form') or None,
             )

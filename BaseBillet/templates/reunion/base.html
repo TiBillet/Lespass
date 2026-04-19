@@ -106,5 +106,9 @@
 
 {% block scripts %}{% endblock scripts %}
 
+{# Scripts globaux panier : toast + catch 403. Partage avec faire_festival. #}
+{# / Global cart scripts: toast + 403 catch. Shared with faire_festival. #}
+{% include "htmx/components/panier_scripts.html" %}
+
 </body>
 </html>

@@ -3819,27 +3819,69 @@ class PanierMVT(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
 
     def get_permissions(self):
-        # Panier = feature auth-only (simplifie l'UX, derive buyer de request.user).
-        # Le flow direct (event/membership sans panier) reste anonyme, ailleurs.
-        # / Cart = auth-only feature (simpler UX, buyer derived from request.user).
-        # Direct flow (event/membership without cart) stays anonymous elsewhere.
+        # Lectures du panier (list + badge) : AllowAny — session-scoped, aucun data leak.
+        # Le template panier gère l'état auth (anonyme → message "log in to checkout").
+        # Écritures (add, remove, checkout, promo, clear) : IsAuthenticated — force le login.
+        # / Reads: AllowAny (session-scoped, no data leak). Template handles auth state.
+        # Writes: IsAuthenticated (force login via HTMX 403 catch + offcanvas).
+        if self.action in ['list', 'badge']:
+            return [permissions.AllowAny()]
         return [permissions.IsAuthenticated()]
 
     # --- Helpers internes ---
     # --- Internal helpers ---
 
-    def _render_badge_and_toast(self, request, message=None, level='success'):
+    def _render_badge_and_toast(self, request, message=None, level='success', swap_cart_content=False):
         """
-        Rend les partials HTMX pour refresh du badge + toast de feedback.
-        hx-swap-oob sur le badge → auto-update dans le header sans refresh.
-        / Render HTMX partials for badge refresh + feedback toast.
-        hx-swap-oob on the badge → auto-update in header without refresh.
+        Rend les partials HTMX pour refresh du badge + envoie un toast via HX-Trigger.
+        / Render HTMX partials for badge refresh + send a toast via HX-Trigger.
+
+        LOCALISATION : BaseBillet/views.py (dans PanierMVT).
+
+        FLUX :
+        1. Le badge panier est rendu comme reponse HTMX (hx-swap-oob dans partial).
+        2. Le toast est signale au client via le header HX-Trigger avec un event
+           "panierToast". Un listener global dans base.html (reunion et
+           faire_festival) capte l'event et affiche un toast SweetAlert2.
+        3. Si swap_cart_content=True, le body de la reponse contient le partial
+           panier_content.html (le contenu de la page panier). Le bouton/form
+           doit cibler #panier-content via hx-target/hx-swap="outerHTML".
+           Sinon, le body est juste le partial badge (rien a swapper).
+
+        / FLOW:
+        1. Cart badge rendered as HTMX response (hx-swap-oob in partial).
+        2. Toast signaled via HX-Trigger header with event "panierToast".
+        3. If swap_cart_content=True, body contains the cart content partial.
+
+        :param request: Objet Request DRF.
+        :param message: Texte du toast (traduit cote serveur). Si None, pas de toast.
+        :param level: 'success' | 'error' | 'warning' | 'info'. Mappe sur icon Swal.
+        :param swap_cart_content: Si True, rend panier_content.html comme
+            corps de reponse (pour un swap HTMX direct du contenu panier).
+        :return: HttpResponse avec le partial + headers HX-Trigger.
         """
-        context = {
-            'toast_message': message,
-            'toast_level': level,
-        }
-        return render(request, 'htmx/components/panier_toast.html', context=context)
+        if swap_cart_content:
+            # Rend le contenu panier (items + code promo + total + checkout).
+            # Le partial inclut panier_badge.html en fin (pour l'OOB badge).
+            # / Renders the cart content (items + promo + total + checkout).
+            # The partial includes panier_badge.html at the end (for OOB badge).
+            template_context = get_context(request)
+            response = render(request, 'htmx/components/panier_content.html',
+                              context=template_context)
+        else:
+            response = render(request, 'htmx/components/panier_toast.html')
+
+        if message:
+            # str() force l'evaluation d'un lazy _() en texte final,
+            # sinon json.dumps leve un TypeError.
+            # / str() forces evaluation of a lazy _() to final text.
+            response['HX-Trigger'] = json.dumps({
+                'panierToast': {
+                    'level': level,
+                    'text': str(message),
+                }
+            })
+        return response
 
     # --- GET /panier/ ---
     def list(self, request):
@@ -3850,13 +3892,46 @@ class PanierMVT(viewsets.ViewSet):
     # --- POST /panier/add/membership/ ---
     @action(detail=False, methods=['POST'], url_path='add/membership')
     def add_membership(self, request):
-        """Ajoute une adhesion au panier."""
+        """
+        Ajoute une adhesion au panier.
+
+        Le formulaire d'adhesion (`membership/form.html`) poste :
+        - `price` (nom du radio/hidden) avec l'uuid du tarif choisi
+        - `custom_amount_{uuid}` pour les prix libres (un champ par prix)
+        - `options` (multi-valeur)
+        - `form__*` pour les champs custom
+
+        On accepte aussi `price_uuid` et `custom_amount` pour un appel direct
+        (tests, API). On recupere automatiquement le bon custom_amount en
+        cherchant la cle `custom_amount_{price_uuid}`.
+
+        / Adds a membership to the cart.
+        Accepts the membership form fields (`price`, `custom_amount_{uuid}`)
+        and also direct `price_uuid`/`custom_amount` (for tests/API).
+        """
         from BaseBillet.services_panier import PanierSession, InvalidItemError
 
-        price_uuid = request.POST.get('price_uuid')
-        custom_amount = request.POST.get('custom_amount') or None
+        # Support des deux conventions de nommage (form HTML + appel direct).
+        # / Support both naming conventions (HTML form + direct call).
+        price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
+
+        # Cherche d'abord custom_amount direct, puis custom_amount_{uuid}.
+        # / Look for direct custom_amount first, then custom_amount_{uuid}.
+        custom_amount = request.POST.get('custom_amount')
+        if not custom_amount and price_uuid:
+            custom_amount = request.POST.get(f'custom_amount_{price_uuid}')
+        custom_amount = custom_amount or None
+
         options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
         custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        # Le formulaire d'adhesion collecte les noms (cf. membership/form.html).
+        # On les passe a PanierSession pour qu'ils soient stockes sur l'item et
+        # prioritaires sur user.first_name/last_name a la materialisation.
+        # / The membership form collects names. We pass them to PanierSession
+        # so they're stored on the item and prioritized at materialization.
+        firstname = request.POST.get('firstname') or None
+        lastname = request.POST.get('lastname') or None
 
         panier = PanierSession(request)
         try:
@@ -3865,6 +3940,8 @@ class PanierMVT(viewsets.ViewSet):
                 custom_amount=custom_amount,
                 options=options,
                 custom_form=custom_form,
+                firstname=firstname,
+                lastname=lastname,
             )
         except InvalidItemError as exc:
             return self._render_badge_and_toast(request, message=str(exc), level='error')
@@ -3889,7 +3966,9 @@ class PanierMVT(viewsets.ViewSet):
             )
         panier = PanierSession(request)
         panier.remove_item(index)
-        return self._render_badge_and_toast(request, message=_("Item removed."))
+        return self._render_badge_and_toast(
+            request, message=_("Item removed."), swap_cart_content=True,
+        )
 
     # --- POST /panier/update_quantity/<int:pk>/ ---
     @action(detail=True, methods=['POST'], url_path='update_quantity')
@@ -3906,7 +3985,9 @@ class PanierMVT(viewsets.ViewSet):
             )
         panier = PanierSession(request)
         panier.update_quantity(index, qty)
-        return self._render_badge_and_toast(request, message=_("Cart updated."))
+        return self._render_badge_and_toast(
+            request, message=_("Cart updated."), swap_cart_content=True,
+        )
 
     # --- POST /panier/promo_code/ ---
     @action(detail=False, methods=['POST'], url_path='promo_code')
@@ -3923,8 +4004,12 @@ class PanierMVT(viewsets.ViewSet):
         try:
             panier.set_promo_code(code_name)
         except InvalidItemError as exc:
-            return self._render_badge_and_toast(request, message=str(exc), level='error')
-        return self._render_badge_and_toast(request, message=_("Promo code applied."))
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error', swap_cart_content=True,
+            )
+        return self._render_badge_and_toast(
+            request, message=_("Promo code applied."), swap_cart_content=True,
+        )
 
     # --- POST /panier/promo_code/clear/ ---
     @action(detail=False, methods=['POST'], url_path='promo_code/clear')
@@ -3933,7 +4018,9 @@ class PanierMVT(viewsets.ViewSet):
         from BaseBillet.services_panier import PanierSession
         panier = PanierSession(request)
         panier.clear_promo_code()
-        return self._render_badge_and_toast(request, message=_("Promo code removed."))
+        return self._render_badge_and_toast(
+            request, message=_("Promo code removed."), swap_cart_content=True,
+        )
 
     # --- POST /panier/clear/ ---
     @action(detail=False, methods=['POST'], url_path='clear')
@@ -3942,7 +4029,9 @@ class PanierMVT(viewsets.ViewSet):
         from BaseBillet.services_panier import PanierSession
         panier = PanierSession(request)
         panier.clear()
-        return self._render_badge_and_toast(request, message=_("Cart cleared."))
+        return self._render_badge_and_toast(
+            request, message=_("Cart cleared."), swap_cart_content=True,
+        )
 
     # --- POST /panier/checkout/ ---
     @action(detail=False, methods=['POST'], url_path='checkout')
@@ -3957,21 +4046,19 @@ class PanierMVT(viewsets.ViewSet):
         from BaseBillet.services_panier import PanierSession
 
         user = request.user
-        # Si infos user incomplètes (ancien compte), renvoyer vers my_account.
-        # / If user info incomplete (old account), redirect to my_account.
-        if not (user.first_name and user.last_name):
-            messages.warning(
-                request,
-                _("Please complete your profile (first name, last name) before checkout."),
-            )
-            return HttpResponseClientRedirect('/my_account/')
-
+        # Les prenom/nom de l'acheteur sont collectes :
+        # - soit via les formulaires adhesion/reservation (custom_form data)
+        # - soit par Stripe Checkout (billing_address_collection)
+        # On passe user.first_name / user.last_name s'ils existent (fallback),
+        # sinon une chaine vide — Stripe completera.
+        # / Buyer first/last name collected via booking/membership forms or Stripe.
+        # We pass user.first_name/last_name as fallback, or empty string — Stripe fills in.
         panier = PanierSession(request)
         try:
             commande = CommandeService.materialiser(
                 panier, user,
-                first_name=user.first_name,
-                last_name=user.last_name,
+                first_name=user.first_name or '',
+                last_name=user.last_name or '',
                 email=user.email,
             )
         except CommandeServiceError as exc:

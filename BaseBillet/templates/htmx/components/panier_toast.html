@@ -1,12 +1,7 @@
-{# Toast de feedback post-action panier. Le badge est aussi rendu pour refresh. #}
-{# Feedback toast after cart action. Badge is also rendered for refresh. #}
-{% if toast_message %}
-    <div class="toast-container position-fixed top-0 end-0 p-3">
-        <div class="toast show" role="alert">
-            <div class="toast-body text-{{ toast_level|default:'success' }}">
-                {{ toast_message }}
-            </div>
-        </div>
-    </div>
-{% endif %}
+{# Partial retourne apres une action panier (add/remove/update/clear/promo). #}
+{# Le toast de feedback est envoye via le header HX-Trigger (SweetAlert2). #}
+{# Ce template ne rend que le refresh du badge panier via hx-swap-oob. #}
+{# / Partial returned after a cart action (add/remove/update/clear/promo). #}
+{# The feedback toast is sent via the HX-Trigger header (SweetAlert2). #}
+{# This template only renders the cart badge refresh via hx-swap-oob. #}
 {% include 'htmx/components/panier_badge.html' %}

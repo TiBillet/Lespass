@@ -1,0 +1,63 @@
+{% load i18n %}
+{# Scripts globaux pour le panier (inclus depuis reunion/base.html + faire_festival/base.html). #}
+{# - Ecoute l'event "panierToast" envoye par le serveur via HX-Trigger header #}
+{#   et affiche un toast SweetAlert2 non bloquant. #}
+{# - Catch HTMX 403 sur /panier/* : ouvre l'offcanvas login + toast informatif. #}
+{# / Global cart scripts (included from both skins' base.html). #}
+{# - Listens to "panierToast" event (HX-Trigger header) → SweetAlert2 toast. #}
+{# - Catches HTMX 403 on /panier/* : opens login offcanvas + info toast. #}
+<script>
+(function () {
+    // Mapping des niveaux (serveur) vers les icons SweetAlert2.
+    // / Map server-side levels to SweetAlert2 icons.
+    const iconByLevel = {
+        success: 'success',
+        error: 'error',
+        warning: 'warning',
+        info: 'info',
+    };
+
+    // Toast feedback apres action panier (ajout, retrait, code promo, etc.).
+    // / Toast feedback after cart action.
+    document.body.addEventListener('panierToast', function (evt) {
+        const payload = evt.detail || {};
+        const text = payload.text || '';
+        if (!text) return;
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: iconByLevel[payload.level] || 'success',
+            title: text,
+            showConfirmButton: false,
+            timer: 3500,
+            timerProgressBar: true,
+        });
+    });
+
+    // Catch global : 403 sur les actions panier qui exigent l'auth.
+    // / Global catch: 403 on auth-required cart actions.
+    // escapejs obligatoire : la traduction FR peut contenir une apostrophe
+    // qui casserait le litteral JS sans escape.
+    // / escapejs required: FR translation may contain an apostrophe that
+    // would break the JS string literal without escape.
+    document.body.addEventListener('htmx:responseError', function (evt) {
+        const status = evt.detail.xhr.status;
+        const path = evt.detail.pathInfo.requestPath || '';
+        if (status !== 403 || !path.startsWith('/panier/')) return;
+
+        const loginPanel = document.getElementById('loginPanel');
+        if (loginPanel && typeof bootstrap !== 'undefined') {
+            bootstrap.Offcanvas.getOrCreateInstance(loginPanel).show();
+        }
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            title: '{{ _("Please log in to use your cart.")|escapejs }}',
+            showConfirmButton: false,
+            timer: 5000,
+            timerProgressBar: true,
+        });
+    });
+})();
+</script>

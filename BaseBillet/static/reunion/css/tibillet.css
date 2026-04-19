@@ -127,3 +127,34 @@ figure[data-trix-attachment] img {
         margin-right: 0.5rem;
     }
 }
+
+/* ===== Polish UI — details qui font la difference =====
+ * / UI polish — small details that matter
+ * Source d'inspiration : jakub.kr/writing/details-that-make-interfaces-feel-better
+ */
+
+/* Chiffres tabulaires : meme largeur pour tous les chiffres (0,1,2...9).
+ * Empeche le texte de "sauter" quand un compteur change.
+ * / Tabular numbers: same width for all digits (0-9).
+ * Prevents text jumping when counters change.
+ * Applique aux badges (panier, agenda), totaux billets, prix booking/membership.
+ * / Applied to badges (cart, agenda), ticket totals, booking/membership prices.
+ */
+.badge,
+.js-total-amount, .js-total-price,
+.js-order-price, .js-order-amount,
+.js-max-amount,
+.tab-nums {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Titres courts equilibres : evite les mots orphelins en fin de ligne.
+ * / Balanced short titles: avoid orphan words at line end.
+ * Ne pas appliquer sur long paragraphs (perf).
+ * / Do not apply on long paragraphs (perf).
+ */
+h1, h2, h3, h4,
+.h1, .h2, .h3, .h4,
+.balance {
+    text-wrap: balance;
+}

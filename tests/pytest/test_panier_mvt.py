@@ -82,20 +82,25 @@ def adhesion_standard(tenant_context_lespass):
 
 
 @pytest.mark.django_db
-def test_GET_panier_list_renvoie_page(http_client_auth):
-    """GET /panier/ → page 200, panier vide visible.
-    / GET /panier/ → 200 page, empty cart visible."""
-    client, _user = http_client_auth
-    response = client.get('/panier/')
+def test_GET_panier_list_renvoie_page(tenant_context_lespass):
+    """
+    GET /panier/ est accessible en anonyme (template gère l'état auth).
+    / GET /panier/ is accessible when anonymous (template handles auth state).
+    """
+    anon_client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    response = anon_client.get('/panier/')
     assert response.status_code == 200
-    assert b"cart" in response.content.lower() or b"panier" in response.content.lower()
+    # Pas le template DRF browsable API (qui aurait du JSON dans le title)
+    # / Not the DRF browsable API template (which has JSON in title)
+    assert b"Django REST framework" not in response.content or b"panier" in response.content.lower()
 
 
 @pytest.mark.django_db
-def test_GET_panier_badge_renvoie_partial(http_client_auth):
-    """GET /panier/badge/ → partial HTMX (id panier-badge)."""
-    client, _user = http_client_auth
-    response = client.get('/panier/badge/')
+def test_GET_panier_badge_renvoie_partial(tenant_context_lespass):
+    """GET /panier/badge/ accessible anonyme.
+    / GET /panier/badge/ accessible anonymous."""
+    anon_client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    response = anon_client.get('/panier/badge/')
     assert response.status_code == 200
     assert b"panier-badge" in response.content
 
@@ -214,7 +219,10 @@ def test_POST_checkout_panier_vide_retourne_erreur(http_client_auth):
     client, _user = http_client_auth
     response = client.post('/panier/checkout/')
     assert response.status_code == 200
-    assert b"empty" in response.content.lower() or b"vide" in response.content.lower()
+    # Toast d'erreur via HX-Trigger header.
+    # / Error toast via HX-Trigger header.
+    hx_trigger = response.get('HX-Trigger', '').lower()
+    assert 'empty' in hx_trigger or 'vide' in hx_trigger
 
 
 @pytest.mark.django_db
@@ -254,6 +262,19 @@ def test_POST_checkout_panier_gratuit_redirige(http_client_auth, tenant_context_
 
 
 @pytest.mark.django_db
+def test_POST_add_ticket_anonyme_retourne_403(tenant_context_lespass, event_avec_tarif):
+    """Anonyme + POST add_tickets_batch → 403.
+    / Anonymous + POST add_tickets_batch → 403."""
+    event, price = event_avec_tarif
+    anon_client = Client(HTTP_HOST='lespass.tibillet.localhost')
+    response = anon_client.post('/panier/add/tickets_batch/', {
+        'event': str(event.uuid),
+        str(price.uuid): '1',
+    })
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
 def test_POST_checkout_anonyme_retourne_403(tenant_context_lespass):
     """Sans login, PanierMVT actions retournent 403.
     / Without login, PanierMVT actions return 403."""
@@ -263,11 +284,14 @@ def test_POST_checkout_anonyme_retourne_403(tenant_context_lespass):
 
 
 @pytest.mark.django_db
-def test_POST_checkout_profil_incomplet_redirige_my_account(
+def test_POST_checkout_profil_incomplet_ne_bloque_plus(
     tenant_context_lespass,
 ):
-    """User authentifié sans first_name → redirect vers /my_account/.
-    / Authenticated user without first_name → redirect to /my_account/."""
+    """User authentifié sans first_name ne bloque plus le checkout.
+    Les infos prenom/nom sont collectees via formulaires ou Stripe Checkout.
+    / User without first_name no longer blocks checkout.
+    First/last name collected via forms or Stripe Checkout.
+    """
     from AuthBillet.models import TibilletUser
     user = TibilletUser.objects.create(
         email=f"incomplete-{uuid.uuid4()}@example.org",
@@ -279,11 +303,18 @@ def test_POST_checkout_profil_incomplet_redirige_my_account(
     client = Client(HTTP_HOST='lespass.tibillet.localhost')
     client.force_login(user)
 
+    # Panier vide → erreur "empty cart" (pas erreur "profil incomplet").
+    # / Empty cart → "empty cart" error (no longer "incomplete profile").
     response = client.post('/panier/checkout/')
-    # HTMX redirect → 200 avec HX-Redirect header
     assert response.status_code == 200
+    # Pas de redirect vers /my_account/ pour cause de profil incomplet.
+    # / No /my_account/ redirect for incomplete profile.
     hx_redirect = response.get('HX-Redirect', '')
-    assert '/my_account/' in hx_redirect
+    assert '/my_account/' not in hx_redirect
+    # Le toast d'erreur porte sur le panier vide, pas sur le profil.
+    # / Error toast is about empty cart, not profile.
+    hx_trigger = response.get('HX-Trigger', '').lower()
+    assert 'empty' in hx_trigger or 'vide' in hx_trigger
     try:
         user.delete()
     except Exception:

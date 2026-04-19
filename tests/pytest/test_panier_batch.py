@@ -88,7 +88,10 @@ def test_batch_ajoute_plusieurs_tarifs_dun_coup(http_client, event_avec_2_tarifs
         str(price_b.uuid): '1',  # 1 billet réduit
     })
     assert response.status_code == 200
-    assert b"added" in response.content.lower() or b"ajout" in response.content.lower()
+    # Le toast passe par le header HX-Trigger (pas dans le body).
+    # / Toast is delivered via HX-Trigger header (not in body).
+    hx_trigger = response.get('HX-Trigger', '').lower()
+    assert 'added' in hx_trigger or 'ajout' in hx_trigger
 
     session = http_client.session
     items = session.get('panier', {}).get('items', [])
@@ -106,7 +109,10 @@ def test_batch_event_inexistant_retourne_erreur(http_client):
         str(uuid.uuid4()): '1',
     })
     assert response.status_code == 200
-    assert b"Event not found" in response.content or b"not found" in response.content.lower()
+    # Toast d'erreur via HX-Trigger header.
+    # / Error toast via HX-Trigger header.
+    hx_trigger = response.get('HX-Trigger', '').lower()
+    assert 'event not found' in hx_trigger or 'not found' in hx_trigger
 
 
 @pytest.mark.django_db
@@ -119,7 +125,10 @@ def test_batch_aucune_quantite_retourne_erreur(http_client, event_avec_2_tarifs)
         str(price_a.uuid): '0',  # qty 0 ignoré
     })
     assert response.status_code == 200
-    assert b"No tickets" in response.content or b"Aucun" in response.content or b"ticket" in response.content.lower()
+    # Toast d'erreur via HX-Trigger header.
+    # / Error toast via HX-Trigger header.
+    hx_trigger = response.get('HX-Trigger', '').lower()
+    assert 'no tickets' in hx_trigger or 'aucun' in hx_trigger or 'ticket' in hx_trigger
     session = http_client.session
     assert len(session.get('panier', {}).get('items', [])) == 0
 
@@ -155,8 +164,10 @@ def test_batch_rollback_si_un_item_echoue(http_client, tenant_context_lespass):
         str(price_invalid.uuid): '1',
     })
     assert response.status_code == 200
-    # Toast d'erreur
-    assert b"not available" in response.content.lower() or b"error" in response.content.lower()
+    # Toast d'erreur via HX-Trigger header.
+    # / Error toast via HX-Trigger header.
+    hx_trigger = response.get('HX-Trigger', '').lower()
+    assert 'not available' in hx_trigger or 'error' in hx_trigger
     # Panier vide après rollback
     session = http_client.session
     assert len(session.get('panier', {}).get('items', [])) == 0

@@ -27,11 +27,13 @@
         <div class="input-group input-group-sm" style="width: 120px;">
             <form method="post" action="{% url 'panier-update-quantity' pk=forloop.counter0 %}"
                   hx-post="{% url 'panier-update-quantity' pk=forloop.counter0 %}"
-                  hx-swap="none"
+                  hx-target="#panier-content"
+                  hx-swap="outerHTML"
                   class="d-flex w-100">
                 {% csrf_token %}
                 <input type="number" name="qty" value="{{ detail.qty }}" min="1"
                        class="form-control form-control-sm text-center"
+                       data-testid="panier-item-qty"
                        onchange="this.form.requestSubmit();">
             </form>
         </div>
@@ -60,9 +62,12 @@
     {# --- Remove button --- #}
     <form method="post" action="{% url 'panier-remove' pk=forloop.counter0 %}"
           hx-post="{% url 'panier-remove' pk=forloop.counter0 %}"
-          hx-swap="none">
+          hx-target="#panier-content"
+          hx-swap="outerHTML">
         {% csrf_token %}
-        <button type="submit" class="btn btn-sm btn-outline-danger" aria-label="{% trans 'Remove' %}">
+        <button type="submit" class="btn btn-sm btn-outline-danger"
+                aria-label="{% trans 'Remove' %}"
+                data-testid="panier-item-remove">
             <i class="bi bi-trash"></i>
         </button>
     </form>
