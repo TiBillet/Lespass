@@ -3511,7 +3511,7 @@ class Paiement_stripe(models.Model):
 
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
     checkout_session_url = models.URLField(
-        max_length=500,
+        max_length=1024,
         blank=True,
         null=True,
         verbose_name=_("Stripe checkout URL"),

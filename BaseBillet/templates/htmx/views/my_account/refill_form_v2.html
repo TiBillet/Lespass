@@ -134,10 +134,12 @@ CSS dedie : /static/reunion/css/refill_v2.css
 {# / Minimal script: chip binding + preview update. #}
 <script>
 (function() {
-    // Le container est refill-v2-card. On y attache tous les listeners.
-    // / Container is refill-v2-card. All listeners are attached to it.
-    const card = document.getElementById('button_tirelire');
-    if (!card || !card.classList.contains('refill-v2-card')) return;
+    // Le conteneur est la carte .refill-v2-card injectee par HTMX.
+    // On cible via querySelector pour eviter toute dependance a un id externe.
+    // / Container is the .refill-v2-card injected by HTMX. We use querySelector
+    // to avoid depending on any external id.
+    const card = document.querySelector('.refill-v2-card');
+    if (!card) return;
 
     const input = card.querySelector('#refill-input-amount');
     const preview = card.querySelector('#refill-amount-preview');

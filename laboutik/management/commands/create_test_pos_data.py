@@ -195,12 +195,18 @@ class Command(BaseCommand):
 
             # --- Assets supplémentaires pour tests cascade multi-asset ---
             # / Additional assets for multi-asset cascade tests
+            #
+            # IMPORTANT : on ne cree PAS d'Asset FED ici. Le FED est la monnaie
+            # federee TiBillet UNIQUE dans tout le systeme, cree une seule fois
+            # par bootstrap_fed_asset sur le tenant 'federation_fed'. La contrainte
+            # DB partielle UniqueConstraint(category='FED') refuserait un doublon.
+            # Les tests cascade multi-asset utilisent l'Asset FED global (lookup via
+            # Asset.objects.filter(category=Asset.FED).first()) ou un TLF local.
+            # / No FED Asset creation here. FED is the UNIQUE federated TiBillet
+            # currency in the whole system, created once by bootstrap_fed_asset
+            # on the 'federation_fed' tenant. DB partial UniqueConstraint would
+            # reject a duplicate. Cascade tests use the global FED or a local TLF.
             for asset_def in [
-                {
-                    "name": "Fédéré TiBillet",
-                    "category": FedowAsset.FED,
-                    "currency_code": "EUR",
-                },
                 {
                     "name": "Points fidélité",
                     "category": FedowAsset.FID,

@@ -1542,14 +1542,57 @@ class MyAccount(viewsets.ViewSet):
             # leaker d'info sensible).
             # / Detailed log for audit (no user-facing trace to avoid leaking).
             logger.error(f"refill_wallet_submit failed for user {user.email}: {e}")
-            messages.add_message(request, messages.ERROR, _("Stripe error. Contact an admin."))
-            return HttpResponseClientRedirect('/my_account/')
+            return self._erreur_stripe_toast_swal(request, amount_euros_raw)
 
         if not gateway.is_valid():
-            messages.add_message(request, messages.ERROR, _("Stripe error. Contact an admin."))
-            return HttpResponseClientRedirect('/my_account/')
+            logger.error(
+                f"refill_wallet_submit: gateway invalide pour user {user.email}"
+            )
+            return self._erreur_stripe_toast_swal(request, amount_euros_raw)
 
         return HttpResponseClientRedirect(gateway.checkout_session.url)
+
+    def _erreur_stripe_toast_swal(self, request, amount_saisi):
+        """
+        Rend a nouveau le formulaire refill_form_v2 avec la valeur saisie
+        preservee + declenche un toast SweetAlert2 via HX-Trigger 'appToast'.
+        / Re-renders the refill form with preserved value + fires a
+        SweetAlert2 toast via HX-Trigger 'appToast'.
+
+        LOCALISATION : BaseBillet/views.py (helper prive MyAccount)
+
+        Pourquoi pas messages.add_message + redirect :
+        - messages.add_message passe par l'ancien systeme de toast Django
+          (moins visible, pas cohérent avec le reste du projet).
+        - HttpResponseClientRedirect force un rechargement full-page :
+          l'user perd son montant saisi.
+        / Why not messages.add_message + redirect: old Django toast system
+        (inconsistent with project), full-page reload loses user input.
+        """
+        reponse = render(
+            request,
+            'htmx/views/my_account/refill_form_v2.html',
+            {
+                'amount_min_euros_affichage': '1,00',
+                'amount_max_euros_affichage': '500,00',
+                'amount_min_euros_input': '1',
+                'amount_max_euros_input': '500',
+                'submit_url': '/my_account/refill_wallet_submit/',
+                'amount_saisi': amount_saisi,
+            },
+        )
+        # Toast SweetAlert2 declencchée cote client par panier_scripts.html.
+        # / SweetAlert2 toast triggered client-side by panier_scripts.html.
+        reponse['HX-Trigger'] = json.dumps({
+            'appToast': {
+                'level': 'error',
+                'text': str(_(
+                    "Le paiement bancaire n'a pas pu demarrer. "
+                    "Reessaie dans un instant ou contacte un administrateur."
+                )),
+            },
+        })
+        return reponse
 
 
     @action(detail=True, methods=['GET'])

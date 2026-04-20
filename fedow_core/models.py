@@ -214,6 +214,27 @@ class Asset(models.Model):
     class Meta:
         verbose_name = _('Asset')
         verbose_name_plural = _('Assets')
+        constraints = [
+            # Un seul Asset de categorie FED peut exister dans tout le systeme.
+            # Le FED est la monnaie federee TiBillet unique, creee par
+            # bootstrap_fed_asset. Toute tentative de creer un 2e FED (ex: via
+            # l'admin Unfold ou une commande de seed) sera rejetee par la DB.
+            # Contrainte partielle PostgreSQL : s'applique UNIQUEMENT aux lignes
+            # dont category='FED' (pas d'impact sur les TLF/TNF/TIM/FID qui
+            # peuvent exister en multiples exemplaires).
+            # / Only one Asset of category FED can exist in the whole system.
+            # FED is the unique federated TiBillet currency, created by
+            # bootstrap_fed_asset. Any attempt to create a 2nd FED (via Unfold
+            # admin or a seed command) will be rejected by the DB.
+            # Partial PostgreSQL constraint: applies ONLY to rows where
+            # category='FED' (no impact on TLF/TNF/TIM/FID which can exist
+            # in multiple instances).
+            models.UniqueConstraint(
+                fields=['category'],
+                condition=models.Q(category='FED'),
+                name='unique_fed_asset',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.name} ({self.get_category_display()})'
