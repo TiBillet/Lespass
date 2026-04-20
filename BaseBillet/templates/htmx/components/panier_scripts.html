@@ -81,6 +81,31 @@
         });
     });
 
+    // Toast generique "appToast" : utilisable par n'importe quelle vue du projet
+    // (pas seulement le panier). Emis via HX-Trigger cote serveur.
+    // Meme comportement que panierToast mais nom semantique plus large.
+    // Exemple cote Django :
+    //   response['HX-Trigger'] = json.dumps({
+    //       'appToast': {'level': 'error', 'text': 'Stripe indisponible'}
+    //   })
+    // / Generic "appToast" usable by any view (not just cart). Same behavior
+    // as panierToast but broader semantic name.
+    document.body.addEventListener('appToast', function (evt) {
+        const payload = evt.detail || {};
+        const text = payload.text || '';
+        if (!text) return;
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: iconByLevel[payload.level] || 'info',
+            title: text,
+            showConfirmButton: false,
+            showCloseButton: true,
+            timer: 5000,
+            timerProgressBar: true,
+        });
+    });
+
     // Catch global : 403 sur les actions panier qui exigent l'auth.
     // / Global catch: 403 on auth-required cart actions.
     // escapejs obligatoire : la traduction FR peut contenir une apostrophe
