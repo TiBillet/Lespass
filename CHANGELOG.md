@@ -1,5 +1,30 @@
 # Changelog / Journal des modifications
 
+## Session 33 — Visualisation historique transactions V2 / Tx history display V2 (2026-04-20)
+
+**Quoi / What:** La page `/my_account/balance/` affiche desormais les `fedow_core.Transaction` locales pour les users V2 (historique complet incluant les transactions des wallets ephemeres fusionnes dans `user.wallet`), au lieu d'appeler `FedowAPI` distant. Dispatch symetrique Sessions 31-32 via `peut_recharger_v2(user)`.
+/ The balance page now displays local `fedow_core.Transaction` for V2 users (full history including ephemeral wallets merged into `user.wallet`), instead of calling the remote `FedowAPI`.
+
+**Pourquoi / Why:** Apres Sessions 31 (recharge FED V2) et 32 (affichage tokens V2), l'historique transactions restait lu sur Fedow distant. Un user qui rechargeait en V2 voyait son solde mis a jour mais pas la transaction dans son historique. Cette session complete la coherence read-side.
+/ After Sessions 31 (refill) and 32 (tokens display), transaction history was still read from remote Fedow. This session completes read-side consistency.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | Dispatch V2 + methode `_transactions_table_v2` + 2 helpers module-level (`_enrichir_transaction_v2`, `_structure_pour_transaction`) |
+| `BaseBillet/templates/reunion/partials/account/transaction_history_v2.html` | Nouveau partial : table 4 colonnes (Date \| Action \| Montant ±signe \| Structure) + pagination HTMX |
+| `tests/pytest/test_transactions_table_v2.py` | Nouveau, 11 tests pytest DB-only |
+| `A TESTER et DOCUMENTER/visu-historique-transactions-v2.md` | Guide mainteneur |
+| `locale/{fr,en}/LC_MESSAGES/django.po` + `.mo` | 7 nouvelles strings |
+
+### Migration
+- **Migration necessaire / Migration required:** Non / No
+- **Non-regression :** Sessions 31 + 32 inchangees. V1 `transaction_history.html` inchange.
+
+### Tests
+- 11 tests pytest DB-only dans `tests/pytest/test_transactions_table_v2.py`
+- Sessions 31 + 32 non-regressees
+
 ## Session 32 — Visualisation tirelire V2 / Wallet display V2 (2026-04-20)
 
 **Quoi / What:** La page `/my_account/balance/` affiche desormais les `fedow_core.Token` locaux pour les users V2, au lieu d'appeler `FedowAPI` distant. Dispatch symetrique a Session 31 via `peut_recharger_v2(user)`.

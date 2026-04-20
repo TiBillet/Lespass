@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-20 09:21+0000\n"
+"POT-Creation-Date: 2026-04-20 16:50+0000\n"
 "PO-Revision-Date: 2025-03-12 09:37+0100\n"
 "Last-Translator: Diane Alma Kay <pro@kayathommy.fr>\n"
 "Language-Team: French\n"
@@ -140,7 +140,7 @@ msgstr ""
 #: crowds/templates/crowds/partial/contributions.html:11
 #: crowds/templates/crowds/partial/summary.html:282
 #: crowds/templates/crowds/partial/summary.html:310 fedow_core/admin.py:597
-#: fedow_core/models.py:486
+#: fedow_core/models.py:507
 #: fedow_public/templates/fedow_public/retrieve_bank_deposits.html:68
 #: fedow_public/templates/fedow_public/transactions_table.html:28
 #: laboutik/templates/laboutik/partial/hx_detail_vente.html:32
@@ -334,12 +334,12 @@ msgstr "Monnaies et tokens"
 
 #: Administration/admin/dashboard.py:317
 #: Administration/templates/admin/cloture/rapport_temps_reel.html:142
-#: fedow_core/models.py:631 laboutik/csv_export.py:47
+#: fedow_core/models.py:652 laboutik/csv_export.py:47
 #: laboutik/templates/laboutik/email/cloture_rapport_email.html:27
 msgid "Transactions"
 msgstr "Transactions"
 
-#: Administration/admin/dashboard.py:325 fedow_core/models.py:752
+#: Administration/admin/dashboard.py:325 fedow_core/models.py:773
 msgid "Federations"
 msgstr "Fédérations"
 
@@ -749,6 +749,7 @@ msgstr "Stock initial"
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:11
 #: BaseBillet/templates/invoice/invoice.html:163
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:10
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:27
 #: BaseBillet/templates/reunion/views/membership/free_confirmed.html:20
 #: controlvanne/admin.py:357 controlvanne/admin.py:396
 #: controlvanne/admin.py:546
@@ -982,6 +983,7 @@ msgstr "Mode de paiement"
 #: Administration/templates/admin/cloture_detail.html:435
 #: Administration/templates/admin/event/partials/canaux_vente.html:14
 #: Administration/templates/admin/event/partials/moyens_paiement.html:13
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:29
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/email/payment_success_admin.html:32
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/email/payment_success_user.html:32
 #: BaseBillet/templates/reunion/views/qrcode_scan_pay/generator.html:326
@@ -2690,7 +2692,7 @@ msgstr ""
 msgid "Api not OK : {e}"
 msgstr ""
 
-#: Administration/admin/site.py:34 BaseBillet/views.py:835
+#: Administration/admin/site.py:34 BaseBillet/views.py:944
 msgid "Please login to access this page."
 msgstr "Connectez-vous pour accéder à cette page."
 
@@ -2814,7 +2816,7 @@ msgid "Stripe payment"
 msgstr "Paiement Stripe"
 
 #: Administration/importers/lignearticle_exporter.py:29
-#: fedow_core/models.py:510
+#: fedow_core/models.py:531
 msgid "Carte cashless"
 msgstr ""
 
@@ -2885,7 +2887,8 @@ msgstr ""
 #: Administration/templates/admin/cards/refund_panel.html:92
 #: BaseBillet/templates/htmx/views/my_account/transactions_table.html:9
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:9
-#: fedow_core/models.py:495
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:28
+#: fedow_core/models.py:516
 #: fedow_public/templates/fedow_public/transactions_table.html:30
 msgid "Action"
 msgstr "Action"
@@ -2904,7 +2907,7 @@ msgid "Invitations de partage d'assets"
 msgstr ""
 
 #: Administration/templates/admin/asset/asset_changelist_invitations.html:42
-#: fedow_core/models.py:714
+#: fedow_core/models.py:735
 msgid "Cree par"
 msgstr "Créé par"
 
@@ -2940,7 +2943,7 @@ msgstr "Total global de la dette"
 
 #: Administration/templates/admin/bank_transfers/dashboard.html:51
 #: Administration/templates/admin/bank_transfers/historique.html:33
-#: MetaBillet/models.py:178 discovery/models.py:36 fedow_core/models.py:618
+#: MetaBillet/models.py:178 discovery/models.py:36 fedow_core/models.py:639
 #: seo/models.py:50
 msgid "Tenant"
 msgstr "Tenant"
@@ -2951,7 +2954,7 @@ msgstr "Tenant"
 #: Administration/templates/admin/cards/refund_panel.html:93
 #: BaseBillet/models.py:1399 BaseBillet/models.py:1959
 #: BaseBillet/models.py:3839 crowds/models.py:111 fedow_core/models.py:215
-#: fedow_core/models.py:278 fedow_core/models.py:474
+#: fedow_core/models.py:299 fedow_core/models.py:495
 #: laboutik/templates/laboutik/partial/hx_vider_carte_confirm.html:18
 msgid "Asset"
 msgstr "Type d'actif"
@@ -3005,7 +3008,7 @@ msgstr "Référence bancaire"
 
 #: Administration/templates/admin/bank_transfers/dashboard.html:113
 #: Administration/templates/admin/bank_transfers/historique.html:39
-#: fedow_core/models.py:544
+#: fedow_core/models.py:565
 msgid "Commentaire"
 msgstr "Commentaire"
 
@@ -3181,7 +3184,7 @@ msgid "Catégorie"
 msgstr "Catégorie"
 
 #: Administration/templates/admin/cards/refund_panel.html:45
-#: fedow_core/admin.py:529 fedow_core/models.py:287
+#: fedow_core/admin.py:529 fedow_core/models.py:308
 #: laboutik/templates/cotton/articles.html:109
 #: laboutik/templates/laboutik/partial/hx_recap_en_cours.html:201
 #: laboutik/templates/laboutik/partial/hx_recapitulatif_client.html:45
@@ -4334,7 +4337,7 @@ msgstr "Aucune carte"
 #: Administration/templates/admin/membership/wallet_info.html:86
 #: BaseBillet/templates/htmx/views/my_account/my_account.html:47
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:34
-#: fedow_core/admin.py:524 fedow_core/models.py:269
+#: fedow_core/admin.py:524 fedow_core/models.py:290
 msgid "Wallet"
 msgstr "Tirelire"
 
@@ -6900,7 +6903,7 @@ msgstr ""
 msgid "Quantity must be positive."
 msgstr "La quantité doit être supérieure à 0."
 
-#: BaseBillet/services_panier.py:405 BaseBillet/views.py:4716
+#: BaseBillet/services_panier.py:405 BaseBillet/views.py:4976
 #, fuzzy
 #| msgid "Page not found"
 msgid "Event not found."
@@ -7353,11 +7356,11 @@ msgstr "Paiement reçu."
 msgid "Your payment has been validated."
 msgstr "Votre paiement a été validé."
 
-#: BaseBillet/tasks.py:2057 BaseBillet/views.py:957
+#: BaseBillet/tasks.py:2057 BaseBillet/views.py:1066
 msgid "Your reservation has been cancelled."
 msgstr "Votre reservation a bien été annulé."
 
-#: BaseBillet/tasks.py:2116 BaseBillet/views.py:976
+#: BaseBillet/tasks.py:2116 BaseBillet/views.py:1085
 msgid "Your ticket has been cancelled."
 msgstr "Votre billet a bien été annulé."
 
@@ -8445,7 +8448,7 @@ msgstr[1] "Billet d'événement"
 msgid "Remove"
 msgstr "Retirer"
 
-#: BaseBillet/templates/htmx/components/panier_scripts.html:103
+#: BaseBillet/templates/htmx/components/panier_scripts.html:128
 msgid "Please log in to use your cart."
 msgstr "Veuillez vous connecter pour utiliser votre panier."
 
@@ -8802,7 +8805,7 @@ msgstr "Reçu"
 #: crowds/templates/crowds/partial/budget_items.html:10
 #: crowds/templates/crowds/partial/contributions.html:10
 #: crowds/templates/crowds/partial/participations.html:10
-#: crowds/templates/crowds/views/detail.html:318 fedow_core/models.py:705
+#: crowds/templates/crowds/views/detail.html:318 fedow_core/models.py:726
 msgid "Description"
 msgstr "Description"
 
@@ -8979,6 +8982,7 @@ msgid "These units are not convertible into euros."
 msgstr "Ces unités ne sont pas convertibles en euros."
 
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:4
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:15
 #: BaseBillet/templates/reunion/views/account/balance.html:89
 msgid "Transaction history"
 msgstr "Historique des transactions"
@@ -8994,6 +8998,39 @@ msgstr "Plateforme Lèspass"
 #: BaseBillet/templates/reunion/partials/account/transaction_history.html:38
 msgid "LaBoutik register"
 msgstr "Caisse LaBoutik"
+
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:20
+msgid "No transaction yet."
+msgstr "Aucune transaction pour l'instant."
+
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:30
+msgid "Structure"
+msgstr "Structure"
+
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:58
+msgid "Pagination historique transactions"
+msgstr "Pagination historique transactions"
+
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:68
+#: BaseBillet/templates/reunion/views/event/partial/carousel.html:20
+msgid "Previous"
+msgstr "Précédente"
+
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:72
+#, python-format
+msgid ""
+"\n"
+"            Page %(current)s / %(total)s\n"
+"          "
+msgstr ""
+"\n"
+"            Page %(current)s / %(total)s\n"
+"          "
+
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:84
+#: BaseBillet/templates/reunion/views/event/partial/carousel.html:24
+msgid "Next"
+msgstr "Suivante"
 
 #: BaseBillet/templates/reunion/partials/navbar.html:13
 #: seo/templates/seo/base.html:93
@@ -9477,14 +9514,6 @@ msgstr "Ajouter ces billets à votre panier"
 #: BaseBillet/templates/reunion/views/membership/form.html:704
 msgid "Log in to add to cart"
 msgstr "Connectez-vous pour ajouter au panier"
-
-#: BaseBillet/templates/reunion/views/event/partial/carousel.html:20
-msgid "Previous"
-msgstr "Précédente"
-
-#: BaseBillet/templates/reunion/views/event/partial/carousel.html:24
-msgid "Next"
-msgstr "Suivante"
 
 #: BaseBillet/templates/reunion/views/event/partial/geoloc.html:69
 msgid "View on OpenStreetMap in a new tab"
@@ -10819,7 +10848,7 @@ msgid ""
 "Solde insuffisant. Il reste {dround(self.user_balance)} sur le portefeuille."
 msgstr ""
 
-#: BaseBillet/validators.py:1262 BaseBillet/views.py:2812
+#: BaseBillet/validators.py:1262 BaseBillet/views.py:3072
 msgid "Un évènement avec ce nom et cette date existe déjà."
 msgstr ""
 
@@ -10839,7 +10868,7 @@ msgstr "Paiement confirmé. Les billets vont être envoyés à votre adresse mai
 msgid "Payment rejected."
 msgstr "Paiement rejeté."
 
-#: BaseBillet/views.py:249 BaseBillet/views.py:294 BaseBillet/views.py:2724
+#: BaseBillet/views.py:249 BaseBillet/views.py:294 BaseBillet/views.py:2984
 msgid ""
 "Payment confirmed. Tickets sent to your email. You can also view your "
 "tickets through \"My account > Bookings\"."
@@ -10935,34 +10964,34 @@ msgstr "Impossible de rediriger vers la page de login"
 msgid "Unable to prepare redirection"
 msgstr "Impossible de rediriger"
 
-#: BaseBillet/views.py:871
+#: BaseBillet/views.py:980
 msgid ""
 "Please validate your email to access all the features of your profile area."
 msgstr ""
 "Merci de valider votre adresse mail pour accéder à toutes les "
 "fonctionnalités de votre compte."
 
-#: BaseBillet/views.py:951
+#: BaseBillet/views.py:1060
 msgid "You cannot cancel a reservation with scanned tickets."
 msgstr "Vous ne pouvez pas annuler une réservation avec des billets scannés."
 
-#: BaseBillet/views.py:967
+#: BaseBillet/views.py:1076
 msgid "An error occurred while cancelling your reservation."
 msgstr ""
 "Une erreur s'est produite pendant l'annulation de votre réservation, merci "
 "de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:988
+#: BaseBillet/views.py:1097
 msgid "An error occurred while cancelling your ticket."
 msgstr ""
 "Une erreur s'est produite pendant l'annulation de votre réservation, merci "
 "de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:999
+#: BaseBillet/views.py:1108
 msgid "Mail sent, please check spam too!"
 msgstr "Mail envoyé, vérifiez également les spams !"
 
-#: BaseBillet/views.py:1014 BaseBillet/views.py:1032
+#: BaseBillet/views.py:1123 BaseBillet/views.py:1141
 msgid ""
 "Your wallet has been detached from this card. You can scan a new one to link "
 "it again."
@@ -10970,18 +10999,18 @@ msgstr ""
 "Votre compte a été dissocié de cette carte. Vous pouvez scanner une nouvelle "
 "carte TiBillet et la lier à votre compte."
 
-#: BaseBillet/views.py:1017 BaseBillet/views.py:1021 BaseBillet/views.py:1035
-#: BaseBillet/views.py:1039
+#: BaseBillet/views.py:1126 BaseBillet/views.py:1130 BaseBillet/views.py:1144
+#: BaseBillet/views.py:1148
 msgid "Error when detaching your card. Contact an administrator."
 msgstr ""
 "Erreur à la dissociation de la carte. Veuillez contacter un·e "
 "administrateur·ice."
 
-#: BaseBillet/views.py:1042
+#: BaseBillet/views.py:1151
 msgid "User email not active"
 msgstr "Adresse mail inactive"
 
-#: BaseBillet/views.py:1053
+#: BaseBillet/views.py:1162
 msgid ""
 "You do not have a federated wallet. Maybe you loaded money directly at a "
 "register?"
@@ -10989,17 +11018,17 @@ msgstr ""
 "Vous n'avez pas de tirelire fédérée. Peut-être avez-vous rechargé "
 "directement en caisse ?"
 
-#: BaseBillet/views.py:1059
+#: BaseBillet/views.py:1168
 msgid "Your wallet is already empty."
 msgstr "Votre tirelire est déjà vide."
 
-#: BaseBillet/views.py:1067
+#: BaseBillet/views.py:1176
 msgid "A refund has been made to the provided account. Thank you!"
 msgstr ""
 "Un remboursement a été réalisé sur la carte bancaire utilisée pour la "
 "recharge. Merci !"
 
-#: BaseBillet/views.py:1084
+#: BaseBillet/views.py:1193
 msgid ""
 "Apologies, it seems you need to manually request a refund. You can go to one "
 "of the collective's register, or send ar email to: contact@tibillet.re ."
@@ -11008,142 +11037,142 @@ msgstr ""
 "pouvez vous rendre à une des caisses du collectif, ou adresser un mail à : "
 "contact@tibillet.re ."
 
-#: BaseBillet/views.py:1352 BaseBillet/views.py:1360
+#: BaseBillet/views.py:1569 BaseBillet/views.py:1577
 msgid "Not available. Contact an admin."
 msgstr "Indisponible. Contactez un·e administrateur·ice."
 
-#: BaseBillet/views.py:1368
+#: BaseBillet/views.py:1585
 msgid ""
 "Votre wallet est en cours de migration. Merci de patienter, désolés pour la "
 "gêne occasionnée."
 msgstr ""
 
-#: BaseBillet/views.py:1425
+#: BaseBillet/views.py:1642
 #, fuzzy
 #| msgid "This name is not available"
 msgid "Refill not available."
 msgstr "Ce nom n'est pas disponible"
 
-#: BaseBillet/views.py:1445 PaiementStripe/serializers.py:42
+#: BaseBillet/views.py:1662 PaiementStripe/serializers.py:42
 #, fuzzy
 #| msgid "Montant invalide"
 msgid "Montant invalide."
 msgstr "Montant invalide"
 
-#: BaseBillet/views.py:1545 BaseBillet/views.py:1549
-#, fuzzy
-#| msgid "Stripe error, check admin"
-msgid "Stripe error. Contact an admin."
-msgstr "Erreur Stripe, vérifiez l'administration"
+#: BaseBillet/views.py:1807
+msgid ""
+"Le paiement bancaire n'a pas pu demarrer. Reessaie dans un instant ou "
+"contacte un administrateur."
+msgstr ""
 
-#: BaseBillet/views.py:1584 BaseBillet/views.py:1626
+#: BaseBillet/views.py:1844 BaseBillet/views.py:1886
 msgid "Refilled wallet"
 msgstr "Tirelire rechargée"
 
-#: BaseBillet/views.py:1586 BaseBillet/views.py:1588 BaseBillet/views.py:1622
+#: BaseBillet/views.py:1846 BaseBillet/views.py:1848 BaseBillet/views.py:1882
 msgid "Payment verification error"
 msgstr "Erreur de vérification de paiement"
 
-#: BaseBillet/views.py:1611
+#: BaseBillet/views.py:1871
 #, fuzzy
 #| msgid "Page not found"
 msgid "Payment not found"
 msgstr "Page introuvable"
 
-#: BaseBillet/views.py:1632
+#: BaseBillet/views.py:1892
 msgid "Payment in progress. Please refresh in a moment."
 msgstr ""
 
-#: BaseBillet/views.py:1678
+#: BaseBillet/views.py:1938
 msgid "Amount and asset type are required"
 msgstr "Le montant et le type d'actif sont obligatoires."
 
-#: BaseBillet/views.py:1682
+#: BaseBillet/views.py:1942
 msgid "Sale via QR code link"
 msgstr "Vente via un lien QR Code"
 
-#: BaseBillet/views.py:1720 BaseBillet/views.py:1837 BaseBillet/views.py:1905
+#: BaseBillet/views.py:1980 BaseBillet/views.py:2097 BaseBillet/views.py:2165
 msgid "Please validate your email address."
 msgstr "Merci de valider votre adresse mail"
 
-#: BaseBillet/views.py:1844
+#: BaseBillet/views.py:2104
 msgid "No QR code content received"
 msgstr "QrCode reçu"
 
-#: BaseBillet/views.py:1874
+#: BaseBillet/views.py:2134
 msgid "This payment has already been processed"
 msgstr "Ce paiement a déja été réalisé"
 
-#: BaseBillet/views.py:1881 BaseBillet/views.py:1923
+#: BaseBillet/views.py:2141 BaseBillet/views.py:2183
 msgid "Invalid QR code: payment not found"
 msgstr "Qr Code invalide."
 
-#: BaseBillet/views.py:1886 BaseBillet/views.py:1928
+#: BaseBillet/views.py:2146 BaseBillet/views.py:2188
 msgid "Invalid QR code format"
 msgstr "Format du Qr Code invalide."
 
-#: BaseBillet/views.py:1932
+#: BaseBillet/views.py:2192
 msgid "Missing QR code content"
 msgstr "Erreur contenu Qr Code"
 
-#: BaseBillet/views.py:2024
+#: BaseBillet/views.py:2284
 msgid "Error validating payment"
 msgstr "Le paiement n'a pas été validé"
 
-#: BaseBillet/views.py:2202
+#: BaseBillet/views.py:2462
 msgid "Message sent, you have been sent a copy. Thank you!"
 msgstr "Message envoyé, nous vous avons envoyé une copie. Merci !"
 
-#: BaseBillet/views.py:2653
+#: BaseBillet/views.py:2913
 msgid "You have already checked for an action on this event."
 msgstr "Vous vous êtes déjà proposé·e pour être volontaire sur cet évènement."
 
-#: BaseBillet/views.py:2657
+#: BaseBillet/views.py:2917
 msgid "Please log in first."
 msgstr "Merci de vous connecter d'abord."
 
-#: BaseBillet/views.py:2671
+#: BaseBillet/views.py:2931
 msgid "Thank you! You are going to receive a validation email.."
 msgstr "Merci ! Vous allez recevoir un mail de confirmation."
 
-#: BaseBillet/views.py:2727 BaseBillet/views.py:3358
+#: BaseBillet/views.py:2987 BaseBillet/views.py:3618
 msgid "Your payment is awaiting validation."
 msgstr "Votre paiement est en attente de validation."
 
-#: BaseBillet/views.py:2730 BaseBillet/views.py:3361
+#: BaseBillet/views.py:2990 BaseBillet/views.py:3621
 msgid "An error has occurred, please contact the administrator."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:2816
+#: BaseBillet/views.py:3076
 msgid "Évènement créé !"
 msgstr ""
 
-#: BaseBillet/views.py:2895
+#: BaseBillet/views.py:3155
 msgid "Adresse créée !"
 msgstr ""
 
-#: BaseBillet/views.py:2967
+#: BaseBillet/views.py:3227
 msgid "Check in registered!"
 msgstr "Pointage d'arrivée enregistré !"
 
-#: BaseBillet/views.py:2975
+#: BaseBillet/views.py:3235
 msgid "Check out registered!"
 msgstr "Pointage de départ enregistré !"
 
-#: BaseBillet/views.py:3315
+#: BaseBillet/views.py:3575
 msgid "Cette adhésion n'est pas en attente de validation."
 msgstr ""
 
-#: BaseBillet/views.py:3328
+#: BaseBillet/views.py:3588
 msgid "L'adhésion a été acceptée. Un email de paiement a été envoyé."
 msgstr ""
 
-#: BaseBillet/views.py:3353
+#: BaseBillet/views.py:3613
 msgid ""
 "Your payment has been validated and is being processed. Thank you very much!"
 msgstr "Votre paiement a été validé et est en cours de traitement. Merci !"
 
-#: BaseBillet/views.py:3356
+#: BaseBillet/views.py:3616
 msgid ""
 "Your subscription has been validated. You will receive a confirmation email. "
 "Thank you very much!"
@@ -11151,59 +11180,59 @@ msgstr ""
 "Votre adhésion a été validé. Vous allez recevoir un mail de confirmation. "
 "Merci !"
 
-#: BaseBillet/views.py:3379
+#: BaseBillet/views.py:3639
 msgid "PDF generation error"
 msgstr "Erreur de génération PDF"
 
-#: BaseBillet/views.py:3532 BaseBillet/views.py:3553 BaseBillet/views.py:3570
-#: BaseBillet/views.py:3681 BaseBillet/views.py:3702
+#: BaseBillet/views.py:3792 BaseBillet/views.py:3813 BaseBillet/views.py:3830
+#: BaseBillet/views.py:3941 BaseBillet/views.py:3962
 msgid "Accès refusé"
 msgstr ""
 
-#: BaseBillet/views.py:3576
+#: BaseBillet/views.py:3836
 msgid "Produit non trouvé"
 msgstr ""
 
-#: BaseBillet/views.py:3610
+#: BaseBillet/views.py:3870
 #, python-brace-format
 msgid "Le champ '{field.label}' est obligatoire."
 msgstr ""
 
-#: BaseBillet/views.py:3656
+#: BaseBillet/views.py:3916
 msgid "Erreur lors de l'enregistrement : {str(e)}"
 msgstr ""
 
-#: BaseBillet/views.py:3716
+#: BaseBillet/views.py:3976
 msgid "Le nom du champ est obligatoire."
 msgstr ""
 
-#: BaseBillet/views.py:3722
+#: BaseBillet/views.py:3982
 #, python-brace-format
 msgid "Le champ '{field_label}' existe déjà."
 msgstr ""
 
-#: BaseBillet/views.py:3810
+#: BaseBillet/views.py:4070
 msgid "Cette adhésion n'est pas en attente de paiement."
 msgstr ""
 
-#: BaseBillet/views.py:3946
+#: BaseBillet/views.py:4206
 #, python-format
 msgid "Adhésion annulée. %(count)d avoir(s) créé(s)."
 msgstr ""
 
-#: BaseBillet/views.py:3949
+#: BaseBillet/views.py:4209
 msgid "Adhésion annulée."
 msgstr ""
 
-#: BaseBillet/views.py:4096
+#: BaseBillet/views.py:4356
 msgid "An error occurred. Please try again."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:4178
+#: BaseBillet/views.py:4438
 msgid "This space already exists. Redirecting you to it."
 msgstr "Cet espace existe déjà. Vous allez être redirigé·e."
 
-#: BaseBillet/views.py:4184
+#: BaseBillet/views.py:4444
 msgid ""
 "An error occurred while creating your space. It might be because the name is "
 "already taken or no free slot is available. Please contact us."
@@ -11212,81 +11241,81 @@ msgstr ""
 "être déjà pris ou aucun emplacement n'est disponible. Veuillez nous "
 "contacter."
 
-#: BaseBillet/views.py:4198
+#: BaseBillet/views.py:4458
 msgid "Invalid token. Please request a new confirmation email."
 msgstr "Token non valide. Merci de vous reconnecter."
 
-#: BaseBillet/views.py:4526
+#: BaseBillet/views.py:4786
 #, fuzzy
 #| msgid "Users without membership"
 msgid "Unable to add membership."
 msgstr "Ulisateur·ice·s sans adhésions"
 
-#: BaseBillet/views.py:4534
+#: BaseBillet/views.py:4794
 #, fuzzy
 #| msgid "Membership cancelled."
 msgid "Membership added to cart."
 msgstr "Adhésion annulée."
 
-#: BaseBillet/views.py:4546
+#: BaseBillet/views.py:4806
 #, fuzzy
 #| msgid "Invalid choice."
 msgid "Invalid index."
 msgstr "Choix non valide."
 
 # DEPRECATED 2.0 old ui
-#: BaseBillet/views.py:4551
+#: BaseBillet/views.py:4811
 #, fuzzy
 #| msgid "Card removed"
 msgid "Item removed."
 msgstr "Carte retirée"
 
-#: BaseBillet/views.py:4568
+#: BaseBillet/views.py:4828
 #, fuzzy
 #| msgid "Missing QR code content"
 msgid "Missing code."
 msgstr "Erreur contenu Qr Code"
 
-#: BaseBillet/views.py:4578
+#: BaseBillet/views.py:4838
 #, fuzzy
 #| msgid "Promotional codes usage"
 msgid "Promo code applied."
 msgstr "Utilisation des codes promo"
 
 # DEPRECATED 2.0 old ui
-#: BaseBillet/views.py:4589
+#: BaseBillet/views.py:4849
 #, fuzzy
 #| msgid "Card removed"
 msgid "Promo code removed."
 msgstr "Carte retirée"
 
-#: BaseBillet/views.py:4600
+#: BaseBillet/views.py:4860
 #, fuzzy
 #| msgid "Carte vierge."
 msgid "Cart cleared."
 msgstr "Carte vierge."
 
-#: BaseBillet/views.py:4646
+#: BaseBillet/views.py:4906
 #, fuzzy
 #| msgid "An error occurred. Please try again."
 msgid "Checkout failed. Please try again."
 msgstr "Une erreur s'est produite, merci de contacter un·e administrateur·ice."
 
-#: BaseBillet/views.py:4665
+#: BaseBillet/views.py:4925
 msgid "Payment link unavailable. Please contact support."
 msgstr ""
 
-#: BaseBillet/views.py:4673
+#: BaseBillet/views.py:4933
 msgid "Order confirmed. You will receive an email shortly."
 msgstr ""
 
-#: BaseBillet/views.py:4795
+#: BaseBillet/views.py:5055
 #, fuzzy
 #| msgid "No right selected"
 msgid "No tickets selected."
 msgstr "Aucun droit selectionné"
 
-#: BaseBillet/views.py:4799
+#: BaseBillet/views.py:5059
 #, fuzzy, python-format
 #| msgid "%(count)d ticket(s) cancelled and refunded."
 msgid "%(count)d ticket added to cart."
@@ -12052,7 +12081,7 @@ msgstr ""
 msgid "Payée le"
 msgstr ""
 
-#: crowds/models.py:370 fedow_core/models.py:597
+#: crowds/models.py:370 fedow_core/models.py:618
 msgid "Paiement Stripe"
 msgstr "Paiement Stripe"
 
@@ -12945,7 +12974,7 @@ msgstr ""
 msgid "Invitation acceptee ! Vous partagez maintenant l'asset « %(name)s »."
 msgstr ""
 
-#: fedow_core/admin.py:602 fedow_core/models.py:450
+#: fedow_core/admin.py:602 fedow_core/models.py:471
 msgid "Emetteur"
 msgstr "Émetteur"
 
@@ -13065,7 +13094,7 @@ msgstr "ID de tarif Stripe"
 msgid "Identifiant Stripe du Price pour recharge (categorie FED uniquement)"
 msgstr ""
 
-#: fedow_core/models.py:194 fedow_core/models.py:736
+#: fedow_core/models.py:194 fedow_core/models.py:757
 msgid "Invitations en attente"
 msgstr ""
 
@@ -13079,169 +13108,169 @@ msgstr ""
 msgid "Lieux qui ont accepte de partager cet asset."
 msgstr ""
 
-#: fedow_core/models.py:288
+#: fedow_core/models.py:309
 msgid "Solde en centimes. 1500 = 15,00 EUR."
 msgstr ""
 
-#: fedow_core/models.py:292
+#: fedow_core/models.py:313
 msgid "Token"
 msgstr ""
 
-#: fedow_core/models.py:293
+#: fedow_core/models.py:314
 msgid "Tokens"
 msgstr ""
 
-#: fedow_core/models.py:373
+#: fedow_core/models.py:394
 msgid "Genesis"
 msgstr ""
 
-#: fedow_core/models.py:374
+#: fedow_core/models.py:395
 msgid "Creation"
 msgstr "Création"
 
-#: fedow_core/models.py:375
+#: fedow_core/models.py:396
 #: laboutik/templates/laboutik/partial/hx_display_type_payment.html:59
 msgid "Recharge"
 msgstr "Recharge"
 
-#: fedow_core/models.py:376 inventaire/models.py:23
+#: fedow_core/models.py:397 inventaire/models.py:23
 msgid "Vente"
 msgstr "Vente"
 
-#: fedow_core/models.py:377
+#: fedow_core/models.py:398
 msgid "Vente QR"
 msgstr ""
 
-#: fedow_core/models.py:378
+#: fedow_core/models.py:399
 msgid "Fusion"
 msgstr ""
 
-#: fedow_core/models.py:379
+#: fedow_core/models.py:400
 msgid "Remboursement"
 msgstr ""
 
-#: fedow_core/models.py:380
+#: fedow_core/models.py:401
 msgid "Annulation"
 msgstr "Annulation"
 
-#: fedow_core/models.py:381
+#: fedow_core/models.py:402
 msgid "Depot bancaire"
 msgstr ""
 
-#: fedow_core/models.py:382
+#: fedow_core/models.py:403
 msgid "Virement"
 msgstr ""
 
-#: fedow_core/models.py:383
+#: fedow_core/models.py:404
 msgid "Virement bancaire pot central"
 msgstr "Virement bancaire pot central"
 
-#: fedow_core/models.py:406
+#: fedow_core/models.py:427
 msgid "UUID"
 msgstr ""
 
-#: fedow_core/models.py:407
+#: fedow_core/models.py:428
 msgid "Identifiant unique conserve pour les imports depuis l'ancien Fedow"
 msgstr ""
 
-#: fedow_core/models.py:430
+#: fedow_core/models.py:451
 msgid "Hash SHA256"
 msgstr ""
 
-#: fedow_core/models.py:439
+#: fedow_core/models.py:460
 msgid "Transaction migree"
 msgstr "Transaction migrée"
 
-#: fedow_core/models.py:451
+#: fedow_core/models.py:472
 msgid "Wallet debite (qui paye)"
 msgstr ""
 
-#: fedow_core/models.py:464
+#: fedow_core/models.py:485
 msgid "Destinataire"
 msgstr ""
 
-#: fedow_core/models.py:465
+#: fedow_core/models.py:486
 msgid "Wallet credite (qui recoit). Nullable pour VOID/REFUND."
 msgstr ""
 
-#: fedow_core/models.py:487
+#: fedow_core/models.py:508
 msgid "Montant en centimes. 350 = 3,50 EUR."
 msgstr ""
 
-#: fedow_core/models.py:511
+#: fedow_core/models.py:532
 msgid "Carte NFC utilisee pour cette transaction"
 msgstr ""
 
-#: fedow_core/models.py:524
+#: fedow_core/models.py:545
 msgid "Carte maitresse"
 msgstr ""
 
-#: fedow_core/models.py:525
+#: fedow_core/models.py:546
 msgid "Carte maitresse du point de vente (terminal/caissier)"
 msgstr ""
 
-#: fedow_core/models.py:535
+#: fedow_core/models.py:556
 msgid "Date et heure"
 msgstr "Date et heure"
 
-#: fedow_core/models.py:554
+#: fedow_core/models.py:575
 msgid "Metadonnees"
 msgstr ""
 
-#: fedow_core/models.py:569
+#: fedow_core/models.py:590
 msgid "Type d'abonnement (legacy)"
 msgstr ""
 
-#: fedow_core/models.py:574
+#: fedow_core/models.py:595
 msgid "Debut d'abonnement (legacy)"
 msgstr ""
 
-#: fedow_core/models.py:598
+#: fedow_core/models.py:619
 msgid "UUID du Paiement_stripe associe (pas de FK cross-schema)"
 msgstr ""
 
-#: fedow_core/models.py:619
+#: fedow_core/models.py:640
 msgid "Lieu concerne — TOUJOURS filtrer par ce champ dans les vues"
 msgstr ""
 
-#: fedow_core/models.py:626
+#: fedow_core/models.py:647
 msgid "Adresse IP"
 msgstr "Adresse IP"
 
-#: fedow_core/models.py:630
+#: fedow_core/models.py:651
 msgid "Transaction"
 msgstr "Transaction"
 
-#: fedow_core/models.py:697
+#: fedow_core/models.py:718
 #: laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html:61
 #: laboutik/templates/laboutik/partial/hx_formulaire_identification_client.html:63
 msgid "Nom"
 msgstr "Nom"
 
-#: fedow_core/models.py:715
+#: fedow_core/models.py:736
 msgid ""
 "Le lieu qui a cree cette federation. Lui seul peut envoyer des invitations."
 msgstr ""
 
-#: fedow_core/models.py:726
+#: fedow_core/models.py:747
 msgid "Tenants membres"
 msgstr "Locataires membres"
 
-#: fedow_core/models.py:727
+#: fedow_core/models.py:748
 msgid "Lieux qui ont accepte de rejoindre cette federation."
 msgstr ""
 
-#: fedow_core/models.py:737
+#: fedow_core/models.py:758
 msgid ""
 "Lieux invites a rejoindre cette federation. Ils verront l'invitation dans "
 "leur admin et pourront accepter."
 msgstr ""
 
-#: fedow_core/models.py:747
+#: fedow_core/models.py:768
 msgid "Assets partages"
 msgstr "Actifs partagés"
 
-#: fedow_core/models.py:751
+#: fedow_core/models.py:772
 msgid "Federation"
 msgstr "Fédération"
 
@@ -16375,6 +16404,11 @@ msgstr ""
 #: seo/templates/seo/recherche.html:114
 msgid "Saisissez un terme pour lancer la recherche."
 msgstr ""
+
+#, fuzzy
+#~| msgid "Stripe error, check admin"
+#~ msgid "Stripe error. Contact an admin."
+#~ msgstr "Erreur Stripe, vérifiez l'administration"
 
 #~ msgid "Enter code"
 #~ msgstr "Saisir un code"

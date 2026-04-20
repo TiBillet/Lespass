@@ -63,7 +63,7 @@ from TiBillet import settings
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
-from fedow_core.models import Token, Asset
+from fedow_core.models import Token, Asset, Transaction
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from fedow_public.models import AssetFedowPublic
@@ -817,6 +817,115 @@ def _lieux_utilisables_pour_asset(asset):
     return infos
 
 
+def _structure_pour_transaction(tx, receiver_est_historique):
+    """
+    Retourne le libelle de la colonne "Structure" selon l'action de tx.
+    / Returns the "Structure" column label based on tx action.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Utilise _get_tenant_info_cached (Session 32) pour resoudre le nom d'un
+    collectif a partir de son Client.pk (cache global 3600s).
+
+    Cas particuliers :
+    - REFILL : "TiBillet" (convention : monnaie federee unique)
+    - FUSION : "Carte #{card.number}" (ou "-" si card None, anormal)
+    - Autres : nom du collectif "autre partie" selon le sens du flux
+
+    :param tx: fedow_core.Transaction
+    :param receiver_est_historique: bool (True si receiver in wallets historiques)
+    :return: str label pour la colonne Structure
+    """
+    # REFILL : pot central FED, label conventionnel "TiBillet".
+    # / REFILL: central FED pot, conventional label "TiBillet".
+    if tx.action == Transaction.REFILL:
+        return "TiBillet"
+
+    # FUSION : rattachement carte anonyme vers compte user.
+    # Le number imprime (8 chars) identifie la carte pour l'user.
+    # / FUSION: anonymous card -> user account attachment.
+    # The printed number (8 chars) identifies the card to the user.
+    if tx.action == Transaction.FUSION:
+        if tx.card is None:
+            logger.warning(
+                f"Transaction FUSION #{tx.id} sans card : affichage fallback"
+            )
+            return "—"
+        return f"Carte #{tx.card.number}"
+
+    # Autres actions : afficher le nom du collectif "autre partie" selon
+    # le sens du flux par rapport au wallet user.
+    # Si user recoit (receiver_est_historique=True) -> contrepartie = sender
+    # Sinon -> contrepartie = receiver
+    # getattr avec default None gere les deux cas : autre_partie None
+    # (ex: VOID sans receiver) OU autre_partie.origin None.
+    # / Other actions: show the "other party" collective name.
+    # If user receives, counterpart is sender. Else, it's receiver.
+    # getattr default handles both None cases (object None OR origin None).
+    autre_partie = tx.sender if receiver_est_historique else tx.receiver
+    tenant_contrepartie = getattr(autre_partie, "origin", None)
+
+    if tenant_contrepartie is None:
+        return "—"
+
+    info = _get_tenant_info_cached(tenant_contrepartie.pk)
+    if info is None:
+        return "—"
+
+    return info.get("organisation") or "—"
+
+
+def _enrichir_transaction_v2(tx, wallet_user, wallets_historiques_pks):
+    """
+    Transforme une fedow_core.Transaction en dict explicite pour le template.
+    / Turns a fedow_core.Transaction into an explicit dict for the template.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Calcule :
+    - signe : "+" si receiver ∈ wallets_historiques, "-" sinon
+    - amount_euros : amount / 100 (centimes -> euros)
+    - asset_name_affichage : "TiBillets" pour FED, sinon asset.name
+    - action_display : tx.get_action_display() (label traduit)
+    - structure : via _structure_pour_transaction (cf. helper)
+
+    :param tx: fedow_core.Transaction
+    :param wallet_user: AuthBillet.Wallet (user.wallet, conserve pour compat future)
+    :param wallets_historiques_pks: set[UUID] (user.wallet.pk + ephemeres fusionnes)
+    :return: dict explicite consomme par transaction_history_v2.html
+    """
+    # Signe : + si user recoit, - si user envoie.
+    # / Sign: + if user receives, - if user sends.
+    receiver_est_historique = (
+        tx.receiver_id is not None
+        and tx.receiver_id in wallets_historiques_pks
+    )
+    signe = "+" if receiver_est_historique else "-"
+
+    # Label asset : "TiBillets" pour FED (nom propre), sinon nom de l'asset.
+    # / Asset label: "TiBillets" for FED, else asset name.
+    if tx.asset.category == Asset.FED:
+        asset_name_affichage = "TiBillets"
+    else:
+        asset_name_affichage = tx.asset.name
+
+    # Libelle Structure via le helper dedie.
+    # / Structure label via dedicated helper.
+    structure = _structure_pour_transaction(tx, receiver_est_historique)
+
+    return {
+        "uuid": str(tx.uuid),
+        "datetime": tx.datetime,
+        "action": tx.action,
+        "action_display": tx.get_action_display(),
+        "amount_euros": tx.amount / 100,
+        "amount_brut": tx.amount,
+        "signe": signe,
+        "asset_name_affichage": asset_name_affichage,
+        "structure": structure,
+    }
+
+
 class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
@@ -1258,6 +1367,27 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
+        """
+        Historique des transactions du user connecte.
+        / User transaction history.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Dispatch V1/V2 selon peut_recharger_v2(user) :
+        - Verdict "v2" -> lecture locale fedow_core.Transaction (Session 33)
+        - Autres verdicts -> flow V1 FedowAPI (inchange)
+        / V1/V2 dispatch based on peut_recharger_v2(user).
+        """
+        user = request.user
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- Branche V2 : lecture locale fedow_core ---
+        # / V2 branch: local fedow_core read
+        if verdict == "v2":
+            return self._transactions_table_v2(request)
+
+        # --- Autres verdicts : code V1 existant inchange ---
+        # / Other verdicts: existing V1 code unchanged
         config = Configuration.get_solo()
         fedowAPI = FedowAPI()
         # On utilise ici .data plutot que validated_data pour executer les to_representation (celui du WalletSerializer)
@@ -1277,6 +1407,91 @@ class MyAccount(viewsets.ViewSet):
             'previous_url': previous_url,
         }
         return render(request, "reunion/partials/account/transaction_history.html", context=context)
+
+    def _transactions_table_v2(self, request):
+        """
+        Branche V2 de transactions_table : lit fedow_core.Transaction en base
+        locale et reconstitue l'historique des wallets ephemeres fusionnes
+        dans user.wallet.
+        / V2 branch: reads fedow_core.Transaction from local DB and
+        reconstitutes history of ephemeral wallets merged into user.wallet.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Pagination Django 40/page. HTMX swap sur #transactionHistory.
+        """
+        user = request.user
+        config = Configuration.get_solo()
+
+        # Garde : wallet absent -> aucune transaction.
+        # / Guard: no wallet -> no transaction.
+        if user.wallet is None:
+            return render(
+                request,
+                "reunion/partials/account/transaction_history_v2.html",
+                {
+                    "config": config,
+                    "transactions": [],
+                    "paginator_page": None,
+                    "aucune_transaction": True,
+                },
+            )
+
+        # 1. Reconstituer les wallets historiques (user.wallet + ephemeres fusionnes).
+        # / 1. Reconstitute historical wallets.
+        wallets_historiques_pks = {user.wallet.pk}
+        fusions_passees = Transaction.objects.filter(
+            action=Transaction.FUSION,
+            receiver=user.wallet,
+        ).values_list('sender_id', flat=True)
+        wallets_historiques_pks.update(fusions_passees)
+
+        # 2. Query : tx touchant ces wallets + exclude actions techniques.
+        # / 2. Query: tx touching these wallets + exclude technical actions.
+        actions_techniques_a_cacher = [
+            Transaction.FIRST,
+            Transaction.CREATION,
+            Transaction.BANK_TRANSFER,
+        ]
+        tx_queryset = (
+            Transaction.objects
+            .filter(
+                Q(sender_id__in=wallets_historiques_pks)
+                | Q(receiver_id__in=wallets_historiques_pks)
+            )
+            .exclude(action__in=actions_techniques_a_cacher)
+            .select_related(
+                'asset',
+                'sender__origin',
+                'receiver__origin',
+                'card',
+            )
+            .order_by('-datetime')
+        )
+
+        # 3. Pagination 40/page.
+        # / 3. Paginate 40/page.
+        paginator = Paginator(tx_queryset, 40)
+        numero_page = request.GET.get('page', 1)
+        page = paginator.get_page(numero_page)
+
+        # 4. Enrichir chaque transaction pour le template.
+        # / 4. Enrich each transaction for template.
+        transactions_enrichies = [
+            _enrichir_transaction_v2(tx, user.wallet, wallets_historiques_pks)
+            for tx in page.object_list
+        ]
+
+        return render(
+            request,
+            "reunion/partials/account/transaction_history_v2.html",
+            {
+                "config": config,
+                "transactions": transactions_enrichies,
+                "paginator_page": page,
+                "aucune_transaction": len(transactions_enrichies) == 0,
+            },
+        )
 
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])

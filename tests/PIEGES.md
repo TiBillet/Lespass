@@ -1946,6 +1946,95 @@ les tables TENANT referencees.
 Rencontre dans la Session 32 (Task 3 fixture `asset_tlf_avec_federation` et
 Task 5 test split FED+TIM).
 
+### Session 33 — Visualisation historique transactions V2 (2026-04-20)
+
+**11.10 — `CarteCashless.number` ET `tag_id` ont chacun une contrainte unique DB.**
+
+Les fixtures qui creent une `CarteCashless` dans les tests doivent utiliser
+des valeurs **uniques par run** (UUID hex) pour les DEUX champs, pas juste
+le `tag_id`. `CarteCashless.number` est aussi `unique=True` et les fixtures
+de test n'ont pas de teardown DB automatique (models en SHARED_APPS, donc
+pas de rollback au niveau tests pytest).
+
+```python
+# MAL : number hardcode -> IntegrityError au 2e run du test
+carte = CarteCashless.objects.create(
+    tag_id=uuid.uuid4().hex[:8].upper(),
+    number="ABCD1234",  # ERREUR : contrainte unique sur number aussi
+)
+
+# BON : number et tag_id uniques par run
+number_unique = uuid.uuid4().hex[:8].upper()
+carte = CarteCashless.objects.create(
+    tag_id=uuid.uuid4().hex[:8].upper(),
+    number=number_unique,
+)
+tx = Transaction.objects.create(..., card=carte)
+structure = _structure_pour_transaction(tx, ...)
+assert structure == f"Carte #{number_unique}"  # reference le number dynamique
+```
+
+Rencontre dans Task 2 Session 33 (`test_structure_pour_transaction_fusion_retourne_carte_number`).
+
+**11.11 — Markers `#, fuzzy` dans les `.po` apres `makemessages` : Django ignore silencieusement la traduction.**
+
+Apres un `django-admin makemessages`, Django essaye de proposer des traductions
+pour les nouvelles entrees en se basant sur des entrees existantes similaires
+(machine translation). Il colle un marker `#, fuzzy` au-dessus pour signaler
+"je ne suis pas sur, a verifier". **Si on ne retire pas ce marker**, Django
+ignore completement la traduction au runtime — le `msgstr` n'est pas utilise.
+
+```
+#: BaseBillet/templates/reunion/partials/account/transaction_history_v2.html:20
+#, fuzzy
+#| msgid "Last transaction"
+msgid "No transaction yet."
+msgstr "Derniere transaction"  # IGNORE par Django a cause du fuzzy
+
+# BON : retirer la ligne "#, fuzzy" + corriger msgstr
+msgid "No transaction yet."
+msgstr "Aucune transaction pour l'instant."  # OK, utilise au runtime
+```
+
+En Session 33, **3 markers fuzzy** avaient propose des traductions erronees :
+- `"No transaction yet."` → `"Derniere transaction"` (aurait affiche "Derniere transaction" en FR au lieu du message vide)
+- `"Pagination historique transactions"` → `"Afficher les dernieres transactions"`
+- `"Page %(current)s / %(total)s"` → avec mauvais placeholder python-format
+
+**Toujours relire les .po apres makemessages et retirer tous les `#, fuzzy`
+sur les entrees qu'on a ajoutees.** Les autres fuzzy (sur strings tierces)
+peuvent etre laisses si non dans le scope.
+
+Autre piege lie : Django convertit les variables `{% blocktranslate %}` en
+format `%(nom)s` dans le `.po`. `{{ current }}` → `%(current)s`. Ne pas se
+tromper en copiant la chaine depuis le template.
+
+**11.12 — `floatformat:2` affiche `,` ou `.` selon la locale active + `USE_L10N`.**
+
+Le filtre Django `|floatformat:2` produit un separateur decimal :
+- `.` si `USE_L10N=False` ou pas de locale active
+- `,` si `USE_L10N=True` ET locale FR active
+
+En test pytest (sans client HTTP ni middleware), aucune locale n'est activee,
+donc `|floatformat:2` produit `10.00`. Au runtime browser avec middleware
+locale `fr`, on obtient `10,00`.
+
+**Les tests qui assertent le format du montant dans le HTML doivent utiliser
+`10.00` (point), pas `10,00` (virgule) :**
+
+```python
+# test_transactions_table_v2_tri_chronologique_desc
+pos_10_00 = html.find("10.00")  # point, pas virgule
+assert pos_10_00 < pos_10_01 < pos_10_02
+```
+
+Si on veut tester le format user-facing (virgule), il faut un vrai client HTTP
+(`django.test.Client`) avec `LANGUAGE_CODE=fr` explicite, pas juste
+`RequestFactory`.
+
+Rencontre en Task 6 Session 33 : l'implementeur a du adapter les assertions
+de `"10,00"` a `"10.00"` car `RequestFactory` bypasse la locale middleware.
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*
