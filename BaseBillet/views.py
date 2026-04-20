@@ -1629,7 +1629,7 @@ class MyAccount(viewsets.ViewSet):
                     messages.add_message(request, messages.ERROR, _("Payment verification error"))
             except Exception:
                 messages.add_message(request, messages.ERROR, _("Payment verification error"))
-            return redirect('/my_account/')
+            return redirect('/my_account/balance/')
 
         # --- V2 : lecture locale + traitement si webhook en retard ---
         # Pattern inspire de la billetterie/adhesion : la meme fonction
@@ -1652,7 +1652,7 @@ class MyAccount(viewsets.ViewSet):
                 paiement = Paiement_stripe.objects.get(uuid=pk, user=user)
             except (Paiement_stripe.DoesNotExist, ValueError):
                 messages.add_message(request, messages.ERROR, _("Payment not found"))
-                return redirect('/my_account/')
+                return redirect('/my_account/balance/')
 
             # Declencher le traitement si pas deja fait (pattern webhook+retour).
             # Si webhook deja passe : early return rapide (idempotent).
@@ -1663,7 +1663,7 @@ class MyAccount(viewsets.ViewSet):
             except CashlessRefillTamperingError:
                 logger.error(f"Tampering detecte sur return_refill_wallet pour {paiement.uuid}")
                 messages.add_message(request, messages.ERROR, _("Payment verification error"))
-                return redirect('/my_account/')
+                return redirect('/my_account/balance/')
 
             if paiement.status == Paiement_stripe.PAID:
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
@@ -1674,7 +1674,7 @@ class MyAccount(viewsets.ViewSet):
                 # User refreshes later; webhook will retry.
                 messages.add_message(request, messages.INFO, _("Payment in progress. Please refresh in a moment."))
 
-        return redirect('/my_account/')
+        return redirect('/my_account/balance/')
 
 
 class QrCodeScanPay(viewsets.ViewSet):
