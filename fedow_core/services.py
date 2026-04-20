@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 # AssetService: currency and token management
 # ---------------------------------------------------------------------------
 
+
 class AssetService:
     """
     Methodes statiques pour gerer les assets (monnaies/tokens).
@@ -60,7 +61,7 @@ class AssetService:
         """
         assets_du_tenant = Asset.objects.filter(
             tenant_origin=tenant,
-        ).order_by('name')
+        ).order_by("name")
 
         return assets_du_tenant
 
@@ -85,15 +86,20 @@ class AssetService:
             tenants=tenant,
         )
         assets_federes_uuids = federations_du_tenant.values_list(
-            'assets__uuid', flat=True,
+            "assets__uuid",
+            flat=True,
         )
 
         # Combiner : assets du tenant OU assets federes, actifs uniquement.
         # Combine: tenant's assets OR federated assets, active only.
-        assets_accessibles = Asset.objects.filter(
-            Q(tenant_origin=tenant) | Q(uuid__in=assets_federes_uuids),
-            active=True,
-        ).distinct().order_by('name')
+        assets_accessibles = (
+            Asset.objects.filter(
+                Q(tenant_origin=tenant) | Q(uuid__in=assets_federes_uuids),
+                active=True,
+            )
+            .distinct()
+            .order_by("name")
+        )
 
         return assets_accessibles
 
@@ -142,6 +148,7 @@ class AssetService:
 # WalletService : operations sur les soldes (Token)
 # WalletService: balance operations (Token)
 # ---------------------------------------------------------------------------
+
 
 class WalletService:
     """
@@ -192,7 +199,7 @@ class WalletService:
         """
         tous_les_tokens = Token.objects.filter(
             wallet=wallet,
-        ).select_related('asset', 'asset__tenant_origin')
+        ).select_related("asset", "asset__tenant_origin")
 
         return tous_les_tokens
 
@@ -214,12 +221,12 @@ class WalletService:
         resultat = Token.objects.filter(
             wallet=wallet,
         ).aggregate(
-            total=Sum('value'),
+            total=Sum("value"),
         )
 
         # Si aucun Token n'existe, aggregate retourne {'total': None}.
         # If no Token exists, aggregate returns {'total': None}.
-        total_en_centimes = resultat['total'] or 0
+        total_en_centimes = resultat["total"] or 0
 
         return total_en_centimes
 
@@ -278,7 +285,7 @@ class WalletService:
         token, token_just_created = Token.objects.get_or_create(
             wallet=wallet,
             asset=asset,
-            defaults={'value': 0},
+            defaults={"value": 0},
         )
 
         # Verrouiller la ligne pour eviter les modifications concurrentes.
@@ -286,7 +293,7 @@ class WalletService:
         token_verrouille = Token.objects.select_for_update().get(pk=token.pk)
 
         token_verrouille.value = token_verrouille.value + montant_en_centimes
-        token_verrouille.save(update_fields=['value'])
+        token_verrouille.save(update_fields=["value"])
 
         return token_verrouille
 
@@ -341,10 +348,10 @@ class WalletService:
         # We still set the card → user link if not already done.
         carte_a_un_wallet_ephemere = carte.wallet_ephemere is not None
         if not carte_a_un_wallet_ephemere:
-            carte_user_est_deja_correct = (carte.user == user)
+            carte_user_est_deja_correct = carte.user == user
             if not carte_user_est_deja_correct:
                 carte.user = user
-                carte.save(update_fields=['user'])
+                carte.save(update_fields=["user"])
             return
 
         wallet_source = carte.wallet_ephemere
@@ -361,7 +368,7 @@ class WalletService:
                 name=f"Wallet {user.email}",
             )
             user.wallet = nouveau_wallet
-            user.save(update_fields=['wallet'])
+            user.save(update_fields=["wallet"])
 
         wallet_cible = user.wallet
 
@@ -370,11 +377,11 @@ class WalletService:
         # pointe wallet_ephemere vers le meme wallet que user.wallet.
         # / Unlikely but possible if someone manually pointed
         # wallet_ephemere to the same wallet as user.wallet.
-        wallet_source_est_le_meme_que_cible = (wallet_source.pk == wallet_cible.pk)
+        wallet_source_est_le_meme_que_cible = wallet_source.pk == wallet_cible.pk
         if wallet_source_est_le_meme_que_cible:
             carte.user = user
             carte.wallet_ephemere = None
-            carte.save(update_fields=['user', 'wallet_ephemere'])
+            carte.save(update_fields=["user", "wallet_ephemere"])
             return
 
         # --- Transferer chaque Token avec solde > 0 ---
@@ -408,7 +415,7 @@ class WalletService:
         # It's just detached from the card.
         carte.user = user
         carte.wallet_ephemere = None
-        carte.save(update_fields=['user', 'wallet_ephemere'])
+        carte.save(update_fields=["user", "wallet_ephemere"])
 
         logger.info(
             f"Fusion wallet ephemere terminee pour carte {carte.tag_id} "
@@ -481,7 +488,7 @@ class WalletService:
             )
 
         token_verrouille.value = token_verrouille.value - montant_en_centimes
-        token_verrouille.save(update_fields=['value'])
+        token_verrouille.save(update_fields=["value"])
 
         return token_verrouille
 
@@ -554,10 +561,12 @@ class WalletService:
             Token.objects.filter(
                 wallet=wallet_carte,
                 value__gt=0,
-            ).filter(
+            )
+            .filter(
                 Q(asset__category=Asset.TLF, asset__tenant_origin=tenant)
                 | Q(asset__category=Asset.FED)
-            ).select_related('asset', 'asset__tenant_origin')
+            )
+            .select_related("asset", "asset__tenant_origin")
         )
 
         if not tokens_eligibles:
@@ -642,6 +651,7 @@ class WalletService:
                 # / Local import: laboutik may not be available depending on context
                 try:
                     from laboutik.models import CartePrimaire
+
                     CartePrimaire.objects.filter(carte=carte).delete()
                 except ImportError:
                     pass
@@ -662,6 +672,7 @@ class WalletService:
 # TransactionService : creation de transactions (mouvements financiers)
 # TransactionService: transaction creation (financial movements)
 # ---------------------------------------------------------------------------
+
 
 class TransactionService:
     """
@@ -740,7 +751,6 @@ class TransactionService:
             metadata = {}
 
         with transaction.atomic():
-
             # --- Debit du sender ---
             # Certaines actions ne debitent pas le sender :
             # - FIRST / CREATION : genesis, pas de debit
@@ -916,6 +926,7 @@ class TransactionService:
 # BankTransferService: tracking central pot debt to tenants (Phase 2)
 # ---------------------------------------------------------------------------
 
+
 class BankTransferService:
     """
     Service de gestion des virements bancaires pot central -> tenant.
@@ -945,15 +956,15 @@ class BankTransferService:
             action=Transaction.REFUND,
             asset=asset,
             tenant=tenant,
-        ).aggregate(total=Sum('amount'))
-        total_refund = agg_refund.get('total') or 0
+        ).aggregate(total=Sum("amount"))
+        total_refund = agg_refund.get("total") or 0
 
         agg_virement = Transaction.objects.filter(
             action=Transaction.BANK_TRANSFER,
             asset=asset,
             tenant=tenant,
-        ).aggregate(total=Sum('amount'))
-        total_virement = agg_virement.get('total') or 0
+        ).aggregate(total=Sum("amount"))
+        total_virement = agg_virement.get("total") or 0
 
         dette = total_refund - total_virement
         return max(0, dette)  # filet de securite : la dette ne peut etre negative
@@ -978,10 +989,14 @@ class BankTransferService:
         from django.db.models import Sum
         from Customers.models import Client
 
-        couples = Transaction.objects.filter(
-            action__in=[Transaction.REFUND, Transaction.BANK_TRANSFER],
-            asset__category=Asset.FED,
-        ).values_list('tenant_id', 'asset_id').distinct()
+        couples = (
+            Transaction.objects.filter(
+                action__in=[Transaction.REFUND, Transaction.BANK_TRANSFER],
+                asset__category=Asset.FED,
+            )
+            .values_list("tenant_id", "asset_id")
+            .distinct()
+        )
 
         resultat = []
         for tenant_id, asset_id in couples:
@@ -991,29 +1006,41 @@ class BankTransferService:
                 continue
 
             agg_refund = Transaction.objects.filter(
-                action=Transaction.REFUND, asset=asset, tenant=tenant,
-            ).aggregate(total=Sum('amount'))
-            total_refund = agg_refund.get('total') or 0
+                action=Transaction.REFUND,
+                asset=asset,
+                tenant=tenant,
+            ).aggregate(total=Sum("amount"))
+            total_refund = agg_refund.get("total") or 0
 
             agg_virement = Transaction.objects.filter(
-                action=Transaction.BANK_TRANSFER, asset=asset, tenant=tenant,
-            ).aggregate(total=Sum('amount'))
-            total_virement = agg_virement.get('total') or 0
+                action=Transaction.BANK_TRANSFER,
+                asset=asset,
+                tenant=tenant,
+            ).aggregate(total=Sum("amount"))
+            total_virement = agg_virement.get("total") or 0
 
             dette = max(0, total_refund - total_virement)
 
-            dernier_virement = Transaction.objects.filter(
-                action=Transaction.BANK_TRANSFER, asset=asset, tenant=tenant,
-            ).order_by('-datetime').first()
+            dernier_virement = (
+                Transaction.objects.filter(
+                    action=Transaction.BANK_TRANSFER,
+                    asset=asset,
+                    tenant=tenant,
+                )
+                .order_by("-datetime")
+                .first()
+            )
 
-            resultat.append({
-                "tenant": tenant,
-                "asset": asset,
-                "dette_centimes": dette,
-                "total_refund_centimes": total_refund,
-                "total_virements_centimes": total_virement,
-                "dernier_virement": dernier_virement,
-            })
+            resultat.append(
+                {
+                    "tenant": tenant,
+                    "asset": asset,
+                    "dette_centimes": dette,
+                    "total_refund_centimes": total_refund,
+                    "total_virements_centimes": total_virement,
+                    "dernier_virement": dernier_virement,
+                }
+            )
 
         # Tri : dette decroissante / Sort: debt descending
         resultat.sort(key=lambda d: d["dette_centimes"], reverse=True)
@@ -1116,3 +1143,94 @@ class BankTransferService:
             f"vers tenant {tenant.schema_name} (asset {asset.name})"
         )
         return tx
+
+
+# ---------------------------------------------------------------------------
+# RefillService : recharge cashless depuis un PSP externe (Stripe, Payplug...)
+# RefillService: cashless refill from an external PSP
+# ---------------------------------------------------------------------------
+
+
+class RefillService:
+    """
+    Service de recharge FED depuis un paiement bancaire externe.
+    Appele par les webhooks PSP (Stripe aujourd'hui, autres demain).
+
+    / FED refill service from an external bank payment.
+    Called by PSP webhooks (Stripe today, others tomorrow).
+
+    Contrat PSP-agnostique : fedow_core/PSP_INTERFACE.md
+    """
+
+    @staticmethod
+    def process_cashless_refill(
+        paiement_uuid,
+        user,
+        amount_cents,
+        tenant,
+        ip="0.0.0.0",
+    ):
+        """
+        Cree une Transaction(action=REFILL) idempotente et credite le Token de l'user.
+        / Creates an idempotent REFILL Transaction and credits the user's Token.
+
+        Args:
+            paiement_uuid: UUID du paiement externe (Paiement_stripe.uuid, ou autre PSP)
+            user: TibilletUser a crediter
+            amount_cents: int (montant en centimes, deja valide par le serializer)
+            tenant: Client (generalement federation_fed)
+            ip: str (IP de la requete, pour audit)
+
+        Returns:
+            Transaction: la transaction creee (ou existante si idempotence)
+
+        Idempotence :
+        Si une Transaction(checkout_stripe=paiement_uuid, action=REFILL) existe deja,
+        on la retourne sans rien creer. Cela protege contre les retries Stripe.
+
+        / If a Transaction(checkout_stripe=paiement_uuid, action=REFILL) already exists,
+        we return it without creating anything. Protects against PSP retries.
+        """
+        # L'asset FED est unique global (convention, cf. bootstrap_fed_asset).
+        # / FED asset is globally unique (convention, see bootstrap_fed_asset).
+        asset_fed = Asset.objects.get(category=Asset.FED)
+
+        with transaction.atomic():
+            # Idempotence : verifier si la Transaction existe deja.
+            # / Idempotence: check if Transaction already exists.
+            transaction_existante = Transaction.objects.filter(
+                checkout_stripe=paiement_uuid,
+                action=Transaction.REFILL,
+            ).first()
+            if transaction_existante:
+                return transaction_existante
+
+            # Fallback defensif : creer le wallet si absent.
+            # Normalement, MyAccount.refill_wallet() a deja cree le wallet avant Stripe
+            # (car la metadata Stripe a besoin de wallet.uuid).
+            # / Defensive fallback: create wallet if missing.
+            # Normally refill_wallet() already created it before Stripe.
+            if user.wallet is None:
+                user.wallet = Wallet.objects.create(
+                    origin=tenant,
+                    name=f"Wallet {user.email}",
+                )
+                user.save(update_fields=["wallet"])
+
+            # Creation de la Transaction REFILL + credit du Token (atomique).
+            # TransactionService.creer_recharge fait un atomic imbrique,
+            # Django gere via savepoint.
+            # / Create REFILL Transaction + credit Token (atomic).
+            # TransactionService.creer_recharge uses nested atomic, Django savepoint.
+            nouvelle_transaction = TransactionService.creer_recharge(
+                sender_wallet=asset_fed.wallet_origin,
+                receiver_wallet=user.wallet,
+                asset=asset_fed,
+                montant_en_centimes=amount_cents,
+                tenant=tenant,
+                ip=ip,
+                checkout_stripe_uuid=paiement_uuid,
+                comment="Recharge FED via PSP (voir PSP_INTERFACE.md)",
+            )
+
+            return nouvelle_transaction

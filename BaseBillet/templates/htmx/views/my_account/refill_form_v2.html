@@ -1,0 +1,189 @@
+{% load i18n static %}
+{% comment %}
+Formulaire HTMX de saisie de montant pour la recharge FED V2.
+HTMX form to enter the refill amount for V2 FED top-up.
+
+LOCALISATION : BaseBillet/templates/htmx/views/my_account/refill_form_v2.html
+
+Contexte attendu :
+- submit_url : URL POST du handler refill_wallet_submit
+- amount_min_euros_input / amount_max_euros_input : bornes HTML5 (int euros)
+- amount_min_euros_affichage / amount_max_euros_affichage : bornes format fr ("1,00")
+- error (optionnel) : message d'erreur de validation (422)
+- amount_saisi (optionnel) : valeur deja saisie a pre-remplir apres erreur
+
+Design : carte centree elegante a la place du bloc des 3 boutons d'action.
+L'user voit son montant en grand + chips de montants suggeres + input libre.
+Typo : Playwrite IS pour le titre (manuscrit chaleureux), Staatliches pour
+l'affichage du montant (display poster), Luciole pour le corps.
+
+CSS dedie : /static/reunion/css/refill_v2.css
+{% endcomment %}
+
+{# CSS charge par le template parent balance.html dans {% block extra_head %}. #}
+{# / CSS loaded by parent template balance.html in extra_head block. #}
+<div class="refill-v2-card" id="tirelire-section" data-testid="refill-form-container" aria-live="polite">
+    <div class="refill-v2-inner">
+
+        <h3 class="refill-v2-title" data-testid="refill-form-title">
+            {% translate "Je recharge ma tirelire" %}
+        </h3>
+        <p class="refill-v2-subtitle">
+            {% blocktranslate with min=amount_min_euros_affichage max=amount_max_euros_affichage %}
+                Entre {{ min }} € et {{ max }} € — paiement par carte bancaire.
+            {% endblocktranslate %}
+        </p>
+
+        {% if error %}
+            <div class="refill-v2-error" role="alert" data-testid="refill-form-error">
+                <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+                <span>{{ error }}</span>
+            </div>
+        {% endif %}
+
+        <form method="post"
+              action="{{ submit_url }}"
+              hx-post="{{ submit_url }}"
+              hx-target="#tirelire-section"
+              hx-swap="outerHTML"
+              hx-indicator="#tibillet-spinner"
+              data-testid="refill-form">
+
+            {% csrf_token %}
+
+            {# Grand affichage du montant saisi : mis a jour en live via oninput. #}
+            {# / Big amount display, updated live via oninput JS. #}
+            <div class="refill-v2-amount-display" aria-hidden="true">
+                <span class="refill-v2-amount-value" id="refill-amount-preview">{{ amount_saisi|default:"0" }}</span>
+                <span class="refill-v2-amount-currency">€</span>
+            </div>
+
+            {# Chips de montants suggeres : setValue() pour remplir l'input + preview. #}
+            {# / Suggested amount chips: setValue() fills input + preview. #}
+            <div class="refill-v2-chips" role="group" aria-label="{% translate 'Montants suggérés' %}">
+                {% for montant in "5,10,15,20,50,100"|cut:" " %}{% endfor %}
+                <button type="button" class="refill-v2-chip" data-refill-preset="5"
+                        data-testid="refill-chip-5">5 €</button>
+                <button type="button" class="refill-v2-chip" data-refill-preset="10"
+                        data-testid="refill-chip-10">10 €</button>
+                <button type="button" class="refill-v2-chip" data-refill-preset="15"
+                        data-testid="refill-chip-15">15 €</button>
+                <button type="button" class="refill-v2-chip" data-refill-preset="20"
+                        data-testid="refill-chip-20">20 €</button>
+                <button type="button" class="refill-v2-chip" data-refill-preset="50"
+                        data-testid="refill-chip-50">50 €</button>
+                <button type="button" class="refill-v2-chip" data-refill-preset="100"
+                        data-testid="refill-chip-100">100 €</button>
+            </div>
+
+            {# Input "libre" pour les montants non listes. #}
+            {# Mobile : inputmode=decimal pour clavier numerique avec virgule. #}
+            {# Pas d'autofocus : sur mobile, ouvre le clavier a l'arrivee et gache l'UX. #}
+            {# / Mobile: inputmode=decimal for numeric keyboard with comma. #}
+            {# No autofocus: on mobile, opens keyboard immediately = bad UX. #}
+            <div class="refill-v2-input-group">
+                <label for="refill-input-amount">
+                    {% translate "Autre montant" %}
+                </label>
+                <input type="number"
+                       id="refill-input-amount"
+                       name="amount_euros"
+                       class="refill-v2-input"
+                       step="0.01"
+                       min="{{ amount_min_euros_input }}"
+                       max="{{ amount_max_euros_input }}"
+                       value="{{ amount_saisi|default:'' }}"
+                       required
+                       inputmode="decimal"
+                       pattern="[0-9]+([.,][0-9]{1,2})?"
+                       placeholder="{% translate 'Ex. 12,50' %}"
+                       aria-label="{% translate 'Montant personnalisé en euros' %}"
+                       data-testid="refill-input-amount">
+            </div>
+
+            {# Bouton PAYER sticky bottom sur mobile (media query CSS) : reste toujours #}
+            {# visible meme quand le clavier virtuel est ouvert. Le lien Annuler est #}
+            {# secondaire, pas critique d'etre visible. #}
+            {# / PAYER button sticky-bottom on mobile: always visible even with virtual keyboard open. #}
+            <div class="refill-v2-actions">
+                {# Annuler : restauration de la section "Ma tirelire" via HTMX, #}
+                {# pas de reload full page. href="/my_account/" comme fallback sans JS. #}
+                {# / Cancel: HTMX swap to restore, no full page reload. href for no-JS fallback. #}
+                <a href="/my_account/"
+                   hx-get="/my_account/tirelire_section/"
+                   hx-target="#tirelire-section"
+                   hx-swap="outerHTML"
+                   hx-indicator="#tibillet-spinner"
+                   class="refill-v2-cancel"
+                   data-testid="refill-btn-cancel">
+                    {% translate "Annuler" %}
+                </a>
+                <button type="submit"
+                        class="refill-v2-submit"
+                        data-loading-disable
+                        data-testid="refill-btn-submit">
+                    <i class="bi bi-credit-card-2-front-fill" aria-hidden="true"></i>
+                    {% translate "Payer" %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# Script minimal FALC : bind des chips + update du preview. #}
+{# / Minimal script: chip binding + preview update. #}
+<script>
+(function() {
+    // Le container est refill-v2-card. On y attache tous les listeners.
+    // / Container is refill-v2-card. All listeners are attached to it.
+    const card = document.getElementById('button_tirelire');
+    if (!card || !card.classList.contains('refill-v2-card')) return;
+
+    const input = card.querySelector('#refill-input-amount');
+    const preview = card.querySelector('#refill-amount-preview');
+    const chips = card.querySelectorAll('.refill-v2-chip');
+
+    // Met a jour l'affichage (preview) depuis la valeur de l'input.
+    // / Update the preview from the input value.
+    function majPreview() {
+        const valeurBrute = (input.value || '').trim();
+        if (valeurBrute === '' || isNaN(parseFloat(valeurBrute))) {
+            preview.textContent = '0';
+            return;
+        }
+        // On affiche tel que saisi (entier ou decimal), format simple.
+        // / Display as typed (int or decimal), simple format.
+        const valeurNombre = parseFloat(valeurBrute);
+        if (Number.isInteger(valeurNombre)) {
+            preview.textContent = String(valeurNombre);
+        } else {
+            preview.textContent = valeurNombre.toFixed(2).replace('.', ',');
+        }
+    }
+
+    // Chips : au clic, on remplit l'input et on marque le chip comme actif.
+    // / Chips: on click, fill input and mark chip active.
+    chips.forEach(function(chip) {
+        chip.addEventListener('click', function() {
+            const preset = chip.getAttribute('data-refill-preset');
+            if (!preset) return;
+            input.value = preset;
+            chips.forEach(function(c) { c.classList.remove('is-active'); });
+            chip.classList.add('is-active');
+            majPreview();
+            input.focus();
+        });
+    });
+
+    // Input : mise a jour en live + retire l'etat actif des chips si saisie libre.
+    // / Input: live update + remove chip active state on free input.
+    input.addEventListener('input', function() {
+        majPreview();
+        chips.forEach(function(c) { c.classList.remove('is-active'); });
+    });
+
+    // Affichage initial (au chargement / apres erreur 422 avec amount_saisi).
+    // / Initial display (on load / after 422 with amount_saisi).
+    majPreview();
+})();
+</script>

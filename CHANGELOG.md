@@ -1,5 +1,147 @@
 # Changelog / Journal des modifications
 
+## Session 32 — Visualisation tirelire V2 / Wallet display V2 (2026-04-20)
+
+**Quoi / What:** La page `/my_account/balance/` affiche desormais les `fedow_core.Token` locaux pour les users V2, au lieu d'appeler `FedowAPI` distant. Dispatch symetrique a Session 31 via `peut_recharger_v2(user)`.
+/ The balance page now displays local `fedow_core.Token` for V2 users, instead of calling the remote `FedowAPI`. Symmetric dispatch with Session 31 via `peut_recharger_v2(user)`.
+
+**Pourquoi / Why:** Apres la Session 31 (recharge FED V2 en base locale), les users V2 ne voyaient pas leurs tokens sur leur page balance (toujours lus depuis le serveur Fedow distant). Cette session complete le flow read-side en local.
+/ After Session 31 (FED V2 refill in local DB), V2 users couldn't see their tokens on the balance page (still read from remote Fedow). This session completes the local read-side flow.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `BaseBillet/views.py` | Dispatch V2 dans `MyAccount.tokens_table` + methode `_tokens_table_v2` + 2 helpers module-level (`_lieux_utilisables_pour_asset`, `_get_tenant_info_cached`) + imports `Token`/`Asset` |
+| `BaseBillet/templates/reunion/partials/account/token_table_v2.html` | Nouveau partial : 2 sous-tableaux (Currencies fiduciaires + Time & loyalty compteurs) + cas vide |
+| `tests/pytest/test_tokens_table_v2.py` | Nouveau, 9 tests pytest DB-only |
+| `A TESTER et DOCUMENTER/visu-tirelire-v2.md` | Guide mainteneur |
+| `tests/PIEGES.md` | Nouvelle entree 11.9 : cross-schema cascade sur delete() requiert tenant_context |
+| `locale/{fr,en}/LC_MESSAGES/django.po` + `.mo` | 7 nouvelles strings i18n |
+
+### Migration
+- **Migration necessaire / Migration required:** Non / No
+- **Non-regression :** V1 flow (`FedowAPI`) inchange. Les users `v1_legacy`, `wallet_legacy`, `feature_desactivee` continuent d'utiliser le flow existant.
+
+### Tests
+- 9 tests pytest DB-only dans `tests/pytest/test_tokens_table_v2.py`
+- Session 31 (31 tests) non-regressee
+
+## Recharge FED V2 — Phases A, B, C / FED V2 Refill — Phases A, B, C
+
+**Date :** 2026-04-20
+**Migration :** Oui / Yes — voir section Migrations ci-dessous
+
+**Quoi / What :** Fondations techniques de la recharge FED V2 locale (sans
+serveur Fedow distant) pour les nouveaux tenants. La recharge FED, jusqu'a
+present entierement deleguee a un serveur Fedow distant via HTTP+RSA, est
+reecrite en acces DB direct dans `fedow_core` (SHARED_APPS). Les tenants
+legacy (avec `server_cashless` configure) continuent le flow V1 inchange ;
+les tenants V2 (`module_monnaie_locale=True AND server_cashless IS NULL`)
+basculent automatiquement sur le nouveau flow local.
+
+**Pourquoi / Why :** Premiere etape du plan de fusion mono-repo TiBillet
+(cf. `TECH DOC/Laboutik sessions/PLAN_LABOUTIK.md`). La recharge FED est le
+cas d'usage n°1 du plan de remplacement progressif du serveur Fedow distant
+par l'app locale `fedow_core`. Permet l'atomicite cross-schema, supprime la
+dependance critique au serveur Fedow distant pour cette feature, ouvre la
+voie a l'ajout de PSP alternatifs (Payplug, Lydia, etc.) via le contrat
+documente dans `fedow_core/PSP_INTERFACE.md`.
+
+### Architecture en 4 couches
+
+```
+Intention (Product RECHARGE_CASHLESS_FED)
+    → Gateway PSP (CreationPaiementStripeFederation, pas de Connect, pas de SEPA)
+        → Moyen (Paiement_stripe source=CASHLESS_REFILL, dans tenant federation_fed)
+            → Resultat wallet (RefillService : Transaction REFILL + credit Token)
+```
+
+### Decisions architecturales validees
+
+| Decision | Valeur |
+|---|---|
+| Moteur cible | `fedow_core` (SHARED_APPS, acces DB direct) |
+| Tenant de stockage | Tenant dedie `federation_fed` (`Client.FED = 'E'`) |
+| Bootstrap | Management command `bootstrap_fed_asset` idempotente |
+| Gateway Stripe | Pas de Stripe Connect (compte central root), CB uniquement (pas SEPA) |
+| Montant min/max | Hardcodes 100 / 50000 centimes (1 € / 500 €) |
+| Bascule V1/V2 | Helper `peut_recharger_v2(user)` : module_monnaie_locale + server_cashless courant + wallet.origin |
+| Bloc wallet legacy | Message FALC inline "Migration en cours, merci de patienter" |
+| Idempotence webhook | Check `Transaction(checkout_stripe=..., action=REFILL).exists()` dans atomic |
+| Anti-tampering | `stripe.amount_total == int(paiement.total() * 100)` |
+| Verrous admin | Asset FED lecture seule ; Product de recharge non creable manuellement |
+
+### Fichiers crees / Created files
+
+| Fichier / File | Role / Role |
+|---|---|
+| `fedow_core/management/commands/bootstrap_fed_asset.py` | Commande idempotente : tenant `federation_fed` + root wallet + Asset FED + Product de recharge |
+| `fedow_core/PSP_INTERFACE.md` | Contrat documente pour l'ajout d'un nouveau PSP |
+| `PaiementStripe/serializers.py` | `RefillAmountSerializer` (bornes 1 € / 500 €) |
+| `PaiementStripe/refill_federation.py` | `CreationPaiementStripeFederation` (gateway Stripe compte central, sans Connect ni SEPA) |
+| `BaseBillet/templates/htmx/views/my_account/refill_form_v2.html` | Formulaire HTMX saisie montant |
+| `BaseBillet/templates/htmx/views/my_account/refill_migration_inline.html` | Message "migration en cours" pour wallet legacy |
+| `tests/pytest/test_bootstrap_fed_asset.py` | 4 tests bootstrap idempotent |
+| `tests/pytest/test_refill_service.py` | 3 tests RefillService (nominal, idempotent, wallet fallback) |
+| `tests/pytest/test_refill_serializer.py` | 5 tests bornes montant |
+| `tests/pytest/test_refill_federation_gateway.py` | 4 tests gateway (no Connect, no SEPA, source, metadata) |
+| `tests/pytest/test_refill_webhook.py` | 4 tests webhook (dispatch, anti-tampering, idempotence, source check) |
+| `tests/pytest/test_peut_recharger_v2.py` | 4 tests bascule V1/V2 (4 verdicts) |
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `Customers/models.py` | +categorie `Client.FED = 'E'` |
+| `BaseBillet/models.py` | +`Product.RECHARGE_CASHLESS_FED` + `Paiement_stripe.CASHLESS_REFILL` |
+| `fedow_core/services.py` | +classe `RefillService.process_cashless_refill()` (idempotent) |
+| `fedow_core/admin.py` | Defense en profondeur : Asset FED non modifiable (`has_change_permission`) |
+| `Administration/management/commands/install.py` | +hook `call_command('bootstrap_fed_asset')` |
+| `laboutik/management/commands/create_test_pos_data.py` | +hook `bootstrap_fed_asset` (fixtures test) |
+| `ApiBillet/views.py` | +`_process_stripe_webhook_cashless_refill()` + dispatch `refill_type='FED'` avant legacy |
+| `BaseBillet/views.py` | +helper `peut_recharger_v2()` + reecriture `refill_wallet()` + `refill_wallet_submit()` + `return_refill_wallet()` V1/V2 |
+
+### Migrations / Migrations
+
+- `Customers/migrations/0005_alter_client_categorie.py`
+- `BaseBillet/migrations/0215_alter_paiement_stripe_source_and_more.py`
+
+Application :
+
+```bash
+docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
+```
+
+Puis **obligatoire apres la migration**, lancer le bootstrap (idempotent) :
+
+```bash
+docker exec lespass_django poetry run python manage.py bootstrap_fed_asset
+```
+
+### Tests / Tests
+
+- **Phase A** : 12 tests pytest verts (bootstrap + service + serializer)
+- **Phase B** : 8 tests pytest verts (gateway + webhook)
+- **Phase D** : 4 tests pytest verts (les 4 branches de peut_recharger_v2)
+- **Non-regression** : 17 tests fedow_core + 19 tests Stripe existants, 0 regression
+- **Total Session 31** : **24 nouveaux tests pytest** (+ 36 tests existants intacts)
+
+### Ce qui reste (Phase D-polish et suite)
+
+- Tests pytest nice-to-have (Asset FED absent, cross-tenant, serializer UI)
+- Tests E2E Playwright (flow complet Stripe 4242 + non-regression V1)
+- Condition template `my_account_wallet.html` : masquer le bouton refill quand `module_monnaie_locale=False`
+- i18n : `makemessages -l fr -l en` + `compilemessages` pour les nouveaux strings
+- Phase E (Session 31 Phase E, optionnelle, plus tard) : suppression complete du legacy Fedow distant (chantier 5-7 jours, 36 usages de `FedowAPI()` a garder)
+
+### Reference / Reference
+
+- Spec : `TECH DOC/Laboutik sessions/Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md`
+- Plans : `PLAN_PHASE_A.md`, `PLAN_PHASE_B.md`
+- Contrat PSP : `fedow_core/PSP_INTERFACE.md`
+
+---
+
 ## Stabilisation complete suite E2E / Full E2E suite stabilization
 
 **Date :** 2026-04-19

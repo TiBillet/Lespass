@@ -63,6 +63,7 @@ from TiBillet import settings
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
+from fedow_core.models import Token, Asset
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from fedow_public.models import AssetFedowPublic
@@ -691,6 +692,131 @@ class TiBilletLogin(viewsets.ViewSet):
         return HttpResponseRedirect(redirect_url)
 
 
+def peut_recharger_v2(user):
+    """
+    Determine si l'user peut recharger son wallet FED via le flow V2 (fedow_core local).
+    / Determine if the user can refill their FED wallet via the V2 flow (local fedow_core).
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Verdicts possibles :
+    - "feature_desactivee" : module_monnaie_locale=False (pas de bouton refill)
+    - "v1_legacy" : tenant courant a server_cashless (LaBoutik externe -> flow V1)
+    - "wallet_legacy" : wallet de l'user cree dans un tenant V1 (message migration)
+    - "v2" : tout est OK, flow V2 autorise
+
+    Le tenant courant est lu depuis connection.tenant via Configuration.get_solo().
+    / Current tenant is read from connection.tenant via Configuration.get_solo().
+
+    Reference : spec TECH DOC/Laboutik sessions/Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md
+    """
+    # Garde 1 : le tenant courant est en mode V2 ?
+    # / Guard 1: current tenant is in V2 mode?
+    config = Configuration.get_solo()
+    if not config.module_monnaie_locale:
+        return False, "feature_desactivee"
+
+    if config.server_cashless is not None:
+        return False, "v1_legacy"
+
+    # Garde 2 : le wallet de l'user n'est pas lie a un tenant V1 ?
+    # / Guard 2: user's wallet is not linked to a V1 tenant?
+    if user.wallet and user.wallet.origin:
+        with tenant_context(user.wallet.origin):
+            config_origin = Configuration.get_solo()
+            if config_origin.server_cashless is not None:
+                return False, "wallet_legacy"
+
+    return True, "v2"
+
+
+def _get_tenant_info_cached(tenant_pk):
+    """
+    Retourne {organisation, logo} d'un tenant, avec cache 1h.
+    / Returns {organisation, logo} of a tenant, with 1h cache.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    CACHE CROSS-TENANT VOLONTAIRE : la cle "tenant_info_v2" est globale
+    (pas de connection.tenant.pk dedans). C'est voulu : cette fonction
+    sert a afficher les noms/logos de N lieux depuis un seul schema.
+    Une cle par tenant casserait le mutualisme du cache et creerait
+    N*M entrees redondantes. Pattern strictement equivalent a
+    get_place_cached_info V1 (cle "place_uuid" aussi globale).
+    / Intentional cross-tenant cache. Same pattern as V1's
+    get_place_cached_info which also uses a global key.
+
+    Premier appel (cache froid) : itere tous les tenants
+    categorie=SALLE_SPECTACLE en une seule passe (N tenant_context).
+    / First call (cold cache): iterates all SALLE_SPECTACLE tenants
+    in one pass.
+
+    :param tenant_pk: UUID du tenant (Client.pk)
+    :return: dict {organisation, logo} ou None si tenant inconnu
+    """
+    cache_key = "tenant_info_v2"
+    cache_content = cache.get(cache_key)
+
+    if cache_content is None:
+        # Cache froid : on pre-construit pour tous les lieux en une passe.
+        # / Cold cache: pre-build for all venues in one pass.
+        cache_content = {}
+        for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                cache_content[tenant.pk] = {
+                    "organisation": config.organisation,
+                    "logo": config.logo,
+                }
+        cache.set(cache_key, cache_content, 3600)
+
+    return cache_content.get(tenant_pk)
+
+
+def _lieux_utilisables_pour_asset(asset):
+    """
+    Retourne la liste des lieux ou un token de cet asset peut etre utilise.
+    / Returns the list of venues where a token of this asset can be used.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Cas special FED : asset global, utilisable dans TOUS les lieux V2.
+    On retourne None (convention) pour que le template affiche un badge
+    unique "Utilisable partout" sans iterer 300+ lieux.
+    / Special FED case: global asset, usable everywhere. Return None so
+    the template shows a single "Usable everywhere" badge.
+
+    Cas TLF/TNF/TIM/FID : le lieu createur (tenant_origin) + les lieux
+    federes via les M2M Federation.assets <-> Federation.tenants.
+    / TLF/TNF/TIM/FID case: the creator + federation members.
+
+    :param asset: fedow_core.Asset
+    :return: None si FED, sinon list[{organisation, logo}]
+    """
+    # Cas FED : pas de liste, badge "partout" cote template.
+    # / FED case: no list, "everywhere" badge on template side.
+    if asset.category == Asset.FED:
+        return None
+
+    # Cas autres : collecter tenants origine + federes, dedupliquer par pk.
+    # / Other cases: collect origin + federated tenants, deduplicate by pk.
+    tenants_utilisables = [asset.tenant_origin]
+    for federation in asset.federations.all():
+        for tenant in federation.tenants.all():
+            tenants_utilisables.append(tenant)
+
+    tenants_uniques_par_pk = {t.pk: t for t in tenants_utilisables}
+
+    # Resoudre organisation + logo via cache (evite tenant_context N+1)
+    # / Resolve organization + logo via cache (avoids tenant_context N+1)
+    infos = []
+    for tenant in tenants_uniques_par_pk.values():
+        info = _get_tenant_info_cached(tenant.pk)
+        if info is not None:
+            infos.append(info)
+    return infos
+
+
 class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
@@ -754,6 +880,25 @@ class MyAccount(viewsets.ViewSet):
         template_context['account_tab'] = 'balance'
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
+
+    @action(detail=False, methods=['GET'], url_path='tirelire_section')
+    def tirelire_section(self, request: HttpRequest):
+        """
+        Renvoie le partial de la section "Ma tirelire" a l'etat initial.
+        / Returns the initial "My balance" section partial.
+
+        Appelee par le bouton "Annuler" du formulaire V2 de recharge (HTMX swap
+        outerHTML sur #tirelire-section). Permet de revenir a l'etat initial
+        sans recharger la page complete.
+        / Called by the V2 refill form "Cancel" button. Restores the initial
+        state without full page reload.
+        """
+        template_context = get_context(request)
+        return render(
+            request,
+            "htmx/views/my_account/tirelire_section.html",
+            context=template_context,
+        )
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
@@ -965,6 +1110,27 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
+        """
+        Affichage des tokens du user connecte pour la page /my_account/balance/.
+        / Tokens display for the connected user on the balance page.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Dispatch V1/V2 selon peut_recharger_v2(user) :
+        - Verdict "v2" -> lecture locale fedow_core.Token (Session 32)
+        - Autres verdicts -> flow V1 FedowAPI (inchange depuis Session 31)
+        / V1/V2 dispatch based on peut_recharger_v2(user).
+        """
+        user = request.user
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- Branche V2 : lecture locale fedow_core ---
+        # / V2 branch: local fedow_core read
+        if verdict == "v2":
+            return self._tokens_table_v2(request)
+
+        # --- Autres verdicts : code V1 existant inchange ---
+        # / Other verdicts: existing V1 code unchanged
         config = Configuration.get_solo()
         fedowAPI = FedowAPI()
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
@@ -989,12 +1155,6 @@ class MyAccount(viewsets.ViewSet):
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
-            # Recherche de la dernière action du token fédéré
-            # if token['asset']['category'] == 'FED':
-            #     last_federated_transaction: datetime = token['last_transaction']['datetime']
-
-        print(tokens)
-
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
             'config': config,
@@ -1002,6 +1162,99 @@ class MyAccount(viewsets.ViewSet):
         }
 
         return render(request, "reunion/partials/account/token_table.html", context=context)
+
+    def _tokens_table_v2(self, request):
+        """
+        Branche V2 de tokens_table : lit fedow_core.Token en base locale.
+        / V2 branch: reads fedow_core.Token from local DB.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Construit deux sous-listes (fiduciaires + compteurs) et delegue
+        le rendu au partial token_table_v2.html.
+        / Builds two sub-lists (fiduciary + counters) and delegates rendering.
+        """
+        user = request.user
+        config = Configuration.get_solo()
+
+        # Garde : wallet absent -> message "aucun token".
+        # / Guard: no wallet -> "no token" message.
+        if user.wallet is None:
+            return render(
+                request,
+                "reunion/partials/account/token_table_v2.html",
+                {
+                    "config": config,
+                    "tokens_fiduciaires": [],
+                    "tokens_compteurs": [],
+                    "aucun_token": True,
+                },
+            )
+
+        # Query optimisee : select_related pour asset + tenant_origin,
+        # prefetch_related pour federations et tenants (evite N+1 sur pastilles).
+        # / Optimized query: select_related + prefetch_related to avoid N+1 on chips.
+        tous_les_tokens = (
+            Token.objects
+            .filter(wallet=user.wallet)
+            .select_related("asset", "asset__tenant_origin")
+            .prefetch_related("asset__federations__tenants")
+        )
+
+        # Categories affichees dans le sous-tableau "Monnaies" (fiduciaires).
+        # / Categories displayed in the "Currencies" sub-table (fiduciary).
+        categories_fiduciaires = [Asset.FED, Asset.TLF, Asset.TNF]
+
+        tokens_fiduciaires = []
+        tokens_compteurs = []
+        for token in tous_les_tokens:
+            # Label d'affichage : "TiBillets" pour FED (nom propre, pas traduit),
+            # sinon nom de l'asset tel que saisi par le createur.
+            # / Display label: "TiBillets" for FED (brand, not translated),
+            # otherwise asset name as entered by creator.
+            if token.asset.category == Asset.FED:
+                asset_name_affichage = "TiBillets"
+            else:
+                asset_name_affichage = token.asset.name
+
+            # Dict explicite passe au template (pas de mutation ORM).
+            # / Explicit dict for template (no ORM mutation).
+            item = {
+                "value_euros": token.value / 100,        # centimes -> euros
+                "value_brut": token.value,               # pour TIM/FID (unites brutes)
+                "asset_name_affichage": asset_name_affichage,
+                "category": token.asset.category,
+                "category_display": token.asset.get_category_display(),
+                "currency_code": token.asset.currency_code,
+                "lieux_utilisables": _lieux_utilisables_pour_asset(token.asset),
+            }
+
+            if token.asset.category in categories_fiduciaires:
+                tokens_fiduciaires.append(item)
+            else:
+                tokens_compteurs.append(item)
+
+        # Tri : solde decroissant, fallback nom d'asset.
+        # / Sort: balance descending, fallback asset name.
+        tokens_fiduciaires.sort(
+            key=lambda x: (-x["value_brut"], x["asset_name_affichage"])
+        )
+        tokens_compteurs.sort(
+            key=lambda x: (-x["value_brut"], x["asset_name_affichage"])
+        )
+
+        aucun_token = len(tokens_fiduciaires) == 0 and len(tokens_compteurs) == 0
+
+        return render(
+            request,
+            "reunion/partials/account/token_table_v2.html",
+            {
+                "config": config,
+                "tokens_fiduciaires": tokens_fiduciaires,
+                "tokens_compteurs": tokens_compteurs,
+                "aucun_token": aucun_token,
+            },
+        )
 
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
@@ -1070,35 +1323,313 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def refill_wallet(self, request):
+        """
+        Point d'entree de la recharge FED.
+        / FED refill entry point.
+
+        Dispatch V1/V2 selon peut_recharger_v2(user) :
+        - "feature_desactivee" : message d'erreur (ne devrait pas arriver, bouton cache cote template)
+        - "v1_legacy" : flow legacy Fedow distant inchange
+        - "wallet_legacy" : partial HTMX avec message "migration en cours"
+        - "v2" : partial HTMX avec formulaire de saisie de montant
+
+        / V1/V2 dispatch based on peut_recharger_v2(user).
+        """
         user = request.user
-        fedowAPI = FedowAPI()
-        # C'est fedow qui génère la demande de paiement à Stripe.
-        # Il ajoute dans les metadonnée les infos du wallet, et le signe.
-        # Lors du retour du paiement, la signature est vérifiée pour être sur que la demande de paiement vient bien de Fedow.
-        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
-        if stripe_checkout_url:
-            # Redirection du client vers le lien stripe demandé par Fedow
-            return HttpResponseClientRedirect(stripe_checkout_url)
-        else:
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- Branche V1 legacy : flow historique via Fedow distant ---
+        # / Legacy V1 branch: historical Fedow-remote flow
+        if verdict == "v1_legacy":
+            fedowAPI = FedowAPI()
+            # C'est fedow qui genere la demande de paiement a Stripe.
+            # Il ajoute dans les metadonnees les infos du wallet, et le signe.
+            # Lors du retour du paiement, la signature est verifiee.
+            # / Fedow generates the Stripe payment request (signed metadata).
+            stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+            if stripe_checkout_url:
+                return HttpResponseClientRedirect(stripe_checkout_url)
             messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
-    @action(detail=True, methods=['GET'])
-    def return_refill_wallet(self, request, pk=None):
-        # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
-        # Fedow vérifie la signature du paiement dans les metada Stripe
-        # C'est Fedow entré le metadata signé, c'est lui qui vérifie.
+        # --- Branche "feature desactivee" : ne devrait pas etre atteinte ---
+        # Le bouton devrait deja etre cache dans le template par
+        # {% if config.module_monnaie_locale %}. Defense en profondeur.
+        # / Feature disabled: shouldn't be reached, button should be hidden.
+        if verdict == "feature_desactivee":
+            messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        # --- Branche "wallet legacy" : message inline migration ---
+        # / Wallet legacy branch: inline migration message
+        if verdict == "wallet_legacy":
+            context = {
+                'message_migration': _(
+                    "Votre wallet est en cours de migration. "
+                    "Merci de patienter, désolés pour la gêne occasionnée."
+                ),
+            }
+            return render(
+                request,
+                'htmx/views/my_account/refill_migration_inline.html',
+                context,
+            )
+
+        # --- Branche V2 : partial HTMX avec formulaire de saisie ---
+        # / V2 branch: HTMX partial with amount input form
+        context = {
+            # Valeurs pour affichage humain (fr: virgule decimale).
+            # / Values for human display (fr: decimal comma).
+            'amount_min_euros_affichage': '1,00',
+            'amount_max_euros_affichage': '500,00',
+            # Valeurs pour les attributs HTML5 min/max (point decimal, format standard).
+            # / Values for HTML5 min/max attributes (decimal point, standard format).
+            'amount_min_euros_input': '1',
+            'amount_max_euros_input': '500',
+            # Action POST qui sera appelee par le formulaire pour creer le paiement.
+            # / POST action called by the form to create the payment.
+            'submit_url': '/my_account/refill_wallet_submit/',
+        }
+        return render(
+            request,
+            'htmx/views/my_account/refill_form_v2.html',
+            context,
+        )
+
+    @action(detail=False, methods=['POST'])
+    def refill_wallet_submit(self, request):
+        """
+        Reception du formulaire de recharge V2. Valide le montant, cree le
+        Paiement_stripe via CreationPaiementStripeFederation, redirige vers Stripe.
+        / Receives V2 refill form. Validates amount, creates Paiement_stripe
+        via CreationPaiementStripeFederation, redirects to Stripe.
+
+        Convention de conversion : l'user saisit un montant en euros, la vue
+        convertit en centimes avant de le passer au serializer.
+        / Conversion: user enters amount in euros, view converts to cents.
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.db import connection
+        from django_tenants.utils import tenant_context
+        from PaiementStripe.serializers import RefillAmountSerializer
+        from PaiementStripe.refill_federation import CreationPaiementStripeFederation
+        from ApiBillet.serializers import get_or_create_price_sold
+        from fedow_core.models import Asset
+        from BaseBillet.models import LigneArticle, PaymentMethod
+
         user = request.user
-        fedowAPI = FedowAPI()
+        verdict_ok, _verdict = peut_recharger_v2(user)
+        if not verdict_ok:
+            # Cas impossible en usage normal : l'UI n'aurait pas affiche le formulaire.
+            # / Impossible in normal use: UI wouldn't have shown the form.
+            messages.add_message(request, messages.ERROR, _("Refill not available."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        # Conversion euros (texte utilisateur) -> centimes (int).
+        # Accepte "," ou "." comme separateur decimal.
+        # / Convert user-entered euros text to int cents.
+        # Accept either "," or "." as decimal separator.
+        amount_euros_raw = request.POST.get('amount_euros', '').strip().replace(',', '.')
+        try:
+            amount_euros_decimal = Decimal(amount_euros_raw)
+        except (InvalidOperation, TypeError):
+            return render(
+                request,
+                'htmx/views/my_account/refill_form_v2.html',
+                {
+                    'amount_min_euros_affichage': '1,00',
+                    'amount_max_euros_affichage': '500,00',
+                    'amount_min_euros_input': '1',
+                    'amount_max_euros_input': '500',
+                    'submit_url': '/my_account/refill_wallet_submit/',
+                    'error': _("Montant invalide."),
+                    'amount_saisi': amount_euros_raw,
+                },
+                status=422,
+            )
+        amount_cents = int(amount_euros_decimal * 100)
+
+        # Validation via le serializer (bornes 100 / 50000).
+        # / Validation via serializer (bounds 100 / 50000).
+        serializer = RefillAmountSerializer(data={'amount_cents': amount_cents})
+        if not serializer.is_valid():
+            first_error = next(iter(serializer.errors.values()))[0]
+            return render(
+                request,
+                'htmx/views/my_account/refill_form_v2.html',
+                {
+                    'amount_min_euros_affichage': '1,00',
+                    'amount_max_euros_affichage': '500,00',
+                    'amount_min_euros_input': '1',
+                    'amount_max_euros_input': '500',
+                    'submit_url': '/my_account/refill_wallet_submit/',
+                    'error': first_error,
+                    'amount_saisi': amount_euros_raw,
+                },
+                status=422,
+            )
+
+        # Capture du domain AVANT la bascule (federation_fed n'a pas de Domain).
+        # / Capture current tenant domain BEFORE switching (federation_fed has no Domain).
+        tenant_courant_domain = connection.tenant.get_primary_domain().domain
+        absolute_domain = f'https://{tenant_courant_domain}/my_account/'
+
+        tenant_federation = Client.objects.get(schema_name='federation_fed')
+
+        # Creer le wallet de l'user s'il n'existe pas (Wallet est en SHARED_APPS).
+        # / Create user's wallet if missing (Wallet is in SHARED_APPS).
+        if user.wallet is None:
+            from AuthBillet.models import Wallet as AuthWallet
+            user.wallet = AuthWallet.objects.create(
+                origin=tenant_federation,
+                name=f"Wallet {user.email}",
+            )
+            user.save(update_fields=['wallet'])
+
+        # Basculer dans federation_fed pour creer le Paiement_stripe (TENANT_APPS).
+        # Tout est encapsule dans transaction.atomic() : si l'appel Stripe leve
+        # (timeout reseau, cle invalide, 500 Stripe), on rollback les creations
+        # DB (PriceSold, LigneArticle, Paiement_stripe).
+        # / Switch to federation_fed to create Paiement_stripe (TENANT_APPS).
+        # Everything wrapped in transaction.atomic(): if the Stripe call fails,
+        # we rollback the DB creations.
+        from django.db import transaction as db_transaction
 
         try:
-            wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
-            if wallet:
+            with tenant_context(tenant_federation):
+                with db_transaction.atomic():
+                    asset_fed = Asset.objects.get(category=Asset.FED)
+                    product_refill = Product.objects.get(
+                        categorie_article=Product.RECHARGE_CASHLESS_FED
+                    )
+                    price_refill = product_refill.prices.first()
+
+                    # PriceSold en Decimal euros (pattern existant). On n'appelle PAS
+                    # get_id_price_stripe() pour eviter la creation d'un Stripe Connect
+                    # account pour federation_fed — la gateway utilise `price_data`
+                    # inline a la place.
+                    # / PriceSold in Decimal euros (existing pattern). We do NOT call
+                    # get_id_price_stripe() to avoid creating a Stripe Connect account
+                    # for federation_fed — the gateway uses inline `price_data` instead.
+                    custom_amount_euros = Decimal(amount_cents) / Decimal(100)
+                    pricesold = get_or_create_price_sold(
+                        price_refill,
+                        custom_amount=custom_amount_euros,
+                    )
+
+                    ligne = LigneArticle.objects.create(
+                        pricesold=pricesold,
+                        amount=amount_cents,
+                        qty=1,
+                        payment_method=PaymentMethod.STRIPE_FED,
+                    )
+
+                    # Creation gateway -> appel Stripe API. Si l'appel leve,
+                    # l'atomic rollback PriceSold + LigneArticle + Paiement_stripe.
+                    # / Gateway creation -> Stripe API call. If it raises,
+                    # atomic rolls back PriceSold + LigneArticle + Paiement_stripe.
+                    gateway = CreationPaiementStripeFederation(
+                        user=user,
+                        liste_ligne_article=[ligne],
+                        wallet_receiver=user.wallet,
+                        asset_fed=asset_fed,
+                        tenant_federation=tenant_federation,
+                        absolute_domain=absolute_domain,
+                        success_url='return_refill_wallet/',
+                    )
+        except Exception as e:
+            # Log detaille pour audit (pas de trace utilisateur pour ne pas
+            # leaker d'info sensible).
+            # / Detailed log for audit (no user-facing trace to avoid leaking).
+            logger.error(f"refill_wallet_submit failed for user {user.email}: {e}")
+            messages.add_message(request, messages.ERROR, _("Stripe error. Contact an admin."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        if not gateway.is_valid():
+            messages.add_message(request, messages.ERROR, _("Stripe error. Contact an admin."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        return HttpResponseClientRedirect(gateway.checkout_session.url)
+
+
+    @action(detail=True, methods=['GET'])
+    def return_refill_wallet(self, request, pk=None):
+        """
+        Retour utilisateur apres paiement Stripe de recharge FED.
+        / User return after Stripe FED refill payment.
+
+        Dispatch V1/V2 :
+        - V1 (tenant legacy avec server_cashless) : pk = CheckoutStripe.uuid Fedow distant
+          -> appel FedowAPI.retrieve_from_refill_checkout
+        - V2 (tenant V2) : pk = Paiement_stripe.uuid local (dans federation_fed)
+          -> lecture locale du status
+
+        Plus de polling serveur V2 : si le webhook n'est pas encore arrive,
+        l'user voit "En cours de traitement" et rafraichit sa page.
+        / No V2 server polling: if webhook not yet received, user sees
+        "in progress" and refreshes the page.
+        """
+        from django_tenants.utils import tenant_context
+
+        user = request.user
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- V1 legacy : demande confirmation a Fedow distant ---
+        # / V1 legacy: ask Fedow-remote for confirmation
+        if verdict == "v1_legacy":
+            fedowAPI = FedowAPI()
+            try:
+                wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
+                if wallet:
+                    messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
+                else:
+                    messages.add_message(request, messages.ERROR, _("Payment verification error"))
+            except Exception:
+                messages.add_message(request, messages.ERROR, _("Payment verification error"))
+            return redirect('/my_account/')
+
+        # --- V2 : lecture locale + traitement si webhook en retard ---
+        # Pattern inspire de la billetterie/adhesion : la meme fonction
+        # (traiter_paiement_cashless_refill) est appelee depuis le webhook Stripe
+        # ET depuis ici. Comme ca, un user qui revient tres vite (webhook pas
+        # encore arrive) declenche lui-meme le traitement. Concurrency-safe
+        # via select_for_update cote fonction.
+        # / V2: local read + processing if webhook late. Same pattern as
+        # billetterie/membership : the shared function is called from both
+        # webhook and return view. User who returns fast triggers processing.
+        # / V2: local read of Paiement_stripe in federation_fed
+        from ApiBillet.views import (
+            traiter_paiement_cashless_refill,
+            CashlessRefillTamperingError,
+        )
+
+        tenant_federation = Client.objects.get(schema_name='federation_fed')
+        with tenant_context(tenant_federation):
+            try:
+                paiement = Paiement_stripe.objects.get(uuid=pk, user=user)
+            except (Paiement_stripe.DoesNotExist, ValueError):
+                messages.add_message(request, messages.ERROR, _("Payment not found"))
+                return redirect('/my_account/')
+
+            # Declencher le traitement si pas deja fait (pattern webhook+retour).
+            # Si webhook deja passe : early return rapide (idempotent).
+            # Si Stripe dit pas payee : return, paiement reste PENDING.
+            # / Trigger processing if not done yet (webhook+return pattern).
+            try:
+                paiement = traiter_paiement_cashless_refill(paiement, request)
+            except CashlessRefillTamperingError:
+                logger.error(f"Tampering detecte sur return_refill_wallet pour {paiement.uuid}")
+                messages.add_message(request, messages.ERROR, _("Payment verification error"))
+                return redirect('/my_account/')
+
+            if paiement.status == Paiement_stripe.PAID:
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
             else:
-                messages.add_message(request, messages.ERROR, _("Payment verification error"))
-        except Exception:
-            messages.add_message(request, messages.ERROR, _("Payment verification error"))
+                # Stripe dit pas encore paye (rare : SEPA pending ou erreur transitoire).
+                # L'user rafraichit sa page plus tard ; le webhook reessayera.
+                # / Stripe says not yet paid (rare: SEPA pending or transient error).
+                # User refreshes later; webhook will retry.
+                messages.add_message(request, messages.INFO, _("Payment in progress. Please refresh in a moment."))
 
         return redirect('/my_account/')
 

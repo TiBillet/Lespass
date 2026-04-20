@@ -1688,6 +1688,264 @@ Les tests `tests/e2e/*.py` doivent etre lances depuis l'hote ou dans un containe
 dedie avec `playwright install chromium`. Tester la syntaxe via `--collect-only`
 est possible dans le container.
 
+### Session 31 — Recharge FED V2 (2026-04-20)
+
+**11.1 — `PriceSold.get_id_price_stripe()` cree automatiquement un Stripe Connect account pour le tenant courant.**
+Ce piege est **critique** pour tout flow de paiement qui doit utiliser le compte
+Stripe central (root) et non un Connect account de lieu. La methode
+`get_id_price_stripe()` passe `stripe_account=Configuration.get_solo().get_stripe_connect_account()`
+au `stripe.Price.create()`, et `get_stripe_connect_account()` **cree un Connect
+account si aucun n'existe** pour le tenant courant.
+
+Consequence en prod : si on utilise `pricesold.get_id_price_stripe()` sans
+explicitement `stripe_account=None` avant la `stripe.checkout.Session.create()`,
+le Price Stripe est scoped sur un Connect account different du compte de
+paiement → erreur Stripe "No such price" au moment du checkout.
+
+Solution (utilisee par `PaiementStripe/refill_federation.py`) : utiliser
+`price_data` inline dans les `line_items` au lieu d'un `price_id` pre-cree.
+
+```python
+# MAL : cree un Connect account pour federation_fed
+line_items = [{
+    "price": ligne.pricesold.get_id_price_stripe(),  # cree Connect
+    "quantity": 1,
+}]
+
+# BIEN : price_data inline, pas de Connect cree
+line_items = [{
+    "price_data": {
+        "currency": "eur",
+        "unit_amount": ligne.amount,  # centimes int
+        "product_data": {"name": ligne.pricesold.productsold.product.name},
+    },
+    "quantity": int(ligne.qty),
+}]
+```
+
+Reference Stripe : https://stripe.com/docs/api/checkout/sessions/create#create_checkout_session-line_items-price_data
+
+**11.2 — `Client.objects.exclude(schema_name__in=[...]).first()` peut tomber sur un tenant au schema non migre.**
+Les tests qui cherchent un tenant "quelconque" pour simuler un comportement
+V1/V2 doivent **cibler un tenant connu** (ex: `chantefrein` dans ce projet)
+plutot que de prendre le premier venu. Sinon, un tenant de test laisse par
+un autre run peut etre selectionne → `ProgrammingError: relation "BaseBillet_configuration" does not exist`
+au premier appel a `Configuration.get_solo()` dans le `tenant_context()`.
+
+```python
+# MAL : peut tomber sur un tenant orphelin au schema partiel
+tenant_legacy = Client.objects.exclude(
+    schema_name__in=["public", "federation_fed", "lespass"]
+).first()
+
+# BIEN : tenant de fixture connu avec schema migre
+try:
+    tenant_legacy = Client.objects.get(schema_name="chantefrein")
+except Client.DoesNotExist:
+    pytest.skip("Tenant 'chantefrein' introuvable")
+```
+
+**11.3 — `Paiement_stripe.total()` retourne un `Decimal` (via `dround`), pas un `int` centimes.**
+Pour comparer au `stripe.amount_total` (int centimes Stripe), conversion
+explicite obligatoire :
+
+```python
+# MAL : comparaison Decimal vs int → faux positifs possibles
+if stripe_amount_cents != paiement.total():  # Decimal '15.00' != 1500 ???
+    return Response("tampering", status=400)
+
+# BIEN : conversion explicite
+stripe_amount_cents = payload["data"]["object"]["amount_total"]  # int
+paiement_amount_cents = int(paiement.total() * 100)  # Decimal→int
+if stripe_amount_cents != paiement_amount_cents:
+    return Response("tampering", status=400)
+```
+
+Alternative propre (a ajouter dans une session ulterieure) : methode
+`Paiement_stripe.total_cents() -> int` sur le modele.
+
+**11.4 — Helper `peut_recharger_v2(user)` sans parametre `tenant_courant`.**
+Le helper utilise `Configuration.get_solo()` qui lit `connection.tenant`.
+Ajouter un parametre `tenant_courant` est tentant mais inutile et source de
+confusion (l'appelant pourrait passer un tenant different de celui de la
+requete). Garder la signature minimale : `peut_recharger_v2(user)`.
+
+```python
+def peut_recharger_v2(user):
+    config = Configuration.get_solo()  # lit connection.tenant
+    if not config.module_monnaie_locale:
+        return False, "feature_desactivee"
+    # ...
+```
+
+**11.5 — Creation de Wallet dans `tenant_context(federation_fed)` : piege a eviter.**
+`AuthBillet.Wallet` est en SHARED_APPS (schema public). Le bloc
+`with tenant_context(tenant_federation):` est **inutile** pour creer un Wallet.
+Entrer dans ce context avant la creation du wallet est trompeur (donne
+l'impression que le wallet est "dans" federation_fed, alors qu'il est
+dans public avec `origin=federation_fed`). Creer les Wallets en dehors
+du tenant_context, et n'entrer dans le context que pour les TENANT_APPS
+(Paiement_stripe, LigneArticle, Product, Price).
+
+**11.6 — `{% endcomment %}` dans le TEXTE d'un commentaire Django casse le parser.**
+Django parse le premier `{% endcomment %}` rencontre pour fermer le bloc.
+Si le TEXTE du commentaire contient la sequence litterale `{% endcomment %}`
+(meme comme exemple), le bloc est ferme prematurement, et le vrai
+`{% endcomment %}` final devient orphelin → `TemplateSyntaxError: Invalid
+block tag on line X: 'endcomment'`.
+
+```django
+{# MAL — le commentaire contient la sequence fermante en exemple #}
+{% comment %}
+NB : multi-ligne via {% comment %} ... {% endcomment %}.
+                                        ^^^^^^^^^^^^^^ ← ferme ici !
+{% endcomment %}
+                      ← devient orphelin → erreur
+```
+
+Solution : ne jamais ecrire la sequence `{% endcomment %}` (avec les `%`)
+dans le texte d'un commentaire. Paraphraser ("balise de fin de commentaire")
+ou utiliser `{# #}` single-line si le commentaire est court.
+
+**Bonus — Daphne/ASGI + `cached.Loader` : les modifications de templates
+ne sont PAS hot-reloaded.** Il faut relancer le daphne (Ctrl+C puis `rsp`)
+pour qu'une modification de template soit prise en compte. Le StatReloader
+watch les .py mais le cache de templates est en memoire.
+
+**11.7 — Pattern "webhook + retour user" : meme fonction metier appelee
+depuis les deux chemins, idempotente via `select_for_update`.**
+
+C'est le pattern utilise par billetterie (Paiement_stripe.update_checkout_status)
+et repris pour la recharge FED V2 (ApiBillet.views.traiter_paiement_cashless_refill).
+Indispensable quand :
+- L'user peut revenir sur la vue de retour AVANT que le webhook Stripe n'arrive
+- On veut que le paiement soit traite dans les deux cas (user voit immediatement
+  le resultat, pas un "Payment in progress please refresh")
+
+Squelette de la fonction commune :
+
+```python
+def traiter_paiement_xxx(paiement, request):
+    # 1. Early return sans lock : deja traite = no-op (cas idempotence triviale)
+    if paiement.status == Paiement_stripe.PAID:
+        return paiement
+
+    # 2. Appel Stripe HORS verrou (peut prendre 1-3s)
+    stripe_session = stripe.checkout.Session.retrieve(paiement.checkout_session_id_stripe)
+    if stripe_session.payment_status != "paid":
+        return paiement  # pas encore paye, on reessayera
+
+    # 3. Section critique courte : lock + re-check + traitement
+    with transaction.atomic():
+        paiement_lock = Paiement_stripe.objects.select_for_update().get(uuid=paiement.uuid)
+        if paiement_lock.status == Paiement_stripe.PAID:
+            return paiement_lock  # traite par requete concurrente pendant qu'on attendait Stripe
+        # ... traitement metier (RefillService, creation ticket, etc.)
+        paiement_lock.status = Paiement_stripe.PAID
+        paiement_lock.save(update_fields=['status'])
+    return paiement_lock
+```
+
+**Pieges a eviter :**
+
+- **Ne JAMAIS mettre l'appel Stripe DANS le `with transaction.atomic()`.**
+  Le lock DB serait tenu pendant 1-3s (latence reseau Stripe), bloquant
+  les autres requetes sur la meme ligne + consommant une connexion DB du
+  pool. Appel Stripe HORS atomic, verrou HORS appel Stripe.
+
+- **`select_for_update` row-level, pas table-level.** Un `SELECT FOR UPDATE
+  WHERE uuid=X` verrouille SEULEMENT cette ligne. Les autres paiements
+  (uuid=Y, uuid=Z) restent libres. 1000 users en parallele = 1000 locks sur
+  1000 lignes differentes = zero contention. Pour verifier en prod : requete
+  `SELECT locktype, relation, mode FROM pg_locks`.
+
+- **Re-check du status APRES le lock.** Entre le early return prelim et le lock,
+  une autre requete concurrente peut avoir traite le paiement. Il faut
+  revalider `if paiement_lock.status == PAID: return` apres le SFU.
+
+- **Tests : simuler le scenario "webhook puis retour user" avec 2 appels
+  successifs.** Entre les 2, `refresh_from_db()` pour simuler un nouveau
+  chargement depuis une nouvelle requete HTTP — sinon l'objet Python est
+  stale (status=PENDING alors que DB a status=PAID) et l'early return prelim
+  ne matche pas.
+
+- **Tests mocks : `stripe.checkout.Session.retrieve` doit etre patch.**
+  La fixture `mock_stripe` du projet le fait. Configurer avant chaque test :
+  `mock_stripe.session.payment_status = "paid"` + `mock_stripe.session.amount_total = X`.
+
+**11.8 — `HTTP_X_FORWARDED_FOR` contient une LISTE d'IPs derriere une chaine
+de proxies, pas une seule.**
+
+Stack typique : user → Traefik → Docker → Daphne. Chaque proxy ajoute
+son IP au header, separees par `", "`. Exemple reel :
+`request.META['HTTP_X_FORWARDED_FOR'] = "172.21.0.1, 172.21.0.2"`
+
+Si on passe ca brut a un `GenericIPAddressField` Django :
+```
+ValueError: '172.21.0.1, 172.21.0.2' does not appear to be an IPv4 or IPv6 address
+```
+
+Solution : extraire la premiere IP (IP du client original selon la
+convention X-Forwarded-For).
+
+```python
+# MAUVAIS : passe la liste brute
+ip = request.META.get('HTTP_X_FORWARDED_FOR') or request.META.get('REMOTE_ADDR', '0.0.0.0')
+
+# BON : parse la premiere IP
+xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
+if xff:
+    ip = xff.split(',')[0].strip()
+else:
+    ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+```
+
+**Securite :** ne jamais utiliser X-Forwarded-For pour de l'auth ou du
+rate-limiting sans verifier le `REMOTE_ADDR` est bien un proxy de confiance.
+Un client peut forger ce header. Pour l'audit simple (logger l'IP dans
+Transaction), c'est OK.
+
+**Test regression :** `tests/pytest/test_traiter_paiement_cashless_refill.py::test_traiter_xff_multi_ip_derriere_chaine_proxies`.
+
+### Session 32 — Visualisation tirelire V2 (2026-04-20)
+
+**11.9 — `Asset.delete()` / `Wallet.delete()` en cascade cross-schema :
+besoin de `tenant_context` dans le cleanup de fixture.**
+
+Quand un test cree un `fedow_core.Asset` ou `AuthBillet.Wallet` (SHARED_APPS)
+et le supprime en fin de test, la cascade atteint des modeles en TENANT_APPS :
+- `Asset.uuid` -> `BaseBillet.Product.asset` (cascade)
+- `Wallet` -> `BaseBillet.LigneArticle.wallet` (cascade)
+
+Sans `tenant_context(tenant)`, le `DELETE` emis par Django tente un
+`UPDATE/DELETE` sur une table TENANT (ex: `BaseBillet_product`,
+`BaseBillet_lignearticle`) qui n'existe PAS dans le schema `public`,
+provoquant : `ProgrammingError: relation "BaseBillet_product" does not exist`.
+
+```python
+# MAL : cleanup sans tenant_context
+@pytest.fixture
+def asset_tlf(tenant_lespass):
+    asset = Asset.objects.create(..., tenant_origin=tenant_lespass)
+    yield asset
+    asset.delete()  # ERREUR : cascade BaseBillet_product
+
+# BON : cleanup dans tenant_context
+@pytest.fixture
+def asset_tlf(tenant_lespass):
+    asset = Asset.objects.create(..., tenant_origin=tenant_lespass)
+    yield asset
+    with tenant_context(tenant_lespass):
+        asset.delete()
+```
+
+Si plusieurs objets ont des cascades cross-schema (Asset + Wallet), tous
+les `delete()` doivent etre dans le `tenant_context` du tenant qui possede
+les tables TENANT referencees.
+
+Rencontre dans la Session 32 (Task 3 fixture `asset_tlf_avec_federation` et
+Task 5 test split FED+TIM).
+
 ---
 
 *Ce document est un commun numerique. Prenez-en soin !*

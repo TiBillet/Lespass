@@ -14,7 +14,7 @@ from django.http import Http404, HttpResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from django_tenants.utils import tenant_context, schema_context
+from django_tenants.utils import tenant_context
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import permission_classes, action
 from rest_framework.generics import get_object_or_404
@@ -813,7 +813,7 @@ def paiment_stripe_validator(request, paiement_stripe: Paiement_stripe):
                 paiement_stripe.status = Paiement_stripe.CANCELED
                 paiement_stripe.save()
         else:
-            return Response(_(f'Meta error'), status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response(_('Meta error'), status=status.HTTP_406_NOT_ACCEPTABLE)
 
     # on vérifie le changement de status
     paiement_stripe.refresh_from_db()
@@ -1000,7 +1000,7 @@ class Wallet(viewsets.ViewSet):
         email = serializer.validated_data['email']
         user: "HumanUser" = get_or_create_user(email)
         if not user:
-            return Response(_(f"Invalid user"), status=status.HTTP_406_NOT_ACCEPTABLE)
+            return Response(_("Invalid user"), status=status.HTTP_406_NOT_ACCEPTABLE)
 
         fedowAPI = FedowAPI()
         stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
@@ -1015,12 +1015,212 @@ class Wallet(viewsets.ViewSet):
 
 
 
+class CashlessRefillTamperingError(Exception):
+    """Montant Stripe different du montant du Paiement_stripe local."""
+    pass
+
+
+def traiter_paiement_cashless_refill(paiement, request):
+    """
+    Fonction metier COMMUNE au webhook Stripe et a la vue de retour user.
+    Idempotente, concurrency-safe via select_for_update sur Paiement_stripe.
+    / Shared business function for Stripe webhook AND user-return view.
+    Idempotent, concurrency-safe via select_for_update on Paiement_stripe.
+
+    LOCALISATION : ApiBillet/views.py
+
+    Inspiration : le pattern existant Paiement_stripe.update_checkout_status()
+    utilise par billetterie et adhesion — la meme methode est appelee depuis
+    le webhook Stripe ET depuis la vue de retour user. Ici on fait pareil mais
+    avec select_for_update (verrou DB) plutot que le flag traitement_en_cours.
+
+    Flux :
+    1. Early return si status=PAID (idempotence triviale, lit sans lock).
+    2. Appel Stripe API (HORS verrou, peut prendre 1-3s).
+       Si Stripe dit payment_status != "paid" : return, le webhook reessayera.
+    3. Section critique courte (verrou tenu ~20ms) :
+        a. SELECT FOR UPDATE paiement → serialise webhook + retour user concurrents
+        b. Re-check status=PAID (autre requete a fini pendant qu'on attendait Stripe)
+        c. Anti-tampering : stripe.amount_total == int(paiement.total() * 100)
+        d. Appel RefillService.process_cashless_refill (idempotent interne)
+        e. paiement.status = PAID
+
+    IMPORTANT : cette fonction assume que l'appelant est DEJA dans
+    tenant_context(federation_fed). connection.tenant doit etre federation_fed.
+
+    / IMPORTANT: caller must already be inside tenant_context(federation_fed).
+
+    Args :
+        paiement : Paiement_stripe deja charge (source=CASHLESS_REFILL).
+        request : HttpRequest (pour l'IP audit).
+
+    Returns :
+        Paiement_stripe a jour (status=PAID si Stripe dit paid).
+
+    Raises :
+        CashlessRefillTamperingError : si stripe.amount_total != paiement local.
+    """
+    from fedow_core.services import RefillService
+
+    # 1. Early return sans verrou : si deja traite, on sort.
+    # / Fast path without lock: if already processed, return.
+    if paiement.status == Paiement_stripe.PAID:
+        return paiement
+
+    # 2. Verifier le status cote Stripe (source de verite).
+    # HORS verrou : cet appel peut prendre 1-3s. On ne veut pas tenir un lock DB
+    # pendant ce temps (voir PIEGES.md piege 11.7).
+    # / Outside lock: Stripe API call can take 1-3s. Do NOT hold DB lock meanwhile.
+    stripe.api_key = RootConfiguration.get_solo().get_stripe_api()
+    try:
+        stripe_session = stripe.checkout.Session.retrieve(paiement.checkout_session_id_stripe)
+    except Exception as e:
+        logger.warning(
+            f"Cashless refill : impossible de recuperer session Stripe "
+            f"{paiement.checkout_session_id_stripe} : {e}"
+        )
+        return paiement
+
+    if stripe_session.payment_status != "paid":
+        # Paiement pas (encore) effectif cote Stripe.
+        # Le webhook reessayera quand Stripe confirmera.
+        # / Payment not (yet) effective on Stripe side. Webhook will retry later.
+        logger.info(
+            f"Cashless refill : Stripe payment_status={stripe_session.payment_status} "
+            f"pour paiement {paiement.uuid}, rien a faire pour l'instant."
+        )
+        return paiement
+
+    # 3. Section critique : verrou sur la ligne paiement, tenue courte.
+    # / Critical section: row lock on paiement, held briefly.
+    from django.db import transaction as db_transaction
+    with db_transaction.atomic():
+        # select_for_update bloque les autres requetes concurrentes sur CETTE ligne
+        # (autres lignes non affectees — scalabilite preservee).
+        # / select_for_update blocks concurrent requests on THIS row only.
+        paiement_lock = Paiement_stripe.objects.select_for_update().get(uuid=paiement.uuid)
+
+        # Re-check apres lock : une autre requete concurrente a pu finir pendant
+        # qu'on attendait Stripe. Si oui, on sort proprement.
+        # / Re-check after lock: a concurrent request may have finished while we
+        # were waiting for Stripe.
+        if paiement_lock.status == Paiement_stripe.PAID:
+            logger.info(
+                f"Cashless refill : paiement {paiement_lock.uuid} deja traite "
+                f"par une requete concurrente."
+            )
+            return paiement_lock
+
+        # Anti-tampering sur la ligne lockee (source de verite).
+        paiement_amount_cents = int(paiement_lock.total() * 100)
+        if stripe_session.amount_total != paiement_amount_cents:
+            logger.error(
+                f"Cashless refill TAMPERING : Stripe {stripe_session.amount_total} "
+                f"!= paiement {paiement_amount_cents} (uuid={paiement_lock.uuid})"
+            )
+            raise CashlessRefillTamperingError(
+                f"Amount mismatch: Stripe {stripe_session.amount_total}, "
+                f"paiement {paiement_amount_cents}"
+            )
+
+        # Creer Transaction REFILL + crediter Token (idempotent interne via
+        # check Transaction.exists() dans atomic).
+        # / Create REFILL Transaction + credit Token.
+        #
+        # HTTP_X_FORWARDED_FOR peut contenir plusieurs IPs separees par ", "
+        # quand il y a une chaine de proxies (Traefik + Docker + ...). La
+        # premiere est l'IP du client original — c'est celle qu'on stocke.
+        # GenericIPAddressField refuse une liste, il attend une IP unique.
+        # / HTTP_X_FORWARDED_FOR may contain a comma-separated list of IPs
+        # (proxy chain). First one is the original client IP.
+        xff_header = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        if xff_header:
+            request_ip = xff_header.split(',')[0].strip()
+        else:
+            request_ip = request.META.get('REMOTE_ADDR', '0.0.0.0')
+        RefillService.process_cashless_refill(
+            paiement_uuid=paiement_lock.uuid,
+            user=paiement_lock.user,
+            amount_cents=paiement_amount_cents,
+            tenant=connection.tenant,  # federation_fed (on est deja dans son context)
+            ip=request_ip,
+        )
+
+        paiement_lock.status = Paiement_stripe.PAID
+        paiement_lock.save(update_fields=['status'])
+
+        logger.info(
+            f"Cashless refill OK : paiement {paiement_lock.uuid} "
+            f"montant {paiement_amount_cents} cents"
+        )
+
+    return paiement_lock
+
+
+def _process_stripe_webhook_cashless_refill(payload, request):
+    """
+    Dispatcher webhook Stripe pour recharge FED V2.
+    Extrait les IDs du payload, charge le Paiement_stripe, delegue a
+    traiter_paiement_cashless_refill (fonction commune webhook + retour user).
+
+    / Stripe webhook dispatcher for V2 FED refill. Extracts IDs, loads the
+    Paiement_stripe, delegates to shared function.
+
+    LOCALISATION : ApiBillet/views.py (appele par Webhook_stripe.post)
+
+    Returns :
+        Response HTTP 200 (OK), 400 (tampering/source), 404 (paiement introuvable).
+    """
+    metadata = payload["data"]["object"]["metadata"]
+    tenant_uuid = metadata.get('tenant')
+    paiement_uuid = metadata.get('paiement_stripe_uuid')
+
+    if not tenant_uuid or not paiement_uuid:
+        logger.warning(f"Webhook FED V2 : metadata incomplete : {metadata}")
+        return Response("Missing metadata", status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        tenant = Client.objects.get(uuid=tenant_uuid)
+    except (Client.DoesNotExist, ValueError):
+        logger.error(f"Webhook FED V2 : tenant {tenant_uuid} introuvable ou invalide")
+        return Response("Tenant not found", status=status.HTTP_404_NOT_FOUND)
+
+    # Defense en profondeur : n'accepter que le tenant federation_fed.
+    # / Defense in depth: only accept federation_fed tenant.
+    if tenant.schema_name != 'federation_fed':
+        logger.error(
+            f"Webhook FED V2 : tenant {tenant.schema_name} "
+            f"n'est pas federation_fed (tampering suspecte)"
+        )
+        return Response("Invalid tenant for FED refill", status=status.HTTP_400_BAD_REQUEST)
+
+    with tenant_context(tenant):
+        try:
+            paiement = Paiement_stripe.objects.get(uuid=paiement_uuid)
+        except Paiement_stripe.DoesNotExist:
+            logger.error(f"Webhook FED V2 : Paiement_stripe {paiement_uuid} introuvable")
+            return Response("Paiement not found", status=status.HTTP_404_NOT_FOUND)
+
+        if paiement.source != Paiement_stripe.CASHLESS_REFILL:
+            logger.error(
+                f"Webhook FED V2 : metadata refill_type=FED mais paiement.source={paiement.source}"
+            )
+            return Response("Not a cashless refill", status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            traiter_paiement_cashless_refill(paiement, request)
+        except CashlessRefillTamperingError:
+            return Response("Amount mismatch", status=status.HTTP_400_BAD_REQUEST)
+
+        return Response("OK", status=status.HTTP_200_OK)
+
+
 @permission_classes([permissions.AllowAny])
 class Webhook_stripe(APIView):
 
     def post(self, request):
         payload = request.data
-        logger.info(f" ")
+        logger.info(" ")
         # logger.info(f"Webhook_stripe --> {payload}")
         logger.info(f"Webhook_stripe --> {payload.get('type')} - id : {payload.get('id')}")
         try :
@@ -1040,8 +1240,16 @@ class Webhook_stripe(APIView):
 
         # c'est une requete depuis un webhook stripe
         if payload.get('type') == "checkout.session.completed" or payload.get('type') == "checkout.session.async_payment_succeeded":
+
+            # === DISPATCH V2 RECHARGE FED (nouveau, avant tout le reste) ===
+            # Si la metadata contient refill_type=FED, c'est une recharge FED V2.
+            # / V2 FED refill dispatch (before all other cases).
+            webhook_metadata = payload["data"]["object"].get("metadata") or {}
+            if webhook_metadata.get('refill_type') == 'FED':
+                return _process_stripe_webhook_cashless_refill(payload, request)
+
             if "return_refill_wallet" in payload["data"]["object"]["success_url"]:
-                return Response(f"Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
+                return Response("Ce checkout est pour fedow.", status=status.HTTP_205_RESET_CONTENT)
 
             if not payload["data"]["object"]["metadata"].get('tenant'):
                 logger.warning(f"Webhook_stripe Pas de tenant dans metadata --> {payload}")
@@ -1050,7 +1258,7 @@ class Webhook_stripe(APIView):
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             if tenant_uuid_in_metadata == "payment_link" :
-                return Response(f"Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
+                return Response("Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
 
             tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
             with tenant_context(tenant):
@@ -1137,7 +1345,7 @@ class Webhook_stripe(APIView):
 
             tenant_uuid_in_metadata = payload["data"]["object"]["metadata"]["tenant"]
             if tenant_uuid_in_metadata == "payment_link" :
-                return Response(f"Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
+                return Response("Payment link ? Pas besoin de traitement.",status=status.HTTP_204_NO_CONTENT)
 
             tenant = Client.objects.get(uuid=tenant_uuid_in_metadata)
             with tenant_context(tenant):
@@ -1186,7 +1394,7 @@ class Webhook_stripe(APIView):
 
                             # Le paiement a déja été pris en compte
                             if Paiement_stripe.objects.filter(payment_intent_id=transfer_id).exists():
-                                return Response(f"Déja pris en compte", status=status.HTTP_208_ALREADY_REPORTED)
+                                return Response("Déja pris en compte", status=status.HTTP_208_ALREADY_REPORTED)
 
                             try:
                                 # Envoi à Fedow

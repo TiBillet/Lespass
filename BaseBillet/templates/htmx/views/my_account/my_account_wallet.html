@@ -2,11 +2,16 @@
 
 <div class="container pt-5">
 
-    <div class="d-flex flex-row" hx-indicator="#tibillet-spinner">
-        <button type="submit" class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto"
-                role="button"
-                aria-label="Je recharge ma tirelire"
-                hx-get="/my_account/refill_wallet">
+    {# Zone qui accueille le bouton Refill (V1/V2) ou le formulaire V2 ou le message wallet_legacy. #}
+    {# / Zone that holds the Refill button (V1/V2), the V2 form, or the wallet_legacy message. #}
+    <div id="refill-zone" class="d-flex flex-row" hx-indicator="#tibillet-spinner">
+        <button type="button"
+                class="btn bg-gradient-info btn-lg mt-2 p-4 mb-2 w-75 mx-auto"
+                aria-label="{% translate 'Refill my wallet' %}"
+                data-testid="refill-btn-open"
+                hx-get="/my_account/refill_wallet"
+                hx-target="#refill-zone"
+                hx-swap="innerHTML">
             {% translate "Refill my wallet" %}
         </button>
     </div>

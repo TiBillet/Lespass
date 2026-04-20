@@ -3,7 +3,7 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 > Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-08 (session 29 — cascade multi-asset NFC)
+> Dernière mise à jour : 2026-04-20 (session 31 Phases A-B-C-D terminees, 24 tests pytest verts)
 
 ---
 
@@ -444,6 +444,41 @@ Paniers mixtes EUR + tokens. À détailler avec le mainteneur.
 - [ ] Regrouper articles par `Price.asset` dans `payer()`
 - [ ] Affichage multi-total (par asset) dans le panier
 - [ ] Session dédiée pour l'UX
+
+### 9.5 Recharge FED V2 (remplacement Fedow legacy) ✅ EN PROD (Phases A-B-C-D)
+
+Migration de la recharge FED (monnaie fédérée) vers `fedow_core` en accès DB direct.
+Plus de passage par le serveur Fedow distant pour la recharge. Les nouveaux tenants
+utilisent la V2 ; les anciens (avec `Configuration.server_cashless` renseigné) restent
+sur le flow legacy.
+Spec : `Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md`.
+
+Principe : séparation stricte **moyen** (Paiement_stripe, remplaçable par autre PSP)
+et **résultat** (Transaction REFILL + crédit Token, indépendant du PSP). Contrat PSP
+documenté dans `fedow_core/PSP_INTERFACE.md`.
+
+- [x] **Session 31.A — Modèle + service** : +`Client.FED='E'`, +`Paiement_stripe.CASHLESS_REFILL`,
+  +`Product.RECHARGE_CASHLESS_FED`, management command `bootstrap_fed_asset` idempotente,
+  `RefillAmountSerializer` (1€/500€), `RefillService.process_cashless_refill()` idempotent,
+  `PSP_INTERFACE.md`. 12 tests pytest verts.
+- [x] **Session 31.B — Gateway Stripe + Webhook + admin** : `CreationPaiementStripeFederation`
+  (compte central, pas de Connect, pas de SEPA), handler `_process_stripe_webhook_cashless_refill`
+  avec anti-tampering + idempotence, dispatch dans `ApiBillet/views.py:1042`, verrous admin
+  Asset FED. 8 tests pytest verts.
+- [x] **Session 31.C — Vues utilisateur** : helper `peut_recharger_v2()`, réécriture `refill_wallet()`
+  (4 branches), nouvelle action `refill_wallet_submit()` (POST), `return_refill_wallet()` V1/V2,
+  templates HTMX `refill_form_v2.html` + `refill_migration_inline.html` avec aria-live/data-testid.
+- [x] **Session 31.D — Tests critiques + doc** : 4 tests `peut_recharger_v2` (4 verdicts),
+  CHANGELOG bilingue FR/EN, `A TESTER et DOCUMENTER/recharge-fed-v2.md`, 5 nouveaux pièges
+  documentés dans `tests/PIEGES.md` (section 11).
+  **Total : 24 tests pytest verts + 0 régression sur 36 tests existants.**
+- [x] **Code review externe** : 3 issues critiques corrigées (Stripe Connect leak via `price_data`
+  inline, atomicité `refill_wallet_submit`, validation `schema_name='federation_fed'` dans webhook).
+
+- [ ] **Session 31.D-polish (reportée)** : 5 tests pytest nice-to-have, 4 tests E2E Playwright,
+  masquage bouton refill si `module_monnaie_locale=False`, test "Asset FED absent".
+- [ ] **Session 31.E (reportée, Phase 6-7 plan global)** : suppression complète de `FedowAPI()`
+  (36 usages non gardés → chantier 5-7 jours séparé), migration données legacy → V2.
 
 ### 10. Stress test (Phase 3.3)
 

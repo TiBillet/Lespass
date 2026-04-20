@@ -1,0 +1,111 @@
+{% load humanize i18n %}
+{% comment %}
+Partial V2 : affichage des tokens fedow_core.Token d'un user.
+
+LOCALISATION : BaseBillet/templates/reunion/partials/account/token_table_v2.html
+
+Rendu par MyAccount._tokens_table_v2() uniquement pour les users V2
+(verdict peut_recharger_v2 == "v2"). Les autres branches utilisent
+le partial V1 token_table.html (inchange).
+
+/ V2 partial for fedow_core.Token display. Rendered only for V2 users.
+{% endcomment %}
+
+<div id="tokens-v2-container" aria-live="polite">
+
+  {% if aucun_token %}
+    <div class="text-center py-4 opacity-75" data-testid="tokens-v2-empty">
+      <i class="bi bi-wallet2 fs-1 d-block mb-2" aria-hidden="true"></i>
+      <p class="mb-2">{% translate "You don't have any TiBillets yet." %}</p>
+      <a href="#tirelire-section" class="text-decoration-none">
+        <i class="bi bi-arrow-up-circle" aria-hidden="true"></i>
+        {% translate "Refill your wallet above" %}
+      </a>
+    </div>
+  {% endif %}
+
+  {% if tokens_fiduciaires %}
+    <h3 class="h5 mt-3">{% translate "Currencies" %}</h3>
+    <table class="table" data-testid="tokens-v2-fiduciaires">
+      <thead>
+        <tr>
+          <th>{% translate "Balance" %}</th>
+          <th>{% translate "Usable at" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in tokens_fiduciaires %}
+          <tr data-testid="token-row-fiduciaire">
+            <td>
+              <strong>{{ item.value_euros|floatformat:2 }}</strong>
+              <span class="ms-1">{{ item.asset_name_affichage }}</span>
+              <span class="badge bg-secondary ms-1">{{ item.category_display }}</span>
+            </td>
+            <td>
+              {% if item.lieux_utilisables is None %}
+                {# FED : badge unique "partout", pas de liste de 300+ lieux #}
+                {# FED: single "everywhere" badge, no list of 300+ venues #}
+                <span class="badge bg-primary">{% translate "Usable everywhere" %}</span>
+              {% else %}
+                {% for lieu in item.lieux_utilisables %}
+                  {% if lieu.logo %}
+                    <img src="{{ lieu.logo.thumbnail.url }}"
+                         alt="{{ lieu.organisation }}"
+                         style="height: 1.5rem"
+                         class="align-baseline me-1">
+                  {% endif %}
+                  <span class="me-2">{{ lieu.organisation }}</span>
+                {% endfor %}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if tokens_compteurs %}
+    {# mt-4 : separation visuelle supplementaire entre les deux tableaux.
+     # mt-4: extra visual separation between the two tables. #}
+    <h3 class="h5 mt-4">{% translate "Time & loyalty" %}</h3>
+    <p class="small opacity-75">
+      {% translate "These units are not convertible into euros." %}
+    </p>
+    <table class="table" data-testid="tokens-v2-compteurs">
+      <thead>
+        <tr>
+          <th>{% translate "Balance" %}</th>
+          <th>{% translate "Usable at" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in tokens_compteurs %}
+          <tr data-testid="token-row-compteur">
+            <td>
+              <strong>{{ item.value_brut }}</strong>
+              <span class="ms-1">{{ item.currency_code }}</span>
+              <span class="ms-1">{{ item.asset_name_affichage }}</span>
+              <span class="badge bg-info ms-1">{{ item.category_display }}</span>
+            </td>
+            <td>
+              {# Pas de branche lieux_utilisables is None : FED (convertible
+               # en EUR) n'apparait jamais dans les compteurs TIM/FID.
+               # / No is-None branch: FED (EUR-convertible) never appears
+               # in counters TIM/FID. #}
+              {% for lieu in item.lieux_utilisables %}
+                {% if lieu.logo %}
+                  <img src="{{ lieu.logo.thumbnail.url }}"
+                       alt="{{ lieu.organisation }}"
+                       style="height: 1.5rem"
+                       class="align-baseline me-1">
+                {% endif %}
+                <span class="me-2">{{ lieu.organisation }}</span>
+              {% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+</div>

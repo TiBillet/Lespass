@@ -52,6 +52,7 @@ logger = logging.getLogger(__name__)
 # IMPORTANT: never inside a ModelAdmin class with Unfold (pitfall 23).
 # ---------------------------------------------------------------------------
 
+
 def _wallet_court(wallet):
     """Renvoie les 8 premiers caracteres de l'UUID du wallet (lisibilite admin).
     Returns the first 8 chars of the wallet UUID (admin readability)."""
@@ -88,6 +89,7 @@ def _value_en_euros(centimes):
 #      Venue is moved from pending_invitations to federated_with
 # ---------------------------------------------------------------------------
 
+
 @admin.register(Asset, site=staff_admin_site)
 class AssetAdmin(ModelAdmin):
     """
@@ -107,25 +109,26 @@ class AssetAdmin(ModelAdmin):
     Tenant filter: shows own assets (tenant_origin)
     AND assets federated with this venue (federated_with).
     """
+
     list_display = [
-        'name',
-        'category',
-        'currency_code',
-        'active',
-        'lieux_federes',
+        "name",
+        "category",
+        "currency_code",
+        "active",
+        "lieux_federes",
     ]
-    list_filter = ['category', 'active', 'archive']
-    search_fields = ['name', 'currency_code']
+    list_filter = ["category", "active", "archive"]
+    search_fields = ["name", "currency_code"]
 
     # pending_invitations en autocomplete (le createur invite via ce champ).
     # federated_with en readonly (rempli automatiquement par accept_asset_invitation).
     # pending_invitations as autocomplete (creator invites via this field).
     # federated_with as readonly (filled automatically by accept_asset_invitation).
-    autocomplete_fields = ['pending_invitations']
+    autocomplete_fields = ["pending_invitations"]
 
     # Template au-dessus de la liste : invitations en attente pour ce tenant.
     # Template above the list: pending invitations for this tenant.
-    list_before_template = 'admin/asset/asset_changelist_invitations.html'
+    list_before_template = "admin/asset/asset_changelist_invitations.html"
 
     compressed_fields = True
     warn_unsaved_form = True
@@ -139,8 +142,9 @@ class AssetAdmin(ModelAdmin):
         # Ajouter le createur en premier.
         # Add the creator first.
         noms_des_lieux.insert(0, obj.tenant_origin.name)
-        return ', '.join(noms_des_lieux)
-    lieux_federes.short_description = _('Lieux federes')
+        return ", ".join(noms_des_lieux)
+
+    lieux_federes.short_description = _("Lieux federes")
 
     # --- Permissions par role / Role-based permissions ---
 
@@ -161,12 +165,23 @@ class AssetAdmin(ModelAdmin):
         If obj is None (generic call for the list),
         return True so everyone sees the "edit" link
         (which leads to read-only view for non-creators).
+
+        Exception Asset FED : jamais modifiable, meme par son "createur"
+        (tenant federation_fed). Cree une fois pour toutes par
+        bootstrap_fed_asset. Defense en profondeur contre une modification
+        accidentelle via shell admin ou migration manuelle.
+        / Exception for FED Asset: never editable, even by its "creator"
+        (federation_fed tenant). Created once by bootstrap_fed_asset.
+        Defense in depth against accidental edits.
         """
+        if obj is not None and obj.category == Asset.FED:
+            return False
+
         if obj is None:
             return True
 
         tenant_actuel = connection.tenant
-        tenant_est_createur = (obj.tenant_origin_id == tenant_actuel.pk)
+        tenant_est_createur = obj.tenant_origin_id == tenant_actuel.pk
         return tenant_est_createur
 
     def has_delete_permission(self, request, obj=None):
@@ -195,11 +210,16 @@ class AssetAdmin(ModelAdmin):
         """
         queryset = super().get_queryset(request)
         tenant_actuel = connection.tenant
-        assets_visibles = queryset.filter(
-            Q(tenant_origin=tenant_actuel) | Q(federated_with=tenant_actuel)
-        ).filter(
-            archive=False,
-        ).distinct().select_related('tenant_origin')
+        assets_visibles = (
+            queryset.filter(
+                Q(tenant_origin=tenant_actuel) | Q(federated_with=tenant_actuel)
+            )
+            .filter(
+                archive=False,
+            )
+            .distinct()
+            .select_related("tenant_origin")
+        )
         return assets_visibles
 
     # --- Champs dynamiques / Dynamic fields ---
@@ -216,23 +236,26 @@ class AssetAdmin(ModelAdmin):
         # Formulaire de creation : champs minimaux.
         # Add form: minimal fields.
         if obj is None:
-            return ['name', 'currency_code', 'category']
+            return ["name", "currency_code", "category"]
 
         tenant_actuel = connection.tenant
-        tenant_est_createur = (obj.tenant_origin_id == tenant_actuel.pk)
+        tenant_est_createur = obj.tenant_origin_id == tenant_actuel.pk
 
         if tenant_est_createur:
             # Le createur voit pending_invitations + federated_with.
             # Creator sees pending_invitations + federated_with.
             return [
-                'name', 'currency_code', 'category',
-                'active',
-                'pending_invitations', 'federated_with',
+                "name",
+                "currency_code",
+                "category",
+                "active",
+                "pending_invitations",
+                "federated_with",
             ]
         else:
             # Un lieu federe voit tout en readonly (via get_readonly_fields).
             # A federated venue sees everything readonly (via get_readonly_fields).
-            return ['name', 'currency_code', 'category', 'federated_with']
+            return ["name", "currency_code", "category", "federated_with"]
 
     def get_readonly_fields(self, request, obj=None):
         """
@@ -244,25 +267,33 @@ class AssetAdmin(ModelAdmin):
           + nom/code devise/categorie (immutables apres creation).
         Lecture (federe) : tout en readonly.
         """
-        base_readonly = ['uuid', 'tenant_origin', 'created_at', 'last_update']
+        base_readonly = ["uuid", "tenant_origin", "created_at", "last_update"]
 
         if obj is None:
             return base_readonly
 
         tenant_actuel = connection.tenant
-        tenant_est_createur = (obj.tenant_origin_id == tenant_actuel.pk)
+        tenant_est_createur = obj.tenant_origin_id == tenant_actuel.pk
 
         if tenant_est_createur:
             # Le createur ne peut pas changer nom/code/categorie apres creation.
             # federated_with est rempli automatiquement (pas editable).
             # Creator can't change name/code/category after creation.
             # federated_with is filled automatically (not editable).
-            return base_readonly + ['name', 'currency_code', 'category', 'federated_with']
+            return base_readonly + [
+                "name",
+                "currency_code",
+                "category",
+                "federated_with",
+            ]
         else:
             # Un lieu federe voit tout en readonly.
             # A federated venue sees everything readonly.
             return base_readonly + [
-                'name', 'currency_code', 'category', 'federated_with',
+                "name",
+                "currency_code",
+                "category",
+                "federated_with",
             ]
 
     def get_form(self, request, obj=None, **kwargs):
@@ -274,14 +305,14 @@ class AssetAdmin(ModelAdmin):
         FED (federated) is not offered: it's a unique system asset.
         """
         form = super().get_form(request, obj, **kwargs)
-        if obj is None and 'category' in form.base_fields:
+        if obj is None and "category" in form.base_fields:
             categories_autorisees = [
                 (Asset.TLF, dict(Asset.CATEGORY_CHOICES)[Asset.TLF]),
                 (Asset.TNF, dict(Asset.CATEGORY_CHOICES)[Asset.TNF]),
                 (Asset.TIM, dict(Asset.CATEGORY_CHOICES)[Asset.TIM]),
                 (Asset.FID, dict(Asset.CATEGORY_CHOICES)[Asset.FID]),
             ]
-            form.base_fields['category'].choices = categories_autorisees
+            form.base_fields["category"].choices = categories_autorisees
         return form
 
     # --- Sauvegarde / Save ---
@@ -340,7 +371,7 @@ class AssetAdmin(ModelAdmin):
         invitations_precedentes = set()
         if obj.pk:
             invitations_precedentes = set(
-                obj.pending_invitations.values_list('pk', flat=True)
+                obj.pending_invitations.values_list("pk", flat=True)
             )
 
         super().save_related(request, form, formsets, change)
@@ -348,7 +379,7 @@ class AssetAdmin(ModelAdmin):
         # Verifier que le tenant est bien le createur.
         # Check that the tenant is the creator.
         tenant_actuel = connection.tenant
-        tenant_est_createur = (obj.tenant_origin_id == tenant_actuel.pk)
+        tenant_est_createur = obj.tenant_origin_id == tenant_actuel.pk
 
         if obj.pk and not tenant_est_createur:
             # Revert les invitations au precedent etat.
@@ -369,11 +400,11 @@ class AssetAdmin(ModelAdmin):
         urls_par_defaut = super().get_urls()
         urls_custom = [
             re_path(
-                r'^accept_asset_invitation/(?P<asset_pk>[^/]+)/$',
+                r"^accept_asset_invitation/(?P<asset_pk>[^/]+)/$",
                 self.admin_site.admin_view(
                     csrf_protect(require_POST(self.accept_asset_invitation))
                 ),
-                name='asset-accept-invitation',
+                name="asset-accept-invitation",
             ),
         ]
         return urls_custom + urls_par_defaut
@@ -401,7 +432,9 @@ class AssetAdmin(ModelAdmin):
 
         # Verifier que ce tenant est bien dans les invitations en attente.
         # Check that this tenant is in pending invitations.
-        invitation_existe = asset.pending_invitations.filter(pk=tenant_actuel.pk).exists()
+        invitation_existe = asset.pending_invitations.filter(
+            pk=tenant_actuel.pk
+        ).exists()
         if not invitation_existe:
             messages.error(request, _("Aucune invitation en attente pour ce lieu."))
             return redirect(self._url_changelist())
@@ -417,8 +450,9 @@ class AssetAdmin(ModelAdmin):
         )
         messages.success(
             request,
-            _("Invitation acceptee ! Vous partagez maintenant l'asset « %(name)s ».") % {
-                'name': asset.name,
+            _("Invitation acceptee ! Vous partagez maintenant l'asset « %(name)s ».")
+            % {
+                "name": asset.name,
             },
         )
         return redirect(self._url_changelist())
@@ -435,9 +469,9 @@ class AssetAdmin(ModelAdmin):
 
         invitations_asset_en_attente = Asset.objects.filter(
             pending_invitations=tenant_actuel,
-        ).select_related('tenant_origin')
+        ).select_related("tenant_origin")
 
-        extra_context['invitations_asset_en_attente'] = invitations_asset_en_attente
+        extra_context["invitations_asset_en_attente"] = invitations_asset_en_attente
         return super().changelist_view(request, extra_context=extra_context)
 
     # --- Helpers ---
@@ -448,8 +482,8 @@ class AssetAdmin(ModelAdmin):
         Shortcut for Asset changelist URL.
         """
         return reverse(
-            f'{self.admin_site.name}:'
-            f'{self.model._meta.app_label}_{self.model._meta.model_name}_changelist'
+            f"{self.admin_site.name}:"
+            f"{self.model._meta.app_label}_{self.model._meta.model_name}_changelist"
         )
 
 
@@ -457,6 +491,7 @@ class AssetAdmin(ModelAdmin):
 # Token : soldes des wallets (lecture seule)
 # Token: wallet balances (read-only)
 # ---------------------------------------------------------------------------
+
 
 @admin.register(Token, site=staff_admin_site)
 class TokenAdmin(ModelAdmin):
@@ -474,20 +509,23 @@ class TokenAdmin(ModelAdmin):
     Filtre tenant : affiche les tokens lies aux assets de ce lieu.
     Tenant filter: shows tokens linked to this venue's assets.
     """
+
     list_display = [
-        'wallet_court',
-        'asset',
-        'value_court',
+        "wallet_court",
+        "asset",
+        "value_court",
     ]
-    list_filter = ['asset']
-    search_fields = ['wallet__name']
+    list_filter = ["asset"]
+    search_fields = ["wallet__name"]
 
     def wallet_court(self, obj):
         return _wallet_court(obj.wallet)
+
     wallet_court.short_description = _("Wallet")
 
     def value_court(self, obj):
         return _value_en_euros(obj.value)
+
     value_court.short_description = _("Solde")
 
     def get_queryset(self, request):
@@ -502,7 +540,7 @@ class TokenAdmin(ModelAdmin):
         tenant_actuel = connection.tenant
         tokens_du_tenant = queryset.filter(
             asset__tenant_origin=tenant_actuel,
-        ).select_related('wallet', 'asset')
+        ).select_related("wallet", "asset")
         return tokens_du_tenant
 
     def has_add_permission(self, request):
@@ -523,6 +561,7 @@ class TokenAdmin(ModelAdmin):
 # Transaction: movement history (read-only)
 # ---------------------------------------------------------------------------
 
+
 @admin.register(Transaction, site=staff_admin_site)
 class TransactionAdmin(ModelAdmin):
     """
@@ -539,50 +578,54 @@ class TransactionAdmin(ModelAdmin):
     Filtre tenant : affiche les transactions de ce lieu uniquement.
     Tenant filter: shows this venue's transactions only.
     """
+
     list_display = [
-        'id',
-        'action',
-        'asset',
-        'amount_court',
-        'sender_court',
-        'receiver_court',
-        'datetime',
+        "id",
+        "action",
+        "asset",
+        "amount_court",
+        "sender_court",
+        "receiver_court",
+        "datetime",
     ]
-    list_filter = ['action', 'asset']
-    search_fields = ['id', 'comment']
+    list_filter = ["action", "asset"]
+    search_fields = ["id", "comment"]
 
     def amount_court(self, obj):
         return _value_en_euros(obj.amount)
+
     amount_court.short_description = _("Montant")
 
     def sender_court(self, obj):
         return _wallet_court(obj.sender)
+
     sender_court.short_description = _("Emetteur")
 
     def receiver_court(self, obj):
         return _wallet_court(obj.receiver)
+
     receiver_court.short_description = _("Recepteur")
 
     readonly_fields = [
-        'id',
-        'uuid',
-        'hash',
-        'migrated',
-        'sender',
-        'receiver',
-        'asset',
-        'amount',
-        'action',
-        'card',
-        'primary_card',
-        'datetime',
-        'comment',
-        'metadata',
-        'subscription_type',
-        'subscription_start_datetime',
-        'checkout_stripe',
-        'tenant',
-        'ip',
+        "id",
+        "uuid",
+        "hash",
+        "migrated",
+        "sender",
+        "receiver",
+        "asset",
+        "amount",
+        "action",
+        "card",
+        "primary_card",
+        "datetime",
+        "comment",
+        "metadata",
+        "subscription_type",
+        "subscription_start_datetime",
+        "checkout_stripe",
+        "tenant",
+        "ip",
     ]
 
     def get_queryset(self, request):
@@ -597,7 +640,7 @@ class TransactionAdmin(ModelAdmin):
         tenant_actuel = connection.tenant
         transactions_du_tenant = queryset.filter(
             tenant=tenant_actuel,
-        ).select_related('sender', 'receiver', 'asset')
+        ).select_related("sender", "receiver", "asset")
         return transactions_du_tenant
 
     def has_add_permission(self, request):
@@ -629,6 +672,7 @@ class TransactionAdmin(ModelAdmin):
 #      Venue is moved from pending_tenants → tenants
 # ---------------------------------------------------------------------------
 
+
 @admin.register(Federation, site=staff_admin_site)
 class FederationAdmin(ModelAdmin):
     """
@@ -648,16 +692,17 @@ class FederationAdmin(ModelAdmin):
     Tenant filter: shows federations this venue is a member of
     OR that it created.
     """
+
     list_display = [
-        'name',
-        'description',
-        'nombre_de_membres',
+        "name",
+        "description",
+        "nombre_de_membres",
     ]
-    search_fields = ['name']
+    search_fields = ["name"]
 
     # Autocomplete au lieu de filter_horizontal : plus simple pour l'utilisateur.
     # Autocomplete instead of filter_horizontal: simpler for the user.
-    autocomplete_fields = ['pending_tenants']
+    autocomplete_fields = ["pending_tenants"]
 
     # tenants est exclu du formulaire : les membres s'ajoutent
     # uniquement via le flow d'invitation (accept) ou sont retires
@@ -669,17 +714,17 @@ class FederationAdmin(ModelAdmin):
     # by the creator (remove_member).
     # assets is excluded from form: asset management is done
     # per-asset via AssetAdmin (pending_invitations / federated_with).
-    exclude = ['tenants', 'assets']
+    exclude = ["tenants", "assets"]
 
-    readonly_fields = ['uuid', 'created_by']
+    readonly_fields = ["uuid", "created_by"]
 
     # Template au-dessus de la liste : invitations en attente.
     # Template above the list: pending invitations.
-    list_before_template = 'admin/federation/federation_list_before.html'
+    list_before_template = "admin/federation/federation_list_before.html"
 
     # Template au-dessus du formulaire d'edition : liste des membres.
     # Template above the edit form: members list.
-    change_form_before_template = 'admin/federation/federation_members.html'
+    change_form_before_template = "admin/federation/federation_members.html"
 
     compressed_fields = True
     warn_unsaved_form = True
@@ -690,7 +735,8 @@ class FederationAdmin(ModelAdmin):
         Shows the member count in the list.
         """
         return obj.tenants.count()
-    nombre_de_membres.short_description = _('Membres')
+
+    nombre_de_membres.short_description = _("Membres")
 
     # --- Permissions par role / Role-based permissions ---
 
@@ -716,7 +762,7 @@ class FederationAdmin(ModelAdmin):
             return True
 
         tenant_actuel = connection.tenant
-        tenant_est_createur = (obj.created_by_id == tenant_actuel.pk)
+        tenant_est_createur = obj.created_by_id == tenant_actuel.pk
         return tenant_est_createur
 
     def has_delete_permission(self, request, obj=None):
@@ -728,7 +774,7 @@ class FederationAdmin(ModelAdmin):
             return True
 
         tenant_actuel = connection.tenant
-        tenant_est_createur = (obj.created_by_id == tenant_actuel.pk)
+        tenant_est_createur = obj.created_by_id == tenant_actuel.pk
         return tenant_est_createur
 
     # --- Queryset filtre par tenant / Tenant-filtered queryset ---
@@ -805,18 +851,18 @@ class FederationAdmin(ModelAdmin):
         urls_par_defaut = super().get_urls()
         urls_custom = [
             re_path(
-                r'^accept_invitation/(?P<federation_pk>[^/]+)/$',
+                r"^accept_invitation/(?P<federation_pk>[^/]+)/$",
                 self.admin_site.admin_view(
                     csrf_protect(require_POST(self.accept_invitation))
                 ),
-                name='federation-accept-invitation',
+                name="federation-accept-invitation",
             ),
             re_path(
-                r'^remove_member/(?P<federation_pk>[^/]+)/(?P<tenant_pk>[^/]+)/$',
+                r"^remove_member/(?P<federation_pk>[^/]+)/(?P<tenant_pk>[^/]+)/$",
                 self.admin_site.admin_view(
                     csrf_protect(require_POST(self.remove_member))
                 ),
-                name='federation-remove-member',
+                name="federation-remove-member",
             ),
         ]
         return urls_custom + urls_par_defaut
@@ -844,7 +890,9 @@ class FederationAdmin(ModelAdmin):
 
         # Verifier que ce tenant est bien dans les invitations en attente.
         # Check that this tenant is in pending invitations.
-        invitation_existe = federation.pending_tenants.filter(pk=tenant_actuel.pk).exists()
+        invitation_existe = federation.pending_tenants.filter(
+            pk=tenant_actuel.pk
+        ).exists()
         if not invitation_existe:
             messages.error(request, _("Aucune invitation en attente pour ce lieu."))
             return redirect(self._url_changelist())
@@ -860,8 +908,11 @@ class FederationAdmin(ModelAdmin):
         )
         messages.success(
             request,
-            _("Invitation acceptee ! Vous faites maintenant partie de la federation « %(name)s ».") % {
-                'name': federation.name,
+            _(
+                "Invitation acceptee ! Vous faites maintenant partie de la federation « %(name)s »."
+            )
+            % {
+                "name": federation.name,
             },
         )
         return redirect(self._url_changelist())
@@ -887,7 +938,7 @@ class FederationAdmin(ModelAdmin):
 
         # Seul le createur peut exclure un membre.
         # Only the creator can remove a member.
-        tenant_est_createur = (federation.created_by_id == tenant_actuel.pk)
+        tenant_est_createur = federation.created_by_id == tenant_actuel.pk
         if not tenant_est_createur:
             messages.error(
                 request,
@@ -922,8 +973,9 @@ class FederationAdmin(ModelAdmin):
         )
         messages.success(
             request,
-            _("Le lieu « %(name)s » a ete exclu de la federation.") % {
-                'name': tenant_a_exclure.name,
+            _("Le lieu « %(name)s » a ete exclu de la federation.")
+            % {
+                "name": tenant_a_exclure.name,
             },
         )
         return redirect(self._url_change(federation.pk))
@@ -940,12 +992,12 @@ class FederationAdmin(ModelAdmin):
 
         invitations_en_attente = Federation.objects.filter(
             pending_tenants=tenant_actuel,
-        ).select_related('created_by')
+        ).select_related("created_by")
 
-        extra_context['invitations_en_attente'] = invitations_en_attente
+        extra_context["invitations_en_attente"] = invitations_en_attente
         return super().changelist_view(request, extra_context=extra_context)
 
-    def change_view(self, request, object_id, form_url='', extra_context=None):
+    def change_view(self, request, object_id, form_url="", extra_context=None):
         """
         Ajoute la liste des membres et le role du tenant au contexte.
         Adds the members list and the tenant's role to the context.
@@ -964,13 +1016,13 @@ class FederationAdmin(ModelAdmin):
             # Liste des membres pour le template.
             # Members list for the template.
             membres_de_la_federation = federation.tenants.all()
-            extra_context['membres_de_la_federation'] = membres_de_la_federation
-            extra_context['federation'] = federation
+            extra_context["membres_de_la_federation"] = membres_de_la_federation
+            extra_context["federation"] = federation
 
             # Le createur voit les boutons "Exclure".
             # The creator sees the "Remove" buttons.
-            tenant_est_createur = (federation.created_by_id == tenant_actuel.pk)
-            extra_context['tenant_est_createur'] = tenant_est_createur
+            tenant_est_createur = federation.created_by_id == tenant_actuel.pk
+            extra_context["tenant_est_createur"] = tenant_est_createur
         except Federation.DoesNotExist:
             pass
 
@@ -984,8 +1036,8 @@ class FederationAdmin(ModelAdmin):
         Shortcut for Federation changelist URL.
         """
         return reverse(
-            f'{self.admin_site.name}:'
-            f'{self.model._meta.app_label}_{self.model._meta.model_name}_changelist'
+            f"{self.admin_site.name}:"
+            f"{self.model._meta.app_label}_{self.model._meta.model_name}_changelist"
         )
 
     def _url_change(self, pk):
@@ -994,7 +1046,7 @@ class FederationAdmin(ModelAdmin):
         Shortcut for a federation change URL.
         """
         return reverse(
-            f'{self.admin_site.name}:'
-            f'{self.model._meta.app_label}_{self.model._meta.model_name}_change',
+            f"{self.admin_site.name}:"
+            f"{self.model._meta.app_label}_{self.model._meta.model_name}_change",
             args=[pk],
         )

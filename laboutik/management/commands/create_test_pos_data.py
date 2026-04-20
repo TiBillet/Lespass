@@ -36,6 +36,13 @@ class Command(BaseCommand):
     help = "Cree des donnees de test POS (categories, produits, prix, points de vente) pour le tenant courant."
 
     def handle(self, *args, **options):
+        # Bootstrap de l'infrastructure FED V2 (tenant federation_fed + Asset FED + Product de recharge).
+        # Idempotent : si deja present, ne recree rien. Necessaire pour les tests qui
+        # utilisent la recharge V2 (Session 31).
+        # / V2 FED infrastructure bootstrap. Idempotent. Needed for tests using V2 refill.
+        from django.core.management import call_command
+        call_command('bootstrap_fed_asset')
+
         # Si on est deja dans un tenant_context (schema != "public"), on l'utilise.
         # Sinon (lancement standalone via docker exec), on prend le premier tenant non-public.
         # ATTENTION : "relation does not exist" = on est sur le schema public,

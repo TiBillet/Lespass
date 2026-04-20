@@ -1186,6 +1186,11 @@ class Product(models.Model):
     NONE, BILLET, PACK, RECHARGE_CASHLESS = "N", "B", "P", "R"
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = "S", "T", "M", "A", "G"
     DON, FREERES, NEED_VALIDATION = "D", "F", "V"
+    # Recharge cashless FED : produit système créé par bootstrap_fed_asset.
+    # Un seul Product avec cette catégorie existe, lié à l'asset FED unique.
+    # / Cashless FED refill: system product created by bootstrap_fed_asset.
+    # Only one Product with this category exists, linked to the unique FED asset.
+    RECHARGE_CASHLESS_FED = "E"
     QRCODE_MA = "Q"
     # Fut de boisson pour tireuse connectee (controlvanne)
     # / Beverage keg for connected tap (controlvanne)
@@ -1202,6 +1207,7 @@ class Product(models.Model):
         # (MERCH, _('Merchandasing')),
         (ADHESION, _("Subscription or membership")),
         (BADGE, _("Punchclock")),
+        (RECHARGE_CASHLESS_FED, _("FED cashless refill")),
         (QRCODE_MA, _("QrCode paiement on my account")),
         (FUT, _("Keg (connected tap)")),
         # (DON, _('Don')),
@@ -3586,13 +3592,14 @@ class Paiement_stripe(models.Model):
         related_name="paiements",
     )
 
-    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT = (
+    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT, CASHLESS_REFILL = (
         "Q",
         "B",
         "F",
         "C",
         "I",
         "T",
+        "R",
     )
     SOURCE_CHOICES = (
         (QRCODE, _("From QR code scan")),  # ancien api. A virer ?
@@ -3601,6 +3608,11 @@ class Paiement_stripe(models.Model):
         (FRONT_CROWDS, _("From Crowds app")),
         (INVOICE, _("From invoice")),
         (TRANSFERT, _("Stripe Transfert")),
+        # Recharge FED V2 : paiement d'un user pour recharger son wallet fédéré.
+        # Stocké dans le schema federation_fed, pas dans le tenant du lieu.
+        # / FED V2 refill: user payment to refill their federated wallet.
+        # Stored in federation_fed schema, not in the venue tenant.
+        (CASHLESS_REFILL, _("Cashless refill")),
     )
     source = models.CharField(
         max_length=1,
