@@ -1021,18 +1021,17 @@ msgid "Cancel"
 msgstr "Annuler"
 
 #: Administration/templates/admin/dashboard_module_modal.html:37
-#, fuzzy
 #| msgid "Confirmed"
 msgid "Confirm"
-msgstr "Confirmé"
+msgstr "Confirmez"
 
 #: Administration/templates/admin/event/change_form.html:8
 msgid "Copy the public url of the event"
-msgstr ""
+msgstr "Copier l'adresse url de la page évènement"
 
 #: Administration/templates/admin/event/change_form.html:10
 msgid "Copied !"
-msgstr ""
+msgstr "Copié !"
 
 #: Administration/templates/admin/federation/federation_list_before.html:13
 msgid "Invitations a rejoindre une federation"
@@ -1055,16 +1054,14 @@ msgid "Membres de la federation"
 msgstr ""
 
 #: Administration/templates/admin/federation/federation_members.html:30
-#, fuzzy
 #| msgid "Created"
 msgid "Createur"
-msgstr "Créé"
+msgstr "Créateur"
 
 #: Administration/templates/admin/federation/federation_members.html:48
-#, fuzzy
 #| msgid "Excluded tags"
 msgid "Exclure"
-msgstr "Labels exclus"
+msgstr ""
 
 #: Administration/templates/admin/human_user/right_and_wallet_info.html:7
 msgid "User rights"
@@ -3876,7 +3873,7 @@ msgstr "Votre paiement a été validé."
 
 #: BaseBillet/tasks.py:2056 BaseBillet/views.py:816
 msgid "Your reservation has been cancelled."
-msgstr "Votre reservation a bien été annulé."
+msgstr "Votre reservation a bien été annulée."
 
 #: BaseBillet/tasks.py:2115 BaseBillet/views.py:835
 msgid "Your ticket has been cancelled."
