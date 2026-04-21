@@ -480,6 +480,50 @@ documenté dans `fedow_core/PSP_INTERFACE.md`.
 - [ ] **Session 31.E (reportée, Phase 6-7 plan global)** : suppression complète de `FedowAPI()`
   (36 usages non gardés → chantier 5-7 jours séparé), migration données legacy → V2.
 
+### 9.6 Scan QR carte V2 (remplacement Fedow legacy sur flow public carte) ✅ (2026-04-21)
+
+Migration du flow public "scan QR cashless" de `fedow_connect` (HTTP Fedow distant)
+vers `fedow_core` (DB direct). Dispatch V1/V2 via `Configuration.server_cashless`.
+Les nouveaux tenants utilisent la V2, les legacy restent sur V1 inchangé.
+Spec : `Session 34 - Scan QR carte V2/SPEC_SCAN_QR_CARTE_V2.md`.
+
+Principe : **CarteService** dans `fedow_core/services.py` avec 4 méthodes
+(`scanner_carte`, `lier_a_user`, `declarer_perdue`, `lister_cartes_du_user`)
+alignées sur les entrées publiques (`/qr/<uuid>/`, `/qr/link/`, `/my_account/card/`).
+Aucune migration de schema (Option 3 YAGNI).
+
+- [x] **Task 1 — Exceptions métier** : `CarteIntrouvable`, `CarteDejaLiee`, `UserADejaCarte`
+  avec `_()` i18n, bilingual docstrings.
+- [x] **Task 2 — `scanner_carte()`** : 3 branches (carte identifiée / anonyme / vierge),
+  création lazy wallet_ephemere protégée par `transaction.atomic()` + `select_for_update()`
+  + double-check locking (anti-race). 3 tests.
+- [x] **Task 3 — `lier_a_user()`** : atomic transaction, anti-vol (`UserADejaCarte` si
+  `user.cartecashless_set.exclude(pk=carte.pk).exists()`), fusion déléguée à
+  `WalletService.fusionner_wallet_ephemere`, rattrapage des adhésions anonymes
+  (`Membership(user=None, card_number=X)` → `user=alice`). 7 tests.
+- [x] **Task 4 — `declarer_perdue()`** : nullify `carte.user` + `carte.wallet_ephemere`,
+  préserve `user.wallet` et ses tokens. 3 tests.
+- [x] **Task 5-7 — Dispatch V1/V2 dans `BaseBillet/views.py`** : 4 vues refactorées
+  (`ScanQrCode.retrieve`, `ScanQrCode.link`, `MyAccount.lost_my_card`, `admin_lost_my_card`)
+  avec helpers `_xxx_v1_legacy` et `_xxx_v2_fedow_core`. Conditon : `bool(config.server_cashless)`.
+- [x] **`lister_cartes_du_user()`** (bascule `/my_account/card/` + `admin_my_cards`) :
+  retourne des `SimpleNamespace` compatibles avec templates `card_table.html` et
+  `wallet_info.html` sans toucher au template. 3 tests.
+- [x] **Task 9 — Workflow djc** : CHANGELOG bilingue, makemessages + compilemessages
+  FR+EN, `A TESTER et DOCUMENTER/scan-qr-carte-v2.md`, `fedow_core/CARTES.md`.
+- [x] **Seed cartes E2E dans `demo_data_v2.py`** : 5 cartes avec `tag_id` depuis `.env`
+  (DEMO_TAGID_*) et **UUIDs hardcodés** (mapping visuel, URLs `/qr/<uuid>/` stables
+  entre flushes).
+- [x] **Code review externe** : 2 Critical fixés (race `scanner_carte`, doc multi-tenant),
+  6 fast wins appliqués (`user.save` après dispatch, `update_fields=["is_active"]`,
+  imports hoistés, `logger.exception`, suppression teardown manuel).
+  **Total : 16 tests pytest verts + 0 régression.**
+
+- [ ] **Task 8 — Tests E2E Playwright (reportée)** : 19 scénarios documentés dans
+  `Session 34 - Scan QR carte V2/TESTS_E2E_A_FAIRE.md`. Reportée suite à incident
+  DB (teardown trop agressif a vidé `Configuration` via cascade). Règle stricte
+  "zéro teardown agressif" documentée dans `tests/PIEGES.md` section 12.4.
+
 ### 10. Stress test (Phase 3.3)
 
 - [ ] Management command `verify_transactions` (séquence, soldes, tenant)

@@ -58,12 +58,15 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
     ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
     PaiementHorsLigneSerializer
 from Customers.models import Client, Domain
+from QrcodeCashless.models import CarteCashless
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
 from fedow_core.models import Token, Asset, Transaction
+from fedow_core.services import CarteService
+from fedow_core.exceptions import CarteDejaLiee, CarteIntrouvable, UserADejaCarte
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from fedow_public.models import AssetFedowPublic
@@ -395,71 +398,132 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
     def retrieve(self, request, pk=None):
-        # TODO: Serializer ?
+        """
+        GET /qr/<qrcode_uuid>/ — scan public de carte cashless.
+        / Public QR code scan of a cashless card.
+
+        LOCALISATION : BaseBillet/views.py:ScanQrCode
+        Dispatch V1 (fedow_connect HTTP) / V2 (fedow_core DB direct) selon
+        Configuration.server_cashless du tenant d'origine de la carte.
+        """
+        # --- Validation UUID ---
+        # / Validate UUID format.
         try:
-            qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
-        except ValueError:
-            logger.warning("ValueError, not an uuid")
+            qrcode_uuid = uuid.UUID(pk)
+        except (ValueError, TypeError):
+            logger.warning(f"ScanQrCode.retrieve : pk non uuid : {pk}")
             raise Http404()
-        except Exception as e:
-            logger.error(e)
-            raise e
 
-        # 1) checket fedow 2) checker origin card 3) rediriger vers primary_domain
-        # redirection des cartes génériques
-        tenant: Client = connection.tenant
-        # Besoin d'etre sur un tenant qui a déja échangé avec Fedow
-        if tenant.categorie != Client.SALLE_SPECTACLE:
-            tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
-        with tenant_context(tenant):
-            fedowAPI = FedowAPI()
-            serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
-            if not serialized_qrcode_card:
-                raise Http404("Unknow qrcode_uuid")
+        # --- Resolution carte + tenant d'origine (SHARED_APPS : acces direct) ---
+        # / Resolve card and origin tenant (SHARED_APPS: direct access).
+        try:
+            carte = CarteCashless.objects.select_related(
+                "detail__origine", "user", "wallet_ephemere",
+            ).get(uuid=qrcode_uuid)
+        except CarteCashless.DoesNotExist:
+            raise Http404("Unknow qrcode_uuid")
 
-            lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
-            if not lespass_domain:
-                raise Http404("Origin error")
+        if carte.detail is None or carte.detail.origine is None:
+            logger.error(f"Carte {qrcode_uuid} sans detail ou origine")
+            raise Http404("Origin error")
 
-            domain = get_object_or_404(Domain, domain=lespass_domain)
-            primary_domain = domain.tenant.get_primary_domain()
-            if primary_domain.domain not in request.build_absolute_uri():
-                return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
+        tenant_origine = carte.detail.origine
 
-            if not serialized_qrcode_card:
-                logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
-                raise Http404()
+        # --- Redirection cross-domain vers le primary_domain du tenant d'origine ---
+        # UX V1 conservee : scanner une carte ramene toujours sur son festival.
+        # / Cross-domain redirect to origin tenant's primary domain. V1 UX preserved.
+        primary_domain = tenant_origine.get_primary_domain()
+        if primary_domain.domain not in request.build_absolute_uri():
+            return HttpResponseRedirect(f"https://{primary_domain.domain}/qr/{qrcode_uuid}/")
 
-            # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
-            if serialized_qrcode_card['is_wallet_ephemere']:
-                logger.info("Wallet ephemere, on demande le mail")
-                template_context = get_context(request)
-                template_context['qrcode_uuid'] = qrcode_uuid
-                template_context['base_template'] = 'reunion/blank_base.html'
-                # Logout au cas où on scanne les cartes à la suite.
-                logout(request)
-                return render(request, "reunion/views/register.html", context=template_context)
+        # --- Dispatch V1 / V2 selon tenant d'origine ---
+        # V1 : tenant legacy (server_cashless renseigne) → HTTP Fedow distant
+        # V2 : tenant fedow_core → acces DB direct
+        # / V1 vs V2 dispatch based on Configuration.server_cashless.
+        with tenant_context(tenant_origine):
+            config = Configuration.get_solo()
+            tenant_est_en_v1 = bool(config.server_cashless)
 
-            # Si wallet non ephemere, alors on a un user :
-            wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+            if tenant_est_en_v1:
+                return self._retrieve_v1_legacy(request, qrcode_uuid, tenant_origine)
+            return self._retrieve_v2_fedow_core(request, carte, tenant_origine)
 
-            user: TibilletUser = wallet.user
+    def _retrieve_v1_legacy(self, request, qrcode_uuid, tenant_origine):
+        """
+        Branche V1 : appelle fedow_connect (HTTP vers Fedow distant).
+        Ancien code conserve pour les tenants legacy.
+        / V1 branch: calls fedow_connect (HTTP to remote Fedow).
+        """
+        fedowAPI = FedowAPI()
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            raise Http404("Unknow qrcode_uuid")
+
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            template_context = get_context(request)
+            template_context['qrcode_uuid'] = qrcode_uuid
+            template_context['base_template'] = 'reunion/blank_base.html'
+            logout(request)
+            return render(request, "reunion/views/register.html", context=template_context)
+
+        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        user = wallet.user
+        # Activer le user uniquement s'il ne l'est pas deja, et n'ecrire que
+        # cette colonne pour eviter de declencher tous les signaux pre/post_save.
+        # / Activate user only if not already active; write only this column
+        # to avoid firing all pre/post_save signals.
+        if not user.is_active:
             user.is_active = True
-            user.save()
+            user.save(update_fields=["is_active"])
+        login(request, user)
 
-            # Parti pris : On logue l'user lorsqu'il scanne sa carte.
-            login(request, user)
+        if settings.TEST or settings.DEBUG:
+            token = user.get_connect_token()
+            base_url = connection.tenant.get_primary_domain().domain
+            connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+            messages.add_message(request, messages.INFO,
+                                 format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+        return redirect("/my_account")
 
-            # Pour les tests :
-            # On est sur le moteur de démonstration / test
-            # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.TEST or settings.DEBUG:
-                token = user.get_connect_token()
-                base_url = connection.tenant.get_primary_domain().domain
-                connexion_url = f"https://{base_url}/emailconfirmation/{token}"
-                messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+    def _retrieve_v2_fedow_core(self, request, carte, tenant_origine):
+        """
+        Branche V2 : appelle fedow_core.CarteService (DB direct).
+        / V2 branch: calls fedow_core.CarteService (direct DB access).
+        """
+        ip = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        resultat = CarteService.scanner_carte(
+            carte=carte, tenant_origine=tenant_origine,
+            ip=ip,
+        )
 
-            return redirect("/my_account")
+        if resultat.is_wallet_ephemere:
+            template_context = get_context(request)
+            template_context['qrcode_uuid'] = carte.uuid
+            template_context['base_template'] = 'reunion/blank_base.html'
+            # Logout au cas ou on scanne les cartes a la suite
+            # / Logout in case of consecutive scans
+            logout(request)
+            return render(request, "reunion/views/register.html", context=template_context)
+
+        # Carte identifiee : login automatique du user
+        # / Identified card: automatic user login
+        user = carte.user
+        # Activer le user uniquement s'il ne l'est pas deja, et n'ecrire que
+        # cette colonne pour eviter de declencher tous les signaux pre/post_save.
+        # / Activate user only if not already active; write only this column
+        # to avoid firing all pre/post_save signals.
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+        login(request, user)
+
+        if settings.TEST or settings.DEBUG:
+            token = user.get_connect_token()
+            base_url = connection.tenant.get_primary_domain().domain
+            connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+            messages.add_message(request, messages.INFO,
+                                 format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+        return redirect("/my_account")
 
     # @action(detail=False, methods=['POST'])
     # def link_with_email_confirm(self, request):
@@ -467,79 +531,117 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
     @action(detail=False, methods=['POST'])
     def link(self, request):
-        # data=request.POST.dict() in the controler for boolean
-        # logger.info(request.POST.dict())
-        # import ipdb; ipdb.set_trace()
-        # data=request.POST.dict() in the controler for boolean
+        """
+        POST /qr/link/ — identification d'une carte scannee.
+        / Identify a scanned card with user email.
+
+        LOCALISATION : BaseBillet/views.py:ScanQrCode
+        """
         validator = LinkQrCodeValidator(data=request.POST.dict())
         if not validator.is_valid():
             for error in validator.errors:
                 logger.error(f"{error} : {validator.errors[error][0]}")
-                messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
+                messages.add_message(request, messages.ERROR,
+                                     f"{error} : {validator.errors[error][0]}")
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        # Le mail est envoyé
         email = validator.validated_data['email']
-        user: TibilletUser = get_or_create_user(email, force_mail=True)
+        user = get_or_create_user(email, force_mail=True)
         if validator.validated_data.get('newsletter'):
             send_to_ghost_email.delay(email)
 
-        # import ipdb; ipdb.set_trace()
         if not user:
-            # Le mail n'est pas validé par django (example.org?)
             messages.add_message(request, messages.ERROR, f"{_('Invalid email')}")
-            logger.error("email validé par validateur DRF mais pas par get_or_create_user "
-                         "-> email de confirmation a renvoyé une erreur")
+            logger.error("email valide DRF mais pas get_or_create_user")
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
+        # Completer first_name/last_name uniquement si vides (pas d'ecrasement)
+        # / Fill first_name/last_name only if empty (never overwrite).
         if validator.data.get('lastname') and not user.last_name:
             user.last_name = validator.data.get('lastname')
         if validator.data.get('firstname') and not user.first_name:
             user.first_name = validator.data.get('firstname')
         if validator.data.get('newsletter'):
             send_to_ghost_email.delay(email, f"{user.first_name} {user.last_name}")
-        # On retire le mail valid : impose la vérification du mail en cas de nouvelle carte
+
+        # --- Dispatch V1 / V2 ---
+        # On resout la carte AVANT de toucher au user : si la carte est
+        # introuvable on retourne tot sans modifier l'user (pas de perte
+        # d'email_valid si le lien echoue).
+        # / Resolve card FIRST, then touch the user. If card is missing we
+        # return early without modifying the user (no email_valid loss).
+        qrcode_uuid = validator.validated_data['qrcode_uuid']
+
+        try:
+            carte = CarteCashless.objects.select_related("detail__origine").get(uuid=qrcode_uuid)
+        except CarteCashless.DoesNotExist:
+            messages.add_message(request, messages.ERROR, _("Card not found"))
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+        # Carte trouvee : on peut maintenant poser email_valid=False
+        # (impose la re-verification du mail) et persister first_name/last_name.
+        # / Card found: now safe to set email_valid=False and persist names.
         user.email_valid = False
         user.save()
 
+        tenant_origine = carte.detail.origine
+        with tenant_context(tenant_origine):
+            config = Configuration.get_solo()
+            tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            return self._link_v1_legacy(request, user, qrcode_uuid, carte)
+        return self._link_v2_fedow_core(request, user, carte)
+
+    def _link_v1_legacy(self, request, user, qrcode_uuid, carte):
+        """
+        Branche V1 : appelle fedow_connect (HTTP).
+        / V1 branch: calls fedow_connect (HTTP).
+        """
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        # Si l'user possède déja un wallet et une carte référencée dans Fedow,
-
-        # il ne peut pas avoir de deuxièmes cartes
-        # Evite le vol de carte : si je connais l'email d'une personne,
-        # je peux avoir son wallet juste en mettant son email sur une nouvelle carte…
-        # Fonctionne de concert avec la vérification chez Fedow : fedow_core.views.linkwallet_cardqrcode : 385
         if not created:
-            logger.info(f"wallet {wallet} non created after get_or_create_wallet")
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
                 messages.add_message(request, messages.ERROR,
-                                     _("You seem to already have a TiBillet card linked to your wallet. "
-                                       "Please revoke it first in your profile area to link a new one."))
+                                     _("You seem to already have a TiBillet card "
+                                       "linked to your wallet. Please revoke it first."))
                 return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
-        qrcode_uuid = validator.validated_data['qrcode_uuid']
-        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
+        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(
+            user=user, qrcode_uuid=qrcode_uuid,
+        )
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
 
-        # On retourne sur la page GET /qr/
-        # Qui redirigera si besoin et affichera l'erreur
-        logger.info(
-            f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
-
-        # On check si des adhésions n'ont pas été faites avec la carte en wallet ephemère
-        card_number = linked_serialized_card.get('number_printed')
+        card_number = linked_serialized_card.get('number_printed') if linked_serialized_card else None
         if card_number:
             for membership in Membership.objects.filter(
-                    user__isnull=True,
-                    card_number=card_number):
+                user__isnull=True, card_number=card_number,
+            ):
                 membership.user = user
                 membership.first_name = user.first_name
                 membership.last_name = user.last_name
                 membership.save()
+
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+    def _link_v2_fedow_core(self, request, user, carte):
+        """
+        Branche V2 : appelle fedow_core.CarteService (DB direct).
+        / V2 branch: calls fedow_core.CarteService.
+        """
+        try:
+            CarteService.lier_a_user(
+                qrcode_uuid=carte.uuid, user=user,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+            )
+        except UserADejaCarte as e:
+            messages.add_message(request, messages.ERROR, str(e))
+        except CarteDejaLiee as e:
+            messages.add_message(request, messages.ERROR, str(e))
+        except CarteIntrouvable as e:
+            messages.add_message(request, messages.ERROR, str(e))
 
         return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
@@ -1011,20 +1113,95 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
-        fedowAPI = FedowAPI()
-        cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
-        context = {
-            'cards': cards
-        }
+        """
+        GET /my_account/my_cards/ — liste les cartes liees au user courant.
+        / List cards linked to current user.
+
+        Dispatch V1 (fedow_connect HTTP) / V2 (fedow_core DB direct) selon
+        Configuration.server_cashless du tenant courant.
+
+        YAGNI multi-tenant : le dispatch se base sur le tenant courant (celui
+        ou l'user consulte son /my_account/), pas sur le tenant d'origine de
+        chaque carte. En pratique, un user n'a qu'une seule carte a la fois
+        (anti-vol UserADejaCarte), donc la cohabitation V1/V2 cross-tenant sur
+        le meme user est improbable. Si ce cas survient plus tard (federation
+        V1 + V2), il faudra dispatcher par carte.
+        / YAGNI multi-tenant: dispatch uses current tenant, not each card's
+        origin. Anti-theft guarantees at most one card per user in practice.
+        """
+        # Dispatch V1 / V2
+        # / V1 vs V2 dispatch
+        config = Configuration.get_solo()
+        tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            # Branche V1 : appelle fedow_connect (HTTP vers Fedow distant)
+            # / V1 branch: HTTP to remote Fedow
+            fedowAPI = FedowAPI()
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+        else:
+            # Branche V2 : lookup DB direct via CarteService
+            # / V2 branch: direct DB lookup via CarteService
+            cards = CarteService.lister_cartes_du_user(request.user)
+
+        context = {'cards': cards}
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
     @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
-        fedowAPI = FedowAPI()
+        """
+        GET — Admin tenant : cartes + tokens d'un user donne (vue admin Unfold).
+        / Admin view: cards + tokens for a given user.
+
+        Dispatch V1 / V2 selon Configuration.server_cashless.
+        """
         user = get_object_or_404(HumanUser, pk=pk)
-        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+
+        config = Configuration.get_solo()
+        tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            # Branche V1 : fedow_connect HTTP
+            # / V1 branch
+            fedowAPI = FedowAPI()
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+            tokens = [
+                token for token in wallet.get('tokens')
+                if token.get('asset_category') not in ['SUB', 'BDG']
+            ]
+        else:
+            # Branche V2 : fedow_core DB direct
+            # cartes via CarteService.lister_cartes_du_user
+            # tokens via user.wallet.tokens (filtree sur Asset actif)
+            # / V2 branch
+            from types import SimpleNamespace
+
+            cards = CarteService.lister_cartes_du_user(user)
+
+            tokens = []
+            if user.wallet is not None:
+                tokens_queryset = Token.objects.filter(
+                    wallet=user.wallet,
+                    asset__active=True,
+                    value__gt=0,
+                ).select_related("asset")
+                for token in tokens_queryset:
+                    # Le template attend : token.value (dround),
+                    # token.asset.is_stripe_primary, token.name.
+                    # On expose ces 3 champs via SimpleNamespace pour compat.
+                    # / Template needs: value, asset.is_stripe_primary, name.
+                    tokens.append(
+                        SimpleNamespace(
+                            value=token.value,
+                            asset=SimpleNamespace(
+                                # is_stripe_primary en V2 = asset de categorie FED
+                                # / is_stripe_primary in V2 = FED-category asset
+                                is_stripe_primary=(token.asset.category == "FED"),
+                            ),
+                            name=token.asset.name,
+                        )
+                    )
 
         context = {
             'cards': cards,
@@ -1110,46 +1287,107 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def admin_lost_my_card(self, request, pk, *args, **kwargs):
+        """
+        GET — Admin tenant declare une carte perdue pour un user.
+        / Tenant admin declares a card lost for a user.
+        """
         tenant = request.tenant
         admin = request.user
         user_pk, number_printed = pk.split(':')
         user = get_object_or_404(HumanUser, pk=user_pk)
-        if admin.is_tenant_admin(tenant):
-            try:
-                fedowAPI = FedowAPI()
-                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
-                if lost_card_report:
-                    messages.add_message(request, messages.SUCCESS,
-                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-                else:
-                    messages.add_message(request, messages.ERROR,
-                                         _("Error when detaching your card. Contact an administrator."))
-            except Exception as e:
-                logger.error(f"admin_lost_my_card error: {e}")
-                messages.add_message(request, messages.ERROR,
-                                     _("Error when detaching your card. Contact an administrator."))
+        if not admin.is_tenant_admin(tenant):
             return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+        self._declare_lost_card_dispatch(request, user, number_printed)
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
-        if request.user.email_valid:
-            try:
-                fedowAPI = FedowAPI()
-                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
-                if lost_card_report:
-                    messages.add_message(request, messages.SUCCESS,
-                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-                else:
-                    messages.add_message(request, messages.ERROR,
-                                         _("Error when detaching your card. Contact an administrator."))
-            except Exception as e:
-                logger.error(f"lost_my_card error: {e}")
+        """
+        GET — L'utilisateur declare sa propre carte perdue.
+        / User declares their own card lost.
+        """
+        if not request.user.email_valid:
+            logger.warning(_("User email not active"))
+            messages.add_message(request, messages.ERROR,
+                                 _("You need a valid email to declare a card lost."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        self._declare_lost_card_dispatch(request, request.user, pk)
+        return HttpResponseClientRedirect('/my_account/')
+
+    def _declare_lost_card_dispatch(self, request, user, number_printed):
+        """
+        Dispatch V1/V2 pour la declaration de perte.
+        / V1/V2 dispatch for loss declaration.
+
+        Pourquoi le tenant_context ne couvre QUE la lecture de Configuration :
+        - Configuration est TENANT_APP (schema tenant) — il faut le tenant_context
+          pour la lecture.
+        - Les helpers V1 et V2 appeles APRES n'ont pas besoin du context :
+            * V1 (fedow_connect) : utilise une cle API de tenant pre-chargee.
+            * V2 (fedow_core.CarteService) : opere uniquement sur SHARED_APPS
+              (CarteCashless, Wallet, Transaction), pas besoin de schema tenant.
+        / tenant_context scopes ONLY the Configuration read because :
+          Configuration is TENANT_APP (needs schema). V1/V2 helpers below work
+          without the context (V1 uses pre-loaded API key, V2 is SHARED_APPS).
+        """
+        # Recuperer le tenant d'origine de la carte (SHARED_APPS : acces direct)
+        # / Get the origin tenant of the card (SHARED_APPS: direct access).
+        try:
+            carte = CarteCashless.objects.select_related("detail__origine").get(
+                user=user, number=number_printed,
+            )
+        except CarteCashless.DoesNotExist:
+            messages.add_message(request, messages.ERROR,
+                                 _("Card not found or not linked to your account."))
+            return
+
+        tenant_origine = carte.detail.origine
+        with tenant_context(tenant_origine):
+            config = Configuration.get_solo()
+            tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            self._declare_lost_v1_legacy(request, user, number_printed)
+        else:
+            self._declare_lost_v2_fedow_core(request, user, number_printed)
+
+    def _declare_lost_v1_legacy(self, request, user, number_printed):
+        """Branche V1 : fedow_connect HTTP."""
+        try:
+            fedowAPI = FedowAPI()
+            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(
+                user, number_printed=number_printed,
+            )
+            if lost_card_report:
+                messages.add_message(request, messages.SUCCESS,
+                                     _("Your wallet has been detached from this card. "
+                                       "You can scan a new one to link it again."))
+            else:
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
-            return HttpResponseClientRedirect('/my_account/')
-        else:
-            logger.warning(_("User email not active"))
-            return HttpResponseClientRedirect('/my_account/')
+        except Exception:
+            # logger.exception capture la stack trace complete (exc_info=True).
+            # / logger.exception captures the full stack trace.
+            logger.exception("_declare_lost_v1_legacy error")
+            messages.add_message(request, messages.ERROR,
+                                 _("Error when detaching your card. Contact an administrator."))
+
+    def _declare_lost_v2_fedow_core(self, request, user, number_printed):
+        """Branche V2 : fedow_core.CarteService."""
+        try:
+            CarteService.declarer_perdue(user=user, number_printed=number_printed)
+            messages.add_message(request, messages.SUCCESS,
+                                 _("Your wallet has been detached from this card. "
+                                   "You can scan a new one to link it again."))
+        except CarteIntrouvable as e:
+            messages.add_message(request, messages.ERROR, str(e))
+        except Exception:
+            # logger.exception capture la stack trace complete (exc_info=True).
+            # / logger.exception captures the full stack trace.
+            logger.exception("_declare_lost_v2_fedow_core error")
+            messages.add_message(request, messages.ERROR,
+                                 _("Error when detaching your card. Contact an administrator."))
 
     @action(detail=False, methods=['GET'])
     def refund_online(self, request):

@@ -101,38 +101,66 @@ def creer_ou_mettre_a_jour_product_recharge(sender, instance, created, **kwargs)
 
         couleurs = COULEURS_PAR_CATEGORIE.get(categorie_asset, {})
 
-        produit = Product.objects.create(
+        # get_or_create sur (name) : si un Product avec ce nom existe deja
+        # (cas typique : Asset precedent supprime, Product reste orphelin
+        # via SET_NULL sur Product.asset), on le reutilise. Cela evite la
+        # UniqueViolation sur la contrainte (categorie_article, name).
+        # Les valeurs custom (couleurs, icone) eventuellement modifiees par
+        # l'admin sont preservees — on ne les ecrase pas avec les defaults.
+        # / get_or_create on (name): if a Product with this name already
+        # exists (typical case: previous Asset deleted, Product stayed as
+        # orphan via SET_NULL on Product.asset), reuse it. Avoids the
+        # UniqueViolation on (categorie_article, name). Admin-customized
+        # values (colors, icon) are preserved — defaults not overwritten.
+        produit, produit_nouveau = Product.objects.get_or_create(
             name=nom_produit,
-            methode_caisse=methode_caisse,
-            asset=instance,
-            categorie_pos=categorie_cashless,
-            couleur_fond_pos=couleurs.get("fond", "#10B981"),
-            couleur_texte_pos=couleurs.get("texte", "#FFFFFF"),
-            icon_pos=couleurs.get("icon", "fa-coins"),
+            defaults={
+                "methode_caisse": methode_caisse,
+                "asset": instance,
+                "categorie_pos": categorie_cashless,
+                "couleur_fond_pos": couleurs.get("fond", "#10B981"),
+                "couleur_texte_pos": couleurs.get("texte", "#FFFFFF"),
+                "icon_pos": couleurs.get("icon", "fa-coins"),
+            },
         )
 
-        # Creer les 4 tarifs par defaut (1, 5, 10, Libre)
-        # / Create the 4 default prices (1, 5, 10, Free)
-        for tarif in TARIFS_DEFAUT:
-            Price.objects.create(
-                product=produit,
-                name=tarif["name"],
-                prix=tarif["prix"],
-                free_price=tarif["free_price"],
-                publish=True,
-                order=tarif["order"],
-            )
+        # Si on a recupere un Product orphelin (Asset supprime anterieurement),
+        # on le re-rattache au nouvel Asset. Les autres champs restent intacts.
+        # / If we retrieved an orphan Product (previous Asset deleted),
+        # re-link it to the new Asset. Other fields remain untouched.
+        if not produit_nouveau and produit.asset is None:
+            produit.asset = instance
+            produit.save(update_fields=["asset"])
 
-        # Ajouter le Product a tous les PV CASHLESS du tenant
-        # / Add the Product to all CASHLESS POS of the tenant
+        # Les 4 tarifs par defaut (1, 5, 10, Libre) ne sont crees qu'a la
+        # vraie creation du Product. Si on reutilise un Product existant,
+        # ses Prices sont deja la (preserves par la compta via PROTECT).
+        # / Default prices (1, 5, 10, Free) are only created on real Product
+        # creation. If reusing existing Product, its Prices are already there.
+        if produit_nouveau:
+            for tarif in TARIFS_DEFAUT:
+                Price.objects.create(
+                    product=produit,
+                    name=tarif["name"],
+                    prix=tarif["prix"],
+                    free_price=tarif["free_price"],
+                    publish=True,
+                    order=tarif["order"],
+                )
+
+        # Ajouter le Product a tous les PV CASHLESS du tenant.
+        # .add() est idempotent sur un M2M : pas de doublon si deja attache.
+        # / Add the Product to all CASHLESS POS of the tenant.
+        # .add() is idempotent on M2M: no duplicate if already attached.
         pvs_cashless = PointDeVente.objects.filter(
             comportement=PointDeVente.CASHLESS,
         )
         for pv in pvs_cashless:
             pv.products.add(produit)
 
+        action_label = "cree" if produit_nouveau else "reutilise (orphelin)"
         logger.info(
-            f"Product de recharge cree : '{produit.name}' "
+            f"Product de recharge {action_label} : '{produit.name}' "
             f"(methode={methode_caisse}) pour Asset '{instance.name}' "
             f"({instance.category}), attache a {pvs_cashless.count()} PV CASHLESS"
         )

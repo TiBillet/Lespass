@@ -80,3 +80,46 @@ class MontantSuperieurDette(Exception):
             "dette": dette_actuelle_en_centimes,
         }
         super().__init__(message)
+
+
+class CarteIntrouvable(Exception):
+    """
+    Carte non trouvee ou pas liee au user demande.
+    / Card not found or not linked to the requested user.
+
+    LOCALISATION : fedow_core/exceptions.py
+    Levee par : CarteService.declarer_perdue()
+    """
+
+    def __init__(self, message=None):
+        super().__init__(message or _("Carte introuvable ou non liee a votre compte."))
+
+
+class CarteDejaLiee(Exception):
+    """
+    Carte deja liee a un autre compte utilisateur.
+    / Card already linked to another user account.
+
+    LOCALISATION : fedow_core/exceptions.py
+    Levee par : CarteService.lier_a_user() quand carte.user != user
+    """
+
+    def __init__(self, message=None):
+        super().__init__(message or _("Cette carte est deja liee a un autre compte."))
+
+
+class UserADejaCarte(Exception):
+    """
+    L'utilisateur a deja une autre carte liee a son compte.
+    Protection anti-vol : empeche de lier plusieurs cartes avec un meme email.
+    / User already has another card linked. Anti-theft protection.
+
+    LOCALISATION : fedow_core/exceptions.py
+    Levee par : CarteService.lier_a_user() quand user.cartecashless_set non vide
+    """
+
+    def __init__(self, message=None):
+        super().__init__(message or _(
+            "Vous avez deja une carte TiBillet liee a votre compte. "
+            "Declarez-la perdue avant d'en associer une nouvelle."
+        ))

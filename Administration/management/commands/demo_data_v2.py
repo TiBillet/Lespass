@@ -3373,6 +3373,91 @@ class Command(BaseCommand):
                 f"{event_payant.slug}, {event_gated.slug}"
             )
 
+            # -----------------------------------------------------------
+            # 5) Cartes cashless E2E
+            # Les tag_id viennent du .env (settings.DEMO_TAGID_*) — meme pattern
+            # que create_test_pos_data.py, pour que toute la stack parle des
+            # memes cartes (POS + Lespass + tests manuels).
+            # Les UUIDs sont hardcodes ici pour que les URLs /qr/<uuid>/ soient
+            # STABLES entre chaque flush/recreation de DB. Permet de lancer des
+            # tests manuels (ou Playwright plus tard) avec des URLs reproductibles.
+            # Les cartes sont resetees (user=None, wallet_ephemere=None)
+            # a chaque run pour garantir l'etat initial.
+            #
+            # URL de test manuel type (CLIENT3, carte jetable reset a chaque run) :
+            # https://lespass.tibillet.localhost/qr/22222222-2222-2222-2222-d74b1b5d0003/
+            #
+            # / E2E cashless cards. tag_ids from .env (settings.DEMO_TAGID_*) —
+            # same pattern as create_test_pos_data.py for stack-wide consistency.
+            # UUIDs hardcoded here so /qr/<uuid>/ URLs stay STABLE across
+            # flushes. Cards reset (user=None, wallet_ephemere=None) on each run.
+            # -----------------------------------------------------------
+            import uuid as uuid_module
+
+            detail_e2e, _ = Detail.objects.get_or_create(
+                base_url="E2E_CARDS_V2",
+                defaults={
+                    "origine": lespass_tenant,
+                    "generation": 1,
+                },
+            )
+            # Force l'origine meme si le Detail existait deja (idempotence).
+            # / Force origin even if Detail already existed (idempotence).
+            detail_e2e.origine = lespass_tenant
+            detail_e2e.save(update_fields=["origine"])
+
+            # Liste de tuples (tag_id_depuis_env, uuid_hardcode).
+            # Les tag_id par defaut correspondent au .env de test — si le mainteneur
+            # change DEMO_TAGID_* dans son .env, les cartes prennent automatiquement
+            # les nouveaux tag_id. Les UUIDs restent STABLES (hardcodes).
+            # / Tuples (tag_id_from_env, hardcoded_uuid). tag_ids follow .env,
+            # UUIDs stay hardcoded for stable URLs.
+            cartes_e2e = [
+                (
+                    getattr(settings, "DEMO_TAGID_CM", "A49E8E2A"),
+                    "22222222-2222-2222-2222-a49e8e2a0000",
+                ),
+                (
+                    getattr(settings, "DEMO_TAGID_CLIENT1", "52BE6543"),
+                    "22222222-2222-2222-2222-52be65430001",
+                ),
+                (
+                    getattr(settings, "DEMO_TAGID_CLIENT2", "33BC1DAA"),
+                    "22222222-2222-2222-2222-33bc1daa0002",
+                ),
+                (
+                    getattr(settings, "DEMO_TAGID_CLIENT3", "D74B1B5D"),
+                    "22222222-2222-2222-2222-d74b1b5d0003",
+                ),
+                (
+                    getattr(settings, "DEMO_TAGID_CLIENT4", "E85C2C6E"),
+                    "22222222-2222-2222-2222-e85c2c6e0004",
+                ),
+            ]
+            for tag_id_carte, uuid_hardcode in cartes_e2e:
+                # update_or_create : si la carte existe deja avec un autre UUID
+                # (DB legacy), on aligne sur l'UUID hardcode. Le tag_id reste
+                # la cle stable (lookup), l'UUID est force.
+                # / update_or_create: align UUID on hardcoded value if card
+                # existed with a random legacy UUID.
+                CarteCashless.objects.update_or_create(
+                    tag_id=tag_id_carte,
+                    defaults={
+                        "uuid": uuid_module.UUID(uuid_hardcode),
+                        "number": tag_id_carte,
+                        "detail": detail_e2e,
+                        # Reset a l'etat vierge pour chaque seed
+                        # / Reset to blank state on each seed
+                        "user": None,
+                        "wallet_ephemere": None,
+                    },
+                )
+
+            self.stdout.write(
+                f"  [E2E] Cartes cashless seedees : {len(cartes_e2e)} cartes "
+                f"(tag_ids depuis .env, UUIDs hardcodes)"
+            )
+
     def _create_federations_demo(self):
         """
         Cree 2 federations demo et lie les assets pour une demo realiste.

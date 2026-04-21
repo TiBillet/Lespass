@@ -125,24 +125,102 @@ def wallet_lieu_tim():
     return Wallet.objects.create(name='[test_retour] Lieu TIM')
 
 
+def _get_or_create_asset_test(tenant, wallet_lieu, name, category, currency_code):
+    """
+    Helper idempotent pour creer ou reutiliser un Asset de test.
+    Protege contre le piege UniqueViolation du signal post_save Asset qui
+    cree un Product (Recharge <name>) avec contrainte unique
+    (categorie_article, name) :
+    - Si l'Asset existe : on le reutilise (signal pas re-declenche en create).
+    - Si l'Asset n'existe pas mais qu'un Product orphelin `Recharge <name>`
+      persiste (cas : run precedent a supprime l'Asset mais pas le Product,
+      car Product.asset est SET_NULL), on supprime le Product avant creation
+      pour eviter la UniqueViolation.
+    / Idempotent helper. Protects against post_save signal UniqueViolation
+    on (categorie_article, name). If Asset missing but orphan Product exists
+    (Asset deleted with SET_NULL on Product.asset), delete the orphan Product
+    before creating.
+
+    LOCALISATION : tests/pytest/test_retour_carte_recharges.py
+    """
+    # Wrapper tous les acces a Product (TENANT_APP) dans un schema_context.
+    # Sinon les lookups tournent dans le schema courant (souvent public)
+    # ou Product n'existe pas, cassant le nettoyage des orphelins.
+    # / Wrap all Product access (TENANT_APP) in schema_context, otherwise
+    # lookups run in the current (often public) schema where Product does
+    # not exist, breaking orphan cleanup.
+    from BaseBillet.models import Product, Price
+
+    with schema_context(tenant.schema_name):
+        # Desactiver les autres assets actifs de meme categorie pour eviter
+        # que Asset.objects.filter(..., active=True).first() retourne le mauvais.
+        # / Deactivate other active assets of same category.
+        Asset.objects.filter(
+            tenant_origin=tenant,
+            category=category,
+            active=True,
+        ).update(active=False)
+
+        # Nettoyer les Products orphelins (asset=None, car SET_NULL quand l'Asset
+        # a ete supprime) qui porteraient un nom entrant en conflit avec le
+        # signal post_save. Le signal cherche Product.objects.filter(asset=instance).first()
+        # et essaie de le renommer vers `{prefixe} {instance.name}` — si un orphelin
+        # a deja ce nom, UniqueViolation sur (categorie_article, name).
+        # / Clean up orphan Products (asset=None via SET_NULL after Asset delete)
+        # that would clash with the post_save signal's rename target.
+        noms_potentiels = [
+            f"Recharge {name}",        # TLF
+            f"Recharge cadeau {name}",  # TNF
+            f"Recharge temps {name}",   # TIM
+        ]
+        for nom_produit in noms_potentiels:
+            orphelins = Product.objects.filter(name=nom_produit, asset__isnull=True)
+            if orphelins.exists():
+                Price.objects.filter(product__in=orphelins).delete()
+                orphelins.delete()
+
+        # Reutiliser l'asset existant si deja cree par un run precedent.
+        # / Reuse existing asset if created by a previous run.
+        asset_existant = Asset.objects.filter(
+            tenant_origin=tenant,
+            name=name,
+            category=category,
+        ).first()
+        if asset_existant is not None:
+            # Rattacher le wallet_origin au nouveau wallet_lieu de la session
+            # courante : la fixture `wallet_lieu` cree un nouveau Wallet a
+            # chaque session pytest, donc l'Asset reutilise doit etre
+            # reassigne pour que les tests (qui assertent sur wallet_lieu)
+            # trouvent le bon sender.
+            # / Rebind wallet_origin to this session's wallet_lieu: the
+            # fixture creates a new Wallet each pytest session, so reused
+            # Assets must be reassigned for tests asserting on wallet_lieu.
+            champs_a_mettre_a_jour = []
+            if asset_existant.wallet_origin_id != wallet_lieu.pk:
+                asset_existant.wallet_origin = wallet_lieu
+                champs_a_mettre_a_jour.append("wallet_origin")
+            if not asset_existant.active:
+                asset_existant.active = True
+                champs_a_mettre_a_jour.append("active")
+            if champs_a_mettre_a_jour:
+                asset_existant.save(update_fields=champs_a_mettre_a_jour)
+            return asset_existant
+
+        return AssetService.creer_asset(
+            tenant=tenant,
+            name=name,
+            category=category,
+            currency_code=currency_code,
+            wallet_origin=wallet_lieu,
+        )
+
+
 @pytest.fixture(scope="module")
 def asset_tlf(tenant, wallet_lieu):
     """Asset TLF (monnaie locale euro) du tenant.
     / TLF asset (local fiat currency) for the tenant."""
-    # Desactiver les autres TLF actifs du tenant
-    # / Deactivate other active TLF assets for this tenant
-    Asset.objects.filter(
-        tenant_origin=tenant,
-        category=Asset.TLF,
-        active=True,
-    ).update(active=False)
-
-    return AssetService.creer_asset(
-        tenant=tenant,
-        name='TestCoin Retour',
-        category=Asset.TLF,
-        currency_code='EUR',
-        wallet_origin=wallet_lieu,
+    return _get_or_create_asset_test(
+        tenant, wallet_lieu, 'TestCoin Retour', Asset.TLF, 'EUR',
     )
 
 
@@ -150,18 +228,8 @@ def asset_tlf(tenant, wallet_lieu):
 def asset_tnf(tenant, wallet_lieu_tnf):
     """Asset TNF (monnaie cadeau) du tenant.
     / TNF asset (gift currency) for the tenant."""
-    Asset.objects.filter(
-        tenant_origin=tenant,
-        category=Asset.TNF,
-        active=True,
-    ).update(active=False)
-
-    return AssetService.creer_asset(
-        tenant=tenant,
-        name='TestCadeau Retour',
-        category=Asset.TNF,
-        currency_code='EUR',
-        wallet_origin=wallet_lieu_tnf,
+    return _get_or_create_asset_test(
+        tenant, wallet_lieu_tnf, 'TestCadeau Retour', Asset.TNF, 'EUR',
     )
 
 
@@ -169,18 +237,8 @@ def asset_tnf(tenant, wallet_lieu_tnf):
 def asset_tim(tenant, wallet_lieu_tim):
     """Asset TIM (monnaie temps) du tenant.
     / TIM asset (time currency) for the tenant."""
-    Asset.objects.filter(
-        tenant_origin=tenant,
-        category=Asset.TIM,
-        active=True,
-    ).update(active=False)
-
-    return AssetService.creer_asset(
-        tenant=tenant,
-        name='TestTemps Retour',
-        category=Asset.TIM,
-        currency_code='TMP',
-        wallet_origin=wallet_lieu_tim,
+    return _get_or_create_asset_test(
+        tenant, wallet_lieu_tim, 'TestTemps Retour', Asset.TIM, 'TMP',
     )
 
 

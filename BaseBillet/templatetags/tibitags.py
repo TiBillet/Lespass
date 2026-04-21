@@ -6,9 +6,10 @@ from django import template
 from django.db import connection
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-
-from Administration.management.commands.demo_data import logger
 from fedow_connect.utils import dround as utils_dround
+
+import logging
+logger = logging.getLogger(__name__)
 
 register = template.Library()
 

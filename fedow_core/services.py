@@ -19,15 +19,22 @@ REGLES / RULES:
 """
 
 import logging
+from dataclasses import dataclass
 
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
-from fedow_core.exceptions import SoldeInsuffisant
+from fedow_core.exceptions import (
+    CarteDejaLiee,
+    CarteIntrouvable,
+    SoldeInsuffisant,
+    UserADejaCarte,
+)
 from fedow_core.models import Asset, Federation, Token, Transaction
 
 from AuthBillet.models import Wallet
+from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
 
@@ -1232,5 +1239,285 @@ class RefillService:
                 checkout_stripe_uuid=paiement_uuid,
                 comment="Recharge FED via PSP (voir PSP_INTERFACE.md)",
             )
-
             return nouvelle_transaction
+
+
+# ==========================================================================
+# CarteService — Service carte cashless (scan QR + identification + perte)
+# Session 34 (2026-04-20)
+# / CarteService — Cashless card service (QR scan + user link + lost)
+# ==========================================================================
+
+
+@dataclass
+class ScanResult:
+    """
+    Resultat d'un scan de carte. Contient le wallet resolu et si c'est ephemere.
+    / Result of a card scan. Contains resolved wallet and ephemeral flag.
+
+    LOCALISATION : fedow_core/services.py
+    """
+    wallet: Wallet
+    is_wallet_ephemere: bool
+
+
+class CarteService:
+    """
+    Service de gestion des cartes cashless (scan QR, identification, perte).
+    Remplace les appels vers fedow_connect/NFCcardFedow pour les tenants V2.
+    / Cashless card management service. Replaces fedow_connect calls for V2 tenants.
+
+    LOCALISATION : fedow_core/services.py
+
+    Decisions architecturales (cf. SPEC_SCAN_QR_CARTE_V2.md) :
+    - Aucune modification de schema CarteCashless
+    - CarteCashless.uuid sert d'identifiant public (qrcode_uuid)
+    - Wallet ephemere cree a la volee sur carte vierge
+    - Fusion deleguee a WalletService.fusionner_wallet_ephemere()
+    """
+
+    @staticmethod
+    def scanner_carte(carte, tenant_origine, ip="0.0.0.0"):
+        """
+        Resout le wallet d'une carte. Cree un wallet_ephemere si carte vierge.
+        / Resolves a card's wallet. Creates a wallet_ephemere if card is blank.
+
+        Retourne ScanResult(wallet, is_wallet_ephemere).
+
+        Concurrence : la creation du wallet ephemere est protegee par un
+        verrou de ligne (select_for_update) a l'interieur d'une transaction
+        atomique. Evite que deux scans simultanes sur une carte vierge creent
+        deux wallets ephemeres dont un serait orphelin (dernier ecrit gagne).
+        / Concurrency: lazy wallet_ephemere creation is protected by a row-level
+        lock inside an atomic transaction. Prevents two concurrent scans from
+        creating two ephemeral wallets (last-write-wins leaves one orphan).
+
+        :param carte: CarteCashless
+        :param tenant_origine: Client (tenant d'origine de la carte, = carte.detail.origine)
+        :param ip: str (IP de la requete, pour tracabilite future)
+        :return: ScanResult
+        """
+        # --- Carte identifiee : wallet du user ---
+        # Cas le plus frequent. Lecture seule, pas de verrou necessaire.
+        # Nota : user.wallet peut etre None (user inscrit sans wallet encore).
+        # Dans ce cas on bascule sur la branche wallet_ephemere ou creation.
+        # / Identified card: user's wallet (read-only, no lock needed).
+        carte_est_identifiee = carte.user is not None and carte.user.wallet is not None
+        if carte_est_identifiee:
+            return ScanResult(wallet=carte.user.wallet, is_wallet_ephemere=False)
+
+        # --- Carte anonyme deja scannee : wallet ephemere existant ---
+        # Lecture sans verrou ; si une autre requete concurrente est en train
+        # de creer le wallet_ephemere, on bascule sur la branche atomique.
+        # / Anonymous card already scanned: existing wallet_ephemere (no lock).
+        if carte.wallet_ephemere is not None:
+            return ScanResult(wallet=carte.wallet_ephemere, is_wallet_ephemere=True)
+
+        # --- Carte vierge : creer un wallet_ephemere et l'attacher (atomique) ---
+        # Verrou sur la ligne carte pour eviter la double-creation concurrente.
+        # Apres lock, on re-verifie que le wallet_ephemere n'a pas ete cree
+        # entretemps par une autre requete (double-check locking).
+        # / Blank card: create wallet_ephemere atomically. Lock the card row
+        # and re-check wallet_ephemere (double-check locking).
+        with transaction.atomic():
+            carte_verrouillee = CarteCashless.objects.select_for_update().get(pk=carte.pk)
+
+            # Double-check : une autre requete a peut-etre cree le wallet pendant
+            # qu'on attendait le verrou.
+            # / Double-check: another request may have created the wallet
+            # while we were waiting for the lock.
+            if carte_verrouillee.wallet_ephemere is not None:
+                return ScanResult(
+                    wallet=carte_verrouillee.wallet_ephemere,
+                    is_wallet_ephemere=True,
+                )
+
+            # Si entretemps un user a ete pose, on retourne son wallet.
+            # / If a user was set meanwhile, return their wallet.
+            carte_devenue_identifiee = (
+                carte_verrouillee.user is not None
+                and carte_verrouillee.user.wallet is not None
+            )
+            if carte_devenue_identifiee:
+                return ScanResult(
+                    wallet=carte_verrouillee.user.wallet,
+                    is_wallet_ephemere=False,
+                )
+
+            nouveau_wallet_ephemere = Wallet.objects.create(
+                origin=tenant_origine,
+                name=f"Wallet ephemere carte {carte_verrouillee.number}",
+            )
+            carte_verrouillee.wallet_ephemere = nouveau_wallet_ephemere
+            carte_verrouillee.save(update_fields=["wallet_ephemere"])
+            # On update aussi l'objet passe en param pour que le caller voie
+            # l'etat a jour sans refresh_from_db() explicite.
+            # / Also update the passed-in object so caller sees fresh state.
+            carte.wallet_ephemere = nouveau_wallet_ephemere
+            return ScanResult(
+                wallet=nouveau_wallet_ephemere,
+                is_wallet_ephemere=True,
+            )
+
+    @staticmethod
+    def lier_a_user(qrcode_uuid, user, ip="0.0.0.0"):
+        """
+        Lie une carte a un user. Effectue la fusion du wallet ephemere
+        et rattrape les adhesions anonymes.
+        / Link a card to a user. Performs wallet_ephemere fusion
+        and catches up anonymous memberships.
+
+        Transactionnel : tout ou rien.
+        / Transactional: all or nothing.
+
+        :param qrcode_uuid: UUID de la carte (= CarteCashless.uuid)
+        :param user: TibilletUser identifie
+        :param ip: str (IP de la requete)
+        :return: CarteCashless liee
+        :raises CarteIntrouvable: carte absente en base
+        :raises CarteDejaLiee: carte deja liee a un autre user
+        :raises UserADejaCarte: user possede deja une autre carte (anti-vol)
+        """
+        from django.db import transaction as db_transaction
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Membership
+
+        with db_transaction.atomic():
+            # --- Verrou sur la ligne carte pour eviter double-link concurrent ---
+            # select_for_update() SANS select_related : PostgreSQL refuse FOR UPDATE
+            # sur la partie nullable d'un outer join. Les FK sont chargees
+            # paresseusement quand on y accede ensuite.
+            # / Lock the card row WITHOUT select_related: PostgreSQL refuses FOR UPDATE
+            # on the nullable side of an outer join. Related FKs are lazily loaded
+            # when accessed below.
+            try:
+                carte = CarteCashless.objects.select_for_update().get(uuid=qrcode_uuid)
+            except CarteCashless.DoesNotExist:
+                raise CarteIntrouvable()
+
+            tenant_origine = carte.detail.origine
+
+            # --- Idempotence : carte deja liee a CE user ---
+            # / Idempotency: card already linked to THIS user.
+            carte_deja_liee_au_user = carte.user is not None and carte.user.pk == user.pk
+            if carte_deja_liee_au_user:
+                return carte
+
+            # --- Carte deja liee a un AUTRE user ---
+            # / Card linked to ANOTHER user.
+            carte_liee_a_autre_user = carte.user is not None and carte.user.pk != user.pk
+            if carte_liee_a_autre_user:
+                raise CarteDejaLiee()
+
+            # --- Anti-vol : user a-t-il deja une autre carte ? ---
+            # Exclut la carte courante (utile en cas de relink apres perte).
+            # / Anti-theft: does user already have another card? Exclude current card.
+            user_a_deja_une_autre_carte = (
+                user.cartecashless_set.exclude(pk=carte.pk).exists()
+            )
+            if user_a_deja_une_autre_carte:
+                raise UserADejaCarte()
+
+            # --- Fusion du wallet ephemere vers user.wallet ---
+            # Delegue a WalletService (deja implemente en Phase 0).
+            # Cree user.wallet si inexistant, transfere chaque Token avec solde > 0,
+            # cree les Transaction(FUSION), pose carte.user et detache wallet_ephemere.
+            # / Delegate to WalletService (already implemented in Phase 0).
+            WalletService.fusionner_wallet_ephemere(
+                carte=carte,
+                user=user,
+                tenant=tenant_origine,
+                ip=ip,
+            )
+
+            # --- Rattrapage des adhesions anonymes ---
+            # Les adhesions faites avec la carte anonyme (user=None, card_number=X)
+            # sont rattachees au user identifie.
+            # / Catch up anonymous memberships (user=None, card_number=X).
+            with tenant_context(tenant_origine):
+                Membership.objects.filter(
+                    user__isnull=True,
+                    card_number=carte.number,
+                ).update(
+                    user=user,
+                    first_name=user.first_name or "",
+                    last_name=user.last_name or "",
+                )
+
+            return carte
+
+    @staticmethod
+    def lister_cartes_du_user(user):
+        """
+        Liste les cartes liees au user sous forme de structures legeres
+        compatibles avec les templates existants (reunion/partials/account/card_table.html
+        et admin/membership/wallet_info.html).
+        / List user's cards as lightweight structs, template-compatible.
+
+        Les templates attendent :
+        - card.number_printed
+        - card.origin.place.name
+        - card.origin.generation
+
+        On construit des SimpleNamespace pour rester retro-compatible avec le
+        format V1 (fedow_connect.NFCcard.retrieve_card_by_signature) sans
+        polluer le modele CarteCashless avec des properties dediees.
+        / Templates expect: card.number_printed, card.origin.place.name,
+        card.origin.generation. SimpleNamespace keeps V1 compatibility without
+        polluting the model.
+
+        :param user: TibilletUser
+        :return: list de SimpleNamespace (peut etre vide)
+        """
+        from types import SimpleNamespace
+
+        cartes = CarteCashless.objects.filter(user=user).select_related(
+            "detail__origine",
+        )
+        cartes_formatees = []
+        for carte in cartes:
+            # Defauts si detail ou origine sont None (cas edge : DB incomplete).
+            # / Defaults if detail or origine is None (edge: incomplete DB).
+            nom_lieu = ""
+            generation = 0
+            if carte.detail is not None:
+                generation = carte.detail.generation
+                if carte.detail.origine is not None:
+                    nom_lieu = carte.detail.origine.name
+
+            cartes_formatees.append(
+                SimpleNamespace(
+                    number_printed=carte.number,
+                    origin=SimpleNamespace(
+                        place=SimpleNamespace(name=nom_lieu),
+                        generation=generation,
+                    ),
+                )
+            )
+        return cartes_formatees
+
+    @staticmethod
+    def declarer_perdue(user, number_printed):
+        """
+        Detache la carte du user. Le wallet user conserve ses tokens.
+        Reproduction du comportement V1 (lost_my_card_by_signature).
+        / Detach card from user. User wallet keeps its tokens.
+
+        :param user: TibilletUser
+        :param number_printed: str (CarteCashless.number, 8 chars)
+        :return: CarteCashless detachee
+        :raises CarteIntrouvable: carte absente ou non liee a ce user
+        """
+        try:
+            carte = CarteCashless.objects.get(user=user, number=number_printed)
+        except CarteCashless.DoesNotExist:
+            raise CarteIntrouvable()
+
+        carte.user = None
+        carte.wallet_ephemere = None
+        carte.save(update_fields=["user", "wallet_ephemere"])
+
+        logger.info(
+            f"Carte {number_printed} declaree perdue par user {user.email}"
+        )
+        return carte

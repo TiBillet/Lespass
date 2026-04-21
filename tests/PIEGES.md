@@ -2037,5 +2037,125 @@ de `"10,00"` a `"10.00"` car `RequestFactory` bypasse la locale middleware.
 
 ---
 
+### Session 34 — Scan QR carte V2 (2026-04-21)
+
+**12.1 — `select_for_update()` + `select_related()` : incompatible sur FK nullable.**
+
+PostgreSQL refuse `FOR UPDATE` sur le cote nullable d'un OUTER JOIN. Les FK
+nullable (`CarteCashless.user`, `CarteCashless.wallet_ephemere`) generent un
+OUTER JOIN quand utilisees avec `select_related`, ce qui plante :
+
+```
+django.db.utils.NotSupportedError: FOR UPDATE cannot be applied to the
+nullable side of an outer join
+```
+
+**MAL** (plante au runtime) :
+```python
+carte = CarteCashless.objects.select_for_update().select_related(
+    "detail__origine", "user", "wallet_ephemere",
+).get(uuid=qrcode_uuid)
+```
+
+**BON** (select_related retire, FK chargees paresseusement apres lock) :
+```python
+carte = CarteCashless.objects.select_for_update().get(uuid=qrcode_uuid)
+# carte.user, carte.wallet_ephemere se chargent a la demande
+```
+
+Rencontre en Task 3 Session 34 : `CarteService.lier_a_user` avait
+`select_related("detail__origine", "user", "wallet_ephemere")`. Le test
+`test_lier_carte_avec_tokens_cree_transaction_fusion` a fait planter avec
+NotSupportedError.
+
+---
+
+**12.2 — `User.objects.create_user()` lit `connection.tenant` en fixture.**
+
+`TibilletManager._create_user` pose `user.client_source = connection.tenant`.
+Si on appelle depuis un `schema_context('lespass')` (FakeTenant), ca crashe :
+```
+ValueError: Cannot assign FakeTenant: Must be a Customers.Client instance
+```
+
+**MAL** :
+```python
+@pytest.fixture
+def user_tout_neuf(db):
+    return User.objects.create_user(email="u@t.local", password="p")
+    # plante si connection.tenant est FakeTenant
+```
+
+**BON** — wrap en `tenant_context(tenant_reel)` :
+```python
+@pytest.fixture
+def user_tout_neuf(db, tenant_origine):
+    with tenant_context(tenant_origine):
+        return User.objects.create_user(email="u@t.local", password="p")
+```
+
+Pattern standard dans le projet (cf. `test_billetterie_pos.py`).
+
+---
+
+**12.3 — Teardown manuel de fixture inutile avec `db` fixture.**
+
+La fixture pytest-django `db` utilise `transaction.atomic` + rollback
+automatique a la fin de chaque test. Toutes les ecritures (CarteCashless,
+Wallet, Token, Transaction, Detail) sont annulees. Le teardown manuel est :
+1. Redondant (deja annule par le rollback)
+2. Fragile (FK PROTECT peut raise, cascade imprevisible)
+
+**MAL** — teardown manuel fragile :
+```python
+@pytest.fixture
+def detail_cartes(db, tenant_origine):
+    ...
+    yield detail
+    Transaction.objects.filter(card=carte).delete()  # peut raise PROTECT
+    carte.delete()
+    Detail.objects.filter(...).delete()
+```
+
+**BON** — se reposer sur le rollback `db` :
+```python
+@pytest.fixture
+def detail_cartes(db, tenant_origine):
+    with tenant_context(tenant_origine):
+        detail, _ = Detail.objects.get_or_create(...)
+        yield detail
+        # Pas de teardown : `db` rollback tout
+```
+
+Exception : tests qui utilisent `@pytest.mark.django_db(transaction=True)`
+n'ont pas de rollback → teardown manuel necessaire. Mais c'est rare.
+
+---
+
+**12.4 — E2E Playwright + `.delete()` queryset peut vider la DB.**
+
+Les tests E2E ne beneficient PAS du rollback (ils passent par un vrai serveur
+Django via Traefik, processus separe). Les teardowns doivent etre ultra-cibles.
+Un `TibilletUser.objects.filter(email__startswith='e2e-').delete()` peut
+cascader de facon imprevue et vider des tables partagees (FK CASCADE sur
+Wallet, Reservation, Membership...).
+
+**Regles E2E sur DB reelle** :
+1. Pas de `.filter(X__startswith=...).delete()` sur des modeles riches en FK
+   (TibilletUser, Wallet). Utiliser match exact (`email="e2e-test@..."`).
+2. Pas de queryset `.delete()` — iterer et supprimer un par un avec try/except.
+3. **Ou mieux : pas de teardown du tout**. Setup idempotent via
+   `get_or_create` + reset explicite des champs mutables (`user=None`,
+   `wallet_ephemere=None`). La DB dev est legerement polluee mais personne
+   ne risque de perdre de donnees.
+
+Incident en Session 34 : un teardown E2E a vide `Configuration` via cascade
+apres un `test_users.delete()`. Le mainteneur a du restart la DB. Fix
+applique : Task 8 (E2E) reportee, 19 scenarios documentes dans
+`TECH DOC/Laboutik sessions/Session 34 - Scan QR carte V2/TESTS_E2E_A_FAIRE.md`
+avec la regle "zero teardown agressif".
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

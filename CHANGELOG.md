@@ -1,5 +1,28 @@
 # Changelog / Journal des modifications
 
+## Session 34 — Scan QR carte V2 (fedow_core) / QR card scan V2
+
+**Quoi / What :** Bascule du flow public "scan QR carte cashless" de `fedow_connect/fedow_api.py` (HTTP vers Fedow distant) vers `fedow_core/services.py` (DB direct). Scope : scan, identification user (link), fusion wallet ephemere, perte de carte.
+**Pourquoi / Why :** Supprimer la dependance reseau Fedow pour le flow public, simplifier l'audit anti-vol, preparer la suppression totale de `fedow_connect/` (roadmap C).
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `fedow_core/exceptions.py` | +3 exceptions (`CarteIntrouvable`, `CarteDejaLiee`, `UserADejaCarte`) |
+| `fedow_core/services.py` | +classe `CarteService` (scanner_carte, lier_a_user, declarer_perdue) |
+| `BaseBillet/views.py` | Dispatch V1/V2 dans `ScanQrCode.retrieve/link` + `lost_my_card`/`admin_lost_my_card` |
+| `tests/pytest/test_scan_qr_carte_v2.py` | 13 tests DB-only |
+| `fedow_core/CARTES.md` | Doc mecanique wallet ephemere + fusion |
+
+### Migration / Migration
+- **Migration necessaire / Migration required :** Non / No
+- Aucun changement de schema. `CarteCashless`, `Wallet`, `Transaction.FUSION` deja en place.
+
+### Coexistence V1/V2 / V1/V2 coexistence
+- Dispatch par tenant : `Configuration.server_cashless` renseigne → V1 `fedow_connect` ; sinon V2 `fedow_core`.
+- Les tenants legacy continuent d'appeler le serveur Fedow distant sans changement.
+- Les nouveaux tenants V2 n'utilisent plus jamais `NFCcardFedow` pour le scan QR.
+
 ## Session 33 — Visualisation historique transactions V2 / Tx history display V2 (2026-04-20)
 
 **Quoi / What:** La page `/my_account/balance/` affiche desormais les `fedow_core.Transaction` locales pour les users V2 (historique complet incluant les transactions des wallets ephemeres fusionnes dans `user.wallet`), au lieu d'appeler `FedowAPI` distant. Dispatch symetrique Sessions 31-32 via `peut_recharger_v2(user)`.

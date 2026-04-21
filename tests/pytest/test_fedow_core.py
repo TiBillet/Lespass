@@ -122,6 +122,34 @@ def cleanup_test_data():
     except Exception:
         pass
 
+    # Les Products "Recharge <TEST_PREFIX>..." sont crees par le signal
+    # post_save Asset (fedow_core/signals.py) avec on_delete=SET_NULL sur
+    # Product.asset. Quand on supprime l'Asset, le Product reste oprhelin.
+    # Au prochain run, le signal re-cree un Product de meme nom → UniqueViolation
+    # sur la contrainte unique (categorie_article, name).
+    # On les nettoie ici pour garantir l'idempotence entre sessions pytest.
+    # / "Recharge <TEST_PREFIX>..." Products are created by the Asset
+    # post_save signal with SET_NULL on Product.asset. When the Asset is
+    # deleted, the Product stays orphan. Next run, the signal recreates a
+    # Product with the same name → UniqueViolation on (categorie_article, name).
+    # We clean them up here to ensure idempotence across pytest sessions.
+    try:
+        from django_tenants.utils import tenant_context
+        from Customers.models import Client as _Client
+        from BaseBillet.models import Product as _Product, Price as _Price
+
+        # Les Products sont TENANT_APP : il faut iterer sur les schemas.
+        # / Products are TENANT_APP: iterate over schemas.
+        for tenant_obj in _Client.objects.exclude(schema_name="public"):
+            with tenant_context(tenant_obj):
+                products_orphelins = _Product.objects.filter(
+                    name__startswith=f"Recharge {TEST_PREFIX}",
+                )
+                _Price.objects.filter(product__in=products_orphelins).delete()
+                products_orphelins.delete()
+    except Exception:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Test 1 : creer Asset, Wallet, Token, crediter, verifier value
