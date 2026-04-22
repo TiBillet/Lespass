@@ -7,12 +7,13 @@ export LANG=fr_FR.UTF-8
 export LANGUAGE=fr_FR:fr
 export LC_ALL=fr_FR.UTF-8
 
-# URL kiosque - lit directement depuis .env
+# URL de secours calculée depuis .env (utilisée si tibeer ne fournit pas d'URL)
+# / Fallback URL computed from .env (used if tibeer provides no URL)
 set -a; [ -f /home/sysop/tibeer/controlvanne/Pi/.env ] && . /home/sysop/tibeer/controlvanne/Pi/.env; set +a
 if [ -n "$TIREUSE_UUID" ]; then
-    URL="${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
+    FALLBACK_URL="${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
 else
-    URL="${SERVER_URL}/"
+    FALLBACK_URL="${SERVER_URL}/"
 fi
 
 # Trouver Chromium
@@ -44,6 +45,15 @@ while [ ! -f /tmp/tibeer_cookie_ready ] && [ $WAIT -lt 60 ]; do
 done
 rm -f /tmp/tibeer_cookie_ready
 
+# Lire l'URL fournie par tibeer (mode kiosk normal ou mode appairage localhost:8080)
+# / Read the URL provided by tibeer (normal kiosk mode or pairing mode localhost:8080)
+if [ -f /tmp/tibeer_kiosk_url ]; then
+    URL="$(cat /tmp/tibeer_kiosk_url)"
+    rm -f /tmp/tibeer_kiosk_url
+else
+    URL="$FALLBACK_URL"
+fi
+
 # Boucle de relance Chromium (X reste actif si Chromium crash)
 while true; do
   "$CHROMIUM_BIN" \
@@ -60,4 +70,9 @@ while true; do
   rc=$?
   echo "[KIOSK] Chromium terminé (rc=$rc), relance dans 2s…"
   sleep 2
+  # Après crash/redémarrage : repasser sur l'URL kiosk réelle (le cookie de session
+  # est déjà dans le profil Chromium, pas besoin de recharger le token)
+  # / After crash/restart: switch back to real kiosk URL (session cookie already
+  # in Chromium profile, no need to reload the token)
+  URL="$FALLBACK_URL"
 done
