@@ -179,6 +179,7 @@ AGENTS.md
 #dev prod like
 docker-compose-filaos.yml
 dev-filaos
+letsencrypt
 
 # Cordova
 **/mobile-app/node_modules/
