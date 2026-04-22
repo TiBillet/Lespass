@@ -384,3 +384,76 @@ page de booking
 
 ca ne se met pas à jour immédiatement lorsqu'on réserve plusieurs slots
 seul le slot cliqué se màj. Les suivants non
+
+
+## §19 — Annulation en un clic — confirmation obligatoire selon la spec
+
+**Source :** `booking/templates/booking/views/my_bookings.html`
+
+La spec §7.3 est explicite : "the action should require a deliberate step —
+not a single accidental click." Le bouton "Annuler" actuel déclenche le
+`hx-post` immédiatement au clic, sans confirmation.
+
+Action future : ajouter une étape de confirmation avant l'envoi de la
+requête HTMX. Options envisageables : modale Bootstrap, bouton bascule
+inline (un clic = affiche "Êtes-vous sûr ? Confirmer / Annuler"), ou
+`hx-confirm` natif HTMX (simple mais non stylisable).
+
+
+## §20 — Deadline d'annulation non affichée sur la page mes-réservations
+
+**Source :** `booking/templates/booking/views/my_bookings.html`,
+`booking/views.py` — `my_bookings()`
+
+La spec §7.3 : "The deadline must be visible without entering a
+cancellation flow." Le template n'affiche que `resource.name` et
+`start_datetime`. La deadline (calculée comme
+`start_datetime − cancellation_deadline_hours`) n'est visible qu'en
+cas d'échec de l'annulation (réponse 422), pas avant.
+
+Action future : calculer la deadline par réservation dans la vue
+`my_bookings()` (annoter le queryset ou construire une liste de
+tuples `(booking, deadline)`) et l'afficher dans chaque ligne de la
+liste, par exemple : "Annulation possible jusqu'au mer. 29/04 14:00".
+
+
+## §21 — Panier affiché sur la page mes-réservations — choix UX à arbitrer
+
+**Source :** `booking/templates/booking/booking_base.html`
+
+`booking_base.html` inclut systématiquement `{% include "booking/partial/basket.html" %}`
+en haut de toutes les vues du module, y compris `/booking/my-bookings/`.
+La page mes-réservations est centrée sur les réservations `confirmed` ; le
+panier (réservations `new`) n'est pas mentionné dans la spec §7.3 pour cette
+vue.
+
+Question ouverte : le panier doit-il apparaître sur la page
+mes-réservations ? Arguments pour : cohérence visuelle dans le module,
+le membre voit tout au même endroit. Arguments contre : charge cognitive
+inutile sur une page de gestion, risque d'interaction concurrente entre
+le bouton "Retirer du panier" et le bouton "Annuler" si les deux sont
+déclenchés simultanément (requête abandon silencieuse via HX-Redirect).
+
+Décision à prendre avec l'équipe avant la finalisation du template.
+
+
+## §22 — Filtre "à venir" trop strict — réservations en cours et passées masquées
+
+**Source :** `booking/views.py` — `my_bookings()`
+
+Le queryset filtre `start_datetime__gt=now()` : une réservation disparaît
+de la liste à la seconde où elle commence. Un membre qui a réservé une
+salle de 14h à 16h ne la voit plus à 14h01, alors qu'il l'occupe encore.
+
+La spec dit "upcoming confirmed bookings" sans définir le seuil précisément.
+L'utilisateur souhaite également afficher les réservations passées récentes.
+
+Action future : ajuster le filtre pour inclure les réservations en cours
+et éventuellement un historique. Options :
+- Filtrer par `end_datetime > now()` une fois `end_datetime` disponible en
+  base (voir §15 sur la redondance) ;
+- Ou séparer l'affichage : section "À venir / en cours" +
+  section "Passées" (30 derniers jours par exemple), chacune avec son filtre.
+- Le filtre actuel peut rester pour la section "à venir" mais une section
+  "aujourd'hui" ou "en cours" devrait afficher les créneaux démarrés et
+  non encore terminés.

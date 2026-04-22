@@ -1,58 +1,68 @@
-{% extends 'reunion/account_base.html' %}
+{% extends 'booking/booking_base.html' %}
 {% load i18n %}
 
 <!--
-LOCALISATION : BaseBillet/templates/reunion/views/account/my_resources.html
+LOCALISATION : booking/templates/booking/views/my_bookings.html
 
-Page "Mes ressources" dans l'espace membre /my_account/my_resources/.
+Page "Mes réservations" du module booking — /booking/my-bookings/.
 Affiche les réservations 'confirmed' à venir du membre connecté.
 Chaque réservation dispose d'un bouton d'annulation HTMX.
-/ "My resources" page in the member area /my_account/my_resources/.
+/ "My bookings" page of the booking module — /booking/my-bookings/.
 Shows the logged-in member's upcoming 'confirmed' bookings.
 Each booking has an HTMX cancel button.
 
 Variables attendues / Expected variables:
-  reservations_confirmees — QuerySet[Booking] status='confirmed' + start_datetime > now
-  account_tab             — 'my_resources' (pour le bouton actif dans index.html)
+  confirmed_bookings — QuerySet[Booking] status='confirmed' + start_datetime > now
 
 Flux d'annulation / Cancellation flow:
   1. Clic "Annuler" → hx-post="/booking/cancel/" avec booking_pk
-  2. Succès (HTTP 200) : HX-Redirect → rechargement de /my_account/my_resources/
+  2. Succès (HTTP 200) : HX-Redirect → rechargement de /booking/my-bookings/
   3. Erreur (HTTP 422) : cancel_error.html remplace le bouton via hx-swap="innerHTML"
-     htmx:beforeOnLoad configure le swap des réponses 422.
+     Le script 422 est centralisé dans booking_base.html (bloc "scripts").
   / 1. Click "Annuler" → hx-post="/booking/cancel/" with booking_pk
-  / 2. Success (HTTP 200): HX-Redirect → reload /my_account/my_resources/
+  / 2. Success (HTTP 200): HX-Redirect → reload /booking/my-bookings/
   / 3. Error (HTTP 422): cancel_error.html replaces the button via hx-swap="innerHTML"
-  /    htmx:beforeOnLoad configures the 422 response swap.
+  /    The 422 script is centralised in booking_base.html ("scripts" block).
 -->
 
-{% block title %}{% translate "Mes ressources" %}{% endblock %}
+{% block title %}{% translate "Mes réservations" %}{% endblock %}
 
-{% block account_page %}
+{% block booking_content %}
 
 <section>
+
+    <!--
+    Lien de retour vers l'espace membre.
+    / Back link to the member account area.
+    -->
+    <a href="/my_account/"
+       class="btn btn-outline-secondary btn-sm mb-4">
+        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+        {% translate "Mon compte" %}
+    </a>
+
     <h1 class="h4 mb-4">
         <i class="bi bi-chair me-2" aria-hidden="true"></i>
-        {% translate "Mes ressources" %}
+        {% translate "Mes réservations" %}
     </h1>
 
-    {% if reservations_confirmees %}
+    {% if confirmed_bookings %}
 
         <ul class="list-group mb-4">
-            {% for reservation in reservations_confirmees %}
+            {% for booking in confirmed_bookings %}
                 <li class="list-group-item"
-                    data-testid="my-resource-{{ reservation.pk }}">
+                    data-testid="my-resource-{{ booking.pk }}">
                     <div class="d-flex justify-content-between align-items-center">
 
                         <div>
-                            <strong>{{ reservation.resource.name }}</strong>
+                            <strong>{{ booking.resource.name }}</strong>
                             <br>
                             <span class="text-muted">
-                                {{ reservation.start_datetime|date:"D d/m/Y H:i" }}
+                                {{ booking.start_datetime|date:"D d/m/Y H:i" }}
                             </span>
-                            {% if reservation.slot_count > 1 %}
+                            {% if booking.slot_count > 1 %}
                                 <span class="badge bg-secondary ms-1">
-                                    {{ reservation.slot_count }}
+                                    {{ booking.slot_count }}
                                     {% translate "créneaux" %}
                                 </span>
                             {% endif %}
@@ -73,14 +83,16 @@ Flux d'annulation / Cancellation flow:
                             hx-target points to span#cancel-result-{pk} to
                             replace only the button with the error message.
                             -->
-                            <span id="cancel-result-{{ reservation.pk }}">
+                            <span id="cancel-result-{{ booking.pk }}"
+                                  aria-live="polite">
                                 <button type="button"
                                         class="btn btn-outline-danger btn-sm"
                                         hx-post="/booking/cancel/"
-                                        hx-vals='{"booking_pk": "{{ reservation.pk }}"}'
-                                        hx-target="#cancel-result-{{ reservation.pk }}"
+                                        hx-vals='{"booking_pk": "{{ booking.pk }}"}'
+                                        hx-target="#cancel-result-{{ booking.pk }}"
                                         hx-swap="innerHTML"
-                                        data-testid="btn-cancel-{{ reservation.pk }}">
+                                        hx-disabled-elt="this"
+                                        data-testid="btn-cancel-{{ booking.pk }}">
                                     <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
                                     {% translate "Annuler" %}
                                 </button>
@@ -94,7 +106,7 @@ Flux d'annulation / Cancellation flow:
 
     {% else %}
 
-        <p class="text-muted">
+        <p class="text-muted" data-testid="booking-empty-list">
             {% translate "Aucune réservation confirmée à venir." %}
         </p>
 
@@ -108,23 +120,4 @@ Flux d'annulation / Cancellation flow:
 
 </section>
 
-<!--
-Configure HTMX pour swapper le contenu même sur les réponses HTTP 422.
-Par défaut HTMX ignore les erreurs 4xx et ne remplace pas le DOM.
-/ Configure HTMX to swap content even on HTTP 422 responses.
-By default HTMX ignores 4xx errors and does not replace the DOM.
--->
-<script>
-document.addEventListener("htmx:beforeOnLoad", function(event) {
-    var code_reponse = event.detail.xhr.status;
-
-    // On accepte le swap pour les erreurs de validation (422).
-    // / Allow swap for validation errors (422).
-    if (code_reponse === 422) {
-        event.detail.shouldSwap = true;
-        event.detail.isError    = false;
-    }
-});
-</script>
-
-{% endblock %}
+{% endblock booking_content %}

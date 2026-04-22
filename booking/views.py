@@ -557,11 +557,11 @@ class BookingViewSet(viewsets.ViewSet):
           booking_pk — clé primaire (entier) de la réservation à annuler
 
         Réponses :
-          HTTP 200 — réservation supprimée ; HX-Redirect vers /my_account/my_resources/
+          HTTP 200 — réservation supprimée ; HX-Redirect vers /booking/my-bookings/
           HTTP 401 — utilisateur non authentifié
           HTTP 422 — réservation introuvable, deadline dépassée, ou statut invalide
         / Responses:
-          HTTP 200 — booking deleted; HX-Redirect to /my_account/my_resources/
+          HTTP 200 — booking deleted; HX-Redirect to /booking/my-bookings/
           HTTP 401 — unauthenticated user
           HTTP 422 — booking not found, deadline exceeded, or invalid status
         """
@@ -635,5 +635,57 @@ class BookingViewSet(viewsets.ViewSet):
         reservation.delete()
 
         reponse = HttpResponse(status=200)
-        reponse['HX-Redirect'] = '/my_account/my_resources/'
+        reponse['HX-Redirect'] = '/booking/my-bookings/'
         return reponse
+
+    @action(detail=False, methods=['GET'], url_path='my-bookings', permission_classes=[permissions.AllowAny])
+    def my_bookings(self, request):
+        """
+        Liste les réservations 'confirmed' à venir du membre connecté.
+        / Lists the logged-in member's upcoming 'confirmed' bookings.
+
+        LOCALISATION : booking/views.py
+
+        Accès :
+          Non authentifié           → 302 vers /connexion/?next=...
+          config.module_booking=False → 404
+          Authentifié + module actif  → HTTP 200
+        / Access:
+          Unauthenticated             → 302 to /connexion/?next=...
+          config.module_booking=False → 404
+          Authenticated + module on   → HTTP 200
+        """
+        from django.http import Http404
+        from django.urls import reverse
+        from django.utils import timezone
+        from booking.models import Booking
+
+        # Redirige les visiteurs non connectés vers la page de connexion.
+        # Utilise ?next= pour revenir ici après connexion.
+        # / Redirect unauthenticated visitors to the login page.
+        # Uses ?next= to return here after login.
+        if not request.user.is_authenticated:
+            login_url = reverse('connexion')
+            url_de_retour = f'{login_url}?next={request.get_full_path()}'
+            return redirect(url_de_retour)
+
+        # Refuse l'accès si le module booking est désactivé pour ce tenant.
+        # / Deny access when the booking module is disabled for this tenant.
+        contexte = get_context(request)
+        config = contexte['config']
+        if not config.module_booking:
+            raise Http404
+
+        confirmed_bookings = (
+            Booking.objects
+            .filter(
+                user               = request.user,
+                status             = Booking.STATUS_CONFIRMED,
+                start_datetime__gt = timezone.now(),
+            )
+            .select_related('resource')
+            .order_by('start_datetime')
+        )
+
+        contexte['confirmed_bookings'] = confirmed_bookings
+        return render(request, 'booking/views/my_bookings.html', contexte)

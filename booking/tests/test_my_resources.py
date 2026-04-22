@@ -1,22 +1,24 @@
 """
-Tests pour la page "Mes ressources" dans /my_account/ (session 12).
-/ Tests for the "My resources" page in /my_account/ (session 12).
+Tests pour la page "Mes réservations" dans /booking/my-bookings/.
+/ Tests for the "My bookings" page at /booking/my-bookings/.
 
 LOCALISATION : booking/tests/test_my_resources.py
 
-Couvre les cas définis dans le plan de test session 12.1 :
-- my_resources : exige une authentification (302 vers /)
-- my_resources : affiche les réservations 'confirmed' du membre
-- my_resources : n'affiche pas les réservations 'new' (panier)
-- my_resources : n'affiche pas les réservations des autres membres
+Couvre les cas définis dans le plan de test :
+- my_bookings : exige une authentification (302 vers /connexion/)
+- my_bookings : retourne 404 si config.module_booking=False
+- my_bookings : affiche les réservations 'confirmed' du membre
+- my_bookings : n'affiche pas les réservations 'new' (panier)
+- my_bookings : n'affiche pas les réservations des autres membres
 - bouton dans index.html : absent quand config.module_booking=False
 - bouton dans index.html : présent quand config.module_booking=True
 
-/ Covers session 12.1 test plan cases:
-- my_resources: requires authentication (302 to /)
-- my_resources: shows the member's 'confirmed' bookings
-- my_resources: excludes 'new' (basket) bookings
-- my_resources: excludes other members' bookings
+/ Covers test plan cases:
+- my_bookings: requires authentication (302 to /connexion/)
+- my_bookings: returns 404 when config.module_booking=False
+- my_bookings: shows the member's 'confirmed' bookings
+- my_bookings: excludes 'new' (basket) bookings
+- my_bookings: excludes other members' bookings
 - button in index.html: absent when config.module_booking=False
 - button in index.html: present when config.module_booking=True
 
@@ -162,24 +164,46 @@ def nettoyage_donnees_de_test(tenant):
         ).delete()
 
 
-# ─── Tests : /my_account/my_resources/ ───────────────────────────────────────
+# ─── Tests : /booking/my-bookings/ ───────────────────────────────────────────
 
-def test_my_resources_requires_authentication(client_anonyme):
+def test_my_bookings_requires_authentication(client_anonyme):
     """
-    Un visiteur non authentifié est redirigé vers / (HTTP 302).
-    Le dispatch() de MyAccount redirige avant toute logique de la vue.
-    / An unauthenticated visitor is redirected to / (HTTP 302).
-    MyAccount.dispatch() redirects before any view logic.
+    Un visiteur non authentifié est redirigé vers /connexion/ (HTTP 302).
+    / An unauthenticated visitor is redirected to /connexion/ (HTTP 302).
 
     LOCALISATION : booking/tests/test_my_resources.py
     """
-    reponse = client_anonyme.get('/my_account/my_resources/')
+    reponse = client_anonyme.get('/booking/my-bookings/')
 
     assert reponse.status_code == 302
-    assert reponse['Location'] == '/'
+    assert '/connexion/' in reponse['Location']
 
 
-def test_my_resources_shows_confirmed_bookings(
+def test_my_bookings_returns_404_when_module_disabled(admin_client, tenant):
+    """
+    La page retourne 404 si config.module_booking est False.
+    / The page returns 404 when config.module_booking is False.
+
+    LOCALISATION : booking/tests/test_my_resources.py
+    """
+    from BaseBillet.models import Configuration
+
+    with schema_context(TENANT_SCHEMA):
+        config = Configuration.get_solo()
+        valeur_originale = config.module_booking
+        config.module_booking = False
+        config.save(update_fields=['module_booking'])
+
+    try:
+        reponse = admin_client.get('/booking/my-bookings/')
+        assert reponse.status_code == 404
+    finally:
+        with schema_context(TENANT_SCHEMA):
+            config.module_booking = valeur_originale
+            config.save(update_fields=['module_booking'])
+
+
+def test_my_bookings_shows_confirmed_bookings(
     admin_client,
     test_user,
     ressource_pour_my_resources,
@@ -210,7 +234,7 @@ def test_my_resources_shows_confirmed_bookings(
             status                = Booking.STATUS_CONFIRMED,
         )
 
-    reponse = admin_client.get('/my_account/my_resources/')
+    reponse = admin_client.get('/booking/my-bookings/')
 
     assert reponse.status_code == 200
 
@@ -224,7 +248,7 @@ def test_my_resources_shows_confirmed_bookings(
         reservation_confirmee.delete()
 
 
-def test_my_resources_excludes_new_bookings(
+def test_my_bookings_excludes_new_bookings(
     admin_client,
     test_user,
     ressource_pour_my_resources,
@@ -251,7 +275,7 @@ def test_my_resources_excludes_new_bookings(
             status                = Booking.STATUS_NEW,
         )
 
-    reponse = admin_client.get('/my_account/my_resources/')
+    reponse = admin_client.get('/booking/my-bookings/')
 
     assert reponse.status_code == 200
 
@@ -264,7 +288,7 @@ def test_my_resources_excludes_new_bookings(
         reservation_new.delete()
 
 
-def test_my_resources_excludes_other_members_bookings(
+def test_my_bookings_excludes_other_members_bookings(
     admin_client,
     test_user,
     second_user_client,
@@ -292,7 +316,7 @@ def test_my_resources_excludes_other_members_bookings(
             status                = Booking.STATUS_CONFIRMED,
         )
 
-    reponse = admin_client.get('/my_account/my_resources/')
+    reponse = admin_client.get('/booking/my-bookings/')
 
     assert reponse.status_code == 200
 
@@ -307,7 +331,7 @@ def test_my_resources_excludes_other_members_bookings(
 
 # ─── Tests : bouton dans /my_account/ ────────────────────────────────────────
 
-def test_my_resources_button_visible_when_module_enabled(admin_client, tenant):
+def test_my_bookings_button_visible_when_module_enabled(admin_client, tenant):
     """
     Le bouton 'Mes ressources' s'affiche dans /my_account/ quand
     config.module_booking est True.
@@ -339,7 +363,7 @@ def test_my_resources_button_visible_when_module_enabled(admin_client, tenant):
             config.save(update_fields=['module_booking'])
 
 
-def test_my_resources_button_hidden_when_module_disabled(admin_client, tenant):
+def test_my_bookings_button_hidden_when_module_disabled(admin_client, tenant):
     """
     Le bouton 'Mes ressources' est absent de /my_account/ quand
     config.module_booking est False.
