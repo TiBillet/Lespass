@@ -1088,8 +1088,12 @@ def create_ticket_pdf(ticket: Ticket):
     # PROGRESS_LOGGER.addHandler(logging.NullHandler())
     # PROGRESS_LOGGER.setLevel(50)  # Only show errors, use 50
 
-    # Pour faire le qrcode
-    qr = segno.make(f"{ticket.qrcode()}", micro=False)
+    # RSA 1024 : signature 128 octets → base64 ~172 chars → total ~237 chars.
+    # ECC L (error='l') : capacité V10=271 octets → 237 chars → version 10 (57×57 modules).
+    # ECC M (défaut) aurait donné version 11-12 (61-65 modules), trop dense pour ZXing
+    # dans les conditions festival (scan depuis écran de téléphone).
+    # Scale 7 : chaque module = 7px → QR plus grand, plus lisible en conditions réelles.
+    qr = segno.make(ticket.qrcode(), error='l', micro=False)
     buffer_svg = BytesIO()
     qr.save(buffer_svg, kind='svg', scale=4.6)
 

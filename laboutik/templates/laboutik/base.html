@@ -28,9 +28,9 @@
 	<!-- https://github.com/MikeMcl/big.js/tree/main -->
 	<script src="{% static 'js/big.js' %}"></script>
 	<!-- init global values and function -->
-	<script src="{% static 'js/tibilletUtils.js' %}"></script>
+	<script src="{% static 'js/tibilletUtils.js' %}?v=1"></script>
 	<!-- passing django values to javascript - ex : state.demo.active -->
-	<script src="{% static 'js/nfc.js' %}"></script>
+	<script src="{% static 'js/nfc.js' %}?v=6"></script>
 	<script>
 		const state = JSON.parse("{{stateJson|escapejs}}")
 	</script>
@@ -120,6 +120,22 @@
 	-->
 	<div id="messages" aria-live="polite"></div>
 	<div id="confirm" aria-live="polite"></div>
+
+	<!--
+	DEBUG OVERLAY — visible sur écran Android (WebView ne capture pas console.log dans adb).
+	Affiche les événements clés en temps réel. Cliquer sur l'overlay pour le vider.
+	SUPPRIMER une fois le bug résolu.
+	/ DEBUG OVERLAY — visible on Android screen (WebView doesn't send console.log to adb).
+	Shows key events in real time. Click overlay to clear.
+	REMOVE once bug is fixed.
+	-->
+	<div id="debug-log"
+	     style="position:fixed;bottom:0;left:0;right:0;max-height:180px;overflow-y:auto;
+	            background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;font-family:monospace;
+	            z-index:99999;padding:4px;display:none;line-height:1.3;"
+	     onclick="this.innerHTML='';this.style.display='none';"
+	     title="Cliquer pour effacer"></div>
+
 	<script src="http://localhost/cordova.js"></script>
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
 	<!-- Extension loading-states — spinner avec delai configurable (pas de blink si requete rapide)
@@ -129,6 +145,23 @@
 	     / HTMX WebSocket extension — server push to browser (gauges, notifications) -->
 	<script src="{% static 'js/ext/ws.js' %}"></script>
 	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+	<script>
+		/**
+		 * Enregistre chaque requête HTMX dans le debug overlay.
+		 * / Logs each HTMX request in the debug overlay.
+		 */
+		document.addEventListener('htmx:beforeRequest', function(event) {
+			if (typeof debugLog === 'function') {
+				debugLog('HTMX→ ' + (event.detail.requestConfig ? event.detail.requestConfig.path : '?'))
+			}
+		})
+		document.addEventListener('htmx:afterRequest', function(event) {
+			if (typeof debugLog === 'function') {
+				var status = event.detail.xhr ? event.detail.xhr.status : '?'
+				debugLog('HTMX← ' + status)
+			}
+		})
+	</script>
 	<script>
 		/**
 		 * Retire la classe .hide des overlays #messages et #confirm
@@ -152,7 +185,6 @@
 		 * / htmx:afterSwap fires on the source element, not the target.
 		 * So we listen on document.body and check event.detail.target.
 		 */
-        
 		document.addEventListener('htmx:afterSwap', function (event) {
 			const elementCible = event.detail.target
 			const cibleEstOverlay = (
@@ -162,7 +194,6 @@
 				elementCible.classList.remove('hide')
 			}
 		})
-
 	</script>
 	{% block script %} {% endblock script %}
 	<div id="event-organizer" class="hide"></div>

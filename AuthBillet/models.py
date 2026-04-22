@@ -74,9 +74,13 @@ class RsaKey(models.Model):
     @classmethod
     def generate(cls):
         # Génération d'une paire de clés RSA chiffré avec la SECRET_KEY de Django
+        # RSA 1024 : signature 128 octets → ~172 chars base64 → QR version 11 (41×41)
+        # Suffisant pour des billets festival (durée de vie courte, UUID non-devinable).
+        # Les événements créés avant ce changement conservent leurs clés RSA 2048 ;
+        # les deux formats sont acceptés par _resoudre_qrcode() dans views_scan.py.
         private_key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=2048
+            key_size=1024
         )
 
         # Extraction de la clé publique associée à partir de la clé privée

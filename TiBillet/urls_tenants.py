@@ -1,17 +1,21 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from django.urls import path, include, re_path
+from django.urls import path, include, include, re_path
 
 from Administration.admin_tenant import staff_admin_site
 # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
 from ApiBillet.views import Webhook_stripe
+from discovery.views import PinCodeLaBoutikView, WvLoginHardwareView
 from seo.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
 
 urlpatterns = [
     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
     # re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
     path('admin/', staff_admin_site.urls, name="staff_admin_site"),
+    path('pin_code/', PinCodeLaBoutikView.as_view(), name='laboutik-pin-code'),
+    path('wv/login_hardware', WvLoginHardwareView.as_view(), name='laboutik-wv-login'),
+    path('api/discovery/', include('discovery.urls')),
 
     # Sitemap
     # Access the complete sitemap at: https://yourdomain.com/sitemap.xml

@@ -24,6 +24,28 @@ let currentConfiguration = null
 const logTypes = ['DANGER', 'WARNING', 'INFO']
 
 /**
+ * Affiche un message dans l'overlay de debug visible à l'écran (Android WebView).
+ * Tombe en dégradé sur console.log si l'overlay n'existe pas (navigateur desktop).
+ * Cliquer sur l'overlay pour le vider.
+ * / Shows a message in the on-screen debug overlay (Android WebView).
+ * Falls back to console.log if overlay doesn't exist (desktop browser).
+ * Click overlay to clear it.
+ *
+ * SUPPRIMER une fois le bug de recharge NFC résolu.
+ * / REMOVE once NFC recharge bug is resolved.
+ */
+function debugLog(msg) {
+	console.log(msg)
+}
+
+// Capture les erreurs JS non gérées et les affiche dans le debug overlay.
+// / Captures unhandled JS errors and shows them in the debug overlay.
+window.onerror = function(message, source, lineno, colno, error) {
+	debugLog('ERR: ' + message + ' (' + (source || '').split('/').pop() + ':' + lineno + ')')
+	return false
+}
+
+/**
  * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
  * Utilisé pour tout texte dynamique injecté via innerHTML ou insertAdjacentHTML
  * (noms de produits, noms de tarifs, symboles monétaires).
@@ -207,9 +229,15 @@ function eventsOrganizer(event) {
 		const src = event.detail.src
 		const msg = event.detail.msg
 
+		// Trace les messages critiques pour le debug Android.
+		// / Traces critical messages for Android debug.
+		if (msg === 'additionManageForm') {
+			debugLog('EVT additionManageForm action=' + (data && data.actionType))
+		}
+
 		// Récupère les routes depuis la table switches
 		const eventSwitch = switches[msg]
-		
+
 		// TODO : Si 'msg' n'existe pas dans 'switches', eventSwitch sera undefined
 		// et le forEach plantera. Ne devrait-on pas vérifier si eventSwitch existe
 		// ou logger un warning pour les événements non reconnus ?
@@ -221,6 +249,7 @@ function eventsOrganizer(event) {
 		}
 	} catch (error) {
 		// Silencieux en production
+		debugLog('EVT ERR: ' + error)
 	}
 }
 

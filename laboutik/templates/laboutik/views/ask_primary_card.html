@@ -2,9 +2,8 @@
 {% load static i18n %}
 
 {% block content %}
-
 <c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm" submit-url="{% url 'laboutik-caisse-carte_primaire' %}">
-	<form id="form-nfc" class="hide" hx-post="{% url 'laboutik-caisse-carte_primaire' %}" hx-trigger="" hx-target=".message-nfc"
+	<form id="form-nfc" class="hide" hx-post="{% url 'laboutik-caisse-carte_primaire' %}" hx-trigger="nfcResult" hx-target=".message-nfc"
 		hx-swap="innerHTML" data-testid="caisse-carte-primaire-form">
 		{% csrf_token %}
 		<input id="nfc-tag-id" name="tag_id" />
@@ -14,8 +13,10 @@
 </c-read-nfc>
 
 <script>
-	// gestionnaire de formulaire
+	// gestionnaire de formulaire carte primaire
+	// / primary card form manager
 	function primaryCardManageForm(event) {
+		debugLog('PRI action=' + (event.detail && event.detail.actionType))
 		try {
 			const data = event.detail
 			const form = document.querySelector('#form-nfc')
@@ -23,24 +24,69 @@
 			// update input
 			if (data.actionType === 'updateInput') {
 				form.querySelector(data.selector).value = data.value
+				debugLog('PRI updateInput ' + data.selector + '=' + data.value)
 			}
 
 			// change post url
 			if (data.actionType === 'postUrl') {
-				form.setAttribute('hx-post', data.value)
-				htmx.process(form)
+				// L'URL est fixée dans le template, on ne la change pas pour la carte primaire.
+				// / URL is set in the template, we don't change it for the primary card.
+				debugLog('PRI postUrl (ignoré pour carte primaire)')
 			}
 
-			// submit form
+			// submit form — fetch natif (form.click() ne déclenche pas HTMX depuis un callback NFC dans Cordova WebView)
+			// / native fetch (form.click() does not trigger HTMX from a NFC callback in Cordova WebView)
 			if (data.actionType === 'submit') {
-				form.setAttribute('hx-trigger', 'click')
-				htmx.process(form)
-				// submit
-				form.click()
+				const url = form.getAttribute('hx-post')
+				debugLog('PRI submit→ ' + url)
+
+				// Récupère le CSRF depuis le cookie OU depuis l'input caché Django.
+				// / Get CSRF from cookie OR from Django hidden input.
+				const csrfFromCookie = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || ''
+				const csrfInput = form.querySelector('[name=csrfmiddlewaretoken]')
+				const csrfToken = csrfFromCookie || (csrfInput ? csrfInput.value : '')
+				debugLog('PRI csrf=' + (csrfToken ? csrfToken.slice(0, 6) + '…' : 'VIDE'))
+
+				const formData = new FormData(form)
+
+				fetch(url, {
+					method: 'POST',
+					body: formData,
+					headers: {
+						'X-CSRFToken': csrfToken,
+						'HX-Request': 'true',
+						'HX-Current-URL': window.location.href,
+					}
+				})
+				.then(function(response) {
+					debugLog('PRI fetch status=' + response.status)
+					// django-htmx renvoie HX-Redirect pour rediriger vers le PV.
+					// / django-htmx sends HX-Redirect to redirect to the POS.
+					const hxRedirect = response.headers.get('HX-Redirect')
+					if (hxRedirect) {
+						debugLog('PRI redirect→ ' + hxRedirect)
+						window.location.href = hxRedirect
+						return null
+					}
+					return response.text()
+				})
+				.then(function(html) {
+					if (!html) return
+					// En cas d'erreur (carte inconnue, etc.) : affiche le message.
+					// / On error (unknown card, etc.): display the message.
+					const msgEl = document.querySelector('.message-nfc')
+					if (msgEl) {
+						msgEl.innerHTML = html
+						debugLog('PRI message affiché')
+					}
+				})
+				.catch(function(err) {
+					debugLog('PRI fetch ERR: ' + err)
+				})
 			}
 
 		} catch (error) {
-			console.log('-> addition.js - additionManageForm,', error)
+			debugLog('PRI EXCEPTION: ' + error)
 		}
 	}
 	// écoute des commandes sur le formulaire "#form-nfc"
@@ -49,3 +95,5 @@
 {% endblock content %}
 
 {% block css %}{% endblock css %}
+
+{% block script %}{% endblock script %}

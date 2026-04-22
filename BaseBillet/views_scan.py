@@ -9,10 +9,71 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+import json
+import base64
+
 from BaseBillet.models import ScannerAPIKey, ScanApp, Ticket
 from BaseBillet.permissions import HasScanApi
 from django.db.models import Q, CharField
 from django.db.models.functions import Cast
+
+
+def _resoudre_qrcode(qrcode_data: str):
+    """
+    Accepte deux formats de QR code billet :
+
+    1. UUID seul (nouveau format court) :
+       "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+       → pas de vérification cryptographique, mais l'UUID v4 est
+         non-devinable (2^122 possibilités) et le scanner est déjà
+         authentifié par API key.
+
+    2. base64(json):signature RSA (ancien format) :
+       "eyJ1dWlkIjogIi4uLiJ9:MEQ..."
+       → vérification de la signature RSA avec la clé publique de l'event.
+
+    Retourne le Ticket trouvé, ou lève une ValueError/Ticket.DoesNotExist.
+    """
+    qrcode_data = str(qrcode_data).strip()
+
+    # --- Format court : UUID seul ---
+    try:
+        ticket_uuid = UUID(qrcode_data)
+        return Ticket.objects.get(uuid=ticket_uuid)
+    except (ValueError, AttributeError):
+        pass  # Pas un UUID valide, on essaie l'ancien format
+    except Ticket.DoesNotExist:
+        raise  # UUID valide mais billet introuvable
+
+    # --- Ancien format : base64json:signature ---
+    if ':' not in qrcode_data:
+        raise ValueError("Format QR code invalide : ni UUID ni base64:signature")
+
+    try:
+        # maxsplit=1 pour ne pas couper si la signature contenait un ':'
+        data_b64, signature = qrcode_data.split(':', 1)
+    except ValueError:
+        raise ValueError("Format QR code invalide")
+
+    try:
+        data_json = json.loads(base64.b64decode(data_b64).decode('utf-8'))
+        ticket_uuid = data_json.get('uuid')
+        if not ticket_uuid:
+            raise ValueError("UUID manquant dans le QR code")
+    except Exception as e:
+        raise ValueError(f"Erreur décodage QR code : {e}")
+
+    ticket = Ticket.objects.get(uuid=ticket_uuid)
+
+    from fedow_connect.utils import verify_signature
+    if not verify_signature(
+        ticket.reservation.event.get_public_key(),
+        data_b64.encode('utf-8'),
+        signature
+    ):
+        raise ValueError("Signature QR code invalide")
+
+    return ticket
 
 
 
@@ -78,7 +139,6 @@ class check_ticket(APIView):
 
     def post(self, request):
         try:
-            # Get the QR code data from the request
             qrcode_data = request.data.get('qrcode_data')
 
             if not qrcode_data:
@@ -87,55 +147,12 @@ class check_ticket(APIView):
                     status=status.HTTP_406_NOT_ACCEPTABLE
                 )
 
-            # Split the QR code data to get the base64-encoded JSON and the signature
             try:
-                data_b64, signature = qrcode_data.split(':')
-            except ValueError:
-                return Response(
-                    {"error": "Invalid QR code format"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Decode the base64 JSON to get the ticket UUID
-            try:
-                import json
-                import base64
-                data_json = json.loads(base64.b64decode(data_b64).decode('utf-8'))
-                ticket_uuid = data_json.get('uuid')
-                if not ticket_uuid:
-                    return Response(
-                        {"error": "Ticket UUID not found in QR code data"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except Exception as e:
-                return Response(
-                    {"error": f"Error decoding QR code data: {str(e)}"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Find the ticket by UUID
-            try:
-                ticket = Ticket.objects.get(uuid=ticket_uuid)
+                ticket = _resoudre_qrcode(qrcode_data)
             except Ticket.DoesNotExist:
-                return Response(
-                    {"error": "Ticket not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-
-
-            # Verify the signature using the event's public key
-            from fedow_connect.utils import verify_signature
-            data_b64_bytes = data_b64.encode('utf-8')
-            if not verify_signature(
-                    ticket.reservation.event.get_public_key(),
-                    data_b64_bytes,
-                    signature
-            ):
-                return Response(
-                    {"error": "Invalid ticket signature"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Ticket not found"}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
             # Count the number of tickets in the same reservation
             reservation_tickets_count = ticket.reservation.tickets.count()
@@ -149,6 +166,7 @@ class check_ticket(APIView):
                     "status": ticket.get_status_display(),
                     "is_scanned": ticket.status == Ticket.SCANNED,
                     "event": ticket.reservation.event.name,
+                    "event_uuid": str(ticket.reservation.event.uuid),
                     "first_name": ticket.first_name,
                     "last_name": ticket.last_name,
                     "price": ticket.pricesold.price.name if ticket.pricesold else None,
@@ -173,7 +191,6 @@ class ticket(APIView):
     permission_classes = [HasScanApi]
     def post(self, request):
         try:
-            # Get the QR code data from the request
             qrcode_data = request.data.get('qrcode_data')
             event_uuid = request.data.get('event_uuid')
 
@@ -189,60 +206,18 @@ class ticket(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Split the QR code data to get the base64-encoded JSON and the signature
             try:
-                data_b64, signature = qrcode_data.split(':')
-            except ValueError:
-                return Response(
-                    {"error": "Invalid QR code format"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Decode the base64 JSON to get the ticket UUID
-            try:
-                import json
-                import base64
-                data_json = json.loads(base64.b64decode(data_b64).decode('utf-8'))
-                ticket_uuid = data_json.get('uuid')
-                if not ticket_uuid:
-                    return Response(
-                        {"error": "Ticket UUID not found in QR code data"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-            except Exception as e:
-                return Response(
-                    {"error": f"Error decoding QR code data: {str(e)}"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Find the ticket by UUID
-            try:
-                ticket = Ticket.objects.get(uuid=ticket_uuid)
+                ticket = _resoudre_qrcode(qrcode_data)
             except Ticket.DoesNotExist:
-                return Response(
-                    {"error": "Ticket not found"},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+                return Response({"error": "Ticket not found"}, status=status.HTTP_404_NOT_FOUND)
+            except ValueError as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-            try :
-                assert ticket.reservation.event.uuid == UUID(event_uuid)
-            except Exception as e:
+            # Vérifier que le billet appartient bien à l'événement attendu
+            if ticket.reservation.event.uuid != UUID(event_uuid):
                 return Response(
-                    {"error": "Event error"},
+                    {"error": "Ce billet n'appartient pas à cet événement"},
                     status=status.HTTP_406_NOT_ACCEPTABLE
-                )
-
-            # Verify the signature using the event's public key
-            from fedow_connect.utils import verify_signature
-            data_b64_bytes = data_b64.encode('utf-8')
-            if not verify_signature(
-                    ticket.reservation.event.get_public_key(),
-                    data_b64_bytes,
-                    signature
-            ):
-                return Response(
-                    {"error": "Invalid ticket signature"},
-                    status=status.HTTP_400_BAD_REQUEST
                 )
 
             # Count the number of tickets in the same reservation
@@ -471,7 +446,9 @@ class search_ticket(APIView):
                     "price": t.pricesold.price.name if t.pricesold else None,
                     "product": t.pricesold.productsold.product.name if t.pricesold and getattr(t.pricesold, 'productsold', None) else None,
                     "reservation_uuid": str(t.reservation.uuid),
+                    "event_uuid": str(t.reservation.event.uuid),
                     "status": t.get_status_display(),
+                    "is_scanned": t.status == Ticket.SCANNED,
                     "reservation_datetime": getattr(t.reservation, 'datetime', None),
                     "qrcode_data": t.qrcode(),
                     "custom_form": t.reservation.custom_form, # dans le futur serializer, rendre le custom form avec les clé non sluggé
