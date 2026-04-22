@@ -37,23 +37,35 @@ BookingViewSet
 
 ### Pages (full views)
 
-| File                         | Template                        | URL               |
-|------------------------------|---------------------------------|-------------------|
-| [views/home.md](views/home.md) | `booking/views/home.html`       | `GET /booking/`   |
-| [views/resource-detail.md](views/resource-detail.md) | `booking/views/resource.html` | `GET /booking/resource/<pk>/` |
-| [views/my-bookings.md](views/my-bookings.md) | `booking/templates/booking/views/my_bookings.html` | `GET /booking/my-bookings/` |
++------------------------------------------------------+----------------------------------------------------+-------------------------------+
+| File                                                 | Template                                           | URL                           |
++======================================================+====================================================+===============================+
+| [views/home.md](views/home.md)                       | `booking/views/home.html`                          | `GET /booking/`               |
++------------------------------------------------------+----------------------------------------------------+-------------------------------+
+| [views/resource-detail.md](views/resource-detail.md) | `booking/views/resource.html`                      | `GET /booking/resource/<pk>/` |
++------------------------------------------------------+----------------------------------------------------+-------------------------------+
+| [views/my-bookings.md](views/my-bookings.md)         | `booking/templates/booking/views/my_bookings.html` | `GET /booking/my-bookings/`   |
++------------------------------------------------------+----------------------------------------------------+-------------------------------+
 
 ### Partials (HTMX fragments)
 
-| File                                            | Template                                 |
-|-------------------------------------------------|------------------------------------------|
-| [partial/card.md](partial/card.md)              | `booking/partial/card.html`              |
-| [partial/slot-list.md](partial/slot-list.md)    | `booking/partial/slot_list.html`         |
-| [partial/slot-row.md](partial/slot-row.md)      | `booking/partial/slot_row.html`          |
-| [partial/booking-form.md](partial/booking-form.md) | `booking/partial/booking_form.html`   |
-| [partial/basket.md](partial/basket.md)          | `booking/partial/basket.html`            |
++------------------------------------------------------------+-----------------------------------------+
+| File                                                       | Template                                |
++============================================================+=========================================+
+| [partial/card.md](partial/card.md)                         | `booking/partial/card.html`             |
++------------------------------------------------------------+-----------------------------------------+
+| [partial/slot-list.md](partial/slot-list.md)               | `booking/partial/slot_list.html`        |
++------------------------------------------------------------+-----------------------------------------+
+| [partial/slot-row.md](partial/slot-row.md)                 | `booking/partial/slot_row.html`         |
++------------------------------------------------------------+-----------------------------------------+
+| [partial/booking-form.md](partial/booking-form.md)         | `booking/partial/booking_form.html`     |
++------------------------------------------------------------+-----------------------------------------+
+| [partial/basket.md](partial/basket.md)                     | `booking/partial/basket.html`           |
++------------------------------------------------------------+-----------------------------------------+
 | [partial/basket-confirmed.md](partial/basket-confirmed.md) | `booking/partial/basket_confirmed.html` |
-| [partial/cancel-error.md](partial/cancel-error.md) | `booking/partial/cancel_error.html`  |
++------------------------------------------------------------+-----------------------------------------+
+| [partial/cancel-error.md](partial/cancel-error.md)         | `booking/partial/cancel_error.html`     |
++------------------------------------------------------------+-----------------------------------------+
 
 ---
 

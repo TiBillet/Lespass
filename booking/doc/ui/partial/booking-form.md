@@ -18,20 +18,33 @@ When the user submits, `add_to_basket` either:
 
 ## Context variables
 
-| Variable                     | Type                  | Required | Description                                               |
-|------------------------------|-----------------------|----------|-----------------------------------------------------------|
-| `ressource`                  | `Resource`            | yes      | Parent resource                                           |
-| `slot_li_id`                 | `str`                 | yes      | DOM ID of this `<li>`: `"slot-<pk>-<Ymd-Hi>"`            |
-| `creneau`                    | `BookableInterval`    | no       | Slot data; absent when `slot_indisponible=True`           |
-| `max_slot_count`             | `int`                 | no       | Max value for the consecutive-slots input                 |
-| `slot_duration_minutes`      | `int`                 | no       | Slot duration in minutes                                  |
-| `start_datetime`             | `datetime`            | no       | Slot start (used in hidden field + display)               |
-| `slot_indisponible`          | `bool`                | no       | True → show "slot unavailable" state                      |
-| `erreur`                     | `dict \| str \| None` | no       | Validation errors from server                             |
-| `display_remaining_capacity` | `int`                 | no       | Capacity at form-open time; error state only              |
-| `display_is_new_week`        | `"0"\|"1"`            | no       | Week-separator flag at form-open time; error state only   |
-| `display_is_in_group`        | `"0"\|"1"`            | no       | Group-border flag at form-open time; error state only     |
-| `display_is_group_end`       | `"0"\|"1"`            | no       | Group-end spacing flag at form-open time; error state only|
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| Variable                     | Type                  | Required | Description                                                |
++==============================+=======================+==========+============================================================+
+| `ressource`                  | `Resource`            | yes      | Parent resource                                            |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `slot_li_id`                 | `str`                 | yes      | DOM ID of this `<li>`: `"slot-<pk>-<Ymd-Hi>"`              |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `creneau`                    | `BookableInterval`    | no       | Slot data; absent when `slot_indisponible=True`            |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `max_slot_count`             | `int`                 | no       | Max value for the consecutive-slots input                  |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `slot_duration_minutes`      | `int`                 | no       | Slot duration in minutes                                   |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `start_datetime`             | `datetime`            | no       | Slot start (used in hidden field + display)                |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `slot_indisponible`          | `bool`                | no       | True → show "slot unavailable" state                       |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `erreur`                     | `dict \| str \| None` | no       | Validation errors from server                              |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `display_remaining_capacity` | `int`                 | no       | Capacity at form-open time; error state only               |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `display_is_new_week`        | `"0"\|"1"`            | no       | Week-separator flag at form-open time; error state only    |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `display_is_in_group`        | `"0"\|"1"`            | no       | Group-border flag at form-open time; error state only      |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
+| `display_is_group_end`       | `"0"\|"1"`            | no       | Group-end spacing flag at form-open time; error state only |
++------------------------------+-----------------------+----------+------------------------------------------------------------+
 
 The four `display_*` variables are only needed in the error state. They are
 provided by `add_to_basket`, which reads them from the hidden form fields
@@ -167,8 +180,12 @@ The form is never rendered for unauthenticated users.
 
 ## data-testid
 
-| Value                          | Element        | Purpose                              |
-|--------------------------------|----------------|--------------------------------------|
-| `booking-form-slot-unavailable` | alert box     | Slot no longer available message     |
-| `booking-form-error`           | alert box      | Validation error message             |
-| `booking-form-slot-start`      | form container | Normal booking form                  |
++---------------------------------+----------------+----------------------------------+
+| Value                           | Element        | Purpose                          |
++=================================+================+==================================+
+| `booking-form-slot-unavailable` | alert box      | Slot no longer available message |
++---------------------------------+----------------+----------------------------------+
+| `booking-form-error`            | alert box      | Validation error message         |
++---------------------------------+----------------+----------------------------------+
+| `booking-form-slot-start`       | form container | Normal booking form              |
++---------------------------------+----------------+----------------------------------+
