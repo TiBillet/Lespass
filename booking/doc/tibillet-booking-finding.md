@@ -371,14 +371,16 @@ des créneaux ouvert.
 Il faut ajouter les tags "salle" et "machine" par exemple.
 
 
-## §17 — Template de base propre au module booking (Fait)
+## §17 - vue des réservations 
 
-`booking/templates/booking/booking_base.html` centralise les éléments
-communs à toutes les vues booking : `<main>`, panier, séparateur, et
-gestionnaire HTMX 422. Toutes les vues étendent ce fichier via
-`{% block booking_content %}`.
+Y'a aucune raison pour que ca soit dans /my_account/my_resources/
+plutot que /booking/SOMETHING
 
-Ce template étend lui-même `base_template` (skin plein ou headless).
-Le module booking ne touche pas à `BaseBillet/templates/`.
-/ booking_base.html centralises shared booking view elements. It extends
-base_template itself — the booking module never modifies BaseBillet templates.
+Suffit de mettre un lien dans /my_account qui amène vers la bonne
+page de booking
+
+
+## §18 - mise à jour vue des booking
+
+ca ne se met pas à jour immédiatement lorsqu'on réserve plusieurs slots
+seul le slot cliqué se màj. Les suivants non
