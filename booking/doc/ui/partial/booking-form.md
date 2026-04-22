@@ -18,16 +18,24 @@ When the user submits, `add_to_basket` either:
 
 ## Context variables
 
-| Variable               | Type                | Required | Description                                        |
-|------------------------|---------------------|----------|----------------------------------------------------|
-| `ressource`            | `Resource`          | yes      | Parent resource                                    |
-| `slot_li_id`           | `str`               | yes      | DOM ID of this `<li>`: `"slot-<pk>-<Ymd-Hi>"`     |
-| `creneau`              | `BookableInterval`  | no       | Slot data; absent when `slot_indisponible=True`    |
-| `max_slot_count`       | `int`               | no       | Max value for the consecutive-slots input          |
-| `slot_duration_minutes`| `int`               | no       | Slot duration in minutes (displayed in form label) |
-| `start_datetime`       | `datetime`          | no       | Slot start (used in hidden field + display)        |
-| `slot_indisponible`    | `bool`              | no       | True → show "slot unavailable" state               |
-| `erreur`               | `dict \| str \| None` | no     | Validation errors from server                      |
+| Variable                     | Type                  | Required | Description                                               |
+|------------------------------|-----------------------|----------|-----------------------------------------------------------|
+| `ressource`                  | `Resource`            | yes      | Parent resource                                           |
+| `slot_li_id`                 | `str`                 | yes      | DOM ID of this `<li>`: `"slot-<pk>-<Ymd-Hi>"`            |
+| `creneau`                    | `BookableInterval`    | no       | Slot data; absent when `slot_indisponible=True`           |
+| `max_slot_count`             | `int`                 | no       | Max value for the consecutive-slots input                 |
+| `slot_duration_minutes`      | `int`                 | no       | Slot duration in minutes                                  |
+| `start_datetime`             | `datetime`            | no       | Slot start (used in hidden field + display)               |
+| `slot_indisponible`          | `bool`                | no       | True → show "slot unavailable" state                      |
+| `erreur`                     | `dict \| str \| None` | no       | Validation errors from server                             |
+| `display_remaining_capacity` | `int`                 | no       | Capacity at form-open time; error state only              |
+| `display_is_new_week`        | `"0"\|"1"`            | no       | Week-separator flag at form-open time; error state only   |
+| `display_is_in_group`        | `"0"\|"1"`            | no       | Group-border flag at form-open time; error state only     |
+| `display_is_group_end`       | `"0"\|"1"`            | no       | Group-end spacing flag at form-open time; error state only|
+
+The four `display_*` variables are only needed in the error state. They are
+provided by `add_to_basket`, which reads them from the hidden form fields
+submitted with the POST. The normal state reads them directly from `creneau`.
 
 ---
 
@@ -47,25 +55,27 @@ condition) or the query params are invalid.
 The form was submitted but the server rejected it (serializer error
 or engine error). The form is re-rendered as a 422 response.
 
-- Red alert with the error message text
-- "Réessayer" button:
-  `hx-get="/booking/<pk>/booking_form/?..."` → `hx-target="#<slot_li_id>"`
-  `hx-swap="outerHTML"` — reloads a fresh form
+- Red alert with the error message text (`role="alert"`)
+- "Réessayer" button: `hx-get="/booking/<pk>/booking_form/?..."` →
+  reloads a fresh form
+- "Annuler" link: `hx-get="/booking/<pk>/cancel_form/?..."` →
+  restores the slot row (same endpoint as the normal-state cancel)
 - `data-testid="booking-form-error"`
 
 ### 3. Normal form  (default)
 
 Available slot, no errors.
 
-- Blue info box showing slot time and duration
+- Blue info box showing slot time and duration (the duration is shown
+  here in the info box; the slot-count label does not repeat it)
 - Number input `slot_count` (min=1, max=`max_slot_count`, default=1)
-  Label: "Nombre de créneaux ({{ slot_duration_minutes }} min chacun)"
-  Hidden only when `max_slot_count=1` (no choice to make)
+  Label: "Nombre de créneaux"
+  Hidden when `max_slot_count=1` (no choice to make); a hidden
+  `slot_count=1` field is submitted instead
 - Submit button "Ajouter au panier"
-- Cancel link (re-renders the original `slot_row.html`):
-  `hx-get="/booking/<pk>/booking_form/?..."` → back to slot row
-  *(currently reloads the form — open question whether to add a
-  dedicated cancel endpoint that returns slot_row directly)*
+- Cancel link — calls the dedicated `cancel_form` endpoint:
+  `GET /booking/<pk>/cancel_form/?start_datetime=...&slot_duration_minutes=...`
+  Returns `slot_row.html` via `hx-swap="outerHTML"` on `#<slot_li_id>`
 - `data-testid="booking-form-slot-start"`
 
 ---
@@ -86,6 +96,35 @@ Available slot, no errors.
 ```
 
 CSRF token is included (inherited from `<body hx-headers='...'>`).
+
+### Cancel link (both normal and error states)
+
+```
+hx-get="/booking/<pk>/cancel_form/
+        ?start_datetime=...
+        &slot_duration_minutes=...
+        &remaining_capacity=...
+        &is_new_week=0|1
+        &is_in_group=0|1
+        &is_group_end=0|1"
+hx-target="#{{ slot_li_id }}"
+hx-swap="outerHTML"
+```
+
+`cancel_form` validates these params with `CancelFormQuerySerializer`,
+then reconstructs a `BookableInterval` directly from them — **no
+`compute_slots` call**. The slot is restored exactly as it was displayed
+when the form opened, including correct grouping visuals.
+
+The display values are encoded in the cancel URL:
+
+- **Normal state** — read from `creneau` at render time.
+- **Error state** — read from the four `display_*` context variables
+  (threaded back from `add_to_basket`, which reads them from the hidden
+  form fields submitted with the POST).
+
+`cancel_form` requires authentication (same as `booking_form`). An
+unauthenticated request is redirected to login via `HX-Redirect`.
 
 ### Retry button (error state)
 

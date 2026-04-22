@@ -12,14 +12,19 @@ It carries the same id as the original <li> (slot_li_id), which allows
 the form to swap back with slot_row.html after submission.
 
 Variables attendues / Expected variables:
-  ressource             — objet Resource
-  slot_li_id            — str : id DOM "slot-<pk>-<Ymd-Hi>"
-  creneau               — BookableInterval | None (si slot_indisponible=True)
-  max_slot_count        — int : créneaux consécutifs disponibles depuis ce début
-  slot_duration_minutes — int : durée de chaque créneau en minutes
-  slot_indisponible     — bool : True si le créneau est complet ou inexistant
-  start_datetime        — datetime : début du créneau (toujours présent)
-  erreur                — str | dict | None : message d'erreur de validation
+  ressource                    — objet Resource
+  slot_li_id                   — str : id DOM "slot-<pk>-<Ymd-Hi>"
+  creneau                      — BookableInterval | None (si slot_indisponible=True)
+  max_slot_count               — int : créneaux consécutifs disponibles depuis ce début
+  slot_duration_minutes        — int : durée de chaque créneau en minutes
+  slot_indisponible            — bool : True si le créneau est complet ou inexistant
+  start_datetime               — datetime : début du créneau (toujours présent)
+  erreur                       — str | dict | None : message d'erreur de validation
+  display_remaining_capacity   — int : capacité restante au moment de l'ouverture
+                                 (seulement en état erreur — fourni par add_to_basket)
+  display_is_new_week          — "0"|"1" (seulement en état erreur)
+  display_is_in_group          — "0"|"1" (seulement en état erreur)
+  display_is_group_end         — "0"|"1" (seulement en état erreur)
 -->
 {% load i18n %}
 
@@ -44,25 +49,35 @@ Variables attendues / Expected variables:
 
     <!--
     Erreur de validation renvoyée par add_to_basket (422).
-    Le bouton "Réessayer" recharge le formulaire via hx-get.
+    "Réessayer" recharge le formulaire, "Annuler" restaure la ligne du créneau.
     / Validation error returned by add_to_basket (422).
-    The "Réessayer" button reloads the form via hx-get.
+    "Réessayer" reloads the form, "Annuler" restores the slot row.
     -->
     <li id="{{ slot_li_id }}"
         class="d-flex flex-column gap-2 mb-2 p-2 border rounded border-danger-subtle bg-danger-subtle"
         data-testid="booking-form-error"
+        role="alert"
         aria-live="polite">
         <span class="text-danger small">
             <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
             {{ erreur }}
         </span>
-        <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}"
-           hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}"
-           hx-target="#{{ slot_li_id }}"
-           hx-swap="outerHTML"
-           class="btn btn-outline-secondary btn-sm align-self-start">
-            {% translate "Réessayer" %}
-        </a>
+        <div class="d-flex gap-2">
+            <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}"
+               hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}"
+               hx-target="#{{ slot_li_id }}"
+               hx-swap="outerHTML"
+               class="btn btn-outline-secondary btn-sm">
+                {% translate "Réessayer" %}
+            </a>
+            <a href="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ display_remaining_capacity }}&is_new_week={{ display_is_new_week }}&is_in_group={{ display_is_in_group }}&is_group_end={{ display_is_group_end }}"
+               hx-get="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ display_remaining_capacity }}&is_new_week={{ display_is_new_week }}&is_in_group={{ display_is_in_group }}&is_group_end={{ display_is_group_end }}"
+               hx-target="#{{ slot_li_id }}"
+               hx-swap="outerHTML"
+               class="btn btn-link btn-sm text-muted">
+                {% translate "Annuler" %}
+            </a>
+        </div>
     </li>
 
 {% else %}
@@ -101,32 +116,68 @@ Variables attendues / Expected variables:
 
             <input type="hidden"
                    name="start_datetime"
-                   value="{{ creneau.start|date:'Y-m-d\TH:i:s' }}">
+                   value="{{ start_datetime|date:'Y-m-d\TH:i:s' }}">
             <input type="hidden"
                    name="slot_duration_minutes"
                    value="{{ slot_duration_minutes }}">
 
-            <div class="col-auto">
-                <label for="slot-count-input-{{ slot_li_id }}" class="col-form-label">
-                    {% translate "Nombre de créneaux" %}
-                </label>
-            </div>
-            <div class="col-auto">
-                <input type="number"
-                       id="slot-count-input-{{ slot_li_id }}"
-                       name="slot_count"
-                       value="1"
-                       min="1"
-                       max="{{ max_slot_count }}"
-                       class="form-control"
-                       required>
-            </div>
+            <!--
+            État d'affichage du créneau au moment de l'ouverture du formulaire.
+            Soumis avec le formulaire pour que le lien "Annuler" de l'état erreur
+            puisse restaurer exactement la ligne d'origine (sans recomputer les créneaux).
+            / Slot display state at form-open time.
+            Submitted with the form so the "Annuler" link in the error state can
+            restore the original row exactly (without recomputing slots).
+            -->
+            <input type="hidden" name="display_remaining_capacity" value="{{ creneau.remaining_capacity }}">
+            <input type="hidden" name="display_is_new_week"  value="{{ creneau.is_new_week|yesno:'1,0' }}">
+            <input type="hidden" name="display_is_in_group"  value="{{ creneau.is_in_group|yesno:'1,0' }}">
+            <input type="hidden" name="display_is_group_end" value="{{ creneau.is_group_end|yesno:'1,0' }}">
+
+            {% if max_slot_count > 1 %}
+                <!--
+                Plusieurs créneaux consécutifs disponibles — on laisse l'utilisateur choisir.
+                / Multiple consecutive slots available — let the user choose.
+                -->
+                <div class="col-auto">
+                    <label for="slot-count-input-{{ slot_li_id }}" class="col-form-label">
+                        {% translate "Nombre de créneaux" %}
+                    </label>
+                </div>
+                <div class="col-auto">
+                    <input type="number"
+                           id="slot-count-input-{{ slot_li_id }}"
+                           name="slot_count"
+                           value="1"
+                           min="1"
+                           max="{{ max_slot_count }}"
+                           class="form-control"
+                           required>
+                </div>
+            {% else %}
+                <!--
+                Un seul créneau disponible — pas de choix à faire, on soumet 1 directement.
+                / Only one slot available — no choice to make, submit 1 directly.
+                -->
+                <input type="hidden" name="slot_count" value="1">
+            {% endif %}
+
             <div class="col-auto">
                 <button type="submit"
                         class="btn btn-primary btn-sm"
                         data-loading-disable>
                     {% translate "Ajouter au panier" %}
                 </button>
+            </div>
+
+            <div class="col-auto">
+                <a href="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ creneau.remaining_capacity }}&is_new_week={{ creneau.is_new_week|yesno:'1,0' }}&is_in_group={{ creneau.is_in_group|yesno:'1,0' }}&is_group_end={{ creneau.is_group_end|yesno:'1,0' }}"
+                   hx-get="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ creneau.remaining_capacity }}&is_new_week={{ creneau.is_new_week|yesno:'1,0' }}&is_in_group={{ creneau.is_in_group|yesno:'1,0' }}&is_group_end={{ creneau.is_group_end|yesno:'1,0' }}"
+                   hx-target="#{{ slot_li_id }}"
+                   hx-swap="outerHTML"
+                   class="btn btn-link btn-sm text-muted">
+                    {% translate "Annuler" %}
+                </a>
             </div>
         </form>
 

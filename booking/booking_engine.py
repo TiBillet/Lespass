@@ -64,6 +64,14 @@ class BookableInterval:
     remaining_capacity: int
     group_id:           int  = 0      # même id = même OpeningEntry × date / same OpeningEntry × date
 
+    # Annotations d'affichage — calculées par annoter_creneaux_pour_affichage()
+    # dans views.py, ou encodées depuis les paramètres GET dans cancel_form.
+    # / Display annotations — computed by annoter_creneaux_pour_affichage()
+    # in views.py, or decoded from GET params in cancel_form.
+    is_new_week:  bool = False
+    is_in_group:  bool = False
+    is_group_end: bool = True
+
     @property
     def start(self) -> datetime.datetime:
         return self.interval.start
