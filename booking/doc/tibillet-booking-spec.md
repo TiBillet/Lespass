@@ -548,7 +548,10 @@ still decrease `remaining_capacity` for any overlapping slot.
 2. Member browses resources, optionally filtering by tag. Each resource shows its
    next available slots.
 3. Member selects a slot. If not logged in, they are redirected to login.
-4. Member chooses how many consecutive slots they want (`slot_count`).
+4. Member chooses how many consecutive slots they want (`slot_count`),
+   only when more than one consecutive slot is available. When only
+   one consecutive slot is available, `slot_count=1` is submitted
+   automatically with no visible input.
 5. System checks: membership valid (if `adhesion_obligatoire` is set on the Price),
    slot within `booking_horizon_days`, remaining capacity > 0.
 6. Booking is created with status `new`. The unit is reserved but not yet paid.

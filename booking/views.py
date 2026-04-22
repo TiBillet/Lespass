@@ -4,6 +4,7 @@ Vues de l'app booking.
 
 LOCALISATION : booking/views.py
 """
+import datetime
 from collections import Counter, defaultdict
 
 
@@ -57,6 +58,7 @@ def annoter_creneaux_pour_affichage(creneaux):
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.template.loader import render_to_string
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions
@@ -64,6 +66,8 @@ from rest_framework.decorators import action
 
 from BaseBillet.views import get_context
 from booking.booking_engine import (
+    BookableInterval,
+    Interval,
     compute_max_consecutive_slots,
     compute_slots,
     validate_new_booking,
@@ -73,6 +77,7 @@ from booking.serializers import (
     BookingCreateSerializer,
     BookingFormQuerySerializer,
     CancelBookingSerializer,
+    CancelFormQuerySerializer,
     RemoveFromBasketSerializer,
 )
 
@@ -210,7 +215,6 @@ class BookingViewSet(viewsets.ViewSet):
         # Django always sets LOGIN_URL='/accounts/login/' via global_settings.py,
         # so we cannot use settings.LOGIN_URL to detect its absence.
         if not request.user.is_authenticated:
-            from django.urls import reverse
             login_url = reverse('connexion')
             url_de_retour = f'{login_url}?next={request.get_full_path()}'
 
@@ -288,6 +292,81 @@ class BookingViewSet(viewsets.ViewSet):
         })
         return render(request, 'booking/partial/booking_form.html', contexte)
 
+    @action(detail=True, methods=['GET'], permission_classes=[permissions.AllowAny])
+    def cancel_form(self, request, pk=None):
+        """
+        Annule l'affichage du formulaire de réservation et restaure la ligne du créneau.
+        / Cancels the booking form display and restores the slot row.
+
+        LOCALISATION : booking/views.py
+
+        Appelé par le lien "Annuler" dans booking_form.html.
+        Reconstruit le BookableInterval directement depuis les paramètres GET
+        (état d'affichage encodé lors du rendu du formulaire) — sans appeler
+        compute_slots. Le créneau est rendu tel qu'il était à l'ouverture du
+        formulaire, groupage inclus.
+        / Called by the "Annuler" link in booking_form.html.
+        Rebuilds the BookableInterval directly from GET params (display state
+        encoded at form-render time) — without calling compute_slots. The slot
+        is restored as it was when the form was opened, including grouping.
+
+        Paramètres GET : voir CancelFormQuerySerializer
+        / GET params: see CancelFormQuerySerializer
+        """
+        if not request.user.is_authenticated:
+            login_url = reverse('connexion')
+            url_de_retour = f'{login_url}?next={request.get_full_path()}'
+            if request.htmx:
+                reponse = HttpResponse()
+                reponse['HX-Redirect'] = url_de_retour
+                return reponse
+            return redirect(url_de_retour)
+
+        ressource = get_object_or_404(Resource, pk=pk)
+
+        serializer_params = CancelFormQuerySerializer(data=request.GET)
+        if not serializer_params.is_valid():
+            # Paramètres manquants ou corrompus — on affiche l'indisponibilité.
+            # / Missing or corrupt params — show unavailability.
+            contexte = get_context(request)
+            contexte.update({
+                'ressource':         ressource,
+                'slot_li_id':        self._slot_li_id(ressource.pk, None),
+                'start_datetime':    None,
+                'slot_indisponible': True,
+            })
+            return render(request, 'booking/partial/booking_form.html', contexte)
+
+        start_datetime        = serializer_params.validated_data['start_datetime']
+        slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
+        remaining_capacity    = serializer_params.validated_data['remaining_capacity']
+        is_new_week           = serializer_params.validated_data['is_new_week']
+        is_in_group           = serializer_params.validated_data['is_in_group']
+        is_group_end          = serializer_params.validated_data['is_group_end']
+
+        # Reconstruit le BookableInterval depuis les paramètres d'affichage.
+        # Ces valeurs ont été encodées dans l'URL au moment du rendu du formulaire,
+        # donc le créneau est restauré exactement comme il était affiché.
+        # / Rebuild the BookableInterval from the display params.
+        # These values were encoded in the URL at form-render time, so the slot
+        # is restored exactly as it was displayed.
+        end_datetime = start_datetime + datetime.timedelta(minutes=slot_duration_minutes)
+        creneau = BookableInterval(
+            interval=Interval(start=start_datetime, end=end_datetime),
+            max_capacity=ressource.capacity,
+            remaining_capacity=remaining_capacity,
+        )
+        creneau.is_new_week  = is_new_week
+        creneau.is_in_group  = is_in_group
+        creneau.is_group_end = is_group_end
+
+        contexte = get_context(request)
+        contexte.update({
+            'ressource': ressource,
+            'creneau':   creneau,
+        })
+        return render(request, 'booking/partial/slot_row.html', contexte)
+
     @action(detail=True, methods=['POST'], permission_classes=[permissions.AllowAny])
     def add_to_basket(self, request, pk=None):
         """
@@ -327,17 +406,35 @@ class BookingViewSet(viewsets.ViewSet):
         slot_duration_brut = request.data.get('slot_duration_minutes')
         slot_li_id = self._slot_li_id(ressource.pk, start_datetime_brut)
 
+        # Lit les paramètres d'affichage soumis comme champs cachés dans le formulaire.
+        # Utilisés pour reconstruire la ligne du créneau si la soumission échoue,
+        # afin que le lien "Annuler" puisse restaurer exactement l'état d'origine.
+        # / Reads display params submitted as hidden form fields.
+        # Used to rebuild the slot row if submission fails, so the "Annuler" link
+        # can restore exactly the original display state.
+        try:
+            display_remaining_capacity = max(0, int(request.data.get('display_remaining_capacity', 0)))
+        except (TypeError, ValueError):
+            display_remaining_capacity = 0
+        display_is_new_week  = '1' if request.data.get('display_is_new_week')  == '1' else '0'
+        display_is_in_group  = '1' if request.data.get('display_is_in_group')  == '1' else '0'
+        display_is_group_end = '1' if request.data.get('display_is_group_end') == '1' else '0'
+
         # request.data est parsé automatiquement par DRF selon le Content-Type.
         # / request.data is parsed automatically by DRF based on Content-Type.
         serializer_corps = BookingCreateSerializer(data=request.data)
         if not serializer_corps.is_valid():
             contexte = get_context(request)
             contexte.update({
-                'ressource':            ressource,
-                'slot_li_id':           slot_li_id,
-                'start_datetime':       start_datetime_brut,
-                'slot_duration_minutes': slot_duration_brut,
-                'erreur':               serializer_corps.errors,
+                'ressource':               ressource,
+                'slot_li_id':              slot_li_id,
+                'start_datetime':          start_datetime_brut,
+                'slot_duration_minutes':   slot_duration_brut,
+                'erreur':                  serializer_corps.errors,
+                'display_remaining_capacity': display_remaining_capacity,
+                'display_is_new_week':     display_is_new_week,
+                'display_is_in_group':     display_is_in_group,
+                'display_is_group_end':    display_is_group_end,
             })
             return render(
                 request,
@@ -361,11 +458,15 @@ class BookingViewSet(viewsets.ViewSet):
         if not is_valid:
             contexte = get_context(request)
             contexte.update({
-                'ressource':            ressource,
-                'slot_li_id':           slot_li_id,
-                'start_datetime':       start_datetime,
-                'slot_duration_minutes': slot_duration_minutes,
-                'erreur':               resultat,
+                'ressource':               ressource,
+                'slot_li_id':              slot_li_id,
+                'start_datetime':          start_datetime,
+                'slot_duration_minutes':   slot_duration_minutes,
+                'erreur':                  resultat,
+                'display_remaining_capacity': display_remaining_capacity,
+                'display_is_new_week':     display_is_new_week,
+                'display_is_in_group':     display_is_in_group,
+                'display_is_group_end':    display_is_group_end,
             })
             return render(
                 request,
@@ -656,7 +757,6 @@ class BookingViewSet(viewsets.ViewSet):
           Authenticated + module on   → HTTP 200
         """
         from django.http import Http404
-        from django.urls import reverse
         from django.utils import timezone
         from booking.models import Booking
 

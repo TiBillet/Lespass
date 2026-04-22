@@ -66,6 +66,36 @@ class RemoveFromBasketSerializer(serializers.Serializer):
     booking_pk = serializers.IntegerField()
 
 
+class CancelFormQuerySerializer(serializers.Serializer):
+    """
+    Valide les paramètres GET de la vue cancel_form.
+    / Validates the GET query params for the cancel_form view.
+
+    LOCALISATION : booking/serializers.py
+
+    Paramètres attendus dans la query string :
+      start_datetime        — datetime ISO 8601 tz-aware du créneau
+      slot_duration_minutes — durée du créneau en minutes (entier ≥ 1)
+      remaining_capacity    — capacité restante au moment de l'ouverture du formulaire
+      is_new_week           — 0 ou 1 : le créneau démarre une nouvelle semaine ISO
+      is_in_group           — 0 ou 1 : le créneau appartient à un groupe
+      is_group_end          — 0 ou 1 : dernier créneau du groupe
+    / Expected query string params:
+      start_datetime        — tz-aware ISO 8601 datetime of the slot
+      slot_duration_minutes — slot duration in minutes (integer ≥ 1)
+      remaining_capacity    — remaining capacity when the form was opened
+      is_new_week           — 0 or 1: slot starts a new ISO week
+      is_in_group           — 0 or 1: slot belongs to a group
+      is_group_end          — 0 or 1: last slot in its group
+    """
+    start_datetime        = serializers.DateTimeField()
+    slot_duration_minutes = serializers.IntegerField(min_value=1)
+    remaining_capacity    = serializers.IntegerField(min_value=0)
+    is_new_week           = serializers.BooleanField()
+    is_in_group           = serializers.BooleanField()
+    is_group_end          = serializers.BooleanField()
+
+
 class CancelBookingSerializer(serializers.Serializer):
     """
     Valide le corps de la vue cancel.

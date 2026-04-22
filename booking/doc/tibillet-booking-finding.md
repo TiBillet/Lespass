@@ -457,3 +457,31 @@ et éventuellement un historique. Options :
 - Le filtre actuel peut rester pour la section "à venir" mais une section
   "aujourd'hui" ou "en cours" devrait afficher les créneaux démarrés et
   non encore terminés.
+
+
+## §23 — compute_slots appelé sans contrainte de date dans booking_form et cancel_form (Connu, non bloquant)
+
+**Source :** `booking/views.py` — `booking_form()` et ancienne version de
+`cancel_form()` (résolue dans cancel_form — voir ci-dessous)
+
+`compute_slots(ressource)` est appelé sans passer de fenêtre de dates
+explicite. La fonction calcule les créneaux sur la plage
+`[aujourd'hui, aujourd'hui + booking_horizon_days]`. Pour une ressource
+avec `booking_horizon_days=365` et des créneaux de 30 minutes, cela
+peut générer plusieurs milliers d'intervalles par requête. La liste est
+ensuite parcourue linéairement pour trouver un seul créneau.
+
+**cancel_form résolu :** depuis la refonte du `cancel_form` (avril 2026),
+cette vue ne fait plus appel à `compute_slots`. Elle reconstruit le
+`BookableInterval` directement depuis les paramètres GET encodés au
+moment du rendu du formulaire — coût O(1).
+
+**booking_form non résolu :** `booking_form` et `add_to_basket` appellent
+toujours `compute_slots` en entier. À surveiller si les ressources ont
+des horizons longs (> 90 jours) et des durées de créneau courtes.
+
+Action future possible :
+- Passer une fenêtre `[start_datetime - 1 jour, start_datetime + 1 jour]`
+  à `compute_slots` quand on cherche un créneau précis (booking_form,
+  add_to_basket) — réduit le calcul à quelques créneaux.
+- Ou accepter le coût si les horizons restent ≤ 30 jours en pratique.
