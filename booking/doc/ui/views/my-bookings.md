@@ -7,8 +7,7 @@
 **Base template:** `booking/booking_base.html`
 
 Shows the authenticated member's upcoming confirmed bookings. Each booking
-has an inline HTMX cancel button. This page replaces the BaseBillet
-`MyAccount.my_resources()` view (see `my-resources.md`).
+has an inline HTMX cancel button.
 
 ---
 

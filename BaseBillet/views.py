@@ -217,7 +217,7 @@ def get_context(request):
     if config.module_booking:
         navbar.append(
             {'name': 'booking-list', 'url': '/booking/',
-             'label': _('Ressources'), 'icon': 'chair'}
+             'label': _('Ressources'), 'icon': 'building'}
         )
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
