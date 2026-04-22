@@ -209,9 +209,6 @@ class TireuseViewSet(viewsets.ViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if not tireuse.enabled:
-            return Response({"authorized": False, "message": "Tap is disabled."})
-
         # Chercher la carte NFC / Find the NFC card
         from QrcodeCashless.models import CarteCashless
 
@@ -220,6 +217,12 @@ class TireuseViewSet(viewsets.ViewSet):
             return Response({"authorized": False, "message": "Unknown card."})
 
         # Vérifier si c'est une carte de maintenance / Check if it's a maintenance card
+        # On identifie le type de carte AVANT d'appliquer les regles d'acces :
+        # la carte maintenance doit pouvoir fonctionner quand la tireuse est hors service,
+        # tandis que les cartes normales sont bloquees.
+        # / Identify the card type BEFORE applying access rules:
+        # maintenance cards must work when the tap is out of service,
+        # while normal cards are blocked.
         carte_maintenance = None
         is_maintenance = False
         try:
@@ -228,8 +231,24 @@ class TireuseViewSet(viewsets.ViewSet):
         except CarteMaintenance.DoesNotExist:
             pass
 
-        # --- Maintenance : pas de facturation ---
-        # / Maintenance: no billing
+        # Carte normale + tireuse hors service → refus
+        # / Normal card + tap out of service → refuse
+        if not tireuse.enabled and not is_maintenance:
+            return Response({"authorized": False, "message": "Tap is disabled."})
+
+        # --- Maintenance : uniquement si la tireuse est hors service (enabled=False) ---
+        # Une carte maintenance ne peut rincer que quand la tireuse est déclarée
+        # hors service dans l'admin — sinon elle serait utilisable comme carte gratuite.
+        # / Maintenance: only allowed when the tap is out of service (enabled=False).
+        # A maintenance card must not work during normal service — it would bypass billing.
+        if is_maintenance and tireuse.enabled:
+            return Response(
+                {
+                    "authorized": False,
+                    "message": "Maintenance card refused: tap is in service.",
+                }
+            )
+
         if is_maintenance:
             session = RfidSession.objects.create(
                 uid=uid,
@@ -274,12 +293,22 @@ class TireuseViewSet(viewsets.ViewSet):
         # / Normal service: check wallet balance
         from controlvanne.billing import (
             obtenir_contexte_cashless,
+            calculer_solde_total_cascade,
             calculer_volume_autorise_ml,
         )
-        from fedow_core.services import WalletService
 
         contexte = obtenir_contexte_cashless(carte)
         if not contexte:
+            _push_ws_kiosk(
+                tireuse,
+                {
+                    **_construire_payload_session(tireuse, None),
+                    "authorized": False,
+                    "present": True,
+                    "uid": uid,
+                    "message": "Cashless non configuré pour ce lieu.",
+                },
+            )
             return Response(
                 {
                     "authorized": False,
@@ -287,12 +316,24 @@ class TireuseViewSet(viewsets.ViewSet):
                 }
             )
 
-        solde_centimes = WalletService.obtenir_solde(
-            contexte["wallet_client"], contexte["asset_tlf"]
+        # Solde total cascade TNF → TLF → FED (identique à LaBoutik)
+        # / Total cascade balance TNF → TLF → FED (same as LaBoutik)
+        solde_centimes = calculer_solde_total_cascade(
+            contexte["wallet_client"], contexte["cascade_assets"]
         )
 
         prix_litre = tireuse.prix_litre
         if prix_litre <= 0:
+            _push_ws_kiosk(
+                tireuse,
+                {
+                    **_construire_payload_session(tireuse, None),
+                    "authorized": False,
+                    "present": True,
+                    "uid": uid,
+                    "message": "Prix non configuré pour ce fût.",
+                },
+            )
             return Response(
                 {
                     "authorized": False,
@@ -304,11 +345,40 @@ class TireuseViewSet(viewsets.ViewSet):
         # / Available volume in reservoir
         reservoir_disponible = float(tireuse.reservoir_ml)
 
+        if reservoir_disponible <= 0:
+            _push_ws_kiosk(
+                tireuse,
+                {
+                    **_construire_payload_session(tireuse, None),
+                    "authorized": False,
+                    "present": True,
+                    "uid": uid,
+                    "message": "Fût vide.",
+                },
+            )
+            return Response(
+                {
+                    "authorized": False,
+                    "message": "Empty keg.",
+                }
+            )
+
         allowed_ml = calculer_volume_autorise_ml(
             solde_centimes, prix_litre, reservoir_disponible
         )
 
         if allowed_ml <= 0:
+            _push_ws_kiosk(
+                tireuse,
+                {
+                    **_construire_payload_session(tireuse, None),
+                    "authorized": False,
+                    "present": True,
+                    "uid": uid,
+                    "message": "Solde insuffisant.",
+                    "balance": f"{solde_centimes / 100:.2f}",
+                },
+            )
             return Response(
                 {
                     "authorized": False,
@@ -404,6 +474,25 @@ class TireuseViewSet(viewsets.ViewSet):
             .first()
         )
         if not session:
+            # card_removed sans session = carte refusée retirée OU session déjà fermée
+            # par pour_end (cas maintenance : le Pi envoie pour_end puis card_removed).
+            # / card_removed without session = refused card removed OR session already
+            # closed by pour_end (maintenance case: Pi sends pour_end then card_removed).
+            if event_type == "card_removed":
+                reset_payload = _construire_payload_session(tireuse, None)
+                # Si la tireuse est hors service, le kiosk doit rester en mode maintenance
+                # et non revenir à l'état "En attente" standard.
+                # / If the tap is out of service, the kiosk must stay in maintenance mode
+                # rather than returning to the standard "Waiting" state.
+                if not tireuse.enabled:
+                    reset_payload["maintenance"] = True
+                    reset_payload["message"] = "En Maintenance"
+                logger.info(
+                    f"WS_PUSH card_removed sans session (reset kiosk): uid={uid} "
+                    f"maintenance={not tireuse.enabled}"
+                )
+                _push_ws_kiosk(tireuse, reset_payload)
+                return Response({"status": "ok", "message": "No session — kiosk reset."})
             return Response(
                 {"status": "error", "message": "No open session for this card."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -490,27 +579,45 @@ class TireuseViewSet(viewsets.ViewSet):
                 ),
             )
         elif event_type == "pour_update":
+            # Estimer le solde restant : solde_cascade_total - coût_du_volume_déjà_servi
+            # Le débit réel se fait au pour_end — ici on affiche une estimation visuelle.
+            # / Estimate remaining balance: total_cascade_balance - cost_of_volume_served
+            # The actual debit happens at pour_end — here we show a visual estimate.
+            balance_estimee = None
+            if not session.is_maintenance and tireuse.prix_litre > 0:
+                from controlvanne.billing import (
+                    obtenir_contexte_cashless as _ctx,
+                    calculer_solde_total_cascade,
+                )
+                ctx = _ctx(session.carte)
+                if ctx:
+                    solde_db = calculer_solde_total_cascade(
+                        ctx["wallet_client"], ctx["cascade_assets"]
+                    )
+                    cout_volume = Decimal(str(volume_ml)) / 1000 * tireuse.prix_litre * 100
+                    solde_estime = max(Decimal("0"), Decimal(str(solde_db)) - cout_volume)
+                    balance_estimee = f"{float(solde_estime) / 100:.2f}"
+            extras_update = {"vanne_ouverte": True, "message": "Tirage en cours"}
+            if balance_estimee is not None:
+                extras_update["balance"] = balance_estimee
             _push_ws_kiosk(
                 tireuse,
-                _construire_payload_session(
-                    tireuse,
-                    session,
-                    vanne_ouverte=True,
-                    message="Tirage en cours",
-                ),
+                _construire_payload_session(tireuse, session, **extras_update),
             )
         elif event_type in ("pour_end", "card_removed"):
             # Calculer le solde restant apres facturation (si disponible)
             # / Compute remaining balance after billing (if available)
             solde_apres = None
             if resultat_facturation:
-                from fedow_core.services import WalletService
-                from controlvanne.billing import obtenir_contexte_cashless as _ctx
+                from controlvanne.billing import (
+                    obtenir_contexte_cashless as _ctx,
+                    calculer_solde_total_cascade,
+                )
 
                 ctx = _ctx(session.carte)
                 if ctx:
-                    solde_apres = WalletService.obtenir_solde(
-                        ctx["wallet_client"], ctx["asset_tlf"]
+                    solde_apres = calculer_solde_total_cascade(
+                        ctx["wallet_client"], ctx["cascade_assets"]
                     )
 
             extras_fin = {
@@ -520,10 +627,16 @@ class TireuseViewSet(viewsets.ViewSet):
             if solde_apres is not None:
                 extras_fin["balance"] = f"{solde_apres / 100:.2f}"
 
-            _push_ws_kiosk(
-                tireuse,
-                _construire_payload_session(tireuse, session, **extras_fin),
+            payload_fin = _construire_payload_session(tireuse, session, **extras_fin)
+            logger.info(
+                f"WS_PUSH pour_end/card_removed: event={event_type} "
+                f"present={payload_fin.get('present')} "
+                f"session_done={payload_fin.get('session_done')} "
+                f"ended_at={session.ended_at} "
+                f"volume_ml={payload_fin.get('volume_ml')} "
+                f"uid={uid}"
             )
+            _push_ws_kiosk(tireuse, payload_fin)
 
         response_data = {
             "status": "ok",
@@ -579,13 +692,108 @@ class AuthKioskView(APIView):
         request.session["controlvanne_authenticated"] = True
         request.session.save()
 
+        # Générer un token à usage unique pour l'auth kiosk sans injection de cookie
+        # Le Pi lance Chromium sur l'URL /controlvanne/kiosk-token/<token>/
+        # Django valide le token, pose le cookie de session via HTTP, redirige vers le kiosk
+        # / Generate a one-time token for kiosk auth without cookie injection
+        # The Pi opens Chromium on /controlvanne/kiosk-token/<token>/
+        # Django validates the token, sets session cookie via HTTP, redirects to kiosk
+        import uuid as uuid_module
+        from django.core.cache import cache
+
+        kiosk_token = str(uuid_module.uuid4())
+        # Stocker le token dans le cache comme autorisation valide (TTL 5 minutes)
+        # La valeur True indique simplement que le token est valide.
+        # Chromium navigue vers /kiosk-token/<token>/ → Django valide, marque la session, redirige.
+        # / Store the token in cache as a valid authorization (TTL 5 minutes)
+        # The True value simply indicates the token is valid.
+        # Chromium navigates to /kiosk-token/<token>/ → Django validates, marks session, redirects.
+        cache.set(f"kiosk_token:{kiosk_token}", True, timeout=300)
+
         return Response(
             {
                 "status": "ok",
                 "message": "Session created. Use the sessionid cookie for kiosk.",
                 "session_key": request.session.session_key,
+                "kiosk_token": kiosk_token,
             }
         )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# KioskTokenView — échange token à usage unique → cookie session HTTP
+# / KioskTokenView — exchange one-time token → HTTP session cookie
+# ──────────────────────────────────────────────────────────────────────
+
+
+class KioskTokenView(APIView):
+    """
+    GET /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
+    Échange un token à usage unique contre un cookie de session Django.
+    Django pose le cookie via Set-Cookie dans la réponse HTTP → Chromium le stocke nativement.
+    Redirige ensuite vers l'URL kiosk réelle.
+    / Exchanges a one-time token for a Django session cookie.
+    Django sets the cookie via Set-Cookie in the HTTP response → Chromium stores it natively.
+    Then redirects to the actual kiosk URL.
+
+    LOCALISATION : controlvanne/viewsets.py
+
+    Pas de permission DRF — le token est la preuve d'authenticité.
+    / No DRF permission — the token is the proof of authenticity.
+    """
+
+    permission_classes = []
+    authentication_classes = []
+
+    def get(self, request, token):
+        from django.core.cache import cache
+        from django.http import HttpResponseRedirect, HttpResponseForbidden
+
+        # Valider et consommer le token (usage unique)
+        # / Validate and consume the token (one-time use)
+        cache_key = f"kiosk_token:{token}"
+        token_valide = cache.get(cache_key)
+
+        if not token_valide:
+            return HttpResponseForbidden("Token invalide ou expiré. / Invalid or expired token.")
+
+        # Consommer le token immédiatement (usage unique)
+        # / Consume the token immediately (one-time use)
+        cache.delete(cache_key)
+
+        # Marquer la session de CE navigateur (Chromium) comme authentifiée pour le kiosk
+        # Django's SessionMiddleware enverra Set-Cookie: sessionid=... dans la réponse HTTP
+        # Chromium stocke ce cookie nativement — plus besoin d'injection SQLite
+        # / Mark THIS browser's (Chromium's) session as authenticated for kiosk
+        # Django's SessionMiddleware will send Set-Cookie: sessionid=... in the HTTP response
+        # Chromium stores this cookie natively — no more SQLite injection needed
+        request.session["controlvanne_authenticated"] = True
+        request.session.save()
+
+        # Retourner une page HTML avec meta-refresh plutôt qu'un 302
+        # Avec un 302, certaines versions de Chromium ne transmettent pas le Set-Cookie
+        # dans la requête suivante. Avec un 200 + meta-refresh, le cookie est d'abord
+        # stocké, puis la navigation vers next_url l'envoie correctement.
+        # / Return an HTML page with meta-refresh instead of a 302
+        # With a 302, some Chromium versions don't transmit the Set-Cookie
+        # in the next request. With 200 + meta-refresh, the cookie is stored first,
+        # then the navigation to next_url sends it correctly.
+        from django.http import HttpResponse
+
+        next_url = request.GET.get("next", "/controlvanne/kiosk/")
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0; url={next_url}">
+  <title>Authentification kiosk…</title>
+</head>
+<body>
+  <script>window.location.replace('{next_url}');</script>
+  <p>Redirection en cours… <a href="{next_url}">Cliquez ici si la page ne se charge pas.</a></p>
+</body>
+</html>"""
+        return HttpResponse(html, content_type="text/html")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -597,9 +805,15 @@ class AuthKioskView(APIView):
 def _verifier_authentification_kiosk(request):
     """
     Vérifie que l'utilisateur est authentifié pour le kiosk.
-    Deux moyens d'accès : session kiosk (POST /auth-kiosk/) ou admin tenant.
+    Trois moyens d'accès :
+      1. session kiosk (cookie sessionid déjà posé)
+      2. token à usage unique dans ?kiosk_token=<token> (premier lancement Pi)
+      3. admin du tenant connecté
     / Checks that the user is authenticated for the kiosk.
-    Two access methods: kiosk session (POST /auth-kiosk/) or tenant admin.
+    Three access methods:
+      1. kiosk session (sessionid cookie already set)
+      2. one-time token in ?kiosk_token=<token> (first Pi launch)
+      3. logged-in tenant admin
 
     LOCALISATION : controlvanne/viewsets.py
 
@@ -608,14 +822,33 @@ def _verifier_authentification_kiosk(request):
     """
     from django.db import connection
 
-    # Moyen 1 : session kiosk (créée par POST /controlvanne/auth-kiosk/)
-    # / Method 1: kiosk session (created by POST /controlvanne/auth-kiosk/)
+    # Moyen 1 : session kiosk (cookie sessionid déjà présent dans le navigateur)
+    # / Method 1: kiosk session (sessionid cookie already present in browser)
     est_kiosk = request.session.get("controlvanne_authenticated")
     if est_kiosk:
         return True
 
-    # Moyen 2 : admin du tenant connecté
-    # / Method 2: logged-in tenant admin
+    # Moyen 2 : token à usage unique dans le query string (premier lancement Chromium)
+    # Le Pi construit l'URL kiosk avec ?kiosk_token=<uuid> — Django valide, consomme le token,
+    # marque la session. Django's SessionMiddleware pose Set-Cookie dans la réponse kiosk.
+    # Les rechargements suivants de Chromium utilisent le cookie sessionid.
+    # / Method 2: one-time token in query string (first Chromium launch)
+    # Pi builds kiosk URL with ?kiosk_token=<uuid> — Django validates, consumes token,
+    # marks session. Django's SessionMiddleware sets Set-Cookie in the kiosk response.
+    # Subsequent Chromium reloads use the sessionid cookie.
+    kiosk_token = request.GET.get("kiosk_token")
+    if kiosk_token:
+        from django.core.cache import cache
+        cache_key = f"kiosk_token:{kiosk_token}"
+        token_valide = cache.get(cache_key)
+        if token_valide:
+            cache.delete(cache_key)
+            request.session["controlvanne_authenticated"] = True
+            request.session.save()
+            return True
+
+    # Moyen 3 : admin du tenant connecté
+    # / Method 3: logged-in tenant admin
     utilisateur = request.user
     if utilisateur and utilisateur.is_authenticated:
         est_admin = utilisateur.is_tenant_admin(connection.tenant)

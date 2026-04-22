@@ -1,20 +1,32 @@
 {# Fragment HTMX — confirmation après application du facteur #}
+{# / HTMX fragment — confirmation after factor application #}
 {% load i18n %}
 
 {% if erreur %}
 <div class="alert alert-danger mb-0">{{ erreur }}</div>
 
 {% else %}
-<div class="alert alert-success mb-2" data-testid="calibration-confirmation-success">
-  ✓ Facteur mis à jour avec succès !<br>
-  <strong>{{ facteur_ancien }}</strong>
-  &nbsp;→&nbsp;
-  <strong>{{ facteur_applique }}</strong>
-  <span class="text-muted small">Hz·L⁻¹·min⁻¹</span>
+<div class="alert alert-success mb-3" data-testid="calibration-confirmation-success">
+  <strong>✓ Facteur appliqué avec succès !</strong><br>
+  <span class="text-muted small">
+    {{ facteur_ancien }} → <strong>{{ facteur_applique }}</strong>
+    <span class="ms-1">Hz·L⁻¹·min⁻¹</span>
+  </span>
 </div>
-<a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
-   class="btn btn-outline-primary btn-sm"
-   data-testid="btn-nouvelle-serie">
-  Faire une nouvelle série de mesures
-</a>
+
+<p class="text-muted small mb-3">
+  Le Pi récupèrera automatiquement ce nouveau facteur au retrait de la prochaine carte maintenance.
+</p>
+
+<div class="d-flex gap-2 flex-wrap">
+  <a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
+     class="btn btn-primary"
+     data-testid="btn-verifier-serie">
+    ↺ Vérifier avec une nouvelle série
+  </a>
+  <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
+     class="btn btn-outline-secondary">
+    ← Retour admin
+  </a>
+</div>
 {% endif %}

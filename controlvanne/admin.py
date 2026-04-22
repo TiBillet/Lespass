@@ -249,6 +249,7 @@ class TireuseBecAdmin(ModelAdmin):
         extra_context = extra_context or {}
         if object_id:
             extra_context["kiosk_url"] = f"/controlvanne/kiosk/{object_id}/"
+            extra_context["calibration_url"] = f"/controlvanne/calibration/{object_id}/"
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     @admin.display(description=_("PIN code"))

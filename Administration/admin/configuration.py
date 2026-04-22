@@ -358,7 +358,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 "module_name": module_name,
                 "is_active": is_active,
                 "toggle_url": toggle_url,
-                "csrf_token": request.META.get("CSRF_COOKIE", ""),
+                # csrf_token injecte automatiquement par le context processor via request=request
             },
             request=request,
         )

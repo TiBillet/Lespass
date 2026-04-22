@@ -239,6 +239,18 @@
     try {
       var donnees = JSON.parse(evenement.data);
       var payload = donnees.payload || donnees;
+      // DEBUG — log chaque message WS reçu (présent, session_done, wasPresent par tireuse)
+      // / DEBUG — log every received WS message (present, session_done, wasPresent per tap)
+      var uuid_debug = payload.tireuse_bec_uuid || "?";
+      var c_debug = cards[uuid_debug];
+      console.log(
+        "[WS] present=" + payload.present +
+        " session_done=" + payload.session_done +
+        " maintenance=" + payload.maintenance +
+        " wasPresent=" + (c_debug ? c_debug.wasPresent : "?") +
+        " uid=" + payload.uid +
+        " vanne=" + payload.vanne_ouverte
+      );
 
       // Commandes de navigation du kiosk (utilisées par l'admin)
       // / Kiosk navigation commands (used by admin)
@@ -331,6 +343,14 @@
           c.vol.textContent = Math.round((payload.volume_ml || 0) / 10) + " cl";
           if (payload.balance) { c.balance.textContent = payload.balance; c.lastBalance = payload.balance; }
           if (payload.message) c.msg.textContent = payload.message;
+          // Refus : reset automatique après 4s (la carte sera retirée mais le Pi n'envoie
+          // pas toujours card_removed sans session active)
+          // / Refusal: auto-reset after 4s (card will be removed but Pi doesn't always
+          // send card_removed without an active session)
+          if (payload.authorized === false) {
+            if (c.resetTimer) clearTimeout(c.resetTimer);
+            c.resetTimer = setTimeout(function () { c.resetTimer = null; reinitialiserCarte(c); }, 4000);
+          }
           return;
         }
 
@@ -341,9 +361,9 @@
 
         // CAS 2 : Fin de session / CASE 2: End of session
         if (payload.session_done) {
-          // Si une nouvelle carte est déjà active → ignorer ce session_done tardif
-          // / If a new card is already active → ignore this late session_done
-          if (etait_present) return;
+          // Ignorer si aucune carte n'était présente (session_done tardif après reset déjà fait)
+          // / Ignore if no card was present (late session_done after display already reset)
+          if (!etait_present) return;
           c.auth.className = "badge bg-info text-dark";
           c.auth.textContent = "Termin\u00e9";
           c.state.className = "badge bg-danger";
@@ -357,6 +377,9 @@
         }
 
         // CAS 3 : Retrait / refus / CASE 3: Removal / refusal
+        // Annuler tout timer en cours avant de réinitialiser
+        // / Cancel any pending timer before resetting
+        if (c.resetTimer) { clearTimeout(c.resetTimer); c.resetTimer = null; }
         reinitialiserCarte(c);
         c.auth.className = "badge bg-secondary";
         c.msg.textContent = "En attente...";

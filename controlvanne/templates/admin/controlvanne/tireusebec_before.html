@@ -1,0 +1,13 @@
+{% load i18n %}
+<div class="d-flex gap-2 flex-wrap mb-3">
+  {% if kiosk_url %}
+  <a href="{{ kiosk_url }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+    📺 {% translate "View kiosk" %}
+  </a>
+  {% endif %}
+  {% if calibration_url %}
+  <a href="{{ calibration_url }}" class="btn btn-outline-warning btn-sm">
+    ⚙️ {% translate "Calibrate flow meter" %}
+  </a>
+  {% endif %}
+</div>
