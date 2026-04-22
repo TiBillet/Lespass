@@ -13,10 +13,13 @@ Has no state of its own — delegates entirely to `slot_row.html`.
 
 ## Context variables
 
-| Variable    | Type                     | Required | Description                        |
-|-------------|--------------------------|----------|------------------------------------|
-| `ressource` | `Resource`               | yes      | Passed through to each slot row    |
-| `creneaux`  | `list[BookableInterval]` | yes      | List of slots to render            |
++-------------+--------------------------+----------+---------------------------------+
+| Variable    | Type                     | Required | Description                     |
++=============+==========================+==========+=================================+
+| `ressource` | `Resource`               | yes      | Passed through to each slot row |
++-------------+--------------------------+----------+---------------------------------+
+| `creneaux`  | `list[BookableInterval]` | yes      | List of slots to render         |
++-------------+--------------------------+----------+---------------------------------+
 
 Slots must be pre-annotated with `is_in_group`, `is_group_end`,
 `is_new_week` by `annoter_creneaux_pour_affichage()` before inclusion.
