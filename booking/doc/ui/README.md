@@ -22,14 +22,13 @@ BookingViewSet
 │   └── slot_list       → partial/slot-list.md
 │       └── slot_row    → partial/slot-row.md
 │
+├── my_bookings()       → views/my-bookings.md
 ├── booking_form()      → partial/booking-form.md
 ├── add_to_basket()     → partial/slot-row.md + partial/basket.md (OOB)
 ├── remove_from_basket() → partial/basket.md
 ├── validate_basket()   → partial/basket-confirmed.md
 └── cancel()            → partial/cancel-error.md
 
-MyAccount (BaseBillet)
-└── my_resources()      → views/my-resources.md
 ```
 
 ---
@@ -42,7 +41,7 @@ MyAccount (BaseBillet)
 |------------------------------|---------------------------------|-------------------|
 | [views/home.md](views/home.md) | `booking/views/home.html`       | `GET /booking/`   |
 | [views/resource-detail.md](views/resource-detail.md) | `booking/views/resource.html` | `GET /booking/resource/<pk>/` |
-| [views/my-resources.md](views/my-resources.md) | `BaseBillet/templates/reunion/views/account/my_resources.html` | `GET /my_account/my_resources/` |
+| [views/my-bookings.md](views/my-bookings.md) | `booking/templates/booking/views/my_bookings.html` | `GET /booking/my-bookings/` |
 
 ### Partials (HTMX fragments)
 
