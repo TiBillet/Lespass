@@ -27,6 +27,9 @@ BookingViewSet
 ├── remove_from_basket() → partial/basket.md
 ├── validate_basket()   → partial/basket-confirmed.md
 └── cancel()            → partial/cancel-error.md
+
+MyAccount (BaseBillet)
+└── my_resources()      → views/my-resources.md
 ```
 
 ---
@@ -39,6 +42,7 @@ BookingViewSet
 |------------------------------|---------------------------------|-------------------|
 | [views/home.md](views/home.md) | `booking/views/home.html`       | `GET /booking/`   |
 | [views/resource-detail.md](views/resource-detail.md) | `booking/views/resource.html` | `GET /booking/resource/<pk>/` |
+| [views/my-resources.md](views/my-resources.md) | `BaseBillet/templates/reunion/views/account/my_resources.html` | `GET /my_account/my_resources/` |
 
 ### Partials (HTMX fragments)
 
