@@ -72,9 +72,8 @@ optional payment via the existing TiBillet payment system.
 +====================+==============================================================+
 | **Member**         | A user with an active membership in the tenant's             |
 |                    | association. Can browse resources, book slots, and cancel    |
-|                    | confirmed bookings within the deadline. Has access to a      |
-|                    | restricted admin area to view and cancel own confirmed        |
-|                    | bookings.                                                    |
+|                    | confirmed bookings within the deadline. Manages own          |
+|                    | bookings from their account page (not the admin panel).      |
 +--------------------+--------------------------------------------------------------+
 | **Volunteer**      | A trusted member with elevated rights. Manages resources,    |
 |                    | weekly openings, calendars, and cancellation policies via the |
@@ -569,10 +568,9 @@ Only `confirmed` bookings can be cancelled through this flow. `new` and
 `validated` bookings are removed from the basket management page (see §4.1,
 steps 6–7) with no refund, as no payment has been collected.
 
-1. Member opens their account administration page and views their upcoming
-   `confirmed` bookings.
-2. Member requests cancellation of a booking from the account administration
-   page.
+1. Member opens their account page and views their upcoming `confirmed`
+   bookings.
+2. Member requests cancellation of a booking from their account page.
 3. System checks whether the cancellation deadline has passed: the current time
    must be before the booking start time minus the resource's cancellation
    deadline.
@@ -653,12 +651,12 @@ steps 6–7) with no refund, as no payment has been collected.
 
 - Cancellation is modelled as deletion of the Booking row. No cancelled state is
   stored.
-- Only `confirmed` bookings are cancellable through the member account
-  administration page. `new` and `validated` bookings are removed from the
-  basket management page; no refund applies as no payment has been collected.
+- Only `confirmed` bookings are cancellable through the member account page.
+  `new` and `validated` bookings are removed from the basket; no refund
+  applies as no payment has been collected.
 - Cancellation deadline is configured per resource. Default: 24 hours before
   slot start.
-- **Member cancellation** (own `confirmed` booking via account administration):
+- **Member cancellation** (own `confirmed` booking via account page):
   wallet/cashless refunded automatically if applicable.
 - **Volunteer cancellation** (any booking via backoffice): no automatic refund.
   Any refund is handled manually by the volunteer.
@@ -707,179 +705,85 @@ steps 6–7) with no refund, as no payment has been collected.
 +-------------------------------------+----------------------------------------------+
 
 
-## 7. Server-side Views & Hypermedia Interactions
+## 7. User Journeys
 
-TiBillet is a Hypermedia-Driven Application (HDA). The server returns HTML
-fragments; interactions are driven by HTTP requests with HTML responses via
-htmx. There is no JSON API layer for the booking module. All views follow
-the existing TiBillet HDA conventions.
+### 7.1 The Visitor Discovering Resources
 
-### 7.0 Page Structure
+The visitor arrives without a specific resource in mind. They want to
+know what can be booked and whether anything is available soon.
+Their fear is wasting time clicking into something that turns out
+to have no open slots.
 
-```
-booking/booking_base.html
-    ├── #basket-container       (always at top — OOB-updated after every booking)
-    ├── {% block booking_content %}
-    │       ├── home.html
-    │       │       └── partial/card.html  (one per resource)
-    │       │               └── partial/slot_list.html
-    │       │                       └── partial/slot_row.html  (one per slot)
-    │       └── resource.html
-    │               └── partial/slot_list.html
-    │                       └── partial/slot_row.html  (one per slot)
-    └── HTMX 422 swap handler
-```
+Resources with no upcoming availability remain visible but visually
+set apart. The visitor understands the resource exists — it is just
+not bookable right now. Tag filtering lets them narrow the catalogue
+to their interest without losing the overall picture.
 
-Each slot row has a stable DOM id `slot-<resource_pk>-<YmdHi>`. Clicking
-an available row replaces it (outerHTML) with `booking_form.html`, which
-carries the same id. On submit, the form is replaced back by the updated
-`slot_row.html` (via outerHTML); `#basket-container` is updated in the
-same response via HTMX OOB swap. No page reload is needed.
+### 7.2 The Member Booking a Slot
 
-### 7.1 Web Pages
+The member arrives on a resource page knowing what they want. They
+scan the slot list for a time that works. Their only anxiety is
+whether the slot will still be free at the moment they submit the
+form — once it is in the basket, the slot is held for them.
 
-#### Home — Resource Catalogue
+They click a slot. Nothing reloads. The slot expands inline into a
+small form; the rest of the page stays in place. They choose how
+many consecutive slots they need and submit. The slot immediately
+reflects the new capacity; a basket at the top of the page shows
+the held booking. They should never wonder whether their addition
+was recorded.
 
-- URL: `GET /booking/`
-- Auth: public
-- Template: `booking/views/home.html`
-- List of all resources with their next available slot. Tag filter via
-  `?tag=`. Resources with no upcoming availability are shown greyed out.
+The basket is a temporary hold, not a final commitment. The member
+reviews it and explicitly confirms. Only then is the booking secured.
+If they walk away without confirming, the hold expires automatically
+(approximately 30 minutes) and the slot is released. They must always
+be able to tell the difference between "held in basket" and "confirmed".
 
-#### Resource Page
+If the slot becomes full in the narrow window between click and submit
+(race condition), they see a clear explanation inline — no page reload,
+no lost context, no generic error.
 
-- URL: `GET /booking/resource/{resource_pk}/`
-- Auth: public
-- Template: `booking/views/resource.html`
+If they are not logged in when they click a slot, they are sent to
+the login page and returned to the same resource afterward.
 
-**What the member sees:**
+### 7.3 The Member Managing Their Bookings
 
-The slot list is grouped by date. For each date, every slot is shown:
+The member visits their account to review upcoming confirmed bookings.
+Their primary anxiety is: "Can I still cancel this?" The deadline must
+be visible without entering a cancellation flow.
 
-+---------------------+---------------------------------------------------+
-| Slot state          | Presentation & action                             |
-+=====================+===================================================+
-| Available           | Clickable link showing the time range.            |
-|                     | Click → `GET booking_form` → the slot row         |
-|                     | (`<li id="slot-<pk>-<YmdHi>">`) is replaced       |
-|                     | in-place by the booking form (outerHTML swap).    |
-|                     | Rendered by `partial/slot_row.html` (shared).     |
-|                     | If not logged in → redirect to login.             |
-+---------------------+---------------------------------------------------+
-| Full                | Inert badge "Complet". Not clickable.             |
-+---------------------+---------------------------------------------------+
-| Past / beyond       | Not shown.                                        |
-| horizon             |                                                   |
-+---------------------+---------------------------------------------------+
+When they decide to cancel, the action should require a deliberate
+step — not a single accidental click. If the deadline has already
+passed, they receive a precise explanation (the exact cutoff time),
+not a generic refusal. They should leave the page knowing exactly
+what happened.
 
-### 7.2 Web Components
+### 7.4 The Volunteer Administering the System
 
-HTMX partials — replace a specific DOM fragment, never the full page.
+The volunteer configures resources and manages bookings through the
+Django admin. No custom interface is needed. Their tasks:
 
-#### Booking Form
-
-- URL: `GET /booking/resource/{resource_pk}/booking_form/?start=<ISO-tz>`
-- Auth: member
-- Target: `#slot-<resource_pk>-<YmdHi>` (the slot row, outerHTML swap)
-
-**What the member sees:** the booking form rendered inline in place of the
-slot row. Shows the chosen start time, a `slot_count` picker (1 to max
-consecutive available slots), and the total price.
-
-**Action:** submit → `POST add_to_basket`.
-
-- Success → the form `<li>` is replaced by the updated `slot_row.html`
-  (same outerHTML target); `#basket-container` is updated via OOB swap
-  in the same response. No page reload.
-- Error (422) → the form `<li>` is replaced by itself with an error
-  message and a "Réessayer" link that re-opens the booking form.
-
-#### Add to Basket
-
-- URL: `POST /booking/resource/{resource_pk}/add_to_basket/`
-- Auth: member
-- Target (success): `#slot-<resource_pk>-<YmdHi>` (outerHTML) + OOB
-  `#basket-container`
-- Target (error): `#slot-<resource_pk>-<YmdHi>` (outerHTML, form with
-  error)
-
-Creates a `new` booking for the chosen slot(s) and returns the updated
-basket. On validation failure returns the form with an error message.
-
-#### Remove from Basket
-
-- URL: `POST /booking/{booking_pk}/remove_from_basket/`
-- Auth: member
-- Target: `#basket-container`
-
-Deletes the `new` booking and returns the refreshed basket.
-
-#### Basket
-
-- URL: `GET /booking/basket/`
-- Auth: member
-- Target: `#basket-container`
-
-**What the member sees:** list of `new` bookings (resource, time range,
-price per line), total, a remove button per line, and a "Confirmer"
-button.
-
-**Action:** "Confirmer" → `POST validate_basket`.
-
-#### Basket Confirmed
-
-- URL: `POST /booking/validate_basket/`
-- Auth: member
-- Target: `#basket-container`
-
-Moves all `new` bookings to `confirmed` (via payment if `prix > 0`) and
-returns a confirmation partial. On payment failure returns an error
-partial and the bookings are deleted.
-
-#### Cancel Booking
-
-- URL: `POST /booking/cancel/`
-- Auth: member
-- Target: `#basket-container` (empty on success)
-
-**Action:** member clicks "Annuler" on a `confirmed` booking in their
-account. Returns empty HTML on success; error partial if past the
-cancellation deadline.
-
-### 7.3 Member Account Administration
-
-Members have access to a restricted area of the Django admin panel.
-Unlike volunteers, a member can only view and act on their own bookings.
-
-+-----------------+--------------+----------------------------------------------+
-| Model           | Admin type   | Member permissions                           |
-+=================+==============+==============================================+
-| Booking (own)   | `ModelAdmin` | List own upcoming bookings; cancel (delete)  |
-|                 |              | own bookings before the cancellation         |
-|                 |              | deadline                                     |
-+-----------------+--------------+----------------------------------------------+
-
-### 7.4 Volunteer Backoffice
-
-The volunteer backoffice is managed entirely by the Django admin panel.
-No custom views are required for resource management, weekly openings,
-calendars, or booking administration.
-
-Django admin registration:
+- Create resource groups, resources, and assign weekly opening
+  schedules with slot duration and capacity
+- Define calendars with closed periods (public holidays, maintenance)
+- View the full booking list; manually delete a booking if needed
 
 +-----------------+--------------+-----------------------+
 | Model           | Admin type   | Inline children       |
 +=================+==============+=======================+
-| ResourceGroup   | `ModelAdmin` | —                     |
+| ResourceGroup   | ModelAdmin   | —                     |
 +-----------------+--------------+-----------------------+
-| Resource        | `ModelAdmin` | —                     |
+| Resource        | ModelAdmin   | —                     |
 +-----------------+--------------+-----------------------+
-| WeeklyOpening   | `ModelAdmin` | OpeningEntry (inline) |
+| WeeklyOpening   | ModelAdmin   | OpeningEntry (inline) |
 +-----------------+--------------+-----------------------+
-| Calendar        | `ModelAdmin` | ClosedPeriod (inline) |
+| Calendar        | ModelAdmin   | ClosedPeriod (inline) |
 +-----------------+--------------+-----------------------+
-| Booking         | `ModelAdmin` | —                     |
+| Booking         | ModelAdmin   | —                     |
 +-----------------+--------------+-----------------------+
+
+Members manage their own bookings from their account page
+not from the Django admin.
 
 ## 8. Open Questions
 
