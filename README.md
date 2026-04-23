@@ -1,3 +1,6 @@
+> [!CAUTION]
+> ALPHA V2 RELEASE, NOT FOR PROD (check main for production)
+
 <h1 align="center">
   <!-- CAPTURE : Logo TiBillet (le logo actuel ou un nouveau si vous en avez un) -->
   <br>
@@ -102,8 +105,8 @@ docker compose up -d
 
 # pour les donnée de démo / dev
 docker exec -ti lespass_django bash
-./flush.sh # la première fois, ça installe toute les fixtures
-rsp # la seconde fois
+./flush.sh # la première fois, ça installe toute les fixtures et lance le serveur
+rsp # Si l'installation a déja été réalisé, lance le serveur de dev'
 ```
 
 L'application est accessible sur `https://lespass.tibillet.localhost`.
