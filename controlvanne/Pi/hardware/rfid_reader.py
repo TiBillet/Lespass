@@ -91,19 +91,37 @@ class RFIDReader:
         return None
 
     def _read_rc522(self):
-        """Lecture spécifique RC522."""
+        """Lecture spécifique RC522.
+        On utilise PICC_REQALL (0x52) plutôt que PICC_REQIDL (0x26) :
+        REQIDL ne détecte que les cartes IDLE — après la première lecture,
+        certains modules RC522 laissent la carte en état ACTIVE et REQIDL
+        échoue systématiquement, fermant la vanne prématurément.
+        REQALL détecte toutes les cartes (IDLE, ACTIVE, HALT) et garantit
+        une présence continue tant que la carte est dans le champ.
+        / We use PICC_REQALL (0x52) instead of PICC_REQIDL (0x26):
+        REQIDL only detects IDLE cards — after the first read, some RC522
+        modules leave the card in ACTIVE state and REQIDL fails consistently,
+        closing the valve prematurely.
+        REQALL detects all cards (IDLE, ACTIVE, HALT) and ensures continuous
+        presence detection as long as the card is in the field.
+        """
         try:
-            # 1. Requête
+            # REQIDL : détecte les cartes en état IDLE.
+            # Note : certains modules RC522 (notamment les clones bon marché)
+            # laissent la carte en état ACTIVE après anticollision sans SELECT,
+            # causant des échecs de lecture dès le 2ème poll. Voir TODO.
+            # / REQIDL: detects cards in IDLE state.
+            # Note: some RC522 modules (especially cheap clones) leave the card
+            # in ACTIVE state after anticollision without SELECT, causing read
+            # failures from the 2nd poll onward. See TODO.
             (status, TagType) = self.reader.MFRC522_Request(self.reader.PICC_REQIDL)
 
             if status == self.reader.MI_OK:
-                # 2. Anticollision
                 (status, uid) = self.reader.MFRC522_Anticoll()
 
                 if status == self.reader.MI_OK:
                     return self._uid_to_hex(uid)
         except Exception as e:
-            # On évite de spammer les logs sur des erreurs de lecture VIDES
             pass
         return None
 
@@ -146,6 +164,23 @@ class RFIDReader:
         """
         if not uid:
             return None
+
+        # RC522 renvoie souvent 5 octets (4 octets UID + 1 octet Checksum)
+        if len(uid) == 5:
+            # On vérifie si c'est bien le checksum (XOR des 4 premiers)
+            uid = uid[:4]
+
+        # Formatage Hex Majuscule
+        return "".join([f"{x:02X}" for x in uid])
+
+    def cleanup(self):
+        """Nettoyage des ressources."""
+        if self.reader_type == "VMA405" and self.serial:
+            self.serial.close()
+        # MFRC522 gère son propre SPI, pas de cleanup critique nécessaire ici
+        # ACR122U : pas de ressource persistante à fermer (connexion créée à chaque lecture)
+        logger.info("Lecteur RFID nettoyé")
+
 
         # RC522 renvoie souvent 5 octets (4 octets UID + 1 octet Checksum)
         if len(uid) == 5:
