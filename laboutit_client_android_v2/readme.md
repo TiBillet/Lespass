@@ -1,10 +1,12 @@
-# Créer votre fichier de conf
+# Création de l'application android(apk) 
+
+## Créer votre fichier de conf
 - A la racine du projet, créer env.js et modifier le.
 ```bash
 cp ./mobile-app/www/env-example.js ./mobile-app/www/env.js
 ```
 
-# Créer le conteneur docker
+## Créer le conteneur docker
 - dans le dossier docker
 ```bash
 docker compose build --no-cache
@@ -12,37 +14,36 @@ docker compose build --no-cache
 docker compose build
 ```
 
-# Lancer le conteneur docker
+## Lancer le conteneur docker
 ```bash
 docker compose up -d
 ```
 
-# Entrer dans le conteneur docker
+## Entrer dans le conteneur docker
 ```bash
 docker exect -it cordova bash
 ```
 
-# Installer les plugins du projet et lance un build
-```bash
-./runAndroid
-```
+## Installer l'application sur mobile, tablette
 
-# Lancer le serveur adb
-```bash
-adb devices
-```
-
-# Sur le mobile
+### Sur le mobile
 - Activer le mode développeur
 - Activer le débeugage sans fil
 - Appairer le mobile à conteneur par code
 
-# Dans le conteneur docker
+### Dans le conteneur
+
+#### Lancer le serveur adb et vérifier les appareils connectés
+```bash
+adb devices
+```
+
+#### Appairage dans le conteneur docker
 ```bash
 adb pair <ip du mobile>:<port d'appairage>
 ```
 
-# Vérifier l'appairage
+#### Vérifier l'appairage
 ```bash
 adb devices
 ```
@@ -52,12 +53,27 @@ List of devices attached
 adb-DE13P48F10229-39R4ti._adb-tls-connect._tcp  device
 ```
 
-# Vérification prérequis
+```bash
+./runAndroid
+```
+
+#### Vérification prérequis
 ```bash
 cordova requirements
 ```
 
-# Création et installaion de l'application sur mobile
+#### Reset projet
+```bash
+./reset_projet
+```
+
+#### Installer les plugins du projet et lance un build
+```bash
+./buildAndroid
+```
+
+## Infos divers
+### Création et installaion de l'application sur mobile
 ```bash
 # build debug for only Android
 cordova run android --debug
@@ -65,7 +81,7 @@ cordova run android --debug
 cordova run android --release
 ```
 
-# debug mobile
+### debug mobile
 ```bash
 adb devices
 ```
@@ -81,5 +97,5 @@ adb logcat | grep SunmiPrintHelper
 ```
 
 
-# Attention
+## Attention
 - En cas de souci d'installation supprimer l'ancienne application sur le mobile
