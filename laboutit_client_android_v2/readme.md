@@ -1,7 +1,10 @@
 # Création de l'application android(apk) 
 
 ## Créer votre fichier de conf
-- A la racine du projet, créer env.js et modifier le.
+- A la racine du projet, créer env.js et modifier le :   
+  . type_app: 'cordova', // android 
+  . server_pin_code: "http://tibillet.localhost", // votre serveur de pin_code
+  
 ```bash
 cp ./mobile-app/www/env-example.js ./mobile-app/www/env.js
 ```
