@@ -4,16 +4,14 @@
 - A la racine du projet, créer env.js et modifier le :   
   . type_app: 'cordova', // android 
   . server_pin_code: "http://tibillet.localhost", // votre serveur de pin_code
-  
+
 ```bash
 cp ./mobile-app/www/env-example.js ./mobile-app/www/env.js
 ```
 
-## Créer le conteneur docker
+## Créer le conteneur docker (environnement de travail cordova)
 - dans le dossier docker
 ```bash
-docker compose build --no-cache
-# or
 docker compose build
 ```
 
@@ -32,7 +30,8 @@ docker exect -it cordova bash
 ### Sur le mobile
 - Activer le mode développeur
 - Activer le débeugage sans fil
-- Appairer le mobile à conteneur par code
+- Appairer le mobile au conteneur (appairage par code)
+  L'appairage par code donne un ip, port et le code d'appairage à entrer.
 
 ### Dans le conteneur
 
@@ -41,7 +40,7 @@ docker exect -it cordova bash
 adb devices
 ```
 
-#### Appairage dans le conteneur docker
+#### Appairage dans le conteneur docker si besoin
 ```bash
 adb pair <ip du mobile>:<port d'appairage>
 ```
@@ -56,16 +55,12 @@ List of devices attached
 adb-DE13P48F10229-39R4ti._adb-tls-connect._tcp  device
 ```
 
-```bash
-./runAndroid
-```
-
-#### Vérification prérequis
+#### Vérification prérequis (dans mobile-app, application cordova)
 ```bash
 cordova requirements
 ```
 
-#### Reset projet
+#### Reset projet (pour un build propre)
 ```bash
 ./reset_projet
 ```
@@ -74,6 +69,12 @@ cordova requirements
 ```bash
 ./buildAndroid
 ```
+
+#### build etinstallation de l'application sur le mobile, tablette
+```bash
+./runAndroid
+```
+
 
 ## Infos divers
 ### Création et installaion de l'application sur mobile
