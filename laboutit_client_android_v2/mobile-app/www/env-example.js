@@ -1,8 +1,7 @@
 export const env = {
-  mode_nfc: "NFCMC",
-  front_type: "FMO",
-  server_pin_code: "https://monsite.com",
+  type_app: 'cordova', // cordova / pi / desktop 
+  server_pin_code: "http://tibillet.localhost",
+  confFilename: 'configLaboutik.json',
   servers: [],
-  client: null,
-  current_server: ""
+  currentServer: ''
 }
