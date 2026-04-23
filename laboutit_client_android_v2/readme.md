@@ -2,7 +2,7 @@
 
 ## Créer votre fichier de conf
 - A la racine du projet, créer env.js et modifier le :   
-  . type_app: 'cordova', // android 
+  . type_app: 'cordova', // android   
   . server_pin_code: "http://tibillet.localhost", // votre serveur de pin_code
 
 ```bash
@@ -30,7 +30,7 @@ docker exect -it cordova bash
 ### Sur le mobile
 - Activer le mode développeur
 - Activer le débeugage sans fil
-- Appairer le mobile au conteneur (appairage par code)
+- Appairer le mobile au conteneur (appairage par code)   
   L'appairage par code donne un ip, port et le code d'appairage à entrer.
 
 ### Dans le conteneur
@@ -102,3 +102,6 @@ adb logcat | grep SunmiPrintHelper
 
 ## Attention
 - En cas de souci d'installation supprimer l'ancienne application sur le mobile
+- Lors d'un build si proplème npm (TODO: add to reset_projet) :   
+  . supprimer le package-lock.json   
+  . Dans package.json, modifier les propriétées cordova: {} et devDependencies: {} .
