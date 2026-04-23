@@ -188,4 +188,6 @@ letsencrypt
 # autoriser www dans les plugins
 !laboutit_client_android_v2/cordova_local_plugins/**/www/
 !laboutit_client_android_v2/cordova_local_plugins/**/www/**
+!laboutit_client_android_v2/mobile-app/www/
+!laboutit_client_android_v2/mobile-app/www/**
 env.js

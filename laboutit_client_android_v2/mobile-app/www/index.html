@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="msapplication-tap-highlight" content="no" />
+  <meta name="viewport" content="initial-scale=1, width=device-width, viewport-fit=cover" />
+  <link rel="stylesheet" href="assets/css/index.css" />
+  <link rel="stylesheet" href="assets/css/palette.css" />
+  <title>TiBillet LaBoutik</title>
+</head>
+
+<body>
+  <header>
+    <img class="header-img" alt="TiBillet" src="assets/images/icon-complet-blanc.svg" />
+    <div class="spinner"></div>
+    <svg class="logs-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+      <rect x="6" y="4" width="12" height="16" />
+      <line x1="8" y1="9" x2="16" y2="9" />
+      <line x1="8" y1="13" x2="16" y2="13" />
+      <line x1="8" y1="17" x2="13" y2="17" />
+    </svg>
+  </header>
+  <main></main>
+  <div class="content-input">
+    <input type="number" id="pin-code" />
+    <!-- TODO afficher et gérer le clavier pour un pi -->
+     <label id="pin-code-message" style="color: var(--yellow00);"></label>
+  </div>
+  <div class="logs-content"></div>
+  <script src="http://localhost/cordova.js"></script>
+  <script type="module" src="assets/js/index.js"></script>
+</body>
+
+</html>
