@@ -70,11 +70,10 @@ cordova requirements
 ./buildAndroid
 ```
 
-#### build etinstallation de l'application sur le mobile, tablette
+#### build et installation de l'application sur le mobile, tablette ou émulateur
 ```bash
 ./runAndroid
 ```
-
 
 ## Infos divers
 ### Création et installaion de l'application sur mobile
