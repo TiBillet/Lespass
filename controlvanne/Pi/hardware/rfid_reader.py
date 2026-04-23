@@ -91,29 +91,25 @@ class RFIDReader:
         return None
 
     def _read_rc522(self):
-        """Lecture spécifique RC522.
-        On utilise PICC_REQALL (0x52) plutôt que PICC_REQIDL (0x26) :
-        REQIDL ne détecte que les cartes IDLE — après la première lecture,
-        certains modules RC522 laissent la carte en état ACTIVE et REQIDL
-        échoue systématiquement, fermant la vanne prématurément.
-        REQALL détecte toutes les cartes (IDLE, ACTIVE, HALT) et garantit
-        une présence continue tant que la carte est dans le champ.
-        / We use PICC_REQALL (0x52) instead of PICC_REQIDL (0x26):
-        REQIDL only detects IDLE cards — after the first read, some RC522
-        modules leave the card in ACTIVE state and REQIDL fails consistently,
-        closing the valve prematurely.
-        REQALL detects all cards (IDLE, ACTIVE, HALT) and ensures continuous
-        presence detection as long as the card is in the field.
+        """Lecture spécifique RC522 via PICC_REQIDL (détecte les cartes en état IDLE).
+        Le problème de détection continue (vanne qui se ferme après ~3s carte posée)
+        n'est PAS un problème de protocole logiciel : les tests montrent que le RC522
+        rate la carte la grande majorité du temps sur certains Pi (gaps de plusieurs
+        minutes même avec sleep(1)), alors qu'il lit normalement sur d'autres Pi avec
+        le même lecteur et le même code. Cause : problème physique/électronique côté Pi
+        (alimentation 3.3V instable, connexion SPI/RST mal plantée, masse défaillante).
+        REQALL (0x52) et SELECT+HALT ont été testés sans amélioration — le problème
+        est en dessous de la couche protocolaire.
+        / RC522 read via PICC_REQIDL (detects cards in IDLE state).
+        The continuous-detection issue (valve closing after ~3s with card present)
+        is NOT a software protocol problem: tests show the RC522 misses the card
+        most of the time on some Pis (gaps of several minutes even with sleep(1)),
+        while it reads normally on other Pis with the same reader and same code.
+        Cause: physical/electrical issue on the Pi side (unstable 3.3V supply,
+        loose SPI/RST connection, bad ground). REQALL (0x52) and SELECT+HALT
+        were tested with no improvement — the issue is below the protocol layer.
         """
         try:
-            # REQIDL : détecte les cartes en état IDLE.
-            # Note : certains modules RC522 (notamment les clones bon marché)
-            # laissent la carte en état ACTIVE après anticollision sans SELECT,
-            # causant des échecs de lecture dès le 2ème poll. Voir TODO.
-            # / REQIDL: detects cards in IDLE state.
-            # Note: some RC522 modules (especially cheap clones) leave the card
-            # in ACTIVE state after anticollision without SELECT, causing read
-            # failures from the 2nd poll onward. See TODO.
             (status, TagType) = self.reader.MFRC522_Request(self.reader.PICC_REQIDL)
 
             if status == self.reader.MI_OK:
@@ -164,23 +160,6 @@ class RFIDReader:
         """
         if not uid:
             return None
-
-        # RC522 renvoie souvent 5 octets (4 octets UID + 1 octet Checksum)
-        if len(uid) == 5:
-            # On vérifie si c'est bien le checksum (XOR des 4 premiers)
-            uid = uid[:4]
-
-        # Formatage Hex Majuscule
-        return "".join([f"{x:02X}" for x in uid])
-
-    def cleanup(self):
-        """Nettoyage des ressources."""
-        if self.reader_type == "VMA405" and self.serial:
-            self.serial.close()
-        # MFRC522 gère son propre SPI, pas de cleanup critique nécessaire ici
-        # ACR122U : pas de ressource persistante à fermer (connexion créée à chaque lecture)
-        logger.info("Lecteur RFID nettoyé")
-
 
         # RC522 renvoie souvent 5 octets (4 octets UID + 1 octet Checksum)
         if len(uid) == 5:

@@ -16,8 +16,7 @@ Gère la lecture NFC, le contrôle de vanne et la communication avec le serveur 
 Un seul prérequis côté serveur : créer un `PairingDevice` lié à une `TireuseBec` dans l'admin TiBillet pour obtenir un **code PIN à 6 chiffres**.
 
 ```bash
-curl -O https://raw.githubusercontent.com/TiBillet/Lespass/V2/controlvanne/Pi/install_pi.sh
-bash install_pi.sh
+wget https://raw.githubusercontent.com/TiBillet/Lespass/dev_vps/controlvanne/Pi/install_pi.sh && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
 Le script pose quelques questions puis délègue à `make`. À la fin, redémarrer le Pi.
