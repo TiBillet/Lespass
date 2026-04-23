@@ -3201,8 +3201,13 @@ class EventMVT(viewsets.ViewSet):
             logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
+        # On passe l'user resolu par le validator (via l'email saisi),
+        # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
+        # Le template choisit son message selon user.is_active : il doit refleter
+        # l'etat reel utilise par TicketCreator.method_F pour decider d'envoyer
+        # les billets immediatement (user actif) ou un mail de validation (user inactif).
         return render(request, "reunion/views/event/reservation_ok.html", context={
-            "user": request.user,
+            "user": validator.reservation.user_commande,
         })
 
     @action(detail=True, methods=['GET'])

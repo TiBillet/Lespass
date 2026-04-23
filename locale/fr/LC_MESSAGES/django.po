@@ -7358,7 +7358,7 @@ msgstr "Votre paiement a été validé."
 
 #: BaseBillet/tasks.py:2057 BaseBillet/views.py:1155
 msgid "Your reservation has been cancelled."
-msgstr "Votre reservation a bien été annulé."
+msgstr "Votre reservation a bien été annulée."
 
 #: BaseBillet/tasks.py:2116 BaseBillet/views.py:1174
 msgid "Your ticket has been cancelled."
