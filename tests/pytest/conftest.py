@@ -280,6 +280,36 @@ def mock_stripe():
         )
 
 
+_CONFIG_LESPASS_ETAIT_PRESENTE = True
+
+
+def pytest_runtest_teardown(item, nextitem):
+    """TEMPORAIRE : trace le premier test qui vide Configuration lespass."""
+    global _CONFIG_LESPASS_ETAIT_PRESENTE
+    if not _CONFIG_LESPASS_ETAIT_PRESENTE:
+        return
+    try:
+        from django.db import connection
+        from django_tenants.utils import tenant_context
+        from Customers.models import Client as TenantClient
+        from BaseBillet.models import Configuration
+        # Force le schema public avant le tenant_context pour être sûr
+        connection.set_schema_to_public()
+        tenant = TenantClient.objects.get(schema_name='lespass')
+        with tenant_context(tenant):
+            count = Configuration.objects.filter(pk=1).count()
+            if count == 0:
+                import sys
+                with open('/tmp/config_pollution.log', 'a') as f:
+                    f.write(f"CONFIG LESPASS VIDE APRES : {item.nodeid}\n")
+                print(f"\n\n*** CONFIG LESPASS VIDE APRES : {item.nodeid} ***\n",
+                      flush=True, file=sys.stderr)
+                _CONFIG_LESPASS_ETAIT_PRESENTE = False
+    except Exception as e:
+        with open('/tmp/config_pollution.log', 'a') as f:
+            f.write(f"EXCEPTION APRES {item.nodeid}: {e}\n")
+
+
 def pytest_runtest_setup(item):
     """
     Avant chaque test qui herite de FastTenantTestCase, force

@@ -99,6 +99,11 @@ git clone https://github.com/TiBillet/TiBillet.git
 cd TiBillet
 cp env_example .env        # Configurer les variables d'environnement
 docker compose up -d
+
+# pour les donnée de démo / dev
+docker exec -ti lespass_django bash
+./flush.sh # la première fois, ça installe toute les fixtures
+rsp # la seconde fois
 ```
 
 L'application est accessible sur `https://lespass.tibillet.localhost`.
