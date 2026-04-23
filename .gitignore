@@ -177,7 +177,6 @@ AGENTS.md
 /demo_data.sql.gz
 
 #dev prod like
-docker-compose-filaos.yml
 dev-filaos
 letsencrypt
 
