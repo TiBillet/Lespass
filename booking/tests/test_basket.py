@@ -526,10 +526,10 @@ def test_booking_form_shows_correct_max_slot_count(
     LOCALISATION : booking/tests/test_basket.py
 
     ressource_avec_creneaux a 6 créneaux d'1h à partir de 09:00 chaque lundi.
-    Aucune réservation → compute_max_consecutive_slots retourne 6.
+    Aucune réservation → max_slot_count vaut 6.
     Le sélecteur <input type="number"> doit avoir max="6".
     / ressource_avec_creneaux has 6 1-hour slots from 09:00 every Monday.
-    No bookings → compute_max_consecutive_slots returns 6.
+    No bookings → max_slot_count equals 6.
     The <input type="number"> selector must have max="6".
     """
     with schema_context(TENANT_SCHEMA):

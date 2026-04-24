@@ -357,45 +357,6 @@ def compute_slots(resource, date_from=None, date_to=None, reference_date=None):
     return result
 
 
-def compute_max_consecutive_slots(creneaux, start_datetime, slot_duration_minutes):
-    """
-    Retourne le nombre de créneaux consécutifs disponibles depuis start_datetime.
-    / Returns the count of consecutive available slots starting from start_datetime.
-
-    LOCALISATION : booking/booking_engine.py
-
-    Parcourt E depuis start_datetime par pas de slot_duration_minutes.
-    S'arrête au premier créneau manquant ou complet (remaining_capacity == 0).
-    Retourne 0 si start_datetime n'est pas dans E.
-
-    Fontion pure — pas d'accès DB.
-    / Pure function — no DB access.
-
-    :param creneaux:              list[BookableInterval] — E calculé par compute_slots
-    :param start_datetime:        datetime tz-aware — début du premier créneau demandé
-    :param slot_duration_minutes: int — durée de chaque créneau en minutes
-    :return: int — nombre de créneaux consécutifs disponibles (0 si aucun)
-    """
-    # Construit un dictionnaire début → BookableInterval pour la recherche en O(1).
-    # / Builds a start → BookableInterval dict for O(1) lookup.
-    slot_par_debut = {bi.start: bi for bi in creneaux}
-
-    nombre_de_creneaux_consecutifs = 0
-    debut_courant = start_datetime
-
-    while True:
-        bi = slot_par_debut.get(debut_courant)
-
-        # Créneau absent de E ou capacité épuisée → on s'arrête.
-        # / Slot not in E or capacity exhausted → stop.
-        if bi is None or bi.remaining_capacity <= 0:
-            break
-
-        nombre_de_creneaux_consecutifs += 1
-        debut_courant = debut_courant + datetime.timedelta(minutes=slot_duration_minutes)
-
-    return nombre_de_creneaux_consecutifs
-
 
 def validate_new_booking(resource, start_datetime, slot_duration_minutes,
                          slot_count, member, reference_date=None,
