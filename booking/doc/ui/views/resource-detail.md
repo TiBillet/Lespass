@@ -15,14 +15,14 @@ description, image, tags, and the complete slot list.
 `ressource` (`Resource`, required)
   The bookable resource object.
 
-`creneaux` (`list[BookableInterval]`, required)
-  Computed slots, annotated for display grouping.
+`slot_groups` (`list[DisplaySlotGroup]`, required)
+  Computed slots, annotated for display.
 
 `reservations_en_cours` (`QuerySet[Booking] | []`, required)
   Authenticated user's 'new' bookings for basket.
 
-Slots are annotated by `annoter_creneaux_pour_affichage()` with:
-`is_in_group`, `is_group_end`, `is_new_week` (see `partial/slot-row.md`).
+Slots are annotated by `annotate_slots_for_display()` with:
+`is_new_week` (see `partial/slot-row.md`).
 
 ---
 

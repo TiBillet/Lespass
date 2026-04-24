@@ -19,8 +19,8 @@ Has no state of its own — delegates entirely to `slot_row.html`.
 `creneaux` (`list[BookableInterval]`, required)
   List of slots to render.
 
-Slots must be pre-annotated with `is_in_group`, `is_group_end`,
-`is_new_week` by `annoter_creneaux_pour_affichage()` before inclusion.
+Slots must be pre-annotated with `is_new_week` by
+`annotate_slots_for_display()` before inclusion.
 
 ---
 

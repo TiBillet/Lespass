@@ -30,8 +30,8 @@ An optional `?tag=` query parameter filters cards to a single tag.
 `ressource` (`Resource`)
   The bookable resource.
 
-`creneaux` (`list[BookableInterval]`)
-  Computed available slots.
+`slot_groups` (`list[DisplaySlotGroup]`)
+  Computed available slots (card preview, max 5 slots).
 
 `a_des_creneaux` (`bool`)
   True if at least one slot exists.
