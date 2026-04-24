@@ -45,8 +45,8 @@ while [ ! -f /tmp/tibeer_cookie_ready ] && [ $WAIT -lt 60 ]; do
 done
 rm -f /tmp/tibeer_cookie_ready
 
-# Lire l'URL fournie par tibeer (mode kiosk normal ou mode appairage localhost:8080)
-# / Read the URL provided by tibeer (normal kiosk mode or pairing mode localhost:8080)
+# Lire l'URL fournie par tibeer (kiosk avec token d'auth)
+# / Read the URL provided by tibeer (kiosk with auth token)
 if [ -f /tmp/tibeer_kiosk_url ]; then
     URL="$(cat /tmp/tibeer_kiosk_url)"
     rm -f /tmp/tibeer_kiosk_url

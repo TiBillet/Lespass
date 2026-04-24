@@ -6,7 +6,7 @@ Point d'entree du client Pi tireuse connectee.
 LOCALISATION : controlvanne/Pi/main.py
 
 Demarrage :
-1. Verif credentials — si absents, mode appairage PIN (port 8080)
+1. Verif credentials — si absents, arret avec message (lancer make claim PIN=<code>)
 2. Init hardware (RFID, vanne, debitmetre)
 3. Ping serveur (verif connectivite + config tireuse)
 4. Auth kiosk : obtenir un token a usage unique
@@ -34,18 +34,20 @@ def main():
     """Point d'entree du programme. / Program entry point."""
     logger.info("Demarrage TiBeer...")
 
-    # 1. Si le Pi n'est pas appaire (API_KEY ou TIREUSE_UUID absents),
-    #    demarrer le serveur de pairing PIN sur le port 8080.
-    #    .xinitrc ouvrira Chromium sur http://localhost:8080/
-    #    L'admin saisit le PIN depuis l'admin Django, le Pi sauvegarde
-    #    les credentials dans .env et redémarre automatiquement.
-    # / If the Pi is not paired (API_KEY or TIREUSE_UUID missing),
-    #   start the PIN pairing server on port 8080.
+    # 1. Verifier que le Pi est appaire (API_KEY + TIREUSE_UUID presents dans .env).
+    #    Si non appaire, arreter avec un message clair.
+    #    L'appairage se fait en SSH via : make claim PIN=<code> [SERVER=<url>]
+    #    Le code PIN est visible dans Admin → Tireuses → Taps (colonne PIN code).
+    # / Check that the Pi is paired (API_KEY + TIREUSE_UUID present in .env).
+    #   If not paired, exit with a clear message.
+    #   Pairing is done via SSH: make claim PIN=<code> [SERVER=<url>]
     if API_KEY in ("changeme", "", None) or not TIREUSE_UUID:
-        logger.warning("Pi non appaire — mode appairage PIN (port 8080)")
-        from first.pairing_server import demarrer
-        demarrer(logger=logger)
-        return
+        logger.error(
+            "Pi non appaire. Lancer depuis le Pi en SSH :\n"
+            "  make claim PIN=<code> [SERVER=<url>]\n"
+            "Le code PIN est visible dans Admin → Tireuses → Taps (colonne PIN code)."
+        )
+        sys.exit(1)
 
     # 2. Init hardware / Init hardware
     logger.info("Init hardware...")

@@ -105,8 +105,8 @@ Tous les endpoints sont proteges par `HasTireuseAccess` : cle API `TireuseAPIKey
 
 Le Raspberry Pi s'appaire via le systeme `discovery` existant :
 
-1. L'admin cree un `PairingDevice` dans Unfold → PIN 6 chiffres genere
-2. L'admin cree une `TireuseBec` et la lie au `PairingDevice`
+1. L'admin cree une `TireuseBec` dans Unfold
+2. Un `PairingDevice` est cree automatiquement par signal → PIN 6 chiffres genere
 3. Le Pi envoie le PIN via `POST /api/discovery/claim/`
 4. Discovery detecte la tireuse liee → cree une `TireuseAPIKey` (pas `LaBoutikAPIKey`)
 5. Reponse : `{ server_url, api_key, tireuse_uuid, device_name }`
@@ -120,7 +120,7 @@ Le Raspberry Pi s'appaire via le systeme `discovery` existant :
 
 - Le module tireuse est active sur le tenant (Dashboard → carte "Tireuse" → switch ON)
 - Un asset TLF (monnaie locale) est actif sur le tenant
-- Le Raspberry Pi est pret (voir section Pi ci-dessous)
+- Le materiel est pret et cablé (Pi, lecteur RFID, electrovanne, debitmetre)
 
 ### Etape 1 : creer un debitmetre
 
@@ -151,18 +151,7 @@ Puis ajouter un **Price** sur ce produit :
 | Prix | `5.00` (prix au litre en EUR) |
 | Vente au poids/volume | **cocher** (obligatoire pour la tireuse) |
 
-### Etape 3 : creer l'appareil d'appairage
-
-**Admin → Discovery → Pairing devices → Ajouter**
-
-| Champ | Valeur |
-|-------|--------|
-| Nom | `Pi Tireuse 1` |
-| Tenant | votre lieu |
-
-Un PIN 6 chiffres est genere automatiquement. Notez-le.
-
-### Etape 4 : creer la tireuse
+### Etape 3 : creer la tireuse
 
 **Admin → Tireuses → Taps → Ajouter**
 
@@ -171,43 +160,34 @@ Un PIN 6 chiffres est genere automatiquement. Notez-le.
 | Nom tireuse | `Biere` (affiche sur le kiosk) |
 | Fut actif | `Blonde Pression` (le produit FUT cree a l'etape 2) |
 | Debitmetre | `YF-S201` (cree a l'etape 1) |
-| Pairing device | `Pi Tireuse 1` (cree a l'etape 3) |
 | Seuil minimum (ml) | `500` (reserve de securite) |
 | Appliquer reserve | cocher |
 | En service | cocher |
 
-Le Point de vente (`PointDeVente`) peut etre cree automatiquement ou manuellement.
+A la sauvegarde, un `PairingDevice` et un `PointDeVente` de type TIREUSE sont crees automatiquement par signal.
 
-### Etape 5 : appairer le Pi
+### Etape 4 : installer le Pi
 
-Sur le Raspberry Pi, lancer le script d'appairage avec le PIN note a l'etape 3 :
+**Admin → Tireuses → Taps** — noter le code PIN dans la colonne **PIN code**.
+
+Puis sur le Raspberry Pi en SSH, lancer le script d'installation avec ce PIN :
 
 ```bash
-# Le Pi envoie le PIN au serveur
-curl -X POST https://votre-domaine.tld/api/discovery/claim/ \
-  -H "Content-Type: application/json" \
-  -d '{"pin_code": "123456"}'
+wget https://raw.githubusercontent.com/TiBillet/Lespass/dev_vps/controlvanne/Pi/install_pi.sh \
+  && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
-Reponse :
-```json
-{
-  "server_url": "https://lespass.votre-domaine.tld",
-  "api_key": "xxxxxxx.yyyyyyy",
-  "tireuse_uuid": "abc123-...",
-  "device_name": "Pi Tireuse 1"
-}
-```
+Le script demande l'URL publique TiBillet, le PIN et le type de lecteur RFID. Il appaire le Pi, configure les services systemd et redemarre. Une fois termine, l'ecran du Pi affiche le kiosk de la tireuse.
 
-Le Pi stocke `api_key` et `tireuse_uuid` dans son `.env`.
+### Apres l'installation (optionnel)
 
-### Etape 6 : creer des cartes de maintenance (optionnel)
+#### Cartes de maintenance
 
 **Admin → Tireuses → Cartes maintenance → Ajouter**
 
 Selectionnez une `CarteCashless` existante. Quand cette carte est badgee sur la tireuse, la vanne s'ouvre sans facturation (mode rincage).
 
-### Etape 7 : calibrer le debitmetre
+#### Calibrer le debitmetre
 
 **Admin → Tireuses → Calibration sessions**
 
@@ -220,8 +200,6 @@ Ou directement : `/controlvanne/calibration/<uuid-tireuse>/`
 5. Sur la page calibration, saisissez le volume reel lu sur le verre
 6. Repetez 2-3 fois
 7. Cliquez "Appliquer le facteur"
-
-### Etape 8 : c'est pret
 
 Reactivez la tireuse (En service = cocher). Les clients peuvent badger leur carte NFC :
 - Solde suffisant → vanne ouverte, biere coule, volume affiche en temps reel sur le kiosk
@@ -239,6 +217,7 @@ Les ventes apparaissent dans les historiques admin et dans la cloture de caisse.
 | Badger | Verifie le solde wallet | Ouvre la vanne sans facturation |
 | Facturation | `TransactionService.creer_vente()` au pour_end | Aucune |
 | Volume autorise | `solde / prix_litre` | Tout le reservoir |
+| `reservoir_ml` decremente | Oui | **Non** |
 | Admin | `CarteCashless` standard | `CarteMaintenance` (OneToOne `CarteCashless`) |
 
 ---
@@ -261,7 +240,7 @@ Le JS est dans `controlvanne/static/controlvanne/js/panel_kiosk.js`.
 
 ### Auth kiosk
 
-Le Pi obtient un cookie session Django via `POST /controlvanne/auth-kiosk/` (cle API dans le header). Chromium est lance avec ce cookie.
+Le Pi appelle `POST /controlvanne/auth-kiosk/` (cle API dans le header) et recoit un token a usage unique. Ce token est passe en parametre URL (`?kiosk_token=<token>`) au demarrage de Chromium. Django valide le token, ouvre une session, et redirige vers le kiosk authentifie.
 
 ---
 
@@ -280,14 +259,14 @@ Le Pi obtient un cookie session Django via `POST /controlvanne/auth-kiosk/` (cle
 Connectez-vous en SSH au Pi puis executez :
 
 ```bash
-wget https://raw.githubusercontent.com/TiBillet/Lespass/integration_laboutik/controlvanne/Pi/install.sh \
-  && chmod +x install.sh && ./install.sh
+wget https://raw.githubusercontent.com/TiBillet/Lespass/dev_vps/controlvanne/Pi/install_pi.sh \
+  && chmod +x install_pi.sh && ./install_pi.sh
 ```
 
 Le script est interactif. Il demande :
 
 1. **URL publique TiBillet** — ex: `https://tibillet.mondomaine.tld` (le domaine racine, pas le sous-domaine tenant)
-2. **PIN 6 chiffres** — affiche dans Admin → Discovery → Pairing devices (cree a l'etape 3 du tuto)
+2. **PIN 6 chiffres** — visible dans Admin → Tireuses → Taps, colonne "PIN code"
 3. **Type de lecteur RFID** — RC522 (SPI, defaut), VMA405 (serie USB), ou ACR122U (USB PC/SC)
 
 Le script appelle automatiquement `/api/discovery/claim/` avec le PIN et recoit :
@@ -488,7 +467,7 @@ BOUCLE (toutes les 100ms)
 │       └── Envoyer event "pour_update" { volume_ml }
 │           (Django met a jour la session, pousse WebSocket → kiosk affiche volume)
 │
-├── SI carte retiree (absente depuis > 1 seconde) :
+├── SI carte retiree (absente depuis > 3 secondes, CARD_GRACE_PERIOD_S) :
 │   │
 │   ├── SI en mode SERVICE :
 │   │   ├── FERMER LA VANNE
@@ -555,15 +534,13 @@ Les signaux Django (`signals.py`) poussent les mises a jour apres chaque modific
 ### Appairage (premiere installation)
 
 ```
-Admin Unfold                    install.sh (Pi)
+Admin Unfold                    make claim (Pi, via SSH)
   │                                  │
-  │  1. Creer PairingDevice          │
+  │  1. Creer TireuseBec             │
+  │     → PairingDevice auto-cree    │
   │     → PIN 6 chiffres genere      │
   │                                  │
-  │  2. Creer TireuseBec             │
-  │     → lier au PairingDevice      │
-  │                                  │
-  │                                  │  3. Saisir URL publique + PIN
+  │                                  │  2. make claim PIN=<code> SERVER=<url>
   │                                  │
   │                     POST /api/discovery/claim/ { pin_code }
   │◀─────────────────────────────────┤
@@ -575,9 +552,9 @@ Admin Unfold                    install.sh (Pi)
   │    api_key, tireuse_uuid         │
   │─────────────────────────────────▶│
   │                                  │
-  │                                  │  4. Genere .env
-  │                                  │  5. Configure services systemd
-  │                                  │  6. Redemarre
+  │                                  │  3. Genere .env
+  │                                  │  4. Configure services systemd
+  │                                  │  5. Redemarre tibeer
   │                                  │
   │  PIN consomme (usage unique)     │
 ```
@@ -594,7 +571,7 @@ Le lecteur NFC lit l'identifiant unique (UID, 4 octets) de la carte sans contact
 
 - **ACR122U** (USB PC/SC) — lecteur de bureau. Utilise le protocole PC/SC via `pyscard`. Commande APDU standard `FF CA 00 00 00` (GET UID ISO 14443). Necessite le daemon `pcscd` actif.
 
-La boucle principale appelle `read_uid()` toutes les 100ms. Si une carte est presente, la methode retourne son UID hex. Sinon, `None`. La detection de presence/absence se fait par comparaison avec l'UID precedent + un delai anti-rebond de 1 seconde (evite les fausses deconnexions dues aux micro-coupures de lecture).
+La boucle principale appelle `read_uid()` toutes les 100ms. Si une carte est presente, la methode retourne son UID hex. Sinon, `None`. La detection de presence/absence se fait par comparaison avec l'UID precedent + un delai anti-rebond (`CARD_GRACE_PERIOD_S`, 3 secondes par defaut) pour eviter les fausses deconnexions dues aux micro-coupures de lecture. Note : ce timer est reinitialise apres les appels reseau `authorize()` + `pour_start` pour eviter que les ~3 secondes d'appels bloquants ne declenchent une fermeture prematuree de la vanne.
 
 #### Debitmetre — `hardware/flow_meter.py`
 
@@ -634,7 +611,7 @@ L'electrovanne est une vanne pilotee electriquement qui ouvre ou ferme le passag
 
 Le controleur ouvre la vanne uniquement apres une autorisation reussie du serveur Django. Il la ferme dans 3 cas :
 1. Le volume autorise (`allowed_ml`) est atteint
-2. La carte est retiree (grace period de 1s ecoulee)
+2. La carte est retiree (grace period de `CARD_GRACE_PERIOD_S` = 3s ecoulee)
 3. Une erreur survient (exception, serveur injoignable)
 
 #### Gestion du wallet — `controlvanne/billing.py` + `fedow_core/services.py`
