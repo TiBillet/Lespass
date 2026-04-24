@@ -93,7 +93,6 @@ from rest_framework.decorators import action
 
 from BaseBillet.views import get_context
 from booking.booking_engine import (
-    compute_max_consecutive_slots,
     compute_slots,
     validate_new_booking,
 )
@@ -287,19 +286,25 @@ class BookingViewSet(viewsets.ViewSet):
         slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
         slot_li_id            = self._slot_li_id(ressource.pk, start_datetime)
 
-        creneaux = compute_slots(ressource)
+        slot_groups = annotate_slots_for_display(compute_slots(ressource))
 
-        # Cherche le créneau demandé dans E (même début et même durée).
-        # / Looks up the requested slot in E (matching start and duration).
+        # Find the requested slot and compute max consecutive available from its
+        # position in the group (contiguity is already encoded in DisplaySlotGroup).
         creneau_demande = None
-        for creneau in creneaux:
-            if (creneau.start == start_datetime
-                    and creneau.duration_minutes() == slot_duration_minutes):
-                creneau_demande = creneau
+        max_slot_count  = 0
+        for group in slot_groups:
+            for i, slot in enumerate(group.slots):
+                if slot.start == start_datetime and slot.slot_duration_minutes == slot_duration_minutes:
+                    creneau_demande = slot
+                    for s in group.slots[i:]:
+                        if s.remaining_capacity <= 0:
+                            break
+                        max_slot_count += 1
+                    break
+            if creneau_demande:
                 break
 
-        # Créneau absent de E ou capacité épuisée → affiche le message d'indisponibilité.
-        # / Slot not in E or capacity exhausted → show unavailability message.
+        # Slot not found in E or capacity exhausted → show unavailability message.
         if creneau_demande is None or creneau_demande.remaining_capacity <= 0:
             contexte = get_context(request)
             contexte.update({
@@ -309,10 +314,6 @@ class BookingViewSet(viewsets.ViewSet):
                 'slot_indisponible': True,
             })
             return render(request, 'booking/partial/booking_form.html', contexte)
-
-        max_slot_count = compute_max_consecutive_slots(
-            creneaux, start_datetime, slot_duration_minutes
-        )
 
         contexte = get_context(request)
         contexte.update({
