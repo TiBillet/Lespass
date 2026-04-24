@@ -12,15 +12,14 @@ description, image, tags, and the complete slot list.
 
 ## Context variables
 
-+-------------------------+---------------------------+----------+------------------------------------------------+
-| Variable                | Type                      | Required | Description                                    |
-+=========================+===========================+==========+================================================+
-| `ressource`             | `Resource`                | yes      | The bookable resource object                   |
-+-------------------------+---------------------------+----------+------------------------------------------------+
-| `creneaux`              | `list[BookableInterval]`  | yes      | Computed slots, annotated for display grouping |
-+-------------------------+---------------------------+----------+------------------------------------------------+
-| `reservations_en_cours` | `QuerySet[Booking] \| []` | yes      | Authenticated user's 'new' bookings for basket |
-+-------------------------+---------------------------+----------+------------------------------------------------+
+`ressource` (`Resource`, required)
+  The bookable resource object.
+
+`creneaux` (`list[BookableInterval]`, required)
+  Computed slots, annotated for display grouping.
+
+`reservations_en_cours` (`QuerySet[Booking] | []`, required)
+  Authenticated user's 'new' bookings for basket.
 
 Slots are annotated by `annoter_creneaux_pour_affichage()` with:
 `is_in_group`, `is_group_end`, `is_new_week` (see `partial/slot-row.md`).
@@ -29,21 +28,23 @@ Slots are annotated by `annoter_creneaux_pour_affichage()` with:
 
 ## States
 
-+-----------+-------------------------------+-----------------------------------------------+
-| State     | Condition                     | Visual                                        |
-+===========+===============================+===============================================+
-| Has image | `ressource.image` is set      | Full-width `<img>` hero at top of page        |
-+-----------+-------------------------------+-----------------------------------------------+
-| No image  | `ressource.image` is falsy    | No image element rendered                     |
-+-----------+-------------------------------+-----------------------------------------------+
-| Has tags  | `ressource.tags` is non-empty | Row of clickable tag badges below description |
-+-----------+-------------------------------+-----------------------------------------------+
-| No tags   | `ressource.tags` is empty     | No tag row rendered                           |
-+-----------+-------------------------------+-----------------------------------------------+
-| Has slots | `creneaux` is non-empty       | Slot list via `slot_list.html` partial        |
-+-----------+-------------------------------+-----------------------------------------------+
-| No slots  | `creneaux` is empty           | Muted message "Aucun créneau disponible"      |
-+-----------+-------------------------------+-----------------------------------------------+
+**Has image** — `ressource.image` is set
+  Full-width `<img>` hero at top of page.
+
+**No image** — `ressource.image` is falsy
+  No image element rendered.
+
+**Has tags** — `ressource.tags` is non-empty
+  Row of clickable tag badges below description.
+
+**No tags** — `ressource.tags` is empty
+  No tag row rendered.
+
+**Has slots** — `creneaux` is non-empty
+  Slot list via `slot_list.html` partial.
+
+**No slots** — `creneaux` is empty
+  Muted message "Aucun créneau disponible".
 
 ---
 
@@ -76,8 +77,5 @@ All navigation uses full-body swap (anti-blink pattern).
 
 ## data-testid
 
-+---------------------------+-------------+-----------------------+
-| Value                     | Element     | Purpose               |
-+===========================+=============+=======================+
-| `booking-resource-detail` | back button | E2E navigation target |
-+---------------------------+-------------+-----------------------+
+`booking-resource-detail` — back button
+  E2E navigation target.

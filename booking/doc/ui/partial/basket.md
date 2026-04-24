@@ -18,39 +18,30 @@
 
 ## Context variables
 
-+-------------------------+---------------------------+----------+-------------------------------------------------------+
-| Variable                | Type                      | Required | Description                                           |
-+=========================+===========================+==========+=======================================================+
-| `reservations_en_cours` | `QuerySet[Booking] \| []` | yes      | User's 'new' bookings; empty list for anonymous users |
-+-------------------------+---------------------------+----------+-------------------------------------------------------+
-| `oob`                   | `bool`                    | no       | When True, adds `hx-swap-oob="outerHTML"` attribute   |
-+-------------------------+---------------------------+----------+-------------------------------------------------------+
+`reservations_en_cours` (`QuerySet[Booking] | []`, required)
+  User's 'new' bookings; empty list for anonymous users.
+
+`oob` (`bool`, optional)
+  When True, adds `hx-swap-oob="outerHTML"` attribute.
 
 ### Booking fields displayed per row
 
-+------------------+------------------------------------------------+
-| Field            | Display format                                 |
-+==================+================================================+
-| `resource.name`  | Plain text label                               |
-+------------------+------------------------------------------------+
-| `start_datetime` | `{{ reservation.start_datetime                 |
-+------------------+------------------------------------------------+
-| `slot_count`     | Badge `× N` (shown only when `slot_count > 1`) |
-+------------------+------------------------------------------------+
+- `resource.name` — plain text label
+- `start_datetime` — formatted date (`D d/m/Y H:i`)
+- `slot_count` — badge `× N` (shown only when `slot_count > 1`)
 
 ---
 
 ## States
 
-+-------------------+-----------------------------------+-----------------------------------------------+
-| State             | Condition                         | Visual                                        |
-+===================+===================================+===============================================+
-| Empty basket      | `reservations_en_cours` is empty  | Muted text "Votre panier est vide"            |
-+-------------------+-----------------------------------+-----------------------------------------------+
-| Basket with items | `reservations_en_cours` non-empty | List of booking rows + "Confirmer" button     |
-+-------------------+-----------------------------------+-----------------------------------------------+
-| OOB mode          | `oob=True`                        | Adds `hx-swap-oob="outerHTML"` on the wrapper |
-+-------------------+-----------------------------------+-----------------------------------------------+
+**Empty basket** — `reservations_en_cours` is empty
+  Muted text "Votre panier est vide".
+
+**Basket with items** — `reservations_en_cours` non-empty
+  List of booking rows + "Confirmer" button.
+
+**OOB mode** — `oob=True`
+  Adds `hx-swap-oob="outerHTML"` on the wrapper.
 
 ---
 
@@ -109,12 +100,11 @@ HTMX processes both swaps in the same response.
 
 ## data-testid
 
-+----------------------+-------------------+----------------------------------+
-| Value                | Element           | Purpose                          |
-+======================+===================+==================================+
-| `booking-basket`     | wrapper container | HTMX swap target (primary + OOB) |
-+----------------------+-------------------+----------------------------------+
-| `basket-remove-<pk>` | remove button     | Per-booking remove button        |
-+----------------------+-------------------+----------------------------------+
-| `basket-validate`    | confirm button    | Confirm all bookings button      |
-+----------------------+-------------------+----------------------------------+
+`booking-basket` — wrapper container
+  HTMX swap target (primary + OOB).
+
+`basket-remove-<pk>` — remove button
+  Per-booking remove button.
+
+`basket-validate` — confirm button
+  Confirm all bookings button.

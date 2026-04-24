@@ -12,48 +12,48 @@ An optional `?tag=` query parameter filters cards to a single tag.
 
 ## Context variables
 
-+-------------------------+---------------------------+----------+------------------------------------------------------------------+
-| Variable                | Type                      | Required | Description                                                      |
-+=========================+===========================+==========+==================================================================+
-| `groupes_annotes`       | `list[dict]`              | yes      | Groups with their resources and computed slots.                  |
-|                         |                           |          | Each item: `{'groupe': ResourceGroup, 'items': list[item_dict]}` |
-+-------------------------+---------------------------+----------+------------------------------------------------------------------+
-| `items_sans_groupe`     | `list[item_dict]`         | yes      | Resources that have no group assigned                            |
-+-------------------------+---------------------------+----------+------------------------------------------------------------------+
-| `tag_filtre`            | `str \| None`             | yes      | Active tag filter value from `?tag=` param                       |
-+-------------------------+---------------------------+----------+------------------------------------------------------------------+
-| `reservations_en_cours` | `QuerySet[Booking] \| []` | yes      | Authenticated user's 'new' bookings for basket                   |
-+-------------------------+---------------------------+----------+------------------------------------------------------------------+
+`groupes_annotes` (`list[dict]`, required)
+  Groups with their resources and computed slots.
+  Each item: `{'groupe': ResourceGroup, 'items': list[item_dict]}`
+
+`items_sans_groupe` (`list[item_dict]`, required)
+  Resources that have no group assigned.
+
+`tag_filtre` (`str | None`, required)
+  Active tag filter value from `?tag=` param.
+
+`reservations_en_cours` (`QuerySet[Booking] | []`, required)
+  Authenticated user's 'new' bookings for basket.
 
 `item_dict` shape (built in `_annote_ressources()`):
 
-+------------------+--------------------------+----------------------------------+
-| Key              | Type                     | Description                      |
-+==================+==========================+==================================+
-| `ressource`      | `Resource`               | The bookable resource            |
-+------------------+--------------------------+----------------------------------+
-| `creneaux`       | `list[BookableInterval]` | Computed available slots         |
-+------------------+--------------------------+----------------------------------+
-| `a_des_creneaux` | `bool`                   | True if at least one slot exists |
-+------------------+--------------------------+----------------------------------+
+`ressource` (`Resource`)
+  The bookable resource.
+
+`creneaux` (`list[BookableInterval]`)
+  Computed available slots.
+
+`a_des_creneaux` (`bool`)
+  True if at least one slot exists.
 
 ---
 
 ## States
 
-+---------------------+----------------------------------+------------------------------------------+
-| State               | Condition                        | Visual                                   |
-+=====================+==================================+==========================================+
-| Tag filter active   | `tag_filtre` is not None         | Blue badge with tag label + × clear link |
-+---------------------+----------------------------------+------------------------------------------+
-| Tag filter inactive | `tag_filtre` is None             | No filter badge shown                    |
-+---------------------+----------------------------------+------------------------------------------+
-| Groups present      | `groupes_annotes` is non-empty   | Section heading per group + card grid    |
-+---------------------+----------------------------------+------------------------------------------+
-| Ungrouped resources | `items_sans_groupe` is non-empty | Card grid with no heading                |
-+---------------------+----------------------------------+------------------------------------------+
-| Empty list          | Both lists empty after filter    | Muted message "Aucune ressource"         |
-+---------------------+----------------------------------+------------------------------------------+
+**Tag filter active** — `tag_filtre` is not None
+  Blue badge with tag label + × clear link.
+
+**Tag filter inactive** — `tag_filtre` is None
+  No filter badge shown.
+
+**Groups present** — `groupes_annotes` is non-empty
+  Section heading per group + card grid.
+
+**Ungrouped resources** — `items_sans_groupe` is non-empty
+  Card grid with no heading.
+
+**Empty list** — both lists empty after filter
+  Muted message "Aucune ressource".
 
 ---
 
@@ -85,12 +85,11 @@ Basket (rendered by `booking_base.html`) persists across navigation.
 
 ## data-testid
 
-+-----------------------------+---------------+--------------------------------+
-| Value                       | Element       | Purpose                        |
-+=============================+===============+================================+
-| `booking-resource-list`     | `<h1>`        | Page heading for E2E targeting |
-+-----------------------------+---------------+--------------------------------+
-| `booking-tag-filter-active` | filter badge  | Active filter badge            |
-+-----------------------------+---------------+--------------------------------+
-| `booking-empty-list`        | message `<p>` | Empty state message            |
-+-----------------------------+---------------+--------------------------------+
+`booking-resource-list` — `<h1>`
+  Page heading for E2E targeting.
+
+`booking-tag-filter-active` — filter badge
+  Active filter badge.
+
+`booking-empty-list` — message `<p>`
+  Empty state message.
