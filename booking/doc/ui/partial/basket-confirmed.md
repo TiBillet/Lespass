@@ -12,25 +12,21 @@ One-shot success feedback. Replaces the basket container after all
 
 ## Context variables
 
-+--------------------------+-------+----------+----------------------------------------------+
-| Variable                 | Type  | Required | Description                                  |
-+==========================+=======+==========+==============================================+
-| `nombre_de_reservations` | `int` | yes      | Number of bookings just confirmed            |
-+--------------------------+-------+----------+----------------------------------------------+
-| `request.path`           | `str` | yes      | Current URL path (auto from request context) |
-+--------------------------+-------+----------+----------------------------------------------+
+`nombre_de_reservations` (`int`, required)
+  Number of bookings just confirmed.
+
+`request.path` (`str`, required)
+  Current URL path (auto from request context).
 
 ---
 
 ## States
 
-+-------------------------+-------------------------------+--------------------------------------------+
-| State                   | Condition                     | Visual                                     |
-+=========================+===============================+============================================+
-| On booking page         | `request.path == "/booking/"` | Green badge only; no return link shown     |
-+-------------------------+-------------------------------+--------------------------------------------+
-| On resource detail page | `request.path != "/booking/"` | Green badge + "Toutes les ressources" link |
-+-------------------------+-------------------------------+--------------------------------------------+
+**On booking page** — `request.path == "/booking/"`
+  Green badge only; no return link shown.
+
+**On resource detail page** — `request.path != "/booking/"`
+  Green badge + "Toutes les ressources" link.
 
 The return link navigates back to `/booking/` with HTMX full-body swap.
 
@@ -62,8 +58,5 @@ href="/booking/"
 
 ## data-testid
 
-+------------------+-----------------+----------------------------------------------+
-| Value            | Element         | Purpose                                      |
-+==================+=================+==============================================+
-| `booking-basket` | wrapper element | Same target as basket.html (swap continuity) |
-+------------------+-----------------+----------------------------------------------+
+`booking-basket` — wrapper element
+  Same target as basket.html (swap continuity).

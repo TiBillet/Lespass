@@ -13,15 +13,14 @@ cancellation fails. Two distinct failure modes have distinct visuals.
 
 ## Context variables
 
-+---------------------+------------+----------+-------------------------------------------------------------+
-| Variable            | Type       | Required | Description                                                 |
-+=====================+============+==========+=============================================================+
-| `erreur_deadline`   | `bool`     | yes      | True if cancellation is refused due to deadline             |
-+---------------------+------------+----------+-------------------------------------------------------------+
-| `deadline_datetime` | `datetime` | no       | Cancellation deadline; required when `erreur_deadline=True` |
-+---------------------+------------+----------+-------------------------------------------------------------+
-| `erreur`            | `str`      | no       | Generic error message; used when `erreur_deadline=False`    |
-+---------------------+------------+----------+-------------------------------------------------------------+
+`erreur_deadline` (`bool`, required)
+  True if cancellation is refused due to deadline.
+
+`deadline_datetime` (`datetime`, optional)
+  Cancellation deadline; required when `erreur_deadline=True`.
+
+`erreur` (`str`, optional)
+  Generic error message; used when `erreur_deadline=False`.
 
 ---
 
@@ -78,10 +77,8 @@ On success (200) the server sends `HX-Redirect` to
 This partial does not currently define `data-testid` attributes.
 Recommended additions:
 
-+-------------------------+-------------+-------------------------------+
-| Value                   | Element     | Purpose                       |
-+=========================+=============+===============================+
-| `cancel-error-deadline` | alert badge | Deadline-exceeded error state |
-+-------------------------+-------------+-------------------------------+
-| `cancel-error-generic`  | alert badge | Generic error state           |
-+-------------------------+-------------+-------------------------------+
+`cancel-error-deadline` — alert badge
+  Deadline-exceeded error state.
+
+`cancel-error-generic` — alert badge
+  Generic error state.

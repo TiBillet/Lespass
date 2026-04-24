@@ -13,15 +13,9 @@ has an inline HTMX cancel button.
 
 ## Access control
 
-+------------------------------------+---------------------------+
-| Condition                          | Response                  |
-+====================================+===========================+
-| User not authenticated             | 302 redirect to `/login/` |
-+------------------------------------+---------------------------+
-| `config.module_booking` is `False` | 404                       |
-+------------------------------------+---------------------------+
-| Authenticated + module enabled     | Render the page           |
-+------------------------------------+---------------------------+
+- User not authenticated → 302 redirect to `/login/`
+- `config.module_booking` is `False` → 404
+- Authenticated + module enabled → Render the page
 
 The redirect (not 401) is intentional: this is a GET page, not an HTMX
 endpoint. A 401 would produce a blank error in the browser; a redirect
@@ -31,38 +25,38 @@ sends the user to login and returns them to this page afterward.
 
 ## Context variables
 
-+----------------------+---------------------+----------+-----------------------------------------------------+
-| Variable             | Type                | Required | Description                                         |
-+======================+=====================+==========+=====================================================+
-| `confirmed_bookings` | `QuerySet[Booking]` | yes      | Member's upcoming `confirmed` bookings, ordered     |
-|                      |                     |          | by `start_datetime`. Filtered: `user=request.user`, |
-|                      |                     |          | `status='confirmed'`, `start_datetime__gt=now()`.   |
-|                      |                     |          | `select_related('resource')` applied.               |
-+----------------------+---------------------+----------+-----------------------------------------------------+
+`confirmed_bookings` (`QuerySet[Booking]`, required)
+  Member's upcoming `confirmed` bookings, ordered by `start_datetime`.
+  Filtered: `user=request.user`, `status='confirmed'`,
+  `start_datetime__gt=now()`. `select_related('resource')` applied.
 
 ---
 
 ## States
 
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| State                   | Condition                         | Visual                                                       |
-+=========================+===================================+==============================================================+
-| Has confirmed bookings  | `confirmed_bookings` is non-empty | `<ul class="list-group">` with one `<li>` per booking        |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| No confirmed bookings   | `confirmed_bookings` is empty     | Muted paragraph "Aucune réservation confirmée à venir."      |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| Multi-slot booking      | `booking.slot_count > 1`          | Secondary badge `{{ slot_count }} créneaux` next to the date |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| Single-slot booking     | `booking.slot_count == 1`         | No badge — resource name and formatted date only             |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| Cancel button — default | Before HTMX request fires         | Danger outline button "Annuler" with × icon                  |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| Cancel error — deadline | 422 with `erreur_deadline=True`   | Warning badge "Annulation impossible" + deadline text inline |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| Cancel error — generic  | 422 with `erreur` string          | Danger badge with the error message inline                   |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
-| Cancel success          | 200 with `HX-Redirect`            | Full page reload of `/booking/my-bookings/`                  |
-+-------------------------+-----------------------------------+--------------------------------------------------------------+
+**Has confirmed bookings** — `confirmed_bookings` is non-empty
+  `<ul class="list-group">` with one `<li>` per booking.
+
+**No confirmed bookings** — `confirmed_bookings` is empty
+  Muted paragraph "Aucune réservation confirmée à venir."
+
+**Multi-slot booking** — `booking.slot_count > 1`
+  Secondary badge `{{ slot_count }} créneaux` next to the date.
+
+**Single-slot booking** — `booking.slot_count == 1`
+  No badge — resource name and formatted date only.
+
+**Cancel button — default** — before HTMX request fires
+  Danger outline button "Annuler" with × icon.
+
+**Cancel error — deadline** — 422 with `erreur_deadline=True`
+  Warning badge "Annulation impossible" + deadline text inline.
+
+**Cancel error — generic** — 422 with `erreur` string
+  Danger badge with the error message inline.
+
+**Cancel success** — 200 with `HX-Redirect`
+  Full page reload of `/booking/my-bookings/`.
 
 ---
 
@@ -99,17 +93,17 @@ sends the user to login and returns them to this page afterward.
 **ViewSet:** `BookingViewSet.cancel()` in `booking/views.py`
 **URL:** `POST /booking/cancel/`
 
-+----------+-------------------------------------------------+-----------------------------------------------------------------------+
-| Response | Condition                                       | Body                                                                  |
-+==========+=================================================+=======================================================================+
-| 200      | Booking deleted                                 | Empty + `HX-Redirect: /booking/my-bookings/`                          |
-+----------+-------------------------------------------------+-----------------------------------------------------------------------+
-| 401      | User not authenticated                          | Empty                                                                 |
-+----------+-------------------------------------------------+-----------------------------------------------------------------------+
-| 422      | Booking not found, wrong owner, or wrong status | `cancel_error.html` with `erreur` string                              |
-+----------+-------------------------------------------------+-----------------------------------------------------------------------+
-| 422      | Cancellation deadline exceeded                  | `cancel_error.html` with `erreur_deadline=True` + `deadline_datetime` |
-+----------+-------------------------------------------------+-----------------------------------------------------------------------+
+**200** — Booking deleted
+  Empty + `HX-Redirect: /booking/my-bookings/`
+
+**401** — User not authenticated
+  Empty.
+
+**422** — Booking not found, wrong owner, or wrong status
+  `cancel_error.html` with `erreur` string.
+
+**422** — Cancellation deadline exceeded
+  `cancel_error.html` with `erreur_deadline=True` + `deadline_datetime`.
 
 Only `confirmed` bookings are cancellable through this endpoint. `new`
 bookings are removed via `remove_from_basket()`.
@@ -129,12 +123,11 @@ bookings are removed via `remove_from_basket()`.
 
 ## data-testid
 
-+----------------------+-------------------+-------------------------------------------+
-| Value                | Element           | Purpose                                   |
-+======================+===================+===========================================+
-| `my-resource-<pk>`   | `<li>`            | Per-booking list item                     |
-+----------------------+-------------------+-------------------------------------------+
-| `btn-cancel-<pk>`    | `<button>`        | Cancel button; `<pk>` is `booking.pk`     |
-+----------------------+-------------------+-------------------------------------------+
-| `booking-empty-list` | empty state `<p>` | Empty state — add this; currently missing |
-+----------------------+-------------------+-------------------------------------------+
+`my-resource-<pk>` — `<li>`
+  Per-booking list item.
+
+`btn-cancel-<pk>` — `<button>`
+  Cancel button; `<pk>` is `booking.pk`.
+
+`booking-empty-list` — empty state `<p>`
+  Empty state — add this; currently missing.
