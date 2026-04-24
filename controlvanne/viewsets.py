@@ -523,7 +523,7 @@ class TireuseViewSet(viewsets.ViewSet):
             session.close_with_volume(float(volume_ml))
 
             # Décrémenter le réservoir / Decrement reservoir
-            if volume_ml > 0:
+            if volume_ml > 0 and not session.is_maintenance:
                 tireuse.reservoir_ml = max(
                     Decimal("0"),
                     tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
