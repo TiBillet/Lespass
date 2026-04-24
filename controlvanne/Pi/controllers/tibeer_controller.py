@@ -86,6 +86,13 @@ class TibeerController:
                         self.current_uid = uid
                         self._handle_new_session(uid)
 
+                        # Remettre le timer a jour apres authorize() + send_event("pour_start") qui
+                        # bloquent plusieurs secondes. Sans ce reset, last_seen_ts date de la
+                        # premiere detection et CARD_GRACE_PERIOD_S expire pendant les appels reseau.
+                        # / Reset timer after the blocking network calls (authorize + pour_start).
+                        # Without this, last_seen_ts is from first detection and CARD_GRACE_PERIOD_S
+                        # expires during the network calls, closing the valve immediately.
+                        self.last_seen_ts = time.time()
                     elif self.is_serving:
                         # Meme carte, service en cours
                         # / Same card, serving
