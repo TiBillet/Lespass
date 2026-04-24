@@ -22,7 +22,7 @@ services:
       # Configuration Let's Encrypt (HTTP-01 challenge)
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=entrypoints-http"
-      - "--certificatesresolvers.letsencrypt.acme.email=filaos974@hotmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.email=myemail@test.com"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
     ports:
@@ -59,10 +59,10 @@ services:
       - backend
     command: "bash start.sh"
     extra_hosts:
-      - "fedow.filaos.re:172.17.0.1"
-      - "lespass.filaos.re:172.17.0.1"
-      - "laboutik.filaos.re:172.17.0.1"
-      - "laboutik2.filaos.re:172.17.0.1"
+      - "fedow.mydomain.com:172.17.0.1"
+      - "lespass.mydomain.com:172.17.0.1"
+      - "laboutik.mydomain.com:172.17.0.1"
+      - "laboutik2.mydomain.com:172.17.0.1"
 
   fedow_nginx:
     image: nginx
@@ -81,7 +81,7 @@ services:
       - traefik.docker.network=frontend
       - traefik.http.routers.fedow_nginx.tls=true
       - traefik.http.routers.fedow_nginx.tls.certresolver=letsencrypt
-      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.filaos.re`)
+      - traefik.http.routers.fedow_nginx.rule=Host(`fedow.mydomain.com`)
       - traefik.http.services.fedow_nginx.loadbalancer.server.port=80
     networks:
       - frontend
@@ -137,10 +137,10 @@ services:
     networks:
       - backend
     extra_hosts:
-      - "fedow.filaos.re:172.17.0.1"
-      - "lespass.filaos.re:172.17.0.1"
-      - "laboutik.filaos.re:172.17.0.1"
-      - "laboutik2.filaos.re:172.17.0.1"
+      - "fedow.mydomain.com:172.17.0.1"
+      - "lespass.mydomain.com:172.17.0.1"
+      - "laboutik.mydomain.com:172.17.0.1"
+      - "laboutik2.mydomain.com:172.17.0.1"
     command: 'bash start_dev.sh'
 
   lespass_celery:
@@ -162,10 +162,10 @@ services:
     networks:
       - backend
     extra_hosts:
-      - "fedow.filaos.re:172.17.0.1"
-      - "lespass.filaos.re:172.17.0.1"
-      - "laboutik.filaos.re:172.17.0.1"
-      - "laboutik2.filaos.re:172.17.0.1"
+      - "fedow.mydomain.com:172.17.0.1"
+      - "lespass.mydomain.com:172.17.0.1"
+      - "laboutik.mydomain.com:172.17.0.1"
+      - "laboutik2.mydomain.com:172.17.0.1"
     command: "poetry run celery -A TiBillet worker -l INFO -B --concurrency=6"
 
   lespass_nginx:
@@ -184,7 +184,7 @@ services:
       - traefik.docker.network=frontend
       - traefik.http.routers.lespass_nginx.tls=true
       - traefik.http.routers.lespass_nginx.tls.certresolver=letsencrypt
-      - traefik.http.routers.lespass_nginx.rule=Host(`filaos.re`) || Host(`www.filaos.re`) || Host(`agenda.filaos.re`) || Host(`lespass.filaos.re`) || Host(`demo.filaos.re`)
+      - traefik.http.routers.lespass_nginx.rule=Host(`mydomain.com`) || Host(`www.mydomain.com`) || Host(`agenda.mydomain.com`) || Host(`lespass.mydomain.com`) || Host(`demo.mydomain.com`)
       - traefik.http.services.lespass_nginx.loadbalancer.server.port=80
     networks:
       - backend
