@@ -3,7 +3,7 @@ LOCALISATION : booking/templates/booking/partial/card.html
 
 Variables attendues / Expected variables:
   item.ressource      — objet Resource (name, description, image, tags)
-  item.creneaux       — list[BookableInterval] triée par start
+  item.slot_groups    — list[DisplaySlotGroup] (card preview, max 5 slots)
   item.a_des_creneaux — bool
 
 Flux HTMX / HTMX flow:
@@ -64,7 +64,7 @@ Flux HTMX / HTMX flow:
                 Clicking a slot transforms it into an inline form.
                 -->
                 <div class="flex-fill mt-2 mb-0">
-                    {% include "booking/partial/slot_list.html" with ressource=item.ressource creneaux=item.creneaux|slice:":5" %}
+                    {% include "booking/partial/slot_list.html" with ressource=item.ressource slot_groups=item.slot_groups %}
                 </div>
 
             </div>

@@ -23,8 +23,6 @@ Variables attendues / Expected variables:
   display_remaining_capacity   — int : capacité restante au moment de l'ouverture
                                  (seulement en état erreur — fourni par add_to_basket)
   display_is_new_week          — "0"|"1" (seulement en état erreur)
-  display_is_in_group          — "0"|"1" (seulement en état erreur)
-  display_is_group_end         — "0"|"1" (seulement en état erreur)
 -->
 {% load i18n %}
 
@@ -70,8 +68,8 @@ Variables attendues / Expected variables:
                class="btn btn-outline-secondary btn-sm">
                 {% translate "Réessayer" %}
             </a>
-            <a href="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ display_remaining_capacity }}&is_new_week={{ display_is_new_week }}&is_in_group={{ display_is_in_group }}&is_group_end={{ display_is_group_end }}"
-               hx-get="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ display_remaining_capacity }}&is_new_week={{ display_is_new_week }}&is_in_group={{ display_is_in_group }}&is_group_end={{ display_is_group_end }}"
+            <a href="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ display_remaining_capacity }}&is_new_week={{ display_is_new_week }}"
+               hx-get="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ display_remaining_capacity }}&is_new_week={{ display_is_new_week }}"
                hx-target="#{{ slot_li_id }}"
                hx-swap="outerHTML"
                class="btn btn-link btn-sm text-muted">
@@ -130,9 +128,7 @@ Variables attendues / Expected variables:
             restore the original row exactly (without recomputing slots).
             -->
             <input type="hidden" name="display_remaining_capacity" value="{{ creneau.remaining_capacity }}">
-            <input type="hidden" name="display_is_new_week"  value="{{ creneau.is_new_week|yesno:'1,0' }}">
-            <input type="hidden" name="display_is_in_group"  value="{{ creneau.is_in_group|yesno:'1,0' }}">
-            <input type="hidden" name="display_is_group_end" value="{{ creneau.is_group_end|yesno:'1,0' }}">
+            <input type="hidden" name="display_is_new_week" value="{{ creneau.is_new_week|yesno:'1,0' }}">
 
             {% if max_slot_count > 1 %}
                 <!--
@@ -171,8 +167,8 @@ Variables attendues / Expected variables:
             </div>
 
             <div class="col-auto">
-                <a href="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ creneau.remaining_capacity }}&is_new_week={{ creneau.is_new_week|yesno:'1,0' }}&is_in_group={{ creneau.is_in_group|yesno:'1,0' }}&is_group_end={{ creneau.is_group_end|yesno:'1,0' }}"
-                   hx-get="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ creneau.remaining_capacity }}&is_new_week={{ creneau.is_new_week|yesno:'1,0' }}&is_in_group={{ creneau.is_in_group|yesno:'1,0' }}&is_group_end={{ creneau.is_group_end|yesno:'1,0' }}"
+                <a href="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ creneau.remaining_capacity }}&is_new_week={{ creneau.is_new_week|yesno:'1,0' }}"
+                   hx-get="/booking/{{ ressource.pk }}/cancel_form/?start_datetime={{ start_datetime|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ slot_duration_minutes }}&remaining_capacity={{ creneau.remaining_capacity }}&is_new_week={{ creneau.is_new_week|yesno:'1,0' }}"
                    hx-target="#{{ slot_li_id }}"
                    hx-swap="outerHTML"
                    class="btn btn-link btn-sm text-muted">

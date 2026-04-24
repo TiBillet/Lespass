@@ -24,7 +24,7 @@ When the user submits, `add_to_basket` either:
 `slot_li_id` (`str`, required)
   DOM ID of this `<li>`: `"slot-<pk>-<Ymd-Hi>"`.
 
-`creneau` (`BookableInterval`, optional)
+`creneau` (`DisplaySlot`, optional)
   Slot data; absent when `slot_indisponible=True`.
 
 `max_slot_count` (`int`, optional)
@@ -48,13 +48,7 @@ When the user submits, `add_to_basket` either:
 `display_is_new_week` (`"0"|"1"`, optional)
   Week-separator flag at form-open time; error state only.
 
-`display_is_in_group` (`"0"|"1"`, optional)
-  Group-border flag at form-open time; error state only.
-
-`display_is_group_end` (`"0"|"1"`, optional)
-  Group-end spacing flag at form-open time; error state only.
-
-The four `display_*` variables are only needed in the error state. They are
+The `display_*` variables are only needed in the error state. They are
 provided by `add_to_basket`, which reads them from the hidden form fields
 submitted with the POST. The normal state reads them directly from `creneau`.
 
@@ -125,22 +119,20 @@ hx-get="/booking/<pk>/cancel_form/
         ?start_datetime=...
         &slot_duration_minutes=...
         &remaining_capacity=...
-        &is_new_week=0|1
-        &is_in_group=0|1
-        &is_group_end=0|1"
+        &is_new_week=0|1"
 hx-target="#{{ slot_li_id }}"
 hx-swap="outerHTML"
 ```
 
 `cancel_form` validates these params with `CancelFormQuerySerializer`,
-then reconstructs a `BookableInterval` directly from them — **no
+then reconstructs a `DisplaySlot` directly from them — **no
 `compute_slots` call**. The slot is restored exactly as it was displayed
-when the form opened, including correct grouping visuals.
+when the form opened.
 
 The display values are encoded in the cancel URL:
 
 - **Normal state** — read from `creneau` at render time.
-- **Error state** — read from the four `display_*` context variables
+- **Error state** — read from the `display_*` context variables
   (threaded back from `add_to_basket`, which reads them from the hidden
   form fields submitted with the POST).
 
