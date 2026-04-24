@@ -39,17 +39,18 @@ TENANT_SCHEMA = 'lespass'
 # / Europe/Paris timezone passed explicitly to pure functions.
 PARIS_TZ = zoneinfo.ZoneInfo('Europe/Paris')
 
-# Date de référence fixe pour les tests validate_new_booking (finding §13).
-# reference_date = 2026-06-01 → horizon 28j → jusqu'au 2026-06-29.
-# / Fixed reference date for validate_new_booking tests (finding §13).
-REFERENCE_DATE = datetime.date(2026, 6, 1)
-MONDAY_NEAR    = datetime.date(2026, 6, 8)    # +7j  — dans l'horizon 28j
-MONDAY_FAR     = datetime.date(2026, 6, 15)   # +14j — hors horizon 7j
+# Dates fixes pour les tests validate_new_booking (finding §13).
+# REFERENCE_NOW = 2026-06-01 00:00 CEST → horizon 28j → jusqu'au 2026-06-29.
+# / Fixed datetimes for validate_new_booking tests (finding §13).
+MONDAY_NEAR = datetime.date(2026, 6, 8)    # +7j  — dans l'horizon 28j
+MONDAY_FAR  = datetime.date(2026, 6, 15)   # +14j — hors horizon 7j
 
 # Semaine fixe pour les tests full-week / one-day-slots / one-week-slot.
+# date_to est la borne exclusive (minuit du lundi suivant) selon la nouvelle convention.
 # / Fixed week for full-week / one-day-slots / one-week-slot tests.
-DATE_FROM_FULL_WEEK = datetime.date(2026, 6, 1)   # lundi / Monday
-DATE_TO_FULL_WEEK   = datetime.date(2026, 6, 7)   # dimanche / Sunday
+# date_to is the exclusive bound (midnight of the following Monday) per new convention.
+DATE_FROM_FULL_WEEK = timezone.make_aware(datetime.datetime(2026, 6, 1), PARIS_TZ)  # lundi / Monday midnight
+DATE_TO_FULL_WEEK   = timezone.make_aware(datetime.datetime(2026, 6, 8), PARIS_TZ)  # lundi suivant, exclu / next Monday, exclusive
 
 WEEK_MINUTES = 7 * 24 * 60   # 10 080 minutes
 
@@ -222,14 +223,21 @@ def _aware(year, month, day, hour=0, minute=0):
     )
 
 
+# Datetime de référence pour les tests validate_new_booking (finding §13).
+# Défini après _aware pour pouvoir l'utiliser.
+# / Reference datetime for validate_new_booking tests (finding §13).
+# Defined after _aware so it can use it.
+REFERENCE_NOW = _aware(2026, 6, 1)
+
+
 # ---------------------------------------------------------------------------
 # Tests — compute_open_intervals  (unitaires / §10)
 # open-day :: Date → Date → Timezone → [ClosedPeriod] → [Interval]
 #
 # compute_open_intervals retourne O = complément des ClosedPeriods fusionnées
-# dans la fenêtre [date_from 00:00, date_to+1 00:00).
+# dans la fenêtre [date_from, date_to) — les deux sont des datetime tz-aware.
 # / compute_open_intervals returns O = complement of merged ClosedPeriods
-# / within window [date_from 00:00, date_to+1 00:00).
+# / within window [date_from, date_to) — both are tz-aware datetimes.
 # ---------------------------------------------------------------------------
 
 def test_compute_open_intervals_returns_complement_of_closed_period():
@@ -250,8 +258,8 @@ def test_compute_open_intervals_returns_complement_of_closed_period():
 
     O = compute_open_intervals(
         closed_periods=[_cp(datetime.date(2026, 6, 10), datetime.date(2026, 6, 12))],
-        date_from=datetime.date(2026, 6, 1),
-        date_to=datetime.date(2026, 6, 30),
+        date_from=_aware(2026, 6, 1),
+        date_to=_aware(2026, 7, 1),
         tz=PARIS_TZ,
     )
 
@@ -274,8 +282,8 @@ def test_compute_open_intervals_handles_single_day_period():
 
     O = compute_open_intervals(
         closed_periods=[_cp(datetime.date(2026, 6, 15), datetime.date(2026, 6, 15))],
-        date_from=datetime.date(2026, 6, 1),
-        date_to=datetime.date(2026, 6, 30),
+        date_from=_aware(2026, 6, 1),
+        date_to=_aware(2026, 7, 1),
         tz=PARIS_TZ,
     )
 
@@ -304,8 +312,8 @@ def test_compute_open_intervals_handles_null_end_date():
 
     O = compute_open_intervals(
         closed_periods=[_cp(datetime.date(2026, 6, 20), None)],
-        date_from=datetime.date(2026, 6, 18),
-        date_to=datetime.date(2026, 6, 25),
+        date_from=_aware(2026, 6, 18),
+        date_to=_aware(2026, 6, 26),
         tz=PARIS_TZ,
     )
 
@@ -336,8 +344,8 @@ def test_compute_open_intervals_merges_overlapping_periods():
             _cp(datetime.date(2026, 6, 10), datetime.date(2026, 6, 15)),
             _cp(datetime.date(2026, 6, 13), datetime.date(2026, 6, 18)),
         ],
-        date_from=datetime.date(2026, 6, 1),
-        date_to=datetime.date(2026, 6, 30),
+        date_from=_aware(2026, 6, 1),
+        date_to=_aware(2026, 7, 1),
         tz=PARIS_TZ,
     )
 
@@ -382,11 +390,12 @@ def test_generate_theoretical_slots_from_weekday_template():
     """
     from booking.booking_engine import compute_open_intervals, generate_theoretical_slots
 
-    date = datetime.date(2026, 6, 1)
-    O = compute_open_intervals([], date, date, PARIS_TZ)
+    date_from = _aware(2026, 6, 1)
+    date_to   = _aware(2026, 6, 2)
+    O = compute_open_intervals([], date_from, date_to, PARIS_TZ)
     entries = [_oe(0, datetime.time(9, 0), 60, 2)]   # MONDAY 09:00, 60 min, 2 slots
 
-    W = generate_theoretical_slots(entries, O, date, date, PARIS_TZ)
+    W = generate_theoretical_slots(entries, O, date_from, date_to, PARIS_TZ)
 
     assert len(W) == 2
     assert W[0].start == _aware(2026, 6, 1, 9, 0)
@@ -415,12 +424,12 @@ def test_generate_theoretical_slots_excludes_closed_dates():
 
     O = compute_open_intervals(
         [_cp(datetime.date(2026, 6, 1), datetime.date(2026, 6, 1))],
-        datetime.date(2026, 6, 1), datetime.date(2026, 6, 8), PARIS_TZ,
+        _aware(2026, 6, 1), _aware(2026, 6, 9), PARIS_TZ,
     )
     entries = [_oe(0, datetime.time(9, 0), 60, 1)]   # MONDAY
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 1), datetime.date(2026, 6, 8), PARIS_TZ,
+        entries, O, _aware(2026, 6, 1), _aware(2026, 6, 9), PARIS_TZ,
     )
 
     assert len(W) == 1
@@ -441,12 +450,12 @@ def test_generate_theoretical_slots_respects_date_to_boundary():
     from booking.booking_engine import compute_open_intervals, generate_theoretical_slots
 
     O = compute_open_intervals(
-        [], datetime.date(2026, 6, 1), datetime.date(2026, 6, 7), PARIS_TZ,
+        [], _aware(2026, 6, 1), _aware(2026, 6, 8), PARIS_TZ,
     )
     entries = [_oe(0, datetime.time(9, 0), 60, 1)]   # MONDAY
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 1), datetime.date(2026, 6, 7), PARIS_TZ,
+        entries, O, _aware(2026, 6, 1), _aware(2026, 6, 8), PARIS_TZ,
     )
 
     assert len(W) == 1
@@ -472,12 +481,12 @@ def test_generate_theoretical_slots_start_on_closed_day_bleed_into_open_day_is_e
 
     O = compute_open_intervals(
         [_cp(datetime.date(2026, 6, 1), datetime.date(2026, 6, 1))],
-        datetime.date(2026, 6, 1), datetime.date(2026, 6, 2), PARIS_TZ,
+        _aware(2026, 6, 1), _aware(2026, 6, 3), PARIS_TZ,
     )
     entries = [_oe(0, datetime.time(23, 30), 60, 1)]   # MONDAY 23:30
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 1), datetime.date(2026, 6, 2), PARIS_TZ,
+        entries, O, _aware(2026, 6, 1), _aware(2026, 6, 3), PARIS_TZ,
     )
 
     assert len(W) == 0
@@ -505,12 +514,12 @@ def test_generate_theoretical_slots_last_slot_bleeds_onto_open_day_is_returned()
 
     O = compute_open_intervals(
         [_cp(datetime.date(2026, 6, 1), datetime.date(2026, 6, 1))],
-        datetime.date(2026, 6, 1), datetime.date(2026, 6, 2), PARIS_TZ,
+        _aware(2026, 6, 1), _aware(2026, 6, 3), PARIS_TZ,
     )
     entries = [_oe(0, datetime.time(22, 0), 120, 2)]   # MONDAY 22:00, 120 min, 2 slots
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 1), datetime.date(2026, 6, 2), PARIS_TZ,
+        entries, O, _aware(2026, 6, 1), _aware(2026, 6, 3), PARIS_TZ,
     )
 
     assert len(W) == 1
@@ -541,12 +550,12 @@ def test_generate_theoretical_slots_multi_day_spanning_entry():
 
     O = compute_open_intervals(
         [_cp(datetime.date(2026, 6, 2), datetime.date(2026, 6, 2))],
-        datetime.date(2026, 6, 1), datetime.date(2026, 6, 2), PARIS_TZ,
+        _aware(2026, 6, 1), _aware(2026, 6, 3), PARIS_TZ,
     )
     entries = [_oe(0, datetime.time(8, 0), 720, 3)]   # MONDAY 08:00, 720 min, 3 slots
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 1), datetime.date(2026, 6, 2), PARIS_TZ,
+        entries, O, _aware(2026, 6, 1), _aware(2026, 6, 3), PARIS_TZ,
     )
 
     assert len(W) == 1
@@ -573,12 +582,12 @@ def test_generate_theoretical_slots_bleed_into_closed_day_start_date_is_open():
 
     O = compute_open_intervals(
         [_cp(datetime.date(2026, 6, 8), datetime.date(2026, 6, 8))],
-        datetime.date(2026, 6, 7), datetime.date(2026, 6, 8), PARIS_TZ,
+        _aware(2026, 6, 7), _aware(2026, 6, 9), PARIS_TZ,
     )
     entries = [_oe(6, datetime.time(23, 30), 60, 1)]   # SUNDAY 23:30
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 7), datetime.date(2026, 6, 8), PARIS_TZ,
+        entries, O, _aware(2026, 6, 7), _aware(2026, 6, 9), PARIS_TZ,
     )
 
     assert len(W) == 0
@@ -602,12 +611,12 @@ def test_generate_theoretical_slots_multi_day_slot_all_open_days_is_returned():
     from booking.booking_engine import compute_open_intervals, generate_theoretical_slots
 
     O = compute_open_intervals(
-        [], datetime.date(2026, 6, 4), datetime.date(2026, 6, 6), PARIS_TZ,
+        [], _aware(2026, 6, 4), _aware(2026, 6, 7), PARIS_TZ,
     )
     entries = [_oe(3, datetime.time(0, 0), 2880, 1)]   # THURSDAY 00:00, 2880 min, 1 slot
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 4), datetime.date(2026, 6, 6), PARIS_TZ,
+        entries, O, _aware(2026, 6, 4), _aware(2026, 6, 7), PARIS_TZ,
     )
 
     assert len(W) == 1
@@ -636,12 +645,12 @@ def test_generate_theoretical_slots_three_day_slot_with_closed_middle_day_is_exc
 
     O = compute_open_intervals(
         [_cp(datetime.date(2026, 6, 5), datetime.date(2026, 6, 5))],
-        datetime.date(2026, 6, 4), datetime.date(2026, 6, 7), PARIS_TZ,
+        _aware(2026, 6, 4), _aware(2026, 6, 8), PARIS_TZ,
     )
     entries = [_oe(3, datetime.time(0, 0), 4320, 1)]   # THURSDAY 00:00, 4320 min, 1 slot
 
     W = generate_theoretical_slots(
-        entries, O, datetime.date(2026, 6, 4), datetime.date(2026, 6, 7), PARIS_TZ,
+        entries, O, _aware(2026, 6, 4), _aware(2026, 6, 8), PARIS_TZ,
     )
 
     assert len(W) == 0
@@ -678,10 +687,11 @@ def test_compute_remaining_capacity_with_no_bookings_equals_capacity():
         generate_theoretical_slots,
     )
 
-    date = datetime.date(2026, 6, 1)
-    O = compute_open_intervals([], date, date, PARIS_TZ)
+    date_from = _aware(2026, 6, 1)
+    date_to   = _aware(2026, 6, 2)
+    O = compute_open_intervals([], date_from, date_to, PARIS_TZ)
     W = generate_theoretical_slots(
-        [_oe(0, datetime.time(9, 0), 60, 1)], O, date, date, PARIS_TZ,
+        [_oe(0, datetime.time(9, 0), 60, 1)], O, date_from, date_to, PARIS_TZ,
     )
     assert len(W) == 1
 
@@ -708,10 +718,11 @@ def test_compute_remaining_capacity_decreases_with_overlapping_booking():
         generate_theoretical_slots,
     )
 
-    date = datetime.date(2026, 6, 1)
-    O = compute_open_intervals([], date, date, PARIS_TZ)
+    date_from = _aware(2026, 6, 1)
+    date_to   = _aware(2026, 6, 2)
+    O = compute_open_intervals([], date_from, date_to, PARIS_TZ)
     W = generate_theoretical_slots(
-        [_oe(0, datetime.time(9, 0), 60, 1)], O, date, date, PARIS_TZ,
+        [_oe(0, datetime.time(9, 0), 60, 1)], O, date_from, date_to, PARIS_TZ,
     )
 
     b1 = _bk(_aware(2026, 6, 1, 9, 0), slot_duration_minutes=60, slot_count=1)
@@ -739,10 +750,11 @@ def test_compute_remaining_capacity_zero_when_all_units_taken():
         generate_theoretical_slots,
     )
 
-    date = datetime.date(2026, 6, 1)
-    O = compute_open_intervals([], date, date, PARIS_TZ)
+    date_from = _aware(2026, 6, 1)
+    date_to   = _aware(2026, 6, 2)
+    O = compute_open_intervals([], date_from, date_to, PARIS_TZ)
     W = generate_theoretical_slots(
-        [_oe(0, datetime.time(9, 0), 60, 1)], O, date, date, PARIS_TZ,
+        [_oe(0, datetime.time(9, 0), 60, 1)], O, date_from, date_to, PARIS_TZ,
     )
 
     b1 = _bk(_aware(2026, 6, 1, 9, 0), 60, 1)
@@ -808,13 +820,13 @@ def test_compute_slots_booking_count_gt_1_overlaps_multiple_slots():
                 status=Booking.STATUS_NEW,
             )
 
-            # reference_date = Jun 01 = date_from → dans l'horizon par défaut.
-            # / reference_date = Jun 01 = date_from → within default horizon.
+            # reference_now = Jun 01 00:00 → date_from = Jun 01 00:00 → dans l'horizon par défaut.
+            # / reference_now = Jun 01 00:00 → date_from = Jun 01 00:00 → within default horizon.
             slots = compute_slots(
                 resource,
-                datetime.date(2026, 6, 1),
-                datetime.date(2026, 6, 1),
-                reference_date=datetime.date(2026, 6, 1),
+                _aware(2026, 6, 1),
+                _aware(2026, 6, 2),
+                reference_now=_aware(2026, 6, 1),
             )
 
             assert len(slots) == 2
@@ -872,9 +884,9 @@ def test_compute_slots_booking_partial_overlap_counts_as_full_overlap():
 
             slots = compute_slots(
                 resource,
-                datetime.date(2026, 6, 1),
-                datetime.date(2026, 6, 1),
-                reference_date=datetime.date(2026, 6, 1),
+                _aware(2026, 6, 1),
+                _aware(2026, 6, 2),
+                reference_now=_aware(2026, 6, 1),
             )
 
             assert len(slots) == 1
@@ -902,8 +914,8 @@ def test_compute_slots_returns_empty_when_no_opening_entries():
 
             slots = compute_slots(
                 resource,
-                datetime.date(2026, 6, 1),
-                datetime.date(2026, 6, 7),
+                _aware(2026, 6, 1),
+                _aware(2026, 6, 8),
             )
 
             assert slots == []
@@ -931,8 +943,8 @@ def test_compute_slots_end_to_end_with_fixture_coworking_resource():
     """
     from booking.booking_engine import compute_slots
 
-    reference_date = datetime.date(2026, 6, 1)
-    monday         = datetime.date(2026, 6, 2)
+    reference_now = _aware(2026, 6, 1)
+    monday_dt     = _aware(2026, 6, 2)
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -949,8 +961,8 @@ def test_compute_slots_end_to_end_with_fixture_coworking_resource():
                     slot_duration_minutes=60, slot_count=8,
                 )
 
-            slots = compute_slots(resource, monday, monday,
-                                  reference_date=reference_date)
+            slots = compute_slots(resource, monday_dt, _aware(2026, 6, 3),
+                                  reference_now=reference_now)
 
             assert len(slots) == 8
             assert slots[0].start.time() == datetime.time(9, 0)
@@ -959,7 +971,7 @@ def test_compute_slots_end_to_end_with_fixture_coworking_resource():
             assert slots[7].end.time()   == datetime.time(17, 0)
 
             for slot in slots:
-                assert slot.start.date() == monday
+                assert slot.start.date() == monday_dt.date()
                 assert slot.duration_minutes() == 60
                 assert slot.max_capacity == 3
                 assert slot.remaining_capacity == 3
@@ -987,8 +999,8 @@ def test_compute_slots_end_to_end_with_fixture_petite_salle():
     """
     from booking.booking_engine import compute_slots
 
-    reference_date = datetime.date(2026, 6, 1)
-    saturday       = datetime.date(2026, 6, 7)
+    reference_now = _aware(2026, 6, 1)
+    saturday_dt   = _aware(2026, 6, 7)
 
     with schema_context(TENANT_SCHEMA):
         try:
@@ -1005,8 +1017,8 @@ def test_compute_slots_end_to_end_with_fixture_petite_salle():
                     slot_duration_minutes=180, slot_count=3,
                 )
 
-            slots = compute_slots(resource, saturday, saturday,
-                                  reference_date=reference_date)
+            slots = compute_slots(resource, saturday_dt, _aware(2026, 6, 8),
+                                  reference_now=reference_now)
 
             assert len(slots) == 3
             assert slots[0].start.time() == datetime.time(10, 0)
@@ -1544,7 +1556,7 @@ def test_validate_booking_accepts_valid_slot():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is True
@@ -1582,7 +1594,7 @@ def test_validate_booking_rejects_slot_beyond_horizon():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1622,7 +1634,7 @@ def test_validate_booking_rejects_slot_in_closed_period():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1665,7 +1677,7 @@ def test_validate_booking_rejects_full_slot():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=user,
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1703,7 +1715,7 @@ def test_validate_booking_slot_count_gt_1_all_slots_must_be_available():
                 slot_duration_minutes=60,
                 slot_count=3,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is True
@@ -1747,7 +1759,7 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_full():
                 slot_duration_minutes=60,
                 slot_count=3,
                 member=user,
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1788,7 +1800,7 @@ def test_validate_booking_slot_count_gt_1_fails_if_one_slot_in_closed_period():
                 slot_duration_minutes=1440,
                 slot_count=3,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1826,7 +1838,7 @@ def test_validate_booking_rejects_mismatched_slot_duration():
                 slot_duration_minutes=30,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1864,7 +1876,7 @@ def test_validate_booking_rejects_start_time_not_aligned_to_opening():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1903,7 +1915,7 @@ def test_validate_booking_slot_count_gt_1_rejects_if_series_exceeds_opening():
                 slot_duration_minutes=60,
                 slot_count=3,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -1942,7 +1954,7 @@ def test_validate_booking_accepts_slot_bleeding_into_next_open_day():
                 slot_duration_minutes=120,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is True
@@ -1984,7 +1996,7 @@ def test_validate_booking_rejects_slot_bleeding_into_closed_next_day():
                 slot_duration_minutes=120,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
+                reference_now=REFERENCE_NOW,
             )
 
             assert is_valid is False
@@ -2029,7 +2041,6 @@ def test_validate_booking_accepts_slot_starting_in_a_few_minutes():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
                 reference_now=reference_now,
             )
 
@@ -2073,7 +2084,6 @@ def test_validate_booking_rejects_slot_that_has_already_started():
                 slot_duration_minutes=60,
                 slot_count=1,
                 member=_get_test_user(),
-                reference_date=REFERENCE_DATE,
                 reference_now=reference_now,
             )
 
@@ -2084,3 +2094,40 @@ def test_validate_booking_rejects_slot_that_has_already_started():
             _cleanup()
 
 
+
+
+def test_generate_theoretical_slots_excludes_past_slots_when_date_from_is_mid_day():
+    """
+    Créneaux commençant avant date_from (milieu de journée) sont exclus.
+    Créneaux commençant à partir de date_from sont inclus.
+    / Slots starting before date_from (mid-day datetime) are excluded.
+    / Slots starting at or after date_from are included.
+
+    LOCALISATION : booking/tests/test_booking_engine.py
+
+    Vérifie le correctif du bug : les créneaux passés du jour courant ne doivent
+    pas être affichés quand date_from = timezone.now() (milieu de journée).
+    / Verifies the bug fix: past-today slots must not be shown when
+    / date_from = timezone.now() (mid-day).
+
+    Ouverture lundi 08:00, 60 min × 4 créneaux → 08:00, 09:00, 10:00, 11:00.
+    date_from = 10:00 → 08:00 et 09:00 exclus, 10:00 et 11:00 inclus.
+    / Monday 08:00, 60 min × 4 slots → 08:00, 09:00, 10:00, 11:00.
+    / date_from = 10:00 → 08:00 and 09:00 excluded, 10:00 and 11:00 included.
+    """
+    from booking.booking_engine import generate_theoretical_slots, Interval
+
+    entries = [_oe(weekday=0, start_time=datetime.time(8, 0),
+                   slot_duration_minutes=60, slot_count=4)]
+    date_from = _aware(2026, 6, 1, 10, 0)   # 10:00 — après 08:00 et 09:00
+    date_to   = _aware(2026, 6, 2)           # minuit exclusif / exclusive midnight
+    open_intervals = [Interval(start=_aware(2026, 6, 1), end=_aware(2026, 6, 2))]
+
+    slots = generate_theoretical_slots(entries, open_intervals, date_from, date_to, PARIS_TZ)
+
+    starts = [s.start for s in slots]
+    assert _aware(2026, 6, 1, 8, 0)  not in starts   # passé — exclu / past — excluded
+    assert _aware(2026, 6, 1, 9, 0)  not in starts   # passé — exclu / past — excluded
+    assert _aware(2026, 6, 1, 10, 0) in starts        # = date_from — inclus / included
+    assert _aware(2026, 6, 1, 11, 0) in starts        # futur — inclus / future — included
+    assert len(slots) == 2

@@ -110,31 +110,31 @@ def compute_open_intervals(closed_periods, date_from, date_to, tz):
 
     LOCALISATION : booking/booking_engine.py
 
-    Fenêtre : [date_from 00:00 local, date_to+1 00:00 local).
-    end_date=None étend la fermeture jusqu'à date_to (spec §3.2.1).
+    Fenêtre : [date_from, date_to) — les deux sont des datetime tz-aware.
+    end_date=None étend la fermeture jusqu'à la fin de la fenêtre (spec §3.2.1).
 
     Accepte tout itérable avec .start_date et .end_date (date | None) —
     pas besoin d'un modèle Django pour les tests unitaires.
 
     :param closed_periods: itérable avec .start_date, .end_date (date|None)
-    :param date_from: datetime.date
-    :param date_to:   datetime.date
+    :param date_from: datetime.datetime tz-aware — début exact de la fenêtre
+    :param date_to:   datetime.datetime tz-aware — fin exclusive de la fenêtre
     :param tz:        tzinfo — fuseau horaire du tenant
     :return: list[Interval] — O, sans chevauchement, ordonné par start
     """
-    window_start = timezone.make_aware(
-        datetime.datetime.combine(date_from, datetime.time.min), tz
-    )
-    window_end = timezone.make_aware(
-        datetime.datetime.combine(date_to + datetime.timedelta(days=1), datetime.time.min),
-        tz,
-    )
+    window_start = date_from
+    window_end   = date_to
+
+    # Dates dérivées pour comparer avec .start_date / .end_date des ClosedPeriods.
+    # / Derived dates for comparison with ClosedPeriod .start_date / .end_date.
+    date_from_as_date = date_from.date()
+    date_to_as_date   = (date_to - datetime.timedelta(microseconds=1)).date()
 
     closed_intervals = []
     for period in closed_periods:
-        period_end_date = period.end_date if period.end_date is not None else date_to
-        clamped_start = max(period.start_date, date_from)
-        clamped_end   = min(period_end_date, date_to)
+        period_end_date = period.end_date if period.end_date is not None else date_to_as_date
+        clamped_start = max(period.start_date, date_from_as_date)
+        clamped_end   = min(period_end_date, date_to_as_date)
         if clamped_start > clamped_end:
             continue
         closed_intervals.append(Interval(
@@ -175,6 +175,7 @@ def generate_theoretical_slots(opening_entries, open_intervals,
 
     Règle W (spec §3.2.2) : w ∈ W ⟺ ∃ o ∈ O, w ⊆ o
     Un créneau qui déborde sur une fermeture est exclu entièrement.
+    Un créneau dont le start est avant date_from est exclu (créneaux passés).
 
     Les starts sont calculés par timedelta (pas par recomposition
     heure/minute) pour supporter les durées > 1440 min.
@@ -185,15 +186,16 @@ def generate_theoretical_slots(opening_entries, open_intervals,
     :param opening_entries: itérable avec .weekday, .start_time,
                             .slot_duration_minutes, .slot_count
     :param open_intervals:  list[Interval] — O
-    :param date_from: datetime.date
-    :param date_to:   datetime.date
+    :param date_from: datetime.datetime tz-aware — début exact de la fenêtre
+    :param date_to:   datetime.datetime tz-aware — fin exclusive de la fenêtre
     :param tz:        tzinfo
     :return: list[BookableInterval] — capacités à 0, remplies par compute_slots
     """
     bookable_intervals = []
-    current_date = date_from
+    current_date = date_from.date()
+    last_date    = (date_to - datetime.timedelta(microseconds=1)).date()
 
-    while current_date <= date_to:
+    while current_date <= last_date:
         for entry in opening_entries:
             if entry.weekday != current_date.weekday():
                 continue
@@ -210,6 +212,13 @@ def generate_theoretical_slots(opening_entries, open_intervals,
                     minutes=entry.slot_duration_minutes
                 )
                 slot_interval = Interval(start=start_dt, end=end_dt)
+
+                # Exclure les créneaux commençant avant la borne de départ.
+                # Masque les créneaux passés quand date_from = timezone.now().
+                # / Exclude slots starting before the window start.
+                # Hides past-today slots when date_from = timezone.now().
+                if start_dt < date_from:
+                    continue
 
                 # w ∈ W ⟺ ∃ o ∈ O, w ⊆ o  (spec §3.2.2)
                 if not any(o.contains(slot_interval) for o in open_intervals):
@@ -298,37 +307,55 @@ def get_existing_bookings_for_resource(resource, date_from, date_to):
 
 # ─── Orchestrateurs / Orchestrators ──────────────────────────────────────────
 
-def compute_slots(resource, date_from=None, date_to=None, reference_date=None):
+def compute_slots(resource, date_from=None, date_to=None, reference_now=None):
     """
-    Calcule E pour la ressource sur [date_from, date_to].
-    / Computes E for the resource over [date_from, date_to].
+    Calcule E pour la ressource sur [date_from, date_to).
+    / Computes E for the resource over [date_from, date_to).
 
     LOCALISATION : booking/booking_engine.py
 
-    date_from=None → aujourd'hui.
-    date_to=None   → date_from + resource.booking_horizon_days.
-    reference_date injecte une date fixe dans les tests (finding §13).
+    date_from=None → maintenant (timezone.now()).
+    date_to=None   → minuit du jour (today + booking_horizon_days + 1).
+    reference_now  injecte un datetime fixe dans les tests (finding §13).
 
+    :param date_from: datetime.datetime tz-aware — début exact (défaut : now)
+    :param date_to:   datetime.datetime tz-aware — fin exclusive (défaut : fin de l'horizon)
+    :param reference_now: datetime.datetime tz-aware — injecté dans les tests
     :return: list[BookableInterval]
     """
-    today = reference_date or timezone.localdate()
+    tz  = timezone.get_current_timezone()
+    now = reference_now or timezone.now()
+
     if date_from is None:
-        date_from = today
+        date_from = now
     if date_to is None:
-        date_to = date_from + datetime.timedelta(days=resource.booking_horizon_days)
-    effective_date_to = min(
-        date_to,
-        today + datetime.timedelta(days=resource.booking_horizon_days),
+        horizon_end_date = now.date() + datetime.timedelta(days=resource.booking_horizon_days)
+        date_to = timezone.make_aware(
+            datetime.datetime.combine(
+                horizon_end_date + datetime.timedelta(days=1), datetime.time.min
+            ),
+            tz,
+        )
+
+    horizon_cap = timezone.make_aware(
+        datetime.datetime.combine(
+            now.date() + datetime.timedelta(days=resource.booking_horizon_days + 1),
+            datetime.time.min,
+        ),
+        tz,
     )
-    if effective_date_to < date_from:
+    effective_date_to = min(date_to, horizon_cap)
+
+    if effective_date_to <= date_from:
         return []
 
     opening_entries   = get_opening_entries_for_resource(resource)
     closed_periods    = get_closed_periods_for_resource(resource)
     existing_bookings = get_existing_bookings_for_resource(
-        resource, date_from, effective_date_to
+        resource,
+        date_from.date(),
+        (effective_date_to - datetime.timedelta(microseconds=1)).date(),
     )
-    tz = timezone.get_current_timezone()
 
     open_intervals = compute_open_intervals(
         closed_periods=closed_periods,
@@ -359,8 +386,7 @@ def compute_slots(resource, date_from=None, date_to=None, reference_date=None):
 
 
 def validate_new_booking(resource, start_datetime, slot_duration_minutes,
-                         slot_count, member, reference_date=None,
-                         reference_now=None):
+                         slot_count, member, reference_now=None):
     """
     Valide B ⊆ E' et crée la réservation de manière atomique (finding §14).
     / Validates B ⊆ E' and creates the booking atomically (finding §14).
@@ -381,7 +407,6 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
       concurrentes. Re-lit les réservations et re-vérifie la capacité
       avec des données fraîches avant d'insérer.
 
-    reference_date : date fixe pour les tests (finding §13).
     reference_now  : datetime fixe pour les tests (finding §13).
 
     :return: (True, Booking) si créé, (False, str) avec le message d'erreur
@@ -397,16 +422,19 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count
     )
-    date_from = start_datetime.date()
-    # (fin − 1 µs).date() : un créneau se terminant à minuit exact
-    # n'occupe pas le lendemain (sémantique semi-ouverte [start, end)).
-    date_to = (last_slot_end_dt - datetime.timedelta(microseconds=1)).date()
+    # date_from / date_to sont des datetime (borne exclusive).
+    # date_to = last_slot_end_dt car la convention est [date_from, date_to) exclusif.
+    # Un créneau finissant à minuit a end = 00:00 qui est exactement dans la fenêtre.
+    # / date_from / date_to are datetimes (exclusive upper bound).
+    # date_to = last_slot_end_dt since the convention is [date_from, date_to) exclusive.
+    date_from = start_datetime
+    date_to   = last_slot_end_dt
 
     # ── Étape 1 : pré-validation ──────────────────────────────────────────────
     slot_by_key = {
         (slot.start, slot.duration_minutes()): slot
         for slot in compute_slots(resource, date_from, date_to,
-                                  reference_date=reference_date)
+                                  reference_now=reference_now)
     }
 
     for i in range(slot_count):
@@ -430,7 +458,9 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
         Resource.objects.select_for_update().get(pk=resource.pk)
 
         fresh_bookings = get_existing_bookings_for_resource(
-            resource, date_from, date_to
+            resource,
+            date_from.date(),
+            (date_to - datetime.timedelta(microseconds=1)).date(),
         )
 
         for i in range(slot_count):
