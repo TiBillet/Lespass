@@ -9,7 +9,6 @@ services:
     volumes:
       - ../cordova_local_plugins:/cordova_local_plugins
       - ../mobile-app:/mobile-app
-      - ../mobile-app/res:/mobile-app/res
       - /dev/bus/usb:/dev/bus/usb
       - ./.bashrc:/root/.bashrc
     tty: true

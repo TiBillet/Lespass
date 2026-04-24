@@ -1,8 +1,12 @@
 # Création de l'application android(apk) 
 
+## l'application
+Elle se trouve dans laboutit_client_android_v2/mobile-app/www.
+Cordova est un pont entre le hardware et le js du front.
+La seule chose à changer est 'server_pin_code'
+
 ## Créer votre fichier de conf
-- A la racine du projet, créer env.js et modifier le :   
-  . type_app: 'cordova', // android   
+- A la racine du projet, créer env.js et modifier le :      
   . server_pin_code: "http://tibillet.localhost", // votre serveur de pin_code
 
 ```bash

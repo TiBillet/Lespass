@@ -96,7 +96,7 @@ export async function awaitDevicesOk() {
  * @returns {object} - configuration
  */
 async function readConfFile() {
-  const pathFile = cordova.file.dataDirectory + env.confFilename
+  const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
   return await new Promise((resolve) => {
     window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
       fileEntry.file(function (file) {
@@ -106,11 +106,11 @@ async function readConfFile() {
         }
         reader.readAsText(file)
       }, () => {
-        putLog('error', `- info, read "${env.confFilename}" failed !`)
+        putLog('error', `- info, read "configLaboutik.json" failed !`)
         resolve(null)
       })
     }, () => {
-      putLog('error', `- info, read "${env.confFilename}" failed !`)
+      putLog('error', `- info, read "configLaboutik.json" failed !`)
       resolve(null)
     })
   })
@@ -127,7 +127,7 @@ async function writeFile(confFile) {
 
   return await new Promise((resolve) => {
     window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function (directoryEntry) {
-      directoryEntry.getFile(env.confFilename, { create: true },
+      directoryEntry.getFile('configLaboutik.json', { create: true },
         function (fileEntry) {
           fileEntry.createWriter(function (fileWriter) {
             fileWriter.onwriteend = function () {
@@ -136,7 +136,7 @@ async function writeFile(confFile) {
             }
             fileWriter.onerror = function (e) {
               // you could hook this up with our global error handler, or pass in an error callback
-              putLog('error', `- info, write "${env.confFilename}" failed: ${e.toString()}`)
+              putLog('error', `- info, write "configLaboutik.json" failed: ${e.toString()}`)
               resolve(false)
             }
             const blob = new Blob([data], { type: 'text/plain' })
@@ -180,8 +180,9 @@ export async function getConfigurationAndSave() {
 }
 
 async function getServerInfos(pinCode) {
-  // putLog('info', '-> getServerInfos  -- type pinCode =', pinCode)
+  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode)
   const confFile = await readConfFile()
+  putLog('info','confFile = ', confFile)
   try {
     // requête à l'app django discovery
     showSpinner()
@@ -218,21 +219,20 @@ export async function updateCurrentServerAndGoServer(event) {
 
   const data = confFile.servers.find(item => item.server_url === url)
 
-  const response = await fetch(url + '/laboutik/auth/bridge/', {
-    method: "POST",
-    headers: {
-      "Authorization": "Api-Key " + data.api_key
-    },
-     credentials: 'include' // demande au navigateur/webview de stocker le cookie
-  })
-  const retour = await response.text()
-  console.log('response.url =', response.url);
+  // Soumission POST via formulaire natif pour éviter les restrictions CORS/fetch
+  // et garantir la transmission du cookie session sur la redirection Django
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = url + '/laboutik/auth/bridge/'
 
-  if (response.status === 204) {
-    window.location = url + '/laboutik/caisse/'
-  } else {
-    putLog('error', `Erreur Api-key, url ou serveur: ${response.url} !`)
-  }
+  const input = document.createElement('input')
+  input.type = 'hidden'
+  input.name = 'api_key'
+  input.value = data.api_key
+
+  form.appendChild(input)
+  document.body.appendChild(form)
+  form.submit()
 }
 
 export async function deleteServer(event) {

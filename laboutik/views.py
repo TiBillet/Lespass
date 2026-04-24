@@ -8507,7 +8507,7 @@ class LaBoutikAuthBridgeView(APIView):
     LOCALISATION : laboutik/views.py
 
     Flux :
-    1. Client POST avec header Authorization: Api-Key xxx
+    1. Client POST un formulaire avec : api_key
     2. Validation de la clé (401 si invalide)
     3. Si la clé n'a pas de user lié (legacy V1) : 400
     4. Si user.is_active=False (révoqué) : 401
@@ -8537,25 +8537,14 @@ class LaBoutikAuthBridgeView(APIView):
     throttle_classes = [BridgeThrottle]
 
     def post(self, request):
-        # Extraction de la clé depuis le header Authorization
-        # / Extract key from Authorization header
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if not auth_header.startswith('Api-Key '):
-            # Log : tentative d'accès sans header Api-Key
-            # / Log: access attempt without Api-Key header
-            logger.warning(
-                "laboutik bridge: missing/malformed Authorization header from %s",
-                request.META.get('REMOTE_ADDR'),
-            )
-            return HttpResponse(status=401)
+        # Extraction de la clé depuis post
+        api_key_string = request.POST.get('api_key', '').strip()
 
-        api_key_string = auth_header[len('Api-Key '):].strip()
         if not api_key_string:
             logger.warning(
-                "laboutik bridge: empty API key from %s",
-                request.META.get('REMOTE_ADDR'),
-            )
-            return HttpResponse(status=401)
+            "laboutik bridge: missing api_key in header or POST body from %s",
+            request.META.get('REMOTE_ADDR'),
+        )
 
         # Validation de la clé
         # / Key validation
@@ -8605,4 +8594,6 @@ class LaBoutikAuthBridgeView(APIView):
             "laboutik bridge: session opened for terminal %s",
             term_user.email,
         )
-        return HttpResponse(status=204)
+        
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect('/laboutik/caisse/')
