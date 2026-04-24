@@ -17,7 +17,7 @@ from json import dumps
 from django.conf import settings
 from django.contrib.auth import login
 from django.db import transaction as db_transaction
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -8595,5 +8595,4 @@ class LaBoutikAuthBridgeView(APIView):
             term_user.email,
         )
         
-        from django.http import HttpResponseRedirect
         return HttpResponseRedirect('/laboutik/caisse/')
