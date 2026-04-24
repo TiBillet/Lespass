@@ -5,56 +5,83 @@ Vues de l'app booking.
 LOCALISATION : booking/views.py
 """
 import datetime
-from collections import Counter, defaultdict
+from dataclasses import dataclass, field
+from collections import defaultdict
 
 
-def annoter_creneaux_pour_affichage(creneaux):
+@dataclass
+class DisplaySlot:
     """
-    Annote chaque créneau avec les indicateurs visuels d'affichage.
-    / Annotates each slot with visual display indicators.
+    View-layer representation of a bookable slot.
+    Built by annotate_slots_for_display() from BookableInterval objects.
+    Contains only display-relevant data; no booking logic.
+    """
+    start:                 datetime.datetime
+    end:                   datetime.datetime
+    remaining_capacity:    int
+    slot_duration_minutes: int
+    is_new_week:           bool = False
+
+    @property
+    def duration_minutes(self) -> int:
+        return self.slot_duration_minutes
+
+
+@dataclass
+class DisplaySlotGroup:
+    """
+    A contiguous run of DisplaySlot objects (x.end == next.start).
+    A solo slot has slots=[itself].
+    Prepared for future multi-slot booking — the booking form will use
+    group.slots to offer block booking.
+    """
+    slots: list = field(default_factory=list)  # list[DisplaySlot]
+
+
+def annotate_slots_for_display(raw_slots):
+    """
+    Converts a list of BookableInterval objects into display-layer objects.
 
     LOCALISATION : booking/views.py
 
-    Ces propriétés ne font pas partie de la logique métier (booking_engine.py).
-    Elles sont calculées ici, dans la couche vue, car elles servent uniquement
-    au rendu HTML (slot_row.html).
-    / These properties are not part of the booking logic (booking_engine.py).
-    They are computed here, in the view layer, because they only serve
-    HTML rendering (slot_row.html).
+    Returns list[DisplaySlotGroup]. Each group holds a contiguous run of
+    DisplaySlot objects (x.end == next.start). A solo slot has one group.
 
-    Propriétés ajoutées / Added properties:
-      is_in_group  — True si le créneau appartient à un groupe de ≥ 2 créneaux
-                     consécutifs issus du même OpeningEntry × date
-      is_group_end — True si dernier (ou seul) créneau du groupe
-      is_new_week  — True si ce créneau démarre une nouvelle semaine ISO
-                     (jamais True pour le tout premier créneau de la liste)
+    Pass 1: create DisplaySlot per slot with is_new_week computed globally.
+    Pass 2: group consecutive DisplaySlot objects into DisplaySlotGroup runs.
 
-    :param creneaux: list[BookableInterval]
-    :return: list[BookableInterval] — mêmes objets, annotés en place
+    :param raw_slots: list[BookableInterval]
+    :return: list[DisplaySlotGroup]
     """
-    group_id_counts = Counter(creneau.group_id for creneau in creneaux)
-
-    for i, creneau in enumerate(creneaux):
-        creneau.is_in_group = group_id_counts[creneau.group_id] > 1
-
-        suivant_meme_groupe = (
-            i < len(creneaux) - 1
-            and creneaux[i + 1].group_id == creneau.group_id
+    # Pass 1: create DisplaySlot objects with is_new_week
+    display_slots = []
+    for i, slot in enumerate(raw_slots):
+        is_new_week = (
+            i > 0
+            and slot.start.isocalendar()[:2] != raw_slots[i - 1].start.isocalendar()[:2]
         )
-        creneau.is_group_end = not suivant_meme_groupe
+        display_slots.append(DisplaySlot(
+            start=slot.start,
+            end=slot.end,
+            remaining_capacity=slot.remaining_capacity,
+            slot_duration_minutes=slot.duration_minutes(),
+            is_new_week=is_new_week,
+        ))
 
-        # is_new_week : vrai si la semaine ISO change par rapport au créneau précédent.
-        # Le tout premier créneau ne déclenche jamais de séparateur de semaine.
-        # / is_new_week: True when the ISO week changes from the previous slot.
-        # The very first slot never triggers a week separator.
-        if i > 0:
-            semaine_courante   = creneau.start.isocalendar()[:2]
-            semaine_precedente = creneaux[i - 1].start.isocalendar()[:2]
-            creneau.is_new_week = semaine_courante != semaine_precedente
+    # Pass 2: group contiguous slots into DisplaySlotGroup runs
+    if not display_slots:
+        return []
+
+    groups = []
+    current_run = [display_slots[0]]
+    for ds in display_slots[1:]:
+        if ds.start == current_run[-1].end:
+            current_run.append(ds)
         else:
-            creneau.is_new_week = False
-
-    return creneaux
+            groups.append(DisplaySlotGroup(slots=current_run))
+            current_run = [ds]
+    groups.append(DisplaySlotGroup(slots=current_run))
+    return groups
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -66,9 +93,6 @@ from rest_framework.decorators import action
 
 from BaseBillet.views import get_context
 from booking.booking_engine import (
-    BookableInterval,
-    Interval,
-    compute_max_consecutive_slots,
     compute_slots,
     validate_new_booking,
 )
@@ -113,11 +137,19 @@ class BookingViewSet(viewsets.ViewSet):
         items_sans_groupe = []
 
         for ressource in toutes_les_ressources:
-            creneaux = compute_slots(ressource)
+            slot_groups = annotate_slots_for_display(compute_slots(ressource))
+            # Limit card preview to first 5 display slots across groups
+            card_groups = []
+            remaining = 5
+            for group in slot_groups:
+                if remaining <= 0:
+                    break
+                card_groups.append(DisplaySlotGroup(slots=group.slots[:remaining]))
+                remaining -= len(card_groups[-1].slots)
             item = {
                 'ressource':      ressource,
-                'creneaux':       creneaux,
-                'a_des_creneaux': len(creneaux) > 0,
+                'slot_groups':    card_groups,
+                'a_des_creneaux': bool(card_groups and card_groups[0].slots),
             }
             if ressource.group:
                 items_par_groupe[ressource.group].append(item)
@@ -178,11 +210,11 @@ class BookingViewSet(viewsets.ViewSet):
             Resource.objects.select_related('calendar', 'weekly_opening', 'group'),
             pk=pk,
         )
-        creneaux = annoter_creneaux_pour_affichage(compute_slots(ressource))
+        slot_groups = annotate_slots_for_display(compute_slots(ressource))
         contexte = get_context(request)
         contexte.update({
             'ressource':             ressource,
-            'creneaux':              creneaux,
+            'slot_groups':           slot_groups,
             'reservations_en_cours': self._reservations_en_cours(request),
         })
         return render(request, 'booking/views/resource.html', contexte)
@@ -254,19 +286,25 @@ class BookingViewSet(viewsets.ViewSet):
         slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
         slot_li_id            = self._slot_li_id(ressource.pk, start_datetime)
 
-        creneaux = compute_slots(ressource)
+        slot_groups = annotate_slots_for_display(compute_slots(ressource))
 
-        # Cherche le créneau demandé dans E (même début et même durée).
-        # / Looks up the requested slot in E (matching start and duration).
+        # Find the requested slot and compute max consecutive available from its
+        # position in the group (contiguity is already encoded in DisplaySlotGroup).
         creneau_demande = None
-        for creneau in creneaux:
-            if (creneau.start == start_datetime
-                    and creneau.duration_minutes() == slot_duration_minutes):
-                creneau_demande = creneau
+        max_slot_count  = 0
+        for group in slot_groups:
+            for i, slot in enumerate(group.slots):
+                if slot.start == start_datetime and slot.slot_duration_minutes == slot_duration_minutes:
+                    creneau_demande = slot
+                    for s in group.slots[i:]:
+                        if s.remaining_capacity <= 0:
+                            break
+                        max_slot_count += 1
+                    break
+            if creneau_demande:
                 break
 
-        # Créneau absent de E ou capacité épuisée → affiche le message d'indisponibilité.
-        # / Slot not in E or capacity exhausted → show unavailability message.
+        # Slot not found in E or capacity exhausted → show unavailability message.
         if creneau_demande is None or creneau_demande.remaining_capacity <= 0:
             contexte = get_context(request)
             contexte.update({
@@ -276,10 +314,6 @@ class BookingViewSet(viewsets.ViewSet):
                 'slot_indisponible': True,
             })
             return render(request, 'booking/partial/booking_form.html', contexte)
-
-        max_slot_count = compute_max_consecutive_slots(
-            creneaux, start_datetime, slot_duration_minutes
-        )
 
         contexte = get_context(request)
         contexte.update({
@@ -301,14 +335,14 @@ class BookingViewSet(viewsets.ViewSet):
         LOCALISATION : booking/views.py
 
         Appelé par le lien "Annuler" dans booking_form.html.
-        Reconstruit le BookableInterval directement depuis les paramètres GET
+        Reconstruit le DisplaySlot directement depuis les paramètres GET
         (état d'affichage encodé lors du rendu du formulaire) — sans appeler
         compute_slots. Le créneau est rendu tel qu'il était à l'ouverture du
-        formulaire, groupage inclus.
+        formulaire.
         / Called by the "Annuler" link in booking_form.html.
-        Rebuilds the BookableInterval directly from GET params (display state
+        Rebuilds the DisplaySlot directly from GET params (display state
         encoded at form-render time) — without calling compute_slots. The slot
-        is restored as it was when the form was opened, including grouping.
+        is restored as it was when the form was opened.
 
         Paramètres GET : voir CancelFormQuerySerializer
         / GET params: see CancelFormQuerySerializer
@@ -341,24 +375,15 @@ class BookingViewSet(viewsets.ViewSet):
         slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
         remaining_capacity    = serializer_params.validated_data['remaining_capacity']
         is_new_week           = serializer_params.validated_data['is_new_week']
-        is_in_group           = serializer_params.validated_data['is_in_group']
-        is_group_end          = serializer_params.validated_data['is_group_end']
 
-        # Reconstruit le BookableInterval depuis les paramètres d'affichage.
-        # Ces valeurs ont été encodées dans l'URL au moment du rendu du formulaire,
-        # donc le créneau est restauré exactement comme il était affiché.
-        # / Rebuild the BookableInterval from the display params.
-        # These values were encoded in the URL at form-render time, so the slot
-        # is restored exactly as it was displayed.
         end_datetime = start_datetime + datetime.timedelta(minutes=slot_duration_minutes)
-        creneau = BookableInterval(
-            interval=Interval(start=start_datetime, end=end_datetime),
-            max_capacity=ressource.capacity,
+        creneau = DisplaySlot(
+            start=start_datetime,
+            end=end_datetime,
             remaining_capacity=remaining_capacity,
+            slot_duration_minutes=slot_duration_minutes,
+            is_new_week=is_new_week,
         )
-        creneau.is_new_week  = is_new_week
-        creneau.is_in_group  = is_in_group
-        creneau.is_group_end = is_group_end
 
         contexte = get_context(request)
         contexte.update({
@@ -416,9 +441,7 @@ class BookingViewSet(viewsets.ViewSet):
             display_remaining_capacity = max(0, int(request.data.get('display_remaining_capacity', 0)))
         except (TypeError, ValueError):
             display_remaining_capacity = 0
-        display_is_new_week  = '1' if request.data.get('display_is_new_week')  == '1' else '0'
-        display_is_in_group  = '1' if request.data.get('display_is_in_group')  == '1' else '0'
-        display_is_group_end = '1' if request.data.get('display_is_group_end') == '1' else '0'
+        display_is_new_week = '1' if request.data.get('display_is_new_week') == '1' else '0'
 
         # request.data est parsé automatiquement par DRF selon le Content-Type.
         # / request.data is parsed automatically by DRF based on Content-Type.
@@ -433,8 +456,6 @@ class BookingViewSet(viewsets.ViewSet):
                 'erreur':                  serializer_corps.errors,
                 'display_remaining_capacity': display_remaining_capacity,
                 'display_is_new_week':     display_is_new_week,
-                'display_is_in_group':     display_is_in_group,
-                'display_is_group_end':    display_is_group_end,
             })
             return render(
                 request,
@@ -465,8 +486,6 @@ class BookingViewSet(viewsets.ViewSet):
                 'erreur':                  resultat,
                 'display_remaining_capacity': display_remaining_capacity,
                 'display_is_new_week':     display_is_new_week,
-                'display_is_in_group':     display_is_in_group,
-                'display_is_group_end':    display_is_group_end,
             })
             return render(
                 request,
@@ -488,12 +507,15 @@ class BookingViewSet(viewsets.ViewSet):
         # / Recompute the slot to get capacity after booking.
         # Display annotations are added so slot_row.html renders the updated
         # slot's visual indicators correctly.
-        creneaux_mis_a_jour = annoter_creneaux_pour_affichage(compute_slots(ressource))
+        updated_slot_groups = annotate_slots_for_display(compute_slots(ressource))
         creneau_mis_a_jour = None
-        for creneau in creneaux_mis_a_jour:
-            if (creneau.start == start_datetime
-                    and creneau.duration_minutes() == slot_duration_minutes):
-                creneau_mis_a_jour = creneau
+        for group in updated_slot_groups:
+            for slot in group.slots:
+                if (slot.start == start_datetime
+                        and slot.slot_duration_minutes == slot_duration_minutes):
+                    creneau_mis_a_jour = slot
+                    break
+            if creneau_mis_a_jour:
                 break
 
         contexte_slot = {

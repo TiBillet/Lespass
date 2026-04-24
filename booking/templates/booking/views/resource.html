@@ -10,7 +10,7 @@ LOCALISATION : booking/templates/booking/views/resource.html
 
 Variables attendues / Expected variables:
   ressource  — objet Resource
-  creneaux   — list[BookableInterval] triée par start, sans slice
+  slot_groups — list[DisplaySlotGroup] triée par start, sans slice
 
 Le panier et le séparateur sont rendus par booking_base.html.
 / The basket and separator are rendered by booking_base.html.
@@ -61,14 +61,14 @@ Flux HTMX / HTMX flow:
 
 <h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
 
-{% if creneaux %}
+{% if slot_groups %}
     <!--
     Liste des créneaux — rendue par le partial partagé slot_list.html.
     form_container_id="container" → cible #booking-form-container.
     / Slot list — rendered by the shared slot_list.html partial.
     form_container_id="container" → target #booking-form-container.
     -->
-    {% include "booking/partial/slot_list.html" with ressource=ressource creneaux=creneaux %}
+    {% include "booking/partial/slot_list.html" with ressource=ressource slot_groups=slot_groups %}
 
 {% else %}
     <p class="text-muted" aria-live="polite">

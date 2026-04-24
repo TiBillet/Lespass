@@ -36,8 +36,8 @@ The very first slot in the list never triggers this separator.
 {% if creneau.remaining_capacity == 0 %}
 
     <li id="slot-{{ ressource.pk }}-{{ creneau.start|date:'Ymd-Hi' }}"
-        class="d-flex align-items-center gap-2 text-muted {% if creneau.is_in_group %}border-start border-2 border-secondary-subtle ps-2{% endif %} {% if creneau.is_in_group and creneau.is_group_end %}mb-2{% elif creneau.is_in_group %}mb-0{% else %}mb-2{% endif %}"
-        data-testid="booking-slot-unavailable{% if creneau.is_in_group %} booking-slot-grouped{% endif %}"
+        class="d-flex align-items-center gap-2 text-muted mb-2"
+        data-testid="booking-slot-unavailable"
         aria-label="{% translate 'Créneau complet' %}">
         <i class="bi bi-x-circle text-danger" aria-hidden="true"></i>
         <span>{{ creneau.start|date:"D d/m H:i" }}</span>
@@ -57,8 +57,8 @@ The very first slot in the list never triggers this separator.
     to swap itself back after submission.
     -->
     <li id="slot-{{ ressource.pk }}-{{ creneau.start|date:'Ymd-Hi' }}"
-        class="d-flex align-items-center gap-2 {% if creneau.is_in_group %}border-start border-2 border-secondary-subtle ps-2{% endif %} {% if creneau.is_in_group and creneau.is_group_end %}mb-2{% elif creneau.is_in_group %}mb-0{% else %}mb-2{% endif %}"
-        data-testid="booking-slot-available{% if creneau.is_in_group %} booking-slot-grouped{% endif %}">
+        class="d-flex align-items-center gap-2 mb-2"
+        data-testid="booking-slot-available">
         <a href="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ creneau.duration_minutes }}"
            hx-get="/booking/{{ ressource.pk }}/booking_form/?start_datetime={{ creneau.start|date:'Y-m-d\TH:i:s' }}&slot_duration_minutes={{ creneau.duration_minutes }}"
            hx-target="#slot-{{ ressource.pk }}-{{ creneau.start|date:'Ymd-Hi' }}"
