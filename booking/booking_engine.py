@@ -283,26 +283,26 @@ def get_closed_periods_for_resource(resource):
     return resource.calendar.closed_periods.all()
 
 
-def get_existing_bookings_for_resource(resource, date_from, date_to):
+def get_existing_bookings_for_resource(resource):
     """
-    Réservations actives (new/validated/confirmed) de la ressource dans
-    [date_from, date_to].
-    / Active bookings (new/validated/confirmed) for the resource within
-    [date_from, date_to].
+    Retourne toutes les réservations actives de la ressource.
+    / Returns all active bookings for the resource.
 
     LOCALISATION : booking/booking_engine.py
 
+    Aucun filtre de date : on charge toutes les réservations de la
+    ressource et on laisse compute_remaining_capacity calculer le
+    chevauchement exact. Ce n'est pas optimal pour les ressources
+    très réservées, mais c'est correct car une réservation peut
+    déborder sur un créneau ultérieur (slot_count > 1, finding §15).
+    Un filtre précis nécessite end_datetime en base (finding §15) —
+    à affiner quand ce champ sera ajouté.
+
     L'annulation = suppression de ligne, pas de statut cancelled (finding §1).
-    Filtre sur start_datetime__date__range — les réservations longues
-    (slot_count > 1) sont incluses ; compute_remaining_capacity vérifie
-    le chevauchement exact.
     """
     from booking.models import Booking
 
-    return Booking.objects.filter(
-        resource=resource,
-        start_datetime__date__range=(date_from, date_to),
-    )
+    return Booking.objects.filter(resource=resource)
 
 
 # ─── Orchestrateurs / Orchestrators ──────────────────────────────────────────
@@ -351,11 +351,7 @@ def compute_slots(resource, date_from=None, date_to=None, reference_now=None):
 
     opening_entries   = get_opening_entries_for_resource(resource)
     closed_periods    = get_closed_periods_for_resource(resource)
-    existing_bookings = get_existing_bookings_for_resource(
-        resource,
-        date_from.date(),
-        (effective_date_to - datetime.timedelta(microseconds=1)).date(),
-    )
+    existing_bookings = get_existing_bookings_for_resource(resource)
 
     open_intervals = compute_open_intervals(
         closed_periods=closed_periods,
@@ -457,11 +453,7 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
     with transaction.atomic():
         Resource.objects.select_for_update().get(pk=resource.pk)
 
-        fresh_bookings = get_existing_bookings_for_resource(
-            resource,
-            date_from.date(),
-            (date_to - datetime.timedelta(microseconds=1)).date(),
-        )
+        fresh_bookings = get_existing_bookings_for_resource(resource)
 
         for i in range(slot_count):
             slot_start = start_datetime + datetime.timedelta(
