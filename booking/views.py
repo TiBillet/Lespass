@@ -87,12 +87,14 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.template.loader import render_to_string
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 
 from BaseBillet.views import get_context
 from booking.booking_engine import (
+    Interval,
     compute_slots,
     validate_new_booking,
 )
@@ -286,7 +288,23 @@ class BookingViewSet(viewsets.ViewSet):
         slot_duration_minutes = serializer_params.validated_data['slot_duration_minutes']
         slot_li_id            = self._slot_li_id(ressource.pk, start_datetime)
 
-        slot_groups = annotate_slots_for_display(compute_slots(ressource))
+        # Fenêtre étroite : commence au créneau demandé pour ne pas calculer
+        # les créneaux passés. La fin couvre tout l'horizon car on doit voir
+        # tous les créneaux consécutifs disponibles pour calculer max_slot_count.
+        # / Narrow window: starts at the requested slot to skip past slots.
+        # End covers the full horizon because all consecutive available slots
+        # are needed to compute max_slot_count correctly.
+        tz            = timezone.get_current_timezone()
+        horizon_fin   = timezone.make_aware(
+            datetime.datetime.combine(
+                start_datetime.astimezone(tz).date()
+                + datetime.timedelta(days=ressource.booking_horizon_days + 1),
+                datetime.time.min,
+            ),
+            tz,
+        )
+        window_form   = Interval(start=start_datetime, end=horizon_fin)
+        slot_groups = annotate_slots_for_display(compute_slots(ressource, window_form))
 
         # Find the requested slot and compute max consecutive available from its
         # position in the group (contiguity is already encoded in DisplaySlotGroup).
@@ -501,13 +519,15 @@ class BookingViewSet(viewsets.ViewSet):
         # + the updated basket as an OOB swap.
         # slot_row.html replaces the form <li> via outerHTML.
 
-        # Recompute le créneau pour obtenir la capacité après réservation.
-        # Les annotations d'affichage sont ajoutées pour que slot_row.html
-        # rende correctement les indicateurs visuels du créneau mis à jour.
-        # / Recompute the slot to get capacity after booking.
-        # Display annotations are added so slot_row.html renders the updated
-        # slot's visual indicators correctly.
-        updated_slot_groups = annotate_slots_for_display(compute_slots(ressource))
+        # Recompute uniquement le créneau réservé pour obtenir sa capacité mise à jour.
+        # La fenêtre est exactement [start, start + durée) — un seul créneau.
+        # / Recompute only the booked slot to get its updated capacity.
+        # Window is exactly [start, start + duration) — a single slot.
+        window_slot = Interval(
+            start=start_datetime,
+            end=start_datetime + datetime.timedelta(minutes=slot_duration_minutes),
+        )
+        updated_slot_groups = annotate_slots_for_display(compute_slots(ressource, window_slot))
         creneau_mis_a_jour = None
         for group in updated_slot_groups:
             for slot in group.slots:

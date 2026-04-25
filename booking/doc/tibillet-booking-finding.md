@@ -103,6 +103,13 @@ On peut éviter cela en ajouter la datetime de fin de chaque
 réservation en BDD. Attention : c'est une donnée qui sera redondante
 avec la durée des slot et leur nombre.
 
+**État actuel (avril 2026) :** `get_existing_bookings_for_resource` charge
+toutes les réservations de la ressource sans filtre de date. L'ancien filtre
+`start_datetime__date__range` était incomplet (manquait les réservations
+démarrant avant la fenêtre mais s'étendant à l'intérieur). Une fois
+`end_datetime` ajouté en base, réintroduire le filtre :
+`start_datetime < window.end AND end_datetime > window.start`.
+
 ## §16 - problème début des créneaux à l'heure pret
 
 Il faut prendre en compte l'heure dans la fenetre de calcul
@@ -201,29 +208,25 @@ et éventuellement un historique. Options :
   non encore terminés.
 
 
-## §23 — compute_slots appelé sans contrainte de date dans booking_form et cancel_form (Connu, non bloquant)
+## §23 — compute_slots appelé sans contrainte de date dans booking_form et cancel_form (résolu)
 
-**Source :** `booking/views.py` — `booking_form()` et ancienne version de
-`cancel_form()` (résolue dans cancel_form — voir ci-dessous)
+**Source :** `booking/views.py`
 
-`compute_slots(ressource)` est appelé sans passer de fenêtre de dates
-explicite. La fonction calcule les créneaux sur la plage
-`[aujourd'hui, aujourd'hui + booking_horizon_days]`. Pour une ressource
-avec `booking_horizon_days=365` et des créneaux de 30 minutes, cela
-peut générer plusieurs milliers d'intervalles par requête. La liste est
-ensuite parcourue linéairement pour trouver un seul créneau.
+Les vues d'affichage du calendrier (`resource_detail`, listing) appellent
+`compute_slots(ressource)` sans fenêtre — c'est correct, elles ont besoin
+de tous les créneaux.
 
-**cancel_form résolu :** depuis la refonte du `cancel_form` (avril 2026),
-cette vue ne fait plus appel à `compute_slots`. Elle reconstruit le
-`BookableInterval` directement depuis les paramètres GET encodés au
-moment du rendu du formulaire — coût O(1).
+Les vues qui ne cherchaient qu'un seul créneau scannaient l'horizon entier
+inutilement. Toutes résolues :
 
-**booking_form non résolu :** `booking_form` et `add_to_basket` appellent
-toujours `compute_slots` en entier. À surveiller si les ressources ont
-des horizons longs (> 90 jours) et des durées de créneau courtes.
+- **cancel_form** : ne fait plus appel à `compute_slots`. Reconstruit le
+  `BookableInterval` depuis les paramètres GET — coût O(1).
+- **booking_form** (avril 2026) : fenêtre `[start_datetime, fin de l'horizon)`.
+  L'horizon complet est conservé car les créneaux consécutifs sont nécessaires
+  pour calculer `max_slot_count`.
+- **add_to_basket** (avril 2026) : fenêtre
+  `[start_datetime, start_datetime + slot_duration_minutes)` — un seul
+  créneau, coût O(1).
 
-Action future possible :
-- Passer une fenêtre `[start_datetime - 1 jour, start_datetime + 1 jour]`
-  à `compute_slots` quand on cherche un créneau précis (booking_form,
-  add_to_basket) — réduit le calcul à quelques créneaux.
-- Ou accepter le coût si les horizons restent ≤ 30 jours en pratique.
+Rendu possible par l'introduction du paramètre `window: Interval` sur
+`compute_slots`.

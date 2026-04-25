@@ -103,70 +103,63 @@ def merge_intervals(intervals):
     return merged
 
 
-def compute_open_intervals(closed_periods, date_from, date_to, tz):
+def compute_open_intervals(closed_periods, window: Interval):
     """
     Calcule O = complémentaire des ClosedPeriods fusionnées (pure).
     / Computes O = complement of merged ClosedPeriods (pure).
 
     LOCALISATION : booking/booking_engine.py
 
-    Fenêtre : [date_from, date_to) — les deux sont des datetime tz-aware.
-    end_date=None étend la fermeture jusqu'à la fin de la fenêtre (spec §3.2.1).
+    Fenêtre : window = [window.start, window.end) — intervalle tz-aware.
+    Le fuseau est dérivé de window.start.tzinfo.
+    end_date=None étend la fermeture jusqu'à window.end (spec §3.2.1).
 
     Accepte tout itérable avec .start_date et .end_date (date | None) —
     pas besoin d'un modèle Django pour les tests unitaires.
 
     :param closed_periods: itérable avec .start_date, .end_date (date|None)
-    :param date_from: datetime.datetime tz-aware — début exact de la fenêtre
-    :param date_to:   datetime.datetime tz-aware — fin exclusive de la fenêtre
-    :param tz:        tzinfo — fuseau horaire du tenant
+    :param window: Interval tz-aware — fenêtre [début, fin exclusive)
     :return: list[Interval] — O, sans chevauchement, ordonné par start
     """
-    window_start = date_from
-    window_end   = date_to
-
-    # Dates dérivées pour comparer avec .start_date / .end_date des ClosedPeriods.
-    # / Derived dates for comparison with ClosedPeriod .start_date / .end_date.
-    date_from_as_date = date_from.date()
-    date_to_as_date   = (date_to - datetime.timedelta(microseconds=1)).date()
+    tz = window.start.tzinfo
 
     closed_intervals = []
     for period in closed_periods:
-        period_end_date = period.end_date if period.end_date is not None else date_to_as_date
-        clamped_start = max(period.start_date, date_from_as_date)
-        clamped_end   = min(period_end_date, date_to_as_date)
-        if clamped_start > clamped_end:
-            continue
-        closed_intervals.append(Interval(
-            start=timezone.make_aware(
-                datetime.datetime.combine(clamped_start, datetime.time.min), tz
-            ),
-            end=timezone.make_aware(
+        cp_start_dt = timezone.make_aware(
+            datetime.datetime.combine(period.start_date, datetime.time.min), tz
+        )
+        if period.end_date is None:
+            cp_end_dt = window.end
+        else:
+            cp_end_dt = timezone.make_aware(
                 datetime.datetime.combine(
-                    clamped_end + datetime.timedelta(days=1), datetime.time.min
+                    period.end_date + datetime.timedelta(days=1), datetime.time.min
                 ),
                 tz,
-            ),
-        ))
+            )
+        clamped_start = max(cp_start_dt, window.start)
+        clamped_end   = min(cp_end_dt, window.end)
+        if clamped_start >= clamped_end:
+            continue
+        closed_intervals.append(Interval(start=clamped_start, end=clamped_end))
 
     open_intervals = []
-    current_start = window_start
+    current_start  = window.start
 
     for closed in merge_intervals(closed_intervals):
         if closed.start > current_start:
             open_intervals.append(Interval(start=current_start, end=closed.start))
         current_start = closed.end
 
-    if current_start < window_end:
-        open_intervals.append(Interval(start=current_start, end=window_end))
+    if current_start < window.end:
+        open_intervals.append(Interval(start=current_start, end=window.end))
 
     return open_intervals
 
 
 # ─── W — Créneaux théoriques / Theoretical slots ─────────────────────────────
 
-def generate_theoretical_slots(opening_entries, open_intervals,
-                                date_from, date_to, tz):
+def generate_theoretical_slots(opening_entries, open_intervals, window: Interval):
     """
     Génère W — créneaux théoriques sur les jours ouverts (pure).
     / Generates W — theoretical slots over open days (pure).
@@ -175,10 +168,11 @@ def generate_theoretical_slots(opening_entries, open_intervals,
 
     Règle W (spec §3.2.2) : w ∈ W ⟺ ∃ o ∈ O, w ⊆ o
     Un créneau qui déborde sur une fermeture est exclu entièrement.
-    Un créneau dont le start est avant date_from est exclu (créneaux passés).
+    Un créneau dont le start est avant window.start est exclu (créneaux passés).
 
     Les starts sont calculés par timedelta (pas par recomposition
     heure/minute) pour supporter les durées > 1440 min.
+    Le fuseau est dérivé de window.start.tzinfo.
 
     Accepte tout itérable avec .weekday, .start_time,
     .slot_duration_minutes, .slot_count — pas de DB.
@@ -186,16 +180,16 @@ def generate_theoretical_slots(opening_entries, open_intervals,
     :param opening_entries: itérable avec .weekday, .start_time,
                             .slot_duration_minutes, .slot_count
     :param open_intervals:  list[Interval] — O
-    :param date_from: datetime.datetime tz-aware — début exact de la fenêtre
-    :param date_to:   datetime.datetime tz-aware — fin exclusive de la fenêtre
-    :param tz:        tzinfo
+    :param window: Interval tz-aware — fenêtre [début, fin exclusive)
     :return: list[BookableInterval] — capacités à 0, remplies par compute_slots
     """
+    tz = window.start.tzinfo
     bookable_intervals = []
-    current_date = date_from.date()
-    last_date    = (date_to - datetime.timedelta(microseconds=1)).date()
+    current_date = window.start.date()
 
-    while current_date <= last_date:
+    while timezone.make_aware(
+        datetime.datetime.combine(current_date, datetime.time.min), tz
+    ) < window.end:
         for entry in opening_entries:
             if entry.weekday != current_date.weekday():
                 continue
@@ -214,10 +208,10 @@ def generate_theoretical_slots(opening_entries, open_intervals,
                 slot_interval = Interval(start=start_dt, end=end_dt)
 
                 # Exclure les créneaux commençant avant la borne de départ.
-                # Masque les créneaux passés quand date_from = timezone.now().
+                # Masque les créneaux passés quand window.start = timezone.now().
                 # / Exclude slots starting before the window start.
-                # Hides past-today slots when date_from = timezone.now().
-                if start_dt < date_from:
+                # Hides past-today slots when window.start = timezone.now().
+                if start_dt < window.start:
                     continue
 
                 # w ∈ W ⟺ ∃ o ∈ O, w ⊆ o  (spec §3.2.2)
@@ -307,46 +301,60 @@ def get_existing_bookings_for_resource(resource):
 
 # ─── Orchestrateurs / Orchestrators ──────────────────────────────────────────
 
-def compute_slots(resource, date_from=None, date_to=None, reference_now=None):
+def compute_slots(resource, window: Interval = None, reference_now=None):
     """
-    Calcule E pour la ressource sur [date_from, date_to).
-    / Computes E for the resource over [date_from, date_to).
+    Calcule E pour la ressource sur la fenêtre donnée.
+    / Computes E for the resource over the given window.
 
     LOCALISATION : booking/booking_engine.py
 
-    date_from=None → maintenant (timezone.now()).
-    date_to=None   → minuit du jour (today + booking_horizon_days + 1).
-    reference_now  injecte un datetime fixe dans les tests (finding §13).
+    window=None → [maintenant, minuit du jour (today + booking_horizon_days + 1)).
+    reference_now injecte un datetime fixe dans les tests (finding §13).
 
-    :param date_from: datetime.datetime tz-aware — début exact (défaut : now)
-    :param date_to:   datetime.datetime tz-aware — fin exclusive (défaut : fin de l'horizon)
+    :param window: Interval tz-aware — fenêtre [début, fin exclusive)
+                   (défaut : [now, fin de l'horizon))
     :param reference_now: datetime.datetime tz-aware — injecté dans les tests
     :return: list[BookableInterval]
     """
     tz  = timezone.get_current_timezone()
     now = reference_now or timezone.now()
 
-    if date_from is None:
-        date_from = now
-    if date_to is None:
-        horizon_end_date = now.date() + datetime.timedelta(days=resource.booking_horizon_days)
-        date_to = timezone.make_aware(
-            datetime.datetime.combine(
-                horizon_end_date + datetime.timedelta(days=1), datetime.time.min
+    # Convertit 'now' dans le fuseau courant du tenant pour que window.start.tzinfo
+    # corresponde au fuseau utilisé dans le reste de la requête. Sans cette conversion,
+    # window.start aurait tzinfo=UTC (de timezone.now()) alors que d'autres datetimes
+    # construits via timezone.get_current_timezone() (ex : fixtures, vues) utiliseraient
+    # le fuseau tenant — décalage dans les comparaisons d'intervalles.
+    # / Convert 'now' to the current tenant timezone so window.start.tzinfo matches
+    # the timezone used elsewhere in the same request. Without this, window.start
+    # would have UTC tzinfo while datetimes built via get_current_timezone() would
+    # use the tenant timezone — mismatch in interval comparisons.
+    now_local = now.astimezone(tz)
+
+    if window is None:
+        horizon_end_date = now_local.date() + datetime.timedelta(days=resource.booking_horizon_days)
+        window = Interval(
+            start=now_local,
+            end=timezone.make_aware(
+                datetime.datetime.combine(
+                    horizon_end_date + datetime.timedelta(days=1), datetime.time.min
+                ),
+                tz,
             ),
-            tz,
         )
 
     horizon_cap = timezone.make_aware(
         datetime.datetime.combine(
-            now.date() + datetime.timedelta(days=resource.booking_horizon_days + 1),
+            now_local.date() + datetime.timedelta(days=resource.booking_horizon_days + 1),
             datetime.time.min,
         ),
         tz,
     )
-    effective_date_to = min(date_to, horizon_cap)
+    effective_window = Interval(
+        start=window.start,
+        end=min(window.end, horizon_cap),
+    )
 
-    if effective_date_to <= date_from:
+    if effective_window.end <= effective_window.start:
         return []
 
     opening_entries   = get_opening_entries_for_resource(resource)
@@ -355,16 +363,12 @@ def compute_slots(resource, date_from=None, date_to=None, reference_now=None):
 
     open_intervals = compute_open_intervals(
         closed_periods=closed_periods,
-        date_from=date_from,
-        date_to=effective_date_to,
-        tz=tz,
+        window=effective_window,
     )
     bookable_intervals = generate_theoretical_slots(
         opening_entries=opening_entries,
         open_intervals=open_intervals,
-        date_from=date_from,
-        date_to=effective_date_to,
-        tz=tz,
+        window=effective_window,
     )
 
     result = []
@@ -418,18 +422,12 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
     last_slot_end_dt = start_datetime + datetime.timedelta(
         minutes=slot_duration_minutes * slot_count
     )
-    # date_from / date_to sont des datetime (borne exclusive).
-    # date_to = last_slot_end_dt car la convention est [date_from, date_to) exclusif.
-    # Un créneau finissant à minuit a end = 00:00 qui est exactement dans la fenêtre.
-    # / date_from / date_to are datetimes (exclusive upper bound).
-    # date_to = last_slot_end_dt since the convention is [date_from, date_to) exclusive.
-    date_from = start_datetime
-    date_to   = last_slot_end_dt
+    booking_window = Interval(start=start_datetime, end=last_slot_end_dt)
 
     # ── Étape 1 : pré-validation ──────────────────────────────────────────────
     slot_by_key = {
         (slot.start, slot.duration_minutes()): slot
-        for slot in compute_slots(resource, date_from, date_to,
+        for slot in compute_slots(resource, booking_window,
                                   reference_now=reference_now)
     }
 

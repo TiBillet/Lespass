@@ -49,6 +49,8 @@ import pytest
 from django.utils import timezone
 from django_tenants.utils import schema_context
 
+from booking.booking_engine import Interval
+
 TEST_PREFIX = '[test_tz_slots]'
 TENANT_SCHEMA = 'lespass'
 
@@ -353,14 +355,13 @@ def test_slot_local_time_is_preserved_utc_plus_1():
 
             # Aucune fermeture → O couvre toute la fenêtre.
             # / No closures → O covers the entire window.
-            open_intervals = compute_open_intervals([], _dt_from(monday, tz), _dt_to(monday, tz), tz)
+            window = Interval(_dt_from(monday, tz), _dt_to(monday, tz))
+            open_intervals = compute_open_intervals([], window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(monday, tz),
-                    date_to=_dt_to(monday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             assert len(slots) == 1
@@ -431,14 +432,13 @@ def test_slot_local_time_is_preserved_utc_plus_9():
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
 
-            open_intervals = compute_open_intervals([], _dt_from(monday, tz), _dt_to(monday, tz), tz)
+            window = Interval(_dt_from(monday, tz), _dt_to(monday, tz))
+            open_intervals = compute_open_intervals([], window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(monday, tz),
-                    date_to=_dt_to(monday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             assert len(slots) == 1
@@ -517,17 +517,14 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_1():
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
 
-            # Calcule O sur la fenêtre mercredi−jeudi pour capturer la fermeture du jeudi.
-            # / Compute O over the Wednesday−Thursday window to capture Thursday closure.
             closed_periods = get_closed_periods_for_resource(resource_for_test)
-            open_intervals = compute_open_intervals(closed_periods, _dt_from(wednesday, tz), _dt_to(thursday, tz), tz)
+            window = Interval(_dt_from(wednesday, tz), _dt_to(thursday, tz))
+            open_intervals = compute_open_intervals(closed_periods, window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(wednesday, tz),
-                    date_to=_dt_to(wednesday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             # Le slot intersecte le jeudi local qui est fermé → exclu.
@@ -592,14 +589,13 @@ def test_midnight_crossing_slot_closed_second_day_utc_plus_9():
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
             closed_periods = get_closed_periods_for_resource(resource_for_test)
-            open_intervals = compute_open_intervals(closed_periods, _dt_from(wednesday, tz), _dt_to(thursday, tz), tz)
+            window = Interval(_dt_from(wednesday, tz), _dt_to(thursday, tz))
+            open_intervals = compute_open_intervals(closed_periods, window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(wednesday, tz),
-                    date_to=_dt_to(wednesday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             assert len(slots) == 0, (
@@ -658,14 +654,13 @@ def test_midnight_crossing_slot_open_second_day_utc_plus_1():
 
             # Aucune fermeture → O couvre toute la fenêtre mercredi−jeudi.
             # / No closures → O covers the entire Wednesday−Thursday window.
-            open_intervals = compute_open_intervals([], _dt_from(wednesday, tz), _dt_to(thursday, tz), tz)
+            window = Interval(_dt_from(wednesday, tz), _dt_to(thursday, tz))
+            open_intervals = compute_open_intervals([], window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(wednesday, tz),
-                    date_to=_dt_to(wednesday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             assert len(slots) == 1, (
@@ -732,14 +727,13 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_1():
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
             closed_periods = get_closed_periods_for_resource(resource_for_test)
-            open_intervals = compute_open_intervals(closed_periods, _dt_from(monday, tz), _dt_to(tuesday, tz), tz)
+            window = Interval(_dt_from(monday, tz), _dt_to(tuesday, tz))
+            open_intervals = compute_open_intervals(closed_periods, window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(monday, tz),
-                    date_to=_dt_to(monday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             assert len(slots) == 0, (
@@ -798,14 +792,13 @@ def test_slot_23h45_crosses_midnight_closed_next_day_utc_plus_9():
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
             closed_periods = get_closed_periods_for_resource(resource_for_test)
-            open_intervals = compute_open_intervals(closed_periods, _dt_from(monday, tz), _dt_to(tuesday, tz), tz)
+            window = Interval(_dt_from(monday, tz), _dt_to(tuesday, tz))
+            open_intervals = compute_open_intervals(closed_periods, window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(monday, tz),
-                    date_to=_dt_to(monday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             assert len(slots) == 0, (
@@ -873,14 +866,13 @@ def test_slot_ending_exactly_at_midnight_next_day_closed_utc_plus_1():
 
             opening_entries = get_opening_entries_for_resource(resource_for_test)
             closed_periods = get_closed_periods_for_resource(resource_for_test)
-            open_intervals = compute_open_intervals(closed_periods, _dt_from(monday, tz), _dt_to(tuesday, tz), tz)
+            window = Interval(_dt_from(monday, tz), _dt_to(tuesday, tz))
+            open_intervals = compute_open_intervals(closed_periods, window)
             with timezone.override(tz):
                 slots = generate_theoretical_slots(
                     opening_entries=opening_entries,
                     open_intervals=open_intervals,
-                    date_from=_dt_from(monday, tz),
-                    date_to=_dt_to(monday, tz),
-                    tz=tz,
+                    window=window,
                 )
 
             # Le slot finit EXACTEMENT à minuit → n'occupe pas le mardi.
