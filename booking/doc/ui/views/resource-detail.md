@@ -1,81 +1,38 @@
-# Resource Detail Page
+# Resource Detail
 
-**Template:** `booking/templates/booking/views/resource.html`
-**Rendered by:** `BookingViewSet.resource_page()`
 **URL:** `GET /booking/resource/<pk>/`
-**Base template:** `booking/booking_base.html`
+**Access:** Public to view; login required to book
 
-Full detail page for a single bookable resource. Shows the resource
-description, image, tags, and the complete slot list.
+## What the user sees
 
----
+- Resource name, description, and image (if set).
+- A chronological list of slots for the coming weeks.
+  A visual separator marks the start of each new week.
+- Each slot shows its date, time, duration, and remaining capacity.
+- Slots that are full (remaining_capacity = 0) appear in the list
+  but are marked unavailable and are not clickable.
+- A link back to the resource list.
 
-## Context variables
+## What the user can do
 
-`ressource` (`Resource`, required)
-  The bookable resource object.
+**Click an available slot:**
+- If logged in → goes to the booking page for that slot. The
+  booking page will show how many consecutive slots of the same
+  duration can be chained from that start time.
+- If not logged in → redirected to the login page, then returned
+  here after login.
 
-`slot_groups` (`list[DisplaySlotGroup]`, required)
-  Computed slots, annotated for display.
+## Edge cases
 
-`reservations_en_cours` (`QuerySet[Booking] | []`, required)
-  Authenticated user's 'new' bookings for basket.
+**No upcoming slots:** a message "Aucun créneau disponible
+prochainement." This can happen in three situations:
 
-Slots are annotated by `annotate_slots_for_display()` with:
-`is_new_week` (see `partial/slot-row.md`).
+- The WeeklyOpening assigned to the resource has no OpeningEntry
+  rows yet. Every resource must have a WeeklyOpening (it is
+  mandatory in the model), but a WeeklyOpening can be empty.
+- The entire booking horizon is covered by ClosedPeriods in the
+  resource's Calendar.
+- The resource has capacity = 0, which deactivates it without
+  deleting it.
 
----
-
-## States
-
-**Has image** — `ressource.image` is set
-  Full-width `<img>` hero at top of page.
-
-**No image** — `ressource.image` is falsy
-  No image element rendered.
-
-**Has tags** — `ressource.tags` is non-empty
-  Row of clickable tag badges below description.
-
-**No tags** — `ressource.tags` is empty
-  No tag row rendered.
-
-**Has slots** — `creneaux` is non-empty
-  Slot list via `slot_list.html` partial.
-
-**No slots** — `creneaux` is empty
-  Muted message "Aucun créneau disponible".
-
----
-
-## Included partials
-
-- `{% include "booking/partial/slot_list.html" with ressource=ressource creneaux=creneaux %}`
-
----
-
-## HTMX interactions
-
-- **Back to list button:**
-  `hx-get="/booking/"` → `hx-target="body"` `hx-swap="innerHTML"` `hx-push-url="true"`
-
-- **Tag badge click:**
-  `hx-get="/booking/?tag=<tag>"` → `hx-target="body"` `hx-swap="innerHTML"` `hx-push-url="true"`
-
-All navigation uses full-body swap (anti-blink pattern).
-
----
-
-## Accessibility
-
-- Back button: `aria-label="Retour à la liste"` or visible text
-- Hero image: `alt="{{ ressource.name }}"` (meaningful, not decorative)
-- Tags container: `aria-label="Tags"` on the wrapper `<p>` or `<div>`
-- Decorative icons on tag badges: `aria-hidden="true"`
-
----
-
-## data-testid
-
-`booking-resource-detail` — back button
-  E2E navigation target.
+**Resource not found:** 404.
