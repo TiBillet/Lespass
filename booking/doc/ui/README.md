@@ -1,99 +1,58 @@
-# Booking UI — Specification Index
+# Booking UI — v0.1 Specification
 
-Each file in this folder documents one template (view or partial) as a
-UI component: context variables, visual states, HTMX wiring, and
-accessibility requirements.
+No HTMX inline interactions.
 
-Use these specs to prompt Claude Code for iterative UI changes.
-Example prompt: "Update `slot-row.md` state X, then implement it."
+## Pages
 
----
-
-## Component map
-
-```
-BookingViewSet
-├── list()              → views/home.md
-│   └── card.html       → partial/card.md
-│       └── slot_list   → partial/slot-list.md
-│           └── slot_row → partial/slot-row.md
-│
-├── resource_page()     → views/resource-detail.md
-│   └── slot_list       → partial/slot-list.md
-│       └── slot_row    → partial/slot-row.md
-│
-├── my_bookings()       → views/my-bookings.md
-├── booking_form()      → partial/booking-form.md
-├── add_to_basket()     → partial/slot-row.md + partial/basket.md (OOB)
-├── remove_from_basket() → partial/basket.md
-├── validate_basket()   → partial/basket-confirmed.md
-└── cancel()            → partial/cancel-error.md
-
-```
-
----
-
-## Files
-
-### Pages (full views)
+Pages the user browses to directly.
 
 [views/home.md](views/home.md)
-  template : `booking/views/home.html`
-  url      : `GET /booking/`
+  url    : `GET /booking/`
+  access : Public
 
 [views/resource-detail.md](views/resource-detail.md)
-  template : `booking/views/resource.html`
-  url      : `GET /booking/resource/<pk>/`
+  url    : `GET /booking/resource/<pk>/`
+  access : Public
 
 [views/my-bookings.md](views/my-bookings.md)
-  template : `booking/templates/booking/views/my_bookings.html`
-  url      : `GET /booking/my-bookings/`
+  url    : `GET /booking/my-bookings/`
+  access : Login required
 
-### Partials (HTMX fragments)
+## Actions
 
-[partial/card.md](partial/card.md)
-  template : `booking/partial/card.html`
+Transactional pages: GET shows a confirmation form, POST performs
+the action. Redirect-only pages are only reachable via redirect
+from an action, never by direct navigation.
 
-[partial/slot-list.md](partial/slot-list.md)
-  template : `booking/partial/slot_list.html`
+[views/create-booking.md](views/create-booking.md)
+  url    : `GET  /booking/<pk>/book/`
+           `POST /booking/<pk>/book/`
+  access : Login required
 
-[partial/slot-row.md](partial/slot-row.md)
-  template : `booking/partial/slot_row.html`
+[views/slot-unavailable.md](views/slot-unavailable.md)
+  url    : `GET /booking/<pk>/slot-unavailable/`
+  access : Public
+  note   : redirect-only — reached from create-booking when the
+            starting slot is already taken
 
-[partial/booking-form.md](partial/booking-form.md)
-  template : `booking/partial/booking_form.html`
+[views/cancel-booking.md](views/cancel-booking.md)
+  url    : `GET  /booking/cancel/<booking_pk>/`
+           `POST /booking/cancel/<booking_pk>/`
+  access : Login required
 
-[partial/basket.md](partial/basket.md)
-  template : `booking/partial/basket.html`
+## Format
 
-[partial/basket-confirmed.md](partial/basket-confirmed.md)
-  template : `booking/partial/basket_confirmed.html`
+Each spec describes what the user sees and what they can do.
+Implementation details (context variables, URL patterns, template
+names) belong in the code, not the spec.
 
-[partial/cancel-error.md](partial/cancel-error.md)
-  template : `booking/partial/cancel_error.html`
+## What is not in v0.1
 
----
+- Basket (bookings go directly to `confirmed`)
+- Payment
+- Membership gating (login is enough)
+- HTMX inline interactions
+- Embeddable iframe
 
-## Format convention
-
-Each spec uses this structure:
-
-```
-## ComponentName
-Short description.
-
-### Context variables
-One entry per variable: `name` (type, required/optional) + description.
-
-### States
-One entry per state: **bold state name** — condition + visual description.
-
-### HTMX interactions
-One bullet per trigger: event → endpoint → target + swap strategy
-
-### Accessibility
-ARIA attributes, aria-live regions, screen-reader labels
-
-### data-testid
-One entry per value: `attribute-value` — element + purpose.
-```
+These will be designed when real users ask for them, or when the
+TiBillet core team makes progress on the payment and basket system.
