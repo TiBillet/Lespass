@@ -40,24 +40,32 @@ class ClaimPinView(APIView):
         pairing_device = serializer.device
         tenant_for_this_device = pairing_device.tenant
 
-        # En DEBUG, renvoyer l'URL de la requête entrante (IP locale, http://).
+        # En DEBUG sur IP locale (Mac dev), renvoyer l'URL de la requête (http://).
         # Permet au GSM de se connecter directement à l'IP du Mac sans HTTPS.
-        # En production, utiliser le domaine principal du tenant (HTTPS obligatoire).
-        # / In DEBUG, return the incoming request URL (local IP, http://).
+        # Sur un vrai domaine (VPS staging en DEBUG), forcer quand même https://.
+        # En production (DEBUG=False), toujours utiliser le domaine principal du tenant.
+        # / In DEBUG on local IP (Mac dev), return the request URL (http://).
         # Allows the phone to connect directly to the Mac IP without HTTPS.
-        # In production, use the tenant's primary domain (HTTPS required).
+        # On a real domain (staging VPS in DEBUG), still force https://.
+        # In production (DEBUG=False), always use the tenant's primary domain.
+        primary_domain = tenant_for_this_device.get_primary_domain()
+        if not primary_domain:
+            logger.error(
+                f"Discovery claim: tenant {tenant_for_this_device.name} has no primary domain"
+            )
+            return Response(
+                {"error": "Tenant configuration error."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
         if settings.DEBUG:
             server_url = request.build_absolute_uri('/').rstrip('/')
+            # Sur un vrai domaine (pas localhost/IP privée), forcer https://
+            # / On a real domain (not localhost/private IP), force https://
+            local_hosts = ('localhost', '127.0.0.1', '192.168.', '10.', '172.')
+            if not any(h in server_url for h in local_hosts):
+                server_url = server_url.replace('http://', 'https://')
         else:
-            primary_domain = tenant_for_this_device.get_primary_domain()
-            if not primary_domain:
-                logger.error(
-                    f"Discovery claim: tenant {tenant_for_this_device.name} has no primary domain"
-                )
-                return Response(
-                    {"error": "Tenant configuration error."},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
             server_url = f"https://{primary_domain.domain}"
 
         # Basculer dans le schéma du tenant pour créer les credentials.
