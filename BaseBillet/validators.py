@@ -212,7 +212,7 @@ class TicketCreator():
             self.tickets = self.method_A()
 
     # Methode ACTION
-    def method_A(self):
+    def method_A(self, prices_dict=None):
         reservation: Reservation = self.reservation
         #     import ipdb; ipdb.set_trace()
         ticket = Ticket.objects.create(

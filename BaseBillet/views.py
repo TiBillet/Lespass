@@ -2102,7 +2102,9 @@ class EventMVT(viewsets.ViewSet):
         # Tri par poids du produit parent, puis par ordre du tarif, puis par prix
         # Sort by parent product weight, then by rate display order, then by price
         event.published_prices = Price.objects.filter(
-            product__event=event, publish=True
+            product__event=event,
+            product__categorie_article__in=[Product.BILLET, Product.FREERES],
+            publish=True,
         ).order_by('product__poids', 'order', 'prix')
         for p in event.published_prices:
             if p.name is None:
