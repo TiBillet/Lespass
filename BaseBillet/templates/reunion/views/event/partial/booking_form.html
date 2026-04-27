@@ -463,10 +463,12 @@
                         class="js-total-price" data-testid="booking-total-price">1,00</span>&nbsp;€</span>
             </span>
         </h4>
+        {% if event.max_per_user %}
         <p>
             {% trans "Maximum capacity of tickets limited to" %}<span
                 class="js-max-amount"> {{ event.max_per_user }} </span>{% trans 'per buyer' %}.
         </p>
+        {% endif %}
     </div>
 
     <div class="p-3">
