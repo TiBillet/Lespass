@@ -22,7 +22,7 @@ Check items off as they are done.
 
 Run in this order — §15 filter depends on end_datetime existing:
 
-- [ ] Remove `tags` from Resource and ResourceGroup
+- [x] Remove `tags` from Resource and ResourceGroup
 - [ ] Add `end_datetime` to Booking — §15 performance fix.
       Once done: update `get_existing_bookings_for_resource` to
       filter with `start_datetime < window.end AND end_datetime >

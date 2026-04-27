@@ -71,12 +71,6 @@ class Resource(models.Model):
         default='',
         verbose_name=_('Image URL'),
     )
-    tags = models.JSONField(
-        default=list,
-        blank=True,
-        verbose_name=_('Tags'),
-        help_text=_('List of labels, e.g. ["salle", "machine"]'),
-    )
 
     class Meta:
         verbose_name = _('Resource')
@@ -112,12 +106,6 @@ class ResourceGroup(models.Model):
         blank=True,
         default='',
         verbose_name=_('Image URL'),
-    )
-    tags = models.JSONField(
-        default=list,
-        blank=True,
-        verbose_name=_('Tags'),
-        help_text=_('List of labels, e.g. ["salle", "machine"]'),
     )
 
     class Meta:

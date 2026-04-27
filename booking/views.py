@@ -121,19 +121,11 @@ class BookingViewSet(viewsets.ViewSet):
         / Returns (groupes_annotes, items_sans_groupe, tag_filtre).
         compute_slots() already excludes past slots.
         """
-        tag_filtre = request.GET.get('tag', '')
-
         toutes_les_ressources = list(
             Resource.objects.select_related(
                 'calendar', 'weekly_opening', 'group',
             ).all()
         )
-
-        if tag_filtre:
-            toutes_les_ressources = [
-                r for r in toutes_les_ressources
-                if tag_filtre in r.tags
-            ]
 
         items_par_groupe  = defaultdict(list)
         items_sans_groupe = []
@@ -165,7 +157,7 @@ class BookingViewSet(viewsets.ViewSet):
             for groupe, items in items_par_groupe.items()
         ]
 
-        return groupes_annotes, items_sans_groupe, tag_filtre
+        return groupes_annotes, items_sans_groupe
 
     def _reservations_en_cours(self, request):
         """
@@ -195,12 +187,11 @@ class BookingViewSet(viewsets.ViewSet):
 
     def list(self, request):
         contexte = get_context(request)
-        groupes_annotes, items_sans_groupe, tag_filtre = self._annote_ressources(request)
+        groupes_annotes, items_sans_groupe = self._annote_ressources(request)
 
         contexte.update({
-            'groupes_annotes':    groupes_annotes,
-            'items_sans_groupe':  items_sans_groupe,
-            'tag_filtre':         tag_filtre,
+            'groupes_annotes':       groupes_annotes,
+            'items_sans_groupe':     items_sans_groupe,
             'reservations_en_cours': self._reservations_en_cours(request),
         })
 
