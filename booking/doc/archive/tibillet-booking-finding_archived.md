@@ -275,3 +275,153 @@ Sans ce verrou, la contrainte de capacité n'est pas garantie sous
 charge concurrente.
 
 Obsolète : cela a été implémenté.
+
+
+## §4. Tags sur Resource et ResourceGroup — OBSOLÈTE
+
+**Source :** `booking/models.py` — classes `Resource` et `ResourceGroup`
+
+`tags = JSONField(default=list)` est un champ provisoire. Le système de tags
+existant dans TiBillet (`BaseBillet.Tag`) est une vraie relation
+`ManyToManyField` avec nom, slug et couleur — c'est ce qu'utilisent les
+événements.
+
+Migration future : remplacer le JSONField par un `ManyToManyField` vers
+`BaseBillet.Tag`, comme sur `BaseBillet.Product`. Cela donnera un sélecteur
+de tags dans l'admin et une cohérence avec le reste de la plateforme.
+
+En attendant, le champ est masqué dans l'admin (non listé dans `fields`).
+
+**Obsolète (avril 2026) :** les tags sont supprimés entièrement du module
+booking (migration 0003). Ce n'est pas un report à plus tard mais une
+suppression définitive. Les tags sont hors périmètre (voir spec §9).
+
+
+## §15 - problème de performance sur calcul de dispo — RÉSOLU
+
+Les réservations (Booking) peuvent avoir des durées arbitraires.
+Dans le modèle, il y a juste le datetime du début. Pour calculer les
+créneaux libres, il faut charger la totalité des réservations puis
+calculer leur datetime de fin.
+
+On peut éviter cela en ajoutant la datetime de fin de chaque réservation
+en BDD. Attention : c'est une donnée redondante avec la durée des slots
+et leur nombre.
+
+**État antérieur :** `get_existing_bookings_for_resource` chargeait
+toutes les réservations sans filtre de date. L'ancien filtre
+`start_datetime__date__range` était incomplet (manquait les réservations
+démarrant avant la fenêtre mais s'étendant à l'intérieur).
+
+**Résolu (avril 2026) :** `end_datetime` ajouté au modèle `Booking`
+(migration 0004). Calculé automatiquement par `Booking.save()` —
+jamais écrit directement. `get_existing_bookings_for_resource` accepte
+maintenant un paramètre `window` optionnel et applique le filtre exact
+`start_datetime < window.end AND end_datetime > window.start` quand il
+est fourni. Les deux points d'appel (`compute_slots` et
+`validate_new_booking`) passent leur fenêtre respective.
+
+
+## §16 - problème début des créneaux à l'heure près — RÉSOLU
+
+Il faut prendre en compte l'heure dans la fenêtre de calcul des créneaux
+ouverts.
+
+**Résolu :** `compute_slots` utilise une fenêtre `Interval` avec un
+`start` timezone-aware qui inclut l'heure courante, pas seulement la
+date. Les créneaux déjà commencés sont exclus.
+
+
+## §16b - manque des tags dans le fixture — OBSOLÈTE
+
+Il faut ajouter les tags "salle" et "machine" par exemple.
+
+**Obsolète (avril 2026) :** les tags sont supprimés entièrement (voir §4).
+Note : deux sections portaient le numéro §16 par erreur. La seconde
+est renommée §16b pour respecter la convention append-only.
+
+
+## §17 - vue des réservations — RÉSOLU
+
+Y'a aucune raison pour que ça soit dans /my_account/my_resources/
+plutôt que /booking/SOMETHING. Suffit de mettre un lien dans /my_account
+qui amène vers la bonne page de booking.
+
+**Résolu (avril 2026) :** la vue des réservations est à
+`/booking/my-bookings/` (spec v0.1, `BookingViewSet.my_bookings()`).
+
+
+## §18 - mise à jour vue des booking — OBSOLÈTE
+
+Ça ne se met pas à jour immédiatement lorsqu'on réserve plusieurs slots :
+seul le slot cliqué se màj, les suivants non.
+
+**Obsolète (avril 2026) :** ce problème était lié à l'approche HTMX
+inline avec OOB swap. En v0.1, les réservations utilisent une navigation
+pleine page — il n'y a plus de mise à jour partielle à gérer.
+
+
+## §19 — Annulation en un clic — RÉSOLU en v0.1
+
+**Source :** `booking/templates/booking/views/my_bookings.html`
+
+La spec §7.3 est explicite : "the action should require a deliberate step
+— not a single accidental click." Le bouton "Annuler" déclenchait le
+`hx-post` immédiatement au clic, sans confirmation.
+
+**Résolu (avril 2026) :** en v0.1, l'annulation passe par une page
+dédiée (`/booking/cancel/<booking_pk>/`) avec un formulaire GET + POST
+explicite. L'étape de confirmation est structurelle — pas un seul clic.
+
+
+## §20 — Deadline d'annulation non affichée — RÉSOLU en v0.1
+
+**Source :** `booking/templates/booking/views/my_bookings.html`
+
+La spec §7.3 : "The deadline must be visible without entering a
+cancellation flow." Le template n'affichait que `resource.name` et
+`start_datetime`. La deadline n'était visible qu'en cas d'échec de
+l'annulation (réponse 422), pas avant.
+
+**Résolu (avril 2026) :** en v0.1, la deadline est affichée sur la page
+de confirmation d'annulation (`/booking/cancel/<booking_pk>/`), avant
+que l'utilisateur confirme. Si la deadline est déjà passée, la page
+l'indique explicitement et n'affiche pas de formulaire.
+
+
+## §21 — Panier affiché sur la page mes-réservations — OBSOLÈTE
+
+**Source :** `booking/templates/booking/booking_base.html`
+
+`booking_base.html` incluait systématiquement le panier en haut de toutes
+les vues, y compris `/booking/my-bookings/`. Question ouverte : le panier
+devait-il apparaître sur cette page ?
+
+**Obsolète (avril 2026) :** le panier est supprimé en v0.1. La question
+ne se pose plus jusqu'à l'intégration du système de paiement (v0.2+).
+
+
+## §22 — Filtre "à venir" trop strict — RÉSOLU en v0.1
+
+**Source :** `booking/views.py` — `my_bookings()`
+
+Le queryset filtrait `start_datetime__gt=now()` : une réservation
+disparaissait de la liste à la seconde où elle commençait.
+
+**Résolu (avril 2026) :** `end_datetime` est maintenant disponible en
+base (migration 0004, voir §15). La vue `my_bookings()` utilisera
+`end_datetime > now()` pour la section "à venir / en cours" et
+`end_datetime <= now()` pour la section "passées". Les deux sections
+sont spécifiées dans `booking/doc/ui/views/my-bookings.md`.
+
+
+## §23 — compute_slots appelé sans contrainte de date — RÉSOLU
+
+**Source :** `booking/views.py`
+
+Les vues qui ne cherchaient qu'un seul créneau scannaient l'horizon
+entier inutilement.
+
+**Résolu :** toutes les vues concernées passent maintenant une fenêtre
+`Interval` à `compute_slots`. Rendu possible par l'introduction du
+paramètre `window: Interval` sur `compute_slots`.
