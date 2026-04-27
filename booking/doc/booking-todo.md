@@ -41,11 +41,11 @@ Run in this order — §15 filter depends on end_datetime existing:
 
 ## Views and URLs
 
-- [ ] Update urls.py — add new URL patterns:
+- [x] Update urls.py — add new URL patterns:
       - `/booking/<pk>/book/`
       - `/booking/<pk>/slot-unavailable/`
       - `/booking/cancel/<booking_pk>/`
-- [ ] Rewrite views.py — replace the current 800-line ViewSet with
+- [x] Rewrite views.py — replace the current 800-line ViewSet with
       simple methods, no HTMX partial management:
       - list()             — resource list
       - resource_page()    — resource detail with full slot list
@@ -53,7 +53,8 @@ Run in this order — §15 filter depends on end_datetime existing:
                              slot-unavailable if already full);
                              POST: create confirmed booking,
                              redirect to my-bookings on success,
-                             redirect to slot-unavailable on failure
+                             re-render with fresh slots on failure
+                             (spec: re-render, not redirect)
       - slot_unavailable() — slot was taken (race condition)
       - my_bookings()      — list upcoming and past bookings
       - cancel_confirm()   — GET: show cancellation confirmation;
@@ -62,10 +63,10 @@ Run in this order — §15 filter depends on end_datetime existing:
 
 ## Templates
 
-- [ ] Delete all existing templates
-- [ ] Simplify booking_base.html — remove basket include and
+- [x] Delete all existing templates
+- [x] Simplify booking_base.html — remove basket include and
       HTMX 422 script
-- [ ] Write 6 new simple templates:
+- [x] Write 6 new simple templates:
       - home.html              (resource list)
       - resource.html          (resource detail + slot list)
       - book.html              (booking confirmation form)

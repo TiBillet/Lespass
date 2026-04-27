@@ -1,123 +1,115 @@
-{% extends 'booking/booking_base.html' %}
+{% extends "booking/booking_base.html" %}
 {% load i18n %}
 
 <!--
 LOCALISATION : booking/templates/booking/views/my_bookings.html
 
-Page "Mes réservations" du module booking — /booking/my-bookings/.
-Affiche les réservations 'confirmed' à venir du membre connecté.
-Chaque réservation dispose d'un bouton d'annulation HTMX.
-/ "My bookings" page of the booking module — /booking/my-bookings/.
-Shows the logged-in member's upcoming 'confirmed' bookings.
-Each booking has an HTMX cancel button.
+Mes réservations — liste des réservations à venir et passées du membre.
+/ My bookings — list of the member's upcoming and past bookings.
 
-Variables attendues / Expected variables:
-  confirmed_bookings — QuerySet[Booking] status='confirmed' + start_datetime > now
-
-Flux d'annulation / Cancellation flow:
-  1. Clic "Annuler" → hx-post="/booking/cancel/" avec booking_pk
-  2. Succès (HTTP 200) : HX-Redirect → rechargement de /booking/my-bookings/
-  3. Erreur (HTTP 422) : cancel_error.html remplace le bouton via hx-swap="innerHTML"
-     Le script 422 est centralisé dans booking_base.html (bloc "scripts").
-  / 1. Click "Annuler" → hx-post="/booking/cancel/" with booking_pk
-  / 2. Success (HTTP 200): HX-Redirect → reload /booking/my-bookings/
-  / 3. Error (HTTP 422): cancel_error.html replaces the button via hx-swap="innerHTML"
-  /    The 422 script is centralised in booking_base.html ("scripts" block).
+Flux / Flow:
+  GET /booking/my-bookings/
+  GET /booking/my-bookings/?new=<pk>  (met en évidence la nouvelle résa)
+  / GET /booking/my-bookings/?new=<pk>  (highlights the new booking)
+  Contexte / Context: upcoming_bookings, past_bookings, highlighted_booking_pk
 -->
 
 {% block title %}{% translate "Mes réservations" %}{% endblock %}
 
 {% block booking_content %}
 
-<section>
+<h1 class="mb-4">{% translate "Mes réservations" %}</h1>
 
-    <!--
-    Lien de retour vers l'espace membre.
-    / Back link to the member account area.
-    -->
-    <a href="/my_account/"
-       class="btn btn-outline-secondary btn-sm mb-4">
-        <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
-        {% translate "Mon compte" %}
+<!--
+Section "À venir" — réservations dont la fin est dans le futur.
+/ "Upcoming" section — bookings whose end is in the future.
+-->
+<h2 class="h4 mb-3" data-testid="booking-upcoming-heading">
+  {% translate "À venir" %}
+</h2>
+
+{% if upcoming_bookings %}
+<ul class="list-group mb-5" data-testid="booking-upcoming-list" aria-live="polite">
+  {% for booking in upcoming_bookings %}
+  <li class="list-group-item d-flex justify-content-between align-items-start
+             {% if booking.pk == highlighted_booking_pk %}list-group-item-success{% endif %}"
+      data-testid="booking-upcoming-item-{{ booking.pk }}">
+    <div>
+      <strong><a href="{% url 'booking-resource' pk=booking.resource.pk %}">{{ booking.resource.name }}</a></strong><br>
+      {{ booking.start_datetime|date:"l d F Y" }}
+      {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
+      – {{ booking.end_datetime|date:"H\hi" }}
+
+      {% if booking.slot_count > 1 %}
+      <span class="badge bg-secondary ms-1">
+        {{ booking.slot_count }} {% translate "créneaux" %}
+      </span>
+      {% endif %}
+
+      {% if booking.pk == highlighted_booking_pk %}
+      <span class="badge bg-success ms-1" data-testid="badge-new-booking">
+        {% translate "Nouvelle réservation" %}
+      </span>
+      {% endif %}
+    </div>
+
+    <a href="{% url 'booking-cancel' booking_pk=booking.pk %}"
+       class="btn btn-outline-danger btn-sm"
+       data-testid="booking-cancel-btn-{{ booking.pk }}">
+      {% translate "Annuler" %}
     </a>
+  </li>
+  {% endfor %}
+</ul>
 
-    <h1 class="h4 mb-4">
-        <i class="bi bi-chair me-2" aria-hidden="true"></i>
-        {% translate "Mes réservations" %}
-    </h1>
+{% else %}
+<p class="text-muted mb-5" data-testid="booking-upcoming-empty">
+  {% translate "Aucune réservation à venir." %}
+</p>
+{% endif %}
 
-    {% if confirmed_bookings %}
+<!--
+Section "Passées" — réservations terminées.
+/ "Past" section — completed bookings.
+-->
+<h2 class="h4 mb-3" data-testid="booking-past-heading">
+  {% translate "Passées" %}
+</h2>
 
-        <ul class="list-group mb-4">
-            {% for booking in confirmed_bookings %}
-                <li class="list-group-item"
-                    data-testid="my-resource-{{ booking.pk }}">
-                    <div class="d-flex justify-content-between align-items-center">
+{% if past_bookings %}
+<ul class="list-group" data-testid="booking-past-list">
+  {% for booking in past_bookings %}
+  <li class="list-group-item text-muted"
+      data-testid="booking-past-item-{{ booking.pk }}">
+    <strong>{{ booking.resource.name }}</strong> —
+    {{ booking.start_datetime|date:"l d F Y" }}
+    {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
 
-                        <div>
-                            <strong>{{ booking.resource.name }}</strong>
-                            <br>
-                            <span class="text-muted">
-                                {{ booking.start_datetime|date:"D d/m/Y H:i" }}
-                            </span>
-                            {% if booking.slot_count > 1 %}
-                                <span class="badge bg-secondary ms-1">
-                                    {{ booking.slot_count }}
-                                    {% translate "créneaux" %}
-                                </span>
-                            {% endif %}
-                        </div>
-
-                        <div class="d-flex flex-column align-items-end gap-1">
-                            <span class="badge bg-success">
-                                {% translate "Confirmée" %}
-                            </span>
-
-                            <!--
-                            Bouton d'annulation — POST HTMX vers /booking/cancel/.
-                            hx-vals injecte booking_pk dans le corps de la requête.
-                            hx-target pointe sur le span#cancel-result-{pk} pour
-                            remplacer uniquement le bouton par le message d'erreur.
-                            / Cancel button — HTMX POST to /booking/cancel/.
-                            hx-vals injects booking_pk into the request body.
-                            hx-target points to span#cancel-result-{pk} to
-                            replace only the button with the error message.
-                            -->
-                            <span id="cancel-result-{{ booking.pk }}"
-                                  aria-live="polite">
-                                <button type="button"
-                                        class="btn btn-outline-danger btn-sm"
-                                        hx-post="/booking/cancel/"
-                                        hx-vals='{"booking_pk": "{{ booking.pk }}"}'
-                                        hx-target="#cancel-result-{{ booking.pk }}"
-                                        hx-swap="innerHTML"
-                                        hx-disabled-elt="this"
-                                        data-testid="btn-cancel-{{ booking.pk }}">
-                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
-                                    {% translate "Annuler" %}
-                                </button>
-                            </span>
-                        </div>
-
-                    </div>
-                </li>
-            {% endfor %}
-        </ul>
-
-    {% else %}
-
-        <p class="text-muted" data-testid="booking-empty-list">
-            {% translate "Aucune réservation confirmée à venir." %}
-        </p>
-
+    {% if booking.slot_count > 1 %}
+    <span class="badge bg-secondary ms-1">
+      {{ booking.slot_count }} {% translate "créneaux" %}
+    </span>
     {% endif %}
+  </li>
+  {% endfor %}
+</ul>
 
-    <a href="/booking/"
-       class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-chair me-1" aria-hidden="true"></i>
-        {% translate "Voir les ressources disponibles" %}
-    </a>
-
-</section>
+{% else %}
+  {% if not upcoming_bookings %}
+  <!--
+  Les deux sections sont vides — affiche un message global avec un lien
+  vers la liste des ressources.
+  / Both sections are empty — show a global message with a link to resources.
+  -->
+  <p class="text-muted" data-testid="booking-all-empty">
+    {% translate "Aucune réservation." %}
+    <a href="{% url 'booking-list' %}">{% translate "Voir les ressources disponibles" %}</a>
+  </p>
+  {% else %}
+  <p class="text-muted" data-testid="booking-past-empty">
+    {% translate "Aucune réservation passée." %}
+  </p>
+  {% endif %}
+{% endif %}
 
 {% endblock booking_content %}

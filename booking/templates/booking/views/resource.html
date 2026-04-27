@@ -1,80 +1,152 @@
 {% extends "booking/booking_base.html" %}
 {% load i18n %}
 
-{% block title %}{{ ressource.name }}{% endblock %}
-{% block meta_description %}{{ ressource.description|truncatewords:20 }}{% endblock %}
-
-{% block booking_content %}
 <!--
 LOCALISATION : booking/templates/booking/views/resource.html
 
-Variables attendues / Expected variables:
-  ressource  — objet Resource
-  slot_groups — list[DisplaySlotGroup] triée par start, sans slice
+Détail d'une ressource avec la liste complète de ses créneaux disponibles.
+/ Resource detail with the full list of available slots.
 
-Le panier et le séparateur sont rendus par booking_base.html.
-/ The basket and separator are rendered by booking_base.html.
-
-Flux HTMX / HTMX flow:
-  Clic sur un créneau → slot_list.html → hx-get booking_form → #booking-form-container
-  Soumission → add_to_basket → succès : HX-Redirect, erreur 422 : form inline
+Flux / Flow:
+  GET /booking/resource/<pk>/
+  Contexte / Context: resource, slot_groups
 -->
-<a href="/booking/"
-   hx-get="/booking/"
-   hx-target="body"
-   hx-swap="innerHTML"
-   hx-push-url="true"
-   class="text-decoration-none small text-muted d-inline-flex align-items-center gap-1 mb-4"
-   data-testid="booking-resource-detail">
-    <i class="bi bi-arrow-left" aria-hidden="true"></i>
-    {% translate "Retour aux ressources" %}
+
+{% block title %}{{ resource.name }}{% endblock %}
+{% block meta_description %}{{ resource.description|truncatewords:20 }}{% endblock %}
+
+{% block booking_content %}
+
+<!--
+Lien retour vers la liste des ressources.
+/ Back link to the resource list.
+-->
+<a href="{% url 'booking-list' %}" class="btn btn-outline-secondary btn-sm mb-4">
+  <i class="bi bi-arrow-left" aria-hidden="true"></i>
+  {% translate "Retour" %}
 </a>
 
-{% if ressource.image %}
-    <img src="{{ ressource.image }}"
-         class="img-fluid rounded mb-4"
-         alt="{{ ressource.name }}"
-         style="max-height: 300px; object-fit: cover; width: 100%;">
-{% endif %}
+<!--
+En-tête : nom, image, description de la ressource.
+/ Header: resource name, image, description.
+-->
+<div class="mb-4" data-testid="booking-resource-header">
+  {% if resource.image %}
+  <img src="{{ resource.image }}"
+       alt="{{ resource.name }}"
+       class="img-fluid rounded mb-3"
+       style="max-height: 300px; object-fit: cover; width: 100%;">
+  {% endif %}
 
-<h1 class="mb-2">{{ ressource.name }}</h1>
+  <h1>{{ resource.name }}</h1>
 
-{% if ressource.description %}
-    <p class="text-muted mb-3">{{ ressource.description }}</p>
-{% endif %}
+  {% if resource.description %}
+  <p class="text-muted">{{ resource.description }}</p>
+  {% endif %}
+</div>
 
-{% if ressource.tags %}
-    <p class="mb-4" aria-label="{% translate 'Tags' %}">
-        {% for tag in ressource.tags %}
-            <a class="badge bg-secondary text-decoration-none me-1"
-               href="/booking/?tag={{ tag }}"
-               hx-get="/booking/?tag={{ tag }}"
-               hx-target="body"
-               hx-swap="innerHTML"
-               hx-push-url="true"
-               aria-label="{% blocktrans with t=tag %}Filtrer par tag {{ t }}{% endblocktrans %}">
-                {{ tag }}
-            </a>
-        {% endfor %}
-    </p>
-{% endif %}
-
-<h2 class="h5 mb-3">{% translate "Créneaux disponibles" %}</h2>
+<!--
+Liste des créneaux disponibles, groupés par semaine.
+/ List of available slots, grouped by week.
+-->
+<h2 class="h4 mb-3">{% translate "Créneaux disponibles" %}</h2>
 
 {% if slot_groups %}
+<!--
+La grille est sur le <ul> pour que toutes les lignes partagent les mêmes
+pistes de colonnes — badge et bouton s'alignent verticalement sur tous les
+créneaux. display:contents sur chaque <li> supprime sa boîte de rendu et
+laisse ses enfants devenir des cellules directes de la grille du <ul>.
+/ The grid sits on the <ul> so every row shares the same column tracks —
+badge and button align vertically across all slots. display:contents on each
+<li> removes its layout box and lets its children become direct grid cells.
+-->
+<ul data-testid="booking-slot-list" aria-live="polite"
+    style="display: grid;
+           grid-template-columns: max-content auto auto;
+           list-style: none;
+           padding: 0;
+           margin: 0;
+           border: 1px solid var(--bs-border-color);
+           border-radius: var(--bs-border-radius);">
+  {% for group in slot_groups %}
+    {% for slot in group.slots %}
+
+    {% if slot.is_new_week %}
     <!--
-    Liste des créneaux — rendue par le partial partagé slot_list.html.
-    form_container_id="container" → cible #booking-form-container.
-    / Slot list — rendered by the shared slot_list.html partial.
-    form_container_id="container" → target #booking-form-container.
+    Séparateur de semaine — s'étend sur les 3 colonnes.
+    / Week separator — spans all 3 columns.
     -->
-    {% include "booking/partial/slot_list.html" with ressource=ressource slot_groups=slot_groups %}
+    <li style="grid-column: 1 / -1;
+               background-color: var(--bs-secondary-bg);
+               padding: 0.25rem 1rem;
+               font-weight: 600;
+               border-bottom: 1px solid var(--bs-border-color);"
+        aria-label="{% translate 'Nouvelle semaine' %}">
+      {{ slot.start|date:"W" }} — {{ slot.start|date:"d F Y" }}
+    </li>
+    {% endif %}
+
+    {% if slot.remaining_capacity > 0 %}
+    <li style="display: contents;" data-testid="booking-slot-available">
+      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;">
+        <strong>{{ slot.start|date:"l d F" }}</strong>&nbsp;
+        {{ slot.start|date:"H\hi" }} – {{ slot.end|date:"H\hi" }}
+        <span class="text-muted small ms-1">({{ slot.slot_duration_minutes }}{% translate "min" %})</span>
+      </span>
+      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center; justify-content: center;">
+        {% if resource.capacity > 1 %}
+        <span class="badge bg-success" data-testid="booking-slot-capacity">
+          {% blocktrans count n=slot.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
+        </span>
+        {% endif %}
+      </span>
+      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;">
+        {% if request.user.is_authenticated %}
+        <a href="{% url 'booking-book' pk=resource.pk %}?start_datetime={{ slot.start|date:'Y-m-d\TH:i:s' }}&group_end={{ group.end|date:'Y-m-d\TH:i:s' }}"
+           class="btn btn-primary btn-sm"
+           data-testid="booking-slot-book-btn">
+          {% translate "Réserver" %}
+        </a>
+        {% else %}
+        <a href="{% url 'connexion' %}?next={% url 'booking-book' pk=resource.pk %}%3Fstart_datetime%3D{{ slot.start|date:'Y-m-d\TH:i:s' }}%26group_end%3D{{ group.end|date:'Y-m-d\TH:i:s' }}"
+           class="btn btn-outline-primary btn-sm"
+           data-testid="booking-slot-login-btn">
+          {% translate "Connexion pour réserver" %}
+        </a>
+        {% endif %}
+      </span>
+    </li>
+
+    {% else %}
+    <li style="display: contents;" data-testid="booking-slot-full">
+      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;" class="text-muted">
+        <strong>{{ slot.start|date:"l d F" }}</strong>&nbsp;
+        {{ slot.start|date:"H\hi" }} – {{ slot.end|date:"H\hi" }}
+        <span class="small ms-1">({{ slot.slot_duration_minutes }}{% translate "min" %})</span>
+      </span>
+      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center; justify-content: center;" class="text-muted">
+        <span class="badge bg-secondary" data-testid="badge-slot-full">
+          <i class="bi bi-lock" aria-hidden="true"></i>
+          {% translate "Complet" %}
+        </span>
+      </span>
+      <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color);"></span>
+    </li>
+    {% endif %}
+
+    {% endfor %}
+  {% endfor %}
+</ul>
 
 {% else %}
-    <p class="text-muted" aria-live="polite">
-        <i class="bi bi-calendar-x" aria-hidden="true"></i>
-        {% translate "Aucun créneau disponible prochainement." %}
-    </p>
+<!--
+État vide — aucun créneau dans l'horizon de réservation.
+/ Empty state — no slot within the booking horizon.
+-->
+<p class="text-muted" data-testid="booking-slot-list-empty">
+  {% translate "Aucun créneau disponible prochainement." %}
+</p>
 {% endif %}
 
 {% endblock booking_content %}
