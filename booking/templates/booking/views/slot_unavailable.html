@@ -1,0 +1,48 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n %}
+
+<!--
+LOCALISATION : booking/templates/booking/views/slot_unavailable.html
+
+Page "créneau indisponible" — affiché quand le créneau a été pris entre
+la page de détail et le formulaire de réservation (modification concurrente).
+/ "Slot unavailable" page — shown when the slot was taken between
+the resource detail page and the booking form (race condition).
+
+Flux / Flow:
+  GET /booking/<pk>/slot-unavailable/?start_datetime=<ISO>
+  Contexte / Context: resource, start_datetime (peut être None / may be None)
+-->
+
+{% block title %}{% translate "Créneau indisponible" %}{% endblock %}
+
+{% block booking_content %}
+
+<div class="text-center py-5" data-testid="booking-slot-unavailable">
+
+  <i class="bi bi-exclamation-circle-fill text-warning"
+     aria-hidden="true"
+     style="font-size: 3rem;"></i>
+
+  <h1 class="mt-3 mb-1">{% translate "Créneau indisponible" %}</h1>
+  <p class="text-muted mb-1">{{ resource.name }}</p>
+
+  {% if start_datetime %}
+  <p class="mb-4" data-testid="booking-unavailable-slot-time">
+    {{ start_datetime|date:"l d F Y" }} {% translate "à" %} {{ start_datetime|date:"H\hi" }}
+  </p>
+  {% endif %}
+
+  <p class="mb-4">
+    {% translate "Ce créneau vient d'être pris par quelqu'un d'autre." %}
+  </p>
+
+  <a href="{% url 'booking-resource' pk=resource.pk %}"
+     class="btn btn-primary"
+     data-testid="booking-back-to-resource-btn">
+    {% translate "Voir les créneaux disponibles" %}
+  </a>
+
+</div>
+
+{% endblock booking_content %}

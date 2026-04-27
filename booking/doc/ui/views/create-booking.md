@@ -4,13 +4,19 @@
 
 ## GET — display the booking form
 
-**URL:** `GET /booking/<pk>/book/?start_datetime=<local datetime>`
+**URL:** `GET /booking/<pk>/book/?start_datetime=<local datetime>&group_end=<local datetime>`
 
 `<pk>` is the primary key of the Resource. `start_datetime` is in
 the tenant's local timezone, with no UTC offset — for example
 `2026-05-10T10:00:00`. This matches what the user sees on the
 resource detail page. The server interprets it as local time for
 this tenant.
+
+`group_end` is the end datetime of the contiguous slot group that
+contains `start_datetime`, as computed on the resource detail page.
+It bounds the slot computation window so the server only scans the
+relevant group instead of the full booking horizon. If absent or
+unparseable, the server falls back to the full horizon.
 
 The user arrives here in two situations:
 - From clicking a slot on the resource detail page.
@@ -99,4 +105,5 @@ to the slot unavailable page.
 **Not logged in:** redirect to login with `?next=` pointing back
 here.
 
-**Resource or slot not found (bad URL params):** 404.
+**Resource not found:** 404.
+**Malformed URL params** (unparseable `start_datetime`): 400.

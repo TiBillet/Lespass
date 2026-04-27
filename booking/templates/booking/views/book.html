@@ -1,0 +1,201 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n %}
+
+<!--
+LOCALISATION : booking/templates/booking/views/book.html
+
+Formulaire de confirmation de réservation.
+/ Booking confirmation form.
+
+Flux GET / GET flow:
+  GET /booking/<pk>/book/?start_datetime=<ISO>
+  Contexte / Context: resource, slot, slot_groups, max_slot_count,
+                      slot_duration_minutes, start_datetime
+
+Flux POST (modification concurrente) / POST race condition flow:
+  Contexte / Context: + error, race_condition=True
+
+Flux créneau commencé / Slot-already-started flow:
+  Contexte / Context: resource, slot_already_started=True
+-->
+
+{% block title %}{% translate "Confirmer la réservation" %}{% endblock %}
+
+{% block booking_content %}
+
+<h1 class="mb-1">{% translate "Confirmer la réservation" %}</h1>
+<p class="text-muted mb-4">{{ resource.name }}</p>
+
+<!--
+Lien retour vers le détail de la ressource.
+/ Back link to the resource detail.
+-->
+<a href="{% url 'booking-resource' pk=resource.pk %}"
+   class="btn btn-outline-secondary btn-sm mb-4">
+  <i class="bi bi-arrow-left" aria-hidden="true"></i>
+  {% translate "Retour" %}
+</a>
+
+<!--
+Message quand le créneau a déjà commencé au moment où la page est chargée.
+/ Message when the slot has already started when the page is loaded.
+-->
+{% if slot_already_started %}
+<div class="alert alert-warning" role="alert" data-testid="booking-slot-started-msg">
+  {% translate "Ce créneau est déjà commencé." %}
+</div>
+<a href="{% url 'booking-resource' pk=resource.pk %}"
+   class="btn btn-primary">
+  {% translate "Voir les créneaux disponibles" %}
+</a>
+
+{% else %}
+
+<!--
+Message de modification concurrente — un créneau a été pris pendant la saisie.
+/ Race condition message — a slot was taken while the user was filling the form.
+-->
+{% if race_condition %}
+<div class="alert alert-warning" role="alert" data-testid="booking-race-condition-msg">
+  {% translate "Un créneau a été réservé entre temps. Vérifiez les disponibilités ci-dessous." %}
+</div>
+{% endif %}
+
+<!--
+Message d'erreur générique (validation POST).
+/ Generic error message (POST validation).
+-->
+{% if error and not race_condition %}
+<div class="alert alert-danger" role="alert" data-testid="booking-error-msg">
+  {% if error.non_field_errors %}
+    {% for msg in error.non_field_errors %}{{ msg }} {% endfor %}
+  {% else %}
+    {{ error }}
+  {% endif %}
+</div>
+{% endif %}
+
+<!--
+Informations sur le créneau de départ.
+/ Information about the starting slot.
+-->
+{% if slot %}
+<div class="card mb-4" data-testid="booking-slot-summary">
+  <div class="card-body">
+    <h2 class="card-title h5">{% translate "Créneau sélectionné" %}</h2>
+    <p class="mb-1">
+      <strong>{{ slot.start|date:"l d F Y" }}</strong>
+      {% translate "à" %} {{ slot.start|date:"H\hi" }}
+    </p>
+    <p class="mb-0 text-muted">
+      {% translate "Durée par créneau :" %} {{ slot.slot_duration_minutes }}{% translate "min" %}
+    </p>
+    {% if resource.capacity > 1 %}
+    <p class="mb-0 text-muted">
+      {% blocktrans count n=slot.remaining_capacity %}{{ n }} place disponible{% plural %}{{ n }} places disponibles{% endblocktrans %}
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!--
+Liste des créneaux consécutifs disponibles depuis le créneau demandé.
+Aide l'utilisateur à choisir combien de créneaux réserver d'un coup.
+/ List of consecutive available slots from the requested slot.
+Helps the user choose how many slots to book at once.
+-->
+{% if consecutive_slots and max_slot_count > 1 %}
+<h2 class="h5 mb-2">{% translate "Créneaux consécutifs disponibles" %}</h2>
+<ul class="list-group mb-4 small" data-testid="booking-consecutive-slots">
+  {% for slot_item in consecutive_slots %}
+  <li class="list-group-item py-1">
+    {{ slot_item.start|date:"H\hi" }} – {{ slot_item.end|date:"H\hi" }}
+    {% if resource.capacity > 1 %}
+    <span class="badge bg-success ms-1">
+      {% blocktrans count n=slot_item.remaining_capacity %}{{ n }} place{% plural %}{{ n }} places{% endblocktrans %}
+    </span>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<!--
+Formulaire de confirmation — les champs cachés portent le créneau choisi.
+/ Confirmation form — hidden fields carry the chosen slot.
+-->
+<form method="post" action="{% url 'booking-book' pk=resource.pk %}"
+      data-testid="booking-confirm-form">
+  {% csrf_token %}
+
+  <!--
+  Champs cachés : start_datetime et slot_duration_minutes.
+  Envoyés au POST pour que le serveur puisse reconstruire et valider le créneau.
+  / Hidden fields: start_datetime and slot_duration_minutes.
+  Sent on POST so the server can reconstruct and validate the slot.
+  -->
+  <input type="hidden" name="start_datetime" value="{{ start_datetime|date:'Y-m-d\TH:i:s' }}">
+  <input type="hidden" name="group_end" value="{{ group_end|date:'Y-m-d\TH:i:s' }}">
+
+  <!--
+  Nombre de créneaux — input si plusieurs disponibles, champ caché si un seul.
+  / Slot count — input if several available, hidden field if only one.
+  -->
+  {% if max_slot_count > 1 %}
+  <div class="mb-3">
+    <label for="id_slot_count" class="form-label fw-semibold">
+      {% translate "Nombre de créneaux" %}
+    </label>
+    <input type="number"
+           id="id_slot_count"
+           name="slot_count"
+           value="1"
+           min="1"
+           max="{{ max_slot_count }}"
+           class="form-control"
+           style="max-width: 120px;"
+           data-testid="booking-slot-count-input">
+    <div class="form-text">
+      {% blocktrans with max=max_slot_count %}Maximum : {{ max }} créneaux consécutifs.{% endblocktrans %}
+    </div>
+  </div>
+  {% else %}
+  <input type="hidden" name="slot_count" value="1">
+  {% endif %}
+
+  <!--
+  Message d'annulation : date limite si possible, sinon annulation impossible.
+  / Cancellation message: deadline if possible, otherwise cancellation not possible.
+  -->
+  {% if cancellation_possible %}
+  <div class="alert alert-info mb-4" role="note" data-testid="booking-cancellation-notice">
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+    {% blocktrans with deadline=cancellation_deadline|date:"d F Y à H\hi" %}
+      Vous pouvez annuler jusqu'au {{ deadline }}.
+    {% endblocktrans %}
+  </div>
+  {% else %}
+  <div class="alert alert-warning mb-4" role="note" data-testid="booking-cancellation-notice">
+    <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+    {% translate "L'annulation ne sera pas possible pour ce créneau." %}
+  </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button type="submit"
+            class="btn btn-primary"
+            data-testid="booking-confirm-btn">
+      {% translate "Confirmer" %}
+    </button>
+    <a href="{% url 'booking-resource' pk=resource.pk %}"
+       class="btn btn-outline-secondary"
+       data-testid="booking-back-btn">
+      {% translate "Retour" %}
+    </a>
+  </div>
+</form>
+
+{% endif %}
+
+{% endblock booking_content %}

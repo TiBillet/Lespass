@@ -4,65 +4,19 @@
 <!--
 LOCALISATION : booking/templates/booking/booking_base.html
 
-Template de base propre au module booking.
-Étend le template de skin courant (base_template, plein ou headless)
-et y ajoute les éléments communs à toutes les vues de réservation.
-/ Base template specific to the booking module.
-Extends the current skin template (base_template, full or headless)
-and adds elements common to all booking views.
-
-Tous les templates de vue booking étendent ce fichier, pas base_template
-directement, afin de centraliser les ajouts propres au module ici.
-/ All booking view templates extend this file, not base_template directly,
-so that module-specific additions are centralised here.
+Template de base du module booking.
+Étend le template de skin courant (base_template, plein ou headless).
+/ Base template for the booking module.
+Extends the current skin template (base_template, full or headless).
 
 Hiérarchie / Hierarchy:
   skin/base.html (ou headless.html)
     └── booking/booking_base.html
-            └── booking/views/home.html
-            └── booking/views/resource.html
+            └── booking/views/*.html
 -->
 
 {% block main %}
-<!--
-Conteneur principal commun à toutes les vues booking.
-/ Main container shared by all booking views.
--->
 <main class="container-lg py-4">
-
-    <!--
-    Panier — toujours affiché en haut, même vide, sur toutes les vues.
-    Position fixe : l'utilisateur le trouve toujours au même endroit.
-    Se met à jour automatiquement après un HX-Redirect (rechargement de page).
-    / Basket — always displayed at the top, even when empty, on all views.
-    Fixed position: the user always finds it in the same place.
-    Updates automatically after an HX-Redirect (page reload).
-    -->
-    {% include "booking/partial/basket.html" %}
-    <hr class="my-4">
-
     {% block booking_content %}{% endblock %}
-
 </main>
 {% endblock main %}
-
-{% block scripts %}{{ block.super }}
-<!--
-Configure HTMX pour swapper le contenu même sur les réponses HTTP 422.
-Par défaut HTMX ignore les erreurs 4xx et ne remplace pas le DOM.
-/ Configure HTMX to swap content even on HTTP 422 responses.
-By default HTMX ignores 4xx errors and does not replace the DOM.
--->
-<script>
-document.addEventListener("htmx:beforeOnLoad", function(event) {
-    var code_reponse = event.detail.xhr.status;
-
-    // On accepte le swap pour les erreurs de validation (422).
-    // / Allow swap for validation errors (422).
-    if (code_reponse === 422) {
-        event.detail.shouldSwap = true;
-        event.detail.isError    = false;
-    }
-});
-</script>
-{% endblock scripts %}
