@@ -41,9 +41,21 @@ class FlowMeter:
         self.last_time = time.time()
         self.current_flow_rate = 0.0  # L/min
 
+        # Filtre anti-parasite : ignore les impulsions plus courtes que GLITCH_FILTER_US.
+        # Le relais génère ~7 impulsions parasites au moment de sa commutation (back-EMF
+        # de la bobine injectée par couplage sur le GPIO débitmètre). Ces parasites durent
+        # quelques µs, alors que les impulsions légitimes du YF-S201 durent plusieurs ms.
+        # 5000 µs = 5 ms : largement au-dessus du bruit relais, bien en dessous du signal réel.
+        # / Glitch filter: ignore pulses shorter than GLITCH_FILTER_US.
+        # The relay generates ~7 spurious pulses when switching (back-EMF from coil
+        # injected via coupling onto the flow meter GPIO). These last a few µs, while
+        # legitimate YF-S201 pulses last several ms.
+        GLITCH_FILTER_US = 5000  # 5 ms
+        self.pi.set_glitch_filter(self.gpio_pin, GLITCH_FILTER_US)
+
         # Callback (Interruption)
         self.cb = self.pi.callback(self.gpio_pin, pigpio.FALLING_EDGE, self._callback)
-        logger.info(f"Débitmètre initialisé sur GPIO {self.gpio_pin}")
+        logger.info(f"Débitmètre initialisé sur GPIO {self.gpio_pin} (filtre parasite: {GLITCH_FILTER_US}µs)")
 
     def _callback(self, gpio, level, tick):
         """Appelé à chaque impulsion du capteur."""
