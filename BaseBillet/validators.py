@@ -310,6 +310,13 @@ class TicketCreator():
                 )
                 tickets.append(ticket)
 
+        # Stripe requires a minimum of €0.50 — reject before calling the API
+        total_cents = sum(la.amount * la.qty for la in self.list_line_article_sold)
+        if total_cents < 50:
+            raise serializers.ValidationError(
+                _("Le montant minimum pour un paiement en ligne est de 0,50 €.")
+            )
+
         self.checkout_link = self.get_checkout_stripe()
         return tickets
 
