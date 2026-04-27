@@ -92,7 +92,7 @@ limitées (ex : seul `confirmed → annulation` via suppression).
 
 ## §14. archived
 
-## §15 - problème de performance sur calcul de dispo
+## §15 - problème de performance sur calcul de dispo — RÉSOLU
 
 les réservations (Booking) peuvent avoir des durées arbitraires.
 Dans le modèle, il y a juste le datetime du début. Donc
@@ -109,6 +109,13 @@ toutes les réservations de la ressource sans filtre de date. L'ancien filtre
 démarrant avant la fenêtre mais s'étendant à l'intérieur). Une fois
 `end_datetime` ajouté en base, réintroduire le filtre :
 `start_datetime < window.end AND end_datetime > window.start`.
+
+**Résolu (avril 2026) :** `end_datetime` ajouté au modèle `Booking`
+(migration 0004). Calculé automatiquement par `Booking.save()` —
+jamais écrit directement. `get_existing_bookings_for_resource` accepte
+maintenant un paramètre `window` optionnel et applique le filtre exact
+quand il est fourni. Les deux points d'appel (`compute_slots` et
+`validate_new_booking`) passent leur fenêtre respective.
 
 ## §16 - problème début des créneaux à l'heure pret
 

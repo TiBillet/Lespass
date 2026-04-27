@@ -277,26 +277,39 @@ def get_closed_periods_for_resource(resource):
     return resource.calendar.closed_periods.all()
 
 
-def get_existing_bookings_for_resource(resource):
+def get_existing_bookings_for_resource(resource, window: Interval = None):
     """
-    Retourne toutes les réservations actives de la ressource.
-    / Returns all active bookings for the resource.
+    Retourne les réservations actives de la ressource qui chevauchent
+    la fenêtre donnée. Si window est None, retourne toutes les
+    réservations (fallback sûr, moins performant).
+    / Returns active bookings for the resource that overlap the given
+    window. If window is None, returns all bookings (safe fallback).
 
     LOCALISATION : booking/booking_engine.py
 
-    Aucun filtre de date : on charge toutes les réservations de la
-    ressource et on laisse compute_remaining_capacity calculer le
-    chevauchement exact. Ce n'est pas optimal pour les ressources
-    très réservées, mais c'est correct car une réservation peut
-    déborder sur un créneau ultérieur (slot_count > 1, finding §15).
-    Un filtre précis nécessite end_datetime en base (finding §15) —
-    à affiner quand ce champ sera ajouté.
+    Filtre SQL (finding §15) : start_datetime < window.end
+    AND end_datetime > window.start.
+    Ce filtre est exact car end_datetime est stocké en base et
+    toujours synchronisé par Booking.save().
+    / SQL filter (finding §15): start_datetime < window.end
+    AND end_datetime > window.start.
+    Exact because end_datetime is stored and kept in sync by
+    Booking.save().
 
     L'annulation = suppression de ligne, pas de statut cancelled (finding §1).
+    / Cancellation = row deletion, no cancelled status (finding §1).
     """
     from booking.models import Booking
 
-    return Booking.objects.filter(resource=resource)
+    requete_de_base = Booking.objects.filter(resource=resource)
+
+    if window is None:
+        return requete_de_base
+
+    return requete_de_base.filter(
+        start_datetime__lt=window.end,
+        end_datetime__gt=window.start,
+    )
 
 
 # ─── Orchestrateurs / Orchestrators ──────────────────────────────────────────
@@ -359,7 +372,7 @@ def compute_slots(resource, window: Interval = None, reference_now=None):
 
     opening_entries   = get_opening_entries_for_resource(resource)
     closed_periods    = get_closed_periods_for_resource(resource)
-    existing_bookings = get_existing_bookings_for_resource(resource)
+    existing_bookings = get_existing_bookings_for_resource(resource, window=effective_window)
 
     open_intervals = compute_open_intervals(
         closed_periods=closed_periods,
@@ -451,7 +464,7 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
     with transaction.atomic():
         Resource.objects.select_for_update().get(pk=resource.pk)
 
-        fresh_bookings = get_existing_bookings_for_resource(resource)
+        fresh_bookings = get_existing_bookings_for_resource(resource, window=booking_window)
 
         for i in range(slot_count):
             slot_start = start_datetime + datetime.timedelta(
