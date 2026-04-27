@@ -53,10 +53,7 @@ class ResourceInline(TabularInline):
 @admin.register(ResourceGroup, site=staff_admin_site)
 class ResourceGroupAdmin(ModelAdmin):
     inlines = [ResourceInline]
-    exclude = ['tags']  # provisoire — voir booking/doc/tibillet-booking-decisions.md §4
-
 
 @admin.register(Resource, site=staff_admin_site)
 class ResourceAdmin(ModelAdmin):
     list_display = ['name', 'group', 'capacity', 'weekly_opening', 'calendar']
-    exclude = ['tags']  # provisoire — voir booking/doc/tibillet-booking-decisions.md §4
