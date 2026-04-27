@@ -2,13 +2,16 @@
 
 **Version:** v0.8 (draft)
 **Status:**  Ready for review by TiBillet core team
-**Date:**    2026-04-14
+**Date:**    2026-04-27
 **Author:**  Joris REHM
-**Note:**    This version was produced in a pair specification session with Claude AI (Anthropic)
+**Note:**    This version was produced in pair specification sessions
+             with Claude AI (Anthropic)
 
 Changes:
 
-  - 0.8 Work on the UI specification
+  - 0.8 Work on the UI specification (User Journey)
+        Mark sections with target v0.1 (now) or v0.2 (later)
+        Removed tags system.
   - 0.7 §2 Member actor updated. §3.1.6 Booking status updated.
          §4.2 Member cancel flow clarified. §4.3 Volunteer flow updated.
          §5 Availability, Pricing, Cancellation rules updated.
@@ -117,7 +120,7 @@ A bookable entity. Examples: "Salle de réunion A", "Imprimante 3D Prusa",
 |                               |                 | resource                                    |
 +-------------------------------+-----------------+---------------------------------------------+
 | `pricing_rule`                | FK              | TiBillet Price object applied to bookings   |
-|                               |                 | on this resource                            |
+|                               |                 | on this resource. **[v0.2+]**               |
 +-------------------------------+-----------------+---------------------------------------------+
 
 Note:
@@ -138,9 +141,8 @@ Note:
 +---------------+-----------------+-----------------------------------------------+
 | `image`       | url             | Optional photo                                |
 +---------------+-----------------+-----------------------------------------------+
-| `tags`        | list of strings | Free-form labels for filtering and display    |
-|               |                 | (e.g. "salle", "machine")                     |
-+---------------+-----------------+-----------------------------------------------+
+
+> **tags removed** — tags are out of scope entirely (see §9).
 
 
 #### 3.1.2 Resource Group
@@ -165,8 +167,8 @@ specific resource within the group before booking.
 +---------------+-----------------+-----------------------------------------------+
 | `image`       | url             | Optional photo                                |
 +---------------+-----------------+-----------------------------------------------+
-| `tags`        | list of strings | Free-form labels (same role as on Resource)   |
-+---------------+-----------------+-----------------------------------------------+
+
+> **tags removed** — tags are out of scope entirely (see §9).
 
 **Rules:**
 
@@ -281,7 +283,10 @@ slot_count=5` generates: 10:00–11:00, 11:00–12:00, 12:00–13:00,
 13:00–14:00, 14:00–15:00.
 
 
-#### 3.1.5 Pricing
+#### 3.1.5 Pricing **[v0.2+]**
+
+> **v0.2+:** Pricing and payment are deferred. In v0.1 all bookings
+> are free and go directly to `confirmed` with no payment step.
 
 TiBillet already has a Product + Price model that covers all pricing
 needs for the booking module. Rather than introducing a custom
@@ -334,19 +339,21 @@ state is stored.
 +-------------------------+--------------------+------------------------------------------+
 | `user`                  | FK → TiBillet User | The member who made the booking          |
 +-------------------------+--------------------+------------------------------------------+
-| `status`                | enum               | `new` — in basket, pending user          |
-|                         |                    | validation;                              |
-|                         |                    | `validated` — pending payment;           |
-|                         |                    | `confirmed` — payment done.              |
-|                         |                    | Free slots (`prix = 0`) skip             |
-|                         |                    | `validated` and go directly from         |
-|                         |                    | `new` to `confirmed`.                    |
+| `status`                | enum               | **[v0.1]** `confirmed` only.             |
+|                         |                    | **[v0.2+]** `new` (in basket) and        |
+|                         |                    | `validated` (pending payment) will be    |
+|                         |                    | added when the basket and payment        |
+|                         |                    | system is integrated.                    |
 +-------------------------+--------------------+------------------------------------------+
-| `booked_at`             | datetime           | When the booking was created             |
+| `booked_at`             | datetime (tz-aware)| When the booking was created             |
 +-------------------------+--------------------+------------------------------------------+
-| `payment_ref`           | string or null     | Reference to the TiBillet                |
-|                         |                    | wallet/cashless transaction, set on      |
-|                         |                    | confirmation                             |
+| `end_datetime`          | datetime (tz-aware)| End of the booking, computed from        |
+|                         |                    | `start_datetime + slot_duration_minutes  |
+|                         |                    | * slot_count`. Stored for query          |
+|                         |                    | performance (finding §15).               |
++-------------------------+--------------------+------------------------------------------+
+| `payment_ref`           | string or null     | **[v0.2+]** Reference to the TiBillet   |
+|                         |                    | wallet/cashless transaction.             |
 +-------------------------+--------------------+------------------------------------------+
 
 
@@ -543,27 +550,31 @@ still decrease `remaining_capacity` for any overlapping slot.
 
 ### 4.1 Member — Browse & Book
 
-1. Member visits the public booking page (or the embedded widget on the
-   association's site).
-2. Member browses resources, optionally filtering by tag. Each resource shows its
-   next available slots.
-3. Member selects a slot. If not logged in, they are redirected to login.
-4. Member chooses how many consecutive slots they want (`slot_count`),
-   only when more than one consecutive slot is available. When only
-   one consecutive slot is available, `slot_count=1` is submitted
-   automatically with no visible input.
-5. System checks: membership valid (if `adhesion_obligatoire` is set on the Price),
-   slot within `booking_horizon_days`, remaining capacity > 0.
-6. Booking is created with status `new`. The unit is reserved but not yet paid.
-   Member is asked if they want to add more bookings to their basket before
-   proceeding to validation.
-7. Member reviews their basket and confirms. Bookings move to status `validated`.
-8. If the slot is free (`prix = 0`), bookings move directly to `confirmed` with no
-   payment step. Otherwise payment is processed via TiBillet (wallet, cashless, or
-   credit card). If payment fails or the balance is insufficient, bookings are
-   refused with a clear error and deleted.
-9. On payment success, bookings move to status `confirmed`. Member receives a
-   confirmation notification.
+> **v0.1:** Steps 1–5 below. No basket, no payment. Booking goes
+> directly to `confirmed`. Steps 6–9 are deferred to v0.2+.
+
+1. Member visits the public booking page.
+2. Member browses resources. Each resource shows its next available
+   slots.
+3. Member selects a slot. If not logged in, they are redirected to
+   login.
+4. Member sees the booking confirmation page with the list of
+   consecutive available slots from that start time. Member chooses
+   how many consecutive slots they want (`slot_count`).
+5. System checks: slot within `booking_horizon_days`, remaining
+   capacity > 0. Booking is created with status `confirmed`.
+   Member is redirected to their booking list.
+
+> **v0.2+** steps (deferred):
+
+6. Booking is created with status `new`. Member may add more
+   bookings to their basket before confirming.
+7. Member reviews their basket and confirms. Bookings move to
+   status `validated`.
+8. Payment is processed via TiBillet (wallet, cashless, or credit
+   card). If payment fails, bookings are deleted.
+9. On payment success, bookings move to `confirmed`. Member
+   receives a confirmation notification.
 
 ### 4.2 Member — Cancel a Booking
 
@@ -600,13 +611,14 @@ steps 6–7) with no refund, as no payment has been collected.
 
 ### 4.4 Public Booking Page
 
-- Accessible without login (URL structure is an implementation detail).
-- Shows all resources with their next available slots. Resources with no upcoming
-  availability are shown but greyed out.
-- Slots already full (`remaining_capacity = 0`) are shown as unavailable.
+- Accessible without login.
+- Shows all resources with their next available slots.
+- Slots already full (`remaining_capacity = 0`) are shown as
+  unavailable.
 - Clicking a slot prompts login if not authenticated.
-- Embeddable as an `<iframe>` on external sites.
-- URL parameters allow filtering by tag.
+
+> **v0.2+:** Embeddable as an `<iframe>`. Tag filtering via URL
+> parameters. Tags are out of scope entirely (see §9).
 
 
 ## 5. Business Rules
@@ -644,11 +656,16 @@ steps 6–7) with no refund, as no payment has been collected.
   is no minimum advance notice: a slot starting in a few minutes is bookable
   as long as it has not started yet and capacity allows.
 
-### Pricing & Membership
+### Pricing & Membership **[v0.2+]**
 
-- Pricing and membership eligibility are checked at booking validation time.
-- Free slots (`prix = 0`) skip the payment step entirely: status transitions
-  directly from `new` to `confirmed`, bypassing `validated`.
+> **v0.2+:** No pricing or membership check in v0.1. Any logged-in
+> user can book any resource.
+
+- Pricing and membership eligibility are checked at booking
+  validation time.
+- Free slots (`prix = 0`) skip the payment step entirely: status
+  transitions directly from `new` to `confirmed`, bypassing
+  `validated`.
 
 ### Cancellation
 
@@ -667,18 +684,23 @@ steps 6–7) with no refund, as no payment has been collected.
 > **Open question (core team):** what is the refund behaviour for credit card
 > payments on cancellation?
 
-### Basket & Timeouts
+### Basket & Timeouts **[v0.2+]**
 
-- A member's basket can hold multiple `new` bookings before validation.
-- A `new` booking that is not validated within a set timeout is automatically
-  deleted, freeing the unit. Default timeout: 15 minutes. To be implemented as a
-  periodic cleanup task (e.g. Celery beat).
+> **v0.2+:** No basket in v0.1. Bookings go directly to `confirmed`.
+> The rules below apply when the basket system is introduced.
 
-> **Open question (core team):** should `validated` bookings also expire, and if so
-> with a different timeout than `new`?
+- A member's basket can hold multiple `new` bookings before
+  validation.
+- A `new` booking that is not validated within a set timeout is
+  automatically deleted, freeing the unit. Default timeout: 15
+  minutes. To be implemented as a periodic cleanup task (Celery
+  beat).
 
-> **Open question (core team):** does the timeout apply per individual booking, or
-> per basket session?
+> **Open question (core team):** should `validated` bookings also
+> expire, and if so with a different timeout than `new`?
+
+> **Open question (core team):** does the timeout apply per
+> individual booking, or per basket session?
 
 
 ## 6. Integration with TiBillet
@@ -686,25 +708,27 @@ steps 6–7) with no refund, as no payment has been collected.
 +-------------------------------------+----------------------------------------------+
 | TiBillet system                     | Integration point                            |
 +=====================================+==============================================+
-| **Membership**                      | Booking eligibility check via                |
-|                                     | `adhesion_obligatoire` on the Price object   |
+| **Membership**                      | **[v0.2+]** Booking eligibility check via    |
+|                                     | `adhesion_obligatoire` on the Price object.  |
+|                                     | In v0.1 any logged-in user can book.         |
 +-------------------------------------+----------------------------------------------+
-| **Product / Price**                 | Each bookable resource is backed by a        |
-|                                     | TiBillet Product; pricing uses the existing  |
-|                                     | Price model                                  |
+| **Product / Price**                 | **[v0.2+]** Each bookable resource will be  |
+|                                     | backed by a TiBillet Product. Deferred until |
+|                                     | payment is integrated.                       |
 +-------------------------------------+----------------------------------------------+
-| **Wallet / Cashless / Credit card** | Payment and refund on cancellation handled   |
-|                                     | by existing TiBillet payment machinery       |
+| **Wallet / Cashless / Credit card** | **[v0.2+]** Payment and refund on           |
+|                                     | cancellation. Deferred.                      |
 +-------------------------------------+----------------------------------------------+
-| **Auth / Users**                    | Login required to book; volunteer role from  |
-|                                     | existing permission system                   |
+| **Auth / Users**                    | **[v0.1]** Login required to book;          |
+|                                     | volunteer role from existing permission      |
+|                                     | system.                                      |
 +-------------------------------------+----------------------------------------------+
-| **Federated agenda**                | Out of scope v1 — bookable resources are not |
-|                                     | published to the federated agenda            |
+| **Federated agenda**                | Out of scope — bookable resources are not    |
+|                                     | published to the federated agenda.           |
 +-------------------------------------+----------------------------------------------+
-| **HDA / htmx**                      | All views follow existing TiBillet HDA       |
-|                                     | conventions; server returns HTML fragments,  |
-|                                     | no JSON API layer                            |
+| **HDA / htmx**                      | **[v0.1]** Server returns full HTML pages.  |
+|                                     | **[v0.2+]** HTMX inline interactions added  |
+|                                     | based on real user feedback.                 |
 +-------------------------------------+----------------------------------------------+
 
 
@@ -724,30 +748,31 @@ to their interest without losing the overall picture.
 
 ### 7.2 The Member Booking a Slot
 
+> **v0.1:** The flow below. No basket, no inline HTMX form.
+
 The member arrives on a resource page knowing what they want. They
-scan the slot list for a time that works. Their only anxiety is
-whether the slot will still be free at the moment they submit the
-form — once it is in the basket, the slot is held for them.
+scan the slot list for a time that works. They click a slot and
+land on a dedicated booking confirmation page showing the full list
+of consecutive available slots from that start time, the
+cancellation deadline, and a slot count input.
 
-They click a slot. Nothing reloads. The slot expands inline into a
-small form; the rest of the page stays in place. They choose how
-many consecutive slots they need and submit. The slot immediately
-reflects the new capacity; a basket at the top of the page shows
-the held booking. They should never wonder whether their addition
-was recorded.
+They choose how many consecutive slots they need and confirm. The
+booking is immediately `confirmed` — no intermediate basket step.
+They land on their booking list where the new booking is
+highlighted.
 
-The basket is a temporary hold, not a final commitment. The member
-reviews it and explicitly confirms. Only then is the booking secured.
-If they walk away without confirming, the hold expires automatically
-(approximately 30 minutes) and the slot is released. They must always
-be able to tell the difference between "held in basket" and "confirmed".
-
-If the slot becomes full in the narrow window between click and submit
-(race condition), they see a clear explanation inline — no page reload,
-no lost context, no generic error.
+If the slot becomes full between the moment they clicked and the
+moment they submitted (race condition), the page shows a clear
+explanation and a refreshed slot list — they can adjust and
+resubmit without starting over.
 
 If they are not logged in when they click a slot, they are sent to
 the login page and returned to the same resource afterward.
+
+> **v0.2+:** The basket flow — holding a slot before payment,
+> inline HTMX interactions, expiry of unconfirmed bookings — will
+> be designed when the payment system is ready and real users have
+> expressed the need.
 
 ### 7.3 The Member Managing Their Bookings
 
@@ -814,14 +839,17 @@ should be discussed with the TiBillet core team.
    Volunteer-defined manual order, or alphabetical?
 
 
-## 9. Out of Scope (v1)
+## 9. Out of Scope
 
+- Tags on Resource and ResourceGroup — removed entirely. The
+  grouping system (§3.1.2) is sufficient for organisation.
 - Recurring bookings (member books "every Monday 9–10am")
-- Multiple weekly openings per resource (e.g. summer vs. winter schedule)
+- Multiple weekly openings per resource (e.g. summer vs. winter
+  schedule)
 - Cross-tenant / federated resource sharing
 - Publication of bookable resources to the federated agenda
 - Waitlist when a slot is full
 - Native mobile app (Web Rulez, web is king!)
 - QR code check-in at resource location
 - Usage analytics / reporting dashboard
-- Free form booking (not constrainted by recurring slots) not planned
+- Free form booking (not constrained by recurring slots)
