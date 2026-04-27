@@ -74,12 +74,13 @@ Run in this order — §15 filter depends on end_datetime existing:
 
 ## Tests
 
-- [ ] Delete UI tests that were never validated and do not catch
+- [x] Delete UI tests that were never validated and do not catch
       real issues: test_views_public, test_views_resource,
-      test_basket, test_cancel, test_embed
-- [ ] Keep: test_booking_engine, test_interval,
+      test_basket, test_cancel, test_admin, test_my_resources,
+      test_validate
+- [x] Keep: test_booking_engine, test_interval,
       test_timezone_slots, test_weekly_opening_overlap,
-      test_models, test_validate, test_my_resources
+      test_models
 
 ## Fixture
 
