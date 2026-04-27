@@ -625,7 +625,7 @@ class Configuration(SingletonModel):
         help_text=_("Enable connected beer tap management (controlvanne)."),
     )
     module_booking = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name=_("Booking module"),
         help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
     )
