@@ -13,6 +13,8 @@ Then grouped resources appear, one section per group. Groups are
 ordered alphabetically by name. Within each group, resources are
 also ordered alphabetically.
 
+When a resource has a description, a short text appears below its name.
+
 ## What the user can do
 
 Click a resource name → goes to the resource detail page.

@@ -12,7 +12,9 @@ Flux / Flow:
   Contexte / Context: resources_groups, ungrouped_resources
 
 Affiche les noms des ressources avec un lien vers leur page de détail.
+Affiche aussi la description si la ressource en a une.
 / Shows resource names with a link to their detail page.
+/ Also shows the description when the resource has one.
 -->
 
 {% block title %}{% translate "Réservations" %}{% endblock %}
@@ -27,11 +29,14 @@ Ressources sans groupe affichées en premier, par ordre alphabétique.
 / Ungrouped resources shown first, alphabetically.
 -->
 {% for resource in ungrouped_resources %}
-<div class="mb-2" data-testid="booking-resource-item-{{ resource.pk }}">
+<div class="mb-3" data-testid="booking-resource-item-{{ resource.pk }}">
   <a href="{% url 'booking-resource' pk=resource.pk %}"
      class="fs-5">
     {{ resource.name }}
   </a>
+  {% if resource.description %}
+  <p class="text-muted small mb-0">{{ resource.description }}</p>
+  {% endif %}
 </div>
 {% endfor %}
 
@@ -48,11 +53,14 @@ Groupes de ressources, triés par nom alphabétique.
 {% endif %}
 
 {% for resource in group_entry.resources %}
-<div class="mb-2" data-testid="booking-resource-item-{{ resource.pk }}">
+<div class="mb-3" data-testid="booking-resource-item-{{ resource.pk }}">
   <a href="{% url 'booking-resource' pk=resource.pk %}"
      class="fs-5">
     {{ resource.name }}
   </a>
+  {% if resource.description %}
+  <p class="text-muted small mb-0">{{ resource.description }}</p>
+  {% endif %}
 </div>
 {% endfor %}
 {% endfor %}
