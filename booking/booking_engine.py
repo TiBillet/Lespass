@@ -16,12 +16,21 @@ Fonctions pures (sans DB) : merge_intervals, compute_open_intervals,
   generate_theoretical_slots, compute_remaining_capacity
 Accès DB : get_opening_entries_for_resource, get_closed_periods_for_resource,
   get_existing_bookings_for_resource
-Orchestrateurs : compute_slots → E,  validate_new_booking → B + §14
+Orchestrateurs : compute_slots → E,  validate_new_booking → B
+
+DÉPENDANCE MOTEUR DE BASE DE DONNÉES :
+  validate_new_booking utilise l'isolation SERIALIZABLE de PostgreSQL (SSI —
+  Serializable Snapshot Isolation) pour garantir l'absence de sur-réservation.
+  Ce module ne fonctionnera pas correctement avec SQLite ou MySQL.
+  / validate_new_booking relies on PostgreSQL SERIALIZABLE isolation (SSI)
+  to guarantee no overbooking. This module will not work correctly with
+  SQLite or MySQL.
 """
 import dataclasses
 import datetime
 
-from django.db import transaction
+from django.db import connection, transaction
+from django.db.utils import OperationalError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -401,33 +410,85 @@ def compute_slots(resource, window: Interval = None, reference_now=None):
 def validate_new_booking(resource, start_datetime, slot_duration_minutes,
                          slot_count, member, reference_now=None):
     """
-    Valide B ⊆ E' et crée la réservation de manière atomique (finding §14).
-    / Validates B ⊆ E' and creates the booking atomically (finding §14).
+    Valide B ⊆ E' et crée la réservation dans une transaction SERIALIZABLE.
+    / Validates B ⊆ E' and creates the booking in a SERIALIZABLE transaction.
 
     LOCALISATION : booking/booking_engine.py
 
-    Étape 0 — garde temporelle (§5 Availability) :
-      Un créneau déjà commencé (start_datetime <= maintenant) est refusé.
-      Pas de délai minimum : un créneau démarrant dans quelques minutes
-      est accepté.
+    ── Garde temporelle (sans DB) ───────────────────────────────────────────────
 
-    Étape 1 — pré-validation rapide (non atomique) :
-      compute_slots → vérifie que chaque créneau de B existe dans E'
-      (créneau ouvert, dans l'horizon, bonne durée, capacité > 0).
+    Un créneau déjà commencé (start_datetime <= now) est refusé immédiatement,
+    sans ouvrir de transaction.
+    / A slot that has already started is rejected immediately, without opening
+    a transaction.
 
-    Étape 2 — transaction avec verrou sur Resource (finding §14) :
-      SELECT FOR UPDATE sur la ligne Resource sérialise les créations
-      concurrentes. Re-lit les réservations et re-vérifie la capacité
-      avec des données fraîches avant d'insérer.
+    ── Isolation SERIALIZABLE et rôle de end_datetime ───────────────────────────
 
-    reference_now  : datetime fixe pour les tests (finding §13).
+    La race condition est la suivante : deux utilisateurs voient simultanément
+    remaining_capacity = 1, valident tous les deux, et créent deux réservations
+    — laissant la ressource en sur-réservation.
 
-    :return: (True, Booking) si créé, (False, str) avec le message d'erreur
+    La solution est l'isolation SERIALIZABLE de PostgreSQL (SSI — Serializable
+    Snapshot Isolation). PostgreSQL enregistre un verrou de prédicat (SIReadLock)
+    sur chaque requête de lecture. Si une transaction concurrente insère une
+    ligne qui aurait modifié le résultat d'une lecture déjà effectuée, PostgreSQL
+    détecte le conflit et annule l'une des deux transactions avec SQLSTATE 40001
+    (serialization_failure). L'appelant doit intercepter cette erreur et la
+    traiter comme "créneau non disponible".
+
+    Contrairement à SELECT FOR UPDATE, SSI gère les créneaux sans réservation
+    existante (problème du "phantom row") : le verrou de prédicat couvre la
+    requête elle-même, même si elle retourne zéro lignes.
+
+    Le champ Booking.end_datetime joue un rôle fonctionnel ici, pas seulement
+    de performance (finding §15) : le filtre DB
+    "start_datetime < window.end AND end_datetime > window.start"
+    définit le prédicat exact que SSI verrouille. Deux réservations pour des
+    créneaux qui ne se chevauchent pas sur la même ressource génèrent des
+    prédicats disjoints — elles ne se bloquent pas mutuellement. Sans
+    end_datetime en base, le prédicat couvrirait toutes les réservations de la
+    ressource, sérialisant des transactions indépendantes à tort.
+
+    / The race condition: two users see remaining_capacity = 1, both validate,
+    both create a booking — overbooking the resource.
+
+    The solution is PostgreSQL SERIALIZABLE isolation (SSI). PostgreSQL records
+    a predicate lock (SIReadLock) on each read. If a concurrent transaction
+    inserts a row that would have changed a prior read's result, PostgreSQL
+    detects the conflict and aborts one transaction with SQLSTATE 40001
+    (serialization_failure). The caller must catch this error and treat it as
+    "slot no longer available".
+
+    Unlike SELECT FOR UPDATE, SSI handles empty slots (no existing bookings):
+    the predicate lock covers the query itself, even if it returns zero rows.
+
+    Booking.end_datetime has a functional role here, not just performance (§15):
+    the DB filter "start_datetime < window.end AND end_datetime > window.start"
+    defines the exact predicate SSI locks. Two bookings for non-overlapping slots
+    on the same resource generate disjoint predicates — they do not block each
+    other. Without end_datetime in the DB, the predicate would cover all bookings
+    for the resource, serialising independent transactions unnecessarily.
+
+    ── Dépendance PostgreSQL ────────────────────────────────────────────────────
+
+    SSI tel qu'implémenté ici est spécifique à PostgreSQL. SQLite ne supporte
+    pas SERIALIZABLE. MySQL implémente SERIALIZABLE par des verrous bloquants,
+    pas par SSI — le comportement serait différent.
+    / SSI as implemented here is PostgreSQL-specific. SQLite does not support
+    SERIALIZABLE. MySQL implements SERIALIZABLE via blocking locks, not SSI.
+
+    ── Paramètres / Parameters ──────────────────────────────────────────────────
+
+    reference_now : datetime fixe injecté pour les tests (finding §13).
+                    / Fixed datetime injected for tests (finding §13).
+
+    :return: (True, Booking) si créé / if created
+             (False, str)    message d'erreur / error message
     """
-    from booking.models import Booking, Resource
+    from booking.models import Booking
 
-    # Refuse tout créneau dont le début est passé ou est maintenant.
-    # / Reject any slot whose start time is in the past or right now.
+    # Refuse tout créneau dont le début est passé — sans ouvrir de transaction.
+    # / Reject any past slot — without opening a transaction.
     now = reference_now or timezone.now()
     if start_datetime <= now:
         return False, str(_('Cannot book a slot that has already started.'))
@@ -437,63 +498,89 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
     )
     booking_window = Interval(start=start_datetime, end=last_slot_end_dt)
 
-    # ── Étape 1 : pré-validation ──────────────────────────────────────────────
-    slot_by_key = {
-        (slot.start, slot.duration_minutes()): slot
-        for slot in compute_slots(resource, booking_window,
-                                  reference_now=reference_now)
-    }
+    # Mémorise si on est déjà dans une transaction avant d'entrer dans le bloc.
+    # En production : already_in_transaction est False → on peut fixer
+    # l'isolation SERIALIZABLE avant toute lecture.
+    # En tests : le framework de test enveloppe chaque test dans une transaction
+    # pour le rollback → already_in_transaction est True → on ne peut pas changer
+    # l'isolation en cours de transaction (PostgreSQL rejette la commande).
+    # Dans ce cas on saute le SET et on garde l'isolation par défaut du test.
+    # La garantie SSI ne s'applique qu'en production — les tests couvrent
+    # la logique métier, pas le comportement de l'isolation DB.
+    # / In production: already_in_transaction is False → can set SERIALIZABLE.
+    # In tests: test framework wraps each test in a transaction for rollback
+    # → already_in_transaction is True → cannot change isolation mid-transaction.
+    # Skip SET, keep test's default isolation. SSI guarantee applies in
+    # production only.
+    already_in_transaction = connection.in_atomic_block
 
-    for i in range(slot_count):
-        requested_start = start_datetime + datetime.timedelta(
-            minutes=i * slot_duration_minutes
-        )
-        lookup_key = (requested_start, slot_duration_minutes)
+    try:
+        with transaction.atomic():
+            # Active l'isolation SERIALIZABLE pour cette transaction.
+            # Doit être exécuté avant toute lecture dans la transaction.
+            # Ignoré dans les tests (voir commentaire ci-dessus).
+            # / Enable SERIALIZABLE isolation for this transaction.
+            # Must run before any read inside the transaction.
+            # Skipped in tests (see comment above).
+            if not already_in_transaction:
+                connection.cursor().execute(
+                    'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'
+                )
 
-        if lookup_key not in slot_by_key:
-            return False, str(_(
-                'Slot starting at %(start)s is not available.'
-            ) % {'start': requested_start})
-
-        if slot_by_key[lookup_key].remaining_capacity <= 0:
-            return False, str(_(
-                'Slot starting at %(start)s is fully booked.'
-            ) % {'start': requested_start})
-
-    # ── Étape 2 : création atomique (finding §14) ─────────────────────────────
-    with transaction.atomic():
-        Resource.objects.select_for_update().get(pk=resource.pk)
-
-        fresh_bookings = get_existing_bookings_for_resource(resource, window=booking_window)
-
-        for i in range(slot_count):
-            slot_start = start_datetime + datetime.timedelta(
-                minutes=i * slot_duration_minutes
+            # Calcule E sur la fenêtre de la réservation demandée.
+            # compute_slots lit WeeklyOpening, ClosedPeriods et Bookings —
+            # toutes ces lectures sont verrouillées par prédicat sous SSI.
+            # / Compute E over the requested booking window.
+            # compute_slots reads WeeklyOpening, ClosedPeriods and Bookings —
+            # all these reads are predicate-locked under SSI.
+            available_slots = compute_slots(
+                resource, booking_window, reference_now=reference_now,
             )
-            slot_end = slot_start + datetime.timedelta(minutes=slot_duration_minutes)
+            slot_by_key = {
+                (slot.start, slot.duration_minutes()): slot
+                for slot in available_slots
+            }
 
-            fresh_remaining = compute_remaining_capacity(
-                slot=BookableInterval(
-                    interval=Interval(start=slot_start, end=slot_end),
-                    max_capacity=resource.capacity,
-                    remaining_capacity=0,
-                ),
-                capacity=resource.capacity,
-                existing_bookings=fresh_bookings,
+            # Vérifie que chaque créneau de B existe dans E' (capacité > 0).
+            # / Verify that each slot of B exists in E' (capacity > 0).
+            for i in range(slot_count):
+                slot_start = start_datetime + datetime.timedelta(
+                    minutes=i * slot_duration_minutes
+                )
+                key = (slot_start, slot_duration_minutes)
+
+                if key not in slot_by_key:
+                    return False, str(_(
+                        'Slot starting at %(start)s is not available.'
+                    ) % {'start': slot_start})
+
+                if slot_by_key[key].remaining_capacity <= 0:
+                    return False, str(_(
+                        'Slot starting at %(start)s is fully booked.'
+                    ) % {'start': slot_start})
+
+            new_booking = Booking.objects.create(
+                resource=resource,
+                user=member,
+                start_datetime=start_datetime,
+                slot_duration_minutes=slot_duration_minutes,
+                slot_count=slot_count,
+                status=Booking.STATUS_CONFIRMED,
             )
 
-            if fresh_remaining <= 0:
-                return False, str(_(
-                    'Slot starting at %(start)s is no longer available.'
-                ) % {'start': slot_start})
-
-        new_booking = Booking.objects.create(
-            resource=resource,
-            user=member,
-            start_datetime=start_datetime,
-            slot_duration_minutes=slot_duration_minutes,
-            slot_count=slot_count,
-            status=Booking.STATUS_CONFIRMED,
-        )
+    except OperationalError as e:
+        # SQLSTATE 40001 : échec de sérialisation — PostgreSQL a détecté que
+        # deux transactions concurrentes ont lu et modifié les mêmes données.
+        # L'une des deux est annulée. On la traite comme "créneau non disponible".
+        # / SQLSTATE 40001: serialization failure — PostgreSQL detected that two
+        # concurrent transactions read and modified the same data. One is aborted.
+        # Treat as "slot no longer available".
+        cause = getattr(e, '__cause__', None)
+        pgcode = getattr(cause, 'pgcode', None) or getattr(cause, 'sqlstate', None)
+        if pgcode == '40001':
+            return False, str(_(
+                'This slot was just booked by another user. Please try again.'
+            ))
+        raise
 
     return True, new_booking

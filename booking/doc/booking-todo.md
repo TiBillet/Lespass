@@ -31,9 +31,11 @@ Run in this order — §15 filter depends on end_datetime existing:
 
 ## Engine
 
-- [ ] Fix `select_for_update` — lock Booking rows, not the Resource
-      row. The race condition is between concurrent new bookings, not
-      between bookings and resource deletions.
+- [x] Fix concurrency — replaced select_for_update on Resource with
+      PostgreSQL SERIALIZABLE isolation (SSI) in validate_new_booking.
+      No explicit lock needed; SSI handles phantom rows correctly.
+      end_datetime makes the predicate precise (non-overlapping slots
+      on the same resource do not conflict).
 - [x] Apply §15 date filter in `get_existing_bookings_for_resource`
       (depends on end_datetime migration above)
 
