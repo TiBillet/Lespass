@@ -160,6 +160,11 @@ class Command(BaseCommand):
         Groupe "Salle de répét'" :
         - Petite salle (capacité 1) — planning week-end.
         - Grande salle (capacité 1) — planning week-end.
+
+        Chaque ressource a une description courte et une image de démonstration.
+        Les images viennent de picsum.photos (URL stables, pas de clé API).
+        / Each resource has a short description and a demo image.
+        Images come from picsum.photos (stable URLs, no API key).
         """
         groupe_repet, _created = ResourceGroup.objects.get_or_create(
             name="Salle de répét'",
@@ -172,6 +177,11 @@ class Command(BaseCommand):
                 "weekly_opening": coworking_opening,
                 "capacity": 3,
                 "group": None,
+                "description": (
+                    "Espace de travail partagé, 3 postes disponibles simultanément. "
+                    "Prises, WiFi haut débit, café."
+                ),
+                "image": "https://picsum.photos/seed/coworking/800/400",
             },
         )
         Resource.objects.update_or_create(
@@ -181,6 +191,11 @@ class Command(BaseCommand):
                 "weekly_opening": coworking_opening,
                 "capacity": 1,
                 "group": None,
+                "description": (
+                    "Imprimante FDM Prusa MK4. Filament PLA fourni. "
+                    "Formation obligatoire avant première utilisation."
+                ),
+                "image": "https://picsum.photos/seed/imprimante3d/800/400",
             },
         )
         Resource.objects.update_or_create(
@@ -190,6 +205,11 @@ class Command(BaseCommand):
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
+                "description": (
+                    "Salle de répétition insonorisée, 20 m². "
+                    "Batterie, amplis et câblage inclus. Capacité : 4 musiciens."
+                ),
+                "image": "https://picsum.photos/seed/petitesalle/800/400",
             },
         )
         Resource.objects.update_or_create(
@@ -199,5 +219,10 @@ class Command(BaseCommand):
                 "weekly_opening": repet_opening,
                 "capacity": 1,
                 "group": groupe_repet,
+                "description": (
+                    "Grande salle de répétition, 40 m². Scène surélevée, sono complète. "
+                    "Idéale pour les groupes de 6 personnes et plus."
+                ),
+                "image": "https://picsum.photos/seed/grandesalle/800/400",
             },
         )

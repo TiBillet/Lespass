@@ -86,4 +86,4 @@ Run in this order — §15 filter depends on end_datetime existing:
 
 ## Fixture
 
-- [ ] Add description and image to each Resource in the demo fixture
+- [x] Add description and image to each Resource in the demo fixture
