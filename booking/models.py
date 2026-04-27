@@ -432,6 +432,17 @@ class Booking(models.Model):
     slot_count = models.PositiveIntegerField(
         verbose_name=_('Slot count'),
     )
+    end_datetime = models.DateTimeField(
+        # Redondant avec start_datetime + slot_duration_minutes * slot_count.
+        # Stocké en base pour permettre un filtrage SQL direct (finding §15) :
+        # "start_datetime < window.end AND end_datetime > window.start".
+        # Toujours calculé par save() — ne jamais écrire ce champ directement.
+        # / Redundant with start_datetime + slot_duration_minutes * slot_count.
+        # Stored for direct SQL filtering (finding §15).
+        # Always computed by save() — never write this field directly.
+        editable=False,
+        verbose_name=_('Slot end'),
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -453,6 +464,15 @@ class Booking(models.Model):
         verbose_name = _('Booking')
         verbose_name_plural = _('Bookings')
         ordering = ['start_datetime']
+
+    def save(self, *args, **kwargs):
+        import datetime
+        # Calcule end_datetime avant chaque sauvegarde pour garantir la cohérence.
+        # / Compute end_datetime before every save to keep it in sync.
+        self.end_datetime = self.start_datetime + datetime.timedelta(
+            minutes=self.slot_duration_minutes * self.slot_count
+        )
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.resource} — {self.user} — {self.start_datetime}'

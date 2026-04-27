@@ -23,10 +23,9 @@ Check items off as they are done.
 Run in this order — §15 filter depends on end_datetime existing:
 
 - [x] Remove `tags` from Resource and ResourceGroup
-- [ ] Add `end_datetime` to Booking — §15 performance fix.
-      Once done: update `get_existing_bookings_for_resource` to
-      filter with `start_datetime < window.end AND end_datetime >
-      window.start` instead of loading all bookings.
+- [x] Add `end_datetime` to Booking — §15 performance fix.
+      Updated `get_existing_bookings_for_resource` to filter with
+      `start_datetime < window.end AND end_datetime > window.start`.
 - [ ] Simplify `Booking.status` — keep `confirmed` only, remove
       `new` and `validated`
 
@@ -35,7 +34,7 @@ Run in this order — §15 filter depends on end_datetime existing:
 - [ ] Fix `select_for_update` — lock Booking rows, not the Resource
       row. The race condition is between concurrent new bookings, not
       between bookings and resource deletions.
-- [ ] Apply §15 date filter in `get_existing_bookings_for_resource`
+- [x] Apply §15 date filter in `get_existing_bookings_for_resource`
       (depends on end_datetime migration above)
 
 ## Views and URLs
