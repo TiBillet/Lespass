@@ -6,9 +6,13 @@
 ## What the user sees
 
 - Resource name, description, and image (if set).
-- A chronological list of slots for the coming weeks.
-  A visual separator marks the start of each new week.
-- Each slot shows its date, time, duration, and remaining capacity.
+- A chronological list of slots up to the resource's booking horizon.
+  - A coloured "Semaine N" banner marks the start of each new ISO week.
+  - A bold date header (e.g. "Lundi 04 mai") marks the start of each
+    contiguous group of same-duration slots.
+  - Each slot shows its time range and duration only (the date is not
+    repeated per slot).
+- Remaining capacity is shown per slot when the resource has capacity > 1.
 - Slots that are full (remaining_capacity = 0) appear in the list
   but are marked unavailable and are not clickable.
 - A link back to the resource list.

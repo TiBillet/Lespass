@@ -70,27 +70,40 @@ badge and button align vertically across all slots. display:contents on each
            border: 1px solid var(--bs-border-color);
            border-radius: var(--bs-border-radius);">
   {% for group in slot_groups %}
-    {% for slot in group.slots %}
 
-    {% if slot.is_new_week %}
+    {% if group.slots.0.is_new_week %}
     <!--
     Séparateur de semaine — s'étend sur les 3 colonnes.
     / Week separator — spans all 3 columns.
     -->
     <li style="grid-column: 1 / -1;
-               background-color: var(--bs-secondary-bg);
-               padding: 0.25rem 1rem;
-               font-weight: 600;
+               background-color: var(--bs-primary);
+               color: var(--bs-white);
+               padding: 0.4rem 1rem;
+               font-size: 1.05rem;
+               font-weight: 700;
                border-bottom: 1px solid var(--bs-border-color);"
         aria-label="{% translate 'Nouvelle semaine' %}">
-      {{ slot.start|date:"W" }} — {{ slot.start|date:"d F Y" }}
+      {% blocktrans with n=group.start|date:"W" %}Semaine {{ n }}{% endblocktrans %}
     </li>
     {% endif %}
+
+    <!--
+    En-tête de date — affiché une fois par groupe, s'étend sur les 3 colonnes.
+    / Date header — shown once per group, spans all 3 columns.
+    -->
+    <li style="grid-column: 1 / -1;
+               padding: 0.4rem 1rem;
+               font-weight: 600;
+               border-bottom: 1px solid var(--bs-border-color);">
+      {{ group.start|date:"l d F" }}
+    </li>
+
+    {% for slot in group.slots %}
 
     {% if slot.remaining_capacity > 0 %}
     <li style="display: contents;" data-testid="booking-slot-available">
       <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;">
-        <strong>{{ slot.start|date:"l d F" }}</strong>&nbsp;
         {{ slot.start|date:"H\hi" }} – {{ slot.end|date:"H\hi" }}
         <span class="text-muted small ms-1">({{ slot.slot_duration_minutes }}{% translate "min" %})</span>
       </span>
@@ -121,7 +134,6 @@ badge and button align vertically across all slots. display:contents on each
     {% else %}
     <li style="display: contents;" data-testid="booking-slot-full">
       <span style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--bs-border-color); display: flex; align-items: center;" class="text-muted">
-        <strong>{{ slot.start|date:"l d F" }}</strong>&nbsp;
         {{ slot.start|date:"H\hi" }} – {{ slot.end|date:"H\hi" }}
         <span class="small ms-1">({{ slot.slot_duration_minutes }}{% translate "min" %})</span>
       </span>

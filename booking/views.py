@@ -57,6 +57,10 @@ class DisplaySlotGroup:
     slots: list = field(default_factory=list)  # list[DisplaySlot]
 
     @property
+    def start(self) -> datetime.datetime:
+        return self.slots[0].start
+
+    @property
     def end(self) -> datetime.datetime:
         return self.slots[-1].end
 
