@@ -430,11 +430,20 @@ class Booking(models.Model):
     )
     end_datetime = models.DateTimeField(
         # Redondant avec start_datetime + slot_duration_minutes * slot_count.
-        # Stocké en base pour permettre un filtrage SQL direct (finding §15) :
-        # "start_datetime < window.end AND end_datetime > window.start".
+        # Deux rôles distincts :
+        # 1. Performance (finding §15) : filtrage SQL direct
+        #    "start_datetime < window.end AND end_datetime > window.start".
+        # 2. Fonctionnel : définit le prédicat SSI dans validate_new_booking.
+        #    Sans ce champ, le prédicat couvrirait toutes les réservations de
+        #    la ressource — deux réservations pour des créneaux différents sur
+        #    la même ressource se bloqueraient mutuellement à tort.
         # Toujours calculé par save() — ne jamais écrire ce champ directement.
         # / Redundant with start_datetime + slot_duration_minutes * slot_count.
-        # Stored for direct SQL filtering (finding §15).
+        # Two distinct roles:
+        # 1. Performance (finding §15): direct SQL filtering.
+        # 2. Functional: defines the SSI predicate in validate_new_booking.
+        #    Without this field, the predicate would cover all bookings for the
+        #    resource — two bookings for different slots would conflict wrongly.
         # Always computed by save() — never write this field directly.
         editable=False,
         verbose_name=_('Slot end'),
