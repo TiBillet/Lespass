@@ -1,7 +1,7 @@
 # TiBillet — Booking Module Specification
 
-**Version:** v0.8 (draft)
-**Status:**  Ready for review by TiBillet core team
+**Version:** v0.8
+**Status:**  Ready for app booking v0.1
 **Date:**    2026-04-27
 **Author:**  Joris REHM
 **Note:**    This version was produced in pair specification sessions
@@ -11,7 +11,7 @@ Changes:
 
   - 0.8 Work on the UI specification (User Journey)
         Mark sections with target v0.1 (now) or v0.2 (later)
-        Removed tags system.
+        Removed tags system
   - 0.7 §2 Member actor updated. §3.1.6 Booking status updated.
          §4.2 Member cancel flow clarified. §4.3 Volunteer flow updated.
          §5 Availability, Pricing, Cancellation rules updated.
@@ -852,4 +852,4 @@ should be discussed with the TiBillet core team.
 - Native mobile app (Web Rulez, web is king!)
 - QR code check-in at resource location
 - Usage analytics / reporting dashboard
-- Free form booking (not constrained by recurring slots)
+- Free form booking (not constrained by recurring slots) for members
