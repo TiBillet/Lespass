@@ -14,7 +14,7 @@
   <platform name="android">
     <config-file target="AndroidManifest.xml" parent="/*">
       <uses-permission android:name="android.permission.NFC" />
-      <uses-feature android:name="android.hardware.nfc" android:required="true"/>
+      <uses-feature android:name="android.hardware.nfc" android:required="false"/>
     </config-file>
 
     <!-- Déclaration du fichier source Kotlin -->

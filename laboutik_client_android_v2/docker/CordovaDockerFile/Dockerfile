@@ -2,7 +2,7 @@ FROM debian:12-slim
 
 # base
 RUN apt-get update \
-    && apt-get install ca-certificates curl gnupg wget unzip sudo nano iputils-ping gcc g++ make apt-transport-https -yq
+    && apt-get install ca-certificates curl gnupg wget unzip sudo nano iputils-ping gcc g++ make apt-transport-https jq -yq
 
 # java
 RUN apt-get install openjdk-17-jdk-headless -yq
