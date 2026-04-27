@@ -493,7 +493,7 @@ def validate_new_booking(resource, start_datetime, slot_duration_minutes,
             start_datetime=start_datetime,
             slot_duration_minutes=slot_duration_minutes,
             slot_count=slot_count,
-            status=Booking.STATUS_NEW,
+            status=Booking.STATUS_CONFIRMED,
         )
 
     return True, new_booking

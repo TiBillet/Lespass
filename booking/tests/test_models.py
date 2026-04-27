@@ -19,15 +19,15 @@ TENANT_SCHEMA = 'lespass'
 
 
 @pytest.mark.django_db
-def test_booking_default_status_is_new(test_resource, test_user):
+def test_booking_default_status_is_confirmed(test_resource, test_user):
     """
-    Une Booking créée sans status explicite a le statut 'new'.
-    / A Booking created without explicit status has status 'new'.
+    Une Booking créée sans status explicite a le statut 'confirmed'.
+    / A Booking created without explicit status has status 'confirmed'.
 
     LOCALISATION : booking/tests/test_models.py
 
-    'new' = dans le panier, en attente de validation par le membre.
-    / 'new' = in basket, pending validation by the member.
+    En v0.1, 'confirmed' est le seul statut possible.
+    / In v0.1, 'confirmed' is the only possible status.
     """
     from booking.models import Booking
 
@@ -39,7 +39,7 @@ def test_booking_default_status_is_new(test_resource, test_user):
             slot_duration_minutes=60,
             slot_count=1,
         )
-        assert booking.status == 'new'
+        assert booking.status == 'confirmed'
         booking.delete()
 
 

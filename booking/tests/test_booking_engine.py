@@ -788,7 +788,7 @@ def test_compute_slots_booking_count_gt_1_overlaps_multiple_slots():
                 ),
                 slot_duration_minutes=60,
                 slot_count=2,
-                status=Booking.STATUS_NEW,
+                status=Booking.STATUS_CONFIRMED,
             )
 
             # reference_now = Jun 01 00:00 → date_from = Jun 01 00:00 → dans l'horizon par défaut.
@@ -852,7 +852,7 @@ def test_compute_slots_booking_partial_overlap_counts_as_full_overlap():
                 ),
                 slot_duration_minutes=60,
                 slot_count=1,
-                status=Booking.STATUS_NEW,
+                status=Booking.STATUS_CONFIRMED,
             )
 
             # Fenêtre UTC pour cohérence avec _make_aware_dt (TIME_ZONE=UTC en tests).
