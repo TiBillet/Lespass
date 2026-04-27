@@ -5,17 +5,17 @@ Check items off as they are done.
 
 ## Spec
 
-- [ ] Annotate tibillet-booking-spec.md with v0.1 / v0.2 markers
+- [x] Annotate tibillet-booking-spec.md with v0.1 / v0.2 markers
       throughout
-- [ ] Add tags to spec §9 Out of Scope
-- [ ] Update §3.1.6 Booking status table (remove new/validated,
+- [x] Add tags to spec §9 Out of Scope
+- [x] Update §3.1.6 Booking status table (remove new/validated,
       note that confirmed is the only status in v0.1)
-- [ ] Update §4.1 Member flow (remove basket steps 6–7)
-- [ ] Update §4.4 Public Booking Page (remove tag filtering)
-- [ ] Update §5 Basket & Timeouts (mark entire section out of scope
+- [x] Update §4.1 Member flow (remove basket steps 6–7)
+- [x] Update §4.4 Public Booking Page (remove tag filtering)
+- [x] Update §5 Basket & Timeouts (mark entire section out of scope
       for v0.1)
-- [ ] Update §6 Integration (mark Product/Price/Wallet as deferred)
-- [ ] Update §7.2 Member User Journey (remove basket and HTMX
+- [x] Update §6 Integration (mark Product/Price/Wallet as deferred)
+- [x] Update §7.2 Member User Journey (remove basket and HTMX
       inline form description, align with v0.1 flow)
 
 ## Models (migrations required)
