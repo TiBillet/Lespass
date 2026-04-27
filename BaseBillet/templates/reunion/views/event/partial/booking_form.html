@@ -162,6 +162,9 @@
                                    placeholder="{% trans "Enter the amount (minimum" %} {{ price.prix }}€)"
                                    aria-describedby="custom-amount-help-{{ price.uuid }}"
                                    data-testid="booking-custom-amount-{{ price.uuid }}">
+                            <div class="invalid-feedback"
+                                 id="custom-amount-error-{{ price.uuid }}"
+                                 data-testid="booking-custom-amount-error-{{ price.uuid }}"></div>
                             <small id="custom-amount-help-{{ price.uuid }}" class="form-text text-muted">
                                 {% trans "Enter the desired amount per ticket" %}
                             </small>
@@ -395,20 +398,42 @@
                     }
                 });
 
-                // Validation des prix libres : s'assurer qu'un montant est saisi pour chaque prix libre sélectionné
+                // Validation des prix libres : montant obligatoire, et respect du minimum Stripe (0 ou >= 0.50€)
+                // Free price validation: amount required, and Stripe minimum respected (0 or >= €0.50)
                 function validateFreePrices() {
                     let ok = true;
+                    const stripeMinimumEuros = 0.50;
                     const orders = form.querySelectorAll('.js-order');
                     orders.forEach(order => {
                         const amountInput = order.querySelector('.js-order-amount');
                         const customPriceInput = order.querySelector('.js-order-custom-price');
-                        if (amountInput && customPriceInput && parseInt(amountInput.value) > 0) {
-                            if (!customPriceInput.value || parseFloat(customPriceInput.value) < parseFloat(customPriceInput.min || 0)) {
-                                ok = false;
-                                customPriceInput.classList.add('is-invalid');
-                            } else {
-                                customPriceInput.classList.remove('is-invalid');
-                            }
+                        if (!amountInput || !customPriceInput) return;
+                        if (parseInt(amountInput.value) <= 0) return;
+
+                        const errorDiv = customPriceInput.parentElement.querySelector('.invalid-feedback');
+                        const rawValue = customPriceInput.value;
+                        const parsedAmount = parseFloat(rawValue);
+                        const configuredMinimum = parseFloat(customPriceInput.min || 0);
+
+                        const amountIsEmpty = !rawValue;
+                        const amountIsBelowStripeMinimum = parsedAmount > 0 && parsedAmount < stripeMinimumEuros;
+                        const amountIsBelowConfiguredMinimum = configuredMinimum > 0 && parsedAmount < configuredMinimum;
+
+                        if (amountIsEmpty) {
+                            ok = false;
+                            customPriceInput.classList.add('is-invalid');
+                            if (errorDiv) errorDiv.textContent = "{% translate 'Please enter an amount.' %}";
+                        } else if (amountIsBelowStripeMinimum) {
+                            ok = false;
+                            customPriceInput.classList.add('is-invalid');
+                            if (errorDiv) errorDiv.textContent = "{% translate 'The amount must be 0 (free) or at least €0.50.' %}";
+                        } else if (amountIsBelowConfiguredMinimum) {
+                            ok = false;
+                            customPriceInput.classList.add('is-invalid');
+                            if (errorDiv) errorDiv.textContent = "{% translate 'The amount must be greater than the minimum amount.' %}";
+                        } else {
+                            customPriceInput.classList.remove('is-invalid');
+                            if (errorDiv) errorDiv.textContent = '';
                         }
                     });
                     return ok;
@@ -417,6 +442,14 @@
                 form.addEventListener('htmx:configRequest', function (event) {
                     if (!validateFreePrices()) {
                         event.preventDefault();
+                    }
+                });
+
+                // Efface l'erreur en temps réel quand l'utilisateur corrige le montant
+                // Clears the error live as the user corrects the amount
+                form.addEventListener('input', function (e) {
+                    if (e.target && e.target.classList.contains('js-order-custom-price')) {
+                        validateFreePrices();
                     }
                 });
             })();

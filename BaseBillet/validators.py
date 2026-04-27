@@ -1,7 +1,7 @@
 import logging
 import re
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, Optional, List
 
 import stripe
@@ -417,7 +417,19 @@ class ReservationValidator(serializers.Serializer):
                                 # Conversion en Decimal (supporte virgule et point)
                                 # Convert to Decimal (supports comma and dot)
                                 amount = Decimal(str(raw_custom).replace(',', '.'))
-                                
+
+                                # Stripe interdit les montants entre 0.01€ et 0.49€.
+                                # Seuls 0€ (gratuit) ou >= 0.50€ sont acceptés.
+                                # Stripe rejects amounts between €0.01 and €0.49 — only 0 or >= €0.50 allowed.
+                                stripe_minimum = Decimal('0.50')
+                                amount_is_positive_but_below_stripe_minimum = (
+                                    Decimal('0') < amount < stripe_minimum
+                                )
+                                if amount_is_positive_but_below_stripe_minimum:
+                                    raise serializers.ValidationError({
+                                        custom_amount_key: [_('The amount must be 0 (free) or at least €0.50.')]
+                                    })
+
                                 # Validation du montant minimum / Minimum amount validation
                                 if price.prix and amount < price.prix:
                                     raise serializers.ValidationError({
@@ -432,7 +444,7 @@ class ReservationValidator(serializers.Serializer):
                                 
                                 self.custom_amounts[price.uuid] = amount
                                 
-                            except (TypeError, ValueError, Decimal.InvalidOperation):
+                            except (TypeError, ValueError, InvalidOperation):
                                 raise serializers.ValidationError({custom_amount_key: [_('Invalid amount.')]})
                             except serializers.ValidationError:
                                 raise
