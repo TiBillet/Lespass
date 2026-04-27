@@ -401,14 +401,10 @@ class Booking(models.Model):
     no 'cancelled' status.
     """
 
-    STATUS_NEW = 'new'
-    STATUS_VALIDATED = 'validated'
     STATUS_CONFIRMED = 'confirmed'
 
     STATUS_CHOICES = [
-        (STATUS_NEW, _('New — in basket')),
-        (STATUS_VALIDATED, _('Validated — pending payment')),
-        (STATUS_CONFIRMED, _('Confirmed — payment done')),
+        (STATUS_CONFIRMED, _('Confirmed')),
     ]
 
     resource = models.ForeignKey(
@@ -446,7 +442,7 @@ class Booking(models.Model):
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
-        default=STATUS_NEW,
+        default=STATUS_CONFIRMED,
         verbose_name=_('Status'),
     )
     booked_at = models.DateTimeField(

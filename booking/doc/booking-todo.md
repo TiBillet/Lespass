@@ -26,7 +26,7 @@ Run in this order — §15 filter depends on end_datetime existing:
 - [x] Add `end_datetime` to Booking — §15 performance fix.
       Updated `get_existing_bookings_for_resource` to filter with
       `start_datetime < window.end AND end_datetime > window.start`.
-- [ ] Simplify `Booking.status` — keep `confirmed` only, remove
+- [x] Simplify `Booking.status` — keep `confirmed` only, remove
       `new` and `validated`
 
 ## Engine
