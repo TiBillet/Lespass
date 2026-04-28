@@ -5490,6 +5490,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "detail_cascade": detail_cascade_affichage,
                 "cascade_carte1_json": cascade_json,
                 "total_nfc_carte1": total_nfc,
+                "total_nfc_carte1_euros": f"{total_nfc / 100:.2f}",
                 "total_panier_euros": f"{total_centimes / 100:.2f}",
                 "reste_euros": f"{total_complementaire / 100:.2f}",
                 "accepte_especes": point_de_vente.accepte_especes,
@@ -6667,11 +6668,13 @@ class PaiementViewSet(viewsets.ViewSet):
                     ]
                 )
 
+                total_nfc_carte1_centimes = sum(debits_affichage_c1.values())
                 context_complement = {
                     "tag_id_carte1": tag_id_carte1,
                     "detail_cascade": detail_cascade_affichage,
                     "cascade_carte1_json": cascade_json_rerender,
-                    "total_nfc_carte1": sum(debits_affichage_c1.values()),
+                    "total_nfc_carte1": total_nfc_carte1_centimes,
+                    "total_nfc_carte1_euros": f"{total_nfc_carte1_centimes / 100:.2f}",
                     "total_panier_euros": f"{total_centimes / 100:.2f}",
                     "reste_euros": f"{total_reste_apres_carte2 / 100:.2f}",
                     "accepte_especes": point_de_vente.accepte_especes,

@@ -39,12 +39,18 @@ to avoid HTMX double submit.
     {% translate "Carte" %} : <strong>{{ tag_id_carte1 }}</strong>
   </div>
 
+  {# Somme totale qui etait disponible sur la carte au moment du scan #}
+  {# / Total amount available on the card at scan time #}
+  <div class="fi-msg1" data-testid="complement-carte1-disponible">
+    {% translate "Disponible sur la carte" %} : <strong>{{ total_nfc_carte1_euros }}€</strong>
+  </div>
+
   {# Soldes utilises par la cascade de la 1ere carte #}
   {# / Balances used by the 1st card's cascade #}
   {% if detail_cascade %}
-  <div style="margin: 0.5rem 0; font-size: 0.95rem;" data-testid="complement-detail-cascade">
+  <div class="cascade-badges-list" data-testid="complement-detail-cascade">
     {% for solde_utilise in detail_cascade %}
-    <span class="badge" style="background-color: var(--gris02); color: #fff; margin: 2px; padding: 4px 8px; border-radius: 4px;">
+    <span class="cascade-badge">
       {{ solde_utilise.name }} : {{ solde_utilise.montant_euros }}€
     </span>
     {% endfor %}
@@ -53,12 +59,12 @@ to avoid HTMX double submit.
 
   {# Total du panier et reste a payer #}
   {# / Cart total and remaining amount #}
-  <div class="payment-detail" style="font-variant-numeric: tabular-nums; margin-top: 0.5rem;"
-       data-testid="complement-total-panier">
+  <div class="payment-detail fi-payment-detail" data-testid="complement-total-panier">
     {% translate "Total panier" %} : {{ total_panier_euros }}€
   </div>
 
-  <div class="give-back-box" style="margin: 0.75rem 0;" data-testid="complement-reste-a-payer">
+  <div class="give-back-box" style="margin: 0.75rem 0;" data-testid="complement-reste-a-payer"
+       role="alert">
     <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
     {% translate "Reste à payer" %} : <strong>{{ reste_euros }}€</strong>
   </div>
@@ -72,15 +78,23 @@ to avoid HTMX double submit.
   {# Boutons complement — type="button" autonomes (piege 58) #}
   {# / Complement buttons — standalone type="button" (trap 58) #}
 
+  {% comment %}
+  ESPECES et CB ciblent #messages (innerHTML) car le retour est soit
+  hx_return_payment_success soit un re-render de hx_complement_paiement —
+  aucun des deux n'a de div id confirm en racine, donc un swap outerHTML
+  ferait disparaitre l'overlay. Le complement_paiement lui-meme s'affiche
+  dans #messages, on remplace son contenu par le resultat.
+  / Cash and Card target #messages (innerHTML).
+  {% endcomment %}
   {% if accepte_especes %}
   <button type="button"
-          class="bt-basic-container" style="background-color: var(--vert01); margin-top: 0.5rem; cursor: pointer; border: none; width: 100%;"
+          class="bt-basic-container bt-complement-base bt-complement-especes"
           data-testid="btn-complement-especes"
           hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
           hx-vals='{"moyen_complement": "espece", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
           hx-include="#addition-form"
-          hx-target="#confirm"
-          hx-swap="outerHTML"
+          hx-target="#messages"
+          hx-swap="innerHTML"
           data-loading-disable>
     <div class="bt-basic-icon">
       <i class="fas fa-coins" aria-hidden="true"></i>
@@ -93,13 +107,13 @@ to avoid HTMX double submit.
 
   {% if accepte_carte_bancaire %}
   <button type="button"
-          class="bt-basic-container" style="background-color: var(--bleu03); margin-top: 0.5rem; cursor: pointer; border: none; width: 100%;"
+          class="bt-basic-container bt-complement-base bt-complement-cb"
           data-testid="btn-complement-cb"
           hx-post="{% url 'laboutik-paiement-payer_complementaire' %}"
           hx-vals='{"moyen_complement": "carte_bancaire", "tag_id_carte1": "{{ tag_id_carte1 }}", "cascade_carte1": {{ cascade_carte1_json|escapejs }}, "total_nfc_carte1": "{{ total_nfc_carte1 }}"}'
           hx-include="#addition-form"
-          hx-target="#confirm"
-          hx-swap="outerHTML"
+          hx-target="#messages"
+          hx-swap="innerHTML"
           data-loading-disable>
     <div class="bt-basic-icon">
       <i class="fas fa-credit-card" aria-hidden="true"></i>
@@ -112,7 +126,7 @@ to avoid HTMX double submit.
 
   {% if autoriser_2eme_carte %}
   <button type="button"
-          class="bt-basic-container" style="background-color: var(--warning00); margin-top: 0.5rem; cursor: pointer; border: none; width: 100%;"
+          class="bt-basic-container bt-complement-base bt-complement-2eme-carte"
           data-testid="btn-complement-2eme-carte"
           hx-get="{% url 'laboutik-paiement-lire_nfc_complement' %}?tag_id_carte1={{ tag_id_carte1 }}&cascade_carte1={{ cascade_carte1_json|urlencode }}&total_nfc_carte1={{ total_nfc_carte1 }}"
           hx-target="#confirm"

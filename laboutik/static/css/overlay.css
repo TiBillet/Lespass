@@ -127,13 +127,13 @@
    / Insufficient funds
    ============================================================ */
 .fi-title1 {
-	font-size: 2.5rem;
+	font-size: clamp(1.5rem, 4vw, 2.5rem);
 	font-weight: bold;
 	text-align: center;
 }
 
 .fi-msg1 {
-	font-size: 1.5rem;
+	font-size: clamp(1rem, 3vw, 1.5rem);
 	font-weight: bold;
 	text-align: center;
 }
@@ -167,6 +167,9 @@
 }
 
 .confirm-total {
+	font-size: 2.5rem;
+	font-weight: bold;
+	font-variant-numeric: tabular-nums;
 	margin-bottom: 1rem;
 }
 
@@ -236,6 +239,7 @@
 	font-weight: bold;
 	text-align: center;
 	margin-top: 0.5rem;
+	font-variant-numeric: tabular-nums;
 }
 
 .payment-msg1 {
@@ -254,6 +258,7 @@
 	text-align: center;
 	opacity: 0.85;
 	margin-top: 0.5rem;
+	font-variant-numeric: tabular-nums;
 }
 
 
@@ -282,6 +287,80 @@
 
 .give-back-box i {
 	margin-right: 0.5rem;
+}
+
+/* Bouton "Imprimer le ticket" sur l'ecran de succes
+   / "Print receipt" button on the success screen */
+.bt-imprimer-ticket {
+	background-color: var(--bleu05);
+	margin-top: 1rem;
+}
+
+/* Feedback d'impression — visible seulement quand le serveur a injecte du contenu.
+   Box contrastee (fond sombre + bordure doree) pour ressortir sur le fond vert
+   de l'ecran de succes, comme la box "Monnaie a rendre" ressort en rouge.
+   / Print feedback — visible only when server has injected content.
+   Contrasted box (dark bg + gold border) to stand out on the green success
+   background, like the "Change to give back" red box stands out. */
+#print-feedback:not(:empty) {
+	display: inline-block;
+	margin-top: 0.75rem;
+	padding: 0.5rem 1rem;
+	background-color: var(--noir03);
+	color: var(--blanc01);
+	border: 2px solid var(--warning00);
+	border-radius: 8px;
+	font-weight: bold;
+}
+
+/* Liste des badges du detail cascade NFC (complement de paiement)
+   / NFC cascade detail badge list (payment complement)
+   Wrap auto pour eviter le debordement quand plusieurs assets sont utilises.
+   / Auto wrap to avoid overflow when multiple assets are used. */
+.cascade-badges-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	justify-content: center;
+	max-width: 100%;
+	margin: 0.5rem 0;
+	font-size: 0.95rem;
+}
+
+.cascade-badge {
+	max-width: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	background-color: var(--gris02);
+	color: #fff;
+	padding: 4px 8px;
+	border-radius: 4px;
+}
+
+/* Boutons complement de paiement (.bt-basic-container reutilise pour la largeur)
+   / Payment complement buttons (reuses .bt-basic-container for width) */
+.bt-complement-base {
+	border: none;
+}
+
+.bt-complement-especes {
+	background-color: var(--vert01);
+}
+
+.bt-complement-cb {
+	background-color: var(--bleu03);
+}
+
+.bt-complement-2eme-carte {
+	background-color: var(--warning00);
+}
+
+/* Detail de paiement (Total panier, montants) — chiffres alignes
+   / Payment detail (cart total, amounts) — aligned digits */
+.fi-payment-detail {
+	font-variant-numeric: tabular-nums;
+	margin-top: 0.5rem;
 }
 
 
@@ -392,6 +471,20 @@
 	font-size: 1rem;
 }
 
+/* Texte explicatif sous le titre d'identification client
+   / Help text under client identification title */
+.choose-id-help {
+	opacity: 0.8;
+	font-size: 1rem;
+	margin: 0 0 0.5rem;
+}
+
+/* Avertissement quand aucun moyen de paiement n'est configure
+   / Warning when no payment method is configured */
+.no-payment-warning {
+	color: var(--warning);
+}
+
 
 /* ============================================================
    hx_adhesion_confirm.html — confirmation adhesion
@@ -459,32 +552,60 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
+	font-variant-numeric: tabular-nums;
 }
 
-/* Actions : CONFIRMER plus proéminent / Actions: CONFIRM button more prominent */
+/* Actions de l'ecran recapitulatif client : empilement vertical des boutons
+   de paiement. La largeur fixe de .bt-basic-container interdit un alignement
+   horizontal avec 4 boutons, qui debordait sur tous les viewports < 1280px.
+   / Client recap actions: vertical stacking of payment buttons.
+   .bt-basic-container fixed width breaks horizontal alignment with 4 buttons,
+   which overflowed on every viewport < 1280px. */
 .adhesion-confirm-actions {
 	display: flex;
-	flex-direction: row;
-	justify-content: space-around;
+	flex-direction: column;
 	align-items: center;
+	gap: 0.75rem;
 	margin-top: 1rem;
 }
 
+/* Boutons compacts pour la pile verticale du recapitulatif client.
+   La hauteur globale (~5 boutons + header + carte + articles) depassait
+   100vh sur grand viewport et provoquait un debordement coupe.
+   On reduit la hauteur native (var --bt-basic-height: 120px) a 80px,
+   et on neutralise le margin-top natif (le gap du parent gere l'espacement).
+   / Compact buttons for the client recap vertical stack.
+   Total height (~5 buttons + header + card + articles) overflowed 100vh
+   on large viewports and got cropped. We reduce native height (var
+   --bt-basic-height: 120px) to 80px and neutralize native margin-top. */
+.adhesion-confirm-actions > .bt-basic-container {
+	margin-top: 0;
+	height: 80px;
+	font-size: 1.4rem;
+}
+
+.adhesion-confirm-actions > .bt-basic-container .bt-basic-icon {
+	font-size: 1.8rem;
+}
+
+.adhesion-confirm-actions > .bt-basic-container .bt-basic-text {
+	font-size: 1.4rem;
+}
+
+/* Sur grand viewport, .bt-basic-container est multiplie par ~1.42 (modele00.css)
+   ce qui repousserait la hauteur a 113px. On bloque a 80px sur cet ecran.
+   / On large viewport, .bt-basic-container is multiplied (~1.42) which would
+   push height to 113px. We cap at 80px on this screen. */
+@media only screen and (min-width: 600px) {
+	.adhesion-confirm-actions > .bt-basic-container {
+		height: 80px;
+	}
+}
+
 #bt-confirmer-adhesion {
-	margin-left: 8px;
 	min-height: 70px;
 	min-width: 200px;
 	font-size: 1.2rem;
-}
-
-@media (max-width: 600px) {
-	.adhesion-confirm-actions {
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	#bt-confirmer-adhesion {
-		margin-left: 0;
-	}
 }
 
 
@@ -517,6 +638,29 @@
 .recapitulatif-article-prix {
 	white-space: nowrap;
 	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+.recapitulatif-total-prix {
+	font-variant-numeric: tabular-nums;
+}
+
+/* Boutons de paiement de l'ecran recapitulatif client (.bt-basic-container)
+   / Client recap payment buttons (.bt-basic-container) */
+.bt-client-cashless {
+	background-color: var(--bleu03);
+}
+
+.bt-client-especes {
+	background-color: var(--warning00);
+}
+
+.bt-client-cb {
+	background-color: var(--bleu05);
+}
+
+.bt-client-cheque {
+	background-color: var(--gris02);
 }
 
 .recapitulatif-total-ligne {
@@ -886,6 +1030,14 @@
 	background-color: var(--rouge07);
 }
 
+/* hx_complement_paiement.html — complément de paiement NFC fractionné
+   / NFC split payment complement screen */
+#messages:has([data-testid="complement-paiement"]) {
+	display: flex;
+	flex-direction: column;
+	background-color: var(--rouge07);
+}
+
 /* hx_cloture_rapport.html — rapport de cloture */
 #messages:has([data-testid="cloture-rapport"]) {
 	background-color: var(--info, #17a2b8);
@@ -903,4 +1055,46 @@
 	justify-content: center;
 	align-items: center;
 	background-color: var(--noir01);
+}
+
+
+/* ============================================================
+   Responsive — ecrans de paiement compacts
+   / Responsive — compact payment screens
+
+   Cibles materiel :
+   - Sunmi D3 mini (10.1" portrait) et tablettes generiques  : <= 768px
+   - Sunmi V2s (5.45" portrait, ~720px largeur)              : <= 540px
+   / Hardware targets:
+   - Sunmi D3 mini (portrait) and generic tablets : <= 768px
+   - Sunmi V2s (portrait, ~720px)                 : <= 540px
+   ============================================================ */
+
+/* Tablettes / Sunmi D3 mini portrait
+   / Tablets / Sunmi D3 mini portrait */
+@media (max-width: 768px) {
+	.give-back-box {
+		font-size: 2rem;
+		padding: 0.75rem 1rem;
+	}
+	.cascade-badge {
+		font-size: 0.85rem;
+	}
+}
+
+/* Sunmi V2s portrait — ecran le plus contraint
+   / Sunmi V2s portrait — most constrained screen */
+@media (max-width: 540px) {
+	.give-back-box {
+		font-size: 1.6rem;
+		padding: 0.5rem 0.75rem;
+		margin-top: 0.25rem;
+	}
+	.cascade-badge {
+		font-size: 0.8rem;
+		padding: 2px 6px;
+	}
+	.fi-payment-detail {
+		font-size: 1rem;
+	}
 }

@@ -5,13 +5,13 @@
   {% if payment.moyen_paiement == 'nfc' and step == 2 %}
   <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants" %}</div>
   <div class="fi-title1">{% translate "sur deuxième carte" %}</div>
-  <div class="fi-msg1 test-return-missing-cash">
+  <div class="fi-msg1 test-return-missing-cash" role="alert">
     {% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
     {{ card.name }}.
   </div>
   {% else %}
   <div class="fi-title1 test-return-title">{% translate "Fonds insuffisants." %}</div>
-  <div class="fi-msg1 test-return-missing-cash">
+  <div class="fi-msg1 test-return-missing-cash" role="alert">
     {% translate "Il manque" %} <span id="test-manque-monnaie">{{payment.missing }}</span> {{ currency_data.symbol }} à
     {{ card.name }}.
   </div>
@@ -40,8 +40,6 @@
     hx-get="{% url 'laboutik-paiement-lire_nfc' %}" hx-target="#confirm" hx-trigger="click" hx-swap="outerHTML"
     data-loading-disable
     hx-on:htmx:before-request="askAdditionManageForm('updateInput','#addition-moyen-paiement','nfc'){% if uuid_transaction != '' %}; askAdditionManageForm('updateInput','#addition-uuid-transaction','{{ uuid_transaction }}'){% endif %}"/>
-
-  <!-- TODO: chèque ? -->
   {% endif %}
   <c-bt.return />
 
