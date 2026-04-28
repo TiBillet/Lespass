@@ -213,6 +213,10 @@ class CreationPaiementStripe():
                 self.config.stripe_accept_sepa = False
                 self.config.save(update_fields=['stripe_accept_sepa'])
                 checkout_session = stripe.checkout.Session.create(**data_checkout)
+            elif 'total amount due must add up' in str(e).lower() or 'minimum amount' in str(e).lower():
+                # Le montant total est inférieur au minimum Stripe (€0.50).
+                # Ne pas retenter — la validation en amont aurait dû bloquer ceci.
+                raise serializers.ValidationError(str(e))
             else:
                 # L'id stripe d'un prix est mauvais.
                 # Probablement du a un changement d'etat de test/prod.
