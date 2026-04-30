@@ -1,0 +1,14 @@
+#!/bin/bash
+echo "----- install libpcsclite1"
+apt-get install libpcsclite1 -y
+echo "----- install libpcsclite-dev"
+apt-get install libpcsclite-dev -y
+echo "----- install pcscd"
+apt-get install pcscd -y
+echo "----- install pcsc-tools"
+apt-get install pcsc-tools -y
+# configuration
+echo "install nfc /bin/false" > /etc/modprobe.d/blacklist-nfc-usb.conf
+echo "install pn533 /bin/false"  >> /etc/modprobe.d/blacklist-nfc-usb.conf
+chown root:root /etc/modprobe.d/blacklist-nfc-usb.conf
+chmod 0644 /etc/modprobe.d/blacklist-nfc-usb.conf
