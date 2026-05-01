@@ -1,0 +1,244 @@
+#!/bin/bash
+set -e
+
+# Déterminer le répertoire du scriptd
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CURRENT_USER=$(whoami)
+HOME_DIR="$HOME"
+ 
+nfc="$1"
+rotate="$2"
+
+# Verifier si le nombre d'arguments est correct sinon valeurs par defaut
+if [ "$#" -ne 2 ]; then
+	read -p "Usage: $0 type_nfc rotate
+	 ---- Vous allez continuer avec les valeurs par defaut (y/n):---- " choix 
+		if [ "$choix" != "Y" ] && [ "$choix" != "y" ]; then
+		echo "Arrêt du script."
+		exit 1
+		elif [ "$choix" != "N" ] && [ "$choix" != "n" ]; then
+		echo "Le script continue avec les valeurs par défaut."
+		fi
+
+	nfc="gpio"
+	rotate=3
+fi
+echo "valeurs par defaut : $nfc $rotate"
+
+# update
+echo "----- Update system"
+apt-get update && sudo apt-get -y upgrade
+
+# install divers
+apt list --installed > log1
+
+
+# install node 20.xx
+apt list --installed > log1
+
+echo "----- install gcc"
+apt-get install gcc -y
+echo "----- install g++"
+apt-get install g++ -y
+echo "----- install make"
+apt-get install make -y
+echo "----- install apt-transport-https"
+apt-get install apt-transport-https -y
+
+apt-get install -y ca-certificates curl gnupg -y
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/nodesource.gpg
+NODE_MAJOR=24
+echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | sudo tee /etc/apt/sources.list.d/nodesource.list
+apt-get update
+apt-get install nodejs -y
+apt list --installed > log2
+sort log1 log2 | uniq -u > log-install-node24.txt && rm -fr log1 && rm -fr log2
+
+# addon nodejs
+npm install -g node-gyp
+npm install -g rebuild
+
+# install X11 + openbox
+apt list --installed > log1
+
+echo "----- installxorg"
+apt-get install xserver-xorg -y
+echo "----- install x11"
+apt-get install x11-xserver-utils -y
+echo "----- install xinit"
+apt-get install xinit -y
+
+if ! grep -q "Pi 4 Model" /proc/cpuinfo; then
+  echo "ce n'est pas un Pi4"
+  echo "----- install fbturbo"
+  apt-get install xserver-xorg-video-fbturbo -y
+else
+  echo "C un PI4"
+fi
+
+echo "----- install xdtool"
+apt-get install xdotool -y
+echo "----- install openbox"
+apt-get install openbox -y
+
+apt list --installed > log2
+sort log1 log2 | uniq -u > log-install-x11-openbox.txt && rm -fr log1 && rm -fr log2
+
+# install chromium
+apt list --installed > log1
+
+echo "----- install chromium...Prends un café c'est un peut long :) "
+apt-get install chromium -y
+
+apt list --installed > log2
+sort log1 log2 | uniq -u > log-install-chromium.txt && rm -fr log1 && rm -fr log2
+
+# config startx
+echo "----- config startx"
+if grep "#modif bashrc = ok" "$HOME_DIR/.bashrc" > /dev/null
+then
+ echo 'bashrc déjà modifié pour auto startx !'
+else
+ echo 'export TYPE_SERVEUR_NFC=VMA405' >> "$HOME_DIR/.bashrc"
+ echo '#modif bashrc = ok' >> "$HOME_DIR/.bashrc"
+ echo '[[ -z $DISPLAY && $XDG_VTNR -eq 1 ]] && startx -- -nocursor' >> "$HOME_DIR/.bashrc"
+fi
+
+# nfc usb et gpio
+echo "----- config lecteur nfc"
+if [ $nfc = 'gpio' ]
+then
+  # gpio
+  # Vérifier si spi n'est pas déjà activé
+  if ! grep -q "^dtparam=spi=on" /boot/config.txt; then
+    echo "dtparam=spi=on" >> /boot/config.txt
+    echo "----- SPI activé"
+  else
+    echo "----- SPI déjà activé"
+  fi
+  usermod -a -G gpio $USER
+  usermod -a -G spi $USER
+  usermod -a -G netdev $USER
+  chown root:gpio /dev/gpiomem
+  chmod g+rw /dev/gpiomem
+  rm -fr /etc/modprobe.d/blacklist-nfc-usb.conf
+  # libpcsclite-dev nécessaire pour compiler nfc-pcsc (même en mode gpio, le package est dans les dépendances)
+  echo "----- install libpcsclite-dev (pour nfc-pcsc)"
+  apt-get install libpcsclite-dev -y
+else
+  # usb
+  echo "----- install libpcsclite1"
+  apt-get install libpcsclite1 -y
+  echo "----- install libpcsclite-dev"
+  apt-get install libpcsclite-dev -y
+  echo "----- install pcscd"
+  apt-get install pcscd -y
+  echo "----- install pcsc-tools"
+  apt-get install pcsc-tools -y
+  # configuration
+  echo "install nfc /bin/false" > /etc/modprobe.d/blacklist-nfc-usb.conf
+  echo "install pn533 /bin/false"  >> /etc/modprobe.d/blacklist-nfc-usb.conf
+  chown root:root /etc/modprobe.d/blacklist-nfc-usb.conf
+  chmod 0644 /etc/modprobe.d/blacklist-nfc-usb.conf
+fi
+
+# Configuration de l'ecran
+echo "Config ecran"
+
+# Copie des fichiers de configuration depuis install_pi/src/
+if [ -f "$SCRIPT_DIR/src/99-fbturbo.conf" ]; then
+    sudo cp -rf "$SCRIPT_DIR/src/99-fbturbo.conf" /usr/share/X11/xorg.conf.d/99-fbturbo.conf
+    echo "----- 99-fbturbo.conf copié"
+else
+    echo "WARNING: $SCRIPT_DIR/src/99-fbturbo.conf non trouvé"
+fi
+
+if [ -f "$SCRIPT_DIR/src/40-libinput.conf" ]; then
+    sudo cp "$SCRIPT_DIR/src/40-libinput.conf" /etc/X11/xorg.conf.d/40-libinput.conf
+    echo "----- 40-libinput.conf copié"
+else
+    echo "WARNING: $SCRIPT_DIR/src/40-libinput.conf non trouvé"
+fi
+
+# Désactiver vc4-kms-v3d pour Pi 4
+if grep -qE "^dtoverlay=vc4-kms-v3d" "/boot/config.txt"; then
+  sed -i "s|^dtoverlay=vc4-kms-v3d|#dtoverlay=vc4-kms-v3d|" "/boot/config.txt"
+  echo "----- vc4-kms-v3d désactivé"
+fi
+params=("hdmi_force_hotplug=1" "dtparam=i2c_arm=on" "dtparam=spi=on" "enable_uart=1" "display_rotate="$rotate "max_usb_current=1"  "config_hdmi_boost=7" "hdmi_group=2" "hdmi_mode=87" "hdmi_drive=1" "hdmi_cvt 1024 600 60 6 0 0 0")
+
+for element in "${params[@]}"; do
+  if ! grep -qE "^[^#]*\b${element%=*}=" "/boot/config.txt"; then
+    echo "$element" >> "/boot/config.txt"
+  else
+    sed -i "s|^[^#]*\b${element%=*}=.*|$element|" "/boot/config.txt"
+  fi
+done
+
+# Sauvegarde du fichier original
+cp /etc/X11/xorg.conf.d/40-libinput.conf /etc/X11/xorg.conf.d/40-libinput.conf.bak
+
+# Mise à jour de la CalibrationMatrix selon la rotation
+# Format: "a b c d e f g h i" où:
+#   Xcursor = a*Xtouch + b*Ytouch + c
+#   Ycursor = d*Xtouch + e*Ytouch + f
+# Pour rotation 270° (défaut): X et Y sont inversés
+if [ "$rotate" -eq 0 ]; then
+    # 0° - Normal
+    sed -i 's/Option "CalibrationMatrix" "[^"]*"/Option "CalibrationMatrix" "1 0 0 0 1 0 0 0 1"/' /etc/X11/xorg.conf.d/40-libinput.conf
+elif [ "$rotate" -eq 1 ]; then
+    # 90° - Rotation horaire
+    sed -i 's/Option "CalibrationMatrix" "[^"]*"/Option "CalibrationMatrix" "0 -1 1 1 0 0 0 0 1"/' /etc/X11/xorg.conf.d/40-libinput.conf
+elif [ "$rotate" -eq 2 ]; then
+    # 180° - Retournement
+    sed -i 's/Option "CalibrationMatrix" "[^"]*"/Option "CalibrationMatrix" "-1 0 1 0 -1 1 0 0 1"/' /etc/X11/xorg.conf.d/40-libinput.conf
+elif [ "$rotate" -eq 3 ]; then
+    # 270° - Rotation anti-horaire (défaut)
+    # Xcursor = -Ytouch + 1, Ycursor = Xtouch
+    sed -i 's/Option "CalibrationMatrix" "[^"]*"/Option "CalibrationMatrix" "0 -1 1 1 0 0 0 0 1"/' /etc/X11/xorg.conf.d/40-libinput.conf
+fi
+
+# Vérification que la CalibrationMatrix a bien été modifiée
+if grep -q 'Option "CalibrationMatrix"' /etc/X11/xorg.conf.d/40-libinput.conf; then
+    echo "----- CalibrationMatrix configurée pour la rotation $rotate"
+else
+    echo "WARNING: CalibrationMatrix non trouvée dans 40-libinput.conf"
+fi
+
+
+#Autologin mode console
+raspi-config nonint do_boot_behaviour B2
+
+# configuration x11
+echo "----- configuration x11"
+echo  > /etc/xdg/openbox/autostart
+echo '# stop veille/économie dénergie' >> /etc/xdg/openbox/autostart
+echo 'xset dpms 0 0 0 && xset s noblank  && xset s off' >> /etc/xdg/openbox/autostart
+echo  >> /etc/xdg/openbox/autostart
+echo '# vidage du cache chromium' >> /etc/xdg/openbox/autostart
+echo "rm -fr $HOME_DIR/.cache/chromium" >> /etc/xdg/openbox/autostart
+echo  >> /etc/xdg/openbox/autostart
+
+# Mode KIOSK - Démarrage de chromium en plein écran sans interface utilisateur
+# Options :
+#   --kiosk                          : Mode plein écran sans barre d'adresse ni menus
+#   --noerrdialogs                   : Supprime les boîtes de dialogue d'erreur
+#   --disable-infobars               : Supprime les barres d'information (ex: "Chrome est géré par votre organisation")
+#   --disable-features=Translate     : Désactive la popup de traduction automatique
+#   --disable-pinch                  : Désactive le zoom tactile (pinch-to-zoom)
+#   --check-for-update-interval=...  : Vérifie les mises à jour une fois par an (en secondes)
+echo '# lance chromium en mode kiosk' >> /etc/xdg/openbox/autostart
+echo 'chromium --kiosk --noerrdialogs --disable-infobars --disable-features=Translate --disable-pinch --check-for-update-interval=31536000 http://localhost:3000/' >> /etc/xdg/openbox/autostart
+
+chown root:root /etc/xdg/openbox/autostart
+chmod 755 /etc/xdg/openbox/autostart
+
+
+if grep -q "Pi 4 Model" /proc/cpuinfo; then
+  echo "C un Pi4"
+  echo "----- sudo rm /usr/share/X11/xorg.conf.d/*.*"
+  sudo rm /usr/share/X11/xorg.conf.d/*.*
+fi
+
+echo "-----Fin du script, Reboot"
+reboot

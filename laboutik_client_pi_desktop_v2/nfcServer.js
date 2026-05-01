@@ -6,7 +6,7 @@ import { cors } from './modules/cors.js'
 import { checkPrinter, print } from './modules/devices/thermalPrinterTcp.js'
 
 const root = process.cwd()
-let refAskTagId = null, clientGlobale = null, appDeviceEmitter = null
+let refAskTagId = null, clientGlobale = null
 
 // 1 - affiche messages des appels socket.io et leurs méthodes uniquement
 // 2 - url et méthodes affiliées
@@ -19,34 +19,6 @@ function socketEmit(msg, data) {
   }
 }
 
-// manage nfc
-function manageNfc(msg) {
-  let error = ''
-  if (msg.errorNfcReader) {
-    error = 'Nfc error'
-  }
-  if (msg.errorNfc) {
-    error = 'Nfc error'
-  }
-  // emet au front les erreurs du nfc
-  if (error !== '') {
-    socketEmit('nfcMessage', { error })
-  }
-  // emet au front le status du nfc
-  if (msg.status) {
-    socketEmit('nfcMessage', msg)
-  }
-  // emet au front le tagId si demande de tag id référencée
-  if (msg.tagId && refAskTagId !== null) {
-    socketEmit('nfcMessage', msg)
-  }
-  // emet au front le tagId de test
-  if (msg.tagId && refAskTagId === null) {
-    socketEmit('nfcMessage', { testTagId: msg.tagId })
-  }
-  // console.log("msg =", msg)
-}
-
 function initNfcDevice(socket) {
   // console.log('-> initNfcDevice')
   try {
@@ -56,14 +28,13 @@ function initNfcDevice(socket) {
       pi: 'vma405-rfid-rc522.js'
     }
     const pathDevice = root + '/modules/devices/' + deviceFiles[env.type_app]
-    // console.log('pathDevice =', pathDevice)
+    console.log('pathDevice =', pathDevice)
 
-    if (appDeviceEmitter !== null) {
-      appDeviceEmitter.removeListener("nfcMessage", manageNfc)
-    }
     import(pathDevice).then(module => {
       const { initNfcReader } = module
       initNfcReader(socket)
+    }).catch(err => {
+      console.log('-> initNfcDevice, erreur chargement module:', err)
     })
   } catch (error) {
     console.log('-> initNfcDevice,', error)

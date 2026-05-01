@@ -11,37 +11,48 @@
 // source : https://github.com/pokusew/nfc-pcsc#flow-of-handling-tags
 import { NFC } from 'nfc-pcsc'
 
+let nfcInstance = null
+let currentSocket = null
+
 export function initNfcReader(socket) {
-  const nfc = new NFC()
-  nfc.on('reader', reader => {
-    const msg = { status: 'available' }
-    socket.emit('nfcMessage', msg)
+  currentSocket = socket
+
+  if (nfcInstance !== null) {
+    console.log('NFC déjà initialisé, socket mis à jour')
+    return
+  }
+
+  function emit(msg) {
+    if (currentSocket) currentSocket.emit('nfcMessage', msg)
+  }
+
+  nfcInstance = new NFC()
+
+  nfcInstance.on('reader', reader => {
+
+    emit({ status: 'available' })
 
     reader.on('card', card => {
-      const msg = { tagId: card.uid }
-      socket.emit('nfcMessage', msg)
+      emit({ tagId: card.uid })
     })
 
 
     reader.on('error', err => {
       // console.log(`${reader.reader.name}  an error occurred`, err);
-      const msg = { errorNfcReader: err }
-      socket.emit('nfcMessage', msg)
-    });
+      emit({ errorNfcReader: err })
+    })
 
     reader.on('end', () => {
       // console.log(`${reader.reader.name}  device removed`)
-      const msg = { status: 'disable' }
-      socket.emit('nfcMessage', msg)
-    });
+      emit({ status: 'disable' })
+    })
 
   });
 
-  nfc.on('error', err => {
+  nfcInstance.on('error', err => {
     // console.log('an error occurred', err);
-    const msg = { errorNfc: err }
-    socket.emit('nfcMessage', msg)
-  });
+    emit({ errorNfc: err })
+  })
 }
 
 console.log('Module "acr122u-u9" loaded !');

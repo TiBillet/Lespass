@@ -1,7 +1,7 @@
 {
   "name": "laboutik_client_pi_desktop_v2",
   "version": "1.0.0",
-  "description": "",
+  "description": "package.json desktop",
   "main": "env-example.js",
   "type": "module",
   "scripts": {
