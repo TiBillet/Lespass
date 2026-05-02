@@ -341,11 +341,18 @@ class TireuseViewSet(viewsets.ViewSet):
                 }
             )
 
-        # Volume disponible dans le reservoir
-        # / Available volume in reservoir
-        reservoir_disponible = float(tireuse.reservoir_ml)
+        # Volume disponible dans le reservoir.
+        # Si illimité, on passe une valeur arbitrairement grande pour que
+        # calculer_volume_autorise_ml ne plafonne pas sur le réservoir.
+        # / Available reservoir volume.
+        # If unlimited, pass an arbitrarily large value so
+        # calculer_volume_autorise_ml doesn't cap on the reservoir.
+        if tireuse.reservoir_illimite:
+            reservoir_disponible = 9_999_000.0
+        else:
+            reservoir_disponible = float(tireuse.reservoir_ml)
 
-        if reservoir_disponible <= 0:
+        if not tireuse.reservoir_illimite and reservoir_disponible <= 0:
             _push_ws_kiosk(
                 tireuse,
                 {

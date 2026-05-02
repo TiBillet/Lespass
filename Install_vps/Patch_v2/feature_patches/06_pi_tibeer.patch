@@ -1,0 +1,637 @@
+diff --git a/controlvanne/Pi/config/claim.sh b/controlvanne/Pi/config/claim.sh
+index aaa836d7..3437d883 100644
+--- a/controlvanne/Pi/config/claim.sh
++++ b/controlvanne/Pi/config/claim.sh
+@@ -18,7 +18,8 @@ TARGET_DIR="/home/sysop/tibeer/controlvanne/Pi"
+ [ -n "$SERVER"   ] || { echo "SERVER manquant."; exit 1; }
+ 
+ echo "Appairage en cours avec $SERVER..."
+-RESPONSE=$(curl -sf -X POST "${SERVER}/api/discovery/claim/" \
++# -k : ignore SSL auto-signe en dev / ignore self-signed SSL in dev
++RESPONSE=$(curl -skf -X POST "${SERVER}/api/discovery/claim/" \
+     -H "Content-Type: application/json" \
+     -d "{\"pin_code\": \"${PIN_CODE}\"}")
+ 
+diff --git a/controlvanne/Pi/config/env_example b/controlvanne/Pi/config/env_example
+index a9af1822..d3217c4a 100644
+--- a/controlvanne/Pi/config/env_example
++++ b/controlvanne/Pi/config/env_example
+@@ -7,7 +7,7 @@ DEBUG=False
+ RFID_TYPE=__RFID_TYPE__
+ # GPIO
+ GPIO_VANNE=18
+-VALVE_ACTIVE_HIGH=False
++VALVE_ACTIVE_HIGH=True
+ GPIO_FLOW_SENSOR=23
+ FLOW_CALIBRATION_FACTOR=6.5
+ # Réseau
+diff --git a/controlvanne/Pi/config/settings.py b/controlvanne/Pi/config/settings.py
+index cb1df70e..6e27c114 100644
+--- a/controlvanne/Pi/config/settings.py
++++ b/controlvanne/Pi/config/settings.py
+@@ -24,6 +24,10 @@ SERVER_URL = os.getenv("SERVER_URL", "https://localhost")
+ API_KEY = os.getenv("API_KEY", "changeme")
+ TIREUSE_UUID = os.getenv("TIREUSE_UUID", "")
+ 
++# Mettre a False pour un serveur de dev avec certificat auto-signe.
++# Set to False for a dev server with a self-signed certificate.
++SSL_VERIFY = os.getenv("SSL_VERIFY", "True").lower() != "false"
++
+ # --- RFID ---
+ RFID_TYPE = os.getenv("RFID_TYPE", "RC522")
+ RC522_SPI_DEVICE = int(os.getenv("RC522_SPI_DEVICE", "0"))
+diff --git a/controlvanne/Pi/config/xinitrc.bash b/controlvanne/Pi/config/xinitrc.bash
+index 4d34e9a5..1b04ac05 100644
+--- a/controlvanne/Pi/config/xinitrc.bash
++++ b/controlvanne/Pi/config/xinitrc.bash
+@@ -7,12 +7,13 @@ export LANG=fr_FR.UTF-8
+ export LANGUAGE=fr_FR:fr
+ export LC_ALL=fr_FR.UTF-8
+ 
+-# URL kiosque - lit directement depuis .env
++# URL de secours calculée depuis .env (utilisée si tibeer ne fournit pas d'URL)
++# / Fallback URL computed from .env (used if tibeer provides no URL)
+ set -a; [ -f /home/sysop/tibeer/controlvanne/Pi/.env ] && . /home/sysop/tibeer/controlvanne/Pi/.env; set +a
+ if [ -n "$TIREUSE_UUID" ]; then
+-    URL="${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
++    FALLBACK_URL="${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
+ else
+-    URL="${SERVER_URL}/"
++    FALLBACK_URL="${SERVER_URL}/"
+ fi
+ 
+ # Trouver Chromium
+@@ -44,6 +45,15 @@ while [ ! -f /tmp/tibeer_cookie_ready ] && [ $WAIT -lt 60 ]; do
+ done
+ rm -f /tmp/tibeer_cookie_ready
+ 
++# Lire l'URL fournie par tibeer (kiosk avec token d'auth)
++# / Read the URL provided by tibeer (kiosk with auth token)
++if [ -f /tmp/tibeer_kiosk_url ]; then
++    URL="$(cat /tmp/tibeer_kiosk_url)"
++    rm -f /tmp/tibeer_kiosk_url
++else
++    URL="$FALLBACK_URL"
++fi
++
+ # Boucle de relance Chromium (X reste actif si Chromium crash)
+ while true; do
+   "$CHROMIUM_BIN" \
+@@ -60,4 +70,9 @@ while true; do
+   rc=$?
+   echo "[KIOSK] Chromium terminé (rc=$rc), relance dans 2s…"
+   sleep 2
++  # Après crash/redémarrage : repasser sur l'URL kiosk réelle (le cookie de session
++  # est déjà dans le profil Chromium, pas besoin de recharger le token)
++  # / After crash/restart: switch back to real kiosk URL (session cookie already
++  # in Chromium profile, no need to reload the token)
++  URL="$FALLBACK_URL"
+ done
+diff --git a/controlvanne/Pi/controllers/tibeer_controller.py b/controlvanne/Pi/controllers/tibeer_controller.py
+index d0722100..522ff9cd 100644
+--- a/controlvanne/Pi/controllers/tibeer_controller.py
++++ b/controlvanne/Pi/controllers/tibeer_controller.py
+@@ -22,7 +22,7 @@ from utils.exceptions import BackendError
+ 
+ # Anti-rebond : delai avant de considerer que la carte est partie (secondes)
+ # / Anti-bounce: delay before considering the card is gone (seconds)
+-CARD_GRACE_PERIOD_S = 1.5
++CARD_GRACE_PERIOD_S = 3.0
+ 
+ # Frequence d'envoi des events pour_update (secondes)
+ # / Frequency of pour_update events (seconds)
+@@ -51,6 +51,14 @@ class TibeerController:
+         self.last_update_ts = 0
+         self.running = True
+ 
++        # Flag : la derniere session etait-elle une session maintenance ?
++        # Si oui, on pinge le serveur apres le retrait de la carte pour
++        # recuperer immediatement le nouveau facteur de calibration.
++        # / Flag: was the last session a maintenance session?
++        # If yes, we ping the server after card removal to immediately
++        # retrieve the new calibration factor.
++        self.last_session_was_maintenance = False
++
+     def run(self):
+         """Boucle principale — tourne toutes les 100ms.
+         / Main loop — runs every 100ms."""
+@@ -78,6 +86,13 @@ class TibeerController:
+                         self.current_uid = uid
+                         self._handle_new_session(uid)
+ 
++                        # Remettre le timer a jour apres authorize() + send_event("pour_start") qui
++                        # bloquent plusieurs secondes. Sans ce reset, last_seen_ts date de la
++                        # premiere detection et CARD_GRACE_PERIOD_S expire pendant les appels reseau.
++                        # / Reset timer after the blocking network calls (authorize + pour_start).
++                        # Without this, last_seen_ts is from first detection and CARD_GRACE_PERIOD_S
++                        # expires during the network calls, closing the valve immediately.
++                        self.last_seen_ts = time.time()
+                     elif self.is_serving:
+                         # Meme carte, service en cours
+                         # / Same card, serving
+@@ -112,6 +127,12 @@ class TibeerController:
+             self.session_id = auth.get("session_id")
+             self.allowed_ml = float(auth.get("allowed_ml", 0))
+ 
++            # Memoriser si c'est une session maintenance
++            # / Remember if this is a maintenance session
++            self.last_session_was_maintenance = auth.get("is_maintenance", False)
++            if self.last_session_was_maintenance:
++                logger.info("Session maintenance detectee — un ping sera effectue au retrait de la carte.")
++
+             # Reset debitmetre (snapshot du volume actuel)
+             # / Reset flow meter (snapshot of current volume)
+             self.session_start_vol = self.flow_meter.volume_l() * 1000.0
+@@ -137,6 +158,7 @@ class TibeerController:
+             logger.warning(f"Badge {uid} refuse: {message}")
+             self.is_serving = False
+             self.session_id = None
++            self.last_session_was_maintenance = False
+ 
+     def _handle_pouring_loop(self, now):
+         """Pendant le service : envoie les mises a jour de volume.
+@@ -166,12 +188,18 @@ class TibeerController:
+     def _handle_card_removal(self):
+         """Carte retiree → fermer la vanne, envoyer les events de fin.
+         / Card removed → close valve, send end events."""
++        # Capturer le flag avant de le reinitialiser
++        # / Capture the flag before resetting it
++        session_etait_maintenance = self.last_session_was_maintenance
++
+         if self.is_serving:
+             self._end_session_actions()
+ 
+-        # Envoyer card_removed (declenche le popup kiosk via WebSocket)
+-        # / Send card_removed (triggers kiosk popup via WebSocket)
+-        if self.session_id is not None:
++        # Envoyer card_removed dans tous les cas : avec ou sans session.
++        # Sans session (carte refusee) : permet au kiosk de revenir a "En attente".
++        # / Send card_removed in all cases: with or without session.
++        # Without session (refused card): lets the kiosk go back to "Waiting".
++        if self.current_uid is not None:
+             try:
+                 self.client.send_event("card_removed", self.current_uid, 0)
+             except BackendError:
+@@ -180,6 +208,16 @@ class TibeerController:
+         self.current_uid = None
+         self.session_id = None
+         self.allowed_ml = 0.0
++        self.last_session_was_maintenance = False
++
++        # Apres une session maintenance : pinger le serveur pour recuperer
++        # immediatement le nouveau facteur de calibration si l'admin vient
++        # de l'appliquer via la page de calibration.
++        # / After a maintenance session: ping the server to immediately retrieve
++        # the new calibration factor if the admin just applied it via the
++        # calibration page.
++        if session_etait_maintenance:
++            self._rafraichir_calibration()
+ 
+     def _end_session_actions(self):
+         """Ferme la vanne et envoie le bilan final.
+@@ -202,6 +240,33 @@ class TibeerController:
+ 
+         self.is_serving = False
+ 
++    def _rafraichir_calibration(self):
++        """
++        Appele apres une session maintenance : pinge le serveur et applique
++        immediatement le facteur de calibration retourne.
++        Permet a l'admin d'appliquer un nouveau facteur via la page de calibration
++        et de le voir pris en compte des le prochain versement sans redemarrer le Pi.
++        / Called after a maintenance session: pings the server and immediately
++        applies the returned calibration factor.
++        Lets the admin apply a new factor via the calibration page and have it
++        take effect on the very next pour without restarting the Pi.
++        """
++        logger.info("Session maintenance terminee — recuperation du facteur de calibration...")
++        try:
++            ping_result = self.client.ping()
++            if ping_result.get("status") == "pong":
++                tireuse_config = ping_result.get("tireuse", {})
++                calibration = tireuse_config.get("calibration_factor")
++                if calibration:
++                    self.flow_meter.set_calibration_factor(calibration)
++                    logger.info(f"Facteur de calibration mis a jour apres maintenance: {calibration}")
++                else:
++                    logger.warning("Ping OK mais pas de calibration_factor dans la reponse.")
++            else:
++                logger.warning(f"Ping apres maintenance: {ping_result.get('message', 'reponse inattendue')}")
++        except BackendError as e:
++            logger.warning(f"Ping apres maintenance echoue (facteur inchange): {e}")
++
+     def cleanup(self):
+         """Nettoyage des ressources GPIO.
+         / Cleanup GPIO resources."""
+diff --git a/controlvanne/Pi/first/__init__.py b/controlvanne/Pi/first/__init__.py
+deleted file mode 100644
+index e69de29b..00000000
+diff --git a/controlvanne/Pi/hardware/flow_meter.py b/controlvanne/Pi/hardware/flow_meter.py
+index 0eb4ee45..851f8eb4 100644
+--- a/controlvanne/Pi/hardware/flow_meter.py
++++ b/controlvanne/Pi/hardware/flow_meter.py
+@@ -41,9 +41,21 @@ class FlowMeter:
+         self.last_time = time.time()
+         self.current_flow_rate = 0.0  # L/min
+ 
++        # Filtre anti-parasite : ignore les impulsions plus courtes que GLITCH_FILTER_US.
++        # Le relais génère ~7 impulsions parasites au moment de sa commutation (back-EMF
++        # de la bobine injectée par couplage sur le GPIO débitmètre). Ces parasites durent
++        # quelques µs, alors que les impulsions légitimes du YF-S201 durent plusieurs ms.
++        # 5000 µs = 5 ms : largement au-dessus du bruit relais, bien en dessous du signal réel.
++        # / Glitch filter: ignore pulses shorter than GLITCH_FILTER_US.
++        # The relay generates ~7 spurious pulses when switching (back-EMF from coil
++        # injected via coupling onto the flow meter GPIO). These last a few µs, while
++        # legitimate YF-S201 pulses last several ms.
++        GLITCH_FILTER_US = 5000  # 5 ms
++        self.pi.set_glitch_filter(self.gpio_pin, GLITCH_FILTER_US)
++
+         # Callback (Interruption)
+         self.cb = self.pi.callback(self.gpio_pin, pigpio.FALLING_EDGE, self._callback)
+-        logger.info(f"Débitmètre initialisé sur GPIO {self.gpio_pin}")
++        logger.info(f"Débitmètre initialisé sur GPIO {self.gpio_pin} (filtre parasite: {GLITCH_FILTER_US}µs)")
+ 
+     def _callback(self, gpio, level, tick):
+         """Appelé à chaque impulsion du capteur."""
+diff --git a/controlvanne/Pi/hardware/rfid_reader.py b/controlvanne/Pi/hardware/rfid_reader.py
+index 5816895a..1de33e6f 100644
+--- a/controlvanne/Pi/hardware/rfid_reader.py
++++ b/controlvanne/Pi/hardware/rfid_reader.py
+@@ -91,19 +91,33 @@ class RFIDReader:
+         return None
+ 
+     def _read_rc522(self):
+-        """Lecture spécifique RC522."""
++        """Lecture spécifique RC522 via PICC_REQIDL (détecte les cartes en état IDLE).
++        Le problème de détection continue (vanne qui se ferme après ~3s carte posée)
++        n'est PAS un problème de protocole logiciel : les tests montrent que le RC522
++        rate la carte la grande majorité du temps sur certains Pi (gaps de plusieurs
++        minutes même avec sleep(1)), alors qu'il lit normalement sur d'autres Pi avec
++        le même lecteur et le même code. Cause : problème physique/électronique côté Pi
++        (alimentation 3.3V instable, connexion SPI/RST mal plantée, masse défaillante).
++        REQALL (0x52) et SELECT+HALT ont été testés sans amélioration — le problème
++        est en dessous de la couche protocolaire.
++        / RC522 read via PICC_REQIDL (detects cards in IDLE state).
++        The continuous-detection issue (valve closing after ~3s with card present)
++        is NOT a software protocol problem: tests show the RC522 misses the card
++        most of the time on some Pis (gaps of several minutes even with sleep(1)),
++        while it reads normally on other Pis with the same reader and same code.
++        Cause: physical/electrical issue on the Pi side (unstable 3.3V supply,
++        loose SPI/RST connection, bad ground). REQALL (0x52) and SELECT+HALT
++        were tested with no improvement — the issue is below the protocol layer.
++        """
+         try:
+-            # 1. Requête
+             (status, TagType) = self.reader.MFRC522_Request(self.reader.PICC_REQIDL)
+ 
+             if status == self.reader.MI_OK:
+-                # 2. Anticollision
+                 (status, uid) = self.reader.MFRC522_Anticoll()
+ 
+                 if status == self.reader.MI_OK:
+                     return self._uid_to_hex(uid)
+         except Exception as e:
+-            # On évite de spammer les logs sur des erreurs de lecture VIDES
+             pass
+         return None
+ 
+diff --git a/controlvanne/Pi/hardware/valve.py b/controlvanne/Pi/hardware/valve.py
+index 5dea0510..3cceef81 100644
+--- a/controlvanne/Pi/hardware/valve.py
++++ b/controlvanne/Pi/hardware/valve.py
+@@ -5,32 +5,45 @@ from utils.exceptions import ValveError
+ 
+ 
+ class Valve:
+-    """Gestion de la vanne électromagnétique via pigpio."""
++    """Gestion de la vanne électromagnétique via pigpio.
++    Supporte les circuits actif-haut (VALVE_ACTIVE_HIGH=True)
++    et actif-bas (VALVE_ACTIVE_HIGH=False).
++    """
+ 
+     def __init__(self):
+         self.gpio_pin = int(os.getenv("GPIO_VANNE", "18"))
+-        self.is_open = (
+-            False  # Initialisé ici pour garantir l'attribut dans tous les cas
+-        )
+-        self.pi = pigpio.pi()
++        self.active_high = os.getenv("VALVE_ACTIVE_HIGH", "True").lower() == "true"
++        self.is_open = False
+ 
++        self.pi = pigpio.pi()
+         if not self.pi.connected:
+             logger.error("Pigpio non connecté (Vanne) !")
+             raise ValveError("Pigpio non connecté : impossible d'initialiser la vanne")
+ 
+         self.pi.set_mode(self.gpio_pin, pigpio.OUTPUT)
+-        self.close()  # Sécurité au démarrage (fermeture physique + is_open = False)
+-        logger.info(f"Vanne initialisée sur GPIO {self.gpio_pin}")
++        self.close()  # Sécurité au démarrage
++        logger.info(
++            f"Vanne initialisée sur GPIO {self.gpio_pin} "
++            f"(active_high={self.active_high})"
++        )
++
++    def _signal_open(self):
++        """Niveau GPIO pour ouvrir (actif-haut → 1, actif-bas → 0)."""
++        return 1 if self.active_high else 0
++
++    def _signal_close(self):
++        """Niveau GPIO pour fermer (actif-haut → 0, actif-bas → 1)."""
++        return 0 if self.active_high else 1
+ 
+     def open(self):
+-        self.pi.write(self.gpio_pin, 1)
++        self.pi.write(self.gpio_pin, self._signal_open())
+         self.is_open = True
+-        logger.info("Vanne ouverte.")
++        logger.info(f"Vanne ouverte (GPIO{self.gpio_pin}={self._signal_open()}).")
+ 
+     def close(self):
+-        self.pi.write(self.gpio_pin, 0)
++        self.pi.write(self.gpio_pin, self._signal_close())
+         self.is_open = False
+-        logger.info("Vanne fermée.")
++        logger.info(f"Vanne fermée (GPIO{self.gpio_pin}={self._signal_close()}).")
+ 
+     def cleanup(self):
+         self.close()
+diff --git a/controlvanne/Pi/main.py b/controlvanne/Pi/main.py
+index 8a8d2145..408d62c7 100644
+--- a/controlvanne/Pi/main.py
++++ b/controlvanne/Pi/main.py
+@@ -6,24 +6,23 @@ Point d'entree du client Pi tireuse connectee.
+ LOCALISATION : controlvanne/Pi/main.py
+ 
+ Demarrage :
+-1. Init hardware (RFID, vanne, debitmetre)
+-2. Ping serveur (verif connectivite + config tireuse)
+-3. Auth kiosk (cookie session pour Chromium)
+-4. Lancer Chromium kiosk en arriere-plan
+-5. Boucle controleur (lecture RFID + controle vanne + API)
++1. Verif credentials — si absents, arret avec message (lancer make claim PIN=<code>)
++2. Init hardware (RFID, vanne, debitmetre)
++3. Ping serveur (verif connectivite + config tireuse)
++4. Auth kiosk : obtenir un token a usage unique
++5. Ecrire l'URL de demarrage kiosk dans /tmp/tibeer_kiosk_url
++6. Signaler a xinitrc que Chromium peut demarrer (/tmp/tibeer_cookie_ready)
++7. Boucle controleur (lecture RFID + controle vanne + API)
+ """
+ 
+ import os
+ import sys
+-import subprocess
+-import time
+-import sqlite3
+ 
+ from dotenv import load_dotenv
+ load_dotenv()
+ 
+ from utils.logger import logger
+-from config.settings import SERVER_URL, TIREUSE_UUID, SYSTEMD_NOTIFY
++from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID, SYSTEMD_NOTIFY
+ from hardware.rfid_reader import RFIDReader
+ from hardware.valve import Valve
+ from hardware.flow_meter import FlowMeter
+@@ -31,89 +30,33 @@ from network.backend_client import BackendClient
+ from controllers.tibeer_controller import TibeerController
+ 
+ 
+-def inject_session_cookie(session_key, domain):
+-    """
+-    Écrit le cookie sessionid dans la base SQLite de Chromium avant son lancement.
+-    S'adapte dynamiquement au schéma de la version de Chromium installée.
+-    Chromium est lancé par kiosk.service/.xinitrc après le signal /tmp/tibeer_cookie_ready.
+-    / Writes sessionid cookie into Chromium's SQLite store before launch.
+-    Dynamically adapts to the installed Chromium version's schema.
+-    Chromium is launched by kiosk.service/.xinitrc after the /tmp/tibeer_cookie_ready signal.
+-    """
+-    profile_dir = "/home/sysop/.config/chromium-kiosk"
+-    db_dir = os.path.join(profile_dir, "Default")
+-    os.makedirs(db_dir, exist_ok=True)
+-    db_path = os.path.join(db_dir, "Cookies")
+-
+-    # Chromium time = microsecondes depuis 1601-01-01 / Chromium time = microseconds since 1601-01-01
+-    epoch_diff = 11644473600
+-    now = (int(time.time()) + epoch_diff) * 1_000_000
+-    expires = (int(time.time()) + 86400 * 30 + epoch_diff) * 1_000_000  # 30 jours / 30 days
+-
+-    # Valeurs connues pour toutes les versions de Chromium rencontrées
+-    # / Known values for all encountered Chromium versions
+-    known_values = {
+-        "creation_utc": now,
+-        "host_key": domain,
+-        "top_frame_site_key": "",
+-        "name": "sessionid",
+-        "value": session_key,
+-        "encrypted_value": b"",
+-        "path": "/",
+-        "expires_utc": expires,
+-        "is_secure": 1,
+-        "is_httponly": 1,
+-        "last_access_utc": now,
+-        "has_expires": 1,
+-        "is_persistent": 1,
+-        "priority": 1,
+-        "samesite": 0,
+-        "source_scheme": 2,
+-        "source_port": 443,
+-        "last_update_utc": now,
+-        "source_type": 0,
+-        "has_cross_site_ancestor": 0,
+-    }
+-
+-    conn = sqlite3.connect(db_path)
+-
+-    # Lire les colonnes réellement présentes dans cette version de Chromium
+-    # / Read columns actually present in this Chromium version
+-    cursor = conn.execute("PRAGMA table_info(cookies)")
+-    existing_cols = {row[1] for row in cursor.fetchall()}
+-
+-    # Garder uniquement les colonnes qui existent dans ce DB
+-    # / Keep only columns that exist in this DB
+-    cols = [c for c in known_values if c in existing_cols]
+-    vals = [known_values[c] for c in cols]
+-
+-    placeholders = ",".join(["?" for _ in vals])
+-    col_list = ",".join(cols)
+-
+-    conn.execute("DELETE FROM cookies WHERE host_key=? AND name='sessionid'", (domain,))
+-    conn.execute(f"INSERT INTO cookies ({col_list}) VALUES ({placeholders})", vals)
+-    conn.commit()
+-    conn.close()
+-    logger.info(f"Cookie sessionid injecté pour {domain} ({len(cols)} colonnes)")
+-
+-    # Signal pour .xinitrc : le cookie est prêt, Chromium peut démarrer
+-    # / Signal for .xinitrc: cookie is ready, Chromium can start
+-    open("/tmp/tibeer_cookie_ready", "w").close()
+-
+-
+ def main():
+-    """Point d'entree du programme.
+-    / Program entry point."""
++    """Point d'entree du programme. / Program entry point."""
+     logger.info("Demarrage TiBeer...")
+ 
+-    # 1. Init hardware / Init hardware
++    # 1. Verifier que le Pi est appaire (API_KEY + TIREUSE_UUID presents dans .env).
++    #    Si non appaire, arreter avec un message clair.
++    #    L'appairage se fait en SSH via : make claim PIN=<code> [SERVER=<url>]
++    #    Le code PIN est visible dans Admin → Tireuses → Taps (colonne PIN code).
++    # / Check that the Pi is paired (API_KEY + TIREUSE_UUID present in .env).
++    #   If not paired, exit with a clear message.
++    #   Pairing is done via SSH: make claim PIN=<code> [SERVER=<url>]
++    if API_KEY in ("changeme", "", None) or not TIREUSE_UUID:
++        logger.error(
++            "Pi non appaire. Lancer depuis le Pi en SSH :\n"
++            "  make claim PIN=<code> [SERVER=<url>]\n"
++            "Le code PIN est visible dans Admin → Tireuses → Taps (colonne PIN code)."
++        )
++        sys.exit(1)
++
++    # 2. Init hardware / Init hardware
+     logger.info("Init hardware...")
+     rfid = RFIDReader()
+     valve = Valve()
+     flow_meter = FlowMeter()
+     client = BackendClient()
+ 
+-    # 2. Ping serveur / Ping server
++    # 3. Ping serveur / Ping server
+     logger.info("Ping serveur...")
+     try:
+         ping_result = client.ping()
+@@ -121,9 +64,6 @@ def main():
+             tireuse_config = ping_result.get("tireuse", {})
+             nom = tireuse_config.get("nom", "?")
+             logger.info(f"Serveur OK. Tireuse: {nom}")
+-
+-            # Mettre a jour le facteur de calibration depuis la config serveur
+-            # / Update calibration factor from server config
+             calibration = tireuse_config.get("calibration_factor")
+             if calibration:
+                 flow_meter.set_calibration_factor(calibration)
+@@ -133,22 +73,29 @@ def main():
+     except Exception as e:
+         logger.warning(f"Ping echoue (on continue): {e}")
+ 
+-    # 3. Auth kiosk + injection cookie / Auth kiosk + cookie injection
++    # 4. Auth kiosk : obtenir un token a usage unique
+     logger.info("Auth kiosk...")
++    kiosk_url = f"{SERVER_URL}/controlvanne/kiosk/{TIREUSE_UUID}/"
+     try:
+-        session_key = client.auth_kiosk()
+-        from urllib.parse import urlparse
+-        domain = urlparse(SERVER_URL).hostname
+-        inject_session_cookie(session_key, domain)
++        session_key, kiosk_token = client.auth_kiosk()
++        kiosk_start_url = f"{kiosk_url}?kiosk_token={kiosk_token}"
++        logger.info("Auth kiosk OK")
+     except Exception as e:
+-        logger.warning(f"Auth kiosk echoue (kiosk indisponible): {e}")
++        logger.warning(f"Auth kiosk echoue (kiosk sans auth): {e}")
++        kiosk_start_url = kiosk_url
+ 
+-    # 4. Chromium est lancé par kiosk.service/.xinitrc après le signal /tmp/tibeer_cookie_ready
+-    # /  Chromium is launched by kiosk.service/.xinitrc after the /tmp/tibeer_cookie_ready signal
+-    kiosk_url = f"{SERVER_URL}/controlvanne/kiosk/{TIREUSE_UUID}/"
+-    logger.info(f"Kiosk URL : {kiosk_url}")
++    # 5. Ecrire l'URL de demarrage pour xinitrc
++    try:
++        with open("/tmp/tibeer_kiosk_url", "w") as f:
++            f.write(kiosk_start_url)
++    except Exception as e:
++        logger.warning(f"Impossible d'ecrire /tmp/tibeer_kiosk_url: {e}")
++
++    # 6. Signal pour .xinitrc : le kiosk peut demarrer
++    open("/tmp/tibeer_cookie_ready", "w").close()
++    logger.info(f"Kiosk URL finale : {kiosk_url}")
+ 
+-    # 5. Notification systemd / Systemd notification
++    # 7. Notification systemd
+     if SYSTEMD_NOTIFY:
+         try:
+             import systemd.daemon
+@@ -156,7 +103,7 @@ def main():
+         except ImportError:
+             logger.warning("Module python-systemd manquant.")
+ 
+-    # 6. Boucle controleur / Controller loop
++    # 8. Boucle controleur
+     controller = TibeerController(rfid, valve, flow_meter, client)
+     try:
+         controller.run()
+diff --git a/controlvanne/Pi/network/backend_client.py b/controlvanne/Pi/network/backend_client.py
+index 35ab6823..e2aae0da 100644
+--- a/controlvanne/Pi/network/backend_client.py
++++ b/controlvanne/Pi/network/backend_client.py
+@@ -12,7 +12,7 @@ Endpoints appeles :
+ """
+ 
+ import requests
+-from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID
++from config.settings import SERVER_URL, API_KEY, TIREUSE_UUID, SSL_VERIFY
+ from utils.logger import logger
+ from utils.exceptions import BackendError
+ 
+@@ -46,7 +46,7 @@ class BackendClient:
+         payload = {"tireuse_uuid": self.tireuse_uuid}
+ 
+         try:
+-            response = requests.post(url, json=payload, headers=self.headers, timeout=5.0, verify=True)
++            response = requests.post(url, json=payload, headers=self.headers, timeout=5.0, verify=SSL_VERIFY)
+             if response.status_code == 200:
+                 return response.json()
+             else:
+@@ -73,7 +73,7 @@ class BackendClient:
+         }
+ 
+         try:
+-            response = requests.post(url, json=payload, headers=self.headers, timeout=2.0, verify=True)
++            response = requests.post(url, json=payload, headers=self.headers, timeout=2.0, verify=SSL_VERIFY)
+             data = response.json()
+ 
+             if response.status_code == 200:
+@@ -111,7 +111,7 @@ class BackendClient:
+         timeout = 1.0 if event_type == "pour_update" else 3.0
+ 
+         try:
+-            response = requests.post(url, json=payload, headers=self.headers, timeout=timeout, verify=True)
++            response = requests.post(url, json=payload, headers=self.headers, timeout=timeout, verify=SSL_VERIFY)
+             if response.status_code == 200:
+                 return response.json()
+             else:
+@@ -124,21 +124,26 @@ class BackendClient:
+     def auth_kiosk(self):
+         """
+         POST /controlvanne/auth-kiosk/
+-        Obtient un cookie session Django pour le kiosk Chromium.
+-        / Gets a Django session cookie for the Chromium kiosk.
+-
+-        :return: str — session_key
++        Obtient un token à usage unique pour l'auth kiosk.
++        Le Pi ouvre Chromium sur /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
++        Django pose le cookie de session via HTTP et redirige vers le kiosk.
++        / Gets a one-time token for kiosk auth.
++        The Pi opens Chromium on /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
++        Django sets the session cookie via HTTP and redirects to the kiosk.
++
++        :return: tuple (session_key, kiosk_token)
+         :raises BackendError: si le serveur est injoignable
+         """
+         url = f"{self.server_url}/controlvanne/auth-kiosk/"
+ 
+         try:
+-            response = requests.post(url, json={}, headers=self.headers, timeout=5.0, verify=True)
++            response = requests.post(url, json={}, headers=self.headers, timeout=5.0, verify=SSL_VERIFY)
+             if response.status_code == 200:
+                 data = response.json()
+                 session_key = data.get("session_key", "")
+-                logger.info(f"Auth kiosk OK — session_key obtenue")
+-                return session_key
++                kiosk_token = data.get("kiosk_token", "")
++                logger.info(f"Auth kiosk OK — token obtenu")
++                return session_key, kiosk_token
+             else:
+                 logger.error(f"Auth kiosk: HTTP {response.status_code}")
+                 raise BackendError(f"Auth kiosk echoue: HTTP {response.status_code}")

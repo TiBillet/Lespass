@@ -39,7 +39,7 @@ RFID_BAUDRATE = int(os.getenv("RFID_BAUDRATE", "9600"))
 GPIO_VANNE = int(os.getenv("GPIO_VANNE", "18"))
 GPIO_FLOW_SENSOR = int(os.getenv("GPIO_FLOW_SENSOR", "23"))
 FLOW_CALIBRATION_FACTOR = float(os.getenv("FLOW_CALIBRATION_FACTOR", "6.5"))
-VALVE_ACTIVE_HIGH = os.getenv("VALVE_ACTIVE_HIGH", "False").lower() == "true"
+VALVE_ACTIVE_HIGH = os.getenv("VALVE_ACTIVE_HIGH", "True").lower() == "true"
 
 # --- Logs ---
 BASE_DIR = Path(__file__).resolve().parent.parent

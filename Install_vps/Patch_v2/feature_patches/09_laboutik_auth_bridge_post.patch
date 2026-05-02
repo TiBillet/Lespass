@@ -1,0 +1,63 @@
+diff --git a/laboutik/views.py b/laboutik/views.py
+index 4a980244..3eb5630f 100644
+--- a/laboutik/views.py
++++ b/laboutik/views.py
+@@ -17,7 +17,7 @@ from json import dumps
+ from django.conf import settings
+ from django.contrib.auth import login
+ from django.db import transaction as db_transaction
+-from django.http import Http404, HttpResponse
++from django.http import Http404, HttpResponse, HttpResponseRedirect
+ from django.shortcuts import get_object_or_404, render
+ from django.urls import reverse
+ from django.utils.decorators import method_decorator
+@@ -8529,30 +8529,27 @@ class LaBoutikAuthBridgeView(APIView):
+     sensitive (just a code-debt flag).
+ 
+     COMMUNICATION :
+-    Reçoit : Header Authorization: Api-Key <key>
+-    Émet : 204 No Content + Set-Cookie: sessionid=<key>
++    Reçoit : POST body api_key=<key> (ou header Authorization: Api-Key <key> pour rétrocompatibilité)
++    Émet : redirect 302 → /laboutik/caisse/ + Set-Cookie: sessionid=<key>
+     Erreurs : 401 si clé absente/invalide/révoquée, 400 si clé V1, 429 si throttle
++
++    Utilise le corps POST pour contourner les restrictions CORS sur les WebViews Cordova
++    qui bloquent les requêtes fetch+credentials:include depuis une page Django externe.
++    La soumission d'un form HTML natif ne déclenche pas de preflight CORS.
++    / Uses POST body to bypass CORS restrictions in Cordova WebViews that block
++    fetch+credentials:include from an external Django page.
++    Native HTML form submission does not trigger a CORS preflight.
+     """
+     permission_classes = [AllowAny]
+     throttle_classes = [BridgeThrottle]
+ 
+     def post(self, request):
+-        # Extraction de la clé depuis le header Authorization
+-        # / Extract key from Authorization header
+-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+-        if not auth_header.startswith('Api-Key '):
+-            # Log : tentative d'accès sans header Api-Key
+-            # / Log: access attempt without Api-Key header
+-            logger.warning(
+-                "laboutik bridge: missing/malformed Authorization header from %s",
+-                request.META.get('REMOTE_ADDR'),
+-            )
+-            return HttpResponse(status=401)
+-
+-        api_key_string = auth_header[len('Api-Key '):].strip()
++        # Extraction de la clé depuis le corps POST
++        # / Extract key from POST body
++        api_key_string = request.POST.get('api_key', '').strip()
+         if not api_key_string:
+             logger.warning(
+-                "laboutik bridge: empty API key from %s",
++                "laboutik bridge: missing api_key in header or POST body from %s",
+                 request.META.get('REMOTE_ADDR'),
+             )
+             return HttpResponse(status=401)
+@@ -8605,4 +8602,4 @@ class LaBoutikAuthBridgeView(APIView):
+             "laboutik bridge: session opened for terminal %s",
+             term_user.email,
+         )
+-        return HttpResponse(status=204)
++        return HttpResponseRedirect('/laboutik/caisse/')

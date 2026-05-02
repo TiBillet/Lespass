@@ -1,0 +1,279 @@
+diff --git a/Administration/admin/configuration.py b/Administration/admin/configuration.py
+index 7bd857ab..0f1c5182 100644
+--- a/Administration/admin/configuration.py
++++ b/Administration/admin/configuration.py
+@@ -358,7 +358,7 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
+                 "module_name": module_name,
+                 "is_active": is_active,
+                 "toggle_url": toggle_url,
+-                "csrf_token": request.META.get("CSRF_COOKIE", ""),
++                # csrf_token injecte automatiquement par le context processor via request=request
+             },
+             request=request,
+         )
+diff --git a/TiBillet/urls_tenants.py b/TiBillet/urls_tenants.py
+index f12a6e29..ae7a2c03 100644
+--- a/TiBillet/urls_tenants.py
++++ b/TiBillet/urls_tenants.py
+@@ -1,17 +1,21 @@
+ from django.conf import settings
+ from django.conf.urls.static import static
+ from django.contrib.sitemaps.views import sitemap
+-from django.urls import path, include, re_path
++from django.urls import path, include, include, re_path
+ 
+ from Administration.admin_tenant import staff_admin_site
+ # on modifie la creation du token pour rajouter access_token dans la réponse pour Postman
+ from ApiBillet.views import Webhook_stripe
++from discovery.views import PinCodeLaBoutikView, WvLoginHardwareView
+ from seo.sitemap import EventSitemap, ProductSitemap, StaticViewSitemap
+ 
+ urlpatterns = [
+     # path('jet/', include('jet.urls', 'jet')),  # Django JET URLS
+     # re_path(r'^jet/dashboard/', include('jet.dashboard.urls', 'jet-dashboard')),  # Django JET dashboard URLS
+     path('admin/', staff_admin_site.urls, name="staff_admin_site"),
++    path('pin_code/', PinCodeLaBoutikView.as_view(), name='laboutik-pin-code'),
++    path('wv/login_hardware', WvLoginHardwareView.as_view(), name='laboutik-wv-login'),
++    path('api/discovery/', include('discovery.urls')),
+ 
+     # Sitemap
+     # Access the complete sitemap at: https://yourdomain.com/sitemap.xml
+diff --git a/discovery/views.py b/discovery/views.py
+index 8b36e9fd..e7507a77 100644
+--- a/discovery/views.py
++++ b/discovery/views.py
+@@ -1,5 +1,10 @@
+ import logging
+ 
++from django.conf import settings
++from django.contrib.auth import login as django_login
++from django.db import connection
++from django.shortcuts import redirect
++from django.views import View
+ from django_tenants.utils import tenant_context
+ from rest_framework import status
+ from rest_framework.permissions import AllowAny
+@@ -35,8 +40,14 @@ class ClaimPinView(APIView):
+         pairing_device = serializer.device
+         tenant_for_this_device = pairing_device.tenant
+ 
+-        # Récupérer le domaine principal du tenant
+-        # Get the tenant's primary domain
++        # En DEBUG sur IP locale (Mac dev), renvoyer l'URL de la requête (http://).
++        # Permet au GSM de se connecter directement à l'IP du Mac sans HTTPS.
++        # Sur un vrai domaine (VPS staging en DEBUG), forcer quand même https://.
++        # En production (DEBUG=False), toujours utiliser le domaine principal du tenant.
++        # / In DEBUG on local IP (Mac dev), return the request URL (http://).
++        # Allows the phone to connect directly to the Mac IP without HTTPS.
++        # On a real domain (staging VPS in DEBUG), still force https://.
++        # In production (DEBUG=False), always use the tenant's primary domain.
+         primary_domain = tenant_for_this_device.get_primary_domain()
+         if not primary_domain:
+             logger.error(
+@@ -47,7 +58,15 @@ class ClaimPinView(APIView):
+                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+             )
+ 
+-        server_url = f"https://{primary_domain.domain}"
++        if settings.DEBUG:
++            server_url = request.build_absolute_uri('/').rstrip('/')
++            # Sur un vrai domaine (pas localhost/IP privée), forcer https://
++            # / On a real domain (not localhost/private IP), force https://
++            local_hosts = ('localhost', '127.0.0.1', '192.168.', '10.', '172.')
++            if not any(h in server_url for h in local_hosts):
++                server_url = server_url.replace('http://', 'https://')
++        else:
++            server_url = f"https://{primary_domain.domain}"
+ 
+         # Basculer dans le schéma du tenant pour créer les credentials.
+         # Le type de credentials dépend du rôle du terminal (terminal_role) :
+@@ -136,6 +155,7 @@ class ClaimPinView(APIView):
+         return Response(response_data, status=status.HTTP_200_OK)
+ 
+ 
++
+ def _create_laboutik_terminal(pairing_device):
+     """
+     Crée un TermUser (rôle LaBoutik ou Kiosque) et sa clé API liée.
+@@ -179,3 +199,181 @@ def _create_laboutik_terminal(pairing_device):
+         user=term_user,
+     )
+     return api_key_string
++
++class PinCodeLaBoutikView(APIView):
++    """
++    Endpoint de découverte pour l'APK LaBoutik mobile (Cordova).
++    / Discovery endpoint for the LaBoutik mobile APK (Cordova).
++
++    L'APK envoie le PIN en form-urlencoded et reçoit l'URL du serveur.
++    C'est différent de /api/discovery/claim/ (JSON, pour les terminaux Pi).
++    / The APK sends the PIN as form-urlencoded and receives the server URL.
++    Different from /api/discovery/claim/ (JSON, for Pi terminals).
++
++    Protocole APK :
++    POST /pin_code/  Content-Type: application/x-www-form-urlencoded
++    Body: pin_code=123456&hostname=samsung-galaxy&username=samsung-...
++    Réponse: {"server_url": "http://..../", "server_public_pem": "<api_key>", "locale": "fr"}
++
++    L'APK navigue ensuite vers server_url + "wv/login_hardware".
++    / The APK then navigates to server_url + "wv/login_hardware".
++    """
++    permission_classes = [AllowAny]
++    throttle_classes = [DiscoveryClaimThrottle]
++
++    def post(self, request):
++        # Extraire les champs form-encodés (ou JSON)
++        # / Extract form-encoded fields (or JSON)
++        pin_code_raw = request.data.get('pin_code') or request.POST.get('pin_code')
++        hostname = request.data.get('hostname', '')
++        username = request.data.get('username', '')
++
++        if not pin_code_raw:
++            return Response(
++                {"error": "pin_code is required."},
++                status=status.HTTP_400_BAD_REQUEST,
++            )
++
++        # Valider le PIN via le serializer existant / Validate PIN via existing serializer
++        serializer = PinClaimSerializer(data={'pin_code': str(pin_code_raw)})
++        if not serializer.is_valid():
++            return Response(
++                {"error": "Invalid or already used PIN code."},
++                status=status.HTTP_400_BAD_REQUEST,
++            )
++
++        pairing_device = serializer.device
++        tenant_for_this_device = pairing_device.tenant
++
++        # Construire l'URL du serveur (avec slash final pour la concaténation APK)
++        # / Build server URL (with trailing slash for APK concatenation)
++        primary_domain = tenant_for_this_device.get_primary_domain()
++        if primary_domain:
++            server_url = f"https://{primary_domain.domain}/"
++        elif settings.DEBUG:
++            server_url = request.build_absolute_uri('/').rstrip('/').replace('http://', 'https://') + '/'
++        else:
++            logger.error(f"PinCode: tenant {tenant_for_this_device.name} a pas de domaine principal")
++            return Response({"error": "Tenant configuration error."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
++
++        # Créer la clé API LaBoutik dans le contexte du tenant
++        # / Create LaBoutik API key in tenant context
++        device_label = hostname or username or str(pairing_device.uuid)
++        try:
++            with tenant_context(tenant_for_this_device):
++                from BaseBillet.models import LaBoutikAPIKey
++                _key_obj, api_key_string = LaBoutikAPIKey.objects.create_key(
++                    name=f"apk-{device_label[:50]}"
++                )
++        except Exception as error:
++            logger.error(
++                f"PinCode: échec création clé API "
++                f"pour tenant {tenant_for_this_device.name}: {error}"
++            )
++            return Response(
++                {"error": "Failed to create device credentials."},
++                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
++            )
++
++        # Marquer le PIN comme consommé / Mark PIN as claimed
++        pairing_device.claim()
++
++        logger.info(
++            f"PinCode APK: appareil '{device_label}' "
++            f"appairé au tenant '{tenant_for_this_device.name}'"
++        )
++
++        # L'APK stocke server_public_pem — on y met la clé API pour usage futur.
++        # L'APK naviguera ensuite vers server_url + "wv/login_hardware".
++        # / The APK stores server_public_pem — we put the API key there for future use.
++        # The APK will then navigate to server_url + "wv/login_hardware".
++        return Response({
++            "server_url": server_url,
++            "server_public_pem": api_key_string,
++            "locale": "fr",
++        }, status=status.HTTP_200_OK)
++
++
++class WvLoginHardwareView(View):
++    """
++    Point d'entrée WebView après appairage PIN pour l'APK LaBoutik.
++    / WebView entry point after PIN pairing for the LaBoutik APK.
++
++    L'APK navigue ici après un échange PIN réussi (server_url + "wv/login_hardware").
++
++    Deux choses nécessaires avant d'accéder à la caisse :
++    1. Session Django : l'admin est connecté automatiquement en DEBUG.
++    2. localStorage.laboutik : nfc.js lit storage.mode_nfc pour choisir
++       le mode de lecture NFC. Sans cette clé, le NFC reste muet.
++       En mode Cordova (APK Android), il faut mode_nfc = "NFCMC".
++
++    / Two things needed before accessing the caisse:
++    1. Django session: admin auto-logged-in in DEBUG.
++    2. localStorage.laboutik: nfc.js reads storage.mode_nfc to choose
++       the NFC reading mode. Without this key, NFC stays silent.
++       In Cordova mode (Android APK), mode_nfc must be "NFCMC".
++    """
++
++    def get(self, request):
++        if settings.DEBUG:
++            current_tenant = connection.tenant
++
++            # Chercher un admin du tenant (shared schema, toujours accessible)
++            # / Find a tenant admin (shared schema, always accessible)
++            from AuthBillet.models import TibilletUser
++            admin_user = TibilletUser.objects.filter(
++                client_admin=current_tenant,
++            ).first()
++
++            if admin_user:
++                admin_user.backend = 'django.contrib.auth.backends.ModelBackend'
++                django_login(request, admin_user)
++                logger.info(
++                    f"WvLoginHardware DEBUG: auto-login {admin_user.email} "
++                    f"sur {current_tenant.schema_name}"
++                )
++
++        # Renvoyer une page HTML minimaliste qui :
++        # 1. Initialise localStorage.laboutik avec mode_nfc = "NFCMC"
++        #    (obligatoire : nfc.js lit cette valeur pour activer le lecteur Cordova)
++        # 2. Redirige vers la caisse via JS (la session cookie est déjà posée)
++        # / Return a minimal HTML page that:
++        # 1. Initialises localStorage.laboutik with mode_nfc = "NFCMC"
++        #    (required: nfc.js reads this value to activate the Cordova reader)
++        # 2. Redirects to the caisse via JS (session cookie already set)
++        html = """<!DOCTYPE html>
++<html>
++<head><meta charset="utf-8"></head>
++<body>
++<script>
++// Initialise le mode NFC pour l'APK Cordova.
++// nfc.js lit localStorage.getItem('laboutik').mode_nfc.
++// Sans cette valeur, le lecteur NFC reste muet.
++// / Initialise NFC mode for the Cordova APK.
++// nfc.js reads localStorage.getItem('laboutik').mode_nfc.
++// Without this value, the NFC reader stays silent.
++var laboutikConf = localStorage.getItem('laboutik');
++if (!laboutikConf) {
++    localStorage.setItem('laboutik', JSON.stringify({
++        mode_nfc: 'NFCMC',
++        front_type: 'FMO'
++    }));
++} else {
++    try {
++        var conf = JSON.parse(laboutikConf);
++        if (!conf.mode_nfc) {
++            conf.mode_nfc = 'NFCMC';
++            conf.front_type = conf.front_type || 'FMO';
++            localStorage.setItem('laboutik', JSON.stringify(conf));
++        }
++    } catch(e) {
++        localStorage.setItem('laboutik', JSON.stringify({mode_nfc: 'NFCMC', front_type: 'FMO'}));
++    }
++}
++window.location.replace('/laboutik/caisse/');
++</script>
++</body>
++</html>"""
++        from django.http import HttpResponse
++        return HttpResponse(html, content_type='text/html')
++

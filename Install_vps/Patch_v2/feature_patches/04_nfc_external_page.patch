@@ -1,0 +1,288 @@
+diff --git a/laboutik/static/js/nfc.js b/laboutik/static/js/nfc.js
+index 5e33d1b9..fe198a5d 100644
+--- a/laboutik/static/js/nfc.js
++++ b/laboutik/static/js/nfc.js
+@@ -1,5 +1,14 @@
+ // https://github.com/nerdy-harry/phonegap-nfc-api31?tab=readme-ov-file#nfcshowsettings
+ 
++// Stub de sécurité : si tibilletUtils.js est en cache (ancienne version sans debugLog),
++// on définit une version silencieuse pour que nfc.js ne crashe pas.
++// / Safety stub: if tibilletUtils.js is cached (old version without debugLog),
++// define a silent version so nfc.js doesn't crash.
++if (typeof debugLog !== 'function') {
++	// eslint-disable-next-line no-unused-vars
++	var debugLog = function(msg) { try { console.log('[DBG-stub] ' + msg) } catch(e) {} }
++}
++
+ let NfcReader = class {
+ 	constructor() {
+ 		this.modeNfc = ''
+@@ -14,7 +23,8 @@ let NfcReader = class {
+ 
+ 	SendTagIdAndSubmit(tagId, conf) {
+ 		console.log('-> SendTagIdAndSubmit, conf =', conf)
+-    console.log('-> SendTagIdAndSubmit, tagId =', tagId)
++		console.log('-> SendTagIdAndSubmit, tagId =', tagId)
++		debugLog('NFC SendTagId tag=' + tagId + ' event=' + (conf && conf.eventManageForm))
+ 
+ 		// dispatch event - peuple le tagId dans un formulaire
+ 		sendEvent('organizerMsg', '#event-organizer', {
+@@ -43,6 +53,8 @@ let NfcReader = class {
+ 		const conf = this.conf
+ 		let msgErreurs = 0, data
+ 
++		debugLog('NFC verif tag=' + tagId)
++
+ 		// mettre tagId en majuscule
+ 		if (tagId !== null) {
+ 			tagId = tagId.toUpperCase()
+@@ -51,12 +63,14 @@ let NfcReader = class {
+ 			let tailleTagId = tagId.length
+ 			if (tailleTagId < 8 || tailleTagId > 8) {
+ 				msgErreurs++
++				debugLog('NFC ERR taille=' + tailleTagId)
+ 				console.log('Erreur, taille tagId = ' + tailleTagId + ' !!')
+ 			}
+ 
+ 			// vérifier uuidConnexion
+ 			if (uuidConnexion !== this.uuidConnexion) {
+ 				msgErreurs++
++				debugLog('NFC ERR uuid mismatch recu=' + uuidConnexion + ' attendu=' + this.uuidConnexion)
+ 				console.log('Erreur uuidConnexion différent !!')
+ 			}
+ 
+@@ -64,19 +78,92 @@ let NfcReader = class {
+ 			if (msgErreurs === 0) {
+ 				this.SendTagIdAndSubmit(tagId, conf)
+ 				this.stop()
++			} else {
++				debugLog('NFC BLOQUE msgErreurs=' + msgErreurs)
+ 			}
++		} else {
++			debugLog('NFC ERR tagId null')
+ 		}
+ 	}
+ 
++	listenCordovaNfc() {
++		console.log('-> listenCordovaNfc,', new Date())
++		debugLog('NFC listenCordova cordovaLecture=' + this.cordovaLecture)
++		try {
++			// Sur les pages externes (ex : http://192.168.x.x:8002), enableForegroundDispatch
++			// + onNewIntent ne fonctionne pas de manière fiable avec singleInstance.
++			// On utilise donc readerMode (enableReaderMode) qui livre le tag directement
++			// via ReaderCallback.onTagDiscovered, sans passer par onNewIntent.
++			// / On external pages (e.g. http://192.168.x.x:8002), enableForegroundDispatch
++			// + onNewIntent is unreliable with singleInstance launch mode.
++			// We use readerMode (enableReaderMode) which delivers the tag directly
++			// via ReaderCallback.onTagDiscovered, bypassing onNewIntent entirely.
++			if (typeof nfc !== 'undefined') {
++				// FLAG_READER_NO_PLATFORM_SOUNDS : supprime le son système Android (0x100).
++				// On joue un bip unique via Web Audio API dans le callback pour garder le retour sonore.
++				// Sans ce flag, Android rejoue le son à chaque poll NFC avant que disableReaderMode
++				// prenne effet côté natif, causant un double bip.
++				// / FLAG_READER_NO_PLATFORM_SOUNDS: suppress Android system sound (0x100).
++				// We play one beep via Web Audio API in the callback to keep audio feedback.
++				// Without this flag, Android replays the sound each NFC poll before disableReaderMode
++				// takes effect natively, causing a double beep.
++				const flags = nfc.FLAG_READER_NFC_A | nfc.FLAG_READER_NFC_B | nfc.FLAG_READER_NFC_V | nfc.FLAG_READER_NO_PLATFORM_SOUNDS
++				nfc.readerMode(
++					flags,
++					(tagJson) => {
++						// tagJson est l'objet tag brut (id, techTypes, …)
++						// / tagJson is the raw tag object (id, techTypes, …)
++						if (this.cordovaLecture === true) {
++							this.cordovaLecture = false
++							nfc.disableReaderMode()
++							// Bip unique via Web Audio API en remplacement du son système supprimé.
++							// / Single beep via Web Audio API replacing the suppressed system sound.
++							try {
++								const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
++								const osc = audioCtx.createOscillator()
++								const gain = audioCtx.createGain()
++								osc.connect(gain)
++								gain.connect(audioCtx.destination)
++								osc.frequency.value = 1000
++								gain.gain.setValueAtTime(0.4, audioCtx.currentTime)
++								gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15)
++								osc.start(audioCtx.currentTime)
++								osc.stop(audioCtx.currentTime + 0.15)
++							} catch (audioErr) {
++								console.log('-> nfc beep audio error:', audioErr)
++							}
++							this.verificationTagId(nfc.bytesToHexString(tagJson.id), this.uuidConnexion)
++						}
++					},
++					(error) => {
++						console.log('-> listenCordovaNfc readerMode error:', error)
++					}
++				)
++				// clearInterval seulement si nfc est disponible et readerMode enregistré.
++				// Si nfc n'est pas encore prêt, on réessaie au prochain tick.
++				// / clearInterval only once nfc is available and readerMode is registered.
++				// If nfc is not ready yet, retry on next tick.
++				clearInterval(this.intervalIDVerifApiCordova)
++			}
++		} catch (error) {
++			console.log('-> listenCordovaNfc :', error)
++		}
++	}
+ 
+ 	/**
+ 	* Gestion de la réception du tagIDS et de l'uuidConnexion
+ 	* @param mode
+ 	*/
+-	async gestionModeLectureNfc(mode) {
++	gestionModeLectureNfc(mode) {
+ 		const conf = this.conf
+-		console.log('1 -> gestionModeLectureNfc, mode =', mode)
+-		this.uuidConnexion = crypto.randomUUID()
++		// crypto.randomUUID() nécessite HTTPS et Chrome 92+ — indisponible dans le WebView Cordova sur HTTP.
++		// On utilise un générateur UUID v4 simple basé sur Math.random().
++		// / crypto.randomUUID() requires HTTPS and Chrome 92+ — unavailable in Cordova WebView over HTTP.
++		// Using a simple Math.random()-based UUID v4 generator instead.
++		this.uuidConnexion = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
++			const r = Math.random() * 16 | 0
++			return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
++		})
+ 
+ 		// nfc serveur socket_io + front sur le même appareil (pi ou desktop)
+ 		if (mode === 'NFCLO') {
+@@ -100,8 +187,10 @@ let NfcReader = class {
+ 
+ 		// cordova
+ 		if (mode === 'NFCMC') {
+-			const tagId = await nfcPlugin.startListening()
+-      this.verificationTagId(tagId, this.uuidConnexion)
++			this.cordovaLecture = true
++			this.intervalIDVerifApiCordova = setInterval(() => {
++				this.listenCordovaNfc(conf)
++			}, 500)
+ 		}
+ 
+ 		// simulation
+@@ -175,7 +264,7 @@ let NfcReader = class {
+ 		}
+ 	}
+ 
+-	async start(conf) {
++	start(conf) {
+ 		// console.log('0 -> startLecture  --  DEMO =', state.demo.active)
+ 		this.conf = conf
+ 		try {
+@@ -184,11 +273,8 @@ let NfcReader = class {
+ 				this.modeNfc = 'NFCSIMU'
+ 			} else {
+ 				// hardware: récupère le nfcMode
+-        const cordovaNfcPlugin = await nfcPlugin.available()
+-        if(cordovaNfcPlugin === 1) {
+-          this.modeNfc="NFCMC"
+-        }
+-				// TODO: ajouter le  pi(mfc...) et desktop(usb)
++				const storage = JSON.parse(localStorage.getItem('laboutik'))
++				this.modeNfc = storage.mode_nfc
+ 			}
+ 			this.gestionModeLectureNfc(this.modeNfc)
+ 		} catch (err) {
+@@ -196,7 +282,7 @@ let NfcReader = class {
+ 		}
+ 	}
+ 
+-	async stop() {
++	stop() {
+ 		// console.log('1 -> stopLecture')
+ 		let modeNfc = this.modeNfc
+ 
+@@ -208,7 +294,13 @@ let NfcReader = class {
+ 
+ 		// cordova
+ 		if (modeNfc === 'NFCMC') {
+-			await nfcPlugin.stopListening()
++			this.cordovaLecture = false
++			clearInterval(this.intervalIDVerifApiCordova)
++			// Désactiver readerMode pour libérer le lecteur NFC natif
++			// / Disable readerMode to release the native NFC reader
++			if (typeof nfc !== 'undefined') {
++				nfc.disableReaderMode()
++			}
+ 		}
+ 
+ 		// simulation
+diff --git a/laboutik/templates/laboutik/base.html b/laboutik/templates/laboutik/base.html
+index 46e26f42..ecc10b51 100644
+--- a/laboutik/templates/laboutik/base.html
++++ b/laboutik/templates/laboutik/base.html
+@@ -28,9 +28,9 @@
+ 	<!-- https://github.com/MikeMcl/big.js/tree/main -->
+ 	<script src="{% static 'js/big.js' %}"></script>
+ 	<!-- init global values and function -->
+-	<script src="{% static 'js/tibilletUtils.js' %}"></script>
++	<script src="{% static 'js/tibilletUtils.js' %}?v=1"></script>
+ 	<!-- passing django values to javascript - ex : state.demo.active -->
+-	<script src="{% static 'js/nfc.js' %}"></script>
++	<script src="{% static 'js/nfc.js' %}?v=6"></script>
+ 	<script>
+ 		const state = JSON.parse("{{stateJson|escapejs}}")
+ 	</script>
+@@ -120,6 +120,22 @@
+ 	-->
+ 	<div id="messages" aria-live="polite"></div>
+ 	<div id="confirm" aria-live="polite"></div>
++
++	<!--
++	DEBUG OVERLAY — visible sur écran Android (WebView ne capture pas console.log dans adb).
++	Affiche les événements clés en temps réel. Cliquer sur l'overlay pour le vider.
++	SUPPRIMER une fois le bug résolu.
++	/ DEBUG OVERLAY — visible on Android screen (WebView doesn't send console.log to adb).
++	Shows key events in real time. Click overlay to clear.
++	REMOVE once bug is fixed.
++	-->
++	<div id="debug-log"
++	     style="position:fixed;bottom:0;left:0;right:0;max-height:180px;overflow-y:auto;
++	            background:rgba(0,0,0,0.85);color:#0f0;font-size:10px;font-family:monospace;
++	            z-index:99999;padding:4px;display:none;line-height:1.3;"
++	     onclick="this.innerHTML='';this.style.display='none';"
++	     title="Cliquer pour effacer"></div>
++
+ 	<script src="http://localhost/cordova.js"></script>
+ 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
+ 	<!-- Extension loading-states — spinner avec delai configurable (pas de blink si requete rapide)
+@@ -129,6 +145,23 @@
+ 	     / HTMX WebSocket extension — server push to browser (gauges, notifications) -->
+ 	<script src="{% static 'js/ext/ws.js' %}"></script>
+ 	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
++	<script>
++		/**
++		 * Enregistre chaque requête HTMX dans le debug overlay.
++		 * / Logs each HTMX request in the debug overlay.
++		 */
++		document.addEventListener('htmx:beforeRequest', function(event) {
++			if (typeof debugLog === 'function') {
++				debugLog('HTMX→ ' + (event.detail.requestConfig ? event.detail.requestConfig.path : '?'))
++			}
++		})
++		document.addEventListener('htmx:afterRequest', function(event) {
++			if (typeof debugLog === 'function') {
++				var status = event.detail.xhr ? event.detail.xhr.status : '?'
++				debugLog('HTMX← ' + status)
++			}
++		})
++	</script>
+ 	<script>
+ 		/**
+ 		 * Retire la classe .hide des overlays #messages et #confirm
+@@ -152,7 +185,6 @@
+ 		 * / htmx:afterSwap fires on the source element, not the target.
+ 		 * So we listen on document.body and check event.detail.target.
+ 		 */
+-        
+ 		document.addEventListener('htmx:afterSwap', function (event) {
+ 			const elementCible = event.detail.target
+ 			const cibleEstOverlay = (
+@@ -162,7 +194,6 @@
+ 				elementCible.classList.remove('hide')
+ 			}
+ 		})
+-
+ 	</script>
+ 	{% block script %} {% endblock script %}
+ 	<div id="event-organizer" class="hide"></div>

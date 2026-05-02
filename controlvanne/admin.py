@@ -204,6 +204,7 @@ class TireuseBecAdmin(ModelAdmin):
         "fut_actif",
         "debimetre",
         "enabled",
+        "reservoir_illimite",
         "notes",
     )
 
@@ -275,8 +276,10 @@ class TireuseBecAdmin(ModelAdmin):
 
     @admin.display(description=_("Remaining (cl)"), ordering="reservoir_ml")
     def volume_restant_cl(self, obj):
-        """Volume restant en centilitres.
-        / Remaining volume in centiliters."""
+        """Volume restant en centilitres, ou ∞ si reservoir_illimite.
+        / Remaining volume in centiliters, or ∞ if unlimited."""
+        if obj.reservoir_illimite:
+            return "∞"
         return f"{float(obj.reservoir_ml) / 10:.0f} cl"
 
     def has_view_permission(self, request, obj=None):

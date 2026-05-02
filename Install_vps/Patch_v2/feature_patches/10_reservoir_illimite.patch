@@ -1,0 +1,88 @@
+diff --git a/controlvanne/admin.py b/controlvanne/admin.py
+--- a/controlvanne/admin.py
++++ b/controlvanne/admin.py
+@@ -202,6 +202,7 @@ class TireuseBecAdmin(ModelAdmin):
+     fields = (
+         "nom_tireuse",
+         "fut_actif",
+         "debimetre",
+         "enabled",
++        "reservoir_illimite",
+         "notes",
+     )
+
+@@ -276,7 +277,9 @@ class TireuseBecAdmin(ModelAdmin):
+     @admin.display(description=_("Remaining (cl)"), ordering="reservoir_ml")
+     def volume_restant_cl(self, obj):
+-        """Volume restant en centilitres.
+-        / Remaining volume in centiliters."""
++        """Volume restant en centilitres, ou ∞ si reservoir_illimite.
++        / Remaining volume in centiliters, or ∞ if unlimited."""
++        if obj.reservoir_illimite:
++            return "∞"
+         return f"{float(obj.reservoir_ml) / 10:.0f} cl"
+diff --git a/controlvanne/migrations/0004_tireusebec_reservoir_illimite.py b/controlvanne/migrations/0004_tireusebec_reservoir_illimite.py
+new file mode 100644
+--- /dev/null
++++ b/controlvanne/migrations/0004_tireusebec_reservoir_illimite.py
+@@ -0,0 +1,19 @@
++from django.db import migrations, models
++
++
++class Migration(migrations.Migration):
++
++    dependencies = [
++        ("controlvanne", "0003_remove_seuil_mini_appliquer_reserve"),
++    ]
++
++    operations = [
++        migrations.AddField(
++            model_name="tireusebec",
++            name="reservoir_illimite",
++            field=models.BooleanField(
++                default=True,
++                help_text="If checked, the empty-keg check is bypassed (no volume tracking).",
++                verbose_name="Unlimited reservoir",
++            ),
++        ),
++    ]
+diff --git a/controlvanne/models.py b/controlvanne/models.py
+--- a/controlvanne/models.py
++++ b/controlvanne/models.py
+@@ -233,6 +233,12 @@ class TireuseBec(models.Model):
+     # --- Volume / jauge ---
+
++    reservoir_illimite = models.BooleanField(
++        default=True,
++        verbose_name=_("Unlimited reservoir"),
++        help_text=_("If checked, the empty-keg check is bypassed (no volume tracking)."),
++    )
+     reservoir_ml = models.DecimalField(
+         max_digits=10,
+         decimal_places=2,
+         default=Decimal("0.00"),
+         verbose_name=_("Remaining volume"),
+-        help_text=_("Current volume in ml (decremented in real time)."),
++        help_text=_("Current volume in ml (decremented in real time). Ignored if unlimited."),
+     )
+diff --git a/controlvanne/viewsets.py b/controlvanne/viewsets.py
+--- a/controlvanne/viewsets.py
++++ b/controlvanne/viewsets.py
+@@ -344,10 +344,18 @@ class TireuseViewSet(viewsets.ViewSet):
+-        # Volume disponible dans le reservoir
+-        # / Available volume in reservoir
+-        reservoir_disponible = float(tireuse.reservoir_ml)
+-
+-        if reservoir_disponible <= 0:
++        # Volume disponible dans le reservoir.
++        # Si illimité, on passe une valeur arbitrairement grande pour que
++        # calculer_volume_autorise_ml ne plafonne pas sur le réservoir.
++        # / Available reservoir volume.
++        # If unlimited, pass an arbitrarily large value so
++        # calculer_volume_autorise_ml doesn't cap on the reservoir.
++        if tireuse.reservoir_illimite:
++            reservoir_disponible = 9_999_000.0
++        else:
++            reservoir_disponible = float(tireuse.reservoir_ml)
++
++        if not tireuse.reservoir_illimite and reservoir_disponible <= 0:

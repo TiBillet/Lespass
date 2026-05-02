@@ -1,0 +1,1890 @@
+diff --git a/Administration/templates/admin/controlvanne/tireusebec_before.html b/Administration/templates/admin/controlvanne/tireusebec_before.html
+index 4d74841e..2fccf8ad 100644
+--- a/Administration/templates/admin/controlvanne/tireusebec_before.html
++++ b/Administration/templates/admin/controlvanne/tireusebec_before.html
+@@ -1,20 +1,27 @@
+ {% load i18n %}
+-{# Lien vers la vue kiosk de cette tireuse (affiché uniquement en mode change, pas en add) #}
+-{# / Link to this tap's kiosk view (shown only in change mode, not in add) #}
+-{% if kiosk_url %}
+-<div style="margin-bottom: 16px;">
++{# Liens vers kiosk et calibration (affiches uniquement en mode change, pas en add) #}
++{# / Links to kiosk and calibration (shown only in change mode, not in add) #}
++<div style="margin-bottom:16px;display:flex;gap:12px;flex-wrap:wrap;">
++
++  {% if kiosk_url %}
+   <a href="{{ kiosk_url }}"
+      target="_blank"
+      rel="noopener"
+      data-testid="kiosk-link"
+-     style="display: inline-flex; align-items: center; gap: 8px;
+-            padding: 10px 20px; border-radius: 8px;
+-            background-color: var(--color-primary-600, #7c3aed);
+-            color: white; text-decoration: none; font-weight: 500;
+-            font-size: 14px; transition: opacity 0.2s;">
+-    <span class="material-symbols-outlined" style="font-size: 20px;">monitoring</span>
++     style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:8px;background-color:var(--color-primary-600,#7c3aed);color:white;text-decoration:none;font-weight:500;font-size:14px;">
++    <span class="material-symbols-outlined" style="font-size:20px;">monitoring</span>
+     {% translate "Open kiosk view" %}
+-    <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
++    <span class="material-symbols-outlined" style="font-size:16px;">open_in_new</span>
+   </a>
++  {% endif %}
++
++  {% if calibration_url %}
++  <a href="{{ calibration_url }}"
++     data-testid="calibration-link"
++     style="display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:8px;background-color:#d97706;color:white;text-decoration:none;font-weight:500;font-size:14px;">
++    <span class="material-symbols-outlined" style="font-size:20px;">tune</span>
++    {% translate "Calibrate flow meter" %}
++  </a>
++  {% endif %}
++
+ </div>
+-{% endif %}
+diff --git a/controlvanne/admin.py b/controlvanne/admin.py
+index fe5fcd70..bc214f31 100644
+--- a/controlvanne/admin.py
++++ b/controlvanne/admin.py
+@@ -249,6 +249,7 @@ class TireuseBecAdmin(ModelAdmin):
+         extra_context = extra_context or {}
+         if object_id:
+             extra_context["kiosk_url"] = f"/controlvanne/kiosk/{object_id}/"
++            extra_context["calibration_url"] = f"/controlvanne/calibration/{object_id}/"
+         return super().changeform_view(request, object_id, form_url, extra_context)
+ 
+     @admin.display(description=_("PIN code"))
+diff --git a/controlvanne/billing.py b/controlvanne/billing.py
+index 94fac8db..bec8fc07 100644
+--- a/controlvanne/billing.py
++++ b/controlvanne/billing.py
+@@ -9,8 +9,13 @@ Le ViewSet appelle ces fonctions — séparation ViewSet / logique métier.
+ / This module encapsulates tap-specific billing logic.
+ The ViewSet calls these functions — separation of ViewSet / business logic.
+ 
++Cascade fiduciaire : même ordre que LaBoutik — TNF → TLF → FED.
++Les assets fédérés (FED) sont inclus si accessibles via une Fédération.
++/ Fiduciary cascade: same order as LaBoutik — TNF → TLF → FED.
++Federated assets (FED) are included if accessible via a Federation.
++
+ Dépendances :
+-- fedow_core.services : WalletService, TransactionService
++- fedow_core.services : AssetService, WalletService, TransactionService
+ - fedow_core.models : Asset, Token, Transaction
+ - BaseBillet.models : LigneArticle, ProductSold, PriceSold, PaymentMethod, SaleOrigin
+ - inventaire.services : StockService
+@@ -26,22 +31,34 @@ from django.db import connection, transaction
+ 
+ logger = logging.getLogger(__name__)
+ 
++# Ordre de débit fiduciaire : cadeau → local → fédéré.
++# Identique à ORDRE_CASCADE_FIDUCIAIRE dans laboutik/views.py.
++# / Fiduciary debit order: gift → local → federated.
++# Identical to ORDRE_CASCADE_FIDUCIAIRE in laboutik/views.py.
++ORDRE_CASCADE_FIDUCIAIRE = None  # résolu dynamiquement après import Asset / resolved dynamically after Asset import
++
++
++def _ordre_cascade():
++    """Retourne la liste des catégories d'assets dans l'ordre de cascade.
++    / Returns the list of asset categories in cascade order."""
++    from fedow_core.models import Asset
++    return [Asset.TNF, Asset.TLF, Asset.FED]
++
+ 
+ def obtenir_contexte_cashless(carte):
+     """
+-    Résout le wallet et l'asset TLF pour un paiement cashless tireuse.
+-    / Resolves the wallet and TLF asset for a tap cashless payment.
++    Résout le wallet client et la cascade d'assets fiduciaires pour un paiement tireuse.
++    / Resolves the client wallet and fiduciary asset cascade for a tap payment.
+ 
+-    Même logique que _obtenir_ou_creer_wallet() dans laboutik/views.py
+-    mais retourne aussi l'asset TLF et le wallet du lieu.
+-    / Same logic as _obtenir_ou_creer_wallet() in laboutik/views.py
+-    but also returns the TLF asset and the venue wallet.
++    Même logique que LaBoutik : cascade TNF → TLF → FED via AssetService.
++    / Same logic as LaBoutik: TNF → TLF → FED cascade via AssetService.
+ 
+     :param carte: CarteCashless
+-    :return: dict avec wallet_client, asset_tlf, wallet_lieu. None si pas d'asset TLF.
++    :return: dict avec wallet_client, cascade_assets (liste ordonnée). None si aucun asset.
+     """
+     from AuthBillet.models import Wallet
+     from fedow_core.models import Asset
++    from fedow_core.services import AssetService, WalletService
+ 
+     # --- Résoudre le wallet du client ---
+     # / Resolve client wallet
+@@ -63,27 +80,47 @@ def obtenir_contexte_cashless(carte):
+         carte.wallet_ephemere = wallet_client
+         carte.save(update_fields=["wallet_ephemere"])
+ 
+-    # --- Trouver l'asset TLF actif du tenant ---
+-    # / Find the active TLF asset for this tenant
+-    asset_tlf = Asset.objects.filter(
+-        tenant_origin=connection.tenant,
+-        category=Asset.TLF,
+-        active=True,
+-    ).first()
++    # --- Construire la cascade d'assets accessibles ---
++    # / Build the cascade of accessible assets
++    # Même logique que LaBoutik Phase 1 : tous les assets du tenant + fédérés.
++    # / Same logic as LaBoutik Phase 1: all tenant assets + federated.
++    assets_accessibles = AssetService.obtenir_assets_accessibles(connection.tenant)
+ 
+-    if not asset_tlf:
+-        logger.warning(f"Pas d'asset TLF actif pour le tenant {connection.tenant.name}")
+-        return None
++    cascade_assets = []
++    for categorie in _ordre_cascade():
++        asset = assets_accessibles.filter(category=categorie).first()
++        if asset is not None:
++            cascade_assets.append(asset)
+ 
+-    wallet_lieu = asset_tlf.wallet_origin
++    if not cascade_assets:
++        logger.warning(
++            f"Aucun asset fiduciaire (TNF/TLF/FED) pour le tenant {connection.tenant.name}"
++        )
++        return None
+ 
+     return {
+         "wallet_client": wallet_client,
+-        "asset_tlf": asset_tlf,
+-        "wallet_lieu": wallet_lieu,
++        "cascade_assets": cascade_assets,
+     }
+ 
+ 
++def calculer_solde_total_cascade(wallet_client, cascade_assets):
++    """
++    Somme les soldes de tous les assets de la cascade pour ce wallet.
++    / Sum balances of all cascade assets for this wallet.
++
++    :param wallet_client: Wallet
++    :param cascade_assets: liste ordonnée d'Asset (TNF, TLF, FED…)
++    :return: int — solde total en centimes
++    """
++    from fedow_core.services import WalletService
++
++    total = 0
++    for asset in cascade_assets:
++        total += WalletService.obtenir_solde(wallet_client, asset)
++    return total
++
++
+ def calculer_volume_autorise_ml(
+     solde_centimes, prix_litre_decimal, reservoir_disponible_ml
+ ):
+@@ -94,7 +131,7 @@ def calculer_volume_autorise_ml(
+     Formule : (solde_centimes / prix_centimes_par_litre) * 1000 ml
+     / Formula: (balance_cents / price_cents_per_liter) * 1000 ml
+ 
+-    :param solde_centimes: int — solde du wallet en centimes
++    :param solde_centimes: int — solde total (tous assets cascade) en centimes
+     :param prix_litre_decimal: Decimal — prix au litre en EUR (ex: Decimal("3.50"))
+     :param reservoir_disponible_ml: float — volume restant dans la tireuse en ml
+     :return: Decimal — volume autorisé en ml (arrondi à 2 décimales)
+@@ -122,21 +159,29 @@ def facturer_tirage(
+     session, tireuse, carte, volume_ml, contexte_cashless, ip="0.0.0.0"
+ ):
+     """
+-    Facture un tirage de bière : Transaction + LigneArticle + MouvementStock.
+-    / Bills a beer pour: Transaction + LigneArticle + MouvementStock.
++    Facture un tirage de bière en cascade TNF → TLF → FED.
++    / Bills a beer pour using TNF → TLF → FED cascade.
+ 
+     Appelé au pour_end quand le volume final est connu.
+     / Called at pour_end when the final volume is known.
+ 
++    Cascade : débit TNF en premier (cadeau/gift), puis TLF (local), puis FED (fédéré).
++    Une Transaction fedow_core est créée par asset débité.
++    Une seule LigneArticle est créée pour le montant total.
++    / Cascade: debit TNF first (gift), then TLF (local), then FED (federated).
++    One fedow_core Transaction is created per debited asset.
++    A single LigneArticle is created for the total amount.
++
+     :param session: RfidSession — la session de service
+     :param tireuse: TireuseBec — la tireuse
+     :param carte: CarteCashless — la carte NFC du client
+     :param volume_ml: Decimal — volume servi en ml
+     :param contexte_cashless: dict retourné par obtenir_contexte_cashless()
+     :param ip: str — IP du Raspberry Pi
+-    :return: dict avec transaction, ligne_article, montant_centimes. None si volume=0.
++    :return: dict avec transactions, ligne_article, montant_centimes. None si volume=0.
+     """
+-    from fedow_core.services import TransactionService
++    from fedow_core.services import TransactionService, WalletService
++    from fedow_core.exceptions import SoldeInsuffisant
+     from BaseBillet.models import (
+         LigneArticle,
+         ProductSold,
+@@ -155,7 +200,7 @@ def facturer_tirage(
+         )
+         return None
+ 
+-    # Calculer le montant en centimes / Calculate amount in cents
++    # Calculer le montant total en centimes / Calculate total amount in cents
+     # montant = volume_ml * prix_litre / 1000 * 100
+     # Ex: 250ml * 3.50 EUR/L = 0.250L * 3.50 = 0.875 EUR = 88 centimes
+     montant_eur = volume_ml * prix_litre / Decimal("1000")
+@@ -165,29 +210,70 @@ def facturer_tirage(
+         return None
+ 
+     wallet_client = contexte_cashless["wallet_client"]
+-    wallet_lieu = contexte_cashless["wallet_lieu"]
+-    asset_tlf = contexte_cashless["asset_tlf"]
++    cascade_assets = contexte_cashless["cascade_assets"]
+     tenant_courant = connection.tenant
+ 
+-    # --- Bloc atomique : transaction + LigneArticle + stock ---
+-    # / Atomic block: transaction + LigneArticle + stock
++    # --- Wallet receveur : wallet du lieu (pas asset.wallet_origin qui peut être erroné) ---
++    # Même convention que LaBoutik (WalletService.get_or_create_wallet_tenant).
++    # asset.wallet_origin représente le wallet de genèse de l'asset, qui peut
++    # accidentellement pointer sur un wallet utilisateur — ce qui ferait s'annuler
++    # débit et crédit (solde non décrémenté).
++    # / Receiver wallet: venue wallet (not asset.wallet_origin which may be wrong).
++    # Same convention as LaBoutik (WalletService.get_or_create_wallet_tenant).
++    # asset.wallet_origin is the asset genesis wallet, which may accidentally
++    # point to a user wallet — causing debit and credit to cancel out (balance unchanged).
++    wallet_lieu = WalletService.get_or_create_wallet_tenant(tenant_courant)
++
++    # --- Bloc atomique : transactions cascade + LigneArticle + stock ---
++    # / Atomic block: cascade transactions + LigneArticle + stock
+     with transaction.atomic():
+-        # 1. Créer la transaction fedow_core (débit client → crédit lieu)
+-        # / Create fedow_core transaction (debit client → credit venue)
+-        tx = TransactionService.creer_vente(
+-            sender_wallet=wallet_client,
+-            receiver_wallet=wallet_lieu,
+-            asset=asset_tlf,
+-            montant_en_centimes=montant_centimes,
+-            tenant=tenant_courant,
+-            card=carte,
+-            ip=ip,
+-            comment=f"Tirage {tireuse.nom_tireuse}: {float(volume_ml):.0f}ml",
+-        )
++
++        # 1. Débiter en cascade TNF → TLF → FED
++        # / Debit in cascade TNF → TLF → FED
++        restant_centimes = montant_centimes
++        transactions_creees = []
++        asset_principal = None  # asset le plus utilisé (pour la LigneArticle)
++
++        for asset in cascade_assets:
++            if restant_centimes <= 0:
++                break
++
++            solde_asset = WalletService.obtenir_solde(wallet_client, asset)
++            if solde_asset <= 0:
++                continue
++
++            montant_asset = min(solde_asset, restant_centimes)
++
++            tx = TransactionService.creer_vente(
++                sender_wallet=wallet_client,
++                receiver_wallet=wallet_lieu,
++                asset=asset,
++                montant_en_centimes=montant_asset,
++                tenant=tenant_courant,
++                card=carte,
++                ip=ip,
++                comment=(
++                    f"Tirage {tireuse.nom_tireuse}: {float(volume_ml):.0f}ml"
++                    f" [{asset.category}]"
++                ),
++            )
++            transactions_creees.append(tx)
++            restant_centimes -= montant_asset
++
++            if asset_principal is None:
++                asset_principal = asset
++
++        if restant_centimes > 0:
++            # Solde insuffisant pour couvrir le montant total — ne devrait pas
++            # arriver si authorize() a correctement calculé allowed_ml.
++            # / Insufficient balance to cover total — shouldn't happen if
++            # authorize() correctly computed allowed_ml.
++            raise SoldeInsuffisant(
++                f"Solde insuffisant au pour_end: manque {restant_centimes} centimes"
++            )
+ 
+         # 2. Snapshots ProductSold / PriceSold
+-        # Le fut actif est un Product, le prix est un Price avec poids_mesure=True
+-        # / The active keg is a Product, the price is a Price with poids_mesure=True
++        # / ProductSold / PriceSold snapshots
+         produit = tireuse.fut_actif
+         prix_obj = produit.prices.filter(poids_mesure=True).first()
+ 
+@@ -203,7 +289,8 @@ def facturer_tirage(
+             defaults={"prix": prix_obj.prix},
+         )
+ 
+-        # 3. Créer la LigneArticle / Create the LigneArticle
++        # 3. Créer la LigneArticle (montant total, asset principal)
++        # / Create LigneArticle (total amount, primary asset)
+         # Volume en centilitres pour weight_quantity (unité stock = cl)
+         # / Volume in centiliters for weight_quantity (stock unit = cl)
+         volume_cl = int(round(float(volume_ml) / 10))
+@@ -217,7 +304,7 @@ def facturer_tirage(
+             sale_origin=SaleOrigin.TIREUSE,
+             payment_method=PaymentMethod.LOCAL_EURO,
+             status=LigneArticle.VALID,
+-            asset=asset_tlf.uuid,
++            asset=asset_principal.uuid,
+             carte=carte,
+             wallet=wallet_client,
+             point_de_vente=tireuse.point_de_vente,
+@@ -246,13 +333,94 @@ def facturer_tirage(
+             # / No stock managed — normal behavior
+             pass
+ 
++    assets_debites_str = ", ".join(
++        f"{tx.asset.category}" for tx in transactions_creees
++    ) if transactions_creees else "aucun"
++
+     logger.info(
+-        f"Facturation: tireuse={tireuse.nom_tireuse} volume={float(volume_ml):.0f}ml "
+-        f"montant={montant_centimes}cts tx={tx.id} ligne={ligne.uuid}"
++        f"Facturation cascade: tireuse={tireuse.nom_tireuse} volume={float(volume_ml):.0f}ml "
++        f"montant={montant_centimes}cts assets=[{assets_debites_str}] ligne={ligne.uuid}"
+     )
+ 
++    # ── Sync optionnelle vers fedow_django ──────────────────────────────────
++    # Les transactions locales (fedow_core) et fedow_django sont deux DBs disjointes.
++    # On pousse ici les débits FED/TLF vers fedow_django pour que "Ma Tirelire"
++    # reflète les consommations tireuse.
++    # Les tokens TNF (cadeaux locaux) ne sont pas connus de fedow_django : skip.
++    # Nécessite une carte liée à un user — les cartes anonymes ne peuvent pas signer.
++    # Tous les échecs fedow_django sont loggés mais n'interrompent PAS la facturation.
++    #
++    # / Optional sync to fedow_django.
++    # Local transactions (fedow_core) and fedow_django are two disjoint DBs.
++    # We push FED/TLF debits here so that "Ma Tirelire" reflects tap debits.
++    # TNF tokens (local gifts) are unknown to fedow_django: skip.
++    # Requires a user-linked card — anonymous cards cannot sign the request.
++    # All fedow_django failures are logged but do NOT interrupt billing.
++    try:
++        from fedow_connect.models import FedowConfig
++        from fedow_core.models import Asset as AssetLocal
++
++        fedow_config = FedowConfig.get_solo()
++        carte_a_un_user = carte.user is not None
++        user_a_un_wallet = carte_a_un_user and bool(carte.user.wallet)
++        fedow_est_configure = fedow_config.can_fedow()
++
++        if fedow_est_configure and carte_a_un_user and user_a_un_wallet:
++            from fedow_connect.fedow_api import FedowAPI
++
++            fedow_api = FedowAPI()
++
++            for tx in transactions_creees:
++                # Seul l'asset FED (Stripe fédéré) est présent dans fedow_django.
++                # TNF (cadeaux locaux) et TLF (monnaie locale) sont ignorés :
++                # fedow_django ne les connaît pas pour ce wallet.
++                # / Only FED (Stripe federated) asset exists in fedow_django.
++                # TNF (local gifts) and TLF (local currency) are skipped:
++                # fedow_django does not know them for this wallet.
++                if tx.asset.category != AssetLocal.FED:
++                    continue
++
++                # fedow_django n'accepte que asset_type="EURO" sur /qrcodescanpay/
++                # (valeur unique pour tous les assets fiduciaires dans l'ancienne API).
++                # / fedow_django only accepts asset_type="EURO" on /qrcodescanpay/
++                # (single value for all fiduciary assets in the legacy API).
++                fedow_api.transaction.to_place_from_qrcode(
++                    user=carte.user,
++                    amount=tx.amount,
++                    asset_type="EURO",
++                    comment=(
++                        f"Tirage {tireuse.nom_tireuse}: {float(volume_ml):.0f}ml"
++                        f" [FED]"
++                    ),
++                )
++                logger.info(
++                    f"Sync fedow_django: {tx.amount}cts [FED→EURO]"
++                    f" wallet={carte.user.wallet.uuid}"
++                )
++        elif not fedow_est_configure:
++            logger.debug("Sync fedow_django ignorée : FedowConfig non configuré")
++        elif not carte_a_un_user:
++            logger.debug(
++                f"Sync fedow_django ignorée : carte {carte.tag_id} anonyme (user=None)"
++            )
++        elif not user_a_un_wallet:
++            logger.debug(
++                f"Sync fedow_django ignorée : user {carte.user.email} sans wallet"
++            )
++
++    except Exception as erreur_fedow:
++        # Sync fedow_django non-bloquante : l'échec ne doit jamais annuler la vente.
++        # / Non-blocking fedow_django sync: failure must never cancel the sale.
++        logger.warning(
++            f"Sync fedow_django non-bloquante échouée"
++            f" (tireuse={tireuse.nom_tireuse}): {erreur_fedow}"
++        )
++
+     return {
+-        "transaction": tx,
++        "transactions": transactions_creees,
++        # Compatibilité avec le code existant qui lit ["transaction"]
++        # / Backward compatibility with existing code reading ["transaction"]
++        "transaction": transactions_creees[0] if transactions_creees else None,
+         "ligne_article": ligne,
+         "montant_centimes": montant_centimes,
+     }
+diff --git a/controlvanne/calibration_views.py b/controlvanne/calibration_views.py
+index 95719d85..9aafae00 100644
+--- a/controlvanne/calibration_views.py
++++ b/controlvanne/calibration_views.py
+@@ -1,4 +1,246 @@
+-# Vues de calibration temporairement desactivees pendant le refactoring (Phase 1).
+-# Sera reecrit en Phase 4 (templates + conformite djc).
+-# / Calibration views temporarily disabled during refactoring (Phase 1).
+-# Will be rewritten in Phase 4 (templates + djc compliance).
++"""
++Vues de calibration du debitmetre pour une tireuse.
++/ Calibration views for the tap flow meter.
++
++LOCALISATION : controlvanne/calibration_views.py
++
++Flux :
++1. calibration_page              GET  /controlvanne/calibration/<uuid>/
++   Squelette de la page. Les sessions sont chargees par HTMX (polling).
++
++2. calibration_sessions_partial  GET  /controlvanne/calibration/<uuid>/sessions/?depuis=<ts>
++   Partial HTMX — retourne les sessions en attente de saisie.
++   Appele toutes les 8s par le polling HTMX de la page.
++   Contient le formulaire de saisie unique (un champ par session).
++
++3. calibration_serie             POST /controlvanne/calibration/<uuid>/serie/
++   Recoit tous les volumes en une seule requete (vol_<session_pk>=...).
++   Valide, marque les sessions, calcule le facteur moyen, l'applique.
++   Retourne partial_serie_result.html qui remplace #sessions-poll (outerHTML).
++   Le remplacement outerHTML supprime le polling.
++
++Acces : staff uniquement (@staff_member_required).
++"""
++
++from decimal import Decimal, InvalidOperation
++from datetime import timezone as dt_timezone, datetime
++
++from django.contrib.admin.views.decorators import staff_member_required
++from django.shortcuts import get_object_or_404, render
++from django.utils import timezone
++from django.views.decorators.http import require_POST
++
++from controlvanne.models import RfidSession, TireuseBec
++
++
++# ── Helpers ───────────────────────────────────────────────────────────
++
++
++def _parse_depuis_str(valeur_brute):
++    """
++    Convertit un timestamp flottant (chaine) en datetime UTC.
++    Retourne None si la valeur est absente ou invalide.
++    / Converts a float timestamp (string) to a UTC datetime.
++    Returns None if the value is missing or invalid.
++    """
++    try:
++        ts = float(valeur_brute)
++        return datetime.fromtimestamp(ts, tz=dt_timezone.utc)
++    except (ValueError, TypeError):
++        return None
++
++
++def _sessions_en_attente(tireuse, depuis=None):
++    """
++    Sessions maintenance terminees, volume mesure par Django > 0,
++    sans volume reel saisi par l'admin (volume_reel_ml IS NULL).
++    / Finished maintenance sessions, Django-measured volume > 0,
++    without real volume entered by admin (volume_reel_ml IS NULL).
++    """
++    qs = RfidSession.objects.filter(
++        tireuse_bec=tireuse,
++        is_maintenance=True,
++        ended_at__isnull=False,
++        volume_delta_ml__gt=0,
++        volume_reel_ml__isnull=True,
++    )
++    if depuis:
++        qs = qs.filter(started_at__gte=depuis)
++    return qs.order_by("started_at")
++
++
++def _calculer_facteur_corrige(facteur_actuel, volume_delta_ml, volume_reel_ml):
++    """
++    facteur_corrige = facteur_actuel x (volume_django / volume_reel)
++    Exemple : facteur=6.5, django=500ml, reel=480ml → 6.5 x (500/480) = 6.77
++    Si les volumes sont egaux, le facteur ne change pas.
++    / If volumes are equal, the factor does not change.
++    """
++    if not volume_reel_ml or float(volume_reel_ml) <= 0:
++        return float(facteur_actuel)
++    return round(float(facteur_actuel) * (float(volume_delta_ml) / float(volume_reel_ml)), 4)
++
++
++# ── Vues ──────────────────────────────────────────────────────────────
++
++
++@staff_member_required
++def calibration_page(request, uuid):
++    """
++    GET /controlvanne/calibration/<uuid>/
++    Squelette de la page. Les sessions sont chargees par HTMX (polling toutes les 8s).
++    Le parametre ?depuis=<timestamp> definit le debut de la serie en cours.
++    / Page skeleton. Sessions are loaded by HTMX (polling every 8s).
++    The ?depuis=<timestamp> parameter defines the start of the current series.
++    """
++    tireuse = get_object_or_404(TireuseBec, uuid=uuid)
++    depuis_str = request.GET.get("depuis", "")
++    ctx = {
++        "tireuse": tireuse,
++        "depuis": depuis_str,
++        # maintenant : pour le lien "Nouvelle serie" (timestamp courant)
++        # / maintenant: for the "New series" link (current timestamp)
++        "maintenant": timezone.now().timestamp(),
++    }
++    return render(request, "calibration/page.html", ctx)
++
++
++@staff_member_required
++def calibration_sessions_partial(request, uuid):
++    """
++    GET /controlvanne/calibration/<uuid>/sessions/?depuis=<ts>
++    Partial HTMX appele toutes les 8s par la page.
++    Retourne le formulaire de saisie avec une ligne par session en attente.
++    / HTMX partial called every 8s by the page.
++    Returns the input form with one row per pending session.
++    """
++    tireuse = get_object_or_404(TireuseBec, uuid=uuid)
++    depuis_str = request.GET.get("depuis", "")
++    depuis = _parse_depuis_str(depuis_str)
++    sessions_en_attente = list(_sessions_en_attente(tireuse, depuis))
++    ctx = {
++        "tireuse": tireuse,
++        "depuis": depuis_str,
++        "sessions_en_attente": sessions_en_attente,
++        "erreur": None,
++    }
++    return render(request, "calibration/partial_sessions.html", ctx)
++
++
++@staff_member_required
++@require_POST
++def calibration_serie(request, uuid):
++    """
++    POST /controlvanne/calibration/<uuid>/serie/
++    Recoit les volumes reels pour toutes les sessions de la serie.
++    Format POST : vol_<session_pk>=<volume_ml> pour chaque session.
++    Les champs laisses vides sont ignores (session ignoree dans le calcul).
++    Calcule le facteur moyen et l'applique au debitmetre.
++    Retourne partial_serie_result.html (remplace #sessions-poll en outerHTML).
++    / Receives real volumes for all sessions in the series.
++    POST format: vol_<session_pk>=<volume_ml> for each session.
++    Blank fields are ignored (session excluded from calculation).
++    Calculates the average factor and applies it to the flow meter.
++    Returns partial_serie_result.html (replaces #sessions-poll as outerHTML).
++    """
++    tireuse = get_object_or_404(TireuseBec, uuid=uuid)
++    depuis_str = request.POST.get("depuis", "")
++    depuis = _parse_depuis_str(depuis_str)
++    sessions_en_attente = list(_sessions_en_attente(tireuse, depuis))
++
++    # Aucun debitmetre → erreur immediate (innerHTML pour garder #sessions-poll dans le DOM)
++    # / No flow meter → immediate error (innerHTML to keep #sessions-poll in the DOM)
++    if not tireuse.debimetre:
++        ctx = {
++            "tireuse": tireuse,
++            "depuis": depuis_str,
++            "sessions_en_attente": sessions_en_attente,
++            "erreur": "Aucun débitmètre associé à cette tireuse.",
++        }
++        response = render(request, "calibration/partial_sessions.html", ctx)
++        response["HX-Reswap"] = "innerHTML"
++        return response
++
++    facteur_actuel = float(tireuse.debimetre.flow_calibration_factor)
++
++    # Collecter les volumes saisis et traiter chaque session
++    # / Collect entered volumes and process each session
++    mesures = []
++    facteurs = []
++
++    for session in sessions_en_attente:
++        valeur_brute = request.POST.get(f"vol_{session.pk}", "").strip()
++
++        # Champ laisse vide → on ignore cette session
++        # / Blank field → skip this session
++        if not valeur_brute:
++            continue
++
++        try:
++            volume_reel = Decimal(valeur_brute.replace(",", "."))
++            if volume_reel <= 0:
++                raise ValueError("Volume nul ou negatif")
++        except (InvalidOperation, ValueError):
++            # Volume invalide → on ignore cette session mais on continue
++            # / Invalid volume → skip this session but continue
++            continue
++
++        # Sauvegarder le volume reel dans la session
++        # / Save the real volume in the session
++        session.volume_reel_ml = volume_reel
++        session.is_calibration = True
++        session.save(update_fields=["volume_reel_ml", "is_calibration"])
++
++        facteur_corrige = _calculer_facteur_corrige(
++            facteur_actuel,
++            session.volume_delta_ml,
++            volume_reel,
++        )
++        ecart_pct = round(
++            (float(session.volume_delta_ml) - float(volume_reel))
++            / float(volume_reel) * 100,
++            1,
++        )
++        mesures.append({
++            "session": session,
++            "facteur_corrige": facteur_corrige,
++            "ecart_pct": ecart_pct,
++        })
++        facteurs.append(facteur_corrige)
++
++    # Aucun volume valide saisi → retourner le formulaire avec message d'erreur.
++    # HX-Reswap: innerHTML pour que #sessions-poll reste dans le DOM avec
++    # ses attributs de polling — sans cela le prochain submit ne trouverait
++    # plus la cible et ne ferait rien.
++    # / No valid volume entered → return form with error message.
++    # HX-Reswap: innerHTML so #sessions-poll stays in the DOM with its
++    # polling attributes — without this the next submit can't find the target.
++    if not mesures:
++        ctx = {
++            "tireuse": tireuse,
++            "depuis": depuis_str,
++            "sessions_en_attente": sessions_en_attente,
++            "erreur": "Saisissez au moins un volume avant d'appliquer.",
++        }
++        response = render(request, "calibration/partial_sessions.html", ctx)
++        response["HX-Reswap"] = "innerHTML"
++        return response
++
++    # Calculer et appliquer le facteur moyen
++    # / Calculate and apply the average factor
++    facteur_moyen = round(sum(facteurs) / len(facteurs), 4)
++    facteur_ancien = tireuse.debimetre.flow_calibration_factor
++    tireuse.debimetre.flow_calibration_factor = facteur_moyen
++    tireuse.debimetre.save(update_fields=["flow_calibration_factor"])
++
++    ctx = {
++        "tireuse": tireuse,
++        "depuis": depuis_str,
++        "mesures": mesures,
++        "facteur_ancien": facteur_ancien,
++        "facteur_applique": facteur_moyen,
++        # maintenant : timestamp pour le lien "Nouvelle serie de verification"
++        # / maintenant: timestamp for the "New verification series" link
++        "maintenant": timezone.now().timestamp(),
++    }
++    return render(request, "calibration/partial_serie_result.html", ctx)
+diff --git a/controlvanne/signals.py b/controlvanne/signals.py
+index 1af5a0d3..d45b404d 100644
+--- a/controlvanne/signals.py
++++ b/controlvanne/signals.py
+@@ -177,11 +177,17 @@ def tireusebec_post_save(sender, instance, created, **kwargs):
+             if tenant_est_un_vrai_client:
+                 from discovery.models import PairingDevice
+ 
++                from AuthBillet.models import TibilletUser
+                 pin_genere = PairingDevice.generate_unique_pin()
+                 pairing_device_cree = PairingDevice.objects.create(
+                     name=instance.nom_tireuse,
+                     tenant=tenant_courant,
+                     pin_code=pin_genere,
++                    # IMPORTANT : role TI (Tireuse) — sans ça le claim retourne
++                    # une clé LaBoutik et tireuse_uuid reste vide.
++                    # / IMPORTANT: role TI (Tireuse) — without this, claim returns
++                    # a LaBoutik key and tireuse_uuid stays empty.
++                    terminal_role=TibilletUser.ROLE_TIREUSE,
+                 )
+                 champs_a_mettre_a_jour["pairing_device"] = pairing_device_cree
+                 instance.pairing_device = pairing_device_cree
+diff --git a/controlvanne/static/controlvanne/js/panel_kiosk.js b/controlvanne/static/controlvanne/js/panel_kiosk.js
+index d849781c..9471c7e8 100644
+--- a/controlvanne/static/controlvanne/js/panel_kiosk.js
++++ b/controlvanne/static/controlvanne/js/panel_kiosk.js
+@@ -239,6 +239,18 @@
+     try {
+       var donnees = JSON.parse(evenement.data);
+       var payload = donnees.payload || donnees;
++      // DEBUG — log chaque message WS reçu (présent, session_done, wasPresent par tireuse)
++      // / DEBUG — log every received WS message (present, session_done, wasPresent per tap)
++      var uuid_debug = payload.tireuse_bec_uuid || "?";
++      var c_debug = cards[uuid_debug];
++      console.log(
++        "[WS] present=" + payload.present +
++        " session_done=" + payload.session_done +
++        " maintenance=" + payload.maintenance +
++        " wasPresent=" + (c_debug ? c_debug.wasPresent : "?") +
++        " uid=" + payload.uid +
++        " vanne=" + payload.vanne_ouverte
++      );
+ 
+       // Commandes de navigation du kiosk (utilisées par l'admin)
+       // / Kiosk navigation commands (used by admin)
+@@ -331,6 +343,14 @@
+           c.vol.textContent = Math.round((payload.volume_ml || 0) / 10) + " cl";
+           if (payload.balance) { c.balance.textContent = payload.balance; c.lastBalance = payload.balance; }
+           if (payload.message) c.msg.textContent = payload.message;
++          // Refus : reset automatique après 4s (la carte sera retirée mais le Pi n'envoie
++          // pas toujours card_removed sans session active)
++          // / Refusal: auto-reset after 4s (card will be removed but Pi doesn't always
++          // send card_removed without an active session)
++          if (payload.authorized === false) {
++            if (c.resetTimer) clearTimeout(c.resetTimer);
++            c.resetTimer = setTimeout(function () { c.resetTimer = null; reinitialiserCarte(c); }, 4000);
++          }
+           return;
+         }
+ 
+@@ -341,9 +361,9 @@
+ 
+         // CAS 2 : Fin de session / CASE 2: End of session
+         if (payload.session_done) {
+-          // Si une nouvelle carte est déjà active → ignorer ce session_done tardif
+-          // / If a new card is already active → ignore this late session_done
+-          if (etait_present) return;
++          // Ignorer si aucune carte n'était présente (session_done tardif après reset déjà fait)
++          // / Ignore if no card was present (late session_done after display already reset)
++          if (!etait_present) return;
+           c.auth.className = "badge bg-info text-dark";
+           c.auth.textContent = "Termin\u00e9";
+           c.state.className = "badge bg-danger";
+@@ -357,6 +377,9 @@
+         }
+ 
+         // CAS 3 : Retrait / refus / CASE 3: Removal / refusal
++        // Annuler tout timer en cours avant de réinitialiser
++        // / Cancel any pending timer before resetting
++        if (c.resetTimer) { clearTimeout(c.resetTimer); c.resetTimer = null; }
+         reinitialiserCarte(c);
+         c.auth.className = "badge bg-secondary";
+         c.msg.textContent = "En attente...";
+diff --git a/controlvanne/templates/admin/controlvanne/tireusebec_before.html b/controlvanne/templates/admin/controlvanne/tireusebec_before.html
+new file mode 100644
+index 00000000..383e5643
+--- /dev/null
++++ b/controlvanne/templates/admin/controlvanne/tireusebec_before.html
+@@ -0,0 +1,13 @@
++{% load i18n %}
++<div class="d-flex gap-2 flex-wrap mb-3">
++  {% if kiosk_url %}
++  <a href="{{ kiosk_url }}" target="_blank" class="btn btn-outline-secondary btn-sm">
++    📺 {% translate "View kiosk" %}
++  </a>
++  {% endif %}
++  {% if calibration_url %}
++  <a href="{{ calibration_url }}" class="btn btn-outline-warning btn-sm">
++    ⚙️ {% translate "Calibrate flow meter" %}
++  </a>
++  {% endif %}
++</div>
+diff --git a/controlvanne/templates/calibration/page.html b/controlvanne/templates/calibration/page.html
+index 7bb6ec55..d1d0f0a7 100644
+--- a/controlvanne/templates/calibration/page.html
++++ b/controlvanne/templates/calibration/page.html
+@@ -1,17 +1,88 @@
+-{% extends "admin/base_site.html" %}
+-{% load i18n %}
++{% extends "base.html" %}
++{% load i18n static %}
+ {% block title %}Calibration — {{ tireuse.nom_tireuse }}{% endblock %}
+ 
++{% block nav_right %}
++  <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
++     class="btn btn-sm btn-outline-light">
++    ← Admin
++  </a>
++{% endblock %}
++
++{% block head %}
++  <script src="{% static 'django_htmx/htmx.min.js' %}"></script>
++  <script>
++    /* CSRF global pour toutes les requêtes HTMX */
++    /* / Global CSRF for all HTMX requests */
++    document.addEventListener('htmx:configRequest', function (evt) {
++      evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
++    });
++
++    /*
++     * Gestion des lignes ignorées.
++     * window.ignoredSessions persiste entre les rechargements de polling
++     * (le polling remplace seulement le innerHTML de #sessions-poll,
++     *  pas la page entière — donc les variables window.* survivent).
++     * / Ignored rows management.
++     * window.ignoredSessions persists between polling reloads
++     * (polling only replaces innerHTML of #sessions-poll,
++     *  not the whole page — so window.* variables survive).
++     */
++    window.ignoredSessions = window.ignoredSessions || new Set();
++
++    function ignorerLigne(sessionPk) {
++      window.ignoredSessions.add(String(sessionPk));
++      appliquerIgnores();
++    }
++
++    /* Grise et désactive toutes les lignes dans ignoredSessions */
++    /* / Grays out and disables all rows in ignoredSessions */
++    function appliquerIgnores() {
++      window.ignoredSessions.forEach(function (pk) {
++        var row = document.getElementById('row-' + pk);
++        var input = document.querySelector('[name="vol_' + pk + '"]');
++        if (input) { input.value = ''; input.disabled = true; }
++        if (row) { row.style.opacity = '0.3'; row.style.pointerEvents = 'none'; }
++      });
++    }
++
++    /* Re-applique après chaque swap HTMX (polling ou réponse d'erreur) */
++    /* / Re-applies after each HTMX swap (polling or error response) */
++    document.addEventListener('htmx:afterSettle', appliquerIgnores);
++  </script>
++{% endblock %}
++
+ {% block content %}
+ <div class="row justify-content-center" data-testid="calibration-page">
+   <div class="col-12 col-md-10 col-lg-8">
+ 
+     {# En-tête #}
+-    <div class="d-flex align-items-center mb-4 gap-3 flex-wrap">
+-      <h2 class="mb-0 text-white">Calibration — {{ tireuse.nom_tireuse }}</h2>
++    <div class="d-flex align-items-center justify-content-between mb-4 gap-3 flex-wrap">
++      <h2 class="mb-0">Calibration — {{ tireuse.nom_tireuse }}</h2>
++      {# Timestamp calculé au moment du CLIC (pas du chargement de la page) #}
++      {# pour que les sessions créées pendant la visite ne soient pas incluses #}
++      {# / Timestamp computed at CLICK time (not page load) #}
++      {# so sessions created during the visit are not included #}
++      <button type="button"
++              class="btn btn-warning"
++              data-testid="btn-nouvelle-serie"
++              onclick="window.ignoredSessions = new Set(); window.location.href='?depuis='+Math.floor(Date.now()/1000);">
++        ↺ Nouvelle série
++      </button>
++    </div>
++
++    {# Bandeau série en cours #}
++    {% if depuis %}
++    <div class="alert alert-info py-2 mb-4">
++      Série en cours — seules les mesures effectuées depuis le début de cette série sont affichées.
+     </div>
++    {% else %}
++    <div class="alert alert-secondary py-2 mb-4">
++      Toutes les mesures passées sont affichées. Cliquez <strong>↺ Nouvelle série</strong> pour repartir à zéro.
++    </div>
++    {% endif %}
+ 
+-    {# Info débitmètre + état de la tireuse #}
++    {# Info débitmètre + état maintenance #}
+     <div class="card mb-4">
+       <div class="card-body" style="color:#111">
+         {% if tireuse.debimetre %}
+@@ -19,11 +90,11 @@
+           <p class="mb-0">
+             <strong>Facteur actuel :</strong>
+             <span class="badge bg-secondary fs-6">{{ tireuse.debimetre.flow_calibration_factor }}</span>
+-            <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹ &nbsp;(1 L = facteur × 60 impulsions)</span>
++            <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
+           </p>
+         {% else %}
+           <div class="alert alert-warning mb-0">
+-            Aucun débitmètre associé à cette tireuse. Veuillez en affecter un dans l'admin avant de calibrer.
++            Aucun débitmètre associé. Affectez-en un dans l'admin avant de calibrer.
+           </div>
+         {% endif %}
+ 
+@@ -32,9 +103,8 @@
+         {% else %}
+           <div class="alert alert-danger mt-2 mb-0">
+             ⚠️ La tireuse doit être <strong>désactivée</strong> (mode maintenance) pour pouvoir calibrer.
+-            <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}" class="alert-link ms-1">
+-              Désactiver dans l'admin →
+-            </a>
++            <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
++               class="alert-link ms-1">Désactiver dans l'admin →</a>
+           </div>
+         {% endif %}
+       </div>
+@@ -46,81 +116,35 @@
+       <div class="card-body" style="color:#111">
+         <ol class="mb-0">
+           <li>Désactivez la tireuse dans l'admin <em>(si pas déjà fait)</em></li>
++          <li>Cliquez <strong>↺ Nouvelle série</strong> pour repartir à zéro</li>
+           <li>Connectez un tuyau propre sur la tireuse</li>
+           <li>Présentez une <strong>carte maintenance</strong> → la vanne s'ouvre</li>
+           <li>Versez dans un <strong>verre gradué</strong> jusqu'à ~50 cl</li>
+           <li>Retirez la carte → la vanne se ferme</li>
+-          <li>Revenez sur cette page et saisissez le volume lu sur le verre ci-dessous</li>
+-          <li>Répétez 2 à 3 fois puis cliquez <strong>Appliquer le facteur</strong></li>
++          <li>Répétez les étapes 4–6 au moins 3 fois — les versements apparaissent automatiquement ci-dessous</li>
++          <li>Saisissez les volumes lus sur le verre pour chaque versement</li>
++          <li>Cliquez <strong>✓ Calculer et appliquer le facteur</strong></li>
++          <li>Présentez à nouveau votre <strong>carte maintenance</strong> sur le lecteur puis retirez-la — le Pi récupère immédiatement le nouveau facteur de calibration</li>
+         </ol>
+       </div>
+     </div>
+ 
+-    {# Sessions en attente de saisie #}
+-    {% if sessions_en_attente %}
+-    <div class="card mb-4 border-warning">
+-      <div class="card-header bg-warning text-dark">
+-        <strong>{% translate "Measurements awaiting input" %} ({{ sessions_en_attente|length }})</strong>
+-      </div>
+-      <div class="card-body p-0">
+-        <table class="table table-sm mb-0" style="color:#111" data-testid="calibration-sessions">
+-          <thead class="table-light">
+-            <tr>
+-              <th>Date</th>
+-              <th>Carte</th>
+-              <th>Mesuré par Django</th>
+-              <th>Volume réel dans le verre</th>
+-            </tr>
+-          </thead>
+-          <tbody>
+-            {% for session in sessions_en_attente %}
+-            <tr id="mesure-{{ session.pk }}">
+-              <td>{{ session.started_at|date:"d/m H:i" }}</td>
+-              <td class="text-muted small">{{ session.label_snapshot|default:session.uid }}</td>
+-              <td><strong>{{ session.volume_delta_ml|floatformat:0 }} ml</strong></td>
+-              <td>
+-                <div class="d-flex gap-2 align-items-center flex-wrap">
+-                  <form hx-post="{% url 'calibration_soumettre' uuid=tireuse.uuid session_id=session.pk %}"
+-                        hx-target="#mesure-{{ session.pk }}"
+-                        hx-swap="outerHTML"
+-                        class="d-flex gap-2 align-items-center">
+-                    {% csrf_token %}
+-                    <input type="number" name="volume_reel_ml"
+-                           min="1" max="2000" step="1"
+-                           placeholder="ex : 487"
+-                           class="form-control form-control-sm" style="width:110px" required>
+-                    <button type="submit" class="btn btn-sm btn-primary">Calculer</button>
+-                  </form>
+-                  <form hx-post="{% url 'calibration_supprimer' uuid=tireuse.uuid session_id=session.pk %}"
+-                        hx-target="#mesure-{{ session.pk }}"
+-                        hx-swap="outerHTML"
+-                        hx-confirm="Supprimer cette mesure ?"
+-                        class="d-inline">
+-                    {% csrf_token %}
+-                    <button type="submit" class="btn btn-sm btn-outline-danger">✕</button>
+-                  </form>
+-                </div>
+-              </td>
+-            </tr>
+-            {% endfor %}
+-          </tbody>
+-        </table>
+-      </div>
+-    </div>
+-    {% else %}
+-    <div class="alert alert-info mb-4">
+-      {% translate "No measurements pending." %}
+-      {% if tireuse.enabled %}
+-        Désactivez d'abord la tireuse puis passez une carte maintenance pour verser du liquide.
+-      {% else %}
+-        Passez une carte maintenance pour verser du liquide dans un verre gradué, puis revenez ici.
+-      {% endif %}
+-    </div>
+-    {% endif %}
+-
+-    {# Récap des mesures calibrées + bouton Appliquer #}
+-    <div id="recap">
+-      {% include "calibration/partial_recap.html" %}
++    {# Zone principale : formulaire de saisie (polling HTMX 8s) #}
++    {# La div #sessions-poll porte les attributs de polling. #}
++    {# Quand le formulaire est soumis, hx-swap="outerHTML" remplace cette div #}
++    {# par le résultat — supprimant ainsi le polling automatiquement. #}
++    {# / Main zone: input form (HTMX polling 8s) #}
++    {# The #sessions-poll div carries the polling attributes. #}
++    {# When the form is submitted, hx-swap="outerHTML" replaces this div #}
++    {# with the result — automatically stopping the poll. #}
++    <div id="sessions-poll"
++         hx-get="{% url 'calibration_sessions_partial' uuid=tireuse.uuid %}?depuis={{ depuis }}"
++         hx-trigger="load, every 8s"
++         hx-swap="innerHTML">
++      <p class="text-center text-muted py-4">
++        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
++        Chargement des versements...
++      </p>
+     </div>
+ 
+   </div>
+diff --git a/controlvanne/templates/calibration/partial_confirmation.html b/controlvanne/templates/calibration/partial_confirmation.html
+index 89dee627..c20add90 100644
+--- a/controlvanne/templates/calibration/partial_confirmation.html
++++ b/controlvanne/templates/calibration/partial_confirmation.html
+@@ -1,20 +1,32 @@
+ {# Fragment HTMX — confirmation après application du facteur #}
++{# / HTMX fragment — confirmation after factor application #}
+ {% load i18n %}
+ 
+ {% if erreur %}
+ <div class="alert alert-danger mb-0">{{ erreur }}</div>
+ 
+ {% else %}
+-<div class="alert alert-success mb-2" data-testid="calibration-confirmation-success">
+-  ✓ Facteur mis à jour avec succès !<br>
+-  <strong>{{ facteur_ancien }}</strong>
+-  &nbsp;→&nbsp;
+-  <strong>{{ facteur_applique }}</strong>
+-  <span class="text-muted small">Hz·L⁻¹·min⁻¹</span>
++<div class="alert alert-success mb-3" data-testid="calibration-confirmation-success">
++  <strong>✓ Facteur appliqué avec succès !</strong><br>
++  <span class="text-muted small">
++    {{ facteur_ancien }} → <strong>{{ facteur_applique }}</strong>
++    <span class="ms-1">Hz·L⁻¹·min⁻¹</span>
++  </span>
++</div>
++
++<p class="text-muted small mb-3">
++  Le Pi récupèrera automatiquement ce nouveau facteur au retrait de la prochaine carte maintenance.
++</p>
++
++<div class="d-flex gap-2 flex-wrap">
++  <a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
++     class="btn btn-primary"
++     data-testid="btn-verifier-serie">
++    ↺ Vérifier avec une nouvelle série
++  </a>
++  <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
++     class="btn btn-outline-secondary">
++    ← Retour admin
++  </a>
+ </div>
+-<a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
+-   class="btn btn-outline-primary btn-sm"
+-   data-testid="btn-nouvelle-serie">
+-  Faire une nouvelle série de mesures
+-</a>
+ {% endif %}
+diff --git a/controlvanne/templates/calibration/partial_recap.html b/controlvanne/templates/calibration/partial_recap.html
+index 0f0c5f49..e12e3e94 100644
+--- a/controlvanne/templates/calibration/partial_recap.html
++++ b/controlvanne/templates/calibration/partial_recap.html
+@@ -1,12 +1,27 @@
+-{# Fragment HTMX — récap de toutes les mesures calibrées + bouton Appliquer #}
++{# Fragment HTMX — récap des mesures de la série + bouton Appliquer #}
+ {# Inclus dans page.html ET mis à jour hors-bande depuis partial_mesure.html #}
++{# / HTMX fragment — series measurements summary + Apply button #}
++{# Included in page.html AND updated out-of-band from partial_mesure.html #}
+ {% load l10n %}
+ 
+ {% if mesures_recap %}
+ <div class="card mb-4" data-testid="calibration-recap">
+-  <div class="card-header" style="color:#111">
+-    <strong>Mesures effectuées ({{ mesures_recap|length }})</strong>
++
++  {# En-tête avec indicateur de qualité selon le nombre de mesures #}
++  {# / Header with quality indicator based on measurement count #}
++  <div class="card-header d-flex align-items-center justify-content-between" style="color:#111">
++    <strong>Mesures de la série ({{ mesures_recap|length }})</strong>
++    {% with nb=mesures_recap|length %}
++      {% if nb >= 3 %}
++        <span class="badge bg-success">✓ Fiable</span>
++      {% elif nb == 2 %}
++        <span class="badge bg-warning text-dark">~ Bon</span>
++      {% else %}
++        <span class="badge bg-secondary">indicatif</span>
++      {% endif %}
++    {% endwith %}
+   </div>
++
+   <div class="card-body p-0">
+     <table class="table table-sm mb-0" style="color:#111">
+       <thead class="table-light">
+@@ -42,25 +57,44 @@
+   {% if facteur_moyen and tireuse.debimetre %}
+   <div class="card-footer" style="background:#f8f9fa">
+     <div id="zone-confirmation">
++
++      {# Résumé facteur actuel → proposé #}
++      {# / Current → proposed factor summary #}
+       <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+         <div>
+-          <span class="text-muted small">Facteur actuel :</span>
+-          <strong>{{ tireuse.debimetre.flow_calibration_factor }}</strong>
+-          &nbsp;→&nbsp;
+-          <span class="text-muted small">Facteur proposé :</span>
+-          <span class="badge bg-primary fs-6">{{ facteur_moyen }}</span>
+-          {% if mesures_recap|length > 1 %}
+-            <span class="text-muted small ms-1">(moyenne sur {{ mesures_recap|length }} mesures)</span>
+-          {% endif %}
++          <div class="mb-1">
++            <span class="text-muted small">Facteur actuel :</span>
++            <strong>{{ tireuse.debimetre.flow_calibration_factor }}</strong>
++            &nbsp;→&nbsp;
++            <span class="text-muted small">Facteur proposé :</span>
++            <span class="badge bg-primary fs-6">{{ facteur_moyen }}</span>
++          </div>
++          {% with nb=mesures_recap|length %}
++            {% if nb == 1 %}
++              <div class="text-muted small">⚠ Résultat basé sur 1 seule mesure — faites-en 2 autres pour plus de fiabilité.</div>
++            {% elif nb == 2 %}
++              <div class="text-muted small">Moyenne sur 2 mesures — une troisième améliorerait la fiabilité.</div>
++            {% else %}
++              <div class="text-muted small">Moyenne sur {{ nb }} mesures.</div>
++            {% endif %}
++          {% endwith %}
+         </div>
++
++        {# Formulaire Appliquer — envoie facteur_moyen et depuis en POST #}
++        {# / Apply form — sends facteur_moyen and depuis as POST #}
+         <form hx-post="{% url 'calibration_appliquer' uuid=tireuse.uuid %}"
+               hx-target="#zone-confirmation"
+               hx-swap="innerHTML">
+-          {% csrf_token %}
+           <input type="hidden" name="facteur_moyen" value="{{ facteur_moyen|unlocalize }}">
+-          <button type="submit" class="btn btn-success" data-testid="btn-appliquer-facteur">✓ Appliquer ce facteur</button>
++          <input type="hidden" name="depuis" value="{{ depuis }}">
++          <button type="submit"
++                  class="btn btn-success"
++                  data-testid="btn-appliquer-facteur">
++            ✓ Appliquer ce facteur
++          </button>
+         </form>
+       </div>
++
+     </div>
+   </div>
+   {% endif %}
+diff --git a/controlvanne/templates/calibration/partial_serie_result.html b/controlvanne/templates/calibration/partial_serie_result.html
+new file mode 100644
+index 00000000..1308bf36
+--- /dev/null
++++ b/controlvanne/templates/calibration/partial_serie_result.html
+@@ -0,0 +1,85 @@
++{# Partial HTMX — résultat après application du facteur de la série #}
++{# Remplace #sessions-poll en outerHTML → le polling s'arrête automatiquement. #}
++{# / HTMX partial — result after series factor application #}
++{# Replaces #sessions-poll as outerHTML → polling stops automatically. #}
++
++<div id="serie-result" data-testid="calibration-serie-result">
++
++  <div class="card mb-4 border-success">
++    <div class="card-header bg-success text-white">
++      <strong>✓ Facteur appliqué avec succès</strong>
++    </div>
++
++    <div class="card-body" style="color:#111">
++
++      {# Résumé facteur ancien → nouveau #}
++      <div class="mb-3 fs-5">
++        <span class="text-muted small">Facteur ancien :</span>
++        <strong>{{ facteur_ancien }}</strong>
++        &nbsp;→&nbsp;
++        <span class="text-muted small">Nouveau facteur :</span>
++        <span class="badge bg-primary fs-5">{{ facteur_applique }}</span>
++        <span class="text-muted small ms-1">Hz·L⁻¹·min⁻¹</span>
++      </div>
++
++      {# Détail des mesures #}
++      <table class="table table-sm mb-3" data-testid="calibration-mesures-result">
++        <thead class="table-light">
++          <tr>
++            <th>Date</th>
++            <th>Django (ml)</th>
++            <th>Verre (ml)</th>
++            <th>Écart</th>
++            <th>Facteur calculé</th>
++          </tr>
++        </thead>
++        <tbody>
++          {% for m in mesures %}
++          <tr>
++            <td>{{ m.session.started_at|date:"d/m H:i" }}</td>
++            <td>{{ m.session.volume_delta_ml|floatformat:0 }}</td>
++            <td>{{ m.session.volume_reel_ml|floatformat:0 }}</td>
++            <td>
++              <span class="badge
++                {% if m.ecart_pct > 0 %}bg-danger
++                {% elif m.ecart_pct < 0 %}bg-warning text-dark
++                {% else %}bg-success{% endif %}">
++                {% if m.ecart_pct > 0 %}+{% endif %}{{ m.ecart_pct }}%
++              </span>
++            </td>
++            <td><strong>{{ m.facteur_corrige }}</strong></td>
++          </tr>
++          {% endfor %}
++        </tbody>
++      </table>
++
++      {# Avertissement si une seule mesure #}
++      {% if mesures|length == 1 %}
++      <div class="alert alert-warning mb-3">
++        ⚠ Résultat basé sur 1 seule mesure.
++        Faites une nouvelle série avec 2 ou 3 versements pour plus de fiabilité.
++      </div>
++      {% endif %}
++
++      {# Note sur la mise à jour du Pi #}
++      <p class="text-muted small mb-3">
++        Le Pi récupèrera ce facteur automatiquement au retrait de la prochaine carte maintenance.
++      </p>
++
++      {# Actions #}
++      <div class="d-flex gap-2 flex-wrap">
++        <a href="{% url 'calibration_page' uuid=tireuse.uuid %}?depuis={{ maintenant }}"
++           class="btn btn-primary"
++           data-testid="btn-verifier-serie">
++          ↺ Vérifier avec une nouvelle série
++        </a>
++        <a href="{% url 'staff_admin:controlvanne_tireusebec_change' tireuse.uuid %}"
++           class="btn btn-outline-secondary">
++          ← Retour admin
++        </a>
++      </div>
++
++    </div>
++  </div>
++
++</div>
+diff --git a/controlvanne/templates/calibration/partial_sessions.html b/controlvanne/templates/calibration/partial_sessions.html
+new file mode 100644
+index 00000000..0fe1b6b8
+--- /dev/null
++++ b/controlvanne/templates/calibration/partial_sessions.html
+@@ -0,0 +1,108 @@
++{# Partial HTMX — formulaire de saisie des volumes de la série #}
++{# Chargé en innerHTML dans #sessions-poll (polling 8s) ou en innerHTML sur erreur. #}
++{# Les champs hx-preserve survivent aux refreshes de polling. #}
++{# Soumission réussie : hx-swap="outerHTML" sur #sessions-poll → arrêt du polling. #}
++{# / HTMX partial — series volume input form #}
++{# Loaded as innerHTML in #sessions-poll (polling 8s) or as innerHTML on error. #}
++{# hx-preserve fields survive polling refreshes. #}
++{# Successful submit: hx-swap="outerHTML" on #sessions-poll → stops polling. #}
++
++{% if erreur %}
++<div class="alert alert-danger mb-3" data-testid="calibration-erreur">{{ erreur }}</div>
++{% endif %}
++
++{% if sessions_en_attente %}
++
++<form hx-post="{% url 'calibration_serie' uuid=tireuse.uuid %}"
++      hx-target="#sessions-poll"
++      hx-swap="outerHTML"
++      data-testid="calibration-form-serie">
++
++  <input type="hidden" name="depuis" value="{{ depuis }}">
++
++  <div class="card mb-4 border-warning" data-testid="calibration-sessions">
++    <div class="card-header bg-warning text-dark d-flex align-items-center justify-content-between">
++      <strong id="sessions-count-label">
++        {{ sessions_en_attente|length }} versement(s) — saisissez les volumes lus sur le verre
++      </strong>
++      <span class="badge bg-dark">mise à jour auto</span>
++    </div>
++
++    <div class="card-body p-0">
++      <table class="table table-sm mb-0" style="color:#111">
++        <thead class="table-light">
++          <tr>
++            <th>Date</th>
++            <th>Mesuré par Django</th>
++            <th>Volume réel dans le verre (ml)</th>
++            <th></th>
++          </tr>
++        </thead>
++        <tbody id="sessions-tbody">
++          {% for session in sessions_en_attente %}
++          <tr id="row-{{ session.pk }}" data-testid="session-row-{{ session.pk }}">
++            <td class="align-middle">{{ session.started_at|date:"d/m H:i" }}</td>
++            <td class="align-middle"><strong>{{ session.volume_delta_ml|floatformat:0 }} ml</strong></td>
++            <td>
++              {# hx-preserve : HTMX conserve la valeur saisie lors du polling #}
++              {# L'id doit être unique et stable (basé sur la PK de session) #}
++              {# / hx-preserve: HTMX keeps the typed value during polling #}
++              {# The id must be unique and stable (based on session PK) #}
++              <div id="inp-{{ session.pk }}" hx-preserve>
++                <input type="number"
++                       name="vol_{{ session.pk }}"
++                       min="1" max="2000" step="1"
++                       placeholder="ex : 487"
++                       class="form-control form-control-sm"
++                       style="width:120px"
++                       data-testid="input-vol-{{ session.pk }}">
++              </div>
++            </td>
++            <td class="align-middle">
++              {# Bouton "Ignorer" — masque la ligne côté client et vide l'input #}
++              {# La ligne ignorée n'est pas soumise dans le formulaire (input vide = ignoré) #}
++              {# / "Ignore" button — hides the row client-side and clears the input #}
++              {# The ignored row is not submitted in the form (blank input = ignored) #}
++              <button type="button"
++                      class="btn btn-sm btn-outline-secondary"
++                      title="Ignorer ce versement"
++                      data-testid="btn-ignorer-{{ session.pk }}"
++                      onclick="ignorerLigne('{{ session.pk }}')">
++                ✕
++              </button>
++            </td>
++          </tr>
++          {% endfor %}
++        </tbody>
++      </table>
++    </div>
++
++    <div class="card-footer d-flex align-items-center gap-3 flex-wrap" style="background:#f8f9fa">
++      <button type="submit"
++              class="btn btn-success"
++              data-testid="btn-calculer-appliquer">
++        ✓ Calculer et appliquer le facteur
++      </button>
++      <span class="text-muted small">
++        Cliquez ✕ pour ignorer un versement.
++      </span>
++    </div>
++  </div>
++
++</form>
++
++{% else %}
++
++{# Aucun versement disponible — message selon l'état de la tireuse #}
++{# / No sessions available — message based on tap state #}
++<div class="alert alert-info" data-testid="calibration-no-sessions">
++  Aucun versement enregistré pour cette série.
++  {% if tireuse.enabled %}
++    Désactivez d'abord la tireuse, puis passez une carte maintenance.
++  {% else %}
++    Passez une carte maintenance pour verser du liquide dans un verre gradué.
++    La liste se met à jour automatiquement toutes les 8 secondes.
++  {% endif %}
++</div>
++
++{% endif %}
+diff --git a/controlvanne/templates/controlvanne/kiosk_detail.html b/controlvanne/templates/controlvanne/kiosk_detail.html
+index 4819733d..3decda66 100644
+--- a/controlvanne/templates/controlvanne/kiosk_detail.html
++++ b/controlvanne/templates/controlvanne/kiosk_detail.html
+@@ -103,7 +103,7 @@
+ {% endblock %}
+ 
+ {% block scripts %}
+-<script src="{% static 'controlvanne/js/panel_kiosk.js' %}"></script>
++<script src="{% static 'controlvanne/js/panel_kiosk.js' %}?v=3"></script>
+ {% if demo_tags %}
+   <script src="{% static 'controlvanne/js/simu_pi.js' %}"></script>
+ {% endif %}
+diff --git a/controlvanne/templates/controlvanne/kiosk_list.html b/controlvanne/templates/controlvanne/kiosk_list.html
+index e7373b97..3fc6c452 100644
+--- a/controlvanne/templates/controlvanne/kiosk_list.html
++++ b/controlvanne/templates/controlvanne/kiosk_list.html
+@@ -24,5 +24,5 @@
+ {% endblock %}
+ 
+ {% block scripts %}
+-<script src="{% static 'controlvanne/js/panel_kiosk.js' %}"></script>
++<script src="{% static 'controlvanne/js/panel_kiosk.js' %}?v=3"></script>
+ {% endblock %}
+diff --git a/controlvanne/urls.py b/controlvanne/urls.py
+index ce2e19af..2c14d938 100644
+--- a/controlvanne/urls.py
++++ b/controlvanne/urls.py
+@@ -1,5 +1,5 @@
+ """
+-URLs du module tireuse connectée (controlvanne).
++URLs du module tireuse connectee (controlvanne).
+ / URLs for the connected tap module (controlvanne).
+ 
+ LOCALISATION : controlvanne/urls.py
+@@ -10,40 +10,45 @@ Routes API (Raspberry Pi) :
+ - /controlvanne/api/tireuse/event/      → TireuseViewSet.event
+ 
+ Route auth kiosk :
+-- /controlvanne/auth-kiosk/             → AuthKioskView (POST token → session cookie)
++- /controlvanne/auth-kiosk/             → AuthKioskView
+ 
+-Routes kiosk (écrans Pi) :
+-- /controlvanne/kiosk/                  → KioskViewSet.list (toutes les tireuses)
+-- /controlvanne/kiosk/<uuid>/           → KioskViewSet.retrieve (une seule tireuse)
++Routes kiosk (ecrans Pi) :
++- /controlvanne/kiosk/                  → KioskViewSet.list
++- /controlvanne/kiosk/<uuid>/           → KioskViewSet.retrieve
++
++Routes calibration (admin staff) :
++- /controlvanne/calibration/<uuid>/              → calibration_page
++- /controlvanne/calibration/<uuid>/sessions/     → calibration_sessions_partial (polling HTMX)
++- /controlvanne/calibration/<uuid>/serie/        → calibration_serie (POST : soumettre toute la serie)
+ """
+ 
+ from django.urls import path, include
+ from rest_framework import routers
+ 
+-from controlvanne.viewsets import TireuseViewSet, AuthKioskView, KioskViewSet
++from controlvanne.viewsets import TireuseViewSet, AuthKioskView, KioskViewSet, KioskTokenView
++from controlvanne.calibration_views import (
++    calibration_page,
++    calibration_sessions_partial,
++    calibration_serie,
++)
+ 
+ router = routers.DefaultRouter()
+ router.register(r"api/tireuse", TireuseViewSet, basename="controlvanne-tireuse")
+ 
+ urlpatterns = [
+-    # Auth kiosk : POST token API → cookie session Django
+-    # / Auth kiosk: POST API token → Django session cookie
++    # Auth kiosk
+     path("auth-kiosk/", AuthKioskView.as_view(), name="controlvanne-auth-kiosk"),
+-    # Kiosk : grille de toutes les tireuses actives
+-    # / Kiosk: grid of all active taps
+-    path(
+-        "kiosk/",
+-        KioskViewSet.as_view({"get": "list"}),
+-        name="controlvanne-kiosk-list",
+-    ),
+-    # Kiosk : écran dédié à une seule tireuse
+-    # / Kiosk: screen dedicated to a single tap
+-    path(
+-        "kiosk/<uuid:pk>/",
+-        KioskViewSet.as_view({"get": "retrieve"}),
+-        name="controlvanne-kiosk-detail",
+-    ),
++    path("kiosk-token/<str:token>/", KioskTokenView.as_view(), name="controlvanne-kiosk-token"),
++
++    # Kiosk
++    path("kiosk/", KioskViewSet.as_view({"get": "list"}), name="controlvanne-kiosk-list"),
++    path("kiosk/<uuid:pk>/", KioskViewSet.as_view({"get": "retrieve"}), name="controlvanne-kiosk-detail"),
++
++    # Calibration debitmetre (staff uniquement)
++    path("calibration/<uuid:uuid>/", calibration_page, name="calibration_page"),
++    path("calibration/<uuid:uuid>/sessions/", calibration_sessions_partial, name="calibration_sessions_partial"),
++    path("calibration/<uuid:uuid>/serie/", calibration_serie, name="calibration_serie"),
++
+     # ViewSet DRF : ping, authorize, event
+-    # / DRF ViewSet: ping, authorize, event
+     path("", include(router.urls)),
+ ]
+diff --git a/controlvanne/viewsets.py b/controlvanne/viewsets.py
+index 95f4ac59..bfe4fd8a 100644
+--- a/controlvanne/viewsets.py
++++ b/controlvanne/viewsets.py
+@@ -209,9 +209,6 @@ class TireuseViewSet(viewsets.ViewSet):
+                 status=status.HTTP_404_NOT_FOUND,
+             )
+ 
+-        if not tireuse.enabled:
+-            return Response({"authorized": False, "message": "Tap is disabled."})
+-
+         # Chercher la carte NFC / Find the NFC card
+         from QrcodeCashless.models import CarteCashless
+ 
+@@ -220,6 +217,12 @@ class TireuseViewSet(viewsets.ViewSet):
+             return Response({"authorized": False, "message": "Unknown card."})
+ 
+         # Vérifier si c'est une carte de maintenance / Check if it's a maintenance card
++        # On identifie le type de carte AVANT d'appliquer les regles d'acces :
++        # la carte maintenance doit pouvoir fonctionner quand la tireuse est hors service,
++        # tandis que les cartes normales sont bloquees.
++        # / Identify the card type BEFORE applying access rules:
++        # maintenance cards must work when the tap is out of service,
++        # while normal cards are blocked.
+         carte_maintenance = None
+         is_maintenance = False
+         try:
+@@ -228,8 +231,24 @@ class TireuseViewSet(viewsets.ViewSet):
+         except CarteMaintenance.DoesNotExist:
+             pass
+ 
+-        # --- Maintenance : pas de facturation ---
+-        # / Maintenance: no billing
++        # Carte normale + tireuse hors service → refus
++        # / Normal card + tap out of service → refuse
++        if not tireuse.enabled and not is_maintenance:
++            return Response({"authorized": False, "message": "Tap is disabled."})
++
++        # --- Maintenance : uniquement si la tireuse est hors service (enabled=False) ---
++        # Une carte maintenance ne peut rincer que quand la tireuse est déclarée
++        # hors service dans l'admin — sinon elle serait utilisable comme carte gratuite.
++        # / Maintenance: only allowed when the tap is out of service (enabled=False).
++        # A maintenance card must not work during normal service — it would bypass billing.
++        if is_maintenance and tireuse.enabled:
++            return Response(
++                {
++                    "authorized": False,
++                    "message": "Maintenance card refused: tap is in service.",
++                }
++            )
++
+         if is_maintenance:
+             session = RfidSession.objects.create(
+                 uid=uid,
+@@ -274,12 +293,22 @@ class TireuseViewSet(viewsets.ViewSet):
+         # / Normal service: check wallet balance
+         from controlvanne.billing import (
+             obtenir_contexte_cashless,
++            calculer_solde_total_cascade,
+             calculer_volume_autorise_ml,
+         )
+-        from fedow_core.services import WalletService
+ 
+         contexte = obtenir_contexte_cashless(carte)
+         if not contexte:
++            _push_ws_kiosk(
++                tireuse,
++                {
++                    **_construire_payload_session(tireuse, None),
++                    "authorized": False,
++                    "present": True,
++                    "uid": uid,
++                    "message": "Cashless non configuré pour ce lieu.",
++                },
++            )
+             return Response(
+                 {
+                     "authorized": False,
+@@ -287,12 +316,24 @@ class TireuseViewSet(viewsets.ViewSet):
+                 }
+             )
+ 
+-        solde_centimes = WalletService.obtenir_solde(
+-            contexte["wallet_client"], contexte["asset_tlf"]
++        # Solde total cascade TNF → TLF → FED (identique à LaBoutik)
++        # / Total cascade balance TNF → TLF → FED (same as LaBoutik)
++        solde_centimes = calculer_solde_total_cascade(
++            contexte["wallet_client"], contexte["cascade_assets"]
+         )
+ 
+         prix_litre = tireuse.prix_litre
+         if prix_litre <= 0:
++            _push_ws_kiosk(
++                tireuse,
++                {
++                    **_construire_payload_session(tireuse, None),
++                    "authorized": False,
++                    "present": True,
++                    "uid": uid,
++                    "message": "Prix non configuré pour ce fût.",
++                },
++            )
+             return Response(
+                 {
+                     "authorized": False,
+@@ -304,11 +345,40 @@ class TireuseViewSet(viewsets.ViewSet):
+         # / Available volume in reservoir
+         reservoir_disponible = float(tireuse.reservoir_ml)
+ 
++        if reservoir_disponible <= 0:
++            _push_ws_kiosk(
++                tireuse,
++                {
++                    **_construire_payload_session(tireuse, None),
++                    "authorized": False,
++                    "present": True,
++                    "uid": uid,
++                    "message": "Fût vide.",
++                },
++            )
++            return Response(
++                {
++                    "authorized": False,
++                    "message": "Empty keg.",
++                }
++            )
++
+         allowed_ml = calculer_volume_autorise_ml(
+             solde_centimes, prix_litre, reservoir_disponible
+         )
+ 
+         if allowed_ml <= 0:
++            _push_ws_kiosk(
++                tireuse,
++                {
++                    **_construire_payload_session(tireuse, None),
++                    "authorized": False,
++                    "present": True,
++                    "uid": uid,
++                    "message": "Solde insuffisant.",
++                    "balance": f"{solde_centimes / 100:.2f}",
++                },
++            )
+             return Response(
+                 {
+                     "authorized": False,
+@@ -404,6 +474,25 @@ class TireuseViewSet(viewsets.ViewSet):
+             .first()
+         )
+         if not session:
++            # card_removed sans session = carte refusée retirée OU session déjà fermée
++            # par pour_end (cas maintenance : le Pi envoie pour_end puis card_removed).
++            # / card_removed without session = refused card removed OR session already
++            # closed by pour_end (maintenance case: Pi sends pour_end then card_removed).
++            if event_type == "card_removed":
++                reset_payload = _construire_payload_session(tireuse, None)
++                # Si la tireuse est hors service, le kiosk doit rester en mode maintenance
++                # et non revenir à l'état "En attente" standard.
++                # / If the tap is out of service, the kiosk must stay in maintenance mode
++                # rather than returning to the standard "Waiting" state.
++                if not tireuse.enabled:
++                    reset_payload["maintenance"] = True
++                    reset_payload["message"] = "En Maintenance"
++                logger.info(
++                    f"WS_PUSH card_removed sans session (reset kiosk): uid={uid} "
++                    f"maintenance={not tireuse.enabled}"
++                )
++                _push_ws_kiosk(tireuse, reset_payload)
++                return Response({"status": "ok", "message": "No session — kiosk reset."})
+             return Response(
+                 {"status": "error", "message": "No open session for this card."},
+                 status=status.HTTP_404_NOT_FOUND,
+@@ -434,7 +523,7 @@ class TireuseViewSet(viewsets.ViewSet):
+             session.close_with_volume(float(volume_ml))
+ 
+             # Décrémenter le réservoir / Decrement reservoir
+-            if volume_ml > 0:
++            if volume_ml > 0 and not session.is_maintenance:
+                 tireuse.reservoir_ml = max(
+                     Decimal("0"),
+                     tireuse.reservoir_ml - Decimal(str(float(volume_ml))),
+@@ -490,27 +579,45 @@ class TireuseViewSet(viewsets.ViewSet):
+                 ),
+             )
+         elif event_type == "pour_update":
++            # Estimer le solde restant : solde_cascade_total - coût_du_volume_déjà_servi
++            # Le débit réel se fait au pour_end — ici on affiche une estimation visuelle.
++            # / Estimate remaining balance: total_cascade_balance - cost_of_volume_served
++            # The actual debit happens at pour_end — here we show a visual estimate.
++            balance_estimee = None
++            if not session.is_maintenance and tireuse.prix_litre > 0:
++                from controlvanne.billing import (
++                    obtenir_contexte_cashless as _ctx,
++                    calculer_solde_total_cascade,
++                )
++                ctx = _ctx(session.carte)
++                if ctx:
++                    solde_db = calculer_solde_total_cascade(
++                        ctx["wallet_client"], ctx["cascade_assets"]
++                    )
++                    cout_volume = Decimal(str(volume_ml)) / 1000 * tireuse.prix_litre * 100
++                    solde_estime = max(Decimal("0"), Decimal(str(solde_db)) - cout_volume)
++                    balance_estimee = f"{float(solde_estime) / 100:.2f}"
++            extras_update = {"vanne_ouverte": True, "message": "Tirage en cours"}
++            if balance_estimee is not None:
++                extras_update["balance"] = balance_estimee
+             _push_ws_kiosk(
+                 tireuse,
+-                _construire_payload_session(
+-                    tireuse,
+-                    session,
+-                    vanne_ouverte=True,
+-                    message="Tirage en cours",
+-                ),
++                _construire_payload_session(tireuse, session, **extras_update),
+             )
+         elif event_type in ("pour_end", "card_removed"):
+             # Calculer le solde restant apres facturation (si disponible)
+             # / Compute remaining balance after billing (if available)
+             solde_apres = None
+             if resultat_facturation:
+-                from fedow_core.services import WalletService
+-                from controlvanne.billing import obtenir_contexte_cashless as _ctx
++                from controlvanne.billing import (
++                    obtenir_contexte_cashless as _ctx,
++                    calculer_solde_total_cascade,
++                )
+ 
+                 ctx = _ctx(session.carte)
+                 if ctx:
+-                    solde_apres = WalletService.obtenir_solde(
+-                        ctx["wallet_client"], ctx["asset_tlf"]
++                    solde_apres = calculer_solde_total_cascade(
++                        ctx["wallet_client"], ctx["cascade_assets"]
+                     )
+ 
+             extras_fin = {
+@@ -520,10 +627,16 @@ class TireuseViewSet(viewsets.ViewSet):
+             if solde_apres is not None:
+                 extras_fin["balance"] = f"{solde_apres / 100:.2f}"
+ 
+-            _push_ws_kiosk(
+-                tireuse,
+-                _construire_payload_session(tireuse, session, **extras_fin),
++            payload_fin = _construire_payload_session(tireuse, session, **extras_fin)
++            logger.info(
++                f"WS_PUSH pour_end/card_removed: event={event_type} "
++                f"present={payload_fin.get('present')} "
++                f"session_done={payload_fin.get('session_done')} "
++                f"ended_at={session.ended_at} "
++                f"volume_ml={payload_fin.get('volume_ml')} "
++                f"uid={uid}"
+             )
++            _push_ws_kiosk(tireuse, payload_fin)
+ 
+         response_data = {
+             "status": "ok",
+@@ -579,15 +692,110 @@ class AuthKioskView(APIView):
+         request.session["controlvanne_authenticated"] = True
+         request.session.save()
+ 
++        # Générer un token à usage unique pour l'auth kiosk sans injection de cookie
++        # Le Pi lance Chromium sur l'URL /controlvanne/kiosk-token/<token>/
++        # Django valide le token, pose le cookie de session via HTTP, redirige vers le kiosk
++        # / Generate a one-time token for kiosk auth without cookie injection
++        # The Pi opens Chromium on /controlvanne/kiosk-token/<token>/
++        # Django validates the token, sets session cookie via HTTP, redirects to kiosk
++        import uuid as uuid_module
++        from django.core.cache import cache
++
++        kiosk_token = str(uuid_module.uuid4())
++        # Stocker le token dans le cache comme autorisation valide (TTL 5 minutes)
++        # La valeur True indique simplement que le token est valide.
++        # Chromium navigue vers /kiosk-token/<token>/ → Django valide, marque la session, redirige.
++        # / Store the token in cache as a valid authorization (TTL 5 minutes)
++        # The True value simply indicates the token is valid.
++        # Chromium navigates to /kiosk-token/<token>/ → Django validates, marks session, redirects.
++        cache.set(f"kiosk_token:{kiosk_token}", True, timeout=300)
++
+         return Response(
+             {
+                 "status": "ok",
+                 "message": "Session created. Use the sessionid cookie for kiosk.",
+                 "session_key": request.session.session_key,
++                "kiosk_token": kiosk_token,
+             }
+         )
+ 
+ 
++# ──────────────────────────────────────────────────────────────────────
++# KioskTokenView — échange token à usage unique → cookie session HTTP
++# / KioskTokenView — exchange one-time token → HTTP session cookie
++# ──────────────────────────────────────────────────────────────────────
++
++
++class KioskTokenView(APIView):
++    """
++    GET /controlvanne/kiosk-token/<token>/?next=<kiosk_url>
++    Échange un token à usage unique contre un cookie de session Django.
++    Django pose le cookie via Set-Cookie dans la réponse HTTP → Chromium le stocke nativement.
++    Redirige ensuite vers l'URL kiosk réelle.
++    / Exchanges a one-time token for a Django session cookie.
++    Django sets the cookie via Set-Cookie in the HTTP response → Chromium stores it natively.
++    Then redirects to the actual kiosk URL.
++
++    LOCALISATION : controlvanne/viewsets.py
++
++    Pas de permission DRF — le token est la preuve d'authenticité.
++    / No DRF permission — the token is the proof of authenticity.
++    """
++
++    permission_classes = []
++    authentication_classes = []
++
++    def get(self, request, token):
++        from django.core.cache import cache
++        from django.http import HttpResponseRedirect, HttpResponseForbidden
++
++        # Valider et consommer le token (usage unique)
++        # / Validate and consume the token (one-time use)
++        cache_key = f"kiosk_token:{token}"
++        token_valide = cache.get(cache_key)
++
++        if not token_valide:
++            return HttpResponseForbidden("Token invalide ou expiré. / Invalid or expired token.")
++
++        # Consommer le token immédiatement (usage unique)
++        # / Consume the token immediately (one-time use)
++        cache.delete(cache_key)
++
++        # Marquer la session de CE navigateur (Chromium) comme authentifiée pour le kiosk
++        # Django's SessionMiddleware enverra Set-Cookie: sessionid=... dans la réponse HTTP
++        # Chromium stocke ce cookie nativement — plus besoin d'injection SQLite
++        # / Mark THIS browser's (Chromium's) session as authenticated for kiosk
++        # Django's SessionMiddleware will send Set-Cookie: sessionid=... in the HTTP response
++        # Chromium stores this cookie natively — no more SQLite injection needed
++        request.session["controlvanne_authenticated"] = True
++        request.session.save()
++
++        # Retourner une page HTML avec meta-refresh plutôt qu'un 302
++        # Avec un 302, certaines versions de Chromium ne transmettent pas le Set-Cookie
++        # dans la requête suivante. Avec un 200 + meta-refresh, le cookie est d'abord
++        # stocké, puis la navigation vers next_url l'envoie correctement.
++        # / Return an HTML page with meta-refresh instead of a 302
++        # With a 302, some Chromium versions don't transmit the Set-Cookie
++        # in the next request. With 200 + meta-refresh, the cookie is stored first,
++        # then the navigation to next_url sends it correctly.
++        from django.http import HttpResponse
++
++        next_url = request.GET.get("next", "/controlvanne/kiosk/")
++        html = f"""<!DOCTYPE html>
++<html>
++<head>
++  <meta charset="utf-8">
++  <meta http-equiv="refresh" content="0; url={next_url}">
++  <title>Authentification kiosk…</title>
++</head>
++<body>
++  <script>window.location.replace('{next_url}');</script>
++  <p>Redirection en cours… <a href="{next_url}">Cliquez ici si la page ne se charge pas.</a></p>
++</body>
++</html>"""
++        return HttpResponse(html, content_type="text/html")
++
++
+ # ──────────────────────────────────────────────────────────────────────
+ # KioskViewSet — pages kiosk temps réel pour les écrans Pi
+ # / KioskViewSet — real-time kiosk pages for Pi screens
+@@ -597,9 +805,15 @@ class AuthKioskView(APIView):
+ def _verifier_authentification_kiosk(request):
+     """
+     Vérifie que l'utilisateur est authentifié pour le kiosk.
+-    Deux moyens d'accès : session kiosk (POST /auth-kiosk/) ou admin tenant.
++    Trois moyens d'accès :
++      1. session kiosk (cookie sessionid déjà posé)
++      2. token à usage unique dans ?kiosk_token=<token> (premier lancement Pi)
++      3. admin du tenant connecté
+     / Checks that the user is authenticated for the kiosk.
+-    Two access methods: kiosk session (POST /auth-kiosk/) or tenant admin.
++    Three access methods:
++      1. kiosk session (sessionid cookie already set)
++      2. one-time token in ?kiosk_token=<token> (first Pi launch)
++      3. logged-in tenant admin
+ 
+     LOCALISATION : controlvanne/viewsets.py
+ 
+@@ -608,14 +822,33 @@ def _verifier_authentification_kiosk(request):
+     """
+     from django.db import connection
+ 
+-    # Moyen 1 : session kiosk (créée par POST /controlvanne/auth-kiosk/)
+-    # / Method 1: kiosk session (created by POST /controlvanne/auth-kiosk/)
++    # Moyen 1 : session kiosk (cookie sessionid déjà présent dans le navigateur)
++    # / Method 1: kiosk session (sessionid cookie already present in browser)
+     est_kiosk = request.session.get("controlvanne_authenticated")
+     if est_kiosk:
+         return True
+ 
+-    # Moyen 2 : admin du tenant connecté
+-    # / Method 2: logged-in tenant admin
++    # Moyen 2 : token à usage unique dans le query string (premier lancement Chromium)
++    # Le Pi construit l'URL kiosk avec ?kiosk_token=<uuid> — Django valide, consomme le token,
++    # marque la session. Django's SessionMiddleware pose Set-Cookie dans la réponse kiosk.
++    # Les rechargements suivants de Chromium utilisent le cookie sessionid.
++    # / Method 2: one-time token in query string (first Chromium launch)
++    # Pi builds kiosk URL with ?kiosk_token=<uuid> — Django validates, consumes token,
++    # marks session. Django's SessionMiddleware sets Set-Cookie in the kiosk response.
++    # Subsequent Chromium reloads use the sessionid cookie.
++    kiosk_token = request.GET.get("kiosk_token")
++    if kiosk_token:
++        from django.core.cache import cache
++        cache_key = f"kiosk_token:{kiosk_token}"
++        token_valide = cache.get(cache_key)
++        if token_valide:
++            cache.delete(cache_key)
++            request.session["controlvanne_authenticated"] = True
++            request.session.save()
++            return True
++
++    # Moyen 3 : admin du tenant connecté
++    # / Method 3: logged-in tenant admin
+     utilisateur = request.user
+     if utilisateur and utilisateur.is_authenticated:
+         est_admin = utilisateur.is_tenant_admin(connection.tenant)
