@@ -8547,22 +8547,26 @@ class LaBoutikAuthBridgeView(APIView):
     sensitive (just a code-debt flag).
 
     COMMUNICATION :
-    Reçoit : Header Authorization: Api-Key <key>
-    Émet : 204 No Content + Set-Cookie: sessionid=<key>
+    Reçoit : POST form-data avec champ 'api_key'=<key>
+    Émet : 302 HttpResponseRedirect vers /laboutik/caisse/ + Set-Cookie: sessionid=<key>
     Erreurs : 401 si clé absente/invalide/révoquée, 400 si clé V1, 429 si throttle
     """
     permission_classes = [AllowAny]
     throttle_classes = [BridgeThrottle]
 
     def post(self, request):
-        # Extraction de la clé depuis post
+        # Extraction de la clé depuis le POST form-data
+        # / Extract key from POST form-data
         api_key_string = request.POST.get('api_key', '').strip()
 
         if not api_key_string:
+            # Log : tentative d'accès sans api_key dans le POST
+            # / Log: access attempt without api_key in POST body
             logger.warning(
-            "laboutik bridge: missing api_key in header or POST body from %s",
-            request.META.get('REMOTE_ADDR'),
-        )
+                "laboutik bridge: missing api_key in POST body from %s",
+                request.META.get('REMOTE_ADDR'),
+            )
+            return HttpResponse(status=401)
 
         # Validation de la clé
         # / Key validation
