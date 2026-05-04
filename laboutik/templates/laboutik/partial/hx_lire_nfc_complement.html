@@ -22,7 +22,7 @@ FLUX :
 -->
 
 <div id="confirm" data-testid="lire-nfc-complement">
-	<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}">
+	<c-read-nfc selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-payer_complementaire' %}">
 		<h1>{% translate "Attente lecture 2ème carte" %}</h1>
 		<p style="opacity: 0.7; font-size: 1rem;">{% translate "Posez la 2ème carte du client sur le lecteur" %}</p>
 	</c-read-nfc>

@@ -18,7 +18,7 @@ FLUX :
   <h1>{% translate "Confirmez le paiement par" %} {{ payment_translation }}</h1>
   {% if method == 'espece' %}
   <!-- total a encaisser, bien visible pour le caissier / total to collect, clearly visible -->
-  <div class="confirm-total" style="font-size: 2.5rem; font-weight: bold; font-variant-numeric: tabular-nums;">
+  <div class="confirm-total">
     {% translate "A encaisser" %} : {{ total|floatformat:2 }} {{ currency_data.symbol }}
   </div>
   <div class="info-sum-given">

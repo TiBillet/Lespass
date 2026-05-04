@@ -73,7 +73,7 @@ FLUX :
   {% endif %}
 
   {# --- Texte explicatif --- #}
-  <p class="choose-id-stagger" style="--ordre: 1; opacity: 0.8; font-size: 1rem; margin: 0 0 0.5rem;">
+  <p class="choose-id-stagger choose-id-help" style="--ordre: 1">
     {% if panier_a_recharges %}{% translate "Carte NFC du client requise pour la recharge" %}{% endif %}
     {% if panier_a_recharges and panier_a_adhesions %}<br/>{% endif %}
     {% if panier_a_adhesions %}{% translate "Identification requise pour l'adhesion" %}{% endif %}
@@ -165,7 +165,7 @@ FLUX :
   {% endif %}{# fin deposit / panier_necessite_client / normal #}
 
   {% if moyens_paiement|length == 0 %}
-  <h3 style="color: var(--warning);">{% translate "Aucun moyen de paiement" %}</h3>
+  <h3 class="no-payment-warning">{% translate "Aucun moyen de paiement" %}</h3>
   {% endif %}
 
   <c-bt.return />

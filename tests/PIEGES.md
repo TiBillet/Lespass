@@ -1384,6 +1384,52 @@ Rencontre sur : accordeon des cards lieu et monnaies de `/explorer/`, session 20
 
 ---
 
+### Piege 76 : commentaires Django `{# ... #}` multi-ligne — DOM fantome avec id parasites
+
+**Symptome** : un `<div id="confirm">` (ou autre id strategique) apparait dans le DOM
+sans qu'aucun template ne l'ait declare. Les fonctions `document.querySelector('#confirm')`
+ciblent le mauvais element. Bug HTMX `targetError` ou des appels comme
+`hideAndEmptyElement('#confirm')` ne nettoient pas l'element visible attendu.
+
+**Cause** : Django ne supporte les commentaires `{# ... #}` **que sur une seule ligne**.
+Un commentaire `{# ... #}` qui s'etend sur plusieurs lignes n'est PAS interprete comme
+un commentaire — son contenu est **rendu litteralement** dans le HTML final. Si le
+commentaire mentionne du HTML (par exemple `<div id="confirm">` pour expliquer pourquoi
+on cible cet id), le navigateur interprete ce texte comme un VRAI element et l'ajoute
+au DOM. Resultat : un id parasite, doublon non visible mais qui casse les selecteurs JS.
+
+```django
+{# ❌ MULTI-LIGNE INVALIDE — rendu en texte brut, le <div id=confirm> devient un vrai element DOM
+   Cibler #messages car le retour n'a pas de <div id="confirm"> en racine,
+   un swap outerHTML sur #confirm ferait disparaitre l'overlay. #}
+
+{# ✅ Single-line OK — Django interprete bien comme commentaire #}
+
+{% comment %}
+✅ Multi-ligne OK — c'est la SEULE syntaxe valide pour un commentaire multi-ligne.
+On peut meme citer du HTML comme <div id="confirm"> sans risque, car le contenu est
+completement supprime du HTML final.
+{% endcomment %}
+```
+
+**Symptomes observes** (session 36, 2026-04-28) :
+- 2 a 4 `<div id="confirm">` dans le DOM apres quelques cycles HTMX
+- `hideAndEmptyElement('#confirm')` ne cachait QUE le doublon parasite (vide), laissant
+  l'overlay reel visible et bloquant l'affichage de `#messages`
+- Tres difficile a diagnostiquer car le commentaire s'affiche parfois litteralement
+  en haut de l'ecran (texte brut visible) — signal qu'il est rendu, pas commente
+
+**Regle** : pour TOUT commentaire Django de plus d'une ligne, utiliser
+`{% comment %}{% endcomment %}`. Le `{# ... #}` est reserve aux notes inline une ligne.
+
+**Bonus** : meme dans un `{% comment %}{% endcomment %}`, eviter de citer des `<div id="...">`
+litteraux. Reformuler en prose ("div id confirm" sans angles) pour eviter qu'un parser
+mal aligne ne ressuscite le bug. Defense en profondeur.
+
+Rencontre sur : `hx_complement_paiement.html`, session 36 (refonte UI ecrans paiement POS, 2026-04-28).
+
+---
+
 ### Pieges chantier Cartes NFC admin (sessions 2026-04-13/14)
 
 #### `tag_id_cm` est le nom canonique du tag caissier au POS, pas `tag_id_primary`

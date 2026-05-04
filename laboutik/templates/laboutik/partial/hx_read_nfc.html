@@ -1,7 +1,7 @@
 {% load static %}
 {% load static i18n %}
 <div id="confirm">
-	<c-read-nfc id="confirm" selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-payer' %}">
+	<c-read-nfc selector="#confirm" event-manage-form="additionManageForm" submit-url="{% url 'laboutik-paiement-payer' %}">
 		<h1>{% translate "Attente lecture carte" %}</h1>
 
 	</c-read-nfc>

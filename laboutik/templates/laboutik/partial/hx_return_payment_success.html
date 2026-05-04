@@ -34,22 +34,20 @@ FLUX :
 
   <!-- complement pour fonds insuffisants / complement for insufficient funds -->
   {% if original_payment %}
-  <div class="payment-detail test-return-total-achats" style="font-variant-numeric: tabular-nums;">
+  <div class="payment-detail test-return-total-achats">
     {% translate "Total" %} ({{ original_moyen_paiement }}/{{ moyen_paiement }}) : {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
   </div>
   {% else %}
-  <div class="payment-detail test-return-total-achats" style="font-variant-numeric: tabular-nums;">
+  <div class="payment-detail test-return-total-achats">
     {% translate "Payé en" %} {{ moyen_paiement }} : {{ payment.total|divide_by:100 }} {{ currency_data.symbol }}
   </div>
   {% endif %}
 
   <!-- Soldes multi-asset apres paiement NFC / Multi-asset balances after NFC payment -->
   {% if soldes_apres_paiement %}
-  <div class="mt-3" data-testid="soldes-multi-asset" aria-live="polite"
-       style="margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;">
+  <div class="cascade-badges-list" data-testid="soldes-multi-asset" aria-live="polite">
     {% for solde in soldes_apres_paiement %}
-    <span class="badge" style="background-color: var(--gris02); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;"
-          data-testid="solde-asset-{{ forloop.counter }}">
+    <span class="cascade-badge" data-testid="solde-asset-{{ forloop.counter }}">
       {{ solde.name }} : {{ solde.solde_euros }}€
     </span>
     {% endfor %}
@@ -64,7 +62,7 @@ FLUX :
 
   <!-- monnaie a rendre / change to give back -->
   {% if payment.give_back > 0 %}
-  <div class="payment-msg-discret" style="font-variant-numeric: tabular-nums;">
+  <div class="payment-msg-discret">
     {% translate "Somme donnée" %} : {{ payment.given_sum|divide_by:100 }} {{ currency_data.symbol }}
   </div>
   <div class="give-back-box" data-testid="paiement-monnaie-a-rendre">
@@ -77,7 +75,7 @@ FLUX :
 
   <!-- Bouton imprimer le ticket de vente / Print receipt button -->
   {% if uuid_transaction and uuid_pv %}
-  <div class="bt-basic-container" style="background-color: #2563EB; margin-top: 1rem;"
+  <div class="bt-basic-container bt-imprimer-ticket"
        data-testid="btn-imprimer-ticket"
        hx-post="{% url 'laboutik-paiement-imprimer_ticket' %}"
        hx-vals='{"uuid_transaction": "{{ uuid_transaction }}", "uuid_pv": "{{ uuid_pv }}"}'
