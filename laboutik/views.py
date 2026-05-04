@@ -8527,7 +8527,8 @@ class LaBoutikAuthBridgeView(APIView):
     Flux :
     1. Client POST un formulaire avec : api_key
     2. Validation de la clé (401 si invalide)
-    3. Si la clé n'a pas de user lié (legacy V1) : 400
+    3. Si la clé n'a pas de user lié (legacy
+     V1) : 400
     4. Si user.is_active=False (révoqué) : 401
     5. django.contrib.auth.login() pose le cookie sessionid
     6. set_expiry(12h) — session courte par hygiène
