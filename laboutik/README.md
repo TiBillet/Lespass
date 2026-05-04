@@ -357,6 +357,415 @@ laboutik/
 
 ---
 
+## Authentification des terminaux (hardware auth)
+
+LaBoutik tourne sur du hardware (PC de caisse, tablette Android, Raspberry Pi kiosque). Chaque terminal doit prouver son identite au serveur Lespass pour acceder a l'API de caisse.
+
+L'authentification se fait en **deux etapes** :
+
+1. **Appairage initial** (une seule fois par appareil) : un code PIN a 6 chiffres echange contre une cle API permanente.
+2. **Login runtime** (a chaque lancement) : la cle API est echangee contre un cookie de session Django valable 12h.
+
+Les requetes metier suivantes (POS, paiement, commandes) passent uniquement par le cookie de session. La cle API ne circule qu'au moment du login, jamais sur les appels courants.
+
+### Modele conceptuel
+
+```
+┌──────────────────┐                              ┌────────────────────────┐
+│  Admin Lespass   │  1. Cree PairingDevice       │   Base PostgreSQL      │
+│  (navigateur)    ├─────────────────────────────▶│                        │
+│                  │     (role=LB, PIN=586573)    │   PairingDevice        │
+└──────────────────┘                              │                        │
+                                                  └────────────────────────┘
+                                                          ▲
+┌──────────────────┐                                      │
+│  Terminal        │  2. POST /api/discovery/claim/       │
+│  (Pi, Android,   ├──────────────────────────────────────┤
+│   PC, etc.)      │     {"pin_code": 586573}             │
+│                  │                                       │
+│                  │  3. Reponse :                         │
+│                  │◀──────────────────────────────────────┤
+│                  │     {server_url, api_key, ...}        │
+│                  │                                       │
+│                  │  4. Stocke api_key localement         │
+│                  │     (.env / localStorage / fichier)   │
+│                  │                                       │
+│                  │  5. POST /laboutik/auth/bridge/       │
+│                  │     Header: Authorization: Api-Key x  │
+│                  ├──────────────────────────────────────▶│
+│                  │                                       │
+│                  │  6. Reponse 204 + Set-Cookie sessionid│
+│                  │◀──────────────────────────────────────┤
+│                  │                                       │
+│                  │  7. Toutes les requetes suivantes     │
+│                  │     via cookie (pas de header)        │
+│                  ├──────────────────────────────────────▶│
+└──────────────────┘                              ┌────────────────────────┐
+                                                  │  /laboutik/caisse/     │
+                                                  │  /laboutik/paiement/   │
+                                                  │  /laboutik/commande/   │
+                                                  └────────────────────────┘
+```
+
+### Flow complet cote serveur
+
+| Etape | Endpoint | Entree | Sortie |
+|-------|----------|--------|--------|
+| 1. Appairage | `POST /api/discovery/claim/` | `{"pin_code": 586573}` (body JSON) | `{server_url, api_key, device_name}` |
+| 2. Login | `POST /laboutik/auth/bridge/` | `Authorization: Api-Key <key>` (header) | `204 No Content` + `Set-Cookie: sessionid=...` |
+| 3. API metier | `GET /laboutik/caisse/` etc. | `Cookie: sessionid=...` (auto) | HTML/JSON de la caisse |
+
+Cote base de donnees, l'appairage cree automatiquement :
+
+- Un **`TermUser`** (`TibilletUser` proxy, `espece=TE`, `terminal_role=LB/TI/KI`) avec un email synthetique `<pairing_uuid>@terminals.local`
+- Une **`LaBoutikAPIKey`** liee au TermUser via `OneToOneField`
+
+La cle API est hashee en base (SHA256). Seule la version non-hashee retournee au moment du claim peut etre utilisee — impossible de la recuperer plus tard.
+
+### Codes de reponse du bridge
+
+| Code | Condition |
+|------|-----------|
+| `204 No Content` | Cle valide, user actif, cookie pose. Succes. |
+| `400 Bad Request` | Cle API V1 legacy (sans `user` lie) — re-pairing necessaire |
+| `401 Unauthorized` | Header absent, cle invalide, ou `user.is_active=False` (revoque) |
+| `429 Too Many Requests` | Throttle 10/min par IP depasse |
+
+Les 401 ont un body vide (pas de fuite d'info pour un attaquant qui tenterait de distinguer cle inconnue / cle revoquee). Seul le 400 a un message explicite (la cle legacy n'est pas une donnee sensible).
+
+### Revocation
+
+Revoquer un terminal se fait via l'admin Unfold (`Terminals > bulk action "Revoke selected terminals"`), ce qui passe `is_active=False` sur le `TermUser`. A la prochaine requete, le middleware d'auth Django voit le flag et anonymise la session — acces refuse instantanement, aucune gymnastique de cache ou d'index inversé.
+
+Pour re-autoriser le terminal, il faut generer un **nouveau** `PairingDevice` cote admin et re-faire l'appairage (`/api/discovery/claim/`). Il n'y a pas de mecanisme de "re-activation" de l'ancien user — c'est volontaire : on garde une trace dans la base du terminal revoque.
+
+### Coexistence V1 / V2
+
+| Version | Permission | Utilise |
+|---------|------------|---------|
+| V1 | `HasLaBoutikAccess` | Header `Authorization: Api-Key` OU session admin tenant |
+| V2 | `HasLaBoutikTerminalAccess` | Session TermUser (bridge) + fallback V1 |
+
+Toutes les routes de l'app `laboutik` utilisent desormais `HasLaBoutikTerminalAccess` (V2) :
+
+- `CaisseViewSet`, `PaiementViewSet`, `CommandeViewSet`, `ArticlePanelViewSet` — session TermUser acceptee directement (chemin V2) ou fallback V1 (header Api-Key ou admin session humain).
+
+Les routes V1 d'autres apps (ex: `ApiBillet`) qui utilisent encore `HasLaBoutikAccess` directement continuent d'accepter le header `Authorization: Api-Key` et la session admin humain, mais PAS les sessions TermUser (c'est voulu : `HasLaBoutikAccess` ne passe pas `is_tenant_admin()` pour un TermUser).
+
+---
+
+## Tuto 1 — Client Python / Raspberry Pi
+
+Script minimal pour un terminal Python (Pi, serveur de caisse legacy, bot de test).
+
+### Pre-requis
+
+```bash
+pip install requests
+```
+
+### Etape 1 — Appairage (une seule fois par machine)
+
+```python
+# pair_device.py
+# Execute une seule fois pour appairer le terminal au serveur Lespass
+# Stocke la cle API dans un fichier .env local
+
+import json
+import os
+import sys
+from pathlib import Path
+
+import requests
+
+SERVER_URL = "https://lespass.tibillet.localhost"
+ENV_FILE = Path(__file__).parent / ".env.json"
+
+
+def claim_pin(pin_code: str) -> dict:
+    """Echange un PIN contre une cle API permanente."""
+    response = requests.post(
+        f"{SERVER_URL}/api/discovery/claim/",
+        json={"pin_code": int(pin_code)},
+        timeout=10,
+        verify=True,  # HTTPS obligatoire en prod
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def main():
+    if ENV_FILE.exists():
+        print(f"[!] {ENV_FILE} existe deja. Supprimez-le pour re-appairer.")
+        sys.exit(1)
+
+    pin = input("PIN (6 chiffres, genere par l'admin) : ").strip()
+    if not pin.isdigit() or len(pin) != 6:
+        print("[!] PIN invalide (attendu : 6 chiffres)")
+        sys.exit(1)
+
+    try:
+        data = claim_pin(pin)
+    except requests.HTTPError as err:
+        print(f"[!] Claim refuse : {err.response.status_code} {err.response.text}")
+        sys.exit(1)
+
+    # Sauvegarde locale. Attention : la cle API donne acces au tenant,
+    # proteger le fichier (mode 600) ou le stocker dans un keyring.
+    ENV_FILE.write_text(json.dumps(data, indent=2))
+    ENV_FILE.chmod(0o600)
+
+    print(f"[OK] Appairage reussi. Infos sauvees dans {ENV_FILE}")
+    print(f"     device_name: {data['device_name']}")
+    print(f"     server_url:  {data['server_url']}")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Usage :
+```bash
+$ python pair_device.py
+PIN (6 chiffres, genere par l'admin) : 586573
+[OK] Appairage reussi. Infos sauvees dans .env.json
+     device_name: Caisse de test
+     server_url:  https://lespass.tibillet.localhost
+```
+
+### Etape 2 — Client runtime (a chaque demarrage)
+
+```python
+# pos_client.py
+# Client HTTP qui :
+# 1. Lit la cle API depuis le fichier d'appairage
+# 2. Echange la cle contre un cookie de session via le bridge
+# 3. Utilise ensuite une session requests pour tous les appels metier
+
+import json
+from pathlib import Path
+
+import requests
+
+ENV_FILE = Path(__file__).parent / ".env.json"
+
+
+class PosClient:
+    def __init__(self):
+        if not ENV_FILE.exists():
+            raise RuntimeError(f"Pas d'appairage. Lancer pair_device.py d'abord.")
+        data = json.loads(ENV_FILE.read_text())
+        self.server_url = data["server_url"]
+        self.api_key = data["api_key"]
+        # Session requests : conserve automatiquement le cookie sessionid
+        self.session = requests.Session()
+        self.session.verify = True
+
+    def login(self) -> None:
+        """Echange la cle API contre un cookie de session (bridge)."""
+        response = self.session.post(
+            f"{self.server_url}/laboutik/auth/bridge/",
+            headers={"Authorization": f"Api-Key {self.api_key}"},
+            timeout=10,
+        )
+        if response.status_code == 204:
+            print("[OK] Session ouverte (12h).")
+            return
+        if response.status_code == 401:
+            raise RuntimeError("Cle API invalide ou terminal revoque. Re-appairer.")
+        if response.status_code == 400:
+            raise RuntimeError("Cle API legacy V1. Re-appairer via PIN.")
+        response.raise_for_status()
+
+    def caisse_home(self) -> str:
+        """Recupere la page d'accueil de la caisse (retourne du HTML)."""
+        response = self.session.get(
+            f"{self.server_url}/laboutik/caisse/",
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.text
+
+    # Ajouter ici d'autres methodes metier selon les besoins :
+    # - valider un panier   → self.session.post("/laboutik/paiement/payer/", data=...)
+    # - ouvrir une commande → self.session.post("/laboutik/commande/...", data=...)
+
+
+def main():
+    client = PosClient()
+    client.login()
+    html = client.caisse_home()
+    print(f"[OK] Caisse chargee ({len(html)} octets de HTML)")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Usage :
+```bash
+$ python pos_client.py
+[OK] Session ouverte (12h).
+[OK] Caisse chargee (34521 octets de HTML)
+```
+
+### Gestion de l'expiration de session
+
+La session dure 12h, refresh automatique a chaque requete (`SESSION_SAVE_EVERY_REQUEST=True`). Une caisse active ne se deconnecte jamais en cours de service. Si la session expire quand meme (caisse inactive 12h+), le serveur retourne un `401` ou un `403`. Le client doit :
+
+1. Detecter le code d'erreur sur une requete metier
+2. Re-appeler `self.login()` (le bridge) pour obtenir un nouveau cookie
+3. Ré-essayer la requete metier
+
+Wrapper suggere :
+
+```python
+def request_with_auto_relogin(self, method: str, url: str, **kwargs):
+    """Wrapper qui re-auth automatiquement sur 401/403."""
+    response = self.session.request(method, url, **kwargs)
+    if response.status_code in (401, 403):
+        self.login()
+        response = self.session.request(method, url, **kwargs)
+    return response
+```
+
+---
+
+## Tuto 2 — Cordova / Android WebView
+
+Pour une app Cordova qui encapsule l'interface POS dans une WebView native, le flow est legerement different : pas de `requests.Session()`, c'est le cookie jar du WebView qui gere la persistance. Le JavaScript initie le bridge puis la navigation classique prend le relais.
+
+### Configuration
+
+Dans `config.xml`, autoriser les cookies cross-origin et le domaine Lespass :
+
+```xml
+<allow-navigation href="https://lespass.tibillet.localhost/*" />
+<access origin="https://lespass.tibillet.localhost" />
+```
+
+### Stockage de la configuration
+
+Au premier lancement, l'app doit demander le PIN, appeler `/api/discovery/claim/`, puis stocker le resultat dans le systeme de fichiers natif (pas dans `localStorage` — un `localStorage` est partage avec tout code charge dans la WebView, y compris les pages distantes).
+
+Exemple avec `cordova-plugin-file` :
+
+```javascript
+// pair.js — premier lancement uniquement
+async function pairDevice(serverUrl, pinCode) {
+  const response = await fetch(`${serverUrl}/api/discovery/claim/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin_code: parseInt(pinCode, 10) }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Claim refuse : ${response.status}`)
+  }
+
+  const data = await response.json()
+  // data = { server_url, api_key, device_name }
+
+  // Ecriture dans le repertoire prive de l'app (cordova-plugin-file)
+  await writeFile('config.json', JSON.stringify(data))
+  return data
+}
+```
+
+### Login au demarrage de l'app
+
+```javascript
+// app.js — execute a chaque deviceready ET a chaque resume
+async function authenticate() {
+  const config = JSON.parse(await readFile('config.json'))
+
+  const response = await fetch(`${config.server_url}/laboutik/auth/bridge/`, {
+    method: 'POST',
+    headers: { 'Authorization': `Api-Key ${config.api_key}` },
+    credentials: 'include',  // IMPORTANT : laisse le WebView poser Set-Cookie
+  })
+
+  if (response.status === 204) {
+    // Le cookie sessionid est maintenant pose sur le WebView.
+    // Toute navigation suivante vers lespass.tibillet.localhost l'enverra.
+    return { ok: true }
+  }
+  if (response.status === 401) {
+    // Cle invalide ou terminal revoque → afficher ecran de re-pairing
+    return { ok: false, reason: 'revoked_or_invalid' }
+  }
+  if (response.status === 400) {
+    // Cle V1 legacy → re-pairing necessaire
+    return { ok: false, reason: 'legacy_key' }
+  }
+  throw new Error(`Auth bridge : ${response.status}`)
+}
+
+document.addEventListener('deviceready', async () => {
+  const result = await authenticate()
+  if (result.ok) {
+    // Rediriger vers l'interface POS principale
+    const config = JSON.parse(await readFile('config.json'))
+    window.location.href = `${config.server_url}/laboutik/caisse/`
+  } else {
+    // Afficher ecran de re-pairing
+    showPairingScreen(result.reason)
+  }
+})
+
+// Cordova declenche 'resume' quand l'app revient au premier plan.
+// On re-auth pour verifier que la session n'a pas expire pendant l'inactivite.
+document.addEventListener('resume', async () => {
+  const result = await authenticate()
+  if (!result.ok) {
+    showPairingScreen(result.reason)
+  }
+})
+```
+
+### Pourquoi `credentials: 'include'` est critique
+
+Par defaut, `fetch()` en CORS ne pose PAS les cookies meme si le serveur envoie `Set-Cookie`. Sans cette option, le bridge retourne bien 204, mais le cookie est ignore et la navigation suivante vers `/laboutik/caisse/` echouera en 401. Bien verifier aussi que `withCredentials`/`credentials` soit actif sur les autres appels qui peuvent suivre.
+
+### Wrapper fetch avec re-auth automatique
+
+Pour les requetes AJAX internes a la page POS (si elle utilise HTMX ou des appels manuels), on peut wrapper `fetch` pour declencher automatiquement le re-bridge si la session expire :
+
+```javascript
+// fetch-wrapper.js
+async function fetchWithAuth(url, options = {}) {
+  const merged = { credentials: 'include', ...options }
+  let response = await fetch(url, merged)
+
+  if (response.status === 401 || response.status === 403) {
+    // Tentative de re-auth
+    const authResult = await authenticate()
+    if (!authResult.ok) {
+      showPairingScreen(authResult.reason)
+      throw new Error('Auth expired, re-pairing required')
+    }
+    // Retry une seule fois
+    response = await fetch(url, merged)
+  }
+
+  return response
+}
+```
+
+### Bonnes pratiques mobile
+
+- **HTTPS obligatoire** : Cordova ignore `Set-Cookie` sur HTTP en clair dans la plupart des WebViews recentes.
+- **Pas d'`api_key` dans l'URL** : utiliser uniquement le header `Authorization`. L'URL apparait dans les logs nginx, l'historique WebView, et les tracebacks.
+- **Nettoyer le DOM apres soumission** : si pour une raison quelconque un form HTML sert au bridge, faire `form.remove()` apres submit pour eviter un retour arriere qui exposerait la cle.
+- **Conteneur natif** : preferer `cordova-plugin-file` au `localStorage` pour stocker l'`api_key`, et le repertoire prive de l'app (`cordova.file.dataDirectory`), pas le stockage partage.
+- **Gerer offline** : si `authenticate()` echoue sur une `TypeError` reseau, afficher un ecran "Hors ligne" distinct du refus d'auth.
+
+### Revoquer un terminal perdu ou vole
+
+Cote admin, passer le `TermUser` correspondant en `is_active=False` depuis l'admin Unfold. Au prochain `deviceready` ou `resume`, l'app recevra un 401 et basculera sur l'ecran de re-pairing. Pour re-habiliter l'appareil (s'il est retrouve), il faut generer un nouveau PIN cote admin et re-faire l'appairage depuis l'app.
+
+---
+
 ## Commandes utiles
 
 ```bash

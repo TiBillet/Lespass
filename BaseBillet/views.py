@@ -28,7 +28,7 @@ from django.utils import timezone
 from django.utils.encoding import force_str, force_bytes
 from django.utils.html import format_html
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, ngettext
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.decorators.http import require_GET
 from django_htmx.http import HttpResponseClientRedirect
@@ -58,11 +58,15 @@ from BaseBillet.validators import LoginEmailValidator, MembershipValidator, Link
     ReservationValidator, ContactValidator, QrCodeScanPayNfcValidator, EventQuickCreateSerializer, \
     PaiementHorsLigneSerializer
 from Customers.models import Client, Domain
+from QrcodeCashless.models import CarteCashless
 from MetaBillet.models import WaitingConfiguration
 from TiBillet import settings
 from crowds.models import CrowdConfig, Initiative
 from fedow_connect.fedow_api import FedowAPI
 from fedow_connect.models import FedowConfig
+from fedow_core.models import Token, Asset, Transaction
+from fedow_core.services import CarteService
+from fedow_core.exceptions import CarteDejaLiee, CarteIntrouvable, UserADejaCarte
 from fedow_connect.utils import dround
 from fedow_connect.validators import TransactionSimpleValidator
 from fedow_public.models import AssetFedowPublic
@@ -178,20 +182,27 @@ def get_context(request):
         "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
         "main_nav": [
-            {'name': 'event-list', 'url': '/event/',
-             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
-             'icon': 'calendar-date'},
             {'name': 'memberships_mvt', 'url': '/memberships/',
              'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
              'icon': 'person-badge'},
+            {'name': 'event-list', 'url': '/event/',
+             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+             'icon': 'calendar-date'},
         ]
     }
 
     navbar: list = context["main_nav"]
 
-    # Infos pratiques : uniquement pour le thème Faire Festival
-    # Practical info page: only for the Faire Festival skin
+    # Le Faire Festival et Infos pratiques : uniquement pour le thème Faire Festival
+    # Le Faire Festival and Practical info pages: only for the Faire Festival skin
     if config.skin == "faire_festival":
+        # On insère en première position pour que "Le Faire Festival" soit le premier lien
+        # Insert at first position so "Le Faire Festival" is the first link
+        navbar.insert(0,
+            {'name': 'le_faire_festival', 'url': '/le-faire-festival/',
+             'label': _('Le Faire Festival'),
+             'icon': 'star-fill'}
+        )
         navbar.append(
             {'name': 'infos_pratiques', 'url': '/infos-pratiques/',
              'label': _('Infos pratiques'),
@@ -361,7 +372,7 @@ def connexion(request):
                 connexion_url = f"https://{base_url}/emailconfirmation/{token}"
                 messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
 
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         logger.error(validator.errors)
     messages.add_message(request, messages.WARNING, "Email validation error")
@@ -395,71 +406,132 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
     authentication_classes = [SessionAuthentication, ]
 
     def retrieve(self, request, pk=None):
-        # TODO: Serializer ?
+        """
+        GET /qr/<qrcode_uuid>/ — scan public de carte cashless.
+        / Public QR code scan of a cashless card.
+
+        LOCALISATION : BaseBillet/views.py:ScanQrCode
+        Dispatch V1 (fedow_connect HTTP) / V2 (fedow_core DB direct) selon
+        Configuration.server_cashless du tenant d'origine de la carte.
+        """
+        # --- Validation UUID ---
+        # / Validate UUID format.
         try:
-            qrcode_uuid: uuid.uuid4 = uuid.UUID(pk)
-        except ValueError:
-            logger.warning("ValueError, not an uuid")
+            qrcode_uuid = uuid.UUID(pk)
+        except (ValueError, TypeError):
+            logger.warning(f"ScanQrCode.retrieve : pk non uuid : {pk}")
             raise Http404()
-        except Exception as e:
-            logger.error(e)
-            raise e
 
-        # 1) checket fedow 2) checker origin card 3) rediriger vers primary_domain
-        # redirection des cartes génériques
-        tenant: Client = connection.tenant
-        # Besoin d'etre sur un tenant qui a déja échangé avec Fedow
-        if tenant.categorie != Client.SALLE_SPECTACLE:
-            tenant = Client.objects.filter(categorie=Client.SALLE_SPECTACLE).first()
-        with tenant_context(tenant):
-            fedowAPI = FedowAPI()
-            serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
-            if not serialized_qrcode_card:
-                raise Http404("Unknow qrcode_uuid")
+        # --- Resolution carte + tenant d'origine (SHARED_APPS : acces direct) ---
+        # / Resolve card and origin tenant (SHARED_APPS: direct access).
+        try:
+            carte = CarteCashless.objects.select_related(
+                "detail__origine", "user", "wallet_ephemere",
+            ).get(uuid=qrcode_uuid)
+        except CarteCashless.DoesNotExist:
+            raise Http404("Unknow qrcode_uuid")
 
-            lespass_domain = serialized_qrcode_card['origin']['place']['lespass_domain']
-            if not lespass_domain:
-                raise Http404("Origin error")
+        if carte.detail is None or carte.detail.origine is None:
+            logger.error(f"Carte {qrcode_uuid} sans detail ou origine")
+            raise Http404("Origin error")
 
-            domain = get_object_or_404(Domain, domain=lespass_domain)
-            primary_domain = domain.tenant.get_primary_domain()
-            if primary_domain.domain not in request.build_absolute_uri():
-                return HttpResponseRedirect(f"https://{primary_domain}/qr/{qrcode_uuid}/")
+        tenant_origine = carte.detail.origine
 
-            if not serialized_qrcode_card:
-                logger.warning(f"serialized_qrcode_card {qrcode_uuid} non valide")
-                raise Http404()
+        # --- Redirection cross-domain vers le primary_domain du tenant d'origine ---
+        # UX V1 conservee : scanner une carte ramene toujours sur son festival.
+        # / Cross-domain redirect to origin tenant's primary domain. V1 UX preserved.
+        primary_domain = tenant_origine.get_primary_domain()
+        if primary_domain.domain not in request.build_absolute_uri():
+            return HttpResponseRedirect(f"https://{primary_domain.domain}/qr/{qrcode_uuid}/")
 
-            # La carte n'a pas d'user, on redirige vers la page de renseignement d'user
-            if serialized_qrcode_card['is_wallet_ephemere']:
-                logger.info("Wallet ephemere, on demande le mail")
-                template_context = get_context(request)
-                template_context['qrcode_uuid'] = qrcode_uuid
-                template_context['base_template'] = 'reunion/blank_base.html'
-                # Logout au cas où on scanne les cartes à la suite.
-                logout(request)
-                return render(request, "reunion/views/register.html", context=template_context)
+        # --- Dispatch V1 / V2 selon tenant d'origine ---
+        # V1 : tenant legacy (server_cashless renseigne) → HTTP Fedow distant
+        # V2 : tenant fedow_core → acces DB direct
+        # / V1 vs V2 dispatch based on Configuration.server_cashless.
+        with tenant_context(tenant_origine):
+            config = Configuration.get_solo()
+            tenant_est_en_v1 = bool(config.server_cashless)
 
-            # Si wallet non ephemere, alors on a un user :
-            wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+            if tenant_est_en_v1:
+                return self._retrieve_v1_legacy(request, qrcode_uuid, tenant_origine)
+            return self._retrieve_v2_fedow_core(request, carte, tenant_origine)
 
-            user: TibilletUser = wallet.user
+    def _retrieve_v1_legacy(self, request, qrcode_uuid, tenant_origine):
+        """
+        Branche V1 : appelle fedow_connect (HTTP vers Fedow distant).
+        Ancien code conserve pour les tenants legacy.
+        / V1 branch: calls fedow_connect (HTTP to remote Fedow).
+        """
+        fedowAPI = FedowAPI()
+        serialized_qrcode_card = fedowAPI.NFCcard.qr_retrieve(qrcode_uuid)
+        if not serialized_qrcode_card:
+            raise Http404("Unknow qrcode_uuid")
+
+        if serialized_qrcode_card['is_wallet_ephemere']:
+            template_context = get_context(request)
+            template_context['qrcode_uuid'] = qrcode_uuid
+            template_context['base_template'] = 'reunion/blank_base.html'
+            logout(request)
+            return render(request, "reunion/views/register.html", context=template_context)
+
+        wallet = Wallet.objects.get(uuid=serialized_qrcode_card['wallet_uuid'])
+        user = wallet.user
+        # Activer le user uniquement s'il ne l'est pas deja, et n'ecrire que
+        # cette colonne pour eviter de declencher tous les signaux pre/post_save.
+        # / Activate user only if not already active; write only this column
+        # to avoid firing all pre/post_save signals.
+        if not user.is_active:
             user.is_active = True
-            user.save()
+            user.save(update_fields=["is_active"])
+        login(request, user)
 
-            # Parti pris : On logue l'user lorsqu'il scanne sa carte.
-            login(request, user)
+        if settings.TEST or settings.DEBUG:
+            token = user.get_connect_token()
+            base_url = connection.tenant.get_primary_domain().domain
+            connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+            messages.add_message(request, messages.INFO,
+                                 format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+        return redirect("/my_account")
 
-            # Pour les tests :
-            # On est sur le moteur de démonstration / test
-            # Pour les tests fonctionnel, on a besoin de vérifier le token, on le génère ici.
-            if settings.TEST or settings.DEBUG:
-                token = user.get_connect_token()
-                base_url = connection.tenant.get_primary_domain().domain
-                connexion_url = f"https://{base_url}/emailconfirmation/{token}"
-                messages.add_message(request, messages.INFO, format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+    def _retrieve_v2_fedow_core(self, request, carte, tenant_origine):
+        """
+        Branche V2 : appelle fedow_core.CarteService (DB direct).
+        / V2 branch: calls fedow_core.CarteService (direct DB access).
+        """
+        ip = request.META.get("REMOTE_ADDR", "0.0.0.0")
+        resultat = CarteService.scanner_carte(
+            carte=carte, tenant_origine=tenant_origine,
+            ip=ip,
+        )
 
-            return redirect("/my_account")
+        if resultat.is_wallet_ephemere:
+            template_context = get_context(request)
+            template_context['qrcode_uuid'] = carte.uuid
+            template_context['base_template'] = 'reunion/blank_base.html'
+            # Logout au cas ou on scanne les cartes a la suite
+            # / Logout in case of consecutive scans
+            logout(request)
+            return render(request, "reunion/views/register.html", context=template_context)
+
+        # Carte identifiee : login automatique du user
+        # / Identified card: automatic user login
+        user = carte.user
+        # Activer le user uniquement s'il ne l'est pas deja, et n'ecrire que
+        # cette colonne pour eviter de declencher tous les signaux pre/post_save.
+        # / Activate user only if not already active; write only this column
+        # to avoid firing all pre/post_save signals.
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+        login(request, user)
+
+        if settings.TEST or settings.DEBUG:
+            token = user.get_connect_token()
+            base_url = connection.tenant.get_primary_domain().domain
+            connexion_url = f"https://{base_url}/emailconfirmation/{token}"
+            messages.add_message(request, messages.INFO,
+                                 format_html(f"<a href='{connexion_url}'>TEST MODE</a>"))
+        return redirect("/my_account")
 
     # @action(detail=False, methods=['POST'])
     # def link_with_email_confirm(self, request):
@@ -467,81 +539,119 @@ class ScanQrCode(viewsets.ViewSet):  # /qr
 
     @action(detail=False, methods=['POST'])
     def link(self, request):
-        # data=request.POST.dict() in the controler for boolean
-        # logger.info(request.POST.dict())
-        # import ipdb; ipdb.set_trace()
-        # data=request.POST.dict() in the controler for boolean
+        """
+        POST /qr/link/ — identification d'une carte scannee.
+        / Identify a scanned card with user email.
+
+        LOCALISATION : BaseBillet/views.py:ScanQrCode
+        """
         validator = LinkQrCodeValidator(data=request.POST.dict())
         if not validator.is_valid():
             for error in validator.errors:
                 logger.error(f"{error} : {validator.errors[error][0]}")
-                messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+                messages.add_message(request, messages.ERROR,
+                                     f"{error} : {validator.errors[error][0]}")
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        # Le mail est envoyé
         email = validator.validated_data['email']
-        user: TibilletUser = get_or_create_user(email, force_mail=True)
+        user = get_or_create_user(email, force_mail=True)
         if validator.validated_data.get('newsletter'):
             send_to_ghost_email.delay(email)
 
-        # import ipdb; ipdb.set_trace()
         if not user:
-            # Le mail n'est pas validé par django (example.org?)
             messages.add_message(request, messages.ERROR, f"{_('Invalid email')}")
-            logger.error("email validé par validateur DRF mais pas par get_or_create_user "
-                         "-> email de confirmation a renvoyé une erreur")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            logger.error("email valide DRF mais pas get_or_create_user")
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
+        # Completer first_name/last_name uniquement si vides (pas d'ecrasement)
+        # / Fill first_name/last_name only if empty (never overwrite).
         if validator.data.get('lastname') and not user.last_name:
             user.last_name = validator.data.get('lastname')
         if validator.data.get('firstname') and not user.first_name:
             user.first_name = validator.data.get('firstname')
         if validator.data.get('newsletter'):
             send_to_ghost_email.delay(email, f"{user.first_name} {user.last_name}")
-        # On retire le mail valid : impose la vérification du mail en cas de nouvelle carte
+
+        # --- Dispatch V1 / V2 ---
+        # On resout la carte AVANT de toucher au user : si la carte est
+        # introuvable on retourne tot sans modifier l'user (pas de perte
+        # d'email_valid si le lien echoue).
+        # / Resolve card FIRST, then touch the user. If card is missing we
+        # return early without modifying the user (no email_valid loss).
+        qrcode_uuid = validator.validated_data['qrcode_uuid']
+
+        try:
+            carte = CarteCashless.objects.select_related("detail__origine").get(uuid=qrcode_uuid)
+        except CarteCashless.DoesNotExist:
+            messages.add_message(request, messages.ERROR, _("Card not found"))
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+        # Carte trouvee : on peut maintenant poser email_valid=False
+        # (impose la re-verification du mail) et persister first_name/last_name.
+        # / Card found: now safe to set email_valid=False and persist names.
         user.email_valid = False
         user.save()
 
+        tenant_origine = carte.detail.origine
+        with tenant_context(tenant_origine):
+            config = Configuration.get_solo()
+            tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            return self._link_v1_legacy(request, user, qrcode_uuid, carte)
+        return self._link_v2_fedow_core(request, user, carte)
+
+    def _link_v1_legacy(self, request, user, qrcode_uuid, carte):
+        """
+        Branche V1 : appelle fedow_connect (HTTP).
+        / V1 branch: calls fedow_connect (HTTP).
+        """
         fedowAPI = FedowAPI()
         wallet, created = fedowAPI.wallet.get_or_create_wallet(user)
-        # Si l'user possède déja un wallet et une carte référencée dans Fedow,
-
-        # il ne peut pas avoir de deuxièmes cartes
-        # Evite le vol de carte : si je connais l'email d'une personne,
-        # je peux avoir son wallet juste en mettant son email sur une nouvelle carte…
-        # Fonctionne de concert avec la vérification chez Fedow : fedow_core.views.linkwallet_cardqrcode : 385
         if not created:
-            logger.info(f"wallet {wallet} non created after get_or_create_wallet")
             retrieve_wallet = fedowAPI.wallet.retrieve_by_signature(user)
             if retrieve_wallet.validated_data['has_user_card']:
                 messages.add_message(request, messages.ERROR,
-                                     _("You seem to already have a TiBillet card linked to your wallet. "
-                                       "Please revoke it first in your profile area to link a new one."))
-                return HttpResponseClientRedirect(request.headers['Referer'])
+                                     _("You seem to already have a TiBillet card "
+                                       "linked to your wallet. Please revoke it first."))
+                return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
-        # Opération de fusion entre la carte liée au qrcode et le wallet de l'user :
-        qrcode_uuid = validator.validated_data['qrcode_uuid']
-        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(user=user, qrcode_uuid=qrcode_uuid)
+        linked_serialized_card = fedowAPI.NFCcard.linkwallet_cardqrcode(
+            user=user, qrcode_uuid=qrcode_uuid,
+        )
         if not linked_serialized_card:
             messages.add_message(request, messages.ERROR, _("Not valid"))
 
-        # On retourne sur la page GET /qr/
-        # Qui redirigera si besoin et affichera l'erreur
-        logger.info(
-            f"SCAN QRCODE LINK : wallet : {wallet}, user : {wallet.user}, card qrcode : {linked_serialized_card['qrcode_uuid']} ")
-
-        # On check si des adhésions n'ont pas été faites avec la carte en wallet ephemère
-        card_number = linked_serialized_card.get('number_printed')
+        card_number = linked_serialized_card.get('number_printed') if linked_serialized_card else None
         if card_number:
             for membership in Membership.objects.filter(
-                    user__isnull=True,
-                    card_number=card_number):
+                user__isnull=True, card_number=card_number,
+            ):
                 membership.user = user
                 membership.first_name = user.first_name
                 membership.last_name = user.last_name
                 membership.save()
 
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+
+    def _link_v2_fedow_core(self, request, user, carte):
+        """
+        Branche V2 : appelle fedow_core.CarteService (DB direct).
+        / V2 branch: calls fedow_core.CarteService.
+        """
+        try:
+            CarteService.lier_a_user(
+                qrcode_uuid=carte.uuid, user=user,
+                ip=request.META.get("REMOTE_ADDR", "0.0.0.0"),
+            )
+        except UserADejaCarte as e:
+            messages.add_message(request, messages.ERROR, str(e))
+        except CarteDejaLiee as e:
+            messages.add_message(request, messages.ERROR, str(e))
+        except CarteIntrouvable as e:
+            messages.add_message(request, messages.ERROR, str(e))
+
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         permission_classes = [permissions.AllowAny]
@@ -692,6 +802,240 @@ class TiBilletLogin(viewsets.ViewSet):
         return HttpResponseRedirect(redirect_url)
 
 
+def peut_recharger_v2(user):
+    """
+    Determine si l'user peut recharger son wallet FED via le flow V2 (fedow_core local).
+    / Determine if the user can refill their FED wallet via the V2 flow (local fedow_core).
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Verdicts possibles :
+    - "feature_desactivee" : module_monnaie_locale=False (pas de bouton refill)
+    - "v1_legacy" : tenant courant a server_cashless (LaBoutik externe -> flow V1)
+    - "wallet_legacy" : wallet de l'user cree dans un tenant V1 (message migration)
+    - "v2" : tout est OK, flow V2 autorise
+
+    Le tenant courant est lu depuis connection.tenant via Configuration.get_solo().
+    / Current tenant is read from connection.tenant via Configuration.get_solo().
+
+    Reference : spec TECH DOC/Laboutik sessions/Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md
+    """
+    # Garde 1 : le tenant courant est en mode V2 ?
+    # / Guard 1: current tenant is in V2 mode?
+    config = Configuration.get_solo()
+    if not config.module_monnaie_locale:
+        return False, "feature_desactivee"
+
+    if config.server_cashless is not None:
+        return False, "v1_legacy"
+
+    # Garde 2 : le wallet de l'user n'est pas lie a un tenant V1 ?
+    # / Guard 2: user's wallet is not linked to a V1 tenant?
+    if user.wallet and user.wallet.origin:
+        with tenant_context(user.wallet.origin):
+            config_origin = Configuration.get_solo()
+            if config_origin.server_cashless is not None:
+                return False, "wallet_legacy"
+
+    return True, "v2"
+
+
+def _get_tenant_info_cached(tenant_pk):
+    """
+    Retourne {organisation, logo} d'un tenant, avec cache 1h.
+    / Returns {organisation, logo} of a tenant, with 1h cache.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    CACHE CROSS-TENANT VOLONTAIRE : la cle "tenant_info_v2" est globale
+    (pas de connection.tenant.pk dedans). C'est voulu : cette fonction
+    sert a afficher les noms/logos de N lieux depuis un seul schema.
+    Une cle par tenant casserait le mutualisme du cache et creerait
+    N*M entrees redondantes. Pattern strictement equivalent a
+    get_place_cached_info V1 (cle "place_uuid" aussi globale).
+    / Intentional cross-tenant cache. Same pattern as V1's
+    get_place_cached_info which also uses a global key.
+
+    Premier appel (cache froid) : itere tous les tenants
+    categorie=SALLE_SPECTACLE en une seule passe (N tenant_context).
+    / First call (cold cache): iterates all SALLE_SPECTACLE tenants
+    in one pass.
+
+    :param tenant_pk: UUID du tenant (Client.pk)
+    :return: dict {organisation, logo} ou None si tenant inconnu
+    """
+    cache_key = "tenant_info_v2"
+    cache_content = cache.get(cache_key)
+
+    if cache_content is None:
+        # Cache froid : on pre-construit pour tous les lieux en une passe.
+        # / Cold cache: pre-build for all venues in one pass.
+        cache_content = {}
+        for tenant in Client.objects.filter(categorie=Client.SALLE_SPECTACLE):
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                cache_content[tenant.pk] = {
+                    "organisation": config.organisation,
+                    "logo": config.logo,
+                }
+        cache.set(cache_key, cache_content, 3600)
+
+    return cache_content.get(tenant_pk)
+
+
+def _lieux_utilisables_pour_asset(asset):
+    """
+    Retourne la liste des lieux ou un token de cet asset peut etre utilise.
+    / Returns the list of venues where a token of this asset can be used.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Cas special FED : asset global, utilisable dans TOUS les lieux V2.
+    On retourne None (convention) pour que le template affiche un badge
+    unique "Utilisable partout" sans iterer 300+ lieux.
+    / Special FED case: global asset, usable everywhere. Return None so
+    the template shows a single "Usable everywhere" badge.
+
+    Cas TLF/TNF/TIM/FID : le lieu createur (tenant_origin) + les lieux
+    federes via les M2M Federation.assets <-> Federation.tenants.
+    / TLF/TNF/TIM/FID case: the creator + federation members.
+
+    :param asset: fedow_core.Asset
+    :return: None si FED, sinon list[{organisation, logo}]
+    """
+    # Cas FED : pas de liste, badge "partout" cote template.
+    # / FED case: no list, "everywhere" badge on template side.
+    if asset.category == Asset.FED:
+        return None
+
+    # Cas autres : collecter tenants origine + federes, dedupliquer par pk.
+    # / Other cases: collect origin + federated tenants, deduplicate by pk.
+    tenants_utilisables = [asset.tenant_origin]
+    for federation in asset.federations.all():
+        for tenant in federation.tenants.all():
+            tenants_utilisables.append(tenant)
+
+    tenants_uniques_par_pk = {t.pk: t for t in tenants_utilisables}
+
+    # Resoudre organisation + logo via cache (evite tenant_context N+1)
+    # / Resolve organization + logo via cache (avoids tenant_context N+1)
+    infos = []
+    for tenant in tenants_uniques_par_pk.values():
+        info = _get_tenant_info_cached(tenant.pk)
+        if info is not None:
+            infos.append(info)
+    return infos
+
+
+def _structure_pour_transaction(tx, receiver_est_historique):
+    """
+    Retourne le libelle de la colonne "Structure" selon l'action de tx.
+    / Returns the "Structure" column label based on tx action.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Utilise _get_tenant_info_cached (Session 32) pour resoudre le nom d'un
+    collectif a partir de son Client.pk (cache global 3600s).
+
+    Cas particuliers :
+    - REFILL : "TiBillet" (convention : monnaie federee unique)
+    - FUSION : "Carte #{card.number}" (ou "-" si card None, anormal)
+    - Autres : nom du collectif "autre partie" selon le sens du flux
+
+    :param tx: fedow_core.Transaction
+    :param receiver_est_historique: bool (True si receiver in wallets historiques)
+    :return: str label pour la colonne Structure
+    """
+    # REFILL : pot central FED, label conventionnel "TiBillet".
+    # / REFILL: central FED pot, conventional label "TiBillet".
+    if tx.action == Transaction.REFILL:
+        return "TiBillet"
+
+    # FUSION : rattachement carte anonyme vers compte user.
+    # Le number imprime (8 chars) identifie la carte pour l'user.
+    # / FUSION: anonymous card -> user account attachment.
+    # The printed number (8 chars) identifies the card to the user.
+    if tx.action == Transaction.FUSION:
+        if tx.card is None:
+            logger.warning(
+                f"Transaction FUSION #{tx.id} sans card : affichage fallback"
+            )
+            return "—"
+        return f"Carte #{tx.card.number}"
+
+    # Autres actions : afficher le nom du collectif "autre partie" selon
+    # le sens du flux par rapport au wallet user.
+    # Si user recoit (receiver_est_historique=True) -> contrepartie = sender
+    # Sinon -> contrepartie = receiver
+    # getattr avec default None gere les deux cas : autre_partie None
+    # (ex: VOID sans receiver) OU autre_partie.origin None.
+    # / Other actions: show the "other party" collective name.
+    # If user receives, counterpart is sender. Else, it's receiver.
+    # getattr default handles both None cases (object None OR origin None).
+    autre_partie = tx.sender if receiver_est_historique else tx.receiver
+    tenant_contrepartie = getattr(autre_partie, "origin", None)
+
+    if tenant_contrepartie is None:
+        return "—"
+
+    info = _get_tenant_info_cached(tenant_contrepartie.pk)
+    if info is None:
+        return "—"
+
+    return info.get("organisation") or "—"
+
+
+def _enrichir_transaction_v2(tx, wallet_user, wallets_historiques_pks):
+    """
+    Transforme une fedow_core.Transaction en dict explicite pour le template.
+    / Turns a fedow_core.Transaction into an explicit dict for the template.
+
+    LOCALISATION : BaseBillet/views.py (helper module-level)
+
+    Calcule :
+    - signe : "+" si receiver ∈ wallets_historiques, "-" sinon
+    - amount_euros : amount / 100 (centimes -> euros)
+    - asset_name_affichage : "TiBillets" pour FED, sinon asset.name
+    - action_display : tx.get_action_display() (label traduit)
+    - structure : via _structure_pour_transaction (cf. helper)
+
+    :param tx: fedow_core.Transaction
+    :param wallet_user: AuthBillet.Wallet (user.wallet, conserve pour compat future)
+    :param wallets_historiques_pks: set[UUID] (user.wallet.pk + ephemeres fusionnes)
+    :return: dict explicite consomme par transaction_history_v2.html
+    """
+    # Signe : + si user recoit, - si user envoie.
+    # / Sign: + if user receives, - if user sends.
+    receiver_est_historique = (
+        tx.receiver_id is not None
+        and tx.receiver_id in wallets_historiques_pks
+    )
+    signe = "+" if receiver_est_historique else "-"
+
+    # Label asset : "TiBillets" pour FED (nom propre), sinon nom de l'asset.
+    # / Asset label: "TiBillets" for FED, else asset name.
+    if tx.asset.category == Asset.FED:
+        asset_name_affichage = "TiBillets"
+    else:
+        asset_name_affichage = tx.asset.name
+
+    # Libelle Structure via le helper dedie.
+    # / Structure label via dedicated helper.
+    structure = _structure_pour_transaction(tx, receiver_est_historique)
+
+    return {
+        "uuid": str(tx.uuid),
+        "datetime": tx.datetime,
+        "action": tx.action,
+        "action_display": tx.get_action_display(),
+        "amount_euros": tx.amount / 100,
+        "amount_brut": tx.amount,
+        "signe": signe,
+        "asset_name_affichage": asset_name_affichage,
+        "structure": structure,
+    }
+
+
 class MyAccount(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.IsAuthenticated, ]
@@ -756,22 +1100,116 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/views/account/balance.html", context=template_context)
 
+    @action(detail=False, methods=['GET'], url_path='tirelire_section')
+    def tirelire_section(self, request: HttpRequest):
+        """
+        Renvoie le partial de la section "Ma tirelire" a l'etat initial.
+        / Returns the initial "My balance" section partial.
+
+        Appelee par le bouton "Annuler" du formulaire V2 de recharge (HTMX swap
+        outerHTML sur #tirelire-section). Permet de revenir a l'etat initial
+        sans recharger la page complete.
+        / Called by the V2 refill form "Cancel" button. Restores the initial
+        state without full page reload.
+        """
+        template_context = get_context(request)
+        return render(
+            request,
+            "htmx/views/my_account/tirelire_section.html",
+            context=template_context,
+        )
+
     @action(detail=False, methods=['GET'])
     def my_cards(self, request):
-        fedowAPI = FedowAPI()
-        cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
-        context = {
-            'cards': cards
-        }
+        """
+        GET /my_account/my_cards/ — liste les cartes liees au user courant.
+        / List cards linked to current user.
+
+        Dispatch V1 (fedow_connect HTTP) / V2 (fedow_core DB direct) selon
+        Configuration.server_cashless du tenant courant.
+
+        YAGNI multi-tenant : le dispatch se base sur le tenant courant (celui
+        ou l'user consulte son /my_account/), pas sur le tenant d'origine de
+        chaque carte. En pratique, un user n'a qu'une seule carte a la fois
+        (anti-vol UserADejaCarte), donc la cohabitation V1/V2 cross-tenant sur
+        le meme user est improbable. Si ce cas survient plus tard (federation
+        V1 + V2), il faudra dispatcher par carte.
+        / YAGNI multi-tenant: dispatch uses current tenant, not each card's
+        origin. Anti-theft guarantees at most one card per user in practice.
+        """
+        # Dispatch V1 / V2
+        # / V1 vs V2 dispatch
+        config = Configuration.get_solo()
+        tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            # Branche V1 : appelle fedow_connect (HTTP vers Fedow distant)
+            # / V1 branch: HTTP to remote Fedow
+            fedowAPI = FedowAPI()
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(request.user)
+        else:
+            # Branche V2 : lookup DB direct via CarteService
+            # / V2 branch: direct DB lookup via CarteService
+            cards = CarteService.lister_cartes_du_user(request.user)
+
+        context = {'cards': cards}
         return render(request, "reunion/partials/account/card_table.html", context=context)
 
     @action(detail=True, methods=['GET'], permission_classes=[TenantAdminPermission])
     def admin_my_cards(self, request, pk):
-        fedowAPI = FedowAPI()
+        """
+        GET — Admin tenant : cartes + tokens d'un user donne (vue admin Unfold).
+        / Admin view: cards + tokens for a given user.
+
+        Dispatch V1 / V2 selon Configuration.server_cashless.
+        """
         user = get_object_or_404(HumanUser, pk=pk)
-        cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
-        wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
-        tokens = [token for token in wallet.get('tokens') if token.get('asset_category') not in ['SUB', 'BDG']]
+
+        config = Configuration.get_solo()
+        tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            # Branche V1 : fedow_connect HTTP
+            # / V1 branch
+            fedowAPI = FedowAPI()
+            cards = fedowAPI.NFCcard.retrieve_card_by_signature(user)
+            wallet = fedowAPI.wallet.cached_retrieve_by_signature(user).validated_data
+            tokens = [
+                token for token in wallet.get('tokens')
+                if token.get('asset_category') not in ['SUB', 'BDG']
+            ]
+        else:
+            # Branche V2 : fedow_core DB direct
+            # cartes via CarteService.lister_cartes_du_user
+            # tokens via user.wallet.tokens (filtree sur Asset actif)
+            # / V2 branch
+            from types import SimpleNamespace
+
+            cards = CarteService.lister_cartes_du_user(user)
+
+            tokens = []
+            if user.wallet is not None:
+                tokens_queryset = Token.objects.filter(
+                    wallet=user.wallet,
+                    asset__active=True,
+                    value__gt=0,
+                ).select_related("asset")
+                for token in tokens_queryset:
+                    # Le template attend : token.value (dround),
+                    # token.asset.is_stripe_primary, token.name.
+                    # On expose ces 3 champs via SimpleNamespace pour compat.
+                    # / Template needs: value, asset.is_stripe_primary, name.
+                    tokens.append(
+                        SimpleNamespace(
+                            value=token.value,
+                            asset=SimpleNamespace(
+                                # is_stripe_primary en V2 = asset de categorie FED
+                                # / is_stripe_primary in V2 = FED-category asset
+                                is_stripe_primary=(token.asset.category == "FED"),
+                            ),
+                            name=token.asset.name,
+                        )
+                    )
 
         context = {
             'cards': cards,
@@ -857,46 +1295,107 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=True, methods=['GET'])
     def admin_lost_my_card(self, request, pk, *args, **kwargs):
+        """
+        GET — Admin tenant declare une carte perdue pour un user.
+        / Tenant admin declares a card lost for a user.
+        """
         tenant = request.tenant
         admin = request.user
         user_pk, number_printed = pk.split(':')
         user = get_object_or_404(HumanUser, pk=user_pk)
-        if admin.is_tenant_admin(tenant):
-            try:
-                fedowAPI = FedowAPI()
-                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(user, number_printed=number_printed)
-                if lost_card_report:
-                    messages.add_message(request, messages.SUCCESS,
-                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-                else:
-                    messages.add_message(request, messages.ERROR,
-                                         _("Error when detaching your card. Contact an administrator."))
-            except Exception as e:
-                logger.error(f"admin_lost_my_card error: {e}")
-                messages.add_message(request, messages.ERROR,
-                                     _("Error when detaching your card. Contact an administrator."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+        if not admin.is_tenant_admin(tenant):
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
+        self._declare_lost_card_dispatch(request, user, number_printed)
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['GET'])
     def lost_my_card(self, request, pk):
-        if request.user.email_valid:
-            try:
-                fedowAPI = FedowAPI()
-                lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(request.user, number_printed=pk)
-                if lost_card_report:
-                    messages.add_message(request, messages.SUCCESS,
-                                         _("Your wallet has been detached from this card. You can scan a new one to link it again."))
-                else:
-                    messages.add_message(request, messages.ERROR,
-                                         _("Error when detaching your card. Contact an administrator."))
-            except Exception as e:
-                logger.error(f"lost_my_card error: {e}")
+        """
+        GET — L'utilisateur declare sa propre carte perdue.
+        / User declares their own card lost.
+        """
+        if not request.user.email_valid:
+            logger.warning(_("User email not active"))
+            messages.add_message(request, messages.ERROR,
+                                 _("You need a valid email to declare a card lost."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        self._declare_lost_card_dispatch(request, request.user, pk)
+        return HttpResponseClientRedirect('/my_account/')
+
+    def _declare_lost_card_dispatch(self, request, user, number_printed):
+        """
+        Dispatch V1/V2 pour la declaration de perte.
+        / V1/V2 dispatch for loss declaration.
+
+        Pourquoi le tenant_context ne couvre QUE la lecture de Configuration :
+        - Configuration est TENANT_APP (schema tenant) — il faut le tenant_context
+          pour la lecture.
+        - Les helpers V1 et V2 appeles APRES n'ont pas besoin du context :
+            * V1 (fedow_connect) : utilise une cle API de tenant pre-chargee.
+            * V2 (fedow_core.CarteService) : opere uniquement sur SHARED_APPS
+              (CarteCashless, Wallet, Transaction), pas besoin de schema tenant.
+        / tenant_context scopes ONLY the Configuration read because :
+          Configuration is TENANT_APP (needs schema). V1/V2 helpers below work
+          without the context (V1 uses pre-loaded API key, V2 is SHARED_APPS).
+        """
+        # Recuperer le tenant d'origine de la carte (SHARED_APPS : acces direct)
+        # / Get the origin tenant of the card (SHARED_APPS: direct access).
+        try:
+            carte = CarteCashless.objects.select_related("detail__origine").get(
+                user=user, number=number_printed,
+            )
+        except CarteCashless.DoesNotExist:
+            messages.add_message(request, messages.ERROR,
+                                 _("Card not found or not linked to your account."))
+            return
+
+        tenant_origine = carte.detail.origine
+        with tenant_context(tenant_origine):
+            config = Configuration.get_solo()
+            tenant_est_en_v1 = bool(config.server_cashless)
+
+        if tenant_est_en_v1:
+            self._declare_lost_v1_legacy(request, user, number_printed)
+        else:
+            self._declare_lost_v2_fedow_core(request, user, number_printed)
+
+    def _declare_lost_v1_legacy(self, request, user, number_printed):
+        """Branche V1 : fedow_connect HTTP."""
+        try:
+            fedowAPI = FedowAPI()
+            lost_card_report = fedowAPI.NFCcard.lost_my_card_by_signature(
+                user, number_printed=number_printed,
+            )
+            if lost_card_report:
+                messages.add_message(request, messages.SUCCESS,
+                                     _("Your wallet has been detached from this card. "
+                                       "You can scan a new one to link it again."))
+            else:
                 messages.add_message(request, messages.ERROR,
                                      _("Error when detaching your card. Contact an administrator."))
-            return HttpResponseClientRedirect('/my_account/')
-        else:
-            logger.warning(_("User email not active"))
-            return HttpResponseClientRedirect('/my_account/')
+        except Exception:
+            # logger.exception capture la stack trace complete (exc_info=True).
+            # / logger.exception captures the full stack trace.
+            logger.exception("_declare_lost_v1_legacy error")
+            messages.add_message(request, messages.ERROR,
+                                 _("Error when detaching your card. Contact an administrator."))
+
+    def _declare_lost_v2_fedow_core(self, request, user, number_printed):
+        """Branche V2 : fedow_core.CarteService."""
+        try:
+            CarteService.declarer_perdue(user=user, number_printed=number_printed)
+            messages.add_message(request, messages.SUCCESS,
+                                 _("Your wallet has been detached from this card. "
+                                   "You can scan a new one to link it again."))
+        except CarteIntrouvable as e:
+            messages.add_message(request, messages.ERROR, str(e))
+        except Exception:
+            # logger.exception capture la stack trace complete (exc_info=True).
+            # / logger.exception captures the full stack trace.
+            logger.exception("_declare_lost_v2_fedow_core error")
+            messages.add_message(request, messages.ERROR,
+                                 _("Error when detaching your card. Contact an administrator."))
 
     @action(detail=False, methods=['GET'])
     def refund_online(self, request):
@@ -966,6 +1465,27 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def tokens_table(self, request):
+        """
+        Affichage des tokens du user connecte pour la page /my_account/balance/.
+        / Tokens display for the connected user on the balance page.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Dispatch V1/V2 selon peut_recharger_v2(user) :
+        - Verdict "v2" -> lecture locale fedow_core.Token (Session 32)
+        - Autres verdicts -> flow V1 FedowAPI (inchange depuis Session 31)
+        / V1/V2 dispatch based on peut_recharger_v2(user).
+        """
+        user = request.user
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- Branche V2 : lecture locale fedow_core ---
+        # / V2 branch: local fedow_core read
+        if verdict == "v2":
+            return self._tokens_table_v2(request)
+
+        # --- Autres verdicts : code V1 existant inchange ---
+        # / Other verdicts: existing V1 code unchanged
         config = Configuration.get_solo()
         fedowAPI = FedowAPI()
         wallet = fedowAPI.wallet.cached_retrieve_by_signature(request.user).validated_data
@@ -990,12 +1510,6 @@ class MyAccount(viewsets.ViewSet):
                     names_of_place_federated.append(place.get('organisation'))
             token['asset']['names_of_place_federated'] = names_of_place_federated
 
-            # Recherche de la dernière action du token fédéré
-            # if token['asset']['category'] == 'FED':
-            #     last_federated_transaction: datetime = token['last_transaction']['datetime']
-
-        print(tokens)
-
         # On fait la liste des lieux fédérés pour les pastilles dans le tableau html
         context = {
             'config': config,
@@ -1004,8 +1518,122 @@ class MyAccount(viewsets.ViewSet):
 
         return render(request, "reunion/partials/account/token_table.html", context=context)
 
+    def _tokens_table_v2(self, request):
+        """
+        Branche V2 de tokens_table : lit fedow_core.Token en base locale.
+        / V2 branch: reads fedow_core.Token from local DB.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Construit deux sous-listes (fiduciaires + compteurs) et delegue
+        le rendu au partial token_table_v2.html.
+        / Builds two sub-lists (fiduciary + counters) and delegates rendering.
+        """
+        user = request.user
+        config = Configuration.get_solo()
+
+        # Garde : wallet absent -> message "aucun token".
+        # / Guard: no wallet -> "no token" message.
+        if user.wallet is None:
+            return render(
+                request,
+                "reunion/partials/account/token_table_v2.html",
+                {
+                    "config": config,
+                    "tokens_fiduciaires": [],
+                    "tokens_compteurs": [],
+                    "aucun_token": True,
+                },
+            )
+
+        # Query optimisee : select_related pour asset + tenant_origin,
+        # prefetch_related pour federations et tenants (evite N+1 sur pastilles).
+        # / Optimized query: select_related + prefetch_related to avoid N+1 on chips.
+        tous_les_tokens = (
+            Token.objects
+            .filter(wallet=user.wallet)
+            .select_related("asset", "asset__tenant_origin")
+            .prefetch_related("asset__federations__tenants")
+        )
+
+        # Categories affichees dans le sous-tableau "Monnaies" (fiduciaires).
+        # / Categories displayed in the "Currencies" sub-table (fiduciary).
+        categories_fiduciaires = [Asset.FED, Asset.TLF, Asset.TNF]
+
+        tokens_fiduciaires = []
+        tokens_compteurs = []
+        for token in tous_les_tokens:
+            # Label d'affichage : "TiBillets" pour FED (nom propre, pas traduit),
+            # sinon nom de l'asset tel que saisi par le createur.
+            # / Display label: "TiBillets" for FED (brand, not translated),
+            # otherwise asset name as entered by creator.
+            if token.asset.category == Asset.FED:
+                asset_name_affichage = "TiBillets"
+            else:
+                asset_name_affichage = token.asset.name
+
+            # Dict explicite passe au template (pas de mutation ORM).
+            # / Explicit dict for template (no ORM mutation).
+            item = {
+                "value_euros": token.value / 100,        # centimes -> euros
+                "value_brut": token.value,               # pour TIM/FID (unites brutes)
+                "asset_name_affichage": asset_name_affichage,
+                "category": token.asset.category,
+                "category_display": token.asset.get_category_display(),
+                "currency_code": token.asset.currency_code,
+                "lieux_utilisables": _lieux_utilisables_pour_asset(token.asset),
+            }
+
+            if token.asset.category in categories_fiduciaires:
+                tokens_fiduciaires.append(item)
+            else:
+                tokens_compteurs.append(item)
+
+        # Tri : solde decroissant, fallback nom d'asset.
+        # / Sort: balance descending, fallback asset name.
+        tokens_fiduciaires.sort(
+            key=lambda x: (-x["value_brut"], x["asset_name_affichage"])
+        )
+        tokens_compteurs.sort(
+            key=lambda x: (-x["value_brut"], x["asset_name_affichage"])
+        )
+
+        aucun_token = len(tokens_fiduciaires) == 0 and len(tokens_compteurs) == 0
+
+        return render(
+            request,
+            "reunion/partials/account/token_table_v2.html",
+            {
+                "config": config,
+                "tokens_fiduciaires": tokens_fiduciaires,
+                "tokens_compteurs": tokens_compteurs,
+                "aucun_token": aucun_token,
+            },
+        )
+
     @action(detail=False, methods=['GET'])
     def transactions_table(self, request):
+        """
+        Historique des transactions du user connecte.
+        / User transaction history.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Dispatch V1/V2 selon peut_recharger_v2(user) :
+        - Verdict "v2" -> lecture locale fedow_core.Transaction (Session 33)
+        - Autres verdicts -> flow V1 FedowAPI (inchange)
+        / V1/V2 dispatch based on peut_recharger_v2(user).
+        """
+        user = request.user
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- Branche V2 : lecture locale fedow_core ---
+        # / V2 branch: local fedow_core read
+        if verdict == "v2":
+            return self._transactions_table_v2(request)
+
+        # --- Autres verdicts : code V1 existant inchange ---
+        # / Other verdicts: existing V1 code unchanged
         config = Configuration.get_solo()
         fedowAPI = FedowAPI()
         # On utilise ici .data plutot que validated_data pour executer les to_representation (celui du WalletSerializer)
@@ -1025,6 +1653,91 @@ class MyAccount(viewsets.ViewSet):
             'previous_url': previous_url,
         }
         return render(request, "reunion/partials/account/transaction_history.html", context=context)
+
+    def _transactions_table_v2(self, request):
+        """
+        Branche V2 de transactions_table : lit fedow_core.Transaction en base
+        locale et reconstitue l'historique des wallets ephemeres fusionnes
+        dans user.wallet.
+        / V2 branch: reads fedow_core.Transaction from local DB and
+        reconstitutes history of ephemeral wallets merged into user.wallet.
+
+        LOCALISATION : BaseBillet/views.py
+
+        Pagination Django 40/page. HTMX swap sur #transactionHistory.
+        """
+        user = request.user
+        config = Configuration.get_solo()
+
+        # Garde : wallet absent -> aucune transaction.
+        # / Guard: no wallet -> no transaction.
+        if user.wallet is None:
+            return render(
+                request,
+                "reunion/partials/account/transaction_history_v2.html",
+                {
+                    "config": config,
+                    "transactions": [],
+                    "paginator_page": None,
+                    "aucune_transaction": True,
+                },
+            )
+
+        # 1. Reconstituer les wallets historiques (user.wallet + ephemeres fusionnes).
+        # / 1. Reconstitute historical wallets.
+        wallets_historiques_pks = {user.wallet.pk}
+        fusions_passees = Transaction.objects.filter(
+            action=Transaction.FUSION,
+            receiver=user.wallet,
+        ).values_list('sender_id', flat=True)
+        wallets_historiques_pks.update(fusions_passees)
+
+        # 2. Query : tx touchant ces wallets + exclude actions techniques.
+        # / 2. Query: tx touching these wallets + exclude technical actions.
+        actions_techniques_a_cacher = [
+            Transaction.FIRST,
+            Transaction.CREATION,
+            Transaction.BANK_TRANSFER,
+        ]
+        tx_queryset = (
+            Transaction.objects
+            .filter(
+                Q(sender_id__in=wallets_historiques_pks)
+                | Q(receiver_id__in=wallets_historiques_pks)
+            )
+            .exclude(action__in=actions_techniques_a_cacher)
+            .select_related(
+                'asset',
+                'sender__origin',
+                'receiver__origin',
+                'card',
+            )
+            .order_by('-datetime')
+        )
+
+        # 3. Pagination 40/page.
+        # / 3. Paginate 40/page.
+        paginator = Paginator(tx_queryset, 40)
+        numero_page = request.GET.get('page', 1)
+        page = paginator.get_page(numero_page)
+
+        # 4. Enrichir chaque transaction pour le template.
+        # / 4. Enrich each transaction for template.
+        transactions_enrichies = [
+            _enrichir_transaction_v2(tx, user.wallet, wallets_historiques_pks)
+            for tx in page.object_list
+        ]
+
+        return render(
+            request,
+            "reunion/partials/account/transaction_history_v2.html",
+            {
+                "config": config,
+                "transactions": transactions_enrichies,
+                "paginator_page": page,
+                "aucune_transaction": len(transactions_enrichies) == 0,
+            },
+        )
 
     ### ONGLET ADHESION
     @action(detail=False, methods=['GET'])
@@ -1071,37 +1784,358 @@ class MyAccount(viewsets.ViewSet):
 
     @action(detail=False, methods=['GET'])
     def refill_wallet(self, request):
+        """
+        Point d'entree de la recharge FED.
+        / FED refill entry point.
+
+        Dispatch V1/V2 selon peut_recharger_v2(user) :
+        - "feature_desactivee" : message d'erreur (ne devrait pas arriver, bouton cache cote template)
+        - "v1_legacy" : flow legacy Fedow distant inchange
+        - "wallet_legacy" : partial HTMX avec message "migration en cours"
+        - "v2" : partial HTMX avec formulaire de saisie de montant
+
+        / V1/V2 dispatch based on peut_recharger_v2(user).
+        """
         user = request.user
-        fedowAPI = FedowAPI()
-        # C'est fedow qui génère la demande de paiement à Stripe.
-        # Il ajoute dans les metadonnée les infos du wallet, et le signe.
-        # Lors du retour du paiement, la signature est vérifiée pour être sur que la demande de paiement vient bien de Fedow.
-        stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
-        if stripe_checkout_url:
-            # Redirection du client vers le lien stripe demandé par Fedow
-            return HttpResponseClientRedirect(stripe_checkout_url)
-        else:
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- Branche V1 legacy : flow historique via Fedow distant ---
+        # / Legacy V1 branch: historical Fedow-remote flow
+        if verdict == "v1_legacy":
+            fedowAPI = FedowAPI()
+            # C'est fedow qui genere la demande de paiement a Stripe.
+            # Il ajoute dans les metadonnees les infos du wallet, et le signe.
+            # Lors du retour du paiement, la signature est verifiee.
+            # / Fedow generates the Stripe payment request (signed metadata).
+            stripe_checkout_url = fedowAPI.wallet.get_federated_token_refill_checkout(user)
+            if stripe_checkout_url:
+                return HttpResponseClientRedirect(stripe_checkout_url)
             messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
             return HttpResponseClientRedirect('/my_account/')
 
-    @action(detail=True, methods=['GET'])
-    def return_refill_wallet(self, request, pk=None):
-        # On demande confirmation à Fedow qui a du recevoir la validation en webhook POST
-        # Fedow vérifie la signature du paiement dans les metada Stripe
-        # C'est Fedow entré le metadata signé, c'est lui qui vérifie.
+        # --- Branche "feature desactivee" : ne devrait pas etre atteinte ---
+        # Le bouton devrait deja etre cache dans le template par
+        # {% if config.module_monnaie_locale %}. Defense en profondeur.
+        # / Feature disabled: shouldn't be reached, button should be hidden.
+        if verdict == "feature_desactivee":
+            messages.add_message(request, messages.ERROR, _("Not available. Contact an admin."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        # --- Branche "wallet legacy" : message inline migration ---
+        # / Wallet legacy branch: inline migration message
+        if verdict == "wallet_legacy":
+            context = {
+                'message_migration': _(
+                    "Votre wallet est en cours de migration. "
+                    "Merci de patienter, désolés pour la gêne occasionnée."
+                ),
+            }
+            return render(
+                request,
+                'htmx/views/my_account/refill_migration_inline.html',
+                context,
+            )
+
+        # --- Branche V2 : partial HTMX avec formulaire de saisie ---
+        # / V2 branch: HTMX partial with amount input form
+        context = {
+            # Valeurs pour affichage humain (fr: virgule decimale).
+            # / Values for human display (fr: decimal comma).
+            'amount_min_euros_affichage': '1,00',
+            'amount_max_euros_affichage': '500,00',
+            # Valeurs pour les attributs HTML5 min/max (point decimal, format standard).
+            # / Values for HTML5 min/max attributes (decimal point, standard format).
+            'amount_min_euros_input': '1',
+            'amount_max_euros_input': '500',
+            # Action POST qui sera appelee par le formulaire pour creer le paiement.
+            # / POST action called by the form to create the payment.
+            'submit_url': '/my_account/refill_wallet_submit/',
+        }
+        return render(
+            request,
+            'htmx/views/my_account/refill_form_v2.html',
+            context,
+        )
+
+    @action(detail=False, methods=['POST'])
+    def refill_wallet_submit(self, request):
+        """
+        Reception du formulaire de recharge V2. Valide le montant, cree le
+        Paiement_stripe via CreationPaiementStripeFederation, redirige vers Stripe.
+        / Receives V2 refill form. Validates amount, creates Paiement_stripe
+        via CreationPaiementStripeFederation, redirects to Stripe.
+
+        Convention de conversion : l'user saisit un montant en euros, la vue
+        convertit en centimes avant de le passer au serializer.
+        / Conversion: user enters amount in euros, view converts to cents.
+        """
+        from decimal import Decimal, InvalidOperation
+        from django.db import connection
+        from django_tenants.utils import tenant_context
+        from PaiementStripe.serializers import RefillAmountSerializer
+        from PaiementStripe.refill_federation import CreationPaiementStripeFederation
+        from ApiBillet.serializers import get_or_create_price_sold
+        from fedow_core.models import Asset
+        from BaseBillet.models import LigneArticle, PaymentMethod
+
         user = request.user
-        fedowAPI = FedowAPI()
+        verdict_ok, _verdict = peut_recharger_v2(user)
+        if not verdict_ok:
+            # Cas impossible en usage normal : l'UI n'aurait pas affiche le formulaire.
+            # / Impossible in normal use: UI wouldn't have shown the form.
+            messages.add_message(request, messages.ERROR, _("Refill not available."))
+            return HttpResponseClientRedirect('/my_account/')
+
+        # Conversion euros (texte utilisateur) -> centimes (int).
+        # Accepte "," ou "." comme separateur decimal.
+        # / Convert user-entered euros text to int cents.
+        # Accept either "," or "." as decimal separator.
+        amount_euros_raw = request.POST.get('amount_euros', '').strip().replace(',', '.')
+        try:
+            amount_euros_decimal = Decimal(amount_euros_raw)
+        except (InvalidOperation, TypeError):
+            return render(
+                request,
+                'htmx/views/my_account/refill_form_v2.html',
+                {
+                    'amount_min_euros_affichage': '1,00',
+                    'amount_max_euros_affichage': '500,00',
+                    'amount_min_euros_input': '1',
+                    'amount_max_euros_input': '500',
+                    'submit_url': '/my_account/refill_wallet_submit/',
+                    'error': _("Montant invalide."),
+                    'amount_saisi': amount_euros_raw,
+                },
+                status=422,
+            )
+        amount_cents = int(amount_euros_decimal * 100)
+
+        # Validation via le serializer (bornes 100 / 50000).
+        # / Validation via serializer (bounds 100 / 50000).
+        serializer = RefillAmountSerializer(data={'amount_cents': amount_cents})
+        if not serializer.is_valid():
+            first_error = next(iter(serializer.errors.values()))[0]
+            return render(
+                request,
+                'htmx/views/my_account/refill_form_v2.html',
+                {
+                    'amount_min_euros_affichage': '1,00',
+                    'amount_max_euros_affichage': '500,00',
+                    'amount_min_euros_input': '1',
+                    'amount_max_euros_input': '500',
+                    'submit_url': '/my_account/refill_wallet_submit/',
+                    'error': first_error,
+                    'amount_saisi': amount_euros_raw,
+                },
+                status=422,
+            )
+
+        # Capture du domain AVANT la bascule (federation_fed n'a pas de Domain).
+        # / Capture current tenant domain BEFORE switching (federation_fed has no Domain).
+        tenant_courant_domain = connection.tenant.get_primary_domain().domain
+        absolute_domain = f'https://{tenant_courant_domain}/my_account/'
+
+        tenant_federation = Client.objects.get(schema_name='federation_fed')
+
+        # Creer le wallet de l'user s'il n'existe pas (Wallet est en SHARED_APPS).
+        # / Create user's wallet if missing (Wallet is in SHARED_APPS).
+        if user.wallet is None:
+            from AuthBillet.models import Wallet as AuthWallet
+            user.wallet = AuthWallet.objects.create(
+                origin=tenant_federation,
+                name=f"Wallet {user.email}",
+            )
+            user.save(update_fields=['wallet'])
+
+        # Basculer dans federation_fed pour creer le Paiement_stripe (TENANT_APPS).
+        # Tout est encapsule dans transaction.atomic() : si l'appel Stripe leve
+        # (timeout reseau, cle invalide, 500 Stripe), on rollback les creations
+        # DB (PriceSold, LigneArticle, Paiement_stripe).
+        # / Switch to federation_fed to create Paiement_stripe (TENANT_APPS).
+        # Everything wrapped in transaction.atomic(): if the Stripe call fails,
+        # we rollback the DB creations.
+        from django.db import transaction as db_transaction
 
         try:
-            wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
-            if wallet:
+            with tenant_context(tenant_federation):
+                with db_transaction.atomic():
+                    asset_fed = Asset.objects.get(category=Asset.FED)
+                    product_refill = Product.objects.get(
+                        categorie_article=Product.RECHARGE_CASHLESS_FED
+                    )
+                    price_refill = product_refill.prices.first()
+
+                    # PriceSold en Decimal euros (pattern existant). On n'appelle PAS
+                    # get_id_price_stripe() pour eviter la creation d'un Stripe Connect
+                    # account pour federation_fed — la gateway utilise `price_data`
+                    # inline a la place.
+                    # / PriceSold in Decimal euros (existing pattern). We do NOT call
+                    # get_id_price_stripe() to avoid creating a Stripe Connect account
+                    # for federation_fed — the gateway uses inline `price_data` instead.
+                    custom_amount_euros = Decimal(amount_cents) / Decimal(100)
+                    pricesold = get_or_create_price_sold(
+                        price_refill,
+                        custom_amount=custom_amount_euros,
+                    )
+
+                    ligne = LigneArticle.objects.create(
+                        pricesold=pricesold,
+                        amount=amount_cents,
+                        qty=1,
+                        payment_method=PaymentMethod.STRIPE_FED,
+                    )
+
+                    # Creation gateway -> appel Stripe API. Si l'appel leve,
+                    # l'atomic rollback PriceSold + LigneArticle + Paiement_stripe.
+                    # / Gateway creation -> Stripe API call. If it raises,
+                    # atomic rolls back PriceSold + LigneArticle + Paiement_stripe.
+                    gateway = CreationPaiementStripeFederation(
+                        user=user,
+                        liste_ligne_article=[ligne],
+                        wallet_receiver=user.wallet,
+                        asset_fed=asset_fed,
+                        tenant_federation=tenant_federation,
+                        absolute_domain=absolute_domain,
+                        success_url='return_refill_wallet/',
+                    )
+        except Exception as e:
+            # Log detaille pour audit (pas de trace utilisateur pour ne pas
+            # leaker d'info sensible).
+            # / Detailed log for audit (no user-facing trace to avoid leaking).
+            logger.error(f"refill_wallet_submit failed for user {user.email}: {e}")
+            return self._erreur_stripe_toast_swal(request, amount_euros_raw)
+
+        if not gateway.is_valid():
+            logger.error(
+                f"refill_wallet_submit: gateway invalide pour user {user.email}"
+            )
+            return self._erreur_stripe_toast_swal(request, amount_euros_raw)
+
+        return HttpResponseClientRedirect(gateway.checkout_session.url)
+
+    def _erreur_stripe_toast_swal(self, request, amount_saisi):
+        """
+        Rend a nouveau le formulaire refill_form_v2 avec la valeur saisie
+        preservee + declenche un toast SweetAlert2 via HX-Trigger 'appToast'.
+        / Re-renders the refill form with preserved value + fires a
+        SweetAlert2 toast via HX-Trigger 'appToast'.
+
+        LOCALISATION : BaseBillet/views.py (helper prive MyAccount)
+
+        Pourquoi pas messages.add_message + redirect :
+        - messages.add_message passe par l'ancien systeme de toast Django
+          (moins visible, pas cohérent avec le reste du projet).
+        - HttpResponseClientRedirect force un rechargement full-page :
+          l'user perd son montant saisi.
+        / Why not messages.add_message + redirect: old Django toast system
+        (inconsistent with project), full-page reload loses user input.
+        """
+        reponse = render(
+            request,
+            'htmx/views/my_account/refill_form_v2.html',
+            {
+                'amount_min_euros_affichage': '1,00',
+                'amount_max_euros_affichage': '500,00',
+                'amount_min_euros_input': '1',
+                'amount_max_euros_input': '500',
+                'submit_url': '/my_account/refill_wallet_submit/',
+                'amount_saisi': amount_saisi,
+            },
+        )
+        # Toast SweetAlert2 declencchée cote client par panier_scripts.html.
+        # / SweetAlert2 toast triggered client-side by panier_scripts.html.
+        reponse['HX-Trigger'] = json.dumps({
+            'appToast': {
+                'level': 'error',
+                'text': str(_(
+                    "Le paiement bancaire n'a pas pu demarrer. "
+                    "Reessaie dans un instant ou contacte un administrateur."
+                )),
+            },
+        })
+        return reponse
+
+
+    @action(detail=True, methods=['GET'])
+    def return_refill_wallet(self, request, pk=None):
+        """
+        Retour utilisateur apres paiement Stripe de recharge FED.
+        / User return after Stripe FED refill payment.
+
+        Dispatch V1/V2 :
+        - V1 (tenant legacy avec server_cashless) : pk = CheckoutStripe.uuid Fedow distant
+          -> appel FedowAPI.retrieve_from_refill_checkout
+        - V2 (tenant V2) : pk = Paiement_stripe.uuid local (dans federation_fed)
+          -> lecture locale du status
+
+        Plus de polling serveur V2 : si le webhook n'est pas encore arrive,
+        l'user voit "En cours de traitement" et rafraichit sa page.
+        / No V2 server polling: if webhook not yet received, user sees
+        "in progress" and refreshes the page.
+        """
+        from django_tenants.utils import tenant_context
+
+        user = request.user
+        verdict_ok, verdict = peut_recharger_v2(user)
+
+        # --- V1 legacy : demande confirmation a Fedow distant ---
+        # / V1 legacy: ask Fedow-remote for confirmation
+        if verdict == "v1_legacy":
+            fedowAPI = FedowAPI()
+            try:
+                wallet = fedowAPI.wallet.retrieve_from_refill_checkout(user, pk)
+                if wallet:
+                    messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
+                else:
+                    messages.add_message(request, messages.ERROR, _("Payment verification error"))
+            except Exception:
+                messages.add_message(request, messages.ERROR, _("Payment verification error"))
+            return redirect('/my_account/balance/')
+
+        # --- V2 : lecture locale + traitement si webhook en retard ---
+        # Pattern inspire de la billetterie/adhesion : la meme fonction
+        # (traiter_paiement_cashless_refill) est appelee depuis le webhook Stripe
+        # ET depuis ici. Comme ca, un user qui revient tres vite (webhook pas
+        # encore arrive) declenche lui-meme le traitement. Concurrency-safe
+        # via select_for_update cote fonction.
+        # / V2: local read + processing if webhook late. Same pattern as
+        # billetterie/membership : the shared function is called from both
+        # webhook and return view. User who returns fast triggers processing.
+        # / V2: local read of Paiement_stripe in federation_fed
+        from ApiBillet.views import (
+            traiter_paiement_cashless_refill,
+            CashlessRefillTamperingError,
+        )
+
+        tenant_federation = Client.objects.get(schema_name='federation_fed')
+        with tenant_context(tenant_federation):
+            try:
+                paiement = Paiement_stripe.objects.get(uuid=pk, user=user)
+            except (Paiement_stripe.DoesNotExist, ValueError):
+                messages.add_message(request, messages.ERROR, _("Payment not found"))
+                return redirect('/my_account/balance/')
+
+            # Declencher le traitement si pas deja fait (pattern webhook+retour).
+            # Si webhook deja passe : early return rapide (idempotent).
+            # Si Stripe dit pas payee : return, paiement reste PENDING.
+            # / Trigger processing if not done yet (webhook+return pattern).
+            try:
+                paiement = traiter_paiement_cashless_refill(paiement, request)
+            except CashlessRefillTamperingError:
+                logger.error(f"Tampering detecte sur return_refill_wallet pour {paiement.uuid}")
+                messages.add_message(request, messages.ERROR, _("Payment verification error"))
+                return redirect('/my_account/balance/')
+
+            if paiement.status == Paiement_stripe.PAID:
                 messages.add_message(request, messages.SUCCESS, _("Refilled wallet"))
             else:
-                messages.add_message(request, messages.ERROR, _("Payment verification error"))
-        except Exception:
-            messages.add_message(request, messages.ERROR, _("Payment verification error"))
+                # Stripe dit pas encore paye (rare : SEPA pending ou erreur transitoire).
+                # L'user rafraichit sa page plus tard ; le webhook reessayera.
+                # / Stripe says not yet paid (rare: SEPA pending or transient error).
+                # User refreshes later; webhook will retry.
+                messages.add_message(request, messages.INFO, _("Payment in progress. Please refresh in a moment."))
 
-        return redirect('/my_account/')
+        return redirect('/my_account/balance/')
 
 class QrCodeScanPay(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
@@ -1540,6 +2574,21 @@ def infos_pratiques(request):
     return render(request, template_path, context=template_context)
 
 
+@require_GET
+def le_faire_festival(request):
+    """
+    FR: Page de présentation "Le Faire Festival" - description de l'événement
+    EN: Presentation page "Le Faire Festival" - event description
+    """
+    template_context = get_context(request)
+
+    # Résolution du template avec fallback vers reunion si le skin n'a pas de le_faire_festival.html
+    config = Configuration.get_solo()
+    template_path = get_skin_template(config, "views/le_faire_festival.html")
+
+    return render(request, template_path, context=template_context)
+
+
 class FederationViewset(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]
     permission_classes = [permissions.AllowAny]
@@ -1645,7 +2694,7 @@ class HomeViewset(viewsets.ViewSet):
         if not validator.is_valid():
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{error} : {validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         contact_mailer.delay(
             sender=validator.validated_data['email'],
@@ -1654,7 +2703,7 @@ class HomeViewset(viewsets.ViewSet):
         )
 
         messages.add_message(request, messages.SUCCESS, _("Message sent, you have been sent a copy. Thank you!"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         # if self.action in ['create']:
@@ -2076,7 +3125,9 @@ class EventMVT(viewsets.ViewSet):
         # Tri par poids du produit parent, puis par ordre du tarif, puis par prix
         # Sort by parent product weight, then by rate display order, then by price
         event.published_prices = Price.objects.filter(
-            product__event=event, publish=True
+            product__event=event,
+            product__categorie_article__in=[Product.BILLET, Product.FREERES],
+            publish=True,
         ).order_by('product__poids', 'order', 'prix')
         for p in event.published_prices:
             if p.name is None:
@@ -2105,11 +3156,11 @@ class EventMVT(viewsets.ViewSet):
         if Ticket.objects.filter(reservation__user_commande=user, reservation__event__in=event.children.all()).exists():
             messages.add_message(request, messages.ERROR,
                                  _("You have already checked for an action on this event."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         if not user:
             messages.add_message(request, messages.ERROR, _("Please log in first."))
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         validator = ReservationValidator(data={
             "email": user.email,
@@ -2120,10 +3171,10 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         messages.add_message(request, messages.SUCCESS, _("Thank you! You are going to receive a validation email.."))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     @action(detail=True, methods=['POST'])
     def reservation(self, request, pk):
@@ -2136,7 +3187,7 @@ class EventMVT(viewsets.ViewSet):
             logger.error(f"ReservationViewset CREATE ERROR : {validator.errors}")
             for error in validator.errors:
                 messages.add_message(request, messages.ERROR, f"{validator.errors[error][0]}")
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -2159,8 +3210,13 @@ class EventMVT(viewsets.ViewSet):
             logger.debug("validator reservation OK, get checkout link -> redirect")
             return HttpResponseClientRedirect(validator.checkout_link)
 
+        # On passe l'user resolu par le validator (via l'email saisi),
+        # pas request.user qui peut etre AnonymousUser si le visiteur n'est pas connecte.
+        # Le template choisit son message selon user.is_active : il doit refleter
+        # l'etat reel utilise par TicketCreator.method_F pour decider d'envoyer
+        # les billets immediatement (user actif) ou un mail de validation (user inactif).
         return render(request, "reunion/views/event/reservation_ok.html", context={
-            "user": request.user,
+            "user": validator.reservation.user_commande,
         })
 
     @action(detail=True, methods=['GET'])
@@ -2427,7 +3483,9 @@ class Badge(viewsets.ViewSet):
         template_context = get_context(request)
         fedowAPI = FedowAPI()
         messages.add_message(request, messages.SUCCESS, _("Check out registered!"))
-        return HttpResponseClientRedirect(request.headers['Referer'])
+        # .get('Referer', '/') : fallback si le header Referer est absent
+        # / .get('Referer', '/'): fallback if Referer header is missing
+        return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
     def get_permissions(self):
         if self.action in ['retrieve']:
@@ -2447,7 +3505,7 @@ class MembershipMVT(viewsets.ViewSet):
             logger.warning(f"MembershipViewset CREATE ERROR : {membership_validator.errors}")
             error_messages = [str(item) for sublist in membership_validator.errors.values() for item in sublist]
             messages.add_message(request, messages.ERROR, error_messages)
-            return HttpResponseClientRedirect(request.headers['Referer'])
+            return HttpResponseClientRedirect(request.headers.get('Referer', '/'))
 
         # Le formulaire est valide.
         # Vérification de la demande de fomulaire supplémentaire avec Formbricks
@@ -2565,9 +3623,18 @@ class MembershipMVT(viewsets.ViewSet):
             context['published_prices_count'] = published_prices.count()
 
             # On check que l'user n'a pas déja prix un abonnement limité
+            price_max_per_user_reached = []
             if request.user.is_authenticated:
                 if product.max_per_user_reached(user=request.user):
                     return render(request, "reunion/views/membership/already_has_membership.html", context=context)
+
+                # Vérification des limites par tarif (Price)
+                # / Check per-rate (Price) limits
+                for price in published_prices:
+                    if price.max_per_user_reached(user=request.user):
+                        price_max_per_user_reached.append(price)
+
+            context['price_max_per_user_reached'] = price_max_per_user_reached
 
             # Pré-remplissage du formulaire dynamique si l'user a déjà une adhésion avec custom_form
             # Pre-fill dynamic form if user already has a membership with custom_form data
@@ -3789,3 +4856,463 @@ class Tenant(viewsets.ViewSet):
 
         #     _("Your Stripe account does not seem to be valid. "
         #       "\nPlease complete your Stripe.com registration before creating a new TiBillet space.")
+
+
+class PanierMVT(viewsets.ViewSet):
+    """
+    ViewSet du panier d'achat. Toutes les actions manipulent PanierSession
+    ou delegue a CommandeService pour le checkout. Toute validation metier
+    est dans les services — cette vue est un thin wrapper.
+
+    / Cart ViewSet. All actions manipulate PanierSession or delegate to
+    CommandeService for checkout. All business validation is in the services
+    — this view is a thin wrapper.
+    """
+    authentication_classes = [SessionAuthentication, ]
+
+    def get_permissions(self):
+        # Lectures du panier (list + badge) : AllowAny — session-scoped, aucun data leak.
+        # Le template panier gère l'état auth (anonyme → message "log in to checkout").
+        # Écritures (add, remove, checkout, promo, clear) : IsAuthenticated — force le login.
+        # / Reads: AllowAny (session-scoped, no data leak). Template handles auth state.
+        # Writes: IsAuthenticated (force login via HTMX 403 catch + offcanvas).
+        if self.action in ['list', 'badge']:
+            return [permissions.AllowAny()]
+        return [permissions.IsAuthenticated()]
+
+    # --- Helpers internes ---
+    # --- Internal helpers ---
+
+    def _render_badge_and_toast(self, request, message=None, level='success', swap_cart_content=False):
+        """
+        Rend les partials HTMX pour refresh du badge + envoie un toast via HX-Trigger.
+        / Render HTMX partials for badge refresh + send a toast via HX-Trigger.
+
+        LOCALISATION : BaseBillet/views.py (dans PanierMVT).
+
+        FLUX :
+        1. Le badge panier est rendu comme reponse HTMX (hx-swap-oob dans partial).
+        2. Le toast est signale au client via le header HX-Trigger avec un event
+           "panierToast". Un listener global dans base.html (reunion et
+           faire_festival) capte l'event et affiche un toast SweetAlert2.
+        3. Si swap_cart_content=True, le body de la reponse contient le partial
+           panier_content.html (le contenu de la page panier). Le bouton/form
+           doit cibler #panier-content via hx-target/hx-swap="outerHTML".
+           Sinon, le body est juste le partial badge (rien a swapper).
+
+        / FLOW:
+        1. Cart badge rendered as HTMX response (hx-swap-oob in partial).
+        2. Toast signaled via HX-Trigger header with event "panierToast".
+        3. If swap_cart_content=True, body contains the cart content partial.
+
+        :param request: Objet Request DRF.
+        :param message: Texte du toast (traduit cote serveur). Si None, pas de toast.
+        :param level: 'success' | 'error' | 'warning' | 'info'. Mappe sur icon Swal.
+        :param swap_cart_content: Si True, rend panier_content.html comme
+            corps de reponse (pour un swap HTMX direct du contenu panier).
+        :return: HttpResponse avec le partial + headers HX-Trigger.
+        """
+        if swap_cart_content:
+            # Rend 2 partials concatenes : le contenu panier (swap sur
+            # #panier-content via hx-swap="outerHTML") + le badge navbar
+            # (OOB swap sur #panier-badge-nav). Ils sont separes pour
+            # eviter la duplication d'id #panier-badge-nav dans le DOM
+            # initial (navbar rend deja un span avec ce id).
+            # / Render 2 concatenated partials: cart content (swap into
+            # #panier-content) + navbar badge (OOB). Separate to avoid
+            # duplicate #panier-badge-nav id in initial DOM.
+            from django.template.loader import render_to_string
+            from django.http import HttpResponse
+            template_context = get_context(request)
+            content_html = render_to_string(
+                'htmx/components/panier_content.html',
+                context=template_context, request=request,
+            )
+            badge_html = render_to_string(
+                'htmx/components/panier_badge.html',
+                context=template_context, request=request,
+            )
+            response = HttpResponse(content_html + badge_html)
+        else:
+            response = render(request, 'htmx/components/panier_toast.html')
+
+        if message:
+            # str() force l'evaluation d'un lazy _() en texte final,
+            # sinon json.dumps leve un TypeError.
+            # / str() forces evaluation of a lazy _() to final text.
+            response['HX-Trigger'] = json.dumps({
+                'panierToast': {
+                    'level': level,
+                    'text': str(message),
+                }
+            })
+        return response
+
+    # --- GET /panier/ ---
+    def list(self, request):
+        """Page panier : récap complet, modif, total, bouton checkout."""
+        template_context = get_context(request)
+        return render(request, 'htmx/views/panier.html', context=template_context)
+
+    # --- POST /panier/add/membership/ ---
+    @action(detail=False, methods=['POST'], url_path='add/membership')
+    def add_membership(self, request):
+        """
+        Ajoute une adhesion au panier.
+
+        Le formulaire d'adhesion (`membership/form.html`) poste :
+        - `price` (nom du radio/hidden) avec l'uuid du tarif choisi
+        - `custom_amount_{uuid}` pour les prix libres (un champ par prix)
+        - `options` (multi-valeur)
+        - `form__*` pour les champs custom
+
+        On accepte aussi `price_uuid` et `custom_amount` pour un appel direct
+        (tests, API). On recupere automatiquement le bon custom_amount en
+        cherchant la cle `custom_amount_{price_uuid}`.
+
+        / Adds a membership to the cart.
+        Accepts the membership form fields (`price`, `custom_amount_{uuid}`)
+        and also direct `price_uuid`/`custom_amount` (for tests/API).
+        """
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        # Support des deux conventions de nommage (form HTML + appel direct).
+        # / Support both naming conventions (HTML form + direct call).
+        price_uuid = request.POST.get('price_uuid') or request.POST.get('price')
+
+        # Cherche d'abord custom_amount direct, puis custom_amount_{uuid}.
+        # / Look for direct custom_amount first, then custom_amount_{uuid}.
+        custom_amount = request.POST.get('custom_amount')
+        if not custom_amount and price_uuid:
+            custom_amount = request.POST.get(f'custom_amount_{price_uuid}')
+        custom_amount = custom_amount or None
+
+        options = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+
+        # Le formulaire d'adhesion collecte les noms (cf. membership/form.html).
+        # On les passe a PanierSession pour qu'ils soient stockes sur l'item et
+        # prioritaires sur user.first_name/last_name a la materialisation.
+        # / The membership form collects names. We pass them to PanierSession
+        # so they're stored on the item and prioritized at materialization.
+        firstname = request.POST.get('firstname') or None
+        lastname = request.POST.get('lastname') or None
+
+        # Code promo : lie a un Product specifique (FK). On ne passe que si
+        # ce code existe pour le product de l'adhesion cible — sinon None.
+        # Validation complete (actif, is_usable, match) dans add_membership.
+        # / Promo code linked to a specific Product (FK). Passed only if it
+        # matches target product; else None. Full validation in add_membership.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+        item_promo = None
+        if promotional_code_name and price_uuid:
+            from BaseBillet.models import PromotionalCode, Price as PriceModel
+            try:
+                _target_price = PriceModel.objects.get(uuid=price_uuid)
+                if PromotionalCode.objects.filter(
+                    name=promotional_code_name,
+                    product=_target_price.product,
+                ).exists():
+                    item_promo = promotional_code_name
+            except PriceModel.DoesNotExist:
+                pass  # add_membership levera l'erreur Price not found
+
+        panier = PanierSession(request)
+        try:
+            panier.add_membership(
+                price_uuid=price_uuid,
+                custom_amount=custom_amount,
+                options=options,
+                custom_form=custom_form,
+                firstname=firstname,
+                lastname=lastname,
+                promotional_code_name=item_promo,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"add_membership unexpected error: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Unable to add membership."), level='error'
+            )
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout (redirect Stripe ou gratuit).
+        # / If the "Add to cart and pay" button sent `then=checkout`, chain
+        # directly to checkout (Stripe redirect or free order).
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=_("Membership added to cart."))
+
+    # --- POST /panier/remove/<int:pk>/ ---
+    @action(detail=True, methods=['POST'], url_path='remove')
+    def remove(self, request, pk=None):
+        """Retire un item a l'index donne (pk = index en string)."""
+        from BaseBillet.services_panier import PanierSession
+
+        try:
+            index = int(pk)
+        except (TypeError, ValueError):
+            return self._render_badge_and_toast(
+                request, message=_("Invalid index."), level='error'
+            )
+        panier = PanierSession(request)
+        panier.remove_item(index)
+        return self._render_badge_and_toast(
+            request, message=_("Item removed."), swap_cart_content=True,
+        )
+
+    # Note : l'endpoint update_quantity a ete supprime volontairement (refactor
+    # 2026-04). Pour changer la quantite, l'user retire l'item et le re-ajoute
+    # via booking_form, garantissant que toutes les validations sont appliquees.
+    # / update_quantity endpoint removed: user must remove + re-add to change qty.
+
+    # --- POST /panier/promo_code/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code')
+    def set_promo_code(self, request):
+        """Applique un code promo au panier."""
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        code_name = request.POST.get('code_name', '').strip()
+        if not code_name:
+            return self._render_badge_and_toast(
+                request, message=_("Missing code."), level='error'
+            )
+        panier = PanierSession(request)
+        try:
+            panier.set_promo_code(code_name)
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error', swap_cart_content=True,
+            )
+        return self._render_badge_and_toast(
+            request, message=_("Promo code applied."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/promo_code/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='promo_code/clear')
+    def clear_promo_code(self, request):
+        """Retire le code promo du panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear_promo_code()
+        return self._render_badge_and_toast(
+            request, message=_("Promo code removed."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/clear/ ---
+    @action(detail=False, methods=['POST'], url_path='clear')
+    def clear(self, request):
+        """Vide completement le panier."""
+        from BaseBillet.services_panier import PanierSession
+        panier = PanierSession(request)
+        panier.clear()
+        return self._render_badge_and_toast(
+            request, message=_("Cart cleared."), swap_cart_content=True,
+        )
+
+    # --- POST /panier/checkout/ ---
+    @action(detail=False, methods=['POST'], url_path='checkout')
+    def checkout(self, request):
+        """
+        Matérialise le panier en Commande → redirect Stripe (payant) ou
+        my_account (gratuit). Utilise request.user comme buyer (auth required).
+        / Materialize cart → Stripe redirect (paid) or my_account (free).
+        Uses request.user as buyer (auth required).
+        """
+        from BaseBillet.services_commande import CommandeService, CommandeServiceError
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+
+        user = request.user
+        # Les prenom/nom de l'acheteur sont collectes :
+        # - soit via les formulaires adhesion/reservation (custom_form data)
+        # - soit par Stripe Checkout (billing_address_collection)
+        # On passe user.first_name / user.last_name s'ils existent (fallback),
+        # sinon une chaine vide — Stripe completera.
+        # / Buyer first/last name collected via booking/membership forms or Stripe.
+        # We pass user.first_name/last_name as fallback, or empty string — Stripe fills in.
+        panier = PanierSession(request)
+        # InvalidItemError est leve par revalidate_all() en Phase 0 de
+        # materialiser() — ex : user a retire une adhesion obligatoire du
+        # panier entre temps. On remonte le message precis a l'utilisateur
+        # ("This rate requires a membership: X") plutot qu'un generique
+        # "Checkout failed" via le fallback Exception.
+        # / InvalidItemError raised by revalidate_all() in Phase 0 — e.g.
+        # user removed a required membership from cart. Surface the precise
+        # message instead of the generic "Checkout failed".
+        try:
+            commande = CommandeService.materialiser(
+                panier, user,
+                first_name=user.first_name or '',
+                last_name=user.last_name or '',
+                email=user.email,
+            )
+        except InvalidItemError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except CommandeServiceError as exc:
+            return self._render_badge_and_toast(request, message=str(exc), level='error')
+        except Exception as exc:
+            logger.error(f"CommandeService.materialiser failed: {exc}")
+            return self._render_badge_and_toast(
+                request, message=_("Checkout failed. Please try again."), level='error'
+            )
+
+        # Le panier est vide apres materialisation reussie.
+        # / Cart is empty after successful materialization.
+        panier.clear()
+
+        # Redirection selon le cas (payant/gratuit).
+        # / Redirect based on case (paid/free).
+        if commande.paiement_stripe and commande.paiement_stripe.checkout_session_url:
+            # C3 : URL persistee en DB — plus besoin d'appeler Stripe.
+            # / C3: URL persisted in DB — no Stripe API call needed.
+            return HttpResponseClientRedirect(commande.paiement_stripe.checkout_session_url)
+        elif commande.paiement_stripe:
+            logger.error(
+                f"Commande {commande.uuid_8()} has Paiement_stripe but no checkout_session_url"
+            )
+            messages.error(
+                request,
+                _("Payment link unavailable. Please contact support."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+        else:
+            # Commande gratuite : messages success + redirect vers my_account
+            # / Free order: success message + redirect to my_account
+            messages.success(
+                request,
+                _("Order confirmed. You will receive an email shortly."),
+            )
+            return HttpResponseClientRedirect('/my_account/my_reservations/')
+
+    # --- GET /panier/badge/ ---
+    @action(detail=False, methods=['GET'], url_path='badge')
+    def badge(self, request):
+        """Partial HTMX : le badge compteur seul."""
+        return render(request, 'htmx/components/panier_badge.html')
+
+    # --- POST /panier/add/tickets_batch/ ---
+    @action(detail=False, methods=['POST'], url_path='add/tickets_batch')
+    def add_tickets_batch(self, request):
+        """
+        Ajoute plusieurs billets au panier à partir du formulaire page event
+        (format legacy : price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback si erreur (on retire tous les items ajoutés dans cette requête).
+
+        / Add multiple tickets to the cart from the event page form (legacy
+        format: price_uuid=qty + options + custom_amount_<uuid> + form__<field>).
+        Rollback on error (remove all items added in this request).
+        """
+        from BaseBillet.models import Event
+        from BaseBillet.services_panier import PanierSession, InvalidItemError
+        from decimal import Decimal
+
+        # Accepter soit `slug` (legacy htmx/views/event.html), soit `event` (uuid, booking_form.html prod).
+        # / Accept either `slug` (legacy template) or `event` (uuid, prod booking_form.html).
+        slug = request.POST.get('slug')
+        event_uuid_param = request.POST.get('event')
+        event = None
+        if event_uuid_param:
+            try:
+                event = Event.objects.get(uuid=event_uuid_param)
+            except (Event.DoesNotExist, ValueError):
+                event = None
+        if event is None and slug:
+            try:
+                event = Event.objects.get(slug=slug)
+            except Event.DoesNotExist:
+                event = None
+        if event is None:
+            return self._render_badge_and_toast(
+                request, message=_("Event not found."), level='error',
+            )
+
+        panier = PanierSession(request)
+        added_count_before = len(panier.items())
+
+        # Extraire options de l'event / Extract event options
+        options_ids = request.POST.getlist('options') if hasattr(request.POST, 'getlist') else []
+        # Custom form fields (prefix form__) / Custom form fields
+        custom_form = {k[len('form__'):]: v for k, v in request.POST.items() if k.startswith('form__')}
+        # Code promo saisi dans booking_form (champ `promotional_code`).
+        # Valide cote serveur dans PanierSession.add_ticket (existence, actif,
+        # is_usable, lie au produit). Le front n'envoie que le nom.
+        # / Promo code from booking_form. Server-validated in add_ticket.
+        promotional_code_name = (request.POST.get('promotional_code') or '').strip() or None
+
+        items_added = 0
+        try:
+            for product in event.products.all():
+                for price in product.prices.all():
+                    price_key = str(price.uuid)
+                    raw_qty = request.POST.get(price_key)
+                    if not raw_qty:
+                        continue
+                    try:
+                        qty = int(Decimal(str(raw_qty).replace(',', '.')))
+                    except (TypeError, ValueError):
+                        continue
+                    if qty <= 0:
+                        continue
+
+                    # Custom amount si free_price / Custom amount if free_price
+                    custom_amount = None
+                    if price.free_price:
+                        custom_amount_raw = request.POST.get(f"custom_amount_{price.uuid}")
+                        if custom_amount_raw not in [None, '', 'null']:
+                            custom_amount = custom_amount_raw
+
+                    # Le code promo est lie a UN product specifique (FK). Le
+                    # booking_form a un champ global `promotional_code` pour
+                    # tout l'event, mais l'event peut avoir plusieurs products.
+                    # On ne passe le code que pour les prices dont le product
+                    # correspond — pour les autres, on passe None (silent skip,
+                    # pas d'erreur). Validation complete (actif, is_usable,
+                    # product match) faite dans add_ticket.
+                    # / Promo code is linked to ONE product (FK). The form
+                    # has a global field but events may have multiple products.
+                    # We pass the code only for matching-product prices;
+                    # others get None (silent skip, no error).
+                    item_promo = None
+                    if promotional_code_name:
+                        from BaseBillet.models import PromotionalCode
+                        if PromotionalCode.objects.filter(
+                            name=promotional_code_name,
+                            product=price.product,
+                        ).exists():
+                            item_promo = promotional_code_name
+                    panier.add_ticket(
+                        event_uuid=event.uuid,
+                        price_uuid=price.uuid,
+                        qty=qty,
+                        custom_amount=custom_amount,
+                        options=options_ids,
+                        custom_form=custom_form,
+                        promotional_code_name=item_promo,
+                    )
+                    items_added += 1
+        except InvalidItemError as exc:
+            # Rollback : retirer les items ajoutés pendant cette requête
+            # / Rollback: remove items added during this request
+            added_after = len(panier.items())
+            for _idx in range(added_after - added_count_before):
+                panier.remove_item(added_count_before)
+            return self._render_badge_and_toast(
+                request, message=str(exc), level='error',
+            )
+
+        if items_added == 0:
+            return self._render_badge_and_toast(
+                request, message=_("No tickets selected."), level='error',
+            )
+
+        message = ngettext(
+            "%(count)d ticket added to cart.",
+            "%(count)d tickets added to cart.",
+            items_added,
+        ) % {'count': items_added}
+        # Si le bouton "Ajouter au panier et payer" a envoye `then=checkout`,
+        # on enchaine directement sur le checkout.
+        # / If "Add to cart and pay" button sent `then=checkout`, chain to checkout.
+        if request.POST.get('then') == 'checkout':
+            return self.checkout(request)
+        return self._render_badge_and_toast(request, message=message)

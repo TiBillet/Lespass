@@ -1,0 +1,123 @@
+{% load humanize i18n %}
+{% comment %}
+Partial V2 : historique des transactions d'un user sur /my_account/balance/.
+
+LOCALISATION : BaseBillet/templates/reunion/partials/account/transaction_history_v2.html
+
+Rendu par MyAccount._transactions_table_v2() uniquement pour les users V2
+(verdict peut_recharger_v2 == "v2"). Les autres branches utilisent le
+partial V1 transaction_history.html (inchange).
+
+/ V2 partial for Transaction history. Rendered only for V2 users.
+
+Polish UI applique (skill /ui) :
+- tabular-nums sur la colonne Montant : chiffres de largeur egale, pas de "saut"
+  visuel quand les montants sont listes.
+- text-wrap: balance sur le titre : evite les mots orphelins sur la derniere ligne.
+- Couleur verte/rouge UNIQUEMENT sur le montant, pas sur le nom de l'asset
+  (meilleure lisibilite, moins "criard").
+- Hover subtil sur les lignes (feedback visuel discret).
+- Espacement mt-5 sur le titre : separation visuelle d'avec la section Monnaies.
+- Date brute en text-muted + police un peu plus petite (hierarchie visuelle).
+/ UI polish applied (/ui skill): tabular-nums, balance, color scope, hover, spacing.
+{% endcomment %}
+
+<style>
+  /* Styles scopes au conteneur V2 uniquement — pas d'effet sur le reste. */
+  /* Scoped to V2 container only — no side effects elsewhere. */
+  #transactionHistory .tx-v2-amount-number {
+    font-variant-numeric: tabular-nums;
+  }
+  #transactionHistory .tx-v2-title {
+    text-wrap: balance;
+  }
+  /* Hover subtil : legere teinte de fond pour feedback visuel sur la ligne. */
+  /* Subtle hover: slight bg tint for row feedback. */
+  #transactionHistory tbody tr {
+    transition: background-color 150ms ease;
+  }
+  #transactionHistory tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+</style>
+
+<section id="transactionHistory" aria-live="polite" data-testid="tx-v2-container">
+  <h2 class="pt-3 mt-5 tx-v2-title">{% translate "Transaction history" %}</h2>
+
+  {% if aucune_transaction %}
+    <div class="text-center py-4 opacity-75" data-testid="tx-v2-empty">
+      <i class="bi bi-clock-history fs-1 d-block mb-2" aria-hidden="true"></i>
+      <p class="mb-0">{% translate "No transaction yet." %}</p>
+    </div>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table align-middle" data-testid="tx-v2-table">
+        <thead>
+          <tr>
+            <th>{% translate "Date" %}</th>
+            <th>{% translate "Action" %}</th>
+            <th class="text-end">{% translate "Amount" %}</th>
+            <th>{% translate "Structure" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in transactions %}
+            <tr data-testid="tx-v2-row" data-tx-action="{{ item.action }}">
+              <td>
+                <span>{{ item.datetime|naturaltime }}</span>
+                <br>
+                <small class="text-muted">{{ item.datetime|date:"d/m/Y H:i" }}</small>
+              </td>
+              <td>{{ item.action_display }}</td>
+              <td class="text-end">
+                {# Couleur sur le MONTANT uniquement (tabular-nums pour alignement). #}
+                {# Le nom de l'asset reste en couleur neutre (moins "criard"). #}
+                {# / Color on AMOUNT only (tabular-nums for alignment). #}
+                {# Asset name stays in default color (less noisy). #}
+                <strong class="tx-v2-amount-number {% if item.signe == '+' %}text-success{% else %}text-danger{% endif %}">
+                  {{ item.signe }}{{ item.amount_euros|floatformat:2 }}
+                </strong>
+                <span class="ms-1 text-body-secondary">{{ item.asset_name_affichage }}</span>
+              </td>
+              <td>{{ item.structure }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if paginator_page.has_other_pages %}
+      <nav aria-label="{% translate 'Pagination historique transactions' %}" class="d-flex justify-content-center gap-2">
+        {% if paginator_page.has_previous %}
+          <a class="btn btn-sm btn-outline-primary"
+             href="?page={{ paginator_page.previous_page_number }}"
+             hx-get="/my_account/transactions_table/?page={{ paginator_page.previous_page_number }}"
+             hx-target="#transactionHistory"
+             hx-swap="outerHTML"
+             hx-indicator="#tibillet-spinner"
+             data-testid="tx-v2-page-prev">
+            <i class="bi bi-chevron-left" aria-hidden="true"></i>
+            {% translate "Previous" %}
+          </a>
+        {% endif %}
+        <span class="btn btn-sm btn-light disabled">
+          {% blocktranslate with current=paginator_page.number total=paginator_page.paginator.num_pages %}
+            Page {{ current }} / {{ total }}
+          {% endblocktranslate %}
+        </span>
+        {% if paginator_page.has_next %}
+          <a class="btn btn-sm btn-outline-primary"
+             href="?page={{ paginator_page.next_page_number }}"
+             hx-get="/my_account/transactions_table/?page={{ paginator_page.next_page_number }}"
+             hx-target="#transactionHistory"
+             hx-swap="outerHTML"
+             hx-indicator="#tibillet-spinner"
+             data-testid="tx-v2-page-next">
+            {% translate "Next" %}
+            <i class="bi bi-chevron-right" aria-hidden="true"></i>
+          </a>
+        {% endif %}
+      </nav>
+    {% endif %}
+  {% endif %}
+</section>

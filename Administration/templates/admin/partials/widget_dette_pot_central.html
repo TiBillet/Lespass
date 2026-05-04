@@ -1,0 +1,35 @@
+{% load i18n %}
+{% load billet_filters %}
+
+{% if dettes_pot_central %}
+{% for d in dettes_pot_central %}
+{% if d.dette_centimes > 0 or d.dernier_virement %}
+<div style="background: #FFFBEB; border-left: 4px solid #F59E0B; padding: 16px; border-radius: 6px; margin-bottom: 12px;"
+     data-testid="widget-dette-pot-central">
+    <h3 style="margin: 0 0 8px; font-size: 1.1rem; color: #92400E;">
+        {% translate "Dette du pot central" %}
+    </h3>
+    <p style="margin: 0 0 4px; font-size: 1.5rem; font-weight: 700;">
+        {{ d.dette_centimes|cents_to_euros }}
+        <span style="font-size: 0.8rem; font-weight: 400; color: #6B7280;">
+            ({{ d.asset.name }})
+        </span>
+    </p>
+    {% if d.dernier_virement %}
+    <p style="margin: 4px 0 0; font-size: 0.9rem; color: #6B7280;">
+        {% blocktrans with date=d.dernier_virement.datetime|date:"d/m/Y" amount=d.dernier_virement.amount|cents_to_euros %}
+            Dernier virement reçu : {{ amount }} le {{ date }}.
+        {% endblocktrans %}
+    </p>
+    {% endif %}
+    <p style="margin-top: 8px;">
+        <a href="{% url 'staff_admin:bank_transfers_historique_tenant' %}"
+           style="color: #2563EB; font-size: 0.9rem; text-decoration: none;"
+           data-testid="link-historique-tenant">
+            {% translate "Voir l'historique" %} →
+        </a>
+    </p>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}

@@ -37,5 +37,44 @@ class StaffAdminSite(UnfoldAdminSite):
     def has_permission(self, request):
         return TenantAdminPermissionWithRequest(request)
 
+    def get_urls(self):
+        """
+        Ajoute les routes custom Phase 2 (bank transfers) au scope /admin/.
+        / Adds Phase 2 custom routes (bank transfers) to /admin/ scope.
+        """
+        from django.urls import path
+        from Administration import views_bank_transfers
+
+        custom_urls = [
+            path(
+                "bank-transfers/",
+                self.admin_view(
+                    views_bank_transfers.BankTransfersViewSet.as_view({
+                        "get": "list", "post": "create",
+                    })
+                ),
+                name="bank_transfers_dashboard",
+            ),
+            path(
+                "bank-transfers/historique/",
+                self.admin_view(
+                    views_bank_transfers.BankTransfersViewSet.as_view({
+                        "get": "historique",
+                    })
+                ),
+                name="bank_transfers_historique",
+            ),
+            path(
+                "bank-transfers/historique-tenant/",
+                self.admin_view(
+                    views_bank_transfers.BankTransfersViewSet.as_view({
+                        "get": "historique_tenant",
+                    })
+                ),
+                name="bank_transfers_historique_tenant",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
 
 staff_admin_site = StaffAdminSite(name='staff_admin')

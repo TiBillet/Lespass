@@ -25,15 +25,30 @@ from django_tenants.utils import schema_context
 @pytest.fixture(scope="session")
 def tireuse_api_key_billing(tenant):
     """Cree une TireuseAPIKey pour les tests billing. Nettoie apres.
-    / Creates a TireuseAPIKey for billing tests. Cleans up after."""
+    / Creates a TireuseAPIKey for billing tests. Cleans up after.
+
+    PIEGE : le yield sort du schema_context. Le teardown (delete)
+    s'execute en schema public → UndefinedTable. Il faut re-ouvrir
+    un schema_context pour le cleanup.
+    / TRAP: yield exits schema_context. Teardown (delete) runs in
+    public schema → UndefinedTable. Must re-open schema_context for cleanup.
+    """
     with schema_context(tenant.schema_name):
         from controlvanne.models import TireuseAPIKey
 
         api_key_obj, key_string = TireuseAPIKey.objects.create_key(
             name="test-billing-key"
         )
-        yield key_string
-        api_key_obj.delete()
+
+    yield key_string
+
+    # Cleanup dans le bon schema (pas en public)
+    # / Cleanup in the correct schema (not public)
+    with schema_context(tenant.schema_name):
+        try:
+            api_key_obj.delete()
+        except Exception:
+            pass  # Déjà supprimé ou schema indisponible
 
 
 @pytest.fixture(scope="session")
@@ -149,21 +164,22 @@ def tireuse_billing(tenant):
                 poids_mesure=True,
             )
 
-        pdv = PointDeVente.objects.create(
-            name="POS tireuse billing test",
-            hidden=True,  # Caché pour ne pas polluer les tests menu_ventes / Hidden to not pollute menu_ventes tests
-        )
-
-        tireuse = TireuseBec.objects.create(
+        tireuse, _created = TireuseBec.objects.get_or_create(
             nom_tireuse="Tireuse billing test",
-            enabled=True,
-            fut_actif=produit_fut,
-            debimetre=debimetre,
-            point_de_vente=pdv,
-            reservoir_ml=Decimal("30000.00"),
-            seuil_mini_ml=Decimal("0.00"),
-            appliquer_reserve=False,
+            defaults={
+                "enabled": True,
+                "fut_actif": produit_fut,
+                "debimetre": debimetre,
+                "reservoir_ml": Decimal("30000.00"),
+            },
         )
+        # Le signal post_save cree automatiquement un PointDeVente.
+        # On le marque hidden pour ne pas polluer les tests menu_ventes.
+        # / post_save signal auto-creates a PointDeVente. Mark it hidden.
+        if tireuse.point_de_vente:
+            PointDeVente.objects.filter(pk=tireuse.point_de_vente_id).update(
+                hidden=True
+            )
 
         return tireuse
 

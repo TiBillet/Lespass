@@ -21,6 +21,8 @@
   hx-encoding="multipart/form-data"
   hx-target="#offcanvas-event-admin"
   hx-swap="innerHTML"
+  data-loading-target="#tibillet-spinner"
+  data-loading-class="active"
   enctype="multipart/form-data"
 >
   {% csrf_token %}
@@ -110,7 +112,7 @@
   </div>
 
   <div class="d-flex gap-2 mt-4">
-    <button type="submit" class="btn btn-primary">
+    <button type="submit" class="btn btn-primary" data-loading-disable>
       <i class="bi bi-check2-circle"></i> {% translate "Créer le lieu" %}
     </button>
     <button type="button" class="btn btn-outline-secondary"

@@ -1,0 +1,20 @@
+{% load i18n %}
+{# Lien vers la vue kiosk de cette tireuse (affiché uniquement en mode change, pas en add) #}
+{# / Link to this tap's kiosk view (shown only in change mode, not in add) #}
+{% if kiosk_url %}
+<div style="margin-bottom: 16px;">
+  <a href="{{ kiosk_url }}"
+     target="_blank"
+     rel="noopener"
+     data-testid="kiosk-link"
+     style="display: inline-flex; align-items: center; gap: 8px;
+            padding: 10px 20px; border-radius: 8px;
+            background-color: var(--color-primary-600, #7c3aed);
+            color: white; text-decoration: none; font-weight: 500;
+            font-size: 14px; transition: opacity 0.2s;">
+    <span class="material-symbols-outlined" style="font-size: 20px;">monitoring</span>
+    {% translate "Open kiosk view" %}
+    <span class="material-symbols-outlined" style="font-size: 16px;">open_in_new</span>
+  </a>
+</div>
+{% endif %}

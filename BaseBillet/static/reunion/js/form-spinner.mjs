@@ -1,20 +1,37 @@
+/**
+ * Affiche/cache le spinner de chargement (#tibillet-spinner)
+ * Utilise la classe .active (coherent avec loading-states HTMX)
+ * / Shows/hides the loading spinner using .active class
+ *
+ * LOCALISATION : reunion/js/form-spinner.mjs
+ */
 const spinner = document.getElementById('tibillet-spinner')
 
-/**
- * 
- * @param {HTMLDivElement} spinner 
- */
 const showSpinner = () => {
-    spinner.style.display = 'block'
+    if (spinner) {
+        spinner.classList.add('active')
+    }
+}
+
+export const hideSpinner = () => {
+    if (spinner) {
+        spinner.classList.remove('active')
+    }
 }
 
 /**
- * 
- * @param {HTMLDivElement} spinner 
+ * Initialise le spinner sur un formulaire HTMX
+ * / Initializes spinner on an HTMX form
+ *
+ * Actions :
+ * - Affiche le spinner au debut de la requete (htmx:beforeRequest)
+ * - Cache le spinner a la fin de la requete (htmx:afterRequest), succes ou erreur
+ *
+ * @param {HTMLElement} form - Le formulaire HTMX a surveiller
  */
-export const hideSpinner = () => {
-    spinner.style.display = 'none'
-}
+export const init = form => {
+    if (!form) return
 
-export const init = form =>
     form.addEventListener('htmx:beforeRequest', showSpinner)
+    form.addEventListener('htmx:afterRequest', hideSpinner)
+}

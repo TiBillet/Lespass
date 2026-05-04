@@ -1,0 +1,14 @@
+{% load i18n %}
+
+{# Toast HTMX : visible uniquement en cas d'echec (HX-Refresh recharge la page sur succes) #}
+{# HTMX toast: only visible on failure (HX-Refresh reloads the page on success) #}
+<div data-testid="refund-toast"
+     style="padding: 16px; border-radius: 6px; margin-bottom: 16px;
+            {% if success %}background: #D1FAE5; color: #065F46;{% else %}background: #FEE2E2; color: #991B1B;{% endif %}">
+    {% if success %}
+        <strong>{% translate "OK" %} :</strong>
+    {% else %}
+        <strong>{% translate "Échec" %} :</strong>
+    {% endif %}
+    {{ message }}
+</div>

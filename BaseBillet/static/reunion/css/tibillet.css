@@ -127,3 +127,48 @@ figure[data-trix-attachment] img {
         margin-right: 0.5rem;
     }
 }
+
+/* ===== Polish UI — details qui font la difference =====
+ * / UI polish — small details that matter
+ * Source d'inspiration : jakub.kr/writing/details-that-make-interfaces-feel-better
+ */
+
+/* Chiffres tabulaires : meme largeur pour tous les chiffres (0,1,2...9).
+ * Empeche le texte de "sauter" quand un compteur change.
+ * / Tabular numbers: same width for all digits (0-9).
+ * Prevents text jumping when counters change.
+ * Applique aux badges (panier, agenda), totaux billets, prix booking/membership.
+ * / Applied to badges (cart, agenda), ticket totals, booking/membership prices.
+ */
+.badge,
+.js-total-amount, .js-total-price,
+.js-order-price, .js-order-amount,
+.js-max-amount,
+.tab-nums {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Titres courts equilibres : evite les mots orphelins en fin de ligne.
+ * / Balanced short titles: avoid orphan words at line end.
+ * Ne pas appliquer sur long paragraphs (perf).
+ * / Do not apply on long paragraphs (perf).
+ */
+h1, h2, h3, h4,
+.h1, .h2, .h3, .h4,
+.balance {
+    text-wrap: balance;
+}
+
+/* Badge compteur du panier dans la navbar — ajustement optique.
+ * Le centre mathematique (translate-middle sur top-0 start-100) tombe sur le
+ * coin top-right de l'icone bi-bag, mais l'icone a du whitespace en haut
+ * (les anses). On decale donc le badge vers l'interieur (bas + gauche) pour
+ * qu'il s'ancre visuellement a l'icone plutot que d'avoir l'air de flotter.
+ * / Cart navbar badge — optical fine-tuning. Mathematical center falls on
+ * the icon's top-right corner, but bi-bag has top whitespace (handles), so
+ * we nudge the badge inward so it anchors visually instead of floating.
+ */
+#panier-badge-nav .badge {
+    margin-top: 0.25rem;
+    margin-left: -0.3rem;
+}

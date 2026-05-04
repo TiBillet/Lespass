@@ -42,10 +42,6 @@
 </div>
 
 <script type="module">
-    import * as Spinner from '{% static "reunion/js/form-spinner.mjs" %}'
-    // hide spinner if present
-    try { Spinner.hideSpinner && Spinner.hideSpinner(); } catch (e) {}
-
     // Déplace le contenu dans l'offcanvas pour remplacer le formulaire
     const content = document.getElementById('membership-already-has-content');
     const container = document.getElementById('offcanvas-membership');

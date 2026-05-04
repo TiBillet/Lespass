@@ -1,0 +1,383 @@
+"""
+Orchestrateur de matérialisation d'un panier en objets DB.
+/ Cart-to-DB materialization orchestrator.
+
+Responsabilité unique : transformer un PanierSession en Commande + N Reservations
++ M Memberships + LigneArticle + éventuel Paiement_stripe. Le tout atomique.
+
+/ Single responsibility: transform a PanierSession into Commande + N Reservations
++ M Memberships + LigneArticle + optional Paiement_stripe. Atomic.
+"""
+import logging
+from decimal import Decimal
+
+from django.db import connection, transaction
+from django.utils.translation import gettext_lazy as _
+
+logger = logging.getLogger(__name__)
+
+
+class CommandeServiceError(Exception):
+    """Erreur à la matérialisation.
+    / Error during materialization."""
+
+
+class CommandeService:
+    """
+    Service stateless qui matérialise un panier en DB.
+    / Stateless service that materializes a cart to DB.
+    """
+
+    @staticmethod
+    @transaction.atomic
+    def materialiser(panier, user, first_name, last_name, email):
+        """
+        Transforme le panier en objets DB et retourne la Commande créée.
+
+        Args:
+            panier: PanierSession instance.
+            user: TibilletUser (déjà résolu par email au niveau de la vue).
+            first_name, last_name, email: infos acheteur.
+
+        Returns:
+            Commande: la commande créée avec son status (PENDING si Stripe
+                nécessaire, PAID si commande gratuite).
+
+        Raises:
+            CommandeServiceError: si le panier est invalide ou vide.
+            InvalidItemError (via re-validation): si un item du panier n'est
+                plus valide au moment du checkout.
+
+        / Transforms the cart into DB objects and returns the created Commande.
+        """
+        from BaseBillet.models import (
+            Commande, LigneArticle, Membership, PaymentMethod, Price,
+            Reservation, SaleOrigin,
+        )
+        from ApiBillet.serializers import dec_to_int, get_or_create_price_sold
+
+        if panier.is_empty():
+            raise CommandeServiceError(_("Cart is empty."))
+
+        # Phase 0 : re-validation complète des items contre la DB.
+        # Si stock épuisé, price dépublié, adhésion supprimée, etc. → InvalidItemError
+        # qui remonte naturellement (atomic rollback → aucune écriture DB).
+        # / Phase 0: full re-validation of items against DB.
+        panier.revalidate_all()
+
+        # Resolution des prenom/nom finaux pour la Commande pivot :
+        # - priorite aux valeurs stockees sur le premier item membership qui en a
+        #   (collectees par membership/form.html),
+        # - sinon fallback sur les args de la fonction (user.first_name).
+        # Ainsi un utilisateur sans profil renseigne obtient une Commande
+        # avec de vrais prenom/nom des que le panier contient une adhesion.
+        # / Resolve final first/last name for the Commande pivot:
+        # - prioritize the first membership item with names (from the form),
+        # - fallback to function args (user.first_name) otherwise.
+        # Ensures users without a filled profile still get proper names.
+        buyer_firstname = first_name
+        buyer_lastname = last_name
+        for item in panier.items():
+            if item.get('type') != 'membership':
+                continue
+            item_fn = (item.get('firstname') or '').strip()
+            item_ln = (item.get('lastname') or '').strip()
+            if item_fn and item_ln:
+                buyer_firstname = item_fn
+                buyer_lastname = item_ln
+                break
+
+        # Resolution des promo codes : chaque item porte son propre
+        # `promotional_code_name` (stocke par PanierSession.add_* apres
+        # validation stricte : actif, is_usable, lie au product du price).
+        # Helper qui transforme le nom en instance PromotionalCode, ou None.
+        # On charge en batch les codes necessaires pour limiter les queries.
+        # / Per-item promo codes: each item carries `promotional_code_name`
+        # (server-validated at add time). Helper maps name→instance. Batch load.
+        from BaseBillet.models import PromotionalCode
+        needed_names = {
+            item.get('promotional_code_name')
+            for item in panier.items()
+            if item.get('promotional_code_name')
+        }
+        promo_by_name = {
+            p.name: p
+            for p in PromotionalCode.objects.filter(name__in=needed_names)
+        } if needed_names else {}
+
+        def _resolve_promo(item):
+            name = item.get('promotional_code_name')
+            return promo_by_name.get(name) if name else None
+
+        # -- Création de la Commande pivot (status=PENDING) --
+        # Le Commande.promo_code pivot prend le premier code rencontre (il
+        # est purement informatif — l'application se fait ligne par ligne).
+        # / The Commande.promo_code pivot takes the first code found (purely
+        # informative — actual application is done line-by-line).
+        pivot_promo_code = None
+        for item in panier.items():
+            pivot_promo_code = _resolve_promo(item)
+            if pivot_promo_code:
+                break
+
+        commande = Commande.objects.create(
+            user=user,
+            email_acheteur=email,
+            first_name=buyer_firstname,
+            last_name=buyer_lastname,
+            status=Commande.PENDING,
+            promo_code=pivot_promo_code,
+        )
+
+        all_lines = []
+        total_centimes = 0
+
+        # -- Phase 1 : Memberships en premier --
+        # -- Phase 1: Memberships first --
+        for item in panier.items():
+            if item['type'] != 'membership':
+                continue
+            price = Price.objects.get(uuid=item['price_uuid'])
+            amount_dec = CommandeService._resolve_amount(price, item)
+
+            # Code promo de cet item specifiquement (pas du panier global).
+            # / Promo code for this specific item (not cart-global).
+            item_promo_code = _resolve_promo(item)
+
+            # Prenom/nom : priorite aux valeurs de l'item (collectees par
+            # membership/form.html), puis fallback sur les args de la fonction
+            # (issus de user.first_name / user.last_name).
+            # / First/last name: prioritize item values (collected by the
+            # membership form), fallback to function args (user.first_name).
+            item_firstname = (item.get('firstname') or '').strip()
+            item_lastname = (item.get('lastname') or '').strip()
+            resolved_firstname = item_firstname or first_name
+            resolved_lastname = item_lastname or last_name
+
+            membership = Membership.objects.create(
+                user=user,
+                price=price,
+                commande=commande,
+                contribution_value=amount_dec,
+                status=Membership.WAITING_PAYMENT,
+                first_name=resolved_firstname,
+                last_name=resolved_lastname,
+                newsletter=False,
+                custom_form=item.get('custom_form') or None,
+            )
+            if item.get('options'):
+                from BaseBillet.models import OptionGenerale
+                opts = OptionGenerale.objects.filter(
+                    uuid__in=item['options']
+                )
+                if opts.exists():
+                    membership.option_generale.set(opts)
+
+            price_sold = get_or_create_price_sold(price, custom_amount=amount_dec)
+            amount_cts = dec_to_int(amount_dec)
+            # Le code n'est applique que si lie au product (double-check
+            # redondant avec la validation a l'ajout, mais safe).
+            # / Code applied only if linked to the product (redundant safety check).
+            applicable_promo = item_promo_code if (
+                item_promo_code and item_promo_code.product_id == price.product_id
+            ) else None
+            line = LigneArticle.objects.create(
+                pricesold=price_sold,
+                membership=membership,
+                payment_method=PaymentMethod.STRIPE_NOFED,
+                amount=amount_cts,
+                qty=1,
+                sale_origin=SaleOrigin.LESPASS,
+                promotional_code=applicable_promo,
+            )
+            all_lines.append(line)
+            total_centimes += amount_cts
+
+        # -- Phase 2 : Reservations groupées par event_uuid --
+        # -- Phase 2: Reservations grouped by event_uuid --
+        from BaseBillet.models import Event
+        tickets_par_event = {}
+        for item in panier.items():
+            if item['type'] != 'ticket':
+                continue
+            tickets_par_event.setdefault(item['event_uuid'], []).append(item)
+
+        for event_uuid, items_event in tickets_par_event.items():
+            event = Event.objects.get(uuid=event_uuid)
+            # Construction d'un products_dict conforme au format attendu par TicketCreator
+            # / Build a products_dict compatible with TicketCreator's expected format
+            products_dict = {}
+            custom_amounts = {}
+            for it in items_event:
+                price = Price.objects.get(uuid=it['price_uuid'])
+                qty = int(it['qty'])
+                products_dict.setdefault(price.product, {})
+                products_dict[price.product][price] = products_dict[price.product].get(price, 0) + qty
+                if it.get('custom_amount'):
+                    custom_amounts[price.uuid] = Decimal(str(it['custom_amount']))
+
+            # Tous les items de cet event partagent options + custom_form
+            # (une seule soumission de booking_form.html par event).
+            # / All items from this event share options + custom_form
+            # (single submission of booking_form.html per event).
+            first_item = items_event[0]
+            custom_form = first_item.get('custom_form') or None
+            options_uuids = first_item.get('options') or []
+
+            # Code promo pour ce batch d'event : premier code trouve parmi les
+            # items. En pratique tous les items d'un meme event ont le meme
+            # code (un seul champ `promotional_code` par submission) mais ce
+            # resolveur est defensif au cas ou. TicketCreator applique ensuite
+            # le code au product matching via get_or_create_price_sold.
+            # / Promo code for this event batch: first found among items.
+            # TicketCreator applies it to matching product via get_or_create_price_sold.
+            event_promo_code = None
+            for it in items_event:
+                event_promo_code = _resolve_promo(it)
+                if event_promo_code:
+                    break
+
+            reservation = Reservation.objects.create(
+                user_commande=user,
+                event=event,
+                commande=commande,
+                custom_form=custom_form,
+                status=Reservation.CREATED,
+            )
+            if options_uuids:
+                from BaseBillet.models import OptionGenerale
+                opts = OptionGenerale.objects.filter(uuid__in=options_uuids)
+                if opts.exists():
+                    reservation.options.set(opts)
+
+            # TicketCreator gère Tickets + LigneArticle. On bloque son Stripe.
+            # / TicketCreator handles Tickets + LigneArticle. We disable its Stripe.
+            from BaseBillet.validators import TicketCreator
+            creator = TicketCreator(
+                reservation=reservation,
+                products_dict=products_dict,
+                promo_code=event_promo_code,
+                custom_amounts=custom_amounts,
+                sale_origin=SaleOrigin.LESPASS,
+                create_checkout=False,  # <-- clé : pas de Stripe ici
+            )
+            for line in creator.list_line_article_sold:
+                all_lines.append(line)
+                total_centimes += int(line.amount * line.qty)
+
+        # -- Phase 3/4 : Stripe ou gratuit --
+        # -- Phase 3/4: Stripe or free --
+        if total_centimes > 0:
+            CommandeService._creer_paiement_stripe(commande, user, all_lines)
+            # Status reste PENDING — Stripe webhook basculera en PAID via signaux
+        else:
+            CommandeService._finaliser_gratuit(commande, all_lines)
+
+        logger.info(
+            f"CommandeService.materialiser OK : commande={commande.uuid_8()}, "
+            f"lignes={len(all_lines)}, total_cts={total_centimes}, status={commande.status}"
+        )
+        return commande
+
+    @staticmethod
+    def _resolve_amount(price, item):
+        """Calcule le montant Decimal à utiliser pour ce price + item.
+        / Compute the Decimal amount to use for this price + item."""
+        if price.free_price and item.get('custom_amount'):
+            return Decimal(str(item['custom_amount']))
+        return price.prix or Decimal("0.00")
+
+    @staticmethod
+    def _creer_paiement_stripe(commande, user, lignes):
+        """Phase 3 — crée un Paiement_stripe consolidé pour toutes les lignes.
+        / Phase 3 — create a consolidated Paiement_stripe for all lines."""
+        from BaseBillet.models import LigneArticle, Paiement_stripe
+        from PaiementStripe.views import CreationPaiementStripe
+
+        tenant = connection.tenant
+        metadata = {
+            'tenant': f'{tenant.uuid}',
+            'tenant_name': f'{tenant.name}',
+            'commande_uuid': f'{commande.uuid}',
+        }
+
+        # Détection : y a-t-il des billets dans la commande ?
+        # Si oui → SEPA refusé (billets à utiliser rapidement).
+        # Si non (adhésion-only) → SEPA autorisé si config ON.
+        # / Detection: does the order contain tickets?
+        # If yes → deny SEPA (tickets must be usable quickly).
+        # If no (adhesion-only) → allow SEPA if config ON.
+        contains_tickets = any(
+            line.reservation is not None for line in lignes
+        )
+
+        # Le success_url pointe vers l'action `stripe_return` sur EventMVT
+        # (`/event/<paiement_stripe_uuid>/stripe_return/`) — meme flow que
+        # pour une reservation directe (validators.py:345). Pas d'action
+        # stripe_return sur PanierMVT, donc on reutilise celle d'EventMVT
+        # qui est generique : update checkout status + redirect vers
+        # `/my_account/my_reservations/` (ou `/event/` si anonyme).
+        # / success_url → EventMVT.stripe_return (same pattern as direct
+        # reservations). PanierMVT has no stripe_return action, so we reuse
+        # the generic one which updates status + redirects to user account.
+        new_paiement = CreationPaiementStripe(
+            user=user,
+            liste_ligne_article=lignes,
+            metadata=metadata,
+            reservation=None,  # Pas de FK : le pivot est Commande
+            source=Paiement_stripe.FRONT_BILLETTERIE,
+            success_url="stripe_return/",
+            cancel_url="stripe_return/",
+            absolute_domain=f"https://{tenant.get_primary_domain()}/event/",
+            accept_sepa=(not contains_tickets),
+        )
+        if not new_paiement.is_valid():
+            raise CommandeServiceError(_("Payment creation failed."))
+
+        paiement = new_paiement.paiement_stripe_db
+        paiement.lignearticles.all().update(status=LigneArticle.UNPAID)
+
+        commande.paiement_stripe = paiement
+        commande.save(update_fields=["paiement_stripe"])
+
+    @staticmethod
+    def _finaliser_gratuit(commande, lignes):
+        """
+        Phase 4 — commande gratuite (total 0€) : pas de Stripe, tout VALID direct.
+        / Phase 4 — free order (total 0€): no Stripe, all VALID direct.
+        """
+        from django.utils import timezone
+        from BaseBillet.models import Commande, LigneArticle, Membership, PaymentMethod, Reservation
+
+        now = timezone.now()
+
+        # Memberships de la commande → ONCE + deadline
+        # / Commande's memberships → ONCE + deadline
+        for membership in commande.memberships_commande.all():
+            if not membership.first_contribution:
+                membership.first_contribution = now
+            membership.last_contribution = now
+            membership.payment_method = PaymentMethod.FREE
+            membership.status = Membership.ONCE
+            membership.save()
+            membership.set_deadline()
+
+        # Reservations de la commande → FREERES/FREERES_USERACTIV selon user.is_active
+        # / Commande's reservations → FREERES/FREERES_USERACTIV per user.is_active
+        for reservation in commande.reservations.all():
+            user = reservation.user_commande
+            reservation.status = (
+                Reservation.FREERES_USERACTIV if user.is_active else Reservation.FREERES
+            )
+            reservation.save()
+
+        # LigneArticle → VALID + payment_method=FREE
+        # / LigneArticle → VALID + payment_method=FREE
+        for line in lignes:
+            line.status = LigneArticle.VALID
+            line.payment_method = PaymentMethod.FREE
+            line.save(update_fields=["status", "payment_method"])
+
+        commande.status = Commande.PAID
+        commande.paid_at = now
+        commande.save(update_fields=["status", "paid_at"])

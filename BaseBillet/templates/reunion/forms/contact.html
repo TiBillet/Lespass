@@ -1,5 +1,7 @@
 {% load i18n %}
-<form hx-post="/home/contact/" class="d-flex flex-column justify-content-between h-100">
+<form hx-post="/home/contact/" class="d-flex flex-column justify-content-between h-100"
+      data-loading-target="#tibillet-spinner"
+      data-loading-class="active">
     <div>
         <div class="form-floating mb-3">
             <input type="email" class="form-control" id="email" placeholder="mon@email.fr" required
@@ -28,7 +30,7 @@
         </div>
     </div>
     <div class="p-3">
-        <button type="submit" class="btn btn-primary d-block mb-3 w-100">{% trans "Send" %}</button>
+        <button type="submit" class="btn btn-primary d-block mb-3 w-100" data-loading-disable>{% trans "Send" %}</button>
         <a href="." class="btn btn-danger d-block">{% trans "Cancel" %}</a>
     </div>
 </form>

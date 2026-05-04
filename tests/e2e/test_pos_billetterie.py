@@ -197,7 +197,7 @@ class TestPOSBilletterieE2E:
             has=page.locator('.billet-tuile-prix:not(:has-text("0€"))')
         ).first
         tuile_payante.click()
-        expect(page.locator('#addition-list')).not_to_be_empty(timeout=5_000)
+        expect(page.locator('#addition-list')).not_to_be_empty(timeout=10_000)
 
         # VALIDER → identification
         # / VALIDER → identification

@@ -19,15 +19,22 @@ REGLES / RULES:
 """
 
 import logging
+from dataclasses import dataclass
 
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
 
-from fedow_core.exceptions import SoldeInsuffisant
+from fedow_core.exceptions import (
+    CarteDejaLiee,
+    CarteIntrouvable,
+    SoldeInsuffisant,
+    UserADejaCarte,
+)
 from fedow_core.models import Asset, Federation, Token, Transaction
 
 from AuthBillet.models import Wallet
+from QrcodeCashless.models import CarteCashless
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +43,7 @@ logger = logging.getLogger(__name__)
 # AssetService : gestion des monnaies et tokens
 # AssetService: currency and token management
 # ---------------------------------------------------------------------------
+
 
 class AssetService:
     """
@@ -60,7 +68,7 @@ class AssetService:
         """
         assets_du_tenant = Asset.objects.filter(
             tenant_origin=tenant,
-        ).order_by('name')
+        ).order_by("name")
 
         return assets_du_tenant
 
@@ -85,15 +93,20 @@ class AssetService:
             tenants=tenant,
         )
         assets_federes_uuids = federations_du_tenant.values_list(
-            'assets__uuid', flat=True,
+            "assets__uuid",
+            flat=True,
         )
 
         # Combiner : assets du tenant OU assets federes, actifs uniquement.
         # Combine: tenant's assets OR federated assets, active only.
-        assets_accessibles = Asset.objects.filter(
-            Q(tenant_origin=tenant) | Q(uuid__in=assets_federes_uuids),
-            active=True,
-        ).distinct().order_by('name')
+        assets_accessibles = (
+            Asset.objects.filter(
+                Q(tenant_origin=tenant) | Q(uuid__in=assets_federes_uuids),
+                active=True,
+            )
+            .distinct()
+            .order_by("name")
+        )
 
         return assets_accessibles
 
@@ -142,6 +155,7 @@ class AssetService:
 # WalletService : operations sur les soldes (Token)
 # WalletService: balance operations (Token)
 # ---------------------------------------------------------------------------
+
 
 class WalletService:
     """
@@ -192,7 +206,7 @@ class WalletService:
         """
         tous_les_tokens = Token.objects.filter(
             wallet=wallet,
-        ).select_related('asset', 'asset__tenant_origin')
+        ).select_related("asset", "asset__tenant_origin")
 
         return tous_les_tokens
 
@@ -214,14 +228,33 @@ class WalletService:
         resultat = Token.objects.filter(
             wallet=wallet,
         ).aggregate(
-            total=Sum('value'),
+            total=Sum("value"),
         )
 
         # Si aucun Token n'existe, aggregate retourne {'total': None}.
         # If no Token exists, aggregate returns {'total': None}.
-        total_en_centimes = resultat['total'] or 0
+        total_en_centimes = resultat["total"] or 0
 
         return total_en_centimes
+
+    @staticmethod
+    def get_or_create_wallet_tenant(tenant):
+        """
+        Recupere ou cree le wallet "lieu" du tenant — wallet receveur des refunds
+        et BANK_TRANSFER, et sender des operations sortantes du lieu.
+        Returns or creates the tenant's "venue" wallet.
+
+        Convention : un wallet par tenant, identifie par origin=tenant
+        ET name=f"Lieu {tenant.schema_name}". Idempotent.
+
+        NB : a remplacer par tenant.wallet quand la convention sera formalisee
+        sur le modele Customers.Client.
+        """
+        wallet, _created = Wallet.objects.get_or_create(
+            origin=tenant,
+            name=f"Lieu {tenant.schema_name}",
+        )
+        return wallet
 
     @staticmethod
     def crediter(wallet, asset, montant_en_centimes):
@@ -259,7 +292,7 @@ class WalletService:
         token, token_just_created = Token.objects.get_or_create(
             wallet=wallet,
             asset=asset,
-            defaults={'value': 0},
+            defaults={"value": 0},
         )
 
         # Verrouiller la ligne pour eviter les modifications concurrentes.
@@ -267,7 +300,7 @@ class WalletService:
         token_verrouille = Token.objects.select_for_update().get(pk=token.pk)
 
         token_verrouille.value = token_verrouille.value + montant_en_centimes
-        token_verrouille.save(update_fields=['value'])
+        token_verrouille.save(update_fields=["value"])
 
         return token_verrouille
 
@@ -322,10 +355,10 @@ class WalletService:
         # We still set the card → user link if not already done.
         carte_a_un_wallet_ephemere = carte.wallet_ephemere is not None
         if not carte_a_un_wallet_ephemere:
-            carte_user_est_deja_correct = (carte.user == user)
+            carte_user_est_deja_correct = carte.user == user
             if not carte_user_est_deja_correct:
                 carte.user = user
-                carte.save(update_fields=['user'])
+                carte.save(update_fields=["user"])
             return
 
         wallet_source = carte.wallet_ephemere
@@ -342,7 +375,7 @@ class WalletService:
                 name=f"Wallet {user.email}",
             )
             user.wallet = nouveau_wallet
-            user.save(update_fields=['wallet'])
+            user.save(update_fields=["wallet"])
 
         wallet_cible = user.wallet
 
@@ -351,11 +384,11 @@ class WalletService:
         # pointe wallet_ephemere vers le meme wallet que user.wallet.
         # / Unlikely but possible if someone manually pointed
         # wallet_ephemere to the same wallet as user.wallet.
-        wallet_source_est_le_meme_que_cible = (wallet_source.pk == wallet_cible.pk)
+        wallet_source_est_le_meme_que_cible = wallet_source.pk == wallet_cible.pk
         if wallet_source_est_le_meme_que_cible:
             carte.user = user
             carte.wallet_ephemere = None
-            carte.save(update_fields=['user', 'wallet_ephemere'])
+            carte.save(update_fields=["user", "wallet_ephemere"])
             return
 
         # --- Transferer chaque Token avec solde > 0 ---
@@ -389,7 +422,7 @@ class WalletService:
         # It's just detached from the card.
         carte.user = user
         carte.wallet_ephemere = None
-        carte.save(update_fields=['user', 'wallet_ephemere'])
+        carte.save(update_fields=["user", "wallet_ephemere"])
 
         logger.info(
             f"Fusion wallet ephemere terminee pour carte {carte.tag_id} "
@@ -462,15 +495,191 @@ class WalletService:
             )
 
         token_verrouille.value = token_verrouille.value - montant_en_centimes
-        token_verrouille.save(update_fields=['value'])
+        token_verrouille.save(update_fields=["value"])
 
         return token_verrouille
+
+    @staticmethod
+    def rembourser_en_especes(
+        carte,
+        tenant,
+        receiver_wallet,
+        ip: str = "0.0.0.0",
+        vider_carte: bool = False,
+        primary_card=None,
+    ) -> dict:
+        """
+        Rembourse en especes les tokens eligibles d'une carte.
+        Refunds in cash the eligible tokens of a card.
+
+        Tokens eligibles / Eligible tokens :
+        - TLF avec asset.tenant_origin == tenant
+        - FED (toutes valeurs, sans filtre origine — un seul FED dans le systeme)
+
+        Cree :
+        - 1 Transaction(action=REFUND, sender=wallet_carte, receiver=receiver_wallet) par asset
+        - 1 LigneArticle FED (encaissement positif STRIPE_FED) si solde FED > 0
+        - 1 LigneArticle CASH negative (sortie cash totale TLF + FED)
+        - Si vider_carte=True : carte.user=None, carte.wallet_ephemere=None,
+          CartePrimaire.objects.filter(carte=carte).delete()
+
+        Tout dans un seul transaction.atomic().
+        All in a single transaction.atomic() block.
+
+        :param carte: CarteCashless (la carte a vider)
+        :param tenant: Client (le tenant courant)
+        :param receiver_wallet: Wallet (le wallet receveur des REFUND, generalement le wallet du lieu)
+        :param ip: str (adresse IP de la requete)
+        :param vider_carte: bool (si True, reset user + wallet_ephemere + CartePrimaire)
+
+        :return: dict {
+            "transactions": list[Transaction],
+            "lignes_articles": list[LigneArticle],
+            "total_centimes": int,
+            "total_tlf_centimes": int,
+            "total_fed_centimes": int,
+        }
+        :raises NoEligibleTokens: si aucun token eligible n'a value > 0
+        """
+        # Imports locaux pour eviter le cycle (BaseBillet est en TENANT_APPS)
+        # / Local imports to avoid cycle (BaseBillet is in TENANT_APPS)
+        from django.db.models import Q
+        from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+        from BaseBillet.services_refund import (
+            get_or_create_product_remboursement,
+            get_or_create_pricesold_refund,
+        )
+        from fedow_core.exceptions import NoEligibleTokens
+
+        # 1. Charger le wallet de la carte
+        # / 1. Load the card's wallet
+        wallet_carte = None
+        if carte.user is not None and carte.user.wallet is not None:
+            wallet_carte = carte.user.wallet
+        elif carte.wallet_ephemere is not None:
+            wallet_carte = carte.wallet_ephemere
+
+        if wallet_carte is None:
+            raise NoEligibleTokens(carte_tag_id=carte.tag_id)
+
+        # 2. Filtrer les tokens eligibles : TLF du tenant + FED
+        # / 2. Filter eligible tokens: tenant's TLF + FED
+        tokens_eligibles = list(
+            Token.objects.filter(
+                wallet=wallet_carte,
+                value__gt=0,
+            )
+            .filter(
+                Q(asset__category=Asset.TLF, asset__tenant_origin=tenant)
+                | Q(asset__category=Asset.FED)
+            )
+            .select_related("asset", "asset__tenant_origin")
+        )
+
+        if not tokens_eligibles:
+            raise NoEligibleTokens(carte_tag_id=carte.tag_id)
+
+        # 3. Atomic : transactions REFUND + LigneArticle + reset eventuel
+        # / 3. Atomic: REFUND transactions + LigneArticle + optional reset
+        transactions_creees = []
+        total_tlf = 0
+        total_fed = 0
+
+        with transaction.atomic():
+            for token in tokens_eligibles:
+                tx = TransactionService.creer(
+                    sender=wallet_carte,
+                    receiver=receiver_wallet,
+                    asset=token.asset,
+                    montant_en_centimes=token.value,
+                    action=Transaction.REFUND,
+                    tenant=tenant,
+                    card=carte,
+                    primary_card=primary_card,
+                    ip=ip,
+                    comment="Remboursement especes admin",
+                    metadata={
+                        "vider_carte": vider_carte,
+                    },
+                )
+                transactions_creees.append(tx)
+                if token.asset.category == Asset.TLF:
+                    total_tlf += token.value
+                elif token.asset.category == Asset.FED:
+                    total_fed += token.value
+
+            # 4. Creer les LigneArticle (Product/PriceSold systeme partages)
+            # / 4. Create LigneArticle (shared system Product/PriceSold)
+            product_refund = get_or_create_product_remboursement()
+            pricesold_refund = get_or_create_pricesold_refund(product_refund)
+
+            lignes_creees = []
+
+            if total_fed > 0:
+                # Recupere l'asset FED unique (convention : 1 seul FED dans le systeme)
+                # On utilise .filter().first() pour un message d'erreur clair si absent
+                # / Get the unique FED asset (convention: 1 FED in the system).
+                # Using .filter().first() for a clear error message if missing.
+                fed_asset = Asset.objects.filter(category=Asset.FED).first()
+                if fed_asset is None:
+                    raise RuntimeError(
+                        "Aucun asset FED n'existe dans le systeme : "
+                        "impossible de rembourser le solde federe."
+                    )
+                ligne_fed = LigneArticle.objects.create(
+                    pricesold=pricesold_refund,
+                    qty=1,
+                    amount=total_fed,
+                    payment_method=PaymentMethod.STRIPE_FED,
+                    status=LigneArticle.VALID,
+                    sale_origin=SaleOrigin.ADMIN,
+                    carte=carte,
+                    wallet=wallet_carte,
+                    asset=fed_asset.uuid,
+                )
+                lignes_creees.append(ligne_fed)
+
+            ligne_cash = LigneArticle.objects.create(
+                pricesold=pricesold_refund,
+                qty=1,
+                amount=-(total_tlf + total_fed),
+                payment_method=PaymentMethod.CASH,
+                status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.ADMIN,
+                carte=carte,
+                wallet=wallet_carte,
+            )
+            lignes_creees.append(ligne_cash)
+
+            # 5. Reset optionnel de la carte (action VV)
+            # / 5. Optional card reset (VV action)
+            if vider_carte:
+                # Import local : laboutik n'est pas toujours dispo selon le contexte
+                # / Local import: laboutik may not be available depending on context
+                try:
+                    from laboutik.models import CartePrimaire
+
+                    CartePrimaire.objects.filter(carte=carte).delete()
+                except ImportError:
+                    pass
+                carte.user = None
+                carte.wallet_ephemere = None
+                carte.save(update_fields=["user", "wallet_ephemere"])
+
+        return {
+            "transactions": transactions_creees,
+            "lignes_articles": lignes_creees,
+            "total_centimes": total_tlf + total_fed,
+            "total_tlf_centimes": total_tlf,
+            "total_fed_centimes": total_fed,
+        }
 
 
 # ---------------------------------------------------------------------------
 # TransactionService : creation de transactions (mouvements financiers)
 # TransactionService: transaction creation (financial movements)
 # ---------------------------------------------------------------------------
+
 
 class TransactionService:
     """
@@ -549,7 +758,6 @@ class TransactionService:
             metadata = {}
 
         with transaction.atomic():
-
             # --- Debit du sender ---
             # Certaines actions ne debitent pas le sender :
             # - FIRST / CREATION : genesis, pas de debit
@@ -557,7 +765,12 @@ class TransactionService:
             # Some actions don't debit the sender:
             # - FIRST / CREATION: genesis, no debit
             # - REFILL: the venue issues tokens, it doesn't spend its own
-            actions_sans_debit = [Transaction.FIRST, Transaction.CREATION, Transaction.REFILL]
+            actions_sans_debit = [
+                Transaction.FIRST,
+                Transaction.CREATION,
+                Transaction.REFILL,
+                Transaction.BANK_TRANSFER,  # virement bancaire externe : pas de mutation Token
+            ]
             action_necessite_debit = action not in actions_sans_debit
 
             if action_necessite_debit:
@@ -568,10 +781,18 @@ class TransactionService:
                 )
 
             # --- Credit du receiver ---
-            # Certaines actions ne creditent pas (VOID, REFUND sans receiver).
-            # Some actions don't credit (VOID, REFUND without receiver).
+            # Certaines actions ne creditent pas le receiver :
+            # - receiver=None (VOID, REFUND sans receiver explicite)
+            # - BANK_TRANSFER : virement bancaire externe, l'argent n'arrive pas
+            #   sur le wallet receveur (il arrive sur le compte bancaire externe).
+            # Some actions don't credit:
+            # - receiver=None (VOID, REFUND without explicit receiver)
+            # - BANK_TRANSFER: external bank movement, money does NOT land on
+            #   the receiver wallet (it lands on the external bank account).
+            actions_sans_credit = [Transaction.BANK_TRANSFER]
             receiver_existe = receiver is not None
-            if receiver_existe:
+            action_necessite_credit = action not in actions_sans_credit
+            if receiver_existe and action_necessite_credit:
                 WalletService.crediter(
                     wallet=receiver,
                     asset=asset,
@@ -705,3 +926,598 @@ class TransactionService:
         )
 
         return transaction_recharge
+
+
+# ---------------------------------------------------------------------------
+# BankTransferService : suivi de la dette pot central → tenant (Phase 2)
+# BankTransferService: tracking central pot debt to tenants (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+class BankTransferService:
+    """
+    Service de gestion des virements bancaires pot central -> tenant.
+    Tracks the central pot's debt to tenants for refunded FED tokens.
+
+    La dette = somme(REFUND FED vers tenant) - somme(BANK_TRANSFER FED vers tenant).
+    Aucune mutation Token (les BANK_TRANSFER sont des evenements bancaires externes,
+    enregistres pour audit + reporting comptable).
+
+    The debt = sum(REFUND FED to tenant) - sum(BANK_TRANSFER FED to tenant).
+    No Token mutation (BANK_TRANSFER are external bank events, recorded for
+    audit + accounting reporting only).
+    """
+
+    @staticmethod
+    def calculer_dette(tenant, asset) -> int:
+        """
+        Retourne la dette actuelle en centimes du pot central envers ce tenant pour cet asset.
+        Returns the central pot's current debt to this tenant for this asset, in cents.
+
+        Calcul : sum(REFUND, asset, tenant=tenant) - sum(BANK_TRANSFER, asset, tenant=tenant).
+        Garantit >= 0 (validation hard a la saisie empeche tout sur-versement).
+        """
+        from django.db.models import Sum
+
+        agg_refund = Transaction.objects.filter(
+            action=Transaction.REFUND,
+            asset=asset,
+            tenant=tenant,
+        ).aggregate(total=Sum("amount"))
+        total_refund = agg_refund.get("total") or 0
+
+        agg_virement = Transaction.objects.filter(
+            action=Transaction.BANK_TRANSFER,
+            asset=asset,
+            tenant=tenant,
+        ).aggregate(total=Sum("amount"))
+        total_virement = agg_virement.get("total") or 0
+
+        dette = total_refund - total_virement
+        return max(0, dette)  # filet de securite : la dette ne peut etre negative
+
+    @staticmethod
+    def obtenir_dettes_par_tenant_et_asset() -> list:
+        """
+        Pour le dashboard superuser : toutes les dettes par couple (tenant, asset).
+        For the superuser dashboard: all debts per (tenant, asset) pair.
+
+        Inclut les couples avec dette > 0 OU au moins 1 REFUND historique.
+        Trie par dette decroissante.
+
+        Retourne : list[dict] avec les cles :
+          - tenant: Client
+          - asset: Asset
+          - dette_centimes: int
+          - total_refund_centimes: int
+          - total_virements_centimes: int
+          - dernier_virement: Transaction | None
+        """
+        from django.db.models import Sum
+        from Customers.models import Client
+
+        couples = (
+            Transaction.objects.filter(
+                action__in=[Transaction.REFUND, Transaction.BANK_TRANSFER],
+                asset__category=Asset.FED,
+            )
+            .values_list("tenant_id", "asset_id")
+            .distinct()
+        )
+
+        resultat = []
+        for tenant_id, asset_id in couples:
+            tenant = Client.objects.filter(pk=tenant_id).first()
+            asset = Asset.objects.filter(pk=asset_id).first()
+            if tenant is None or asset is None:
+                continue
+
+            agg_refund = Transaction.objects.filter(
+                action=Transaction.REFUND,
+                asset=asset,
+                tenant=tenant,
+            ).aggregate(total=Sum("amount"))
+            total_refund = agg_refund.get("total") or 0
+
+            agg_virement = Transaction.objects.filter(
+                action=Transaction.BANK_TRANSFER,
+                asset=asset,
+                tenant=tenant,
+            ).aggregate(total=Sum("amount"))
+            total_virement = agg_virement.get("total") or 0
+
+            dette = max(0, total_refund - total_virement)
+
+            dernier_virement = (
+                Transaction.objects.filter(
+                    action=Transaction.BANK_TRANSFER,
+                    asset=asset,
+                    tenant=tenant,
+                )
+                .order_by("-datetime")
+                .first()
+            )
+
+            resultat.append(
+                {
+                    "tenant": tenant,
+                    "asset": asset,
+                    "dette_centimes": dette,
+                    "total_refund_centimes": total_refund,
+                    "total_virements_centimes": total_virement,
+                    "dernier_virement": dernier_virement,
+                }
+            )
+
+        # Tri : dette decroissante / Sort: debt descending
+        resultat.sort(key=lambda d: d["dette_centimes"], reverse=True)
+        return resultat
+
+    @staticmethod
+    def obtenir_dette_pour_tenant(tenant) -> list:
+        """
+        Pour le widget tenant : meme structure que obtenir_dettes_par_tenant_et_asset
+        mais filtree au tenant courant.
+        """
+        toutes = BankTransferService.obtenir_dettes_par_tenant_et_asset()
+        return [d for d in toutes if d["tenant"].pk == tenant.pk]
+
+    @staticmethod
+    def enregistrer_virement(
+        tenant,
+        asset,
+        montant_en_centimes: int,
+        date_virement,
+        reference_bancaire: str,
+        comment: str = "",
+        ip: str = "0.0.0.0",
+        admin_email: str = "",
+    ):
+        """
+        Enregistre un virement bancaire recu par le tenant.
+        Records a bank transfer received by the tenant.
+
+        Cree atomiquement :
+        - 1 Transaction(action=BANK_TRANSFER, sender=asset.wallet_origin,
+                        receiver=tenant.wallet_lieu, asset=asset, amount=...).
+        - 1 LigneArticle d'encaissement (payment_method=TRANSFER, +amount,
+                                          sale_origin=ADMIN, asset=asset.uuid).
+
+        Validation : montant <= calculer_dette(tenant, asset) (re-check dans l'atomic).
+
+        :return: Transaction creee
+        :raises MontantSuperieurDette: si sur-versement
+        """
+        # Imports locaux pour eviter le cycle SHARED_APPS / TENANT_APPS
+        # / Local imports to avoid SHARED_APPS / TENANT_APPS cycle
+        from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
+        from BaseBillet.services_refund import (
+            get_or_create_product_virement_recu,
+            get_or_create_pricesold_refund,
+        )
+        from fedow_core.exceptions import MontantSuperieurDette
+
+        with transaction.atomic():
+            # Re-check de la dette dans l'atomic (race guard)
+            dette = BankTransferService.calculer_dette(tenant=tenant, asset=asset)
+            if montant_en_centimes > dette:
+                raise MontantSuperieurDette(
+                    montant_demande_en_centimes=montant_en_centimes,
+                    dette_actuelle_en_centimes=dette,
+                )
+
+            receiver_wallet = WalletService.get_or_create_wallet_tenant(tenant)
+
+            # 1. Transaction BANK_TRANSFER (no token mutation grace a actions_sans_credit)
+            tx = TransactionService.creer(
+                sender=asset.wallet_origin,
+                receiver=receiver_wallet,
+                asset=asset,
+                montant_en_centimes=montant_en_centimes,
+                action=Transaction.BANK_TRANSFER,
+                tenant=tenant,
+                ip=ip,
+                comment=comment,
+                metadata={
+                    "reference_bancaire": reference_bancaire,
+                    "date_virement": date_virement.isoformat(),
+                    "saisi_par": admin_email,
+                },
+            )
+
+            # 2. LigneArticle d'encaissement (rapport comptable)
+            product_vr = get_or_create_product_virement_recu()
+            pricesold_vr = get_or_create_pricesold_refund(product_vr)
+            LigneArticle.objects.create(
+                pricesold=pricesold_vr,
+                qty=1,
+                amount=montant_en_centimes,
+                payment_method=PaymentMethod.TRANSFER,
+                status=LigneArticle.VALID,
+                sale_origin=SaleOrigin.ADMIN,
+                asset=asset.uuid,
+                wallet=receiver_wallet,
+                carte=None,
+                metadata={
+                    "reference_bancaire": reference_bancaire,
+                    "date_virement": date_virement.isoformat(),
+                    "transaction_uuid": str(tx.uuid),
+                },
+            )
+
+        logger.info(
+            f"Virement bancaire enregistre : {montant_en_centimes} centimes "
+            f"vers tenant {tenant.schema_name} (asset {asset.name})"
+        )
+        return tx
+
+
+# ---------------------------------------------------------------------------
+# RefillService : recharge cashless depuis un PSP externe (Stripe, Payplug...)
+# RefillService: cashless refill from an external PSP
+# ---------------------------------------------------------------------------
+
+
+class RefillService:
+    """
+    Service de recharge FED depuis un paiement bancaire externe.
+    Appele par les webhooks PSP (Stripe aujourd'hui, autres demain).
+
+    / FED refill service from an external bank payment.
+    Called by PSP webhooks (Stripe today, others tomorrow).
+
+    Contrat PSP-agnostique : fedow_core/PSP_INTERFACE.md
+    """
+
+    @staticmethod
+    def process_cashless_refill(
+        paiement_uuid,
+        user,
+        amount_cents,
+        tenant,
+        ip="0.0.0.0",
+    ):
+        """
+        Cree une Transaction(action=REFILL) idempotente et credite le Token de l'user.
+        / Creates an idempotent REFILL Transaction and credits the user's Token.
+
+        Args:
+            paiement_uuid: UUID du paiement externe (Paiement_stripe.uuid, ou autre PSP)
+            user: TibilletUser a crediter
+            amount_cents: int (montant en centimes, deja valide par le serializer)
+            tenant: Client (generalement federation_fed)
+            ip: str (IP de la requete, pour audit)
+
+        Returns:
+            Transaction: la transaction creee (ou existante si idempotence)
+
+        Idempotence :
+        Si une Transaction(checkout_stripe=paiement_uuid, action=REFILL) existe deja,
+        on la retourne sans rien creer. Cela protege contre les retries Stripe.
+
+        / If a Transaction(checkout_stripe=paiement_uuid, action=REFILL) already exists,
+        we return it without creating anything. Protects against PSP retries.
+        """
+        # L'asset FED est unique global (convention, cf. bootstrap_fed_asset).
+        # / FED asset is globally unique (convention, see bootstrap_fed_asset).
+        asset_fed = Asset.objects.get(category=Asset.FED)
+
+        with transaction.atomic():
+            # Idempotence : verifier si la Transaction existe deja.
+            # / Idempotence: check if Transaction already exists.
+            transaction_existante = Transaction.objects.filter(
+                checkout_stripe=paiement_uuid,
+                action=Transaction.REFILL,
+            ).first()
+            if transaction_existante:
+                return transaction_existante
+
+            # Fallback defensif : creer le wallet si absent.
+            # Normalement, MyAccount.refill_wallet() a deja cree le wallet avant Stripe
+            # (car la metadata Stripe a besoin de wallet.uuid).
+            # / Defensive fallback: create wallet if missing.
+            # Normally refill_wallet() already created it before Stripe.
+            if user.wallet is None:
+                user.wallet = Wallet.objects.create(
+                    origin=tenant,
+                    name=f"Wallet {user.email}",
+                )
+                user.save(update_fields=["wallet"])
+
+            # Creation de la Transaction REFILL + credit du Token (atomique).
+            # TransactionService.creer_recharge fait un atomic imbrique,
+            # Django gere via savepoint.
+            # / Create REFILL Transaction + credit Token (atomic).
+            # TransactionService.creer_recharge uses nested atomic, Django savepoint.
+            nouvelle_transaction = TransactionService.creer_recharge(
+                sender_wallet=asset_fed.wallet_origin,
+                receiver_wallet=user.wallet,
+                asset=asset_fed,
+                montant_en_centimes=amount_cents,
+                tenant=tenant,
+                ip=ip,
+                checkout_stripe_uuid=paiement_uuid,
+                comment="Recharge FED via PSP (voir PSP_INTERFACE.md)",
+            )
+            return nouvelle_transaction
+
+
+# ==========================================================================
+# CarteService — Service carte cashless (scan QR + identification + perte)
+# Session 34 (2026-04-20)
+# / CarteService — Cashless card service (QR scan + user link + lost)
+# ==========================================================================
+
+
+@dataclass
+class ScanResult:
+    """
+    Resultat d'un scan de carte. Contient le wallet resolu et si c'est ephemere.
+    / Result of a card scan. Contains resolved wallet and ephemeral flag.
+
+    LOCALISATION : fedow_core/services.py
+    """
+    wallet: Wallet
+    is_wallet_ephemere: bool
+
+
+class CarteService:
+    """
+    Service de gestion des cartes cashless (scan QR, identification, perte).
+    Remplace les appels vers fedow_connect/NFCcardFedow pour les tenants V2.
+    / Cashless card management service. Replaces fedow_connect calls for V2 tenants.
+
+    LOCALISATION : fedow_core/services.py
+
+    Decisions architecturales (cf. SPEC_SCAN_QR_CARTE_V2.md) :
+    - Aucune modification de schema CarteCashless
+    - CarteCashless.uuid sert d'identifiant public (qrcode_uuid)
+    - Wallet ephemere cree a la volee sur carte vierge
+    - Fusion deleguee a WalletService.fusionner_wallet_ephemere()
+    """
+
+    @staticmethod
+    def scanner_carte(carte, tenant_origine, ip="0.0.0.0"):
+        """
+        Resout le wallet d'une carte. Cree un wallet_ephemere si carte vierge.
+        / Resolves a card's wallet. Creates a wallet_ephemere if card is blank.
+
+        Retourne ScanResult(wallet, is_wallet_ephemere).
+
+        Concurrence : la creation du wallet ephemere est protegee par un
+        verrou de ligne (select_for_update) a l'interieur d'une transaction
+        atomique. Evite que deux scans simultanes sur une carte vierge creent
+        deux wallets ephemeres dont un serait orphelin (dernier ecrit gagne).
+        / Concurrency: lazy wallet_ephemere creation is protected by a row-level
+        lock inside an atomic transaction. Prevents two concurrent scans from
+        creating two ephemeral wallets (last-write-wins leaves one orphan).
+
+        :param carte: CarteCashless
+        :param tenant_origine: Client (tenant d'origine de la carte, = carte.detail.origine)
+        :param ip: str (IP de la requete, pour tracabilite future)
+        :return: ScanResult
+        """
+        # --- Carte identifiee : wallet du user ---
+        # Cas le plus frequent. Lecture seule, pas de verrou necessaire.
+        # Nota : user.wallet peut etre None (user inscrit sans wallet encore).
+        # Dans ce cas on bascule sur la branche wallet_ephemere ou creation.
+        # / Identified card: user's wallet (read-only, no lock needed).
+        carte_est_identifiee = carte.user is not None and carte.user.wallet is not None
+        if carte_est_identifiee:
+            return ScanResult(wallet=carte.user.wallet, is_wallet_ephemere=False)
+
+        # --- Carte anonyme deja scannee : wallet ephemere existant ---
+        # Lecture sans verrou ; si une autre requete concurrente est en train
+        # de creer le wallet_ephemere, on bascule sur la branche atomique.
+        # / Anonymous card already scanned: existing wallet_ephemere (no lock).
+        if carte.wallet_ephemere is not None:
+            return ScanResult(wallet=carte.wallet_ephemere, is_wallet_ephemere=True)
+
+        # --- Carte vierge : creer un wallet_ephemere et l'attacher (atomique) ---
+        # Verrou sur la ligne carte pour eviter la double-creation concurrente.
+        # Apres lock, on re-verifie que le wallet_ephemere n'a pas ete cree
+        # entretemps par une autre requete (double-check locking).
+        # / Blank card: create wallet_ephemere atomically. Lock the card row
+        # and re-check wallet_ephemere (double-check locking).
+        with transaction.atomic():
+            carte_verrouillee = CarteCashless.objects.select_for_update().get(pk=carte.pk)
+
+            # Double-check : une autre requete a peut-etre cree le wallet pendant
+            # qu'on attendait le verrou.
+            # / Double-check: another request may have created the wallet
+            # while we were waiting for the lock.
+            if carte_verrouillee.wallet_ephemere is not None:
+                return ScanResult(
+                    wallet=carte_verrouillee.wallet_ephemere,
+                    is_wallet_ephemere=True,
+                )
+
+            # Si entretemps un user a ete pose, on retourne son wallet.
+            # / If a user was set meanwhile, return their wallet.
+            carte_devenue_identifiee = (
+                carte_verrouillee.user is not None
+                and carte_verrouillee.user.wallet is not None
+            )
+            if carte_devenue_identifiee:
+                return ScanResult(
+                    wallet=carte_verrouillee.user.wallet,
+                    is_wallet_ephemere=False,
+                )
+
+            nouveau_wallet_ephemere = Wallet.objects.create(
+                origin=tenant_origine,
+                name=f"Wallet ephemere carte {carte_verrouillee.number}",
+            )
+            carte_verrouillee.wallet_ephemere = nouveau_wallet_ephemere
+            carte_verrouillee.save(update_fields=["wallet_ephemere"])
+            # On update aussi l'objet passe en param pour que le caller voie
+            # l'etat a jour sans refresh_from_db() explicite.
+            # / Also update the passed-in object so caller sees fresh state.
+            carte.wallet_ephemere = nouveau_wallet_ephemere
+            return ScanResult(
+                wallet=nouveau_wallet_ephemere,
+                is_wallet_ephemere=True,
+            )
+
+    @staticmethod
+    def lier_a_user(qrcode_uuid, user, ip="0.0.0.0"):
+        """
+        Lie une carte a un user. Effectue la fusion du wallet ephemere
+        et rattrape les adhesions anonymes.
+        / Link a card to a user. Performs wallet_ephemere fusion
+        and catches up anonymous memberships.
+
+        Transactionnel : tout ou rien.
+        / Transactional: all or nothing.
+
+        :param qrcode_uuid: UUID de la carte (= CarteCashless.uuid)
+        :param user: TibilletUser identifie
+        :param ip: str (IP de la requete)
+        :return: CarteCashless liee
+        :raises CarteIntrouvable: carte absente en base
+        :raises CarteDejaLiee: carte deja liee a un autre user
+        :raises UserADejaCarte: user possede deja une autre carte (anti-vol)
+        """
+        from django.db import transaction as db_transaction
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Membership
+
+        with db_transaction.atomic():
+            # --- Verrou sur la ligne carte pour eviter double-link concurrent ---
+            # select_for_update() SANS select_related : PostgreSQL refuse FOR UPDATE
+            # sur la partie nullable d'un outer join. Les FK sont chargees
+            # paresseusement quand on y accede ensuite.
+            # / Lock the card row WITHOUT select_related: PostgreSQL refuses FOR UPDATE
+            # on the nullable side of an outer join. Related FKs are lazily loaded
+            # when accessed below.
+            try:
+                carte = CarteCashless.objects.select_for_update().get(uuid=qrcode_uuid)
+            except CarteCashless.DoesNotExist:
+                raise CarteIntrouvable()
+
+            tenant_origine = carte.detail.origine
+
+            # --- Idempotence : carte deja liee a CE user ---
+            # / Idempotency: card already linked to THIS user.
+            carte_deja_liee_au_user = carte.user is not None and carte.user.pk == user.pk
+            if carte_deja_liee_au_user:
+                return carte
+
+            # --- Carte deja liee a un AUTRE user ---
+            # / Card linked to ANOTHER user.
+            carte_liee_a_autre_user = carte.user is not None and carte.user.pk != user.pk
+            if carte_liee_a_autre_user:
+                raise CarteDejaLiee()
+
+            # --- Anti-vol : user a-t-il deja une autre carte ? ---
+            # Exclut la carte courante (utile en cas de relink apres perte).
+            # / Anti-theft: does user already have another card? Exclude current card.
+            user_a_deja_une_autre_carte = (
+                user.cartecashless_set.exclude(pk=carte.pk).exists()
+            )
+            if user_a_deja_une_autre_carte:
+                raise UserADejaCarte()
+
+            # --- Fusion du wallet ephemere vers user.wallet ---
+            # Delegue a WalletService (deja implemente en Phase 0).
+            # Cree user.wallet si inexistant, transfere chaque Token avec solde > 0,
+            # cree les Transaction(FUSION), pose carte.user et detache wallet_ephemere.
+            # / Delegate to WalletService (already implemented in Phase 0).
+            WalletService.fusionner_wallet_ephemere(
+                carte=carte,
+                user=user,
+                tenant=tenant_origine,
+                ip=ip,
+            )
+
+            # --- Rattrapage des adhesions anonymes ---
+            # Les adhesions faites avec la carte anonyme (user=None, card_number=X)
+            # sont rattachees au user identifie.
+            # / Catch up anonymous memberships (user=None, card_number=X).
+            with tenant_context(tenant_origine):
+                Membership.objects.filter(
+                    user__isnull=True,
+                    card_number=carte.number,
+                ).update(
+                    user=user,
+                    first_name=user.first_name or "",
+                    last_name=user.last_name or "",
+                )
+
+            return carte
+
+    @staticmethod
+    def lister_cartes_du_user(user):
+        """
+        Liste les cartes liees au user sous forme de structures legeres
+        compatibles avec les templates existants (reunion/partials/account/card_table.html
+        et admin/membership/wallet_info.html).
+        / List user's cards as lightweight structs, template-compatible.
+
+        Les templates attendent :
+        - card.number_printed
+        - card.origin.place.name
+        - card.origin.generation
+
+        On construit des SimpleNamespace pour rester retro-compatible avec le
+        format V1 (fedow_connect.NFCcard.retrieve_card_by_signature) sans
+        polluer le modele CarteCashless avec des properties dediees.
+        / Templates expect: card.number_printed, card.origin.place.name,
+        card.origin.generation. SimpleNamespace keeps V1 compatibility without
+        polluting the model.
+
+        :param user: TibilletUser
+        :return: list de SimpleNamespace (peut etre vide)
+        """
+        from types import SimpleNamespace
+
+        cartes = CarteCashless.objects.filter(user=user).select_related(
+            "detail__origine",
+        )
+        cartes_formatees = []
+        for carte in cartes:
+            # Defauts si detail ou origine sont None (cas edge : DB incomplete).
+            # / Defaults if detail or origine is None (edge: incomplete DB).
+            nom_lieu = ""
+            generation = 0
+            if carte.detail is not None:
+                generation = carte.detail.generation
+                if carte.detail.origine is not None:
+                    nom_lieu = carte.detail.origine.name
+
+            cartes_formatees.append(
+                SimpleNamespace(
+                    number_printed=carte.number,
+                    origin=SimpleNamespace(
+                        place=SimpleNamespace(name=nom_lieu),
+                        generation=generation,
+                    ),
+                )
+            )
+        return cartes_formatees
+
+    @staticmethod
+    def declarer_perdue(user, number_printed):
+        """
+        Detache la carte du user. Le wallet user conserve ses tokens.
+        Reproduction du comportement V1 (lost_my_card_by_signature).
+        / Detach card from user. User wallet keeps its tokens.
+
+        :param user: TibilletUser
+        :param number_printed: str (CarteCashless.number, 8 chars)
+        :return: CarteCashless detachee
+        :raises CarteIntrouvable: carte absente ou non liee a ce user
+        """
+        try:
+            carte = CarteCashless.objects.get(user=user, number=number_printed)
+        except CarteCashless.DoesNotExist:
+            raise CarteIntrouvable()
+
+        carte.user = None
+        carte.wallet_ephemere = None
+        carte.save(update_fields=["user", "wallet_ephemere"])
+
+        logger.info(
+            f"Carte {number_printed} declaree perdue par user {user.email}"
+        )
+        return carte

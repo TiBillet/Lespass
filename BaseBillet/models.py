@@ -77,6 +77,7 @@ class SaleOrigin(models.TextChoices):
     NFC_MA = "NF", _("NFC online")
     API = "AP", _("API")
     WEBHOOK = "WK", _("Webhook Stripe")
+    TIREUSE = "TI", _("Connected tap")
 
 
 class PaymentMethod(models.TextChoices):
@@ -726,7 +727,7 @@ class Configuration(SingletonModel):
         if self.server_cashless and self.key_cashless:
             try:
                 r = requests.get(
-                    f'{self.server_cashless}/api/check_apikey',
+                    f"{self.server_cashless}/api/check_apikey",
                     headers={
                         "Authorization": f"Api-Key {self.key_cashless}",
                         "Origin": self.domain(),
@@ -960,9 +961,14 @@ class Configuration(SingletonModel):
         verbose_name_plural = _("Settings")
 
     def __str__(self):
+        # __str__ doit retourner une vraie `str`, pas un proxy lazy.
+        # Django admin (et d'autres consommateurs) appellent str(obj) avec TypeError
+        # si on retourne un __proxy__ brut.
+        # / __str__ must return a real `str`, not a lazy proxy. Django admin (and
+        # other consumers) call str(obj) which raises TypeError on raw __proxy__.
         if self.organisation:
-            return _("Settings for ") + self.organisation
-        return _("Settings")
+            return f"{_('Settings for ')}{self.organisation}"
+        return str(_("Settings"))
 
 
 class Tva(models.Model):
@@ -1185,6 +1191,11 @@ class Product(models.Model):
     NONE, BILLET, PACK, RECHARGE_CASHLESS = "N", "B", "P", "R"
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = "S", "T", "M", "A", "G"
     DON, FREERES, NEED_VALIDATION = "D", "F", "V"
+    # Recharge cashless FED : produit système créé par bootstrap_fed_asset.
+    # Un seul Product avec cette catégorie existe, lié à l'asset FED unique.
+    # / Cashless FED refill: system product created by bootstrap_fed_asset.
+    # Only one Product with this category exists, linked to the unique FED asset.
+    RECHARGE_CASHLESS_FED = "E"
     QRCODE_MA = "Q"
     # Fut de boisson pour tireuse connectee (controlvanne)
     # / Beverage keg for connected tap (controlvanne)
@@ -1201,6 +1212,7 @@ class Product(models.Model):
         # (MERCH, _('Merchandasing')),
         (ADHESION, _("Subscription or membership")),
         (BADGE, _("Punchclock")),
+        (RECHARGE_CASHLESS_FED, _("FED cashless refill")),
         (QRCODE_MA, _("QrCode paiement on my account")),
         (FUT, _("Keg (connected tap)")),
         # (DON, _('Don')),
@@ -1239,11 +1251,15 @@ class Product(models.Model):
 
         if self.categorie_article == self.ADHESION:
             # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            # Exclut les adhesions annulees (CANCELED, ADMIN_CANCELED) du count.
+            # / Excludes canceled memberships from the count.
             return (
                 user.memberships.filter(
                     deadline__gte=timezone.now(),
                     price__product__pk=self.pk,
-                ).count()
+                )
+                .exclude(status__in=['C', 'AC'])
+                .count()
                 >= self.max_per_user
             )
 
@@ -1285,6 +1301,7 @@ class Product(models.Model):
     FRACTIONNE_POS = "FR"
     BILLET_POS = "BI"
     FIDELITE = "FD"
+    VIREMENT_RECU = "VR"
 
     METHODE_CAISSE_CHOICES = [
         (VENTE, _("Sale")),
@@ -1297,6 +1314,7 @@ class Product(models.Model):
         (FRACTIONNE_POS, _("Split payment")),
         (BILLET_POS, _("Ticket")),
         (FIDELITE, _("Loyalty")),
+        (VIREMENT_RECU, _("Bank transfer received")),
     ]
 
     methode_caisse = models.CharField(
@@ -1370,6 +1388,23 @@ class Product(models.Model):
             "Utilise pour le calcul du benefice estime. "
             "/ Unit purchase price in cents. "
             "Used for estimated profit calculation."
+        ),
+    )
+
+    # Asset fedow_core lie a ce produit de recharge.
+    # Rempli automatiquement par le signal post_save de fedow_core.Asset.
+    # Null pour les produits non-cashless (VT, AD, BI, etc.).
+    # / fedow_core Asset linked to this top-up product.
+    asset = models.ForeignKey(
+        "fedow_core.Asset",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="products",
+        verbose_name=_("Asset"),
+        help_text=_(
+            "Asset fedow lie a ce produit de recharge. "
+            "/ Fedow asset linked to this top-up product."
         ),
     )
 
@@ -1511,6 +1546,123 @@ class PromotionalCode(models.Model):
         verbose_name = _("Promotional code")
         verbose_name_plural = _("Promotional codes")
         ordering = ("-date_created",)
+
+
+class Commande(models.Model):
+    """
+    Commande unifiée : regroupe plusieurs reservations et adhésions dans un achat
+    unique (panier multi-events). Sert de pivot sémantique, découplé du moyen de
+    paiement (Stripe aujourd'hui, autres moyens plus tard).
+
+    / Unified order: groups several reservations and memberships into a single
+    purchase (multi-event cart). Semantic pivot, decoupled from the payment mean
+    (Stripe today, other means later).
+
+    Liens (FK inverses) :
+      - commande.reservations           → Reservation.commande (FK nullable)
+      - commande.memberships_commande   → Membership.commande (FK nullable)
+      - commande.paiement_stripe        → Paiement_stripe (OneToOne nullable, reverse=commande_obj)
+    """
+
+    uuid = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True,
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="commandes",
+        verbose_name=_("Buyer"),
+        help_text=_(
+            "Utilisateur acheteur (résolu par email au checkout). "
+            "/ Buyer user (resolved by email at checkout)."
+        ),
+    )
+
+    # Informations acheteur, capturées au moment du checkout
+    # / Buyer information, captured at checkout time
+    email_acheteur = models.EmailField(
+        verbose_name=_("Buyer email"),
+    )
+    first_name = models.CharField(
+        max_length=200,
+        verbose_name=_("First name"),
+    )
+    last_name = models.CharField(
+        max_length=200,
+        verbose_name=_("Last name"),
+    )
+
+    # Statuts du cycle de vie d'une commande
+    # / Order lifecycle statuses
+    DRAFT = "DRAFT"
+    PENDING = "PENDING"
+    PAID = "PAID"
+    CANCELED = "CANCELED"
+    EXPIRED = "EXPIRED"
+    STATUS_CHOICES = [
+        (DRAFT, _("Draft")),
+        (PENDING, _("Pending payment")),
+        (PAID, _("Paid")),
+        (CANCELED, _("Canceled")),
+        (EXPIRED, _("Expired")),
+    ]
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default=DRAFT,
+        verbose_name=_("Order status"),
+    )
+
+    # Lien optionnel vers le paiement Stripe.
+    # Nullable car :
+    #   - une commande gratuite (total 0€) n'a pas de paiement
+    #   - une commande DRAFT pré-checkout n'a pas encore de paiement
+    # / Optional link to the Stripe payment. Nullable because:
+    #   - a free order (total 0€) has no payment
+    #   - a DRAFT pre-checkout order has no payment yet
+    paiement_stripe = models.OneToOneField(
+        "Paiement_stripe",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commande_obj",
+        verbose_name=_("Stripe payment"),
+    )
+
+    # Code promo appliqué au panier (au plus un par commande en v1).
+    # / Promotional code applied to the cart (at most one per order in v1).
+    promo_code = models.ForeignKey(
+        PromotionalCode,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="commandes",
+        verbose_name=_("Promotional code"),
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Created at"))
+    paid_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Paid at"),
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = _("Order")
+        verbose_name_plural = _("Orders")
+
+    def __str__(self):
+        return f"Commande {str(self.uuid)[:8]} ({self.status})"
+
+    def uuid_8(self):
+        """Raccourci d'affichage. / Display shortcut."""
+        return f"{self.uuid}".partition("-")[0]
 
 
 @receiver(post_save, sender=Product)
@@ -1657,11 +1809,17 @@ class Price(models.Model):
 
         if self.product.categorie_article == self.product.ADHESION:
             # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
+            # Filtre par Price (self.pk = uuid du Price, pas du Product).
+            # Exclut les adhesions annulees du count.
+            # / Filter by Price (self.pk = Price uuid, not Product).
+            # Excludes canceled memberships from the count.
             return (
                 user.memberships.filter(
                     deadline__gte=timezone.now(),
-                    price__product__pk=self.pk,
-                ).count()
+                    price__pk=self.pk,
+                )
+                .exclude(status__in=['C', 'AC'])
+                .count()
                 >= self.max_per_user
             )
 
@@ -1792,7 +1950,7 @@ class Price(models.Model):
         help_text=_("Raw token amount."),
     )
 
-    #TODO: JONAS CHECK !
+    # TODO: JONAS CHECK !
     # Tarification multi-asset : si null → prix en EUR, si set → prix en unites de l'asset.
     # Permet de definir des tarifs en tokens (monnaie locale, temps, fidelite, etc.).
     # Precedent : fedow_reward_asset fait deja une FK tenant → shared (meme pattern).
@@ -1809,11 +1967,63 @@ class Price(models.Model):
         ),
     )
 
+    # Tarif en monnaie non-fiduciaire (temps, fidélité, crypto, etc.)
+    # Si True, le champ `asset` ci-dessus DOIT être renseigné
+    # et doit pointer vers un asset non-fiduciaire (TIM, FID).
+    # Si False (défaut), le prix est en euros et `asset` est ignoré.
+    # / Non-fiduciary price (time, loyalty, crypto, etc.)
+    # If True, the `asset` field above MUST be set
+    # and must point to a non-fiduciary asset (TIM, FID).
+    # If False (default), price is in euros and `asset` is ignored.
+    non_fiduciaire = models.BooleanField(
+        default=False,
+        verbose_name=_("Non-fiduciary price"),
+        help_text=_(
+            "If checked, the price is in tokens (time, loyalty, etc.) "
+            "instead of euros. You must select the asset below."
+        ),
+    )
+
     # def range_max(self):
     #     return range(self.max_per_user + 1)
 
     def __str__(self):
         return f"{self.product.name} {self.name}"
+
+    def clean(self):
+        """
+        Validation du tarif non-fiduciaire.
+        / Non-fiduciary price validation.
+
+        Règles / Rules:
+        - non_fiduciaire=True et asset=None → erreur
+        - non_fiduciaire=True et asset fiduciaire (TLF/TNF/FED) → erreur
+        - non_fiduciaire=False → asset ignoré, pas d'erreur
+        """
+        super().clean()
+
+        if not self.non_fiduciaire:
+            return
+
+        if self.asset is None:
+            raise ValidationError(
+                {
+                    "asset": _("An asset is required for non-fiduciary prices."),
+                }
+            )
+
+        from fedow_core.models import Asset as FedowAsset
+
+        categories_fiduciaires = (FedowAsset.TLF, FedowAsset.TNF, FedowAsset.FED)
+        if self.asset.category in categories_fiduciaires:
+            raise ValidationError(
+                {
+                    "asset": _(
+                        "Fiduciary assets (local, gift, federated) use the automatic cascade. "
+                        "Select a non-fiduciary asset (time, loyalty)."
+                    ),
+                }
+            )
 
     # def has_stock(self):
     #     if self.stock > 0 :
@@ -2370,7 +2580,7 @@ class Event(models.Model):
         # Supprime le cache de la page principale des events de ce tenant
         # La clé est construite avec l'uuid du tenant (voir EventMVT.federated_events_filter)
         # / Delete the main event list cache for this tenant
-        cache.delete(f'event_list_{connection.tenant.uuid}')
+        cache.delete(f"event_list_{connection.tenant.uuid}")
 
     # def get_absolute_url(self):
     #     return reverse("event-detail", args=[self.slug])
@@ -2649,6 +2859,25 @@ class Reservation(models.Model):
         Event, on_delete=models.PROTECT, related_name="reservation"
     )
 
+    # FK optionnelle vers la commande qui regroupe cette reservation avec d'autres
+    # (billets d'autres events + adhésions). Nullable pour que les flows directs
+    # existants (mono-event sans panier) continuent de fonctionner sans régression.
+    # / Optional FK to the order that groups this reservation with others
+    # (tickets from other events + memberships). Nullable so that existing
+    # direct flows (mono-event without cart) continue to work without regression.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reservations",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si la reservation a été créée via un panier multi-items. "
+            "/ Only set if the reservation was created via a multi-item cart."
+        ),
+    )
+
     (
         CANCELED,
         CREATED,
@@ -2817,7 +3046,7 @@ class Reservation(models.Model):
         / Creates a credit note for a non-Stripe LigneArticle.
         """
         metadata = ligne.metadata if ligne.metadata else {}
-        metadata['original_lignearticle_uuid'] = str(ligne.uuid)
+        metadata["original_lignearticle_uuid"] = str(ligne.uuid)
         avoir = LigneArticle.objects.create(
             pricesold=ligne.pricesold,
             qty=-ligne.qty,
@@ -3058,6 +3287,22 @@ class ScannerAPIKey(AbstractAPIKey):
 
 
 class LaBoutikAPIKey(AbstractAPIKey):
+    """
+    Clé API LaBoutik liée à un TermUser (V2 flow bridge).
+    / LaBoutik API key linked to a TermUser (V2 bridge flow).
+
+    Le champ `user` est nullable pour compat V1 (clés créées avant le bridge).
+    / The `user` field is nullable for V1 compat (keys created before bridge).
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='laboutik_api_key',
+        null=True, blank=True,
+        verbose_name=_("Terminal user"),
+        help_text=_("TermUser linked (V2 bridge flow). Null for legacy V1 keys."),
+    )
+
     class Meta:
         ordering = ("-created",)
         verbose_name = "LaBoutik API Key"
@@ -3270,6 +3515,18 @@ class Paiement_stripe(models.Model):
     datetime = models.DateTimeField(auto_now=True)
 
     checkout_session_id_stripe = models.CharField(max_length=80, blank=True, null=True)
+    checkout_session_url = models.URLField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        verbose_name=_("Stripe checkout URL"),
+        help_text=_(
+            "URL Stripe Checkout persistée après création — permet de rediriger "
+            "l'utilisateur vers le paiement sans rappeler Stripe. "
+            "/ Stripe Checkout URL persisted after creation — allows redirecting "
+            "the user to payment without recalling Stripe."
+        ),
+    )
     payment_intent_id = models.CharField(max_length=80, blank=True, null=True)
     metadata_stripe = JSONField(blank=True, null=True)
     customer_stripe = models.CharField(
@@ -3340,13 +3597,14 @@ class Paiement_stripe(models.Model):
         related_name="paiements",
     )
 
-    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT = (
+    QRCODE, API_BILLETTERIE, FRONT_BILLETTERIE, FRONT_CROWDS, INVOICE, TRANSFERT, CASHLESS_REFILL = (
         "Q",
         "B",
         "F",
         "C",
         "I",
         "T",
+        "R",
     )
     SOURCE_CHOICES = (
         (QRCODE, _("From QR code scan")),  # ancien api. A virer ?
@@ -3355,6 +3613,11 @@ class Paiement_stripe(models.Model):
         (FRONT_CROWDS, _("From Crowds app")),
         (INVOICE, _("From invoice")),
         (TRANSFERT, _("Stripe Transfert")),
+        # Recharge FED V2 : paiement d'un user pour recharger son wallet fédéré.
+        # Stocké dans le schema federation_fed, pas dans le tenant du lieu.
+        # / FED V2 refill: user payment to refill their federated wallet.
+        # Stored in federation_fed schema, not in the venue tenant.
+        (CASHLESS_REFILL, _("Cashless refill")),
     )
     source = models.CharField(
         max_length=1,
@@ -3855,6 +4118,28 @@ class Membership(models.Model):
         verbose_name=_("Product / price"),
         null=True,
         blank=True,
+    )
+
+    # FK optionnelle vers la commande qui regroupe cette adhésion avec d'autres
+    # items (billets, autres adhésions). Nullable pour que les flows directs
+    # existants (adhésion isolée via MembershipValidator) continuent de fonctionner.
+    # / Optional FK to the order that groups this membership with other items
+    # (tickets, other memberships). Nullable so that existing direct flows
+    # (standalone membership via MembershipValidator) continue to work.
+    commande = models.ForeignKey(
+        "Commande",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        # Asymétrique avec Reservation.commande (related_name="reservations") :
+        # "memberships" est déjà pris par le FK user → Membership.
+        # / Asymmetric with Reservation.commande: "memberships" already taken by user FK.
+        related_name="memberships_commande",
+        verbose_name=_("Order"),
+        help_text=_(
+            "Renseignée uniquement si l'adhésion a été créée via un panier multi-items. "
+            "/ Only set if the membership was created via a multi-item cart."
+        ),
     )
 
     asset_fedow = models.UUIDField(null=True, blank=True)

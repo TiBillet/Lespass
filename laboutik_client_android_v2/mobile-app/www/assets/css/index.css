@@ -1,0 +1,223 @@
+:root {
+  /* header */
+  --header-height: 80px;
+  --spinner-size: 2rem;
+  --footer-height: 120px;
+}
+
+/* http://luciole-vision.com/#top */
+@font-face {
+  font-family: "Luciole-regular";
+  src: url("http://localhost/assets/css/fonts/Luciole-Regular.ttf") format("truetype");
+  font-weight: normal;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bleu11);
+  overflow: hidden;
+}
+
+/* spinner */
+.spinner {
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+  border: 5px solid var(--blanc01);
+  border-bottom-color: var(--vert03);
+  border-radius: 50%;
+  display: none;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
+}
+
+@keyframes rotation {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.bt {
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  border-radius: 6px;
+}
+
+.no-select {
+  user-select: none;
+}
+
+header {
+  width: 100vw;
+  height: var(--header-height);
+  background-color: var(--noir03);
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.header-img {
+  width: auto;
+  height: 85%;
+}
+
+.logs-icon {
+  width: var(--spinner-size);
+  height: var(--spinner-size);
+}
+
+main {
+  width: 100vw;
+  height: calc(100vh - var(--header-height));
+  background-color: var(--noir01);
+}
+
+.main-content {
+  width: 100%;
+  height: calc(100vh - var(--header-height));
+}
+
+.main-content-servers {
+  width: 100%;
+  height: calc(100% - var(--footer-height));
+  padding: 8px 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.main-content-footer {
+  width: 100%;
+  height: var(--footer-height);
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+
+  .bt {
+    width: 200px;
+    background-color: var(--blanc02);
+    color: var(--noir01);
+    border: 1px solid var(--gris02);
+    box-shadow: 1px 1px 10px rgba(185, 180, 180, 0.3);
+    font-size: 1.5rem;
+  }
+}
+
+.content-input {
+  position: absolute;
+  left: 0;
+  top: var(--footer-height);
+  width: 100%;
+  height: calc(100vh - var(--header-height));
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--noir01);
+}
+
+#pin-code {
+  font-size: 2rem;
+  line-height: 2.4rem;
+  width: 140px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.logs-content {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: calc(100vh - var(--header-height));
+  display: none;
+  margin-top: var(--header-height);
+  padding: 2px;
+  background-color: var(--blanc02);
+  color: var(--noir01);
+  font-size: 1.2rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.status-body {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.status-item {
+  width: 100%;
+  margin: 24px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.status-messages {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: raw;
+  justify-content: center;
+  align-items: center;
+}
+
+.status-messages-icon {
+  width: 100px;
+}
+
+.status-messages-info {
+  width: 200px;
+  padding-left: 6px;
+}
+
+.status-action {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+/* servers list */
+.servers-list-item {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5rem;
+  margin: 8px 0;
+  border-radius: 4px;
+}
+
+.bt-go-server {
+  width: 70%;
+  margin-right: 8px;
+  color: var(--blanc01);
+  background-color: var(--vert03);
+}
+
+.bt-delete-server {
+  width: 20%;
+  background-color: var(--rouge06);
+}

@@ -78,6 +78,7 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
         "display_status",
         "payment_method",
         "sale_origin",
+        "display_point_de_vente",
     ]
     search_fields = (
         "datetime",
@@ -104,6 +105,7 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
             "membership__user",
             "reservation",
             "reservation__user_commande",
+            "point_de_vente",
         )
 
     @display(description=_("Value"))
@@ -131,13 +133,25 @@ class LigneArticleAdmin(ModelAdmin, ExportActionModelAdmin):
         if not obj.weight_quantity:
             return ""
         # Determiner l'unite depuis le stock du produit
+        # Pour les tireuses (sale_origin=TIREUSE), c'est toujours des centilitres
         # / Determine unit from product stock
+        # For taps (sale_origin=TIREUSE), it's always centiliters
+        if obj.sale_origin == SaleOrigin.TIREUSE:
+            return f"{obj.weight_quantity}cl"
         try:
             unite = obj.pricesold.productsold.product.stock_inventaire.unite
             label = "g" if unite == "GR" else "cl" if unite == "CL" else ""
         except Exception:
-            label = "g"
+            label = ""
         return f"{obj.weight_quantity}{label}"
+
+    @display(description=_("Point of sale"))
+    def display_point_de_vente(self, obj):
+        """Nom du point de vente associé (tireuse, caisse, etc.).
+        / Name of the associated point of sale (tap, register, etc.)."""
+        if obj.point_de_vente:
+            return obj.point_de_vente.name
+        return ""
 
     # noinspection PyTypeChecker
     @display(

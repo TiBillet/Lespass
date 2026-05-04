@@ -1,0 +1,111 @@
+{% load i18n billet_filters %}
+
+<div data-testid="refund-panel">
+    {# --- En-tete carte --- #}
+    <div style="margin-bottom: 16px;">
+        <h2 style="margin: 0 0 8px;">
+            <span class="material-symbols-outlined">credit_card</span>
+            {% translate "Carte" %} {{ carte.tag_id }}
+        </h2>
+        <p style="margin: 0; font-size: 0.9em; color: var(--color-base-500);">
+            {% translate "Numéro" %}: {{ carte.number }}
+            {% if carte.user %}
+                · {% translate "Identifiée à" %} <strong>{{ carte.user.email }}</strong>
+            {% else %}
+                · <em>{% translate "Carte anonyme" %}</em>
+            {% endif %}
+        </p>
+    </div>
+
+    {# --- Cas 1 : carte vierge --- #}
+    {% if carte_vierge %}
+        <div style="background: #dbeafe; color: #1e40af; padding: 14px; border-radius: 6px;"
+             data-testid="refund-panel-empty">
+            {% translate "Cette carte n'a jamais été utilisée. Aucun solde à rembourser." %}
+        </div>
+
+    {# --- Cas 2 : wallet present, zero token eligible --- #}
+    {% elif total_fiduciaire_centimes == 0 %}
+        <div style="background: #dbeafe; color: #1e40af; padding: 14px; border-radius: 6px;"
+             data-testid="refund-panel-no-tokens">
+            {% translate "Aucun solde remboursable sur cette carte (TLF de votre lieu ou FED)." %}
+        </div>
+
+    {# --- Cas 3 : tokens eligibles : afficher + bouton --- #}
+    {% else %}
+        <h3 style="margin: 16px 0 8px; font-size: 1rem; font-weight: 600;">
+            {% translate "Tokens remboursables" %}
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;"
+               data-testid="refund-panel-tokens">
+            <thead>
+                <tr style="background: #F9FAFB; border-bottom: 2px solid #E5E7EB;">
+                    <th style="padding: 8px; text-align: left;">{% translate "Asset" %}</th>
+                    <th style="padding: 8px; text-align: left;">{% translate "Catégorie" %}</th>
+                    <th style="padding: 8px; text-align: right;">{% translate "Solde" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for token in tokens_eligibles %}
+                <tr style="border-bottom: 1px solid #E5E7EB;" data-testid="token-row-{{ forloop.counter }}">
+                    <td style="padding: 8px;">{{ token.asset.name }}</td>
+                    <td style="padding: 8px;">{{ token.asset.get_category_display }}</td>
+                    <td style="padding: 8px; text-align: right; font-weight: 600;">
+                        {{ token.value|cents_to_asset:token.asset }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #F3F4F6; border-radius: 6px; margin-bottom: 16px;">
+            <strong>{% translate "Total fiduciaire à rembourser" %} :</strong>
+            <span style="font-size: 1.2rem; font-weight: bold; color: #16a34a;"
+                  data-testid="refund-panel-total-fiduciaire">
+                {{ total_fiduciaire_centimes|cents_to_euros }}
+            </span>
+        </div>
+
+        <button type="button"
+                hx-get="{% url 'staff_admin:QrcodeCashless_cartecashless_refund_modal' carte.uuid %}"
+                hx-target="#refund-modal-slot"
+                hx-swap="innerHTML"
+                style="padding: 10px 20px; background: #16a34a; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 1em;"
+                data-testid="btn-open-refund-modal">
+            <span class="material-symbols-outlined" style="vertical-align: middle;">payments</span>
+            {% translate "Rembourser en espèces" %}
+        </button>
+    {% endif %}
+
+    {# --- Historique transactions recentes --- #}
+    {% if transactions_recentes %}
+        <h3 style="margin: 24px 0 8px; font-size: 1rem; font-weight: 600;">
+            {% translate "Transactions récentes" %}
+            <span style="font-weight: normal; color: var(--color-base-500); font-size: 0.85em;">
+                ({{ transactions_recentes|length }})
+            </span>
+        </h3>
+        <table style="width: 100%; border-collapse: collapse;" data-testid="refund-panel-history">
+            <thead>
+                <tr style="background: #F9FAFB; border-bottom: 2px solid #E5E7EB;">
+                    <th style="padding: 6px 8px; text-align: left;">{% translate "Date" %}</th>
+                    <th style="padding: 6px 8px; text-align: left;">{% translate "Action" %}</th>
+                    <th style="padding: 6px 8px; text-align: left;">{% translate "Asset" %}</th>
+                    <th style="padding: 6px 8px; text-align: right;">{% translate "Montant" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tx in transactions_recentes %}
+                <tr style="border-bottom: 1px solid #F3F4F6;" data-testid="history-row-{{ forloop.counter }}">
+                    <td style="padding: 6px 8px; font-size: 0.85em;">{{ tx.datetime|date:"d/m/Y H:i" }}</td>
+                    <td style="padding: 6px 8px;">{{ tx.get_action_display }}</td>
+                    <td style="padding: 6px 8px;">{{ tx.asset.name }}</td>
+                    <td style="padding: 6px 8px; text-align: right;">
+                        {{ tx.amount|cents_to_asset:tx.asset }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</div>

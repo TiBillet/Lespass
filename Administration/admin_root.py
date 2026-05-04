@@ -1,23 +1,31 @@
+"""
+Site admin root historique — DESACTIVE.
+Historic root admin site — DISABLED.
+
+Tout l'admin transite par staff_admin_site (Unfold) defini dans
+Administration/admin/site.py et enregistre dans Administration/admin/*.py.
+
+Ce fichier est conserve pour reference pendant la migration V1 -> V2.
+Toutes les declarations sont commentees ; les imports restent pour
+ne pas casser un eventuel import side-effect ailleurs dans le code.
+
+This file is kept for reference during V1 -> V2 migration.
+All declarations are commented out; imports stay to avoid breaking
+any side-effect import elsewhere in the code.
+"""
 import logging
 
-from django.conf import settings
-from django.contrib import admin
-from django.contrib.admin import AdminSite
-from django.contrib.auth import login
-from django.contrib.auth.admin import UserAdmin, GroupAdmin
-from django.contrib.auth.models import Group
-from django.db import connection
-from django.utils.translation import gettext_lazy as _
-from solo.admin import SingletonModelAdmin
 
-from AuthBillet.models import TibilletUser
-from AuthBillet.utils import get_client_ip
-from Customers.models import Client, Domain
-from MetaBillet.models import EventDirectory, ProductDirectory
-from root_billet.models import RootConfiguration
 
 logger = logging.getLogger(__name__)
-#
+
+# ---------------------------------------------------------------------------
+# Tout le code historique de ce fichier est commente.
+# Voir Administration/admin/*.py pour l'admin actuel.
+# All historical code in this file is commented out.
+# See Administration/admin/*.py for the current admin.
+# ---------------------------------------------------------------------------
+
 #
 # class PublicAdminSite(AdminSite):
 #     site_header = "TiBillet Public Admin"
@@ -27,15 +35,6 @@ logger = logging.getLogger(__name__)
 #     def has_permission(self, request):
 #         logger.warning(
 #             f"Tenant AdminSite.has_permission : {request.user} - {request.user.client_source if request.user.is_authenticated else 'No client source'} - ip : {get_client_ip(request)}")
-#
-#         # Dans le cas ou on debug, on se log auto :
-#         # if settings.DEBUG:
-#         #     tenant : Client = connection.tenant
-#         #     admin_user = tenant.user_admin.first()
-#         #     if admin_user:
-#         #         login(request, admin_user)
-#         #         return True
-#
 #
 #         try:
 #             if request.user.client_source.categorie == Client.ROOT:
@@ -47,161 +46,34 @@ logger = logging.getLogger(__name__)
 #             raise e
 #         return False
 #
-#
 # root_admin_site = PublicAdminSite(name='public_admin')
 #
-#
 # # USER
-# # -------------------------------------/
-#
 # class UserAdminTibillet(UserAdmin):
-#     list_display = (
-#         'email',
-#         'email_error',
-#         'is_active',
-#         'is_staff',
-#         'is_superuser',
-#         # 'can_create_tenant',
-#         'client_source',
-#         # 'achat',
-#         'administre',
-#         # 'espece',
-#         # 'groups',
-#     )
-#
-#     list_filter = (
-#         'email',
-#         'is_active',
-#         'client_source',
-#         'espece',
-#     )
-#
-#     fieldsets = (
-#         (None, {'fields': ('username', 'password')}),
-#         (_('Personal info'), {
-#             'fields': (
-#                 'first_name',
-#                 'last_name',
-#                 'email',
-#                 'email_error',
-#                 'phone',
-#                 'client_source',
-#                 'client_admin',
-#                 'client_achat',
-#                 'offre',
-#             )}),
-#         (_('Permissions'), {
-#             'fields': (
-#                 'is_active',
-#                 'is_staff',
-#                 'is_superuser',
-#                 'can_create_tenant',
-#                 'groups',
-#                 'user_permissions',
-#             ),
-#         }),
-#         (_('Important dates'), {'fields': ('last_login', 'date_joined')}),
-#     )
-#     #
-#     add_fieldsets = (
-#         (None, {
-#             'classes': ('wide',),
-#             'fields': (
-#                 'email',
-#                 'password1',
-#                 'password2',
-#                 'is_active',
-#                 'client_source',
-#                 'client_achat',
-#                 'espece',
-#             )}
-#          ),
-#     )
-#
-#     search_fields = ('email',)
-#     ordering = ('email',)
-#
-#     # def save_model(self, request, obj, form, change):
-#     #     obj.client_source = request.tenant
-#     #     obj.save()
-#     #
-#     #     staff_group = Group.objects.get_or_create(name="staff")[0]
-#     #     obj.groups.add(staff_group)
-#     #     obj.client_achat.add(request.tenant)
-#     #
-#     #     super(UserAdminTibillet, self).save_model(request, obj, form, change)
-#
-#
+#     ...
 # root_admin_site.register(TibilletUser, UserAdminTibillet)
-#
 #
 # class CustomGroupAdmin(GroupAdmin):
 #     pass
-#
-#
 # root_admin_site.register(Group, CustomGroupAdmin)
 #
-#
-# # -------------------------------------/
-# # USER
-# # -------------------------------------/
-#
+# # CLIENT / DOMAIN
 # class DomainInline(admin.TabularInline):
 #     model = Domain
 #
-#
 # class ClientAdmin(admin.ModelAdmin):
 #     inlines = [DomainInline]
-#     list_display = (
-#         'schema_name',
-#         'name',
-#         'categorie',
-#         # 'paid_until',
-#         # 'on_trial',
-#         'created_on',
-#     )
-#
-#
+#     list_display = ('schema_name', 'name', 'categorie', 'created_on')
 # root_admin_site.register(Client, ClientAdmin)
-#
 # root_admin_site.register(Domain, admin.ModelAdmin)
 #
-# """
-# class DetailAdmin(admin.ModelAdmin):
-#     list_display = (
-#         'slug',
-#         'base_url',
-#         'origine',
-#         'generation',
-#         'img_url',
-#         'img',
-#     )
-#
-#
-# root_admin_site.register(Detail, DetailAdmin)
-# """
-#
+# # CARTE CASHLESS (deplace vers Administration/admin/cards.py)
+# # CARTE CASHLESS (moved to Administration/admin/cards.py)
 # # class CarteCashlessAdmin(admin.ModelAdmin):
-# #     list_display = (
-# #         'user',
-# #         'tag_id',
-# #         'wallets',
-# #         'number',
-# #         'uuid',
-# #         'get_origin',
-# #     )
-# #
-# #     def get_origin(self, obj):
-# #         return obj.detail.origine
-# #
-# #     get_origin.short_description = 'Origine'
-# #
-# #     search_fields = ('tag_id', 'uuid', 'number')
-# #     list_filter = ('tag_id', 'uuid', 'number', 'detail__origine')
-#
-#
+# #     list_display = ('user', 'tag_id', 'wallets', 'number', 'uuid', 'get_origin')
 # # root_admin_site.register(CarteCashless, CarteCashlessAdmin)
 #
+# # AUTRES
 # root_admin_site.register(ProductDirectory, admin.ModelAdmin)
 # root_admin_site.register(EventDirectory, admin.ModelAdmin)
 # root_admin_site.register(RootConfiguration, SingletonModelAdmin)

@@ -54,6 +54,28 @@ def get_memcached_l1(cache_type, tenant_uuid):
 
 
 # ---------------------------------------------------------------------------
+# Helpers URL images / Image URL helpers
+# ---------------------------------------------------------------------------
+
+
+def build_stdimage_variation_url(img_path, variation="crop"):
+    """
+    Construit l'URL d'une variation StdImageField a partir du chemin brut en DB.
+    Exemple : "images/event_foo.jpg" → "/media/images/event_foo.crop.jpg"
+    Retourne None si pas d'image.
+    / Builds a StdImageField variation URL from the raw DB path.
+    Example: "images/event_foo.jpg" → "/media/images/event_foo.crop.jpg"
+    Returns None if no image.
+    """
+    if not img_path:
+        return None
+    import os
+
+    base_sans_extension, extension = os.path.splitext(img_path)
+    return f"/media/{base_sans_extension}.{variation}{extension}"
+
+
+# ---------------------------------------------------------------------------
 # Requetes SQL cross-schema / Cross-schema SQL queries
 # ---------------------------------------------------------------------------
 #
@@ -164,7 +186,7 @@ def get_events_for_tenants(tenant_schemas):
 
     Parametres / Parameters:
         tenant_schemas: list[tuple(uuid, schema_name)]
-    Retourne / Returns: list[dict] avec cles tenant_id, name, slug, short_description, datetime, end_datetime
+    Retourne / Returns: list[dict] avec cles tenant_id, name, slug, short_description, datetime, end_datetime, img
     """
     if not tenant_schemas:
         return []
@@ -174,9 +196,13 @@ def get_events_for_tenants(tenant_schemas):
     now = timezone.now()
 
     for tenant_uuid, schema_name in tenant_schemas:
+        # On recupere aussi le champ `img` (chemin relatif StdImageField)
+        # pour construire les URLs des vignettes dans tasks.py.
+        # / Also fetch the `img` field (relative StdImageField path)
+        # to build thumbnail URLs in tasks.py.
         parts.append(
             f"SELECT %s AS tenant_id, name, slug, short_description, "
-            f"datetime, end_datetime "
+            f"datetime, end_datetime, img "
             f'FROM "{schema_name}"."BaseBillet_event" '
             f"WHERE published = true AND datetime >= %s"
         )
@@ -196,6 +222,7 @@ def get_events_for_tenants(tenant_schemas):
                     "short_description": row[3],
                     "datetime": row[4].isoformat() if row[4] else None,
                     "end_datetime": row[5].isoformat() if row[5] else None,
+                    "img": row[6] or "",
                 }
             )
 
@@ -239,6 +266,153 @@ def get_memberships_for_tenants(tenant_schemas):
                     "uuid": row[1],
                     "name": row[2],
                     "short_description": row[3],
+                }
+            )
+
+    return results
+
+
+def get_initiatives_for_tenants(tenant_schemas):
+    """
+    Recupere toutes les initiatives non archivees pour les schemas donnes.
+    1 seule requete SQL UNION ALL.
+    / Fetch all non-archived initiatives for given schemas.
+    Single UNION ALL SQL query.
+
+    Parametres / Parameters:
+        tenant_schemas: list[tuple(uuid, schema_name)]
+    Retourne / Returns: list[dict] avec cles tenant_id, uuid, name, short_description, budget_contributif
+    """
+    if not tenant_schemas:
+        return []
+
+    parts = []
+    params = []
+
+    for tenant_uuid, schema_name in tenant_schemas:
+        parts.append(
+            f"SELECT %s AS tenant_id, uuid::text, name, short_description, "
+            f"budget_contributif "
+            f'FROM "{schema_name}"."crowds_initiative" '
+            f"WHERE archived = false"
+        )
+        params.append(str(tenant_uuid))
+
+    sql = " UNION ALL ".join(parts)
+
+    results = []
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for row in cursor.fetchall():
+            results.append(
+                {
+                    "tenant_id": row[0],
+                    "uuid": row[1],
+                    "name": row[2],
+                    "short_description": row[3],
+                    "budget_contributif": row[4],
+                }
+            )
+
+    return results
+
+
+def get_all_assets():
+    """
+    Recupere tous les assets fedow_core actifs avec leurs relations d'acceptation.
+    Deux mecanismes d'acceptation sont pris en compte :
+    1. M2M directe Asset.federated_with → Client (table fedow_core_asset_federated_with)
+    2. Via Federation : Asset ∈ Federation.assets ET Client ∈ Federation.tenants
+    / Fetch all active fedow_core assets with their acceptance relations.
+    Two acceptance mechanisms are taken into account:
+    1. Direct M2M Asset.federated_with → Client (table fedow_core_asset_federated_with)
+    2. Via Federation: Asset ∈ Federation.assets AND Client ∈ Federation.tenants
+
+    Regles / Rules:
+    - accepting_tenants(asset) = {tenant_origin}
+                               ∪ {clients via asset.federated_with}
+                               ∪ {clients via asset.federations → federation.tenants}
+    - Seuls les assets actifs (active=TRUE, archive=FALSE) sont retournes.
+    - is_federation_primary = True si category == 'FED'
+
+    Retourne / Returns: list[dict] avec cles :
+        uuid, name, category, tenant_origin_id, tenant_origin_name,
+        accepting_tenant_ids (list), accepting_count (int), is_federation_primary (bool)
+    """
+    # CTE (Common Table Expressions) pour les deux mecanismes d'acceptation :
+    # 1. direct_acceptance  : M2M directe Asset.federated_with → Client
+    # 2. federation_acceptance : via Federation (asset → federation → tenants)
+    # 3. all_acceptance : union des deux
+    # / CTEs for both acceptance mechanisms:
+    # 1. direct_acceptance  : direct M2M Asset.federated_with → Client
+    # 2. federation_acceptance : via Federation (asset → federation → tenants)
+    # 3. all_acceptance : union of both
+    sql = """
+        WITH direct_acceptance AS (
+            -- Clients acceptant l'asset via la M2M directe Asset.federated_with
+            -- / Clients accepting the asset via the direct M2M Asset.federated_with
+            SELECT asset_id, client_id::text AS client_uuid
+            FROM "public"."fedow_core_asset_federated_with"
+        ),
+        federation_acceptance AS (
+            -- Clients acceptant l'asset via une Federation commune
+            -- / Clients accepting the asset via a shared Federation
+            SELECT fa.asset_id, ft.client_id::text AS client_uuid
+            FROM "public"."fedow_core_federation_assets" fa
+            JOIN "public"."fedow_core_federation_tenants" ft ON fa.federation_id = ft.federation_id
+        ),
+        all_acceptance AS (
+            SELECT asset_id, client_uuid FROM direct_acceptance
+            UNION
+            SELECT asset_id, client_uuid FROM federation_acceptance
+        )
+        SELECT
+            a.uuid::text AS asset_uuid,
+            a.name AS asset_name,
+            a.category AS asset_category,
+            c_origin.uuid::text AS origin_uuid,
+            c_origin.name AS origin_name,
+            COALESCE(
+                ARRAY_AGG(DISTINCT aa.client_uuid) FILTER (WHERE aa.client_uuid IS NOT NULL),
+                ARRAY[]::text[]
+            ) AS accepting_uuids
+        FROM "public"."fedow_core_asset" a
+        LEFT JOIN "public"."Customers_client" c_origin ON a.tenant_origin_id = c_origin.uuid
+        LEFT JOIN all_acceptance aa ON aa.asset_id = a.uuid
+        WHERE a.active = TRUE AND a.archive = FALSE
+        GROUP BY a.uuid, a.name, a.category, c_origin.uuid, c_origin.name
+        ORDER BY a.name
+    """
+
+    results = []
+    with connection.cursor() as cursor:
+        cursor.execute(sql)
+        for row in cursor.fetchall():
+            (
+                asset_uuid,
+                asset_name,
+                asset_category,
+                origin_uuid,
+                origin_name,
+                accepting_uuids,
+            ) = row
+
+            # Union : tenant_origin + lieux federes (direct + federation) = lieux acceptants
+            # / Union: tenant_origin + federated venues (direct + federation) = accepting venues
+            accepting = set(accepting_uuids or [])
+            if origin_uuid:
+                accepting.add(origin_uuid)
+
+            results.append(
+                {
+                    "uuid": asset_uuid,
+                    "name": asset_name,
+                    "category": asset_category,
+                    "tenant_origin_id": origin_uuid,
+                    "tenant_origin_name": origin_name,
+                    "accepting_tenant_ids": sorted(accepting),
+                    "accepting_count": len(accepting),
+                    "is_federation_primary": asset_category == "FED",
                 }
             )
 
@@ -344,7 +518,122 @@ def build_tenant_config_data(client):
             exc,
         )
 
+    # Liste des uuid d'assets acceptes par ce tenant.
+    # Trois chemins d'acceptation :
+    # 1. tenant_origin == ce tenant
+    # 2. via Asset.federated_with (M2M directe Asset↔Client)
+    # 3. via Federation.assets + Federation.tenants (groupe)
+    # / List of asset UUIDs accepted by this tenant.
+    # Three acceptance paths:
+    # 1. tenant_origin == this tenant
+    # 2. via Asset.federated_with (direct Asset↔Client M2M)
+    # 3. via Federation.assets + Federation.tenants (group)
+    sql_accepted = """
+        SELECT DISTINCT a.uuid::text
+        FROM "public"."fedow_core_asset" a
+        WHERE a.tenant_origin_id = %s AND a.active = TRUE AND a.archive = FALSE
+        UNION
+        SELECT DISTINCT afw.asset_id::text
+        FROM "public"."fedow_core_asset_federated_with" afw
+        JOIN "public"."fedow_core_asset" a ON afw.asset_id = a.uuid
+        WHERE afw.client_id = %s AND a.active = TRUE AND a.archive = FALSE
+        UNION
+        SELECT DISTINCT fa.asset_id::text
+        FROM "public"."fedow_core_federation_assets" fa
+        JOIN "public"."fedow_core_federation_tenants" ft ON fa.federation_id = ft.federation_id
+        JOIN "public"."fedow_core_asset" a ON fa.asset_id = a.uuid
+        WHERE ft.client_id = %s AND a.active = TRUE AND a.archive = FALSE
+    """
+    accepted_ids = []
+    with connection.cursor() as cursor:
+        cursor.execute(
+            sql_accepted, [str(client.uuid), str(client.uuid), str(client.uuid)]
+        )
+        for row in cursor.fetchall():
+            accepted_ids.append(row[0])
+    data["accepted_asset_ids"] = sorted(accepted_ids)
+
     return data
+
+
+# ---------------------------------------------------------------------------
+# Comptages bruts cross-tenant / Raw cross-tenant counts
+# ---------------------------------------------------------------------------
+
+
+def get_global_counts(tenant_schemas):
+    """
+    Compte le nombre TOTAL (non filtre) d'events, adhesions et initiatives
+    sur tous les schemas tenants. 1 seule requete SQL UNION ALL.
+    / Count the TOTAL (unfiltered) number of events, memberships and initiatives
+    across all tenant schemas. Single UNION ALL SQL query.
+
+    LOCALISATION: seo/services.py
+
+    Contrairement a get_active_tenants_with_counts() qui filtre les events
+    publies et futurs, cette fonction compte TOUT : passes, non publies, etc.
+    C'est pour l'affichage "chiffres cles" de la landing page.
+    / Unlike get_active_tenants_with_counts() which filters published future
+    events, this function counts EVERYTHING: past, unpublished, etc.
+    This is for the "key figures" display on the landing page.
+
+    Parametres / Parameters:
+        tenant_schemas: list[tuple(uuid, schema_name)]
+    Retourne / Returns: dict avec cles events, memberships, initiatives
+    """
+    if not tenant_schemas:
+        return {"events": 0, "memberships": 0, "initiatives": 0}
+
+    # 3 comptages en 1 requete : on fait un UNION ALL de sous-requetes
+    # qui comptent chacune dans leur table, puis on somme par type.
+    # / 3 counts in 1 query: UNION ALL sub-queries that count in their
+    # respective tables, then sum by type.
+    parts = []
+    params = []
+
+    for tenant_uuid, schema_name in tenant_schemas:
+        # Events (tous, pas filtres) / Events (all, unfiltered)
+        parts.append(
+            f"SELECT 'events' AS type_comptage, COUNT(*) AS nb "
+            f'FROM "{schema_name}"."BaseBillet_event"'
+        )
+        # Adhesions (tous les products avec categorie_article='A')
+        # / Memberships (all products with categorie_article='A')
+        parts.append(
+            f"SELECT 'memberships' AS type_comptage, COUNT(*) AS nb "
+            f'FROM "{schema_name}"."BaseBillet_product" '
+            f"WHERE categorie_article = 'A'"
+        )
+        # Initiatives (app crowds) / Initiatives (crowds app)
+        parts.append(
+            f"SELECT 'initiatives' AS type_comptage, COUNT(*) AS nb "
+            f'FROM "{schema_name}"."crowds_initiative"'
+        )
+
+    sql = (
+        f"SELECT type_comptage, SUM(nb) AS total "
+        f"FROM ({' UNION ALL '.join(parts)}) AS counts "
+        f"GROUP BY type_comptage"
+    )
+
+    result = {"events": 0, "memberships": 0, "initiatives": 0, "assets": 0}
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        for row in cursor.fetchall():
+            type_comptage = row[0]
+            total = int(row[1])
+            if type_comptage in result:
+                result[type_comptage] = total
+
+    # Assets fedow_core : table dans le schema PUBLIC (SHARED_APPS),
+    # pas besoin de UNION ALL — un simple COUNT suffit.
+    # / fedow_core Assets: table in the PUBLIC schema (SHARED_APPS),
+    # no UNION ALL needed — a simple COUNT is enough.
+    from fedow_core.models import Asset
+
+    result["assets"] = Asset.objects.filter(active=True).count()
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -372,15 +661,19 @@ def build_explorer_data():
     from seo.models import SEOCache
     from seo.views_common import get_seo_cache
 
-    # Lire les 3 agregats depuis le cache L1/L2
-    # / Read the 3 aggregates from L1/L2 cache
+    # Lire les 5 agregats depuis le cache L1/L2
+    # / Read the 5 aggregates from L1/L2 cache
     lieux_data = get_seo_cache(SEOCache.AGGREGATE_LIEUX) or {}
     events_data = get_seo_cache(SEOCache.AGGREGATE_EVENTS) or {}
     memberships_data = get_seo_cache(SEOCache.AGGREGATE_MEMBERSHIPS) or {}
+    initiatives_data = get_seo_cache(SEOCache.AGGREGATE_INITIATIVES) or {}
+    assets_data = get_seo_cache(SEOCache.AGGREGATE_ASSETS) or {}
 
     raw_lieux = lieux_data.get("lieux", [])
     raw_events = events_data.get("events", [])
     raw_memberships = memberships_data.get("memberships", [])
+    raw_initiatives = initiatives_data.get("initiatives", [])
+    raw_assets = assets_data.get("assets", [])
 
     # Index des lieux par tenant_id, en excluant ceux sans coordonnees GPS
     # / Index lieux by tenant_id, excluding those without GPS coordinates
@@ -393,7 +686,12 @@ def build_explorer_data():
         lieu_copy = dict(lieu)
         lieu_copy["events"] = []
         lieu_copy["memberships"] = []
+        lieu_copy["initiatives"] = []
         tenant_id = lieu["tenant_id"]
+        # Les assets acceptes par ce lieu viennent du tenant_summary en cache.
+        # / Accepted assets for this lieu come from cached tenant_summary.
+        summary = get_seo_cache(SEOCache.TENANT_SUMMARY, tenant_id) or {}
+        lieu_copy["accepted_asset_ids"] = summary.get("accepted_asset_ids", [])
         lieux_by_tenant[tenant_id] = lieu_copy
 
     # Construire la liste plate d'events avec infos du lieu parent
@@ -434,6 +732,22 @@ def build_explorer_data():
 
         lieu["memberships"].append(membership)
 
+    # Meme chose pour les initiatives / Same for initiatives
+    flat_initiatives = []
+    for initiative in raw_initiatives:
+        tenant_id = initiative.get("tenant_id")
+        lieu = lieux_by_tenant.get(tenant_id)
+        if lieu is None:
+            continue
+
+        initiative_copy = dict(initiative)
+        initiative_copy["lieu_id"] = tenant_id
+        initiative_copy["lieu_name"] = lieu.get("name", "")
+        initiative_copy["lieu_domain"] = lieu.get("domain", "")
+        flat_initiatives.append(initiative_copy)
+
+        lieu["initiatives"].append(initiative)
+
     # Convertir l'index en liste / Convert index to list
     result_lieux = list(lieux_by_tenant.values())
 
@@ -441,4 +755,6 @@ def build_explorer_data():
         "lieux": result_lieux,
         "events": flat_events,
         "memberships": flat_memberships,
+        "initiatives": flat_initiatives,
+        "assets": raw_assets,
     }

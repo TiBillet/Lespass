@@ -32,6 +32,7 @@ from django_tenants.utils import get_tenant_model, tenant_context
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
+from Administration.utils import clean_html
 from ApiBillet.serializers import LigneArticleSerializer, MembershipSerializer
 from AuthBillet.models import TibilletUser
 from BaseBillet.models import Reservation, Ticket, Configuration, Membership, Webhook, LigneArticle, \
@@ -134,7 +135,7 @@ class CeleryMailerClass():
 
             return mail_return
         else:
-            logger.error(f'Pas de contenu HTML ou de configuration email valide')
+            logger.error('Pas de contenu HTML ou de configuration email valide')
             raise ValueError('Pas de contenu HTML ou de configuration email valide')
 
 
@@ -239,7 +240,7 @@ def context_for_membership_email(membership: "Membership"):
         'objet': _("Confirmation email"),
         'sub_title': _("Welcome aboard !"),
         'main_text': _("Your payment for ") + f"{membership.price.product.name}" + _(" has been received."),
-        'main_text_2': config.additional_text_in_membership_mail,
+        'main_text_2': clean_html(config.additional_text_in_membership_mail) if config.additional_text_in_membership_mail else None,
         'main_text_3': additionnal_text_3,
         'table_info': {
             _('Receipt for:'): f'{membership.member_name()}',
@@ -283,7 +284,7 @@ def send_membership_invoice_to_email(membership_uuid: str):
             membership = Membership.objects.get(uuid=membership_uuid)
             user = membership.user
             # Mails de confirmation qui contient un lien vers la facture :
-            logger.info(f"    app.task send_membership_invoice_to_email : Envoi de la confirmation par email")
+            logger.info("    app.task send_membership_invoice_to_email : Envoi de la confirmation par email")
             send_email_generique(
                 context=context_for_membership_email(membership),
                 email=f"{user.email}",
@@ -351,7 +352,7 @@ def send_membership_pending_admin(membership_uuid: str):
         'image_url': image_url,
         'sub_title': _("Administration"),
         'main_text': _("Une nouvelle demande d'adhésion est en attente de validation manuelle."),
-        'main_text_2': f"{membership.member_name()} — {membership.price.product.name} — {membership.price.name}",
+        'main_text_2': clean_html(f"{membership.member_name()} — {membership.price.product.name} — {membership.price.name}"),
         'table_info': {
             _('Adhérent'): f'{membership.member_name()}',
             _('Produit'): f'{membership.price.product.name} - {membership.price.name}',
@@ -865,13 +866,13 @@ def send_stripe_bank_deposit_to_laboutik(self, payload):
     # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
-            logger.warning(f"No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
+            logger.warning("No serveur cashless on config. send_stripe_bank_deposit_to_laboutik not sended")
             return True
     except MaxRetriesExceededError:
         logger.error(f"send_stripe_bank_deposit_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        logger.error("Erreur lors de config.check_serveur_cashless() Serveur down ?")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -933,13 +934,13 @@ def send_refund_to_laboutik(self, ligne_article_pk):
     # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
-            logger.warning(f"No serveur cashless on config. Article not sended")
+            logger.warning("No serveur cashless on config. Article not sended")
             return True
     except MaxRetriesExceededError:
         logger.error(f"send_refund_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        logger.error("Erreur lors de config.check_serveur_cashless() Serveur down ?")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -1019,13 +1020,13 @@ def send_sale_to_laboutik(self, ligne_article_pk):
     # / Check if the cashless server is operational:
     try:
         if not config.check_serveur_cashless():
-            logger.warning(f"No serveur cashless on config. Article not sended")
+            logger.warning("No serveur cashless on config. Article not sended")
             return True
     except MaxRetriesExceededError:
         logger.error(f"send_sale_to_laboutik abandonnée après {self.request.retries} retries (check_serveur_cashless)")
         return False
     except Exception as exc:
-        logger.error(f"Erreur lors de config.check_serveur_cashless() Serveur down ?")
+        logger.error("Erreur lors de config.check_serveur_cashless() Serveur down ?")
         retry_delay = min(3 ** self.request.retries, MAX_RETRY_TIME)
         raise self.retry(exc=exc, countdown=retry_delay)
 
@@ -1438,7 +1439,7 @@ def ticket_celery_mailer(reservation_uuid: str):
                 template='emails/buy_confirmation.html',
                 context={
                     'config': config,
-                    'custom_confirmation_message': reservation.event.custom_confirmation_message,
+                    'custom_confirmation_message': clean_html(reservation.event.custom_confirmation_message) if reservation.event.custom_confirmation_message else None,
                     'reservation': reservation,
                     'image_url_place': image_url_place,
                     'image_url_event': image_url_event,
@@ -1515,10 +1516,10 @@ def webhook_membership(membership_pk):
                 response = requests.request("POST", webhook.url, data=data_sended, timeout=2,
                                             headers={"Content-type": "application/json"},
                                             verify=bool(not settings.DEBUG))
-                logger.debug(f"############### webhook_membership ###############\n")
+                logger.debug("############### webhook_membership ###############\n")
                 logger.debug(f"data sended : {data_sended}\n")
                 logger.debug(f"response : {response.content}")
-                logger.debug(f"############### webhook_membership ###############\n")
+                logger.debug("############### webhook_membership ###############\n")
                 webhook.last_response = f"{timezone.now()} - status code {response.status_code} - {response.content}"
                 if not response.ok:
                     logger.error(f"webhook_membership ERROR : {membership_pk} {timezone.now()} {response.content}")
@@ -1597,7 +1598,7 @@ def send_to_ghost_email(email, name=None):
 
         # Create the token (including decoding secret)
         token = jwt.encode(payload, bytes.fromhex(secret), algorithm='HS256', headers=header)
-        logger.debug(f"JWT token: " + token)
+        logger.debug("JWT token: " + token)
 
         ###################################
         ## Appels de l'API Ghost

@@ -1,0 +1,173 @@
+{% extends "faire_festival/base.html" %}
+{% load static i18n %}
+
+{% block title %}{% translate 'Le Faire Festival' %}{% endblock %}
+
+{% block meta_description %}{% translate "Découvrez le Faire Festival : le plus grand festival de fabrication en France. Ateliers, conférences, rencontres entre makers, artisans et grand public." %}{% endblock %}
+{% block og_title %}{% translate 'Le Faire Festival' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate "Découvrez le Faire Festival : le plus grand festival de fabrication en France. Ateliers, conférences, rencontres entre makers, artisans et grand public." %}{% endblock %}
+{% block twitter_title %}{% translate 'Le Faire Festival' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate "Découvrez le Faire Festival : le plus grand festival de fabrication en France. Ateliers, conférences, rencontres entre makers, artisans et grand public." %}{% endblock %}
+
+{% block main %}
+
+<!-- =======================================================================
+     PAGE "LE FAIRE FESTIVAL"
+     Présentation de l'événement : c'est quoi, qui organise, où ça se passe
+     Version fidèle à la maquette avec images larges et texte compact
+     ======================================================================= -->
+<div class="container-fluid conteneur-principal plein-ecran">
+
+    <!-- ===================================================================
+         SECTION HEADER (Bannière principale)
+         Titre "BIENVENUE AU FAIRE FESTIVAL"
+         =================================================================== -->
+    <section class="container pt-5">
+        <div class="row justify-content-center">
+            <div class="col-10 text-center">
+                <h1 class="visually-hidden">{% translate 'Le Faire Festival' %}</h1>
+                <img src="{% static 'faire_festival/image/Fichier-18.png' %}"
+                     class="img-fluid"
+                     style="max-width: 90%;"
+                     alt="{% translate 'Bienvenue au Faire Festival' %}">
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================================================================
+         SECTION INTRODUCTION
+         Sous-titre et description générale
+         =================================================================== -->
+    <section class="container py-4">
+        <div class="row justify-content-center">
+            <div class="text-center">
+                <h2 class="fs-3 texte-bleu police-mono fw-bold my-3">
+                    {% translate "Le grand rendez-vous toulousain pour réinventer notre façon de produire, de consommer et de transmettre !" %}
+                </h2>
+                <p class="texte-bleu police-mono small fw-bold mb-0" style="font-size: 0.85rem; line-height: 1.5;">
+                    {% translate "Le Faire Festival invite tou·te·s les citoyen·ne·s, artisan·e·s, créatif·ve·s, associations, fablabs, ateliers et collectifs à imaginer et partager leurs savoir-faire. Notre objectif ? Mettre en lumière toutes les façons de documenter : guides, vidéos, pas-à-pas, ateliers de transmission, protocoles ouverts... en bref, tout ce qui permet d'apprendre en faisant !" %}
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 1 : C'EST QUOI EXACTEMENT ?
+         Image à gauche (grande), texte à droite
+         =================================================================== -->
+    <section class="container py-4">
+        <div class="row align-items-center">
+            
+            <!-- Image à gauche - plus grande -->
+            <div class="col-md-6 mb-3 mb-md-0">
+                <div class="position-relative">
+                    <!-- Image avec bordure -->
+                    <div>
+                        <img src="{% static 'faire_festival/image/Fichier-15.webp' %}"
+                             class="img-fluid w-100"
+                             alt="{% translate 'Atelier Faire Festival' %}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Texte à droite - plus compact -->
+            <div class="col-md-6 ps-md-4">
+                <div class="texte-bleu police-mono" style="font-size: 0.8rem; line-height: 1.5;">
+                    <p class="mb-2">
+                        {% translate "C'est le plus grand festival de fabrication en France ! Le temps d'un week-end, nous transformons un lieu de l'innovation toulousaine en un immense espace de rencontre avec une programmation géante (ateliers, conférences, rencontres, soirées...). Le mot d'ordre ? Apprendre, créer, réparer et surtout, partager. Cette année, nous mettons d'ailleurs à l'honneur les \"tutos\" et la documentation : parce que faire, c'est bien, mais transmettre comment faire, c'est encore mieux !" %}
+                    </p>
+                    <p class="mb-2">
+                        {% translate "Vous pouvez construire votre propre programme en piochant parmi nos 22 thématiques (textile, réparation, bois, terre...). Au programme pour le grand public :" %}
+                    </p>
+                    <ul class="list-unstyled mb-0 small" style="font-size: 0.75rem;">
+                        <li class="mb-1">
+                            {% translate "→ Participez à des dizaines d'ateliers pratiques pour apprendre un nouveau savoir-faire, utiliser des outils manuels ou des machines numériques (imprimantes 3D, découpeuses laser)." %}
+                        </li>
+                        <li class="mb-1">
+                            {% translate "→ Assistez à nos grands incontournables comme la course de robots, nos défilés de mode engagés, et flânez dans nos différents marchés de créateurs et créatrices." %}
+                        </li>
+                        <li class="mb-0">
+                            {% translate "→ Rencontrez des artisans, maker, inventeur·rice·s, écoutez des conférences passionnantes et découvrez des solutions concrètes pour rendre notre monde plus durable et solidaire." %}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 2 : QUI ORGANISE CET ÉVÉNEMENT ?
+         Texte à gauche, image à droite (grande)
+         =================================================================== -->
+    <section class="container py-4">
+        <div class="row align-items-center">
+            
+            <!-- Texte à gauche - plus compact -->
+            <div class="col-md-6 pe-md-4 order-2 order-md-1">
+                <div class="texte-bleu police-mono" style="font-size: 0.8rem; line-height: 1.5;">
+                    <p class="mb-2">
+                        {% translate "Le Faire Festival est le fruit d'une véritable dynamique collective. Il est pensé et co-construit en étroite collaboration avec le RéséLab et rassemble une multitude d'acteurs et d'actrices de l'écosystème de la fabrication, de l'artisanat et de l'économie sociale et solidaire. C'est un événement imaginé par des passionné·e·s, cherchant à partager et faire ensemble avec le plus grand nombre." %}
+                    </p>
+                    <p class="mb-0">
+                        {% translate "Nous sommes partenaires avec La Résée, La Cité, Le RéséLab, Le Laboratoire Organique de Lusta, L'Association Nationale des Tiers-Lieux, La Région Occitanie, Le RFFLABs, Toulouse Métropole, l'Ademe, France tiers-lieux et bien d'autres..." %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Image à droite - plus grande -->
+            <div class="col-md-6 mb-3 mb-md-0 order-1 order-md-2">
+                <div class="position-relative">
+                    <!-- Image avec bordure -->
+                    <div>
+                        <img src="{% static 'faire_festival/image/Fichier-16.webp' %}"
+                             class="img-fluid w-100"
+                             alt="{% translate 'La Cité - Faire Festival' %}">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 3 : UN ÉVÉNEMENT RÉELLEMENT TOULOUSAIN
+         Image à gauche (grande), texte à droite
+         =================================================================== -->
+    <section class="container py-4">
+        <div class="row align-items-center">
+            
+            <!-- Image à gauche - plus grande -->
+            <div class="col-md-6 mb-3 mb-md-0">
+                <div class="position-relative">
+                    <!-- Image avec bordure -->
+                    <div>
+                        <img src="{% static 'faire_festival/image/Fichier-17.webp' %}"
+                             class="img-fluid w-100"
+                             alt="{% translate 'Espace Faire Festival' %}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Texte à droite - plus compact -->
+            <div class="col-md-6 ps-md-4">
+                <div class="texte-bleu police-mono" style="font-size: 0.8rem; line-height: 1.5;">
+                    <p class="mb-2">
+                        {% translate "Le cœur du festival bat à La Cité (55 avenue Louis Breguet, Toulouse), un lieu emblématique dédié à l'innovation collaborative en Occitanie." %}
+                    </p>
+                    <p class="mb-0">
+                        {% translate "Le festival s'étend également hors les murs lors de nos soirées festives dans des lieux emblématiques de la ville, comme cette année avec les Intriqués ou la clôture du festival dans un lieu incontournable de la sphère culturelle toulousaine, le musée des Abattoirs." %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+{% endblock main %}
+
+{% block footer %}
+<!-- =======================================================================
+     FOOTER - Version locale du skin Faire Festival
+     ======================================================================= -->
+{% include "faire_festival/partials/footer.html" %}
+{% endblock footer %}

@@ -247,6 +247,19 @@ def test_price_asset_fk(tenant):
         # Prix en tokens (asset set)
         # / Price in tokens (asset set)
         wallet_origin = Wallet.objects.create(name=f'{TEST_PREFIX} Wallet origin')
+
+        # Nettoyer le produit signal d'un run precedent si existant.
+        # Le signal post_save Asset cree automatiquement un Product
+        # "Recharge <nom_asset>" qui peut rester d'un ancien run.
+        # Price.product est on_delete=PROTECT → supprimer les Prix d'abord.
+        # / Clean up signal product from a previous run if it exists.
+        # The Asset post_save signal auto-creates a Product
+        # "Recharge <asset_name>" that may remain from an older run.
+        # Price.product is on_delete=PROTECT → delete Prices first.
+        nom_produit_signal = f'Recharge {TEST_PREFIX} Monnaie test'
+        Price.objects.filter(product__name=nom_produit_signal).delete()
+        Product.objects.filter(name=nom_produit_signal).delete()
+
         asset = AssetService.creer_asset(
             tenant=Client.objects.get(schema_name=TENANT_SCHEMA),
             name=f'{TEST_PREFIX} Monnaie test',
@@ -269,9 +282,13 @@ def test_price_asset_fk(tenant):
         assert int(round(price_eur.prix * 100)) == 500
         assert int(round(price_token.prix * 100)) == 200
 
-        # Nettoyage asset + wallet (SHARED_APPS, hors schema_context)
-        # / Cleanup asset + wallet (SHARED_APPS, outside schema_context)
+        # Nettoyage : prix et produit crees par le signal + asset + wallet
+        # Price.product est on_delete=PROTECT → supprimer les Prix d'abord.
+        # / Cleanup: prices and product created by signal + asset + wallet
+        # Price.product is on_delete=PROTECT → delete Prices first.
         from fedow_core.models import Token, Transaction
+        Price.objects.filter(product__name=nom_produit_signal).delete()
+        Product.objects.filter(name=nom_produit_signal).delete()
         Transaction.objects.filter(asset=asset).delete()
         Token.objects.filter(wallet=wallet_origin).delete()
         asset.delete()

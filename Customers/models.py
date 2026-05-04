@@ -14,7 +14,7 @@ class Client(TenantMixin):
     paid_until =  models.DateField(default=timezone.now)
     on_trial = models.BooleanField(default=False)
 
-    ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, WAITING_CONFIG, ROOT = 'A', 'S', 'F', 'T', 'P', 'M', 'W', 'R'
+    ARTISTE, SALLE_SPECTACLE, FESTIVAL, TOURNEUR, PRODUCTEUR, META, WAITING_CONFIG, ROOT, FED = 'A', 'S', 'F', 'T', 'P', 'M', 'W', 'R', 'E'
     CATEGORIE_CHOICES = [
         (ARTISTE, _('Artist')),
         (SALLE_SPECTACLE, _("Scene")),
@@ -24,6 +24,9 @@ class Client(TenantMixin):
         (META, _('Event aggregator')),
         (WAITING_CONFIG, _('Waiting configuration')),
         (ROOT, _('Root public tenant')),
+        # Tenant fédération : porte le pot central FED, pas d'accès HTTP direct
+        # / Federation tenant: holds central FED pot, no HTTP access
+        (FED, _('Federation currency')),
     ]
 
     categorie = models.CharField(max_length=3, choices=CATEGORIE_CHOICES, default=SALLE_SPECTACLE,

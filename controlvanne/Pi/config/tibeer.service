@@ -7,9 +7,10 @@ Requires=pigpiod.service
 [Service]
 Type=simple
 User=sysop
-WorkingDirectory=/home/sysop
-EnvironmentFile=-/etc/default/tibeer.env
-ExecStart=/home/sysop/tibeer/venv/bin/python /home/sysop/tibeer/main.py
+WorkingDirectory=/home/sysop/tibeer/controlvanne/Pi
+EnvironmentFile=/home/sysop/tibeer/controlvanne/Pi/.env
+ExecStartPre=/home/sysop/tibeer/controlvanne/Pi/git-update.sh
+ExecStart=/home/sysop/tibeer/controlvanne/Pi/.venv/bin/python /home/sysop/tibeer/controlvanne/Pi/main.py
 Restart=always
 RestartSec=2
 

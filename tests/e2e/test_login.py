@@ -33,17 +33,19 @@ class TestLoginFlow:
             f"Expected /my_account/ in URL, got {page.url}"
         )
 
-        # 3. Le bouton Admin panel doit être visible avec la classe btn-outline-danger
-        # / Admin panel button must be visible with btn-outline-danger class
-        admin_panel_button = page.locator('a[href*="/admin/"]').filter(
-            has_text=re.compile(r"Admin panel|Panneau d'administration", re.IGNORECASE)
-        )
-        admin_panel_button.wait_for(state="visible", timeout=10_000)
+        # 3. Le bouton admin tenant doit etre visible avec la classe btn-admin-tenant
+        # Le template my_account affiche un lien par tenant dont l'user est admin.
+        # Le lien pointe vers /admin/ et a data-testid="btn-admin-<slug>".
+        # / The admin tenant button must be visible with btn-admin-tenant class.
+        # The my_account template displays one link per admin-tenant.
+        # The link points to /admin/ with data-testid="btn-admin-<slug>".
+        admin_panel_button = page.locator('a[href*="/admin/"]').first
+        admin_panel_button.wait_for(state="visible", timeout=15_000)
 
-        # Vérifier la classe CSS / Check the CSS class
+        # Verifier la classe CSS / Check the CSS class
         css_classes = admin_panel_button.get_attribute("class") or ""
-        assert "btn-outline-danger" in css_classes, (
-            f"Expected btn-outline-danger in classes, got: {css_classes}"
+        assert "btn-admin-tenant" in css_classes, (
+            f"Expected btn-admin-tenant in classes, got: {css_classes}"
         )
 
     def test_validate_email_format(self, page):

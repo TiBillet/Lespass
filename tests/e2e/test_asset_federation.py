@@ -32,38 +32,53 @@ def _random_id():
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
 
 
-def _login_on_tenant(page, base_url, admin_email):
-    """Login manuel sur un tenant spécifique (URLs absolues).
-    / Manual login on a specific tenant (absolute URLs).
+# Note : le login cross-tenant passe par la fixture `login_as_admin_on_subdomain`
+# (voir conftest.py). Plus de flow UI 6 etapes — appel direct a l'endpoint
+# force_login + injection cookie. Gain ~5s par login.
+# / Cross-tenant login goes through the `login_as_admin_on_subdomain` fixture.
+# No more 6-step UI flow — direct call to force_login endpoint + cookie injection.
+
+
+@pytest.fixture
+def _grant_admin_on_chantefrein(admin_email, django_shell):
+    """Fixture setup/teardown : ajoute admin@admin.com comme admin de
+    chantefrein pour la duree du test, puis le retire en teardown pour
+    ne pas casser test_admin_permissions qui asserts client_admin_count=1.
+
+    / Setup/teardown fixture: grants admin@admin.com as chantefrein admin
+    for the test duration, then removes it at teardown to avoid breaking
+    test_admin_permissions which asserts client_admin_count=1.
     """
-    page.goto(f"{base_url}/")
-    page.wait_for_load_state("networkidle")
-
-    login_button = page.locator(
-        '.navbar button:has-text("Log in"), '
-        '.navbar button:has-text("Connexion")'
-    ).first
-    expect(login_button).to_be_visible(timeout=10_000)
-    login_button.click()
-
-    email_input = page.locator("#loginEmail")
-    expect(email_input).to_be_visible(timeout=5_000)
-    email_input.fill(admin_email)
-
-    submit_button = page.locator('#loginForm button[type="submit"]')
-    submit_button.click()
-
-    test_mode_link = page.locator('a:has-text("TEST MODE")')
-    test_mode_link.wait_for(state="visible", timeout=10_000)
-    test_mode_link.click()
-    page.wait_for_load_state("networkidle")
+    django_shell(
+        "from AuthBillet.models import TibilletUser\n"
+        "from django.db import connection\n"
+        f"u = TibilletUser.objects.get(email='{admin_email}')\n"
+        "u.client_admin.add(connection.tenant)\n"
+        "u.is_staff = True\n"
+        "u.save()\n"
+        "print('OK admin granted on chantefrein')",
+        schema="chantefrein",
+    )
+    yield
+    # Teardown : retirer l'admin de chantefrein (isolation inter-tests).
+    # / Teardown: remove admin from chantefrein (inter-test isolation).
+    django_shell(
+        "from AuthBillet.models import TibilletUser\n"
+        "from django.db import connection\n"
+        f"u = TibilletUser.objects.get(email='{admin_email}')\n"
+        "u.client_admin.remove(connection.tenant)\n"
+        "u.save()\n"
+        "print('OK admin removed from chantefrein')",
+        schema="chantefrein",
+    )
 
 
 class TestAssetFederation:
     """Federation d'assets cross-tenant / Cross-tenant asset federation."""
 
     def test_full_per_asset_invitation_flow(
-        self, page, login_as_admin, admin_email, django_shell
+        self, page, login_as_admin, login_as_admin_on_subdomain,
+        admin_email, django_shell, _grant_admin_on_chantefrein,
     ):
         """Flow complet : créer asset sur Lespass, inviter Chantefrein,
         accepter l'invitation, vérifier la fédération des deux côtés.
@@ -139,8 +154,9 @@ class TestAssetFederation:
             f"Chantefrein ne devrait pas être fédéré avant acceptation: {row_text[:100]}"
         )
 
-        # --- Étapes 6-7 : Login sur Chantefrein (URLs absolues) ---
-        _login_on_tenant(page, CHANTEFREIN_BASE, admin_email)
+        # --- Étapes 6-7 : Login sur Chantefrein (force_login cross-tenant) ---
+        # / Step 6-7: Login on Chantefrein (cross-tenant force_login)
+        login_as_admin_on_subdomain(page, "chantefrein")
 
         # --- Étape 8 : Vérifier invitation visible sur Chantefrein ---
         page.goto(f"{CHANTEFREIN_BASE}/admin/fedow_core/asset/")

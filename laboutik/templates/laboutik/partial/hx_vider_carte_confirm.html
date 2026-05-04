@@ -1,0 +1,112 @@
+{% load i18n billet_filters %}
+{# Ecran plein ecran de confirmation avant remboursement de la carte. #}
+{# Fond orange warning : tension avant action irreversible. #}
+{# Full-screen confirmation before card refund. Orange warning bg: tension. #}
+
+<div class="BF-col"
+     data-testid="vider-carte-confirm"
+     aria-live="polite">
+
+    <div class="fi-title1">
+        {% translate "Vider la carte" %} {{ carte.tag_id }}
+    </div>
+
+    {# Box montant a rendre — fort contraste pour lecture rapide caissier #}
+    {# / Amount-to-refund box — strong contrast for fast cashier reading #}
+    <div class="give-back-box" role="alert" data-testid="vider-carte-amount">
+        <i class="fas fa-hand-holding-usd" aria-hidden="true"></i>
+        {% translate "À rendre" %} : <strong>{{ total_centimes|cents_to_euros }}</strong>
+    </div>
+
+    {# Detail des tokens utilises #}
+    {# / Token detail #}
+    <table class="cascade-tokens-table" data-testid="vider-carte-tokens-table">
+        <thead>
+            <tr>
+                <th>{% translate "Type d'actif" %}</th>
+                <th>{% translate "Solde" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for token in tokens %}
+            <tr>
+                <td>{{ token.asset.name }} ({{ token.asset.get_category_display }})</td>
+                <td>{{ token.value|cents_to_asset:token.asset }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {# Form HTMX : POST -> /vider_carte/ -> renvoie hx_vider_carte_success.html dans #messages #}
+    {# Le bouton submit clique envoie sa propre valeur 'vider_carte' (true|false). #}
+    {# / HTMX form: POST -> /vider_carte/ -> renders hx_vider_carte_success.html into #messages #}
+    {# / The clicked submit button sends its own 'vider_carte' value (true|false). #}
+    <form method="post"
+          action="{% url 'laboutik-paiement-vider_carte' %}"
+          hx-post="{% url 'laboutik-paiement-vider_carte' %}"
+          hx-target="#messages"
+          hx-swap="innerHTML"
+          data-testid="vider-carte-confirm-form">
+        {% csrf_token %}
+        <input type="hidden" name="tag_id" value="{{ tag_id }}">
+        <input type="hidden" name="tag_id_cm" value="{{ tag_id_cm }}">
+        <input type="hidden" name="uuid_pv" value="{{ uuid_pv }}">
+
+        {% if carte.user %}
+        {# Carte avec user identifie : 2 choix distincts au caissier. #}
+        {# / Card with identified user: 2 distinct choices for the cashier. #}
+        <div class="vider-carte-actions-row">
+            <button type="submit"
+                    name="vider_carte"
+                    value="true"
+                    class="bt-basic-container bt-vider-confirm"
+                    data-testid="vider-carte-btn-reinit"
+                    data-loading-disable>
+                <div class="bt-basic-icon">
+                    <i class="fas fa-eraser" aria-hidden="true"></i>
+                </div>
+                <div class="bt-basic-text">
+                    <div>{% translate "Rembourser et" %}</div>
+                    <div>{% translate "réinitialiser" %}</div>
+                </div>
+            </button>
+
+            <button type="submit"
+                    name="vider_carte"
+                    value="false"
+                    class="bt-basic-container bt-vider-keep-user"
+                    data-testid="vider-carte-btn-keep-user"
+                    data-loading-disable>
+                <div class="bt-basic-icon">
+                    <i class="fas fa-user-check" aria-hidden="true"></i>
+                </div>
+                <div class="bt-basic-text">
+                    <div>{% translate "Rembourser et garder" %}</div>
+                    <div class="vider-carte-user-email">{{ carte.user.email }}</div>
+                </div>
+            </button>
+        </div>
+        {% else %}
+        {# Carte anonyme (wallet ephemere) : un seul choix, la reinit fait #}
+        {# disparaitre le wallet ephemere (pas de user a preserver). #}
+        {# / Anonymous card (ephemeral wallet): single choice — reset removes #}
+        {# the ephemeral wallet (no user to preserve). #}
+        <button type="submit"
+                name="vider_carte"
+                value="true"
+                class="bt-basic-container bt-vider-confirm"
+                data-testid="vider-carte-btn-confirm"
+                data-loading-disable>
+            <div class="bt-basic-icon">
+                <i class="fas fa-check-circle" aria-hidden="true"></i>
+            </div>
+            <div class="bt-basic-text">
+                <div>{% translate "Rembourser et" %}</div>
+                <div>{% translate "réinitialiser la carte" %}</div>
+            </div>
+        </button>
+        {% endif %}
+    </form>
+
+    <c-bt.return />
+</div>

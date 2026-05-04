@@ -1,4 +1,3 @@
-from os.path import exists
 from time import sleep
 
 import requests
@@ -85,7 +84,7 @@ class Command(BaseCommand):
             else: # Si TEST
                 stripe.api_key = stripe_test_api_key
                 stripe.Product.list()
-        except Exception as e:
+        except Exception:
             logger.error("No stripe Test nor Prod api Key !")
 
         tenant_public, created = Client.objects.get_or_create(
@@ -140,6 +139,12 @@ class Command(BaseCommand):
             is_primary=False
         )
         domain_public.save()
+
+        ## Tenant FEDERATION : porte le pot central FED pour la recharge V2.
+        ## Commande idempotente : cree tenant federation_fed + Asset FED + Product de recharge.
+        # / FEDERATION tenant: holds the central FED pot for V2 refills.
+        # / Idempotent command: creates federation_fed tenant + FED Asset + refill Product.
+        call_command('bootstrap_fed_asset')
 
         ### Installation du premier tenant :
 

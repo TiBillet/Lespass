@@ -1,0 +1,35 @@
+{% load i18n %}
+{% comment %}
+Message inline pour user avec wallet legacy (origin=tenant V1).
+Remplace la section #tirelire-section entiere (outerHTML).
+/ Inline message for user with legacy wallet (origin=V1 tenant).
+Replaces the entire #tirelire-section (outerHTML).
+
+LOCALISATION : BaseBillet/templates/htmx/views/my_account/refill_migration_inline.html
+
+CSS : charge globalement via reunion/base.html (refill_v2.css).
+{% endcomment %}
+
+<div class="refill-v2-migration" id="tirelire-section" aria-live="polite">
+    <div class="refill-v2-migration-inner" role="status" data-testid="refill-message-migration">
+        <h3 class="refill-v2-migration-title">
+            <i class="bi bi-hourglass-split me-2" aria-hidden="true"></i>
+            {% translate "Migration en cours" %}
+        </h3>
+        <p class="refill-v2-migration-text">
+            {{ message_migration }}
+        </p>
+        {# Retour via HTMX pour restaurer la section sans reload full page. #}
+        {# / HTMX restore — no full page reload. #}
+        <a href="/my_account/"
+           hx-get="/my_account/tirelire_section/"
+           hx-target="#tirelire-section"
+           hx-swap="outerHTML"
+           hx-indicator="#tibillet-spinner"
+           class="refill-v2-migration-back"
+           data-testid="refill-btn-back">
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            {% translate "Retour" %}
+        </a>
+    </div>
+</div>

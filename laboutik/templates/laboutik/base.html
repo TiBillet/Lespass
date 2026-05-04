@@ -152,6 +152,7 @@
 		 * / htmx:afterSwap fires on the source element, not the target.
 		 * So we listen on document.body and check event.detail.target.
 		 */
+        
 		document.addEventListener('htmx:afterSwap', function (event) {
 			const elementCible = event.detail.target
 			const cibleEstOverlay = (
@@ -161,6 +162,7 @@
 				elementCible.classList.remove('hide')
 			}
 		})
+
 	</script>
 	{% block script %} {% endblock script %}
 	<div id="event-organizer" class="hide"></div>

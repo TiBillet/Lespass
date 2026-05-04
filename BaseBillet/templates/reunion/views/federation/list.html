@@ -14,7 +14,7 @@
 {% block twitter_image_alt %}{{ config.organisation }} - {% translate 'Home page' %}{% endblock %}
 
 {% block main %}
-    <main class="container-lg py-5">
+    <div class="container-lg py-5">
         <h1>{% translate 'Network members' %}</h1>
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-3 mb-5">
             {% for place in federated_places %}
@@ -70,5 +70,5 @@
                 </div>
             {% endfor %}
         </div>
-    </main>
+    </div>
 {% endblock main %}

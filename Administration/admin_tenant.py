@@ -15,3 +15,5 @@ from Administration.admin import (  # noqa: F401
     inventaire,
 )
 import booking.admin  # noqa: F401 — enregistre les modèles booking sur staff_admin_site
+from Administration.admin import cards  # noqa: F401
+

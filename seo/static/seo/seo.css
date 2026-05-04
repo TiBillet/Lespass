@@ -11,6 +11,240 @@ h1, h2, h3, .lead {
     text-wrap: balance;
 }
 
+/* Antialiased pour un rendu net sur tous les OS */
+/* / Antialiased for crisp rendering on all OSes */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ================================================================ */
+/* HERO — style tibillet.org : gradient sur mots-cles + logo         */
+/* / HERO — tibillet.org style: gradient on keywords + logo          */
+/* ================================================================ */
+
+/* Fond gris-vert subtil comme tibillet.org / Subtle gray-green bg like tibillet.org */
+.hero-section {
+    background: var(--bs-tertiary-bg, #f0f4f3);
+    padding: 3rem 1rem 2.5rem;
+    margin-bottom: 2rem;
+}
+
+/* Layout 2 colonnes : texte a gauche, logo a droite */
+/* / 2 columns: text left, logo right */
+.hero-layout {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 3rem;
+}
+
+.hero-text {
+    flex: 1;
+}
+
+/* Titre H1 — style tibillet.org avec mots-cles en gradient vert */
+/* / H1 title — tibillet.org style with green gradient keywords */
+.hero-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    margin-bottom: 2rem;
+}
+
+/* Mots-cles en gradient vert/bleu palette TiBillet */
+/* / Keywords in green/blue gradient from TiBillet palette */
+/* Palette : sousou=#259d49, losean=#4296cc, kari=#e9b322 */
+.hero-kw {
+    background: linear-gradient(135deg, #259d49 0%, #4296cc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Boutons CTA / CTA buttons */
+.hero-cta {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.hero-btn-primary {
+    font-weight: 600;
+    padding: 0.65rem 1.8rem;
+    border-radius: 8px;
+    background: #259d49;
+    border-color: #259d49;
+    color: #fff;
+}
+
+.hero-btn-primary:hover {
+    background: #1e8a3f;
+    border-color: #1e8a3f;
+    color: #fff;
+}
+
+.hero-btn-secondary {
+    font-weight: 600;
+    padding: 0.65rem 1.8rem;
+    border-radius: 8px;
+    border: 2px solid var(--bs-border-color, #dee2e6);
+    background: transparent;
+    color: var(--bs-body-color);
+}
+
+.hero-btn-secondary:hover {
+    border-color: #259d49;
+    color: #259d49;
+}
+
+/* Logo TiBillet a droite — masque sur mobile */
+/* / TiBillet logo on right — hidden on mobile */
+.hero-logo {
+    flex-shrink: 0;
+}
+
+.hero-logo-img {
+    max-width: 320px;
+    height: auto;
+}
+
+/* Responsive mobile : empilage vertical, logo cache */
+/* / Mobile responsive: vertical stack, logo hidden */
+@media (max-width: 767.98px) {
+    .hero-layout {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .hero-logo {
+        display: none;
+    }
+
+    .hero-cta {
+        justify-content: center;
+    }
+
+    .hero-section {
+        padding: 2rem 1rem;
+    }
+}
+
+
+/* ================================================================ */
+/* PHILOSOPHIE — texte de fond 2 colonnes                            */
+/* / PHILOSOPHY — 2-column background text                           */
+/* ================================================================ */
+
+.philo-section {
+    margin-bottom: 3rem;
+    padding: 2rem 0;
+}
+
+.philo-title {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    font-weight: 700;
+}
+
+.philo-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.philo-col p {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+@media (max-width: 767.98px) {
+    .philo-columns {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+
+/* ================================================================ */
+/* FONCTIONNALITES — grille 3x2 avec icones                          */
+/* / FEATURES — 3x2 grid with icons                                 */
+/* ================================================================ */
+
+.features-section {
+    margin-bottom: 3rem;
+    padding: 2.5rem 0;
+}
+
+.features-heading {
+    text-align: center;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.features-subheading {
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 2.5rem;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+}
+
+.feature-card {
+    text-align: center;
+    padding: 1.5rem 1rem;
+}
+
+/* Icone dans un cercle colore / Icon in a colored circle */
+.feature-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(37, 157, 73, 0.12) 0%, rgba(66, 150, 204, 0.12) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 1.5rem;
+    color: #259d49;
+}
+
+.feature-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.feature-desc {
+    font-size: 0.88rem;
+    line-height: 1.6;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 0;
+}
+
+/* Responsive : 2 colonnes tablette, 1 colonne mobile */
+/* / Responsive: 2 cols tablet, 1 col mobile */
+@media (max-width: 991.98px) {
+    .features-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .features-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
+
+
 /* Chiffres tabulaires pour les compteurs (largeur egale, pas de "saut") */
 /* / Tabular numbers for counters (equal width, no "jump") */
 .stat-number {
@@ -41,4 +275,282 @@ h1, h2, h3, .lead {
 .seo-card .card-img-top {
     outline: 1px solid rgba(0, 0, 0, 0.10);
     outline-offset: -1px;
+}
+
+
+/* ================================================================ */
+/* Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini      */
+/* / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee    */
+/* ================================================================ */
+
+/* Animation de defilement continu / Continuous scroll animation */
+@keyframes marquee-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+/* Conteneur : masque le debordement, pas de scrollbar */
+/* / Container: hides overflow, no scrollbar */
+.marquee-track {
+    display: flex;
+    overflow: hidden;
+    gap: 0;
+    /* Masque progressif sur les bords (effet fondu)
+       / Progressive mask on edges (fade effect) */
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 6%,
+        black 94%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0%,
+        black 6%,
+        black 94%,
+        transparent 100%
+    );
+}
+
+/* Bande de contenu : defilement infini, dure 30s, lineaire */
+/* / Content strip: infinite scroll, 30s duration, linear */
+.marquee-content {
+    display: flex;
+    gap: 1rem;
+    padding-right: 1rem;
+    flex-shrink: 0;
+    animation: marquee-scroll 30s linear infinite;
+}
+
+/* Pause au survol — respect du prefers-reduced-motion */
+/* / Pause on hover — respects prefers-reduced-motion */
+.marquee-track:hover .marquee-content {
+    animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .marquee-content {
+        animation: none;
+    }
+    .marquee-track {
+        overflow-x: auto;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+}
+
+/* Item individuel : logo/initiale + nom du lieu */
+/* / Individual item: logo/initial + venue name */
+.marquee-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    background: var(--bs-tertiary-bg, rgba(0, 0, 0, 0.03));
+    text-decoration: none;
+    color: var(--bs-body-color);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 200ms ease, box-shadow 200ms ease;
+}
+
+.marquee-item:hover {
+    background: var(--bs-secondary-bg, rgba(0, 0, 0, 0.06));
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.08),
+        0 2px 6px rgba(0, 0, 0, 0.08);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+/* Logo du lieu (quand il existe) / Venue logo (when available) */
+.marquee-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: contain;
+    outline: 1px solid rgba(0, 0, 0, 0.08);
+    outline-offset: -1px;
+    background: white;
+}
+
+/* Initiale (fallback quand pas de logo) / Initial (fallback when no logo) */
+/* Couleurs distribuees via nth-child pour varier les teintes */
+/* / Colors distributed via nth-child to vary hues */
+.marquee-initiale {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: white;
+    flex-shrink: 0;
+}
+
+/* 6 couleurs en rotation / 6 rotating colors */
+.marquee-initiale[data-index="0"] { background: #6366f1; }
+.marquee-initiale[data-index="1"] { background: #f59e0b; }
+.marquee-initiale[data-index="2"] { background: #10b981; }
+.marquee-initiale[data-index="3"] { background: #ef4444; }
+.marquee-initiale[data-index="4"] { background: #8b5cf6; }
+.marquee-initiale[data-index="5"] { background: #06b6d4; }
+.marquee-initiale[data-index="6"] { background: #6366f1; }
+.marquee-initiale[data-index="7"] { background: #f59e0b; }
+.marquee-initiale[data-index="8"] { background: #10b981; }
+.marquee-initiale[data-index="9"] { background: #ef4444; }
+.marquee-initiale[data-index="10"] { background: #8b5cf6; }
+.marquee-initiale[data-index="11"] { background: #06b6d4; }
+
+/* Nom du lieu / Venue name */
+.marquee-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+
+/* ================================================================ */
+/* Bandeau deferoulant "Prochains evenements" — marquee avec vignettes */
+/* / Scrolling marquee "Upcoming events" — marquee with thumbnails   */
+/* ================================================================ */
+
+/* La bande events defile plus lentement (plus de contenu visible) */
+/* / Event strip scrolls slower (more visible content) */
+.marquee-content--events {
+    gap: 1.25rem;
+    padding-right: 1.25rem;
+    animation-duration: 45s;
+}
+
+/* Carte event dans le marquee : vignette + texte */
+/* / Event card in marquee: thumbnail + text */
+.event-marquee-card {
+    display: flex;
+    flex-direction: column;
+    width: 260px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    text-decoration: none;
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg, #fff);
+    box-shadow:
+        0px 0px 0px 1px rgba(0, 0, 0, 0.06),
+        0px 1px 2px -1px rgba(0, 0, 0, 0.06),
+        0px 2px 4px 0px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.event-marquee-card:hover {
+    box-shadow:
+        0px 0px 0px 1px rgba(0, 0, 0, 0.08),
+        0px 2px 8px -1px rgba(0, 0, 0, 0.12),
+        0px 4px 12px 0px rgba(0, 0, 0, 0.08);
+    transform: translateY(-3px);
+    color: var(--bs-body-color);
+    text-decoration: none;
+}
+
+/* Conteneur de la vignette (ratio 16:9 fixe) / Thumbnail container (fixed 16:9 ratio) */
+.event-marquee-img-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: var(--bs-tertiary-bg, #f0f0f0);
+}
+
+.event-marquee-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Outline discret a l'interieur de l'image (regle UI) */
+    /* / Subtle outline inside the image (UI rule) */
+    outline: 1px solid rgba(0, 0, 0, 0.08);
+    outline-offset: -1px;
+    transition: transform 400ms ease;
+}
+
+/* Zoom leger au survol de la carte / Slight zoom on card hover */
+.event-marquee-card:hover .event-marquee-img {
+    transform: scale(1.04);
+}
+
+/* Placeholder quand pas d'image / Placeholder when no image */
+.event-marquee-img-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+}
+
+.event-marquee-img-placeholder[data-index="0"] { background: #6366f1; }
+.event-marquee-img-placeholder[data-index="1"] { background: #f59e0b; }
+.event-marquee-img-placeholder[data-index="2"] { background: #10b981; }
+.event-marquee-img-placeholder[data-index="3"] { background: #ef4444; }
+.event-marquee-img-placeholder[data-index="4"] { background: #8b5cf6; }
+.event-marquee-img-placeholder[data-index="5"] { background: #06b6d4; }
+.event-marquee-img-placeholder[data-index="6"] { background: #6366f1; }
+.event-marquee-img-placeholder[data-index="7"] { background: #f59e0b; }
+.event-marquee-img-placeholder[data-index="8"] { background: #10b981; }
+.event-marquee-img-placeholder[data-index="9"] { background: #ef4444; }
+.event-marquee-img-placeholder[data-index="10"] { background: #8b5cf6; }
+.event-marquee-img-placeholder[data-index="11"] { background: #06b6d4; }
+
+/* Corps texte de la carte event / Event card text body */
+.event-marquee-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem 0.75rem 0.75rem;
+}
+
+/* Nom de l'evenement — max 2 lignes avec ellipsis */
+/* / Event name — max 2 lines with ellipsis */
+.event-marquee-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Date et lieu : petits, discrets / Date and venue: small, subtle */
+.event-marquee-date,
+.event-marquee-lieu {
+    font-size: 0.76rem;
+    color: var(--bs-secondary-color, #6c757d);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-marquee-date i,
+.event-marquee-lieu i {
+    font-size: 0.7rem;
+    margin-right: 0.2rem;
+}
+
+/* Border-radius concentrique : rayon ext (12) = rayon int (8) + padding visuel (4) */
+/* / Concentric border-radius: outer (12) = inner (8) + visual padding (4) */
+.event-marquee-img-wrapper {
+    border-radius: 8px 8px 0 0;
+}
+
+/* Responsive : cards plus petites sur mobile */
+/* / Responsive: smaller cards on mobile */
+@media (max-width: 575.98px) {
+    .event-marquee-card {
+        width: 220px;
+    }
+    .event-marquee-name {
+        font-size: 0.82rem;
+    }
 }

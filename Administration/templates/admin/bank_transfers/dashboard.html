@@ -1,0 +1,140 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% load billet_filters %}
+
+{% block title %}{% translate "Virements pot central" %}{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto; padding: 20px;" data-testid="bank-transfers-dashboard">
+
+    {# Flash message injecte par la vue (create succes/erreur). #}
+    {# Contourne le bug `messages.success` invisible apres redirect depuis vue `admin_view()`. #}
+    {# Flash message injected by the view (create success/error). #}
+    {# Workaround for `messages.success` swallowed after redirect from `admin_view()` wrapped view. #}
+    {% if flash %}
+    <div data-testid="flash-{{ flash.type }}"
+         role="alert"
+         style="margin-bottom: 16px; padding: 12px 16px; border-radius: 6px; font-size: 0.95rem;
+                {% if flash.type == 'success' %}background: #DCFCE7; color: #166534; border: 1px solid #86EFAC;
+                {% else %}background: #FEE2E2; color: #991B1B; border: 1px solid #FCA5A5;{% endif %}">
+        {{ flash.msg }}
+    </div>
+    {% endif %}
+
+    <div style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h1 style="margin: 0 0 8px; font-size: 1.5rem;">{% translate "Virements pot central" %}</h1>
+            <p style="margin: 0; color: #6B7280; font-size: 0.95rem;">
+                {% translate "Suivi de la dette envers chaque tenant pour les FED remboursés." %}
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'staff_admin:bank_transfers_historique' %}"
+               style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: #6B7280; color: white; border-radius: 6px; text-decoration: none; font-size: 0.85em; font-weight: 500;"
+               data-testid="btn-historique-global">
+                {% translate "Historique global" %}
+            </a>
+        </div>
+    </div>
+
+    <div style="background: #F3F4F6; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+        <p style="margin: 0; font-size: 1.1rem;">
+            <strong>{% translate "Total global de la dette" %} :</strong>
+            <span data-testid="dashboard-total-global">{{ total_global_centimes|default:0|cents_to_euros }}</span>
+        </p>
+    </div>
+
+    {% if dettes %}
+    <table style="width: 100%; border-collapse: collapse; background: white;" data-testid="dettes-table">
+        <thead>
+            <tr style="background: #F9FAFB; border-bottom: 2px solid #E5E7EB;">
+                <th style="padding: 12px; text-align: left;">{% translate "Tenant" %}</th>
+                <th style="padding: 12px; text-align: left;">{% translate "Asset" %}</th>
+                <th style="padding: 12px; text-align: right;">{% translate "Dette" %}</th>
+                <th style="padding: 12px; text-align: right;">{% translate "Total remboursé" %}</th>
+                <th style="padding: 12px; text-align: right;">{% translate "Total verse" %}</th>
+                <th style="padding: 12px; text-align: left;">{% translate "Dernier virement reçu" %}</th>
+                <th style="padding: 12px; text-align: center;">{% translate "Action" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in dettes %}
+            <tr style="border-bottom: 1px solid #E5E7EB;" data-testid="dette-row-{{ forloop.counter }}">
+                <td style="padding: 12px;">{{ d.tenant.name }}</td>
+                <td style="padding: 12px;">{{ d.asset.name }}</td>
+                <td style="padding: 12px; text-align: right; font-weight: 600;">
+                    <span data-testid="dette-amount-{{ forloop.counter }}">{{ d.dette_centimes|cents_to_euros }}</span>
+                </td>
+                <td style="padding: 12px; text-align: right; color: #6B7280;">{{ d.total_refund_centimes|cents_to_euros }}</td>
+                <td style="padding: 12px; text-align: right; color: #6B7280;">{{ d.total_virements_centimes|cents_to_euros }}</td>
+                <td style="padding: 12px;">
+                    {% if d.dernier_virement %}
+                        {{ d.dernier_virement.amount|cents_to_euros }} — {{ d.dernier_virement.datetime|date:"d/m/Y" }}
+                    {% else %}
+                        <span style="color: #9CA3AF;">{% translate "Aucun" %}</span>
+                    {% endif %}
+                </td>
+                <td style="padding: 12px; text-align: center;">
+                    {% if d.dette_centimes > 0 %}
+                    <button type="button"
+                            data-testid="btn-saisir-virement-{{ forloop.counter }}"
+                            data-tenant-uuid="{{ d.tenant.uuid }}"
+                            data-tenant-name="{{ d.tenant.name }}"
+                            data-asset-uuid="{{ d.asset.uuid }}"
+                            data-asset-name="{{ d.asset.name }}"
+                            data-dette-centimes="{{ d.dette_centimes }}"
+                            onclick="ouvrirFormulaireVirement(this)"
+                            style="padding: 8px 14px; background: #16A34A; color: white; border: none; border-radius: 6px; font-size: 0.85em; font-weight: 500; cursor: pointer;">
+                        {% translate "Enregistrer un virement" %}
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p data-testid="no-dettes-message" style="text-align: center; padding: 32px; color: #6B7280;">
+            {% translate "Aucune dette en cours." %}
+        </p>
+    {% endif %}
+
+    <!-- Modale de saisie (cachee par defaut, affichee par JS) -->
+    <div id="modal-saisie-virement" style="display:none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="background: white; max-width: 500px; margin: 80px auto; padding: 24px; border-radius: 8px;">
+            <h2 id="modal-title" style="margin-top: 0;">{% translate "Enregistrer un virement" %}</h2>
+            <form method="post" action="{% url 'staff_admin:bank_transfers_dashboard' %}" data-testid="form-saisie-virement">
+                {% csrf_token %}
+                <input type="hidden" name="tenant_uuid" id="form-tenant-uuid">
+                <input type="hidden" name="asset_uuid" id="form-asset-uuid">
+                <p><label>{% translate "Montant (EUR)" %} : <input type="number" name="montant_euros" step="0.01" min="0.01" required data-testid="input-montant"></label></p>
+                <p><label>{% translate "Date du virement" %} : <input type="date" name="date_virement" required data-testid="input-date"></label></p>
+                <p><label>{% translate "Référence bancaire" %} : <input type="text" name="reference" maxlength="100" required data-testid="input-reference"></label></p>
+                <p><label>{% translate "Commentaire" %} : <textarea name="comment" rows="3" data-testid="input-comment"></textarea></label></p>
+                <p><strong>{% translate "Dette actuelle" %} : <span id="modal-dette-display"></span></strong></p>
+                <button type="submit" style="padding: 10px 20px; background: #16A34A; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer;" data-testid="btn-submit-virement">
+                    {% translate "Confirmer le virement" %}
+                </button>
+                <button type="button" onclick="document.getElementById('modal-saisie-virement').style.display='none';" style="padding: 10px 20px; background: #6B7280; color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; margin-left: 8px;">
+                    {% translate "Annuler" %}
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function ouvrirFormulaireVirement(btn) {
+    document.getElementById("form-tenant-uuid").value = btn.dataset.tenantUuid;
+    document.getElementById("form-asset-uuid").value = btn.dataset.assetUuid;
+    document.getElementById("modal-title").textContent =
+        "{% translate 'Virement vers' %} " + btn.dataset.tenantName + " (" + btn.dataset.assetName + ")";
+    // La dette arrive en centimes, on la convertit en euros (convention FR : virgule)
+    // Debt comes in cents, we convert to euros (FR convention: comma)
+    const detteCentimes = parseInt(btn.dataset.detteCentimes, 10) || 0;
+    const detteEuros = (detteCentimes / 100).toFixed(2).replace(".", ",");
+    document.getElementById("modal-dette-display").textContent = detteEuros + "\u00a0€";
+    document.getElementById("modal-saisie-virement").style.display = "block";
+}
+</script>
+{% endblock %}

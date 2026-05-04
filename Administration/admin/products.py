@@ -4,12 +4,11 @@ import re
 
 from django import forms
 from django.contrib import admin, messages
-from django.db import models, IntegrityError
+from django.db import models
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.shortcuts import redirect, get_object_or_404
 from django.template.loader import render_to_string
-from django.urls import reverse
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, StackedInline, TabularInline
@@ -519,26 +518,59 @@ class MembershipPriceInline(BasePriceInline):
 
 class POSPriceInline(BasePriceInline):
     """Inline tarifs pour les produits de caisse (POS).
-    Ajoute contenance (volume par vente) et poids_mesure (vente au poids/volume).
-    Le stock POS est gere par l'app inventaire.
-    Champs conditionnels : contenance cache si poids_mesure coche.
-    / Price inline for POS products.
-    Adds contenance (volume per sale) and poids_mesure (weight/volume sales).
-    POS stock managed by inventaire app.
-    Conditional fields: contenance hidden if poids_mesure checked."""
+    Ajoute contenance, poids_mesure, et non_fiduciaire (tarif en tokens).
+    / POS product price inline.
+    Adds contenance, weight/measure, and non-fiduciary (token pricing)."""
 
-    fields = ("name", "prix", "poids_mesure", "contenance", ("publish", "order"))
+    fields = (
+        "name",
+        "prix",
+        "poids_mesure",
+        "contenance",
+        "non_fiduciaire",
+        "asset",
+        ("publish", "order"),
+    )
 
-    # Champs conditionnels : contenance cache si poids_mesure coche
-    # (la quantite est saisie a chaque vente, pas fixe).
-    # / Conditional fields: contenance hidden if poids_mesure checked
-    # (quantity is entered at each sale, not fixed).
+    # Champs conditionnels :
+    # - contenance cache si poids_mesure coche
+    #   (la quantite est saisie a chaque vente, pas fixe)
+    # - asset cache si non_fiduciaire decoche
+    #   (le dropdown asset n'apparait que pour un tarif en tokens)
+    # / Conditional fields:
+    # - contenance hidden if poids_mesure checked
+    #   (quantity is entered at each sale, not fixed)
+    # - asset hidden if non_fiduciaire unchecked
+    #   (asset dropdown only appears for token pricing)
     inline_conditional_fields = {
         "contenance": "poids_mesure == false",
+        "asset": "non_fiduciaire == true",
     }
 
     class Media:
         js = ("admin/js/inline_conditional_fields.js",)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Filtre les assets dans le dropdown : uniquement TIM et FID du tenant.
+        Les fiduciaires (TLF/TNF/FED) passent par la cascade, pas ici.
+        / Filter assets in dropdown: only TIM and FID for this tenant.
+        Fiduciary assets (TLF/TNF/FED) use the cascade, not direct pricing.
+        """
+        if db_field.name == "asset":
+            from django.db import connection
+
+            from fedow_core.models import Asset as FedowAsset
+
+            # TIM = monnaie temps, FID = fidelite — les seuls usables en tarif direct
+            # / TIM = time currency, FID = loyalty — the only ones usable for direct pricing
+            categories_non_fiduciaires = (FedowAsset.TIM, FedowAsset.FID)
+            kwargs["queryset"] = FedowAsset.objects.filter(
+                tenant_origin=connection.tenant,
+                category__in=categories_non_fiduciaires,
+                active=True,
+            )
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class ProductFormFieldInlineForm(ModelForm):

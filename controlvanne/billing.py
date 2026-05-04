@@ -214,7 +214,7 @@ def facturer_tirage(
             pricesold=price_sold,
             qty=1,
             amount=montant_centimes,
-            sale_origin=SaleOrigin.LABOUTIK,
+            sale_origin=SaleOrigin.TIREUSE,
             payment_method=PaymentMethod.LOCAL_EURO,
             status=LigneArticle.VALID,
             asset=asset_tlf.uuid,

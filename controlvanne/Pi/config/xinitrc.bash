@@ -8,13 +8,11 @@ export LANGUAGE=fr_FR:fr
 export LC_ALL=fr_FR.UTF-8
 
 # URL kiosque - lit directement depuis .env
-set -a; [ -f /home/sysop/tibeer/.env ] && . /home/sysop/tibeer/.env; set +a
-DJANGO_SERVER="${API_URL:-http://192.168.1.10:8000}"
-TIREUSE_ID="${TIREUSE_BEC:-}"
-if [ -n "$TIREUSE_ID" ]; then
-    URL="${DJANGO_SERVER}/?tireuse_bec=${TIREUSE_ID}"
+set -a; [ -f /home/sysop/tibeer/controlvanne/Pi/.env ] && . /home/sysop/tibeer/controlvanne/Pi/.env; set +a
+if [ -n "$TIREUSE_UUID" ]; then
+    URL="${SERVER_URL}/controlvanne/kiosk/${TIREUSE_UUID}/"
 else
-    URL="${DJANGO_SERVER}/"
+    URL="${SERVER_URL}/"
 fi
 
 # Trouver Chromium
@@ -37,14 +35,23 @@ PROFILE_DIR="/home/sysop/.config/chromium-kiosk"
 mkdir -p "$PROFILE_DIR/Default"
 touch "$PROFILE_DIR/First Run"
 
+# Attendre que tibeer ait injecté le cookie sessionid (max 30s)
+# / Wait for tibeer to inject the sessionid cookie (max 30s)
+WAIT=0
+while [ ! -f /tmp/tibeer_cookie_ready ] && [ $WAIT -lt 60 ]; do
+    sleep 0.5
+    WAIT=$((WAIT + 1))
+done
+rm -f /tmp/tibeer_cookie_ready
+
 # Boucle de relance Chromium (X reste actif si Chromium crash)
 while true; do
   "$CHROMIUM_BIN" \
     --user-data-dir="$PROFILE_DIR" \
-    --force-device-scale-factor=1.5 \
+    --force-device-scale-factor=2.0 \
     --lang=fr --accept-lang=fr-FR,fr \
     --no-first-run --no-default-browser-check \
-    --kiosk "$URL" --incognito --start-fullscreen \
+    --kiosk "$URL" --start-fullscreen \
     --overscroll-history-navigation=0 \
     --autoplay-policy=no-user-gesture-required \
     --disable-gpu --use-gl=swiftshader --disable-dev-shm-usage \

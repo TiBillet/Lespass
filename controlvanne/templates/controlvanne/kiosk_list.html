@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{# KIOSK LIST — grille de toutes les tireuses actives #}
+{# / KIOSK LIST — grid of all active taps #}
+{# LOCALISATION : controlvanne/templates/controlvanne/kiosk_list.html #}
+{# WebSocket : /ws/rfid/all/ — mises à jour de toutes les tireuses #}
+
+{% block title %}{{ config.organisation|default:"TiBillet" }} — {% translate "All taps" %}{% endblock %}
+
+{% block content %}
+  <div class="row g-3" id="cards-grid" data-slug-focus="all" data-testid="kiosk-cards-grid">
+    {% for bec in becs %}
+      <div class="col-12 col-md-6 col-lg-4" id="card-col-{{ bec.uuid }}">
+        {% include "controlvanne/partial/kiosk_card.html" with bec=bec %}
+      </div>
+    {% empty %}
+      <div class="col-12">
+        <div class="alert alert-warning" data-testid="kiosk-no-tap">
+          {% translate "No tap configured." %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'controlvanne/js/panel_kiosk.js' %}"></script>
+{% endblock %}

@@ -177,5 +177,17 @@ AGENTS.md
 /demo_data.sql.gz
 
 #dev prod like
-docker-compose-filaos.yml
 dev-filaos
+letsencrypt
+docker-compose-filaos.yml
+
+# Cordova
+**/mobile-app/node_modules/
+**/mobile-app/plugins/
+**/mobile-app/platforms/
+# autoriser www dans les plugins
+!laboutik_client_android_v2/cordova_local_plugins/**/www/
+!laboutik_client_android_v2/cordova_local_plugins/**/www/**
+!laboutik_client_android_v2/mobile-app/www/
+!laboutik_client_android_v2/mobile-app/www/**
+env.js

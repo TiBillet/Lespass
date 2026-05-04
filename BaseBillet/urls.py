@@ -15,6 +15,7 @@ router.register(r'my_account', base_view.MyAccount, basename='my_account')
 router.register(r'qrcodescanpay', base_view.QrCodeScanPay, basename='qrcodescanpay')
 router.register(r'qr', base_view.ScanQrCode, basename='scan_qrcode')
 router.register(r'event', base_view.EventMVT, basename='event')
+router.register(r'panier', base_view.PanierMVT, basename='panier')
 router.register(r'home', base_view.HomeViewset, basename='home')
 router.register(r'login', base_view.TiBilletLogin, basename='login-viewset')
 router.register(r'specialadminaction', base_view.SpecialAdminAction, basename='specialadminaction')
@@ -61,6 +62,7 @@ urlpatterns = [
     path('deconnexion/', base_view.deconnexion, name='deconnexion'),
     path('emailconfirmation/<str:token>', base_view.emailconfirmation, name='emailconfirmation'),
     path('infos-pratiques/', base_view.infos_pratiques, name='infos_pratiques'),
+    path('le-faire-festival/', base_view.le_faire_festival, name='le_faire_festival'),
 
     ##### TEST NICO
     # path("create_tenant/", base_view.create_tenant, name='create_tenant'),

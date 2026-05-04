@@ -68,28 +68,14 @@ let NfcReader = class {
 		}
 	}
 
-	listenCordovaNfc() {
-		console.log('-> listenCordovaNfc,', new Date())
-		try {
-			nfc.addTagDiscoveredListener((nfcEvent) => {
-				let tag = nfcEvent.tag
-				if (this.cordovaLecture === true) {
-					this.verificationTagId(nfc.bytesToHexString(tag.id), this.uuidConnexion)
-				}
-			})
-			clearInterval(this.intervalIDVerifApiCordova)
-		} catch (error) {
-			console.log('-> listenCordovaNfc :', error)
-		}
-	}
 
 	/**
 	* Gestion de la réception du tagIDS et de l'uuidConnexion
 	* @param mode
 	*/
-	gestionModeLectureNfc(mode) {
+	async gestionModeLectureNfc(mode) {
 		const conf = this.conf
-		// console.log('1 -> gestionModeLectureNfc, mode =', mode)
+		console.log('1 -> gestionModeLectureNfc, mode =', mode)
 		this.uuidConnexion = crypto.randomUUID()
 
 		// nfc serveur socket_io + front sur le même appareil (pi ou desktop)
@@ -114,10 +100,8 @@ let NfcReader = class {
 
 		// cordova
 		if (mode === 'NFCMC') {
-			this.cordovaLecture = true
-			this.intervalIDVerifApiCordova = setInterval(() => {
-				this.listenCordovaNfc(conf)
-			}, 500)
+			const tagId = await nfcPlugin.startListening()
+      this.verificationTagId(tagId, this.uuidConnexion)
 		}
 
 		// simulation
@@ -129,6 +113,32 @@ let NfcReader = class {
         <div class="nfc-reader-simu-bt" tag-id="${item.tag_id}">${escapeHtml(item.name)}</div>
       `
 			})
+
+			// Zone de saisie manuelle : permet de tester un tag_id qui n'est
+			// pas dans la liste. Persistance du dernier tag saisi via localStorage.
+			// Manual input zone: allows testing a tag_id not in the list.
+			// Persists last entered tag via localStorage.
+			// Le parent .nfc-container-slot est flex-column avec text blanc :
+			// on force color/background et une largeur fixe sur l'input.
+			// Parent .nfc-container-slot is flex-column with white text:
+			// force color/background and a fixed width on the input.
+			const dernierTagSaisi = localStorage.getItem('nfcSimuManualTag') || ''
+			uiSimu += `
+        <div class="nfc-reader-simu-manual" style="margin-top:1rem;display:flex;gap:8px;align-items:center;justify-content:center;">
+          <input type="text"
+                 id="nfc-simu-manual-input"
+                 placeholder="Tag ID (ex : A49E8E2A)"
+                 maxlength="8"
+                 value="${escapeHtml(dernierTagSaisi)}"
+                 style="width:200px;padding:10px 12px;border:1px solid #d1d5db;border-radius:6px;font-family:monospace;font-size:1rem;text-transform:uppercase;color:#111;background:#fff;" />
+          <button type="button"
+                  id="nfc-simu-manual-submit"
+                  style="padding:10px 18px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;white-space:nowrap;">
+            Valider
+          </button>
+        </div>
+      `
+
 			document.querySelector('#nfc-simu-tag').innerHTML = uiSimu
 
 			// bt simulation receipt tag id
@@ -142,12 +152,30 @@ let NfcReader = class {
 						console.log('-> simulaton tag id,', error)
 					}
 				}
+			})
 
+			// Submit du tag saisi manuellement (clic bouton OU touche Entree).
+			// Submit manually entered tag (button click OR Enter key).
+			const soumettreTagManuel = () => {
+				const input = document.querySelector('#nfc-simu-manual-input')
+				const tagSaisi = input.value.trim().toUpperCase()
+				if (tagSaisi === '') return
+				localStorage.setItem('nfcSimuManualTag', tagSaisi)
+				this.SendTagIdAndSubmit(tagSaisi, conf)
+				this.stop()
+			}
+
+			document.querySelector('#nfc-simu-manual-submit').addEventListener('click', soumettreTagManuel)
+			document.querySelector('#nfc-simu-manual-input').addEventListener('keydown', (ev) => {
+				if (ev.key === 'Enter') {
+					ev.preventDefault()
+					soumettreTagManuel()
+				}
 			})
 		}
 	}
 
-	start(conf) {
+	async start(conf) {
 		// console.log('0 -> startLecture  --  DEMO =', state.demo.active)
 		this.conf = conf
 		try {
@@ -156,8 +184,11 @@ let NfcReader = class {
 				this.modeNfc = 'NFCSIMU'
 			} else {
 				// hardware: récupère le nfcMode
-				const storage = JSON.parse(localStorage.getItem('laboutik'))
-				this.modeNfc = storage.mode_nfc
+        const cordovaNfcPlugin = await nfcPlugin.available()
+        if(cordovaNfcPlugin === 1) {
+          this.modeNfc="NFCMC"
+        }
+				// TODO: ajouter le  pi(mfc...) et desktop(usb)
 			}
 			this.gestionModeLectureNfc(this.modeNfc)
 		} catch (err) {
@@ -165,7 +196,7 @@ let NfcReader = class {
 		}
 	}
 
-	stop() {
+	async stop() {
 		// console.log('1 -> stopLecture')
 		let modeNfc = this.modeNfc
 
@@ -177,8 +208,7 @@ let NfcReader = class {
 
 		// cordova
 		if (modeNfc === 'NFCMC') {
-			this.cordovaLecture = false
-			clearInterval(this.intervalIDVerifApiCordova)
+			await nfcPlugin.stopListening()
 		}
 
 		// simulation

@@ -2,5 +2,5 @@ pyserial>=3.5
 requests>=2.31.0
 python-dotenv>=1.0.0
 systemd-python>=234
-mfrc522-python>=0.0.7
+mfrc522>=0.0.7
 pigpio>=1.78

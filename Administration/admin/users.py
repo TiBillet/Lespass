@@ -7,7 +7,6 @@ from django.contrib import admin, messages
 from django.db import connection
 from django.http import HttpRequest
 from django.shortcuts import redirect, get_object_or_404
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
@@ -16,7 +15,7 @@ from unfold.decorators import display, action
 
 from Administration.admin.site import staff_admin_site
 from ApiBillet.permissions import TenantAdminPermissionWithRequest, RootPermissionWithRequest
-from AuthBillet.models import HumanUser, TibilletUser
+from AuthBillet.models import HumanUser, TermUser, TibilletUser
 from BaseBillet.tasks import forge_connexion_url
 
 logger = logging.getLogger(__name__)
@@ -239,3 +238,105 @@ class HumanUserAdmin(ModelAdmin):
 
         connexion_url = forge_connexion_url(user, base_url)
         return redirect(connexion_url)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Terminaux hardware (TermUser) — admin Unfold
+# / Hardware terminals (TermUser) — Unfold admin
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+@admin.register(TermUser, site=staff_admin_site)
+class TermUserAdmin(ModelAdmin):
+    """
+    Admin Unfold pour les terminaux hardware (TermUser).
+    / Unfold admin for hardware terminals (TermUser).
+
+    LOCALISATION : Administration/admin/users.py
+
+    - Lecture seule sur la plupart des champs (créés via /api/discovery/claim/)
+    - Seul is_active est éditable (pour révoquer un terminal)
+    - Action bulk pour révoquer en lot
+    - Bannière informative sur la page détail (via change_form_before_template)
+    """
+    list_display = (
+        'display_email_short',
+        'terminal_role',
+        'display_is_active',
+        'last_see',
+        'date_joined',
+    )
+    list_filter = ('terminal_role', 'is_active')
+    search_fields = ('email',)
+
+    readonly_fields = (
+        'email', 'terminal_role', 'espece',
+        'client_source', 'date_joined', 'last_see',
+    )
+
+    fieldsets = (
+        (None, {
+            'fields': ('email', 'terminal_role', 'espece', 'is_active'),
+        }),
+        (_('Tracking'), {
+            'fields': ('client_source', 'date_joined', 'last_see'),
+        }),
+    )
+
+    actions = ['revoke_terminals']
+
+    change_form_before_template = 'admin/termuser/change_form_before.html'
+
+    def has_add_permission(self, request, obj=None):
+        # Terminaux créés uniquement via le flow /api/discovery/claim/
+        # / Terminals are only created via the /api/discovery/claim/ flow
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_change_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return TenantAdminPermissionWithRequest(request)
+
+    @admin.display(description=_('Email'))
+    def display_email_short(self, obj):
+        """Tronque l'email UUID pour l'affichage.
+        / Truncates UUID email for display."""
+        email_local_part = obj.email.split('@')[0]
+        if len(email_local_part) > 12:
+            return email_local_part[:12] + '…'
+        return email_local_part
+
+    @admin.display(description=_('Active'), boolean=True)
+    def display_is_active(self, obj):
+        return obj.is_active
+
+    @admin.action(description=_('Revoke selected terminals (is_active=False)'))
+    def revoke_terminals(self, request, queryset):
+        """
+        Action bulk : révoque les terminaux actifs sélectionnés.
+        Utilise save() (et pas update()) pour laisser la porte ouverte
+        à d'éventuels signaux post_save (audit log, déconnexion WebSocket,
+        invalidation de tokens, etc.).
+        / Bulk action: revokes selected active terminals.
+        Uses save() (not update()) to leave room for future post_save signals
+        (audit log, WebSocket disconnect, token invalidation, etc.).
+        """
+        # On ne traite que les terminaux encore actifs pour éviter de re-sauver
+        # des terminaux déjà révoqués, et pour que le compte reflète l'action réelle.
+        # / Only process still-active terminals to avoid re-saving already-revoked
+        # ones, and so the count reflects actual action taken.
+        count = 0
+        for terminal in queryset.filter(is_active=True):
+            terminal.is_active = False
+            terminal.save(update_fields=['is_active'])
+            count += 1
+
+        self.message_user(
+            request,
+            _('%(count)d terminal(s) revoked. Their sessions are now anonymous.') % {'count': count},
+            messages.SUCCESS,
+        )

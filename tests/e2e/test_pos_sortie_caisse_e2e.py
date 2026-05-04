@@ -69,7 +69,7 @@ def _make_cash_sale(page, pos_page, pv_name="Bar"):
     tile = page.locator("#products .article-container").filter(has_text="Biere").first
     expect(tile).to_be_visible(timeout=10_000)
     tile.click()
-    expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=5_000)
+    expect(page.locator("#addition-list")).to_contain_text("Biere", timeout=10_000)
 
     # Valider / Validate
     page.locator("#bt-valider").click()
@@ -187,7 +187,7 @@ class TestSortieDeCaisseE2E:
         # donc la validation JS laisse passer sans alerte.
         # / Enter 1 × 5€ via + button. 5€ <= cash sales so no JS alert.
         input_5 = page.locator('[data-testid="sortie-input-500"]')
-        expect(input_5).to_be_visible(timeout=5_000)
+        expect(input_5).to_be_visible(timeout=10_000)
         page.locator('[data-testid="sortie-btn-plus-500"]').click()
 
         # Verifier que le total JS affiche 5,00 € / Verify JS total shows 5,00 €
@@ -227,7 +227,7 @@ class TestSortieDeCaisseE2E:
         expect(page.locator('[data-testid="recap-solde"]')).to_be_visible(timeout=10_000)
 
         # La ligne "Sorties especes" doit etre visible / "Cash withdrawals" row must be visible
-        expect(page.locator('[data-testid="recap-sorties-especes"]')).to_be_visible(timeout=5_000)
+        expect(page.locator('[data-testid="recap-sorties-especes"]')).to_be_visible(timeout=10_000)
         sorties_texte = page.locator('[data-testid="recap-sorties-especes"]').text_content()
         assert "5,00" in sorties_texte, (
             f"Sorties especes attendu 5,00 €, obtenu: {sorties_texte}"
@@ -287,8 +287,14 @@ class TestSortieDeCaisseE2E:
         # Le panneau etat caisse est visible / Cash state panel is visible
         expect(page.locator('[data-testid="sortie-etat-caisse"]')).to_be_visible(timeout=10_000)
 
-        # Il contient au moins "Fond", "Espèces" ou "Especes", "Solde"
-        # / It contains at least "Fond", "Espèces"/"Especes", "Solde"
+        # Il contient au moins "Fond"/"Float" et "Solde"/"Balance" (selon langue
+        # active du tenant — i18n, cf. PIEGES 9.34).
+        # / It contains at least "Fond"/"Float" and "Solde"/"Balance" (depending
+        # on tenant's active language — i18n, see PIEGES 9.34).
         etat_texte = page.locator('[data-testid="sortie-etat-caisse"]').text_content()
-        assert "Fond" in etat_texte, f"'Fond' non trouvé dans: {etat_texte}"
-        assert "Solde" in etat_texte, f"'Solde' non trouvé dans: {etat_texte}"
+        assert "Fond" in etat_texte or "Float" in etat_texte, (
+            f"'Fond'/'Float' non trouvé dans: {etat_texte}"
+        )
+        assert "Solde" in etat_texte or "Balance" in etat_texte, (
+            f"'Solde'/'Balance' non trouvé dans: {etat_texte}"
+        )

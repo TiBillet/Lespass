@@ -33,6 +33,8 @@
   hx-encoding="multipart/form-data"
   hx-target="#offcanvas-event-admin"
   hx-swap="innerHTML"
+  data-loading-target="#tibillet-spinner"
+  data-loading-class="active"
   method="post"
   enctype="multipart/form-data"
 >
@@ -149,7 +151,7 @@
   </div>
 
   <div class="d-flex gap-2 mt-4">
-    <button type="submit" class="btn btn-primary">
+    <button type="submit" class="btn btn-primary" data-loading-disable>
       <i class="bi bi-check2-circle"></i> {% translate "Créer l'évènement" %}
     </button>
     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="offcanvas">

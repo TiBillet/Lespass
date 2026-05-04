@@ -245,11 +245,17 @@ def test_formatter_ticket_vente():
     ligne1.qty = 2
     ligne1.amount = 350
     ligne1.pricesold = MagicMock(__str__=lambda self: "Biere pression")
+    ligne1.vat = 20.0
+    ligne1.weight_quantity = None
+    ligne1.uuid_transaction = None
 
     ligne2 = MagicMock()
     ligne2.qty = 1
     ligne2.amount = 100
     ligne2.pricesold = MagicMock(__str__=lambda self: "Eau plate")
+    ligne2.vat = 20.0
+    ligne2.weight_quantity = None
+    ligne2.uuid_transaction = None
 
     pv = MagicMock()
     pv.name = "Bar Festival"
@@ -257,7 +263,12 @@ def test_formatter_ticket_vente():
     operateur = MagicMock()
     operateur.email = "caissier@test.com"
 
-    result = formatter_ticket_vente([ligne1, ligne2], pv, operateur, "Especes")
+    # formatter_ticket_vente accede a Configuration.get_solo() (TENANT_APPS)
+    # → il faut etre dans un schema tenant, sinon la table n'existe pas.
+    # / formatter_ticket_vente accesses Configuration.get_solo() (TENANT_APPS)
+    # → must be in a tenant schema, otherwise the table doesn't exist.
+    with schema_context(TENANT_SCHEMA):
+        result = formatter_ticket_vente([ligne1, ligne2], pv, operateur, "Especes")
 
     assert "header" in result
     assert result["header"]["title"] == "Bar Festival"

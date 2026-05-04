@@ -210,6 +210,51 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
     # / Training mode: receipts carry "SIMULATION" label (LNE req. 5)
     is_simulation = laboutik_config.mode_ecole
 
+    # Detail cascade NFC (si paiement multi-asset)
+    # / NFC cascade detail (if multi-asset payment)
+    # Cherche le uuid_transaction commun a toutes les lignes de ce paiement.
+    # / Find the uuid_transaction shared by all lines of this payment.
+    cascade_detail = []
+    uuid_tx = None
+    for ligne in lignes_articles:
+        if hasattr(ligne, "uuid_transaction") and ligne.uuid_transaction:
+            uuid_tx = ligne.uuid_transaction
+            break
+
+    if uuid_tx:
+        from django.db.models import Sum as _Sum
+
+        from BaseBillet.models import LigneArticle
+        from fedow_core.models import Asset as FedowAsset
+
+        # Agreger les montants par asset UUID pour ce paiement
+        # / Aggregate amounts by asset UUID for this payment
+        lignes_par_asset = (
+            LigneArticle.objects.filter(
+                uuid_transaction=uuid_tx,
+                asset__isnull=False,
+            )
+            .values("asset")
+            .annotate(total=_Sum("amount"))
+        )
+
+        # Prefetch les assets pour eviter N+1
+        # / Prefetch assets to avoid N+1
+        asset_uuids = [e["asset"] for e in lignes_par_asset]
+        assets_par_uuid = {
+            a.uuid: a for a in FedowAsset.objects.filter(uuid__in=asset_uuids)
+        }
+
+        for entry in lignes_par_asset:
+            asset_obj = assets_par_uuid.get(entry["asset"])
+            if asset_obj:
+                cascade_detail.append(
+                    {
+                        "name": asset_obj.name,
+                        "total": entry["total"],
+                    }
+                )
+
     return {
         "header": {
             "title": pv.name if pv else "",
@@ -225,6 +270,7 @@ def formatter_ticket_vente(lignes_articles, pv, operateur, moyen_paiement):
         "tva_breakdown": tva_breakdown,
         "total_ht": total_ht_global,
         "total_tva": total_tva_global,
+        "cascade_detail": cascade_detail,
         "is_duplicata": False,
         "is_simulation": is_simulation,
         "pied_ticket": pied_ticket,
@@ -510,4 +556,74 @@ def formatter_ticket_cloture(cloture):
             f"{_('Ouverture')}: {date_ouverture}",
             f"{_('Fermeture')}: {date_cloture}",
         ],
+    }
+
+
+def formatter_recu_vider_carte(transactions):
+    """
+    Formate un recu client pour un vider carte (remboursement especes).
+    Inclut les mentions legales + detail par asset + reference Transaction.
+    / Formats a customer receipt for a card refund (cash refund).
+    Includes legal mentions + detail per asset + Transaction reference.
+
+    LOCALISATION : laboutik/printing/formatters.py
+
+    :param transactions: liste de Transaction REFUND (1 par asset)
+    :return: dict ticket_data compatible avec imprimer_async
+    """
+    from BaseBillet.models import Configuration
+    from laboutik.models import LaboutikConfiguration
+
+    now = timezone.localtime(timezone.now())
+
+    config = Configuration.get_solo()
+    laboutik_config = LaboutikConfiguration.get_solo()
+
+    # Mentions legales basiques (adresse + SIRET si dispo).
+    # / Basic legal mentions.
+    parties_adresse = []
+    if config.adress:
+        parties_adresse.append(config.adress)
+    if config.postal_code:
+        parties_adresse.append(str(config.postal_code))
+    if config.city:
+        parties_adresse.append(config.city)
+    adresse_complete = " ".join(parties_adresse)
+
+    legal = {
+        "organisation": config.organisation or "",
+        "adresse": adresse_complete,
+        "siret": getattr(laboutik_config, "siret", "") or "",
+    }
+
+    # Calcul du total et detail par asset.
+    # / Compute total and per-asset detail.
+    total_centimes = 0
+    articles = []
+    for tx in transactions:
+        total_centimes += tx.amount
+        articles.append({
+            "name": f"{tx.asset.name} ({tx.get_action_display()})",
+            "qty": 1,
+            "prix_centimes": tx.amount,
+            "total_centimes": tx.amount,
+        })
+
+    return {
+        "header": {
+            "title": str(_("REMBOURSEMENT CARTE")),
+            "subtitle": "",
+            "date": now.strftime("%d/%m/%Y %H:%M"),
+        },
+        "legal": legal,
+        "articles": articles,
+        "total": {
+            "amount": total_centimes,
+            "label": str(_("Especes")),
+        },
+        "is_duplicata": False,
+        "is_simulation": False,
+        "pied_ticket": str(_("Merci de votre visite.")),
+        "qrcode": None,
+        "footer": [],
     }

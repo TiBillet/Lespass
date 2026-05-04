@@ -1,0 +1,492 @@
+/**
+ * Recharge FED V2 — styles dédiés
+ * LOCALISATION : BaseBillet/static/reunion/css/refill_v2.css
+ *
+ * Palette créole du skin "reunion" (cf. vars.css) :
+ * --kouler-kari   (jaune curcuma)
+ * --kouler-losean (bleu océan)
+ * --kouler-letsi  (rose framboise)
+ * --kouler-sousou (vert)
+ * --kouler-piton  (marron profond, --pitonbraz / --pitonkler)
+ * --mayaj-pons    (dégradé kari → letsi)
+ * --mayaj-lagon   (dégradé losean → sousou)
+ *
+ * Fonts (cf. tibillet.css) :
+ * - luciole       : sans-serif accessible (dyslexie-friendly)
+ * - staatliches   : display affichette
+ * - Playwrite IS  : manuscrit chaleureux (pour titres affectifs)
+ *
+ * Règles UI appliquées (skill ui) :
+ * - Border radius concentrique (carte 24px, boutons 12px)
+ * - box-shadow à 3 couches plutôt que border
+ * - tabular-nums sur l'affichage du montant
+ * - text-wrap: balance sur le titre
+ * - Stagger sur animation d'entrée
+ * - Animations interruptibles (transitions) pour hover/focus
+ */
+
+/* ==========================================================================
+   Carte principale : s'affiche à la place du bloc des 3 boutons d'action
+   ========================================================================== */
+
+.refill-v2-card {
+    /* Border radius concentric : 24 (exterior) = 16 (interior) + 8 (padding) */
+    border-radius: 24px;
+    padding: 8px;
+    background: var(--mayaj-pons);
+    /* Shadow à 3 couches — discrète mais présente */
+    box-shadow:
+        0 0 0 1px rgba(41, 30, 38, 0.08),
+        0 2px 6px -1px rgba(41, 30, 38, 0.10),
+        0 12px 32px -8px rgba(233, 51, 99, 0.22);
+
+    /* Animation d'entrée — interruptible via transform */
+    animation: refill-card-in 520ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+@keyframes refill-card-in {
+    from {
+        transform: translateY(12px) scale(0.98);
+        opacity: 0;
+        filter: blur(3px);
+    }
+}
+
+/* Conteneur intérieur : fond blanc, rayon intérieur 16px (= 24 - 8).
+ * Pas d'overflow:hidden — pour permettre `position: fixed` sur la barre
+ * d'actions mobile sans stacking context parasite. */
+.refill-v2-inner {
+    border-radius: 16px;
+    background: var(--kouler-blan);
+    padding: 2rem 1.75rem 1.5rem;
+    position: relative;
+}
+
+/* ==========================================================================
+   Typographie : titre en Playwrite IS (script chaleureux), sous-titre discret
+   ========================================================================== */
+
+.refill-v2-title {
+    font-family: 'Playwrite IS', cursive, serif;
+    font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+    font-weight: 400;
+    line-height: 1.15;
+    color: var(--kouler-pitonbraz);
+    margin: 0 0 0.25rem;
+    text-wrap: balance;
+
+    /* Stagger step 1 */
+    animation: refill-item-in 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: 80ms;
+}
+
+.refill-v2-subtitle {
+    font-family: 'luciole', sans-serif;
+    font-size: 0.95rem;
+    color: var(--kouler-piton);
+    margin: 0 0 1.5rem;
+    text-wrap: balance;
+
+    animation: refill-item-in 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: 140ms;
+}
+
+@keyframes refill-item-in {
+    from {
+        transform: translateY(8px);
+        opacity: 0;
+        filter: blur(2px);
+    }
+}
+
+/* ==========================================================================
+   Affichage du montant en grand (lecture tabular-nums)
+   ========================================================================== */
+
+.refill-v2-amount-display {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-bottom: 1.25rem;
+    padding: 1.25rem 1rem;
+    background: linear-gradient(135deg, rgba(233, 179, 34, 0.08), rgba(233, 51, 99, 0.08));
+    border-radius: 16px;
+
+    animation: refill-item-in 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: 200ms;
+}
+
+.refill-v2-amount-value {
+    font-family: 'staatliches', sans-serif;
+    font-size: clamp(3rem, 10vw, 5rem);
+    font-weight: 400;
+    line-height: 1;
+    color: var(--kouler-pitonbraz);
+    /* tabular-nums : les chiffres ne sautent pas quand on change de montant */
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    min-width: 2ch;
+    text-align: right;
+}
+
+.refill-v2-amount-currency {
+    font-family: 'staatliches', sans-serif;
+    font-size: clamp(1.5rem, 4vw, 2rem);
+    color: var(--kouler-letsi);
+}
+
+/* ==========================================================================
+   Chips de montants suggérés
+   ========================================================================== */
+
+.refill-v2-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+
+    animation: refill-item-in 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: 260ms;
+}
+
+.refill-v2-chip {
+    font-family: 'luciole', sans-serif;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: var(--kouler-pitonbraz);
+    background: rgba(66, 150, 204, 0.10); /* losean très léger */
+    border: none;
+    /* Border radius concentric : 12 (interior) fits a 16 or 20 (outer) */
+    border-radius: 12px;
+    padding: 0.55rem 1rem;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+
+    /* transition interruptible pour hover/focus */
+    transition: background 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+
+.refill-v2-chip:hover,
+.refill-v2-chip:focus-visible {
+    background: rgba(66, 150, 204, 0.22);
+    transform: translateY(-1px);
+    outline: none;
+    box-shadow: 0 2px 8px -2px rgba(66, 150, 204, 0.35);
+}
+
+.refill-v2-chip.is-active {
+    background: var(--kouler-losean);
+    color: var(--kouler-blan);
+    box-shadow: 0 2px 8px -2px rgba(66, 150, 204, 0.45);
+}
+
+/* ==========================================================================
+   Input montant (visible mais minimal, secondaire aux chips)
+   ========================================================================== */
+
+.refill-v2-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    /* scroll-margin : sur mobile, quand l'user tap l'input, le browser scroll
+     * pour l'amener dans la viewport. On lui laisse 120px en bas pour que le
+     * bouton PAYER sticky reste visible au-dessus du clavier virtuel.
+     * / scroll-margin: when user taps input on mobile, browser auto-scrolls;
+     * leave 120px at bottom so the sticky PAYER button remains visible. */
+    scroll-margin-bottom: 120px;
+
+    animation: refill-item-in 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: 320ms;
+}
+
+.refill-v2-input-group label {
+    font-family: 'luciole', sans-serif;
+    font-size: 0.85rem;
+    color: var(--kouler-piton);
+    flex-shrink: 0;
+}
+
+.refill-v2-input {
+    font-family: 'luciole', sans-serif;
+    font-size: 1.1rem;
+    font-variant-numeric: tabular-nums;
+    flex: 1;
+    padding: 0.6rem 0.9rem;
+    border: none;
+    border-radius: 10px;
+    background: var(--kouler-blan);
+    color: var(--kouler-pitonbraz);
+    box-shadow:
+        0 0 0 1px rgba(41, 30, 38, 0.10),
+        0 1px 2px -1px rgba(41, 30, 38, 0.06);
+    transition: box-shadow 200ms ease;
+}
+
+.refill-v2-input:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 2px var(--kouler-losean),
+        0 1px 4px -1px rgba(66, 150, 204, 0.35);
+}
+
+/* ==========================================================================
+   Boutons d'action : Payer (proéminent) et Annuler (ghost discret)
+   ========================================================================== */
+
+.refill-v2-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.25rem;
+
+    animation: refill-item-in 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    animation-delay: 380ms;
+}
+
+.refill-v2-cancel {
+    font-family: 'luciole', sans-serif;
+    font-size: 0.95rem;
+    color: var(--kouler-piton);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: rgba(99, 81, 94, 0.35);
+    padding: 0.5rem 0.25rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 200ms ease, text-decoration-color 200ms ease;
+}
+
+.refill-v2-cancel:hover,
+.refill-v2-cancel:focus-visible {
+    color: var(--kouler-pitonbraz);
+    text-decoration-color: var(--kouler-pitonbraz);
+    outline: none;
+}
+
+.refill-v2-submit {
+    font-family: 'staatliches', sans-serif;
+    font-size: 1.15rem;
+    letter-spacing: 0.04em;
+    color: var(--kouler-blan);
+    background: var(--mayaj-pons);
+    border: none;
+    /* Border radius concentric : 12 (interior) inside 16 (inner card) */
+    border-radius: 12px;
+    padding: 0.9rem 1.75rem;
+    cursor: pointer;
+    /* 3-layer shadow pour donner du poids au bouton principal */
+    box-shadow:
+        0 0 0 1px rgba(233, 51, 99, 0.25),
+        0 2px 4px -1px rgba(233, 179, 34, 0.22),
+        0 6px 18px -6px rgba(233, 51, 99, 0.55);
+    transition: transform 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                box-shadow 200ms ease;
+}
+
+.refill-v2-submit:hover,
+.refill-v2-submit:focus-visible {
+    transform: translateY(-2px);
+    box-shadow:
+        0 0 0 1px rgba(233, 51, 99, 0.35),
+        0 3px 8px -2px rgba(233, 179, 34, 0.30),
+        0 12px 28px -6px rgba(233, 51, 99, 0.62);
+    outline: none;
+}
+
+.refill-v2-submit:active {
+    transform: translateY(0);
+    box-shadow:
+        0 0 0 1px rgba(233, 51, 99, 0.28),
+        0 1px 3px -1px rgba(233, 179, 34, 0.18),
+        0 4px 12px -4px rgba(233, 51, 99, 0.45);
+}
+
+.refill-v2-submit:disabled {
+    opacity: 0.55;
+    cursor: wait;
+    transform: none;
+}
+
+/* Icône dans le bouton Payer — légère correction optique à gauche */
+.refill-v2-submit .bi {
+    margin-right: 0.35rem;
+    /* alignement optique : le glyphe de carte a son poids à droite */
+    margin-left: -2px;
+}
+
+/* ==========================================================================
+   Alerte d'erreur (422)
+   ========================================================================== */
+
+.refill-v2-error {
+    font-family: 'luciole', sans-serif;
+    font-size: 0.9rem;
+    color: var(--kouler-pitonbraz);
+    background: rgba(233, 51, 99, 0.12);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.refill-v2-error .bi {
+    color: var(--kouler-letsi);
+    flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Message "migration en cours" (wallet legacy)
+   ========================================================================== */
+
+.refill-v2-migration {
+    /* Même rayons + ombres que la carte principale, mais ton plus doux */
+    border-radius: 24px;
+    padding: 8px;
+    background: var(--mayaj-lagon);
+    box-shadow:
+        0 0 0 1px rgba(41, 30, 38, 0.08),
+        0 2px 6px -1px rgba(41, 30, 38, 0.10),
+        0 8px 24px -6px rgba(66, 150, 204, 0.25);
+
+    animation: refill-card-in 520ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.refill-v2-migration-inner {
+    border-radius: 16px;
+    background: var(--kouler-blan);
+    padding: 2rem 1.75rem;
+}
+
+.refill-v2-migration-title {
+    font-family: 'Playwrite IS', cursive, serif;
+    font-size: clamp(1.4rem, 3vw, 1.8rem);
+    color: var(--kouler-pitonbraz);
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+}
+
+.refill-v2-migration-text {
+    font-family: 'luciole', sans-serif;
+    font-size: 1rem;
+    color: var(--kouler-piton);
+    margin: 0 0 1.25rem;
+    text-wrap: pretty;
+}
+
+.refill-v2-migration-back {
+    font-family: 'luciole', sans-serif;
+    font-size: 0.95rem;
+    color: var(--kouler-losean);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: rgba(66, 150, 204, 0.4);
+    transition: color 200ms ease, text-decoration-color 200ms ease;
+}
+
+.refill-v2-migration-back:hover,
+.refill-v2-migration-back:focus-visible {
+    color: var(--kouler-pitonbraz);
+    text-decoration-color: var(--kouler-pitonbraz);
+    outline: none;
+}
+
+/* ==========================================================================
+   Responsive mobile (< 480px)
+
+   Defi principal : le clavier virtuel (iOS / Android) prend ~300-350px de
+   viewport. Si le bouton PAYER est en flow normal apres l'input, il est
+   cache des que l'user tap le champ pour saisir un montant.
+
+   Solution : sur mobile, la barre d'actions devient `position: fixed; bottom: 0`
+   pour rester visible TOUT LE TEMPS, meme avec clavier ouvert.
+   La card recoit un `padding-bottom` egal a la hauteur de la barre pour que
+   le contenu (chips, input) reste scrollable sans passer sous la barre.
+   ========================================================================== */
+
+@media (max-width: 480px) {
+    .refill-v2-inner {
+        padding: 1.5rem 1.25rem 1.25rem;
+        /* Reserve la place pour la barre d'actions fixe en bas (visuellement).
+         * Sinon l'input serait cache par la barre quand on scroll au max. */
+        padding-bottom: 7rem;
+    }
+
+    /* Annuler quand on affiche la barre fixe : elle sort du card pour etre
+     * positionnee par rapport a la viewport. */
+    .refill-v2-actions {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 100;
+        /* Flex : Annuler (lien) a gauche, PAYER (bouton) a droite, comme desktop.
+         * Sur ecran tres etroit, on garde horizontal pour rester compact. */
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+        /* Fond avec leger blur pour lisibilite au-dessus du motif qui defile. */
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        /* Divider subtil + ombre legere vers le haut. */
+        box-shadow:
+            0 -1px 0 rgba(41, 30, 38, 0.08),
+            0 -8px 24px -8px rgba(41, 30, 38, 0.12);
+        /* Desactive l'animation d'entree pour la barre fixe (sinon elle slide
+         * depuis le haut de la viewport, ce qui est deroutant). */
+        animation: none;
+    }
+
+    .refill-v2-submit {
+        /* Prend l'essentiel de la largeur ; Annuler reste petit a gauche. */
+        flex: 1;
+        min-height: 52px;
+        font-size: 1.05rem;
+        /* Un peu moins de padding horizontal pour tenir a cote d'Annuler. */
+        padding: 0.85rem 1.25rem;
+    }
+
+    .refill-v2-cancel {
+        /* Compact mais tactile (min 44x44 WCAG). */
+        padding: 0.75rem 0.5rem;
+        min-height: 44px;
+        flex-shrink: 0;
+    }
+
+    /* Les chips : tactile-friendly. */
+    .refill-v2-chip {
+        min-height: 44px;
+        padding: 0.6rem 1rem;
+    }
+}
+
+/* ==========================================================================
+   Respect des préférences utilisateur : reduced motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+    .refill-v2-card,
+    .refill-v2-migration,
+    .refill-v2-title,
+    .refill-v2-subtitle,
+    .refill-v2-amount-display,
+    .refill-v2-chips,
+    .refill-v2-input-group,
+    .refill-v2-actions {
+        animation: none !important;
+    }
+
+    .refill-v2-submit,
+    .refill-v2-chip {
+        transition: none !important;
+    }
+}
