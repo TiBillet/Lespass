@@ -49,8 +49,15 @@
 
 				const formData = new FormData(form)
 
+				// credentials: 'include' nécessaire dans Cordova WebView Android : fetch sans cette option
+				// ne transmet pas les cookies de session (sessionid, csrftoken) même pour les requêtes
+				// same-origin. XMLHttpRequest (utilisé par HTMX) les transmettait correctement.
+				// / credentials: 'include' needed in Cordova Android WebView: fetch without this option
+				// does not send session cookies (sessionid, csrftoken) even for same-origin requests.
+				// XMLHttpRequest (used by HTMX) sent them correctly.
 				fetch(url, {
 					method: 'POST',
+					credentials: 'include',
 					body: formData,
 					headers: {
 						'X-CSRFToken': csrfToken,

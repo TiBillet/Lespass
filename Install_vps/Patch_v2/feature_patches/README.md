@@ -179,6 +179,22 @@ Script de déploiement : `patch_reservoir_illimite_v2.sh` (inclut la migration).
 
 ---
 
+### 11 — `ask_primary_card_native_fetch` · `laboutik/templates/laboutik/views/ask_primary_card.html`
+
+**Pourquoi :** dans Cordova WebView Android, `form.click()` ne déclenche pas HTMX quand l'appel
+vient d'un callback NFC injecté via `loadUrl("javascript:...")`. Le formulaire ne s'envoyait jamais.
+
+**Fixes :**
+- Remplacement de `form.click()` + HTMX par `fetch()` natif avec `credentials: 'include'`
+- `credentials: 'include'` est requis : sans lui, Cordova WebView ne transmet pas les cookies
+  de session (`sessionid`, `csrftoken`) même pour les requêtes same-origin (différence avec
+  XMLHttpRequest utilisé par HTMX qui les transmettait correctement)
+- `hx-trigger=""` → `hx-trigger="nfcResult"` (cohérence, l'envoi est géré en JS)
+- `postUrl` ignoré (URL fixée dans le template, pas de changement d'URL pour la carte primaire)
+- Gestion du header `HX-Redirect` pour naviguer vers le PV après reconnaissance de la carte
+
+---
+
 ## Fichiers hors scope (APK Android uniquement)
 
 Les changements suivants touchent le code source de l'APK LaBoutik

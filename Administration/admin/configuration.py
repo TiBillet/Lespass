@@ -304,6 +304,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
                 'onboard_stripe',
                 'stripe_invoice',
                 'stripe_accept_sepa',
+                'force_show_refill_button',
+                'hide_refill_button',
             ),
         }),
         # ('Danger !', {

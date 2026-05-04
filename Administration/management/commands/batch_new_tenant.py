@@ -11,10 +11,10 @@ from django.utils.text import slugify
 from django_tenants.utils import schema_context, tenant_context
 
 from AuthBillet.utils import get_or_create_user
-from BaseBillet.models import Configuration, FederatedPlace
+from BaseBillet.models import Configuration, FederatedPlace, Product
 from Customers.models import Client, Domain
 from fedow_connect.fedow_api import FedowAPI
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy as _, activate
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ class Command(BaseCommand):
         input_path = options['file']
         send_mail = options['mail']  # True si -m est présent, False sinon
 
-        base_domain = 'tibillet.coop'
+        base_domain = os.environ.get('DOMAIN')
         if not base_domain:
             raise CommandError("Variable d'environnement DOMAIN manquante")
 

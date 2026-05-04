@@ -23,20 +23,25 @@ from AuthBillet.models import TibilletUser
 from BaseBillet.models import (
     GhostConfig, FormbricksConfig, FormbricksForms, FederatedPlace, BrevoConfig, Product
 )
-from Customers.models import Client
+from Customers.models import Client, Domain
 from MetaBillet.models import WaitingConfiguration
 
 logger = logging.getLogger(__name__)
 
 
+class DomainInline(admin.TabularInline):
+    model = Domain
+    extra = 1
+    fields = ['domain', 'is_primary']
+
+
 @admin.register(Client, site=staff_admin_site)
 class TenantAdmin(ModelAdmin):
-    # Doit être référencé pour le champs autocomplete_fields federated_with de configuration
-    # est en CRUD total false
-    # Seul le search fields est utile :
+    # CRUD restreint aux superusers — les autres tenants ont uniquement la vue + autocomplete
     search_fields = ['name', ]
-
     list_display = ['name', 'created_on', 'primary_domain', ]
+    fields = ['name', 'schema_name', 'categorie']
+    inlines = [DomainInline]
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -98,7 +103,10 @@ class TenantAdmin(ModelAdmin):
 
     @display(description=_("Domaine principal"))
     def primary_domain(self, instance: Client):
-        primary_domain = f"https://{instance.get_primary_domain().domain}"
+        domain_obj = instance.get_primary_domain()
+        if domain_obj is None:
+            return "—"
+        primary_domain = f"https://{domain_obj.domain}"
         return format_html(f"<a href='{primary_domain}' target='_blank'>{primary_domain}</a>")
 
     def has_redirect_admin_action_permission(self, request: HttpRequest, *args, **kwargs):
@@ -108,13 +116,73 @@ class TenantAdmin(ModelAdmin):
         return TenantAdminPermissionWithRequest(request)
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser
 
     def has_add_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def save_model(self, request, obj, form, change):
+        # Client.save() exige d'être dans le schéma public (django_tenants constraint).
+        # La requête arrive depuis un schéma tenant — on bascule explicitement.
+        # Client.save() requires being in the public schema (django_tenants constraint).
+        is_new = not change
+        from django_tenants.utils import schema_context
+        with schema_context('public'):
+            super().save_model(request, obj, form, change)
+        if is_new:
+            self._setup_new_tenant(request, obj)
+
+    def save_related(self, request, form, formsets, change):
+        # Les inlines (Domain) doivent aussi être sauvegardés dans le schéma public.
+        # Domain inlines must also be saved in the public schema.
+        from django_tenants.utils import schema_context
+        with schema_context('public'):
+            super().save_related(request, form, formsets, change)
+
+    def _setup_new_tenant(self, request, tenant: Client):
+        import subprocess, sys
+        from django_tenants.utils import tenant_context
+        from BaseBillet.models import Configuration, Product
+        from AuthBillet.utils import get_or_create_user
+        from fedow_connect.fedow_api import FedowAPI
+        from django.utils.translation import activate
+
+        try:
+            subprocess.run(
+                [sys.executable, 'manage.py', 'migrate_schemas', '--executor=multiprocessing'],
+                check=True, capture_output=True,
+            )
+        except Exception as e:
+            messages.warning(request, f"Migrations OK mais avertissement : {e}")
+
+        try:
+            with tenant_context(tenant):
+                admin_user = get_or_create_user(request.user.email, send_mail=False)
+                admin_user.client_admin.add(tenant)
+                admin_user.is_staff = True
+                admin_user.is_superuser = True
+                admin_user.save()
+
+                cfg = Configuration.get_solo()
+                cfg.organisation = tenant.name
+                cfg.email = request.user.email
+                cfg.force_show_refill_button = True
+                cfg.save()
+
+                activate(cfg.language or 'fr')
+                if not Product.objects.filter(categorie_article=Product.FREERES).exists():
+                    Product.objects.get_or_create(
+                        name="Réservation gratuite",
+                        categorie_article=Product.FREERES,
+                    )
+
+                FedowAPI(admin=admin_user)
+                messages.success(request, f"Lieu « {tenant.name} » créé et enregistré sur Fedow.")
+        except Exception as e:
+            messages.error(request, f"Lieu créé mais finalisation incomplète : {e}")
 
 
 ### Connect

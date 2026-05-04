@@ -5525,13 +5525,16 @@ class PaiementViewSet(viewsets.ViewSet):
 
                 # ----- 7b) Débits non-fiduciaires (direct sur asset du prix) -----
                 # / Non-fiduciary debits (direct on the price's asset)
+                # Wallet receveur : wallet du lieu (pas asset.wallet_origin qui peut être erroné)
+                # / Receiver wallet: venue wallet (not asset.wallet_origin which can be wrong)
+                wallet_lieu = WalletService.get_or_create_wallet_tenant(tenant_courant)
                 lignes_non_fidu = []
                 for article_nf in articles_non_fiduciaires:
                     asset_nf_cible = article_nf["price"].asset
                     montant_nf = article_nf["prix_centimes"] * article_nf["quantite"]
                     TransactionService.creer_vente(
                         sender_wallet=wallet_client,
-                        receiver_wallet=asset_nf_cible.wallet_origin,
+                        receiver_wallet=wallet_lieu,
                         asset=asset_nf_cible,
                         montant_en_centimes=montant_nf,
                         tenant=tenant_courant,
@@ -5559,7 +5562,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 for asset_a_debiter, total_debit_asset in debits_par_asset.items():
                     TransactionService.creer_vente(
                         sender_wallet=wallet_client,
-                        receiver_wallet=asset_a_debiter.wallet_origin,
+                        receiver_wallet=wallet_lieu,
                         asset=asset_a_debiter,
                         montant_en_centimes=total_debit_asset,
                         tenant=tenant_courant,
@@ -6378,6 +6381,9 @@ class PaiementViewSet(viewsets.ViewSet):
 
                     # 6b) Débits non-fiduciaires
                     # / 6b) Non-fiduciary debits
+                    # Wallet receveur : wallet du lieu (pas asset.wallet_origin qui peut être erroné)
+                    # / Receiver wallet: venue wallet (not asset.wallet_origin which can be wrong)
+                    wallet_lieu = WalletService.get_or_create_wallet_tenant(tenant_courant)
                     lignes_non_fidu = []
                     for article_nf in articles_non_fiduciaires:
                         asset_nf_cible = article_nf["price"].asset
@@ -6386,7 +6392,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         )
                         TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
-                            receiver_wallet=asset_nf_cible.wallet_origin,
+                            receiver_wallet=wallet_lieu,
                             asset=asset_nf_cible,
                             montant_en_centimes=montant_nf,
                             tenant=tenant_courant,
@@ -6416,7 +6422,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     ) in debits_par_asset_c1.items():
                         TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
-                            receiver_wallet=asset_a_debiter.wallet_origin,
+                            receiver_wallet=wallet_lieu,
                             asset=asset_a_debiter,
                             montant_en_centimes=total_debit_asset,
                             tenant=tenant_courant,
@@ -6701,6 +6707,9 @@ class PaiementViewSet(viewsets.ViewSet):
 
                     # Débits non-fiduciaires carte1
                     # / Card1 non-fiduciary debits
+                    # Wallet receveur : wallet du lieu (pas asset.wallet_origin qui peut être erroné)
+                    # / Receiver wallet: venue wallet (not asset.wallet_origin which can be wrong)
+                    wallet_lieu = WalletService.get_or_create_wallet_tenant(tenant_courant)
                     lignes_non_fidu = []
                     for article_nf in articles_non_fiduciaires:
                         asset_nf_cible = article_nf["price"].asset
@@ -6709,7 +6718,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         )
                         TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
-                            receiver_wallet=asset_nf_cible.wallet_origin,
+                            receiver_wallet=wallet_lieu,
                             asset=asset_nf_cible,
                             montant_en_centimes=montant_nf,
                             tenant=tenant_courant,
@@ -6739,7 +6748,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     ) in debits_par_asset_c1.items():
                         TransactionService.creer_vente(
                             sender_wallet=wallet_carte1,
-                            receiver_wallet=asset_a_debiter.wallet_origin,
+                            receiver_wallet=wallet_lieu,
                             asset=asset_a_debiter,
                             montant_en_centimes=total_debit_asset,
                             tenant=tenant_courant,
@@ -6762,7 +6771,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     ) in debits_par_asset_c2.items():
                         TransactionService.creer_vente(
                             sender_wallet=wallet_carte2,
-                            receiver_wallet=asset_a_debiter_c2.wallet_origin,
+                            receiver_wallet=wallet_lieu,
                             asset=asset_a_debiter_c2,
                             montant_en_centimes=total_debit_c2,
                             tenant=tenant_courant,
