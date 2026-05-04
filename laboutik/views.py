@@ -4448,7 +4448,12 @@ def _envoyer_billets_par_email(reservations):
 
 
 def _executer_recharges(
-    articles_panier, wallet_client, carte_client, code_methode_paiement, ip_client
+    articles_panier,
+    wallet_client,
+    carte_client,
+    code_methode_paiement,
+    ip_client,
+    point_de_vente=None,
 ):
     """
     Execute les recharges contenues dans le panier.
@@ -4466,6 +4471,9 @@ def _executer_recharges(
     :param carte_client: CarteCashless du client
     :param code_methode_paiement: code du moyen de paiement ("espece", "carte_bancaire", "CH")
     :param ip_client: adresse IP de la requete
+    :param point_de_vente: PointDeVente d'origine (renseigne sur les LigneArticle pour
+        ventiler le CA par PV dans les rapports)
+    / :param point_de_vente: Origin POS (set on LigneArticle for per-POS CA reports)
     :return: None
     """
     tenant_courant = connection.tenant
@@ -4519,6 +4527,7 @@ def _executer_recharges(
             asset_uuid=asset.uuid,
             carte=carte_client,
             wallet=wallet_client,
+            point_de_vente=point_de_vente,
         )
 
 
@@ -4980,6 +4989,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     carte_client,
                     code_methode_paiement=moyen_paiement_code,
                     ip_client=ip_client,
+                    point_de_vente=point_de_vente,
                 )
 
         # Apres le bloc atomic : envoyer les billets par email via Celery.
@@ -5138,6 +5148,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         carte_client,
                         code_methode_paiement=moyen_paiement_code,
                         ip_client=ip_client,
+                        point_de_vente=point_de_vente,
                     )
 
             # Apres le bloc atomic : envoyer les billets par email via Celery
@@ -5522,6 +5533,7 @@ class PaiementViewSet(viewsets.ViewSet):
                         carte_client,
                         code_methode_paiement="gift",
                         ip_client=ip_client,
+                        point_de_vente=point_de_vente,
                     )
 
                 # ----- 7b) Débits non-fiduciaires (direct sur asset du prix) -----
@@ -5905,6 +5917,7 @@ class PaiementViewSet(viewsets.ViewSet):
                     carte,
                     code_methode_paiement="gift",
                     ip_client=ip_client,
+                    point_de_vente=point_de_vente,
                 )
 
             # Calculer le solde apres credit pour l'ecran de succes
@@ -6375,6 +6388,7 @@ class PaiementViewSet(viewsets.ViewSet):
                             carte1,
                             code_methode_paiement="gift",
                             ip_client=ip_client,
+                            point_de_vente=point_de_vente,
                         )
 
                     # 6b) Débits non-fiduciaires
@@ -6700,6 +6714,7 @@ class PaiementViewSet(viewsets.ViewSet):
                             carte1,
                             code_methode_paiement="gift",
                             ip_client=ip_client,
+                            point_de_vente=point_de_vente,
                         )
 
                     # Débits non-fiduciaires carte1

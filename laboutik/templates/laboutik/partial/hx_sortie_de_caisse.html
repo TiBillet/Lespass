@@ -21,13 +21,7 @@ Validation JS avant envoi :
     <!-- Bouton retour vers Ticket X -->
     <!-- / Back button to Ticket X -->
     <div style="margin-bottom: 1rem;">
-        <button style="
-                display: inline-flex; align-items: center; gap: 0.4rem;
-                background: transparent; border: 1px solid rgba(255,255,255,0.12);
-                color: #6b7280; padding: 0.4rem 1rem; border-radius: 6px;
-                font-family: 'Luciole-regular'; font-size: 0.85rem; cursor: pointer;
-                transition: color 150ms ease, border-color 150ms ease;
-            "
+        <button class="btn-retour-recap"
             hx-get="{% url 'laboutik-caisse-recap_en_cours' %}?{{ params_ventes }}"
             hx-target="#ventes-zone"
             hx-swap="innerHTML"
@@ -138,28 +132,16 @@ Validation JS avant envoi :
             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
                 <button type="button"
                         id="sortie-btn-confirmer-quand-meme"
+                        class="sortie-alerte-btn-confirm"
                         data-testid="sortie-btn-confirmer-quand-meme"
-                        onclick="confirmerSortieQuandMeme()"
-                        style="
-                            background: rgba(251,191,36,0.15); color: #fde68a;
-                            border: 2px solid rgba(251,191,36,0.4);
-                            padding: 0.5rem 1.2rem; border-radius: 8px;
-                            font-family: 'Luciole-regular'; font-size: 0.9rem;
-                            font-weight: 600; cursor: pointer;
-                        ">
+                        onclick="confirmerSortieQuandMeme()">
                     <i class="fas fa-check" aria-hidden="true" style="margin-right: 0.3rem;"></i>
                     {% translate "Confirmer quand même" %}
                 </button>
                 <button type="button"
+                        class="sortie-alerte-btn-cancel"
                         data-testid="sortie-btn-annuler-alerte"
-                        onclick="masquerAlerteSortie()"
-                        style="
-                            background: transparent; color: #9ca3af;
-                            border: 1px solid rgba(255,255,255,0.12);
-                            padding: 0.5rem 1.2rem; border-radius: 8px;
-                            font-family: 'Luciole-regular'; font-size: 0.9rem;
-                            cursor: pointer;
-                        ">
+                        onclick="masquerAlerteSortie()">
                     {% translate "Annuler" %}
                 </button>
             </div>

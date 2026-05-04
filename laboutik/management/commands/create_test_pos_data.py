@@ -605,6 +605,49 @@ class Command(BaseCommand):
             else:
                 self.stdout.write("  Produit existant : Vin en vrac")
 
+            # 5. Vider la carte — bouton special POS Cashless (methode_caisse=VC)
+            # Le produit systeme "Remboursement carte" est cree a la demande par
+            # services_refund.get_or_create_product_remboursement() sans champs POS.
+            # On l'enrichit ici pour qu'il s'affiche comme tuile cliquable au POS.
+            # Le clic declenche un flow JS dedie (vider_carte.js) : scan NFC, preview,
+            # confirmation, remboursement total des assets de la carte.
+            # / Empty Card — special button on Cashless POS (methode_caisse=VC).
+            # The system product is created on demand without POS fields. Enrich it
+            # here so it shows as a clickable tile. Click triggers a dedicated JS flow
+            # (vider_carte.js): NFC scan, preview, confirm, full asset refund.
+            from BaseBillet.services_refund import get_or_create_product_remboursement
+
+            produit_vider_carte = get_or_create_product_remboursement()
+            produit_vider_carte.categorie_pos = categorie_cashless
+            produit_vider_carte.couleur_fond_pos = "#F97316"
+            produit_vider_carte.couleur_texte_pos = "#FFFFFF"
+            produit_vider_carte.icon_pos = "fa-eraser"
+            produit_vider_carte.publish = True
+            produit_vider_carte.save(
+                update_fields=[
+                    "categorie_pos",
+                    "couleur_fond_pos",
+                    "couleur_texte_pos",
+                    "icon_pos",
+                    "publish",
+                ]
+            )
+            # Price systeme a 0 — necessaire pour que la tuile apparaisse dans le POS
+            # (filtre _construire_donnees_articles exige un Price publish=True, asset=null).
+            # Le clic est intercepte par vider_carte.js AVANT addArticle, donc le prix
+            # affiche n'a pas d'impact fonctionnel.
+            # / System Price at 0 — required for tile to show in POS (filter requires
+            # a published EUR Price). Click is intercepted by vider_carte.js before
+            # addArticle, so displayed price has no functional impact.
+            Price.objects.get_or_create(
+                product=produit_vider_carte,
+                name="Refund",
+                defaults={"prix": Decimal(0), "publish": True},
+            )
+            self.stdout.write(
+                f"  Produit Vider Carte enrichi (PV Cashless) : {produit_vider_carte.name}"
+            )
+
             # --- Produits avec tarifs non-fiduciaires (TIM, FID) ---
             # / Products with non-fiduciary prices (TIM, FID)
             asset_tim = FedowAsset.objects.filter(
@@ -998,6 +1041,9 @@ class Command(BaseCommand):
             )
             for produit_recharge in produits_recharge:
                 pdv_cashless.products.add(produit_recharge)
+            # Ajouter le bouton "Vider la carte" au PV Cashless
+            # / Add the "Empty card" button to Cashless POS
+            pdv_cashless.products.add(produit_vider_carte)
             pdv_cashless.categories.set([categorie_cashless])
 
             self.stdout.write(
