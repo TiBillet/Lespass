@@ -32,7 +32,16 @@ from rest_framework.views import APIView
 
 from django.core.exceptions import PermissionDenied
 from django.db import connection
-from django.db.models import F, Max, Prefetch, Sum, Count, Q
+from django.db.models import (
+    F,
+    Max,
+    Prefetch,
+    Sum,
+    Count,
+    Q,
+    ExpressionWrapper,
+    DecimalField,
+)
 from django.db.models.functions import Coalesce
 
 from fedow_core.exceptions import SoldeInsuffisant
@@ -2749,13 +2758,25 @@ class CaisseViewSet(viewsets.ViewSet):
         # / Group by uuid_transaction on the PostgreSQL side (GROUP BY).
         # Lines without uuid_transaction use their uuid as key.
         # All work done by the DB: no Python in-memory loading.
+        # Total transaction = somme des (amount * qty) par ligne.
+        # amount = prix unitaire en centimes (IntegerField).
+        # qty = quantite (DecimalField, peut etre fractionnaire pour cascade NFC).
+        # Sum(amount) seul est faux : il ignore qty (3 pintes a 5€ → 5€ au lieu de 15€).
+        # ExpressionWrapper en DecimalField pour gerer la qty fractionnaire,
+        # puis cast int en Python (le resultat reste en centimes).
+        # / Transaction total = sum of (amount * qty) per line.
+        # Sum(amount) alone is wrong: it ignores qty (3 pints at 5€ → 5€ instead of 15€).
+        total_ligne_centimes = ExpressionWrapper(
+            F("amount") * F("qty"),
+            output_field=DecimalField(max_digits=14, decimal_places=2),
+        )
         ventes_requete = (
             lignes.values(
                 cle_vente=Coalesce("uuid_transaction", "uuid"),
             )
             .annotate(
                 derniere_datetime=Max("datetime"),
-                total=Sum("amount"),
+                total=Sum(total_ligne_centimes),
                 nb_articles=Count("uuid"),
                 moyen_paiement=Max("payment_method"),
                 nom_pv=Max("point_de_vente__name"),
@@ -2780,12 +2801,16 @@ class CaisseViewSet(viewsets.ViewSet):
 
         # Ajouter le label humain du moyen de paiement a chaque vente
         # (le queryset renvoie le code brut "CA", "CC", etc.)
-        # / Add human-readable payment method label to each sale
+        # Caster aussi le total Decimal → int : on reste en centimes pour le filtre |euros.
+        # / Add human-readable payment method label to each sale.
+        # Cast total Decimal → int: stay in cents for the |euros template filter.
         for vente in ventes_page:
             code_moyen = vente.get("moyen_paiement", "")
             vente["moyen_paiement_label"] = LABELS_MOYENS_PAIEMENT_DB.get(
                 code_moyen, code_moyen
             )
+            total_brut = vente.get("total")
+            vente["total"] = int(total_brut) if total_brut is not None else 0
 
         # Liste des PV pour le filtre (select)
         # / POS list for the filter (select)
@@ -2902,21 +2927,69 @@ class CaisseViewSet(viewsets.ViewSet):
         for ligne in lignes:
             nom_article = ""
             nom_tarif = ""
+            produit_lie = None
+            prix_decimal_ref = None  # Decimal en EUR (Price.prix snapshot)
             if ligne.pricesold:
                 if ligne.pricesold.productsold:
-                    nom_article = ligne.pricesold.productsold.product.name
+                    produit_lie = ligne.pricesold.productsold.product
+                    nom_article = produit_lie.name
                 if ligne.pricesold.price:
                     nom_tarif = ligne.pricesold.price.name
+                    prix_decimal_ref = ligne.pricesold.price.prix
+
+            # Total ligne = prix unitaire * qty (cf. LigneArticle.total()).
+            # ligne.amount = prix unitaire en centimes ; ligne.qty = quantite.
+            # Cast int : le total reste en centimes pour le filtre |euros.
+            # / Line total = unit price * qty (see LigneArticle.total()).
+            prix_unitaire_centimes = ligne.amount or 0
+            total_ligne_centimes = (
+                int(prix_unitaire_centimes * ligne.qty)
+                if prix_unitaire_centimes
+                else 0
+            )
+
+            # Detection ligne vrac : weight_quantity non-null et > 0.
+            # Pour vrac : qty=1, weight_quantity=350(g) ou 175(cl), amount=420c (350*0.012),
+            # et Price.prix=12.00 (= 12€/kg). Le caissier veut voir "350g" et "12,00 €/kg",
+            # pas "1" et "4,20 €" qui n'ont pas de sens metier.
+            # / Vrac line detection. For vrac the cashier wants weight + price/kg|L,
+            # not the qty=1 / line-amount which are meaningless to them.
+            est_vrac = bool(ligne.weight_quantity and ligne.weight_quantity > 0)
+            unite_poids = None
+            prix_par_unite_str = None
+            if est_vrac and produit_lie is not None:
+                # Unite (GR / CL) lue sur le Stock du produit.
+                # / Unit (GR / CL) read on product Stock.
+                stock_lie = getattr(produit_lie, "stock_inventaire", None)
+                if stock_lie is not None:
+                    unite_poids = stock_lie.unite
+                # Prix au kg / L : Price.prix est deja en €/kg pour GR, €/L pour CL
+                # (convention validee Session 28 multi-tarif poids/mesure).
+                # / Price per kg/L: Price.prix is already in €/kg or €/L.
+                if prix_decimal_ref is not None and unite_poids in ("GR", "CL"):
+                    suffixe_unite = "kg" if unite_poids == "GR" else "L"
+                    prix_par_unite_str = (
+                        f"{prix_decimal_ref:.2f}".replace(".", ",")
+                        + f" €/{suffixe_unite}"
+                    )
 
             articles_detail.append(
                 {
                     "nom": nom_article,
                     "tarif": nom_tarif,
                     "qty": ligne.qty,
-                    "montant": ligne.amount or 0,
+                    "est_vrac": est_vrac,
+                    # Alias "poids_total" + "unite_poids" pour reutiliser le filtre
+                    # afficher_poids (deja teste, conversion auto kg/L).
+                    # / Aliases to reuse the afficher_poids filter (auto kg/L conversion).
+                    "poids_total": ligne.weight_quantity if est_vrac else None,
+                    "unite_poids": unite_poids,
+                    "prix_unitaire": prix_unitaire_centimes,
+                    "prix_par_unite": prix_par_unite_str,
+                    "total_ligne": total_ligne_centimes,
                 }
             )
-            total_transaction += ligne.amount or 0
+            total_transaction += total_ligne_centimes
 
         # La correction est possible si le moyen n'est pas NFC
         # et si la ligne n'est pas couverte par une cloture

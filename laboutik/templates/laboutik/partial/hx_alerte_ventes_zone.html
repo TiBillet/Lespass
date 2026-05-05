@@ -1,0 +1,53 @@
+{% load i18n %}
+{% comment %}
+ALERTE PLEIN ECRAN dans #ventes-zone (sortie de caisse, etc.).
+Pendant comptable de hx_sortie_succes.html : meme structure, ton warning/error/info.
+/ Full-zone alert in #ventes-zone — counterpart of hx_sortie_succes.html.
+
+LOCALISATION : laboutik/templates/laboutik/partial/hx_alerte_ventes_zone.html
+
+Contexte attendu :
+  msg_type : "warning" (defaut) | "error" | "info" | "success"
+  msg_content : texte a afficher
+  back_url : URL HTMX du bouton retour (cible #ventes-zone)
+
+Styles : .alerte-vz-* dans laboutik/static/css/sortie_de_caisse.css
+{% endcomment %}
+
+<div class="ventes-container" data-testid="alerte-ventes-zone">
+
+    <div class="alerte-vz-card alerte-vz-card-{{ msg_type|default:'warning' }}"
+         role="alert"
+         aria-live="assertive"
+         data-testid="alerte-vz-card">
+        <div class="alerte-vz-header">
+            <span class="alerte-vz-icone-bulle">
+                {% if msg_type == "success" %}
+                <i class="fas fa-check-circle" aria-hidden="true"></i>
+                {% elif msg_type == "info" %}
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                {% elif msg_type == "error" %}
+                <i class="fas fa-times-circle" aria-hidden="true"></i>
+                {% else %}
+                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                {% endif %}
+            </span>
+            <span class="alerte-vz-titre" data-testid="alerte-vz-titre">{{ msg_content }}</span>
+        </div>
+    </div>
+
+    {% if back_url %}
+    <div class="alerte-vz-actions">
+        <button type="button"
+                class="alerte-vz-btn-retour"
+                hx-get="{{ back_url }}"
+                hx-target="#ventes-zone"
+                hx-swap="innerHTML"
+                data-loading-disable
+                data-testid="alerte-vz-btn-retour">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+            {% translate "Retour" %}
+        </button>
+    </div>
+    {% endif %}
+</div>

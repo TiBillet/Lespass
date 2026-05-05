@@ -89,6 +89,7 @@
 {% if section %}
 <h2>{% translate "Sales detail" %}</h2>
 {% for categorie_nom, categorie_data in section.items %}
+{% with afficher_col_poids=categorie_data.articles|has_poids %}
 <h3>{{ categorie_nom }}</h3>
 <table>
     <thead>
@@ -97,6 +98,9 @@
             <th class="text-right">{% translate "Sold" %}</th>
             <th class="text-right">{% translate "Free" %}</th>
             <th class="text-right">{% translate "Total qty" %}</th>
+            {% if afficher_col_poids %}
+            <th class="text-right">{% translate "Poids/Vol" %}</th>
+            {% endif %}
             <th class="text-right">{% translate "HT" %}</th>
             <th class="text-right">{% translate "VAT" %}</th>
             <th class="text-right">{% translate "TTC" %}</th>
@@ -111,6 +115,9 @@
             <td class="text-right">{{ article.qty_vendus|default:0 }}</td>
             <td class="text-right">{{ article.qty_offerts|default:0 }}</td>
             <td class="text-right">{{ article.qty_total|default:0 }}</td>
+            {% if afficher_col_poids %}
+            <td class="text-right">{{ article|afficher_poids }}</td>
+            {% endif %}
             <td class="text-right">{{ article.total_ht|euros }}</td>
             <td class="text-right">{{ article.total_tva|euros }}</td>
             <td class="text-right">{{ article.total_ttc|euros }}</td>
@@ -118,14 +125,15 @@
             <td class="text-right">{{ article.benefice|euros }}</td>
         </tr>
         {% endfor %}
-        {# Total de la catégorie / Category total #}
+        {# Total de la catégorie / Category total — colspan adapte selon Poids/Vol #}
         <tr class="total-row">
-            <td colspan="6">{% translate "Total" %} {{ categorie_nom }}</td>
+            <td colspan="{% if afficher_col_poids %}7{% else %}6{% endif %}">{% translate "Total" %} {{ categorie_nom }}</td>
             <td class="text-right">{{ categorie_data.total_ttc|euros }}</td>
             <td colspan="2"></td>
         </tr>
     </tbody>
 </table>
+{% endwith %}
 {% endfor %}
 {% endif %}
 {% endwith %}

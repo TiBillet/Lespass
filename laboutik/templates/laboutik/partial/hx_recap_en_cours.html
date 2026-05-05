@@ -380,6 +380,7 @@
             </div>
 
             {% for cat_nom, cat_data in detail_ventes.items %}
+            {% with afficher_col_poids=cat_data.articles|has_poids %}
             <div class="ventes-categorie" data-testid="recap-categorie-{{ forloop.counter }}">
                 <h4 class="ventes-categorie-titre">{{ cat_nom }} — {{ cat_data.total_ttc|euros }}</h4>
                 <table class="ventes-table ventes-table-compact">
@@ -387,6 +388,9 @@
                         <tr>
                             <th>{% translate "Article" %}</th>
                             <th class="text-end">{% translate "Qty" %}</th>
+                            {% if afficher_col_poids %}
+                            <th class="text-end">{% translate "Poids/Vol" %}</th>
+                            {% endif %}
                             <th class="text-end">{% translate "TTC" %}</th>
                         </tr>
                     </thead>
@@ -395,12 +399,16 @@
                         <tr>
                             <td>{{ article.nom }}</td>
                             <td class="text-end">{{ article.qty_total|floatformat:0 }}</td>
+                            {% if afficher_col_poids %}
+                            <td class="text-end" data-testid="recap-poids-vol">{{ article|afficher_poids }}</td>
+                            {% endif %}
                             <td class="text-end">{{ article.total_ttc|euros }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% endwith %}
             {% empty %}
             <div class="ventes-message-vide">
                 {% translate "Aucune vente" %}

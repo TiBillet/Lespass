@@ -15,7 +15,7 @@ LOCALISATION : laboutik/reports.py
 import hashlib
 import logging
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Min
 from django.utils.translation import gettext_lazy as _
 
 from BaseBillet.models import (
@@ -267,15 +267,23 @@ class RapportComptableService:
             benefice = total_ht - cout_total
 
             # Poids/volume total vendu pour cet article (somme des weight_quantity)
+            # + unite (GR / CL) lue sur Stock du produit en une seule query.
             # Null si l'article ne se vend pas au poids.
             # / Total weight/volume sold for this article (sum of weight_quantity)
+            # + unit (GR / CL) read from product Stock in a single query.
             # Null if the article is not sold by weight.
             poids_total_agreg = self.lignes.filter(
                 pricesold__productsold__product__name=article["nom"],
                 vat=taux_tva,
                 weight_quantity__isnull=False,
-            ).aggregate(total=Sum("weight_quantity"))
+            ).aggregate(
+                total=Sum("weight_quantity"),
+                unite=Min(
+                    "pricesold__productsold__product__stock_inventaire__unite"
+                ),
+            )
             poids_total = poids_total_agreg["total"]
+            unite_poids = poids_total_agreg["unite"]  # "GR" / "CL" / None
 
             if nom_categorie not in categories:
                 categories[nom_categorie] = {"articles": [], "total_ttc": 0}
@@ -294,6 +302,7 @@ class RapportComptableService:
                     "cout_total": cout_total,
                     "benefice": benefice,
                     "poids_total": poids_total,  # int en g ou cl, ou None si pas de vente au poids
+                    "unite_poids": unite_poids,  # "GR" / "CL" / None — unite du Stock pour conversion d'affichage
                 }
             )
             categories[nom_categorie]["total_ttc"] += total_ttc
