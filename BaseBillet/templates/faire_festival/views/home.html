@@ -1,13 +1,13 @@
 {% extends "faire_festival/base.html" %}
 {% load static i18n tibitags %}
 
-{% block title %}{% translate 'Accueil' %}{% endblock %}
+{% block title %}{% translate "Festival du Faire — Toulouse, 28-30 mai 2026" %}{% endblock %}
 
-{% block meta_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
-{% block og_title %}{{ config.organisation }}{% endblock %}
-{% block og_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
-{% block twitter_title %}{{ config.organisation }}{% endblock %}
-{% block twitter_description %}{% translate "Festival de fabrication partagée : ateliers, conférences, rencontres. Construisez votre programme et participez !" %}{% endblock %}
+{% block meta_description %}{% translate "Le grand festival toulousain de la fabrication partagée : 22 thématiques, ateliers, fablabs, conférences. Construisez votre programme du 28 au 30 mai 2026 !" %}{% endblock %}
+{% block og_title %}{% translate "Festival du Faire — Toulouse, 28-30 mai 2026" %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% translate "Le grand festival toulousain de la fabrication partagée : 22 thématiques, ateliers, fablabs, conférences. Construisez votre programme du 28 au 30 mai 2026 !" %}{% endblock %}
+{% block twitter_title %}{% translate "Festival du Faire — Toulouse, 28-30 mai 2026" %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% translate "Le grand festival toulousain de la fabrication partagée : 22 thématiques, ateliers, fablabs, conférences. Construisez votre programme du 28 au 30 mai 2026 !" %}{% endblock %}
 
 {% block main %}
 
@@ -50,7 +50,7 @@
                          class="img-fluid logo-homepage">
                 </div>
                 <div>
-                    <p class="fw-bold fs-5 mt-5">Le grand rendez-vous toulousain pour réinventer notre façon de produire, de consommer et de transmettre !</p>
+                    <h2 class="fw-bold fs-5 mt-5">Le grand rendez-vous toulousain pour réinventer notre façon de produire, de consommer et de transmettre !</h2>
                 </div>
             </div>
 
@@ -126,7 +126,7 @@
                     <div class="col-md-4">
                         <div class="carte-jour">
                             <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 pr-3 py-1 mb-2">
-                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h4>
+                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 01" %}</h3>
                             </div>
                             <p class="small texte-bleu police-mono">
                                 {% translate "Entre Espaces," %}<br>
@@ -140,7 +140,7 @@
                     <div class="col-md-4">
                         <div class="carte-jour">
                             <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2">
-                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h4>
+                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 02" %}</h3>
                             </div>
                             <p class="small texte-bleu police-mono">
                                 {% translate "Entre Espaces," %}<br>
@@ -155,7 +155,7 @@
                         <div class="carte-jour">
                             <!-- En-tête avec badge positionné par rapport à lui -->
                             <div class="en-tete-jour fond-jaune bordure-epaisse px-3 pe-3 py-1 mb-2 position-relative">
-                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h4>
+                                <h3 class="m-0 texte-bleu police-titre">{% translate "JOUR 03" %}</h3>
                                 <!-- Badge 'Gratuit' collé à l'en-tête -->
                                 <div class="badge-gratuit position-absolute"
                                      style="top:-20px; right:-34px; transform: rotate(30deg); background: white; padding: 0px 8px; border-radius: 20px; z-index: 10;">
@@ -209,7 +209,7 @@
                     <!-- Image illustrative -->
                     <div class="image-etape mb-3">
                         <img src="{% static 'faire_festival/image/Fichier-11.png' %}"
-                             alt="{% translate 'Billets' %}"
+                             alt="{% translate 'Prendre vos billets pour le Faire Festival' %}"
                              class="img-fluid"
                              style="height: 180px; object-fit: contain;">
                     </div>
@@ -237,7 +237,7 @@
                     <!-- Image illustrative -->
                     <div class="image-etape mb-3">
                         <img src="{% static 'faire_festival/image/Fichier-12.png' %}"
-                             alt="{% translate 'Programmation' %}"
+                             alt="{% translate 'Programmation du Faire Festival : 22 thématiques' %}"
                              class="img-fluid"
                              style="height: 180px; object-fit: contain;">
                     </div>
@@ -265,7 +265,7 @@
                     <!-- Image illustrative -->
                     <div class="image-etape mb-3">
                         <img src="{% static 'faire_festival/image/Fichier-13.png' %}"
-                             alt="{% translate 'Faire Festival' %}"
+                             alt="{% translate 'Infos pratiques du Faire Festival, 28-30 mai' %}"
                              class="img-fluid"
                              style="height: 180px; object-fit: contain;">
                     </div>

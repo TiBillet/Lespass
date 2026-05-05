@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework import routers
 from BaseBillet import views as base_view
 from BaseBillet.views_robots import robots_txt
+from BaseBillet.views_humans import humans_txt
 from BaseBillet.test_error_views import test_404, test_500
 import BaseBillet.views_scan as views_scan
 
@@ -22,6 +23,10 @@ urlpatterns = [
     # Dynamic robots.txt - Access at: https://yourdomain.com/robots.txt
     # This automatically includes a reference to the sitemap at: https://yourdomain.com/sitemap.xml
     path('robots.txt', robots_txt, name='robots_txt'),
+
+    # Dynamic humans.txt - Access at: https://yourdomain.com/humans.txt
+    # Standard humanstxt.org : credits the Cooperative Code Commun team
+    path('humans.txt', humans_txt, name='humans_txt'),
 
     ### SCAN TICKET API
     path('scan/check_api_scan/', views_scan.check_api_scan.as_view(), name='check_api_scan'),
