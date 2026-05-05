@@ -3,11 +3,26 @@
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
 >
 > **Organisation des sessions :**
-> - [`DONE/`](DONE/) — sessions terminées et validées (01 → 06 Cascade, 30 → 34)
+> - [`DONE/`](DONE/) — sessions terminées et validées (01 → 06 Cascade, 30 → 34, 37)
 > - [`TODO/`](TODO/) — sessions en attente d'implémentation (06 Rapport temps réel, 35, 36)
 > - `excalidraw/` — schémas et diagrammes
 >
-> Dernière mise à jour : 2026-05-05 (rangement DONE/TODO + intégration retour Antoine 2026-05-04 dans Sessions 35 et 36)
+> Dernière mise à jour : 2026-05-05 (Session 37 implémentée — bug 8 Antoine stock vrac négatif)
+
+---
+
+## Récemment terminé
+
+### Session 37 — Stock vrac négatif et alerte écran validation ✅ (2026-05-05)
+
+Correction du bug 8 du retour Antoine 2026-05-04 (stock vrac hors stock sans
+message d'erreur). Le flag `autoriser_vente_hors_stock` était contourné par un
+`except Exception: pass` trop large créant des "ventes fantômes". Ajout d'une
+validation amont (`_valider_stock_panier`) + alerte sur l'écran de succès quand
+le stock part en négatif. **Effet de bord positif** : la fix `htmx:beforeSwap`
+globale corrige aussi le bug 1 (sortie de caisse 0€ → 400 silencieux).
+
+→ `DONE/Session 37 - Stock vrac negatif et alerte ecran validation.md`
 
 ---
 

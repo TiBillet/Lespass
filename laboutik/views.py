@@ -572,13 +572,20 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
 
         # --- Enrichissement poids/mesure : unités de saisie et labels de prix de référence ---
         # Déterminé à partir du Stock lié (unite GR → grammes/kg, CL → centilitres/litres).
+        # On enrichit aussi les tarifs avec stock_disponible et autoriser_hors_stock
+        # pour la garde JS au pave numerique (bug 8).
         # / Weight-based enrichment: input units and reference price labels.
-        # Determined from linked Stock (unite GR → grams/kg, CL → centilitres/litres).
+        # We also enrich the tariffs with stock_disponible and autoriser_hors_stock
+        # for the JS guard on the numpad (bug 8).
         unite_saisie_label = "g"
         prix_reference_label = "/kg"
+        stock_disponible_pm = None
+        autoriser_hors_stock_pm = True
         if a_poids_mesure:
             try:
                 stock_du_produit_pm = product.stock_inventaire
+                stock_disponible_pm = stock_du_produit_pm.quantite
+                autoriser_hors_stock_pm = stock_du_produit_pm.autoriser_vente_hors_stock
                 if stock_du_produit_pm.unite == "GR":
                     unite_saisie_label = "g"
                     prix_reference_label = "/kg"
@@ -593,12 +600,14 @@ def _construire_donnees_articles(point_de_vente_instance, events_billetterie=Non
                 # / No stock (should not happen, save_related creates one)
                 unite_saisie_label = "g"
                 prix_reference_label = "/kg"
-            # Enrichir les tarifs poids_mesure avec l'unité de saisie
-            # / Enrich weight-based prices with input unit
+            # Enrichir les tarifs poids_mesure avec l'unité de saisie + stock
+            # / Enrich weight-based prices with input unit + stock
             for t in tarifs:
                 if t.get("poids_mesure"):
                     t["unite_saisie_label"] = unite_saisie_label
                     t["prix_reference_label"] = prix_reference_label
+                    t["stock_disponible"] = stock_disponible_pm
+                    t["autoriser_hors_stock"] = autoriser_hors_stock_pm
 
         # Couleurs : override produit si défini, sinon catégorie
         # Colors: product override if set, otherwise category
@@ -3520,6 +3529,78 @@ def _determiner_moyens_paiement(point_de_vente, articles_panier=None):
     return moyens
 
 
+def _valider_stock_panier(articles_panier):
+    """
+    Verifie que chaque article du panier a un stock suffisant si son Stock
+    interdit la vente hors stock (autoriser_vente_hors_stock=False).
+    A appeler AVANT le transaction.atomic() de _creer_lignes_articles.
+    / Checks that each cart item has enough stock if Stock blocks out-of-stock sale.
+    Must be called BEFORE _creer_lignes_articles' transaction.atomic().
+
+    LOCALISATION : laboutik/views.py
+
+    :param articles_panier: liste de dicts retournee par _extraire_articles_du_panier()
+    :return: liste de dicts {name, demande, disponible, unite}.
+             Liste vide = panier OK.
+    """
+    erreurs = []
+    for article in articles_panier:
+        produit = article["product"]
+        try:
+            stock = produit.stock_inventaire
+        except Stock.DoesNotExist:
+            # Pas de gestion de stock pour ce produit, rien a verifier
+            # / No stock management for this product, nothing to check
+            continue
+
+        if stock.autoriser_vente_hors_stock:
+            # Vente hors stock autorisee : aucun blocage en amont
+            # / Out-of-stock sale allowed: no upstream blocking
+            continue
+
+        # Calcule la quantite reellement demandee : poids/mesure ou contenance fixe
+        # / Compute actually requested quantity: weight/measure or fixed contenance
+        weight_amount = article.get("weight_amount")
+        if weight_amount:
+            quantite_demandee = weight_amount  # ex : 50000g pour les cacahuetes
+        else:
+            contenance = article["price"].contenance or 1
+            quantite_demandee = article["quantite"] * contenance
+
+        if quantite_demandee > stock.quantite:
+            erreurs.append(
+                {
+                    "name": produit.name,
+                    "demande": quantite_demandee,
+                    "disponible": stock.quantite,
+                    "unite": stock.unite,
+                }
+            )
+
+    return erreurs
+
+
+def _formater_erreurs_stock(erreurs):
+    """
+    Formate la liste d'erreurs stock en message lisible pour le caissier.
+    Utilise par les vues de paiement quand _valider_stock_panier renvoie des erreurs.
+    / Formats stock error list into a readable message for the cashier.
+
+    LOCALISATION : laboutik/views.py
+
+    :param erreurs: liste de dicts {name, demande, disponible, unite}
+    :return: str formatee, prete pour msg_content de hx_messages.html
+    """
+    parts = []
+    for e in erreurs:
+        parts.append(
+            f"{e['name']} : "
+            f"{_('demande')} {e['demande']} {e['unite']}, "
+            f"{_('reste')} {e['disponible']} {e['unite']}"
+        )
+    return f"{_('Stock insuffisant — vente refusée.')} {' ; '.join(parts)}"
+
+
 def _creer_lignes_articles(
     articles_panier,
     code_methode_paiement,
@@ -3570,6 +3651,16 @@ def _creer_lignes_articles(
     # We'll broadcast the update via WebSocket after commit.
     produits_stock_mis_a_jour = []
 
+    # Accumulateur des produits dont le stock vient de passer en negatif.
+    # Affiche en fin de paiement sur l'ecran de validation (give-back-box orange).
+    # Ne contient que les produits avec autoriser_vente_hors_stock=True
+    # (sinon la vente aurait ete bloquee en amont par _valider_stock_panier).
+    # / Accumulator of products whose stock just went negative.
+    # Shown at end of payment on validation screen (orange give-back-box).
+    # Only contains products with autoriser_vente_hors_stock=True
+    # (otherwise the sale would have been blocked upstream).
+    produits_stock_negatif = []
+
     for article in articles_panier:
         produit = article["product"]
         prix_obj = article["price"]
@@ -3619,14 +3710,18 @@ def _creer_lignes_articles(
         # After decrement, re-read stock from DB (F() doesn't update in-memory instance).
         try:
             stock_du_produit = produit.stock_inventaire
-            from inventaire.services import StockService
+        except Stock.DoesNotExist:
+            # Pas de gestion de stock pour ce produit — comportement normal
+            # / No stock management for this product — normal behavior
+            stock_du_produit = None
 
+        if stock_du_produit is not None:
             if weight_amount:
                 # Poids/mesure : la quantite saisie par le caissier remplace contenance x qty.
                 # On décrémente la quantité saisie (ex: 350g), pas la contenance fixe.
                 # / Weight/volume: cashier's entered quantity replaces contenance x qty.
                 # We decrement the entered quantity (e.g. 350g), not the fixed contenance.
-                StockService.decrementer_pour_vente(
+                stock_devenu_negatif = StockService.decrementer_pour_vente(
                     stock=stock_du_produit,
                     contenance=weight_amount,
                     qty=1,
@@ -3635,7 +3730,7 @@ def _creer_lignes_articles(
             else:
                 # Tarif classique : contenance fixe x quantite
                 # / Standard price: fixed contenance x quantity
-                StockService.decrementer_pour_vente(
+                stock_devenu_negatif = StockService.decrementer_pour_vente(
                     stock=stock_du_produit,
                     contenance=prix_obj.contenance,
                     qty=quantite,
@@ -3645,6 +3740,19 @@ def _creer_lignes_articles(
             # Relire le stock depuis la DB pour avoir la quantité à jour
             # / Re-read stock from DB to get updated quantity
             stock_du_produit.refresh_from_db()
+
+            # Si le stock vient de passer en negatif, prevenir le caissier
+            # via une alerte sur l'ecran de validation de la vente.
+            # / If stock just went negative, warn the cashier via an alert
+            # on the sale validation screen.
+            if stock_devenu_negatif:
+                produits_stock_negatif.append(
+                    {
+                        "name": produit.name,
+                        "quantite": stock_du_produit.quantite,
+                        "unite": stock_du_produit.unite,
+                    }
+                )
 
             produits_stock_mis_a_jour.append(
                 {
@@ -3662,10 +3770,6 @@ def _creer_lignes_articles(
                     ),
                 }
             )
-        except Exception:
-            # Pas de stock géré pour ce produit — comportement normal
-            # / No stock managed for this product — normal behavior
-            pass
 
         lignes_creees.append(ligne)
 
@@ -3722,7 +3826,7 @@ def _creer_lignes_articles(
 
         transaction.on_commit(lambda: broadcast_stock_update(donnees_a_broadcaster))
 
-    return lignes_creees
+    return lignes_creees, produits_stock_negatif
 
 
 def _creer_lignes_articles_cascade(
@@ -3795,6 +3899,10 @@ def _creer_lignes_articles_cascade(
     # Accumulateur pour les mises à jour stock (broadcast WebSocket).
     # / Accumulator for stock updates (WebSocket broadcast).
     produits_stock_mis_a_jour = []
+
+    # Accumulateur des produits passes en stock negatif (alerte ecran de validation).
+    # / Accumulator of products with negative stock (validation screen alert).
+    produits_stock_negatif = []
 
     # ------------------------------------------------------------------ #
     # Étape 2 : Pour chaque article, créer ProductSold + PriceSold + N LigneArticle
@@ -3900,12 +4008,16 @@ def _creer_lignes_articles_cascade(
         # for the stock movement (traceability).
         try:
             stock_du_produit = produit.stock_inventaire
-            from inventaire.services import StockService
+        except Stock.DoesNotExist:
+            # Pas de gestion de stock pour ce produit — comportement normal
+            # / No stock management for this product — normal behavior
+            stock_du_produit = None
 
+        if stock_du_produit is not None:
             if weight_amount:
                 # Poids/mesure : la quantité saisie remplace contenance x qty.
                 # / Weight/volume: entered quantity replaces contenance x qty.
-                StockService.decrementer_pour_vente(
+                stock_devenu_negatif = StockService.decrementer_pour_vente(
                     stock=stock_du_produit,
                     contenance=weight_amount,
                     qty=1,
@@ -3914,7 +4026,7 @@ def _creer_lignes_articles_cascade(
             else:
                 # Tarif classique : contenance fixe x quantité totale
                 # / Standard price: fixed contenance x total quantity
-                StockService.decrementer_pour_vente(
+                stock_devenu_negatif = StockService.decrementer_pour_vente(
                     stock=stock_du_produit,
                     contenance=prix_obj.contenance,
                     qty=quantite,
@@ -3924,6 +4036,17 @@ def _creer_lignes_articles_cascade(
             # Relire le stock depuis la DB pour avoir la quantité à jour
             # / Re-read stock from DB to get updated quantity
             stock_du_produit.refresh_from_db()
+
+            # Si le stock vient de passer en negatif, prevenir le caissier
+            # / If stock just went negative, warn the cashier
+            if stock_devenu_negatif:
+                produits_stock_negatif.append(
+                    {
+                        "name": produit.name,
+                        "quantite": stock_du_produit.quantite,
+                        "unite": stock_du_produit.unite,
+                    }
+                )
 
             produits_stock_mis_a_jour.append(
                 {
@@ -3941,10 +4064,6 @@ def _creer_lignes_articles_cascade(
                     ),
                 }
             )
-        except Exception:
-            # Pas de stock géré pour ce produit — comportement normal
-            # / No stock managed for this product — normal behavior
-            pass
 
     # ------------------------------------------------------------------ #
     # Étape 3 : Chaînage HMAC (conformité LNE exigence 8)
@@ -3994,7 +4113,7 @@ def _creer_lignes_articles_cascade(
 
         transaction.on_commit(lambda: broadcast_stock_update(donnees_a_broadcaster))
 
-    return toutes_les_lignes_creees
+    return toutes_les_lignes_creees, produits_stock_negatif
 
 
 def _creer_ou_renouveler_adhesion(
@@ -4536,11 +4655,13 @@ def _executer_recharges(
 #  / ViderCarteSerializer — validation for POST /laboutik/paiement/vider_carte/ #
 # -------------------------------------------------------------------------- #
 
+
 class ViderCarteSerializer(serializers.Serializer):
     """
     Valide le POST de saisie d'un vider carte au POS.
     Validates the POST form for a POS card refund.
     """
+
     tag_id = serializers.CharField(max_length=8)
     tag_id_cm = serializers.CharField(max_length=8)
     uuid_pv = serializers.UUIDField()
@@ -4948,12 +5069,31 @@ class PaiementViewSet(viewsets.ViewSet):
         ]
         reservations_billets = []
 
+        # Validation amont du stock pour les articles normaux.
+        # Si un article a autoriser_vente_hors_stock=False et que le stock est
+        # insuffisant, on bloque la vente AVANT d'ouvrir transaction.atomic().
+        # / Upstream stock validation for normal articles.
+        # If an article has autoriser_vente_hors_stock=False and stock is insufficient,
+        # block the sale BEFORE opening transaction.atomic().
+        erreurs_stock = _valider_stock_panier(articles_normaux)
+        if erreurs_stock:
+            return render(
+                request,
+                "laboutik/partial/hx_messages.html",
+                {
+                    "msg_type": "warning",
+                    "msg_content": _formater_erreurs_stock(erreurs_stock),
+                },
+                status=400,
+            )
+
+        produits_stock_negatif = []
         with db_transaction.atomic():
             # Articles normaux (ventes, adhesions) → LigneArticle
             # Normal articles (sales, memberships) → LigneArticle
             lignes_normales = []
             if articles_normaux:
-                lignes_normales = _creer_lignes_articles(
+                lignes_normales, produits_stock_negatif = _creer_lignes_articles(
                     articles_normaux,
                     moyen_paiement_code,
                     uuid_transaction=uuid_transaction,
@@ -5029,6 +5169,7 @@ class PaiementViewSet(viewsets.ViewSet):
             "original_payment": transaction_precedente,
             "uuid_transaction": str(uuid_transaction),
             "uuid_pv": str(point_de_vente.uuid),
+            "produits_stock_negatif": produits_stock_negatif,
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -5105,6 +5246,21 @@ class PaiementViewSet(viewsets.ViewSet):
             ]
             reservations_billets = []
 
+            # Validation amont du stock pour les articles normaux.
+            # / Upstream stock validation for normal articles.
+            erreurs_stock = _valider_stock_panier(articles_normaux)
+            if erreurs_stock:
+                return render(
+                    request,
+                    "laboutik/partial/hx_messages.html",
+                    {
+                        "msg_type": "warning",
+                        "msg_content": _formater_erreurs_stock(erreurs_stock),
+                    },
+                    status=400,
+                )
+
+            produits_stock_negatif = []
             # Créer les lignes articles en base (atomique)
             # Create article lines in DB (atomic)
             with db_transaction.atomic():
@@ -5112,7 +5268,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 # Normal articles (sales, memberships) → LigneArticle
                 lignes_normales = []
                 if articles_normaux:
-                    lignes_normales = _creer_lignes_articles(
+                    lignes_normales, produits_stock_negatif = _creer_lignes_articles(
                         articles_normaux,
                         moyen_paiement_code,
                         uuid_transaction=uuid_transaction,
@@ -5194,6 +5350,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "original_payment": transaction_precedente,
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
+                "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
                 request, "laboutik/partial/hx_return_payment_success.html", context
@@ -5583,7 +5740,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 # ----- 7d) Créer toutes les LigneArticle (non-fidu + cascade) -----
                 # / Create all LigneArticle (non-fidu + cascade)
                 toutes_les_lignes_pre_calculees = lignes_non_fidu + lignes_nfc
-                lignes_creees = _creer_lignes_articles_cascade(
+                lignes_creees, produits_stock_negatif = _creer_lignes_articles_cascade(
                     lignes_pre_calculees=toutes_les_lignes_pre_calculees,
                     carte=carte_client,
                     wallet=wallet_client,
@@ -5691,6 +5848,7 @@ class PaiementViewSet(viewsets.ViewSet):
             # Multi-asset : liste des soldes après paiement
             # / Multi-asset: list of balances after payment
             "soldes_apres_paiement": soldes_apres_paiement,
+            "produits_stock_negatif": produits_stock_negatif,
         }
         return render(
             request, "laboutik/partial/hx_return_payment_success.html", context
@@ -6454,12 +6612,14 @@ class PaiementViewSet(viewsets.ViewSet):
                             lignes_finales.append((art_c, asset_c, amount_c, pm_c))
 
                     toutes_les_lignes = lignes_non_fidu + lignes_finales
-                    lignes_creees = _creer_lignes_articles_cascade(
-                        lignes_pre_calculees=toutes_les_lignes,
-                        carte=carte1,
-                        wallet=wallet_carte1,
-                        uuid_transaction=uuid_transaction,
-                        point_de_vente=point_de_vente,
+                    lignes_creees, produits_stock_negatif = (
+                        _creer_lignes_articles_cascade(
+                            lignes_pre_calculees=toutes_les_lignes,
+                            carte=carte1,
+                            wallet=wallet_carte1,
+                            uuid_transaction=uuid_transaction,
+                            point_de_vente=point_de_vente,
+                        )
                     )
 
                     # 6e) Adhésions
@@ -6535,6 +6695,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
+                "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
                 request,
@@ -6804,13 +6965,15 @@ class PaiementViewSet(viewsets.ViewSet):
                     toutes_les_lignes = (
                         lignes_non_fidu + lignes_couvertes_c1 + lignes_couvertes_c2
                     )
-                    lignes_creees = _creer_lignes_articles_cascade(
-                        lignes_pre_calculees=toutes_les_lignes,
-                        carte=carte1,
-                        carte_complement=carte2,
-                        wallet=wallet_carte1,
-                        uuid_transaction=uuid_transaction,
-                        point_de_vente=point_de_vente,
+                    lignes_creees, produits_stock_negatif = (
+                        _creer_lignes_articles_cascade(
+                            lignes_pre_calculees=toutes_les_lignes,
+                            carte=carte1,
+                            carte_complement=carte2,
+                            wallet=wallet_carte1,
+                            uuid_transaction=uuid_transaction,
+                            point_de_vente=point_de_vente,
+                        )
                     )
 
                     # Adhésions
@@ -6893,6 +7056,7 @@ class PaiementViewSet(viewsets.ViewSet):
                 "uuid_transaction": str(uuid_transaction),
                 "uuid_pv": str(point_de_vente.uuid),
                 "soldes_apres_paiement": soldes_apres_paiement,
+                "produits_stock_negatif": produits_stock_negatif,
             }
             return render(
                 request,
@@ -7045,7 +7209,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "card": {"tag_id": tag_id_cm},
         }
         return render(
-            request, "laboutik/partial/hx_vider_carte_overlay.html", contexte,
+            request,
+            "laboutik/partial/hx_vider_carte_overlay.html",
+            contexte,
         )
 
     @action(
@@ -7072,7 +7238,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # Protection self-refund.
         if tag_id and tag_id == tag_id_cm:
             return _render_erreur_toast(
-                request, _("Ne peut pas vider une carte primaire."),
+                request,
+                _("Ne peut pas vider une carte primaire."),
             )
 
         try:
@@ -7086,16 +7253,21 @@ class PaiementViewSet(viewsets.ViewSet):
 
         tokens = list(
             Token.objects.filter(
-                wallet=wallet, value__gt=0,
-            ).filter(
+                wallet=wallet,
+                value__gt=0,
+            )
+            .filter(
                 Q(asset__category=Asset.TLF, asset__tenant_origin=connection.tenant)
                 | Q(asset__category=Asset.FED)
-            ).select_related('asset', 'asset__tenant_origin').order_by('asset__category')
+            )
+            .select_related("asset", "asset__tenant_origin")
+            .order_by("asset__category")
         )
 
         if not tokens:
             return _render_erreur_toast(
-                request, _("Aucun solde remboursable sur cette carte."),
+                request,
+                _("Aucun solde remboursable sur cette carte."),
             )
 
         total_tlf = sum(t.value for t in tokens if t.asset.category == Asset.TLF)
@@ -7112,7 +7284,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "uuid_pv": uuid_pv,
         }
         return render(
-            request, "laboutik/partial/hx_vider_carte_confirm.html", contexte,
+            request,
+            "laboutik/partial/hx_vider_carte_confirm.html",
+            contexte,
         )
 
     @action(
@@ -7143,7 +7317,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Self-refund protection (same check as preview).
         if tag_id_client == tag_id_cm:
             return _render_erreur_toast(
-                request, _("Ne peut pas vider une carte primaire."),
+                request,
+                _("Ne peut pas vider une carte primaire."),
             )
 
         try:
@@ -7163,7 +7338,8 @@ class PaiementViewSet(viewsets.ViewSet):
         # / Access control: primary card must have access to this POS.
         if not pv.cartes_primaires.filter(pk=carte_primaire_obj.pk).exists():
             return _render_erreur_toast(
-                request, _("Cette carte caissier n'a pas acces a ce PV."),
+                request,
+                _("Cette carte caissier n'a pas acces a ce PV."),
             )
 
         receiver_wallet = WalletService.get_or_create_wallet_tenant(connection.tenant)
@@ -7179,7 +7355,8 @@ class PaiementViewSet(viewsets.ViewSet):
             )
         except NoEligibleTokens:
             return _render_erreur_toast(
-                request, _("Aucun solde remboursable (solde a pu changer)."),
+                request,
+                _("Aucun solde remboursable (solde a pu changer)."),
             )
 
         contexte = {
@@ -7192,7 +7369,9 @@ class PaiementViewSet(viewsets.ViewSet):
             "vider_carte": vider_carte_flag,
         }
         return render(
-            request, "laboutik/partial/hx_vider_carte_success.html", contexte,
+            request,
+            "laboutik/partial/hx_vider_carte_success.html",
+            contexte,
         )
 
     @action(
@@ -7216,7 +7395,8 @@ class PaiementViewSet(viewsets.ViewSet):
         pv = PointDeVente.objects.select_related("printer").filter(uuid=uuid_pv).first()
         if pv is None or pv.printer is None or not pv.printer.active:
             return _render_erreur_toast(
-                request, _("Pas d'imprimante configuree sur ce PV."),
+                request,
+                _("Pas d'imprimante configuree sur ce PV."),
             )
 
         transactions = Transaction.objects.filter(
@@ -8512,11 +8692,12 @@ class BridgeThrottle(AnonRateThrottle):
     Anti-brute-force sur le bridge : 10 requêtes/minute par IP.
     / Brute-force protection on bridge: 10 req/min per IP.
     """
-    rate = '10/min'
-    scope = 'laboutik_auth_bridge'
+
+    rate = "10/min"
+    scope = "laboutik_auth_bridge"
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class LaBoutikAuthBridgeView(APIView):
     """
     Pont d'authentification hardware : échange une clé API contre un cookie session.
@@ -8552,26 +8733,28 @@ class LaBoutikAuthBridgeView(APIView):
     Émet : 302 HttpResponseRedirect vers /laboutik/caisse/ + Set-Cookie: sessionid=<key>
     Erreurs : 401 si clé absente/invalide/révoquée, 400 si clé V1, 429 si throttle
     """
+
     permission_classes = [AllowAny]
     throttle_classes = [BridgeThrottle]
 
     def post(self, request):
         # Extraction de la clé depuis le POST form-data
         # / Extract key from POST form-data
-        api_key_string = request.POST.get('api_key', '').strip()
+        api_key_string = request.POST.get("api_key", "").strip()
 
         if not api_key_string:
             # Log : tentative d'accès sans api_key dans le POST
             # / Log: access attempt without api_key in POST body
             logger.warning(
                 "laboutik bridge: missing api_key in POST body from %s",
-                request.META.get('REMOTE_ADDR'),
+                request.META.get("REMOTE_ADDR"),
             )
             return HttpResponse(status=401)
 
         # Validation de la clé
         # / Key validation
         from BaseBillet.models import LaBoutikAPIKey
+
         try:
             api_key = LaBoutikAPIKey.objects.get_from_key(api_key_string)
         except LaBoutikAPIKey.DoesNotExist:
@@ -8579,7 +8762,7 @@ class LaBoutikAuthBridgeView(APIView):
             # / Log: unknown API key (possibly brute-force)
             logger.warning(
                 "laboutik bridge: unknown API key attempt from %s",
-                request.META.get('REMOTE_ADDR'),
+                request.META.get("REMOTE_ADDR"),
             )
             return HttpResponse(status=401)
 
@@ -8591,7 +8774,9 @@ class LaBoutikAuthBridgeView(APIView):
                 api_key.name,
             )
             return HttpResponse(
-                _("Legacy API key, bridge flow not available. Please re-pair the device."),
+                _(
+                    "Legacy API key, bridge flow not available. Please re-pair the device."
+                ),
                 status=400,
             )
 
@@ -8617,5 +8802,5 @@ class LaBoutikAuthBridgeView(APIView):
             "laboutik bridge: session opened for terminal %s",
             term_user.email,
         )
-        
-        return HttpResponseRedirect('/laboutik/caisse/')
+
+        return HttpResponseRedirect("/laboutik/caisse/")

@@ -4,6 +4,7 @@ tests/pytest/test_pos_vider_carte.py — Tests Phase 3 : bouton POS "Vider Carte
 LANCEMENT :
     docker exec lespass_django poetry run pytest tests/pytest/test_pos_vider_carte.py -v --api-key dummy
 """
+
 import uuid as uuid_module
 
 import pytest
@@ -15,20 +16,20 @@ from AuthBillet.models import Wallet
 from Customers.models import Client
 from QrcodeCashless.models import CarteCashless, Detail
 from fedow_core.models import Asset, Token, Transaction
-from fedow_core.services import AssetService, WalletService
+from fedow_core.services import WalletService
 
 
-VC_TEST_PREFIX = '[vc_test]'
+VC_TEST_PREFIX = "[vc_test]"
 
 
 @pytest.fixture(scope="module")
 def tenant_lespass_vc():
-    return Client.objects.get(schema_name='lespass')
+    return Client.objects.get(schema_name="lespass")
 
 
 @pytest.fixture(scope="module")
 def wallet_lieu_vc(tenant_lespass_vc):
-    return Wallet.objects.create(name=f'{VC_TEST_PREFIX} Lieu')
+    return Wallet.objects.create(name=f"{VC_TEST_PREFIX} Lieu")
 
 
 @pytest.fixture(scope="module")
@@ -36,12 +37,12 @@ def asset_tlf_vc(tenant_lespass_vc, wallet_lieu_vc):
     # get_or_create pour eviter l'IntegrityError si un run precedent n'a pas nettoye
     # / get_or_create to avoid IntegrityError if a previous run did not clean up
     asset, _created = Asset.objects.get_or_create(
-        name=f'{VC_TEST_PREFIX} TLF',
+        name=f"{VC_TEST_PREFIX} TLF",
         category=Asset.TLF,
         defaults={
-            'currency_code': 'EUR',
-            'wallet_origin': wallet_lieu_vc,
-            'tenant_origin': tenant_lespass_vc,
+            "currency_code": "EUR",
+            "wallet_origin": wallet_lieu_vc,
+            "tenant_origin": tenant_lespass_vc,
         },
     )
     return asset
@@ -49,18 +50,24 @@ def asset_tlf_vc(tenant_lespass_vc, wallet_lieu_vc):
 
 @pytest.fixture
 def carte_caissier_vc(tenant_lespass_vc):
-    """Carte NFC primaire du caissier pour les tests Phase 3."""
-    with schema_context('lespass'):
+    """Carte NFC primaire du caissier pour les tests Phase 3.
+
+    Resilience : get_or_create pour eviter IntegrityError si run precedent non nettoye.
+    / Resilient: get_or_create avoids IntegrityError if a previous run did not clean up.
+    """
+    with schema_context("lespass"):
         detail, _ = Detail.objects.get_or_create(
-            base_url=f'{VC_TEST_PREFIX}_DETAIL',
+            base_url=f"{VC_TEST_PREFIX}_DETAIL",
             origine=tenant_lespass_vc,
             defaults={"generation": 0},
         )
-        carte = CarteCashless.objects.create(
-            tag_id='VCT00001',
-            number='VCT00001',
-            uuid=uuid_module.uuid4(),
-            detail=detail,
+        carte, _created = CarteCashless.objects.get_or_create(
+            tag_id="VCT00001",
+            defaults={
+                "number": "VCT00001",
+                "uuid": uuid_module.uuid4(),
+                "detail": detail,
+            },
         )
         yield carte
         # Nettoyer les Transactions referencing cette carte avant suppression
@@ -72,26 +79,29 @@ def carte_caissier_vc(tenant_lespass_vc):
 @pytest.fixture
 def carte_client_vc_avec_tlf(tenant_lespass_vc, asset_tlf_vc):
     """Carte client avec wallet_ephemere credite 1000c TLF."""
-    with schema_context('lespass'):
+    with schema_context("lespass"):
         detail, _ = Detail.objects.get_or_create(
-            base_url=f'{VC_TEST_PREFIX}_DETAIL',
+            base_url=f"{VC_TEST_PREFIX}_DETAIL",
             origine=tenant_lespass_vc,
             defaults={"generation": 0},
         )
-        wallet_user = Wallet.objects.create(name=f'{VC_TEST_PREFIX} Wallet client')
+        wallet_user = Wallet.objects.create(name=f"{VC_TEST_PREFIX} Wallet client")
         carte = CarteCashless.objects.create(
-            tag_id='VCT00002',
-            number='VCT00002',
+            tag_id="VCT00002",
+            number="VCT00002",
             uuid=uuid_module.uuid4(),
             detail=detail,
             wallet_ephemere=wallet_user,
         )
         with db_transaction.atomic():
             WalletService.crediter(
-                wallet=wallet_user, asset=asset_tlf_vc, montant_en_centimes=1000,
+                wallet=wallet_user,
+                asset=asset_tlf_vc,
+                montant_en_centimes=1000,
             )
         yield carte
         from BaseBillet.models import LigneArticle
+
         LigneArticle.objects.filter(carte=carte).delete()
         Transaction.objects.filter(card=carte).delete()
         Token.objects.filter(wallet=wallet_user).delete()
@@ -100,8 +110,11 @@ def carte_client_vc_avec_tlf(tenant_lespass_vc, asset_tlf_vc):
 
 
 def test_rembourser_en_especes_accepte_primary_card(
-    tenant_lespass_vc, wallet_lieu_vc, asset_tlf_vc,
-    carte_client_vc_avec_tlf, carte_caissier_vc,
+    tenant_lespass_vc,
+    wallet_lieu_vc,
+    asset_tlf_vc,
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
 ):
     """
     WalletService.rembourser_en_especes accepte un parametre primary_card.
@@ -158,16 +171,17 @@ def test_vider_carte_serializer_vider_carte_defaut_false():
 def _login_as_admin():
     from django.test import Client as TestClient
     from django.contrib.auth import get_user_model
-    client = TestClient(HTTP_HOST='lespass.tibillet.localhost')
+
+    client = TestClient(HTTP_HOST="lespass.tibillet.localhost")
     User = get_user_model()
-    user = User.objects.filter(email='admin@admin.com').first()
+    user = User.objects.filter(email="admin@admin.com").first()
     if user is None:
         pytest.skip("User admin@admin.com introuvable")
     # Signal pre_save peut mettre is_active=False (cf. PIEGES.md 9.88).
     # / Pre_save signal may set is_active=False (see PIEGES.md 9.88).
     if not user.is_active:
         user.is_active = True
-        user.save(update_fields=['is_active'])
+        user.save(update_fields=["is_active"])
     client.force_login(user)
     return client, user
 
@@ -175,27 +189,33 @@ def _login_as_admin():
 def test_vider_carte_preview_carte_inconnue_toast_erreur(carte_caissier_vc):
     """tag_id inexistant → toast erreur, aucune mutation DB."""
     client, user = _login_as_admin()
-    response = client.post('/laboutik/paiement/vider_carte/preview/', data={
-        'tag_id': 'XYZINCON',
-        'tag_id_cm': carte_caissier_vc.tag_id,
-        'uuid_pv': str(uuid_module.uuid4()),
-    })
+    response = client.post(
+        "/laboutik/paiement/vider_carte/preview/",
+        data={
+            "tag_id": "XYZINCON",
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(uuid_module.uuid4()),
+        },
+    )
     assert response.status_code == 200
     contenu = response.content.decode()
-    assert 'inconnue' in contenu.lower() or 'unknown' in contenu.lower()
+    assert "inconnue" in contenu.lower() or "unknown" in contenu.lower()
 
 
 def test_vider_carte_preview_tag_identique_cm_rejette(carte_caissier_vc):
     """Protection self-refund : tag_id == tag_id_cm → toast erreur."""
     client, user = _login_as_admin()
-    response = client.post('/laboutik/paiement/vider_carte/preview/', data={
-        'tag_id': carte_caissier_vc.tag_id,
-        'tag_id_cm': carte_caissier_vc.tag_id,
-        'uuid_pv': str(uuid_module.uuid4()),
-    })
+    response = client.post(
+        "/laboutik/paiement/vider_carte/preview/",
+        data={
+            "tag_id": carte_caissier_vc.tag_id,
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(uuid_module.uuid4()),
+        },
+    )
     assert response.status_code == 200
     contenu = response.content.decode()
-    assert 'carte primaire' in contenu.lower() or 'primary card' in contenu.lower()
+    assert "carte primaire" in contenu.lower() or "primary card" in contenu.lower()
 
 
 from BaseBillet.models import LigneArticle, PaymentMethod, SaleOrigin
@@ -207,14 +227,14 @@ def pv_cashless_vc(carte_caissier_vc):
     from laboutik.models import CartePrimaire, PointDeVente
     from BaseBillet.services_refund import get_or_create_product_remboursement
 
-    with schema_context('lespass'):
+    with schema_context("lespass"):
         pv, _ = PointDeVente.objects.get_or_create(
-            name='VC Test PV',
-            defaults={'comportement': 'V', 'hidden': False},
+            name="VC Test PV",
+            defaults={"comportement": "V", "hidden": False},
         )
         cp, _ = CartePrimaire.objects.get_or_create(
             carte=carte_caissier_vc,
-            defaults={'edit_mode': False},
+            defaults={"edit_mode": False},
         )
         cp.points_de_vente.add(pv)
         product_vc = get_or_create_product_remboursement()
@@ -227,7 +247,9 @@ def pv_cashless_vc(carte_caissier_vc):
 
 
 def test_vider_carte_execute_remboursement_complet(
-    carte_client_vc_avec_tlf, carte_caissier_vc, pv_cashless_vc,
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
+    pv_cashless_vc,
 ):
     """
     POST /laboutik/paiement/vider_carte/ avec vider_carte=false :
@@ -235,16 +257,20 @@ def test_vider_carte_execute_remboursement_complet(
     primary_card de la Transaction == carte_caissier.
     """
     client, user = _login_as_admin()
-    response = client.post('/laboutik/paiement/vider_carte/', data={
-        'tag_id': carte_client_vc_avec_tlf.tag_id,
-        'tag_id_cm': carte_caissier_vc.tag_id,
-        'uuid_pv': str(pv_cashless_vc.uuid),
-        'vider_carte': 'false',
-    })
+    response = client.post(
+        "/laboutik/paiement/vider_carte/",
+        data={
+            "tag_id": carte_client_vc_avec_tlf.tag_id,
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(pv_cashless_vc.uuid),
+            "vider_carte": "false",
+        },
+    )
     assert response.status_code == 200, response.content.decode()[:500]
 
     tx_refund = Transaction.objects.filter(
-        card=carte_client_vc_avec_tlf, action=Transaction.REFUND,
+        card=carte_client_vc_avec_tlf,
+        action=Transaction.REFUND,
     )
     assert tx_refund.count() == 1
     assert tx_refund.first().primary_card_id == carte_caissier_vc.pk
@@ -259,16 +285,21 @@ def test_vider_carte_execute_remboursement_complet(
 
 
 def test_vider_carte_execute_avec_vv(
-    carte_client_vc_avec_tlf, carte_caissier_vc, pv_cashless_vc,
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
+    pv_cashless_vc,
 ):
     """vider_carte=true → carte.user=None, carte.wallet_ephemere=None."""
     client, user = _login_as_admin()
-    response = client.post('/laboutik/paiement/vider_carte/', data={
-        'tag_id': carte_client_vc_avec_tlf.tag_id,
-        'tag_id_cm': carte_caissier_vc.tag_id,
-        'uuid_pv': str(pv_cashless_vc.uuid),
-        'vider_carte': 'true',
-    })
+    response = client.post(
+        "/laboutik/paiement/vider_carte/",
+        data={
+            "tag_id": carte_client_vc_avec_tlf.tag_id,
+            "tag_id_cm": carte_caissier_vc.tag_id,
+            "uuid_pv": str(pv_cashless_vc.uuid),
+            "vider_carte": "true",
+        },
+    )
     assert response.status_code == 200
 
     carte_client_vc_avec_tlf.refresh_from_db()
@@ -277,37 +308,45 @@ def test_vider_carte_execute_avec_vv(
 
 
 def test_vider_carte_carte_primaire_pas_liee_pv_rejette(
-    carte_client_vc_avec_tlf, carte_caissier_vc,
+    carte_client_vc_avec_tlf,
+    carte_caissier_vc,
 ):
     """Si la carte caissier n'est pas dans pv.cartes_primaires → toast erreur."""
     from laboutik.models import PointDeVente
 
     client, user = _login_as_admin()
-    with schema_context('lespass'):
+    with schema_context("lespass"):
         pv_orphan, _ = PointDeVente.objects.get_or_create(
-            name='VC Orphan PV',
-            defaults={'comportement': 'V', 'hidden': False},
+            name="VC Orphan PV",
+            defaults={"comportement": "V", "hidden": False},
         )
 
     try:
-        response = client.post('/laboutik/paiement/vider_carte/', data={
-            'tag_id': carte_client_vc_avec_tlf.tag_id,
-            'tag_id_cm': carte_caissier_vc.tag_id,
-            'uuid_pv': str(pv_orphan.uuid),
-            'vider_carte': 'false',
-        })
+        response = client.post(
+            "/laboutik/paiement/vider_carte/",
+            data={
+                "tag_id": carte_client_vc_avec_tlf.tag_id,
+                "tag_id_cm": carte_caissier_vc.tag_id,
+                "uuid_pv": str(pv_orphan.uuid),
+                "vider_carte": "false",
+            },
+        )
         assert response.status_code == 200
         contenu = response.content.decode()
         assert (
-            'acces' in contenu.lower()
-            or 'access' in contenu.lower()
-            or 'primaire' in contenu.lower()
+            "acces" in contenu.lower()
+            or "access" in contenu.lower()
+            or "primaire" in contenu.lower()
         )
-        assert Transaction.objects.filter(
-            card=carte_client_vc_avec_tlf, action=Transaction.REFUND,
-        ).count() == 0
+        assert (
+            Transaction.objects.filter(
+                card=carte_client_vc_avec_tlf,
+                action=Transaction.REFUND,
+            ).count()
+            == 0
+        )
     finally:
-        with schema_context('lespass'):
+        with schema_context("lespass"):
             pv_orphan.delete()
 
 
@@ -318,34 +357,46 @@ def test_vider_carte_imprimer_recu_sans_imprimante_toast_info(pv_cashless_vc):
     """
     client, user = _login_as_admin()
     response = client.post(
-        '/laboutik/paiement/vider_carte/imprimer_recu/',
+        "/laboutik/paiement/vider_carte/imprimer_recu/",
         data={
-            'transaction_uuids': [str(uuid_module.uuid4())],
-            'uuid_pv': str(pv_cashless_vc.uuid),
+            "transaction_uuids": [str(uuid_module.uuid4())],
+            "uuid_pv": str(pv_cashless_vc.uuid),
         },
     )
     assert response.status_code == 200
     contenu = response.content.decode()
-    assert 'imprimante' in contenu.lower() or 'printer' in contenu.lower()
+    assert "imprimante" in contenu.lower() or "printer" in contenu.lower()
 
 
 def test_formatter_recu_vider_carte_structure_dict(
-    tenant_lespass_vc, asset_tlf_vc, wallet_lieu_vc,
+    tenant_lespass_vc,
+    asset_tlf_vc,
+    wallet_lieu_vc,
 ):
     """Le formatter retourne un dict compatible avec imprimer_async."""
     from laboutik.printing.formatters import formatter_recu_vider_carte
 
-    wallet_source = Wallet.objects.create(name=f'{VC_TEST_PREFIX} Source recu')
-    with schema_context('lespass'):
+    wallet_source = Wallet.objects.create(name=f"{VC_TEST_PREFIX} Source recu")
+    with schema_context("lespass"):
         tx1 = Transaction.objects.create(
-            sender=wallet_source, receiver=wallet_lieu_vc,
-            asset=asset_tlf_vc, amount=800, action=Transaction.REFUND,
-            tenant=tenant_lespass_vc, datetime=timezone.now(), ip="127.0.0.1",
+            sender=wallet_source,
+            receiver=wallet_lieu_vc,
+            asset=asset_tlf_vc,
+            amount=800,
+            action=Transaction.REFUND,
+            tenant=tenant_lespass_vc,
+            datetime=timezone.now(),
+            ip="127.0.0.1",
         )
         tx2 = Transaction.objects.create(
-            sender=wallet_source, receiver=wallet_lieu_vc,
-            asset=asset_tlf_vc, amount=200, action=Transaction.REFUND,
-            tenant=tenant_lespass_vc, datetime=timezone.now(), ip="127.0.0.1",
+            sender=wallet_source,
+            receiver=wallet_lieu_vc,
+            asset=asset_tlf_vc,
+            amount=200,
+            action=Transaction.REFUND,
+            tenant=tenant_lespass_vc,
+            datetime=timezone.now(),
+            ip="127.0.0.1",
         )
 
         recu = formatter_recu_vider_carte([tx1, tx2])
@@ -362,14 +413,15 @@ def test_formatter_recu_vider_carte_structure_dict(
 def cleanup_vc_test_data():
     yield
     try:
-        with schema_context('lespass'):
+        with schema_context("lespass"):
             from BaseBillet.models import LigneArticle
+
             wallets_test = Wallet.objects.filter(name__startswith=VC_TEST_PREFIX)
             assets_test = Asset.objects.filter(name__startswith=VC_TEST_PREFIX)
-            LigneArticle.objects.filter(carte__tag_id__startswith='VCT').delete()
+            LigneArticle.objects.filter(carte__tag_id__startswith="VCT").delete()
             Transaction.objects.filter(asset__in=assets_test).delete()
             Token.objects.filter(wallet__in=wallets_test).delete()
-            CarteCashless.objects.filter(tag_id__startswith='VCT').delete()
+            CarteCashless.objects.filter(tag_id__startswith="VCT").delete()
             Detail.objects.filter(base_url__startswith=VC_TEST_PREFIX).delete()
             assets_test.delete()
             wallets_test.delete()

@@ -1,5 +1,48 @@
 # Changelog / Journal des modifications
 
+## Session 37 — Stock vrac negatif et alerte ecran de validation / Vrac negative stock and validation screen alert (2026-05-05)
+
+**Quoi / What :** Correction du bug 8 du retour Antoine 2026-05-04. Le flag `autoriser_vente_hors_stock` etait contourne par un `except Exception: pass` trop large dans `_creer_lignes_articles`, ce qui creait des "ventes fantomes" comptablement validees mais avec stock non decremente. Ajout d'une validation amont pour bloquer les ventes interdites (avec partial d'erreur visible cote front) et d'une alerte sur l'ecran de succes pour les stocks autorises passes en negatif. Correction au passage du quirk htmx 2.0 qui ignore les reponses 4xx.
+/ Fixed bug 8 from Antoine's 2026-05-04 review. The `autoriser_vente_hors_stock` flag was bypassed by a too-broad `except Exception: pass`, creating "phantom sales" validated accounting-wise but with stock not decremented. Added upstream validation to block forbidden sales (with visible front error partial) and an alert on the success screen for allowed stocks gone negative. Also fixed the htmx 2.0 quirk that silently ignores 4xx responses.
+
+**Pourquoi / Why :** Risque comptable reel : le flag d'autorisation etait sans effet, et l'utilisateur n'avait aucun feedback. Antoine a confirme le scenario en une journee de tests.
+/ Real accounting risk: the authorization flag had no effect, and the user got no feedback. Antoine confirmed the scenario in a day of testing.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `inventaire/services.py` | `decrementer_pour_vente` decremente toujours (plus de raise), retourne `True` si stock devenu negatif |
+| `laboutik/views.py` | +`_valider_stock_panier()` + `_formater_erreurs_stock()` ; `except Stock.DoesNotExist` (au lieu d'`except Exception`) ; signature `_creer_lignes_articles*` retourne tuple `(lignes, produits_stock_negatif)` ; validation amont + propagation au contexte dans 3 vues de paiement (`_payer_par_carte_ou_cheque`, `_payer_en_especes`, `_payer_par_nfc` + `payer_complementaire`) ; enrichissement tarifs poids/mesure avec `stock_disponible` + `autoriser_hors_stock` |
+| `laboutik/templates/laboutik/partial/hx_messages.html` | Refonte : icone contextuelle (warning / info / success / error), text-wrap balance, tabular-nums, contraste max |
+| `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | +zone alerte stock negatif (`.stock-negatif-box`) sous l'ecran de succes |
+| `laboutik/templates/laboutik/base.html` | +listener global `htmx:beforeSwap` qui force le swap sur 400/422 (corrige aussi bug 1 sortie de caisse 0€) |
+| `laboutik/static/js/tarif.js` | Garde null sur `eleQuantity` ; bouton OK numpad enrichi avec `data-stock-disponible` + `data-autoriser-hors-stock` ; alerte inline si quantite > stock dispo (vente hors stock interdite) ; masquage auto a la prochaine saisie |
+| `laboutik/static/js/addition.js` | `additionDisplayPaymentTypes()` ferme l'overlay tarif via `tarifClose()` (corrige `htmx:oobErrorNoTarget` post-vente sur broadcast WS) |
+| `laboutik/static/css/overlay.css` | +classes `.alerte-messages*`, `.stock-negatif-*`, `.tarif-numpad-alerte-stock` (contraste max, bordure noire 2px, sans animation) |
+| `tests/pytest/test_inventaire.py` | Test `test_decrementer_stock_bloquant_leve_exception` adapte au nouveau contrat (retourne `True`, plus de raise) + 1 nouveau test |
+| `tests/pytest/test_stock_negatif.py` | Nouveau, 9 tests : validation amont (5), retour tuple `_creer_lignes_articles` (2), flow paiement HTTP bloque/alerte (2) |
+| `tests/pytest/test_billetterie_pos.py` | Adaptation : 6 destructurations `lignes, _ = _creer_lignes_articles(...)` |
+| `tests/pytest/test_pos_vider_carte.py` | `carte_caissier_vc` passe en `get_or_create()` (corrige IntegrityError teardown VCT00001) |
+
+### Logique en 4 cas / 4-case logic
+| `autoriser_vente_hors_stock` | Stock suffisant ? | Comportement / Behavior |
+|---|---|---|
+| **True** | Oui | Vente normale, ecran succes classique |
+| **True** | Non | **Vente passe** + alerte « Stock negatif » sur ecran de succes |
+| **False** | Oui | Vente normale |
+| **False** | Non | **Vente bloquee** + alerte inline pave numerique (front) OU partial 400 (serveur si bypass front). Aucune ecriture en DB. |
+
+### Migration
+- **Migration necessaire / Migration required :** Non / No
+- Aucun changement de modele. Pure refacto de signature + classes CSS.
+
+### Tests
+- 56 tests pytest verts (`test_inventaire` 28 + `test_stock_negatif` 9 + `test_paiement_especes_cb` 7 + `test_billetterie_pos` 12)
+- Erreur de teardown pre-existante sur `test_billetterie_pos` (catégorie 2, `BaseBillet_ticket relation does not exist`) — le test passe.
+
+### Effet de bord positif
+- Le listener global `htmx:beforeSwap` corrige aussi le **bug 1** (sortie de caisse 0€ → 400 silencieux) signale par Antoine. Tous les partials d'erreur 400/422 du POS sont desormais swappes correctement.
+
 ## Session 34 — Scan QR carte V2 (fedow_core) / QR card scan V2
 
 **Quoi / What :** Bascule du flow public "scan QR carte cashless" de `fedow_connect/fedow_api.py` (HTTP vers Fedow distant) vers `fedow_core/services.py` (DB direct). Scope : scan, identification user (link), fusion wallet ephemere, perte de carte.

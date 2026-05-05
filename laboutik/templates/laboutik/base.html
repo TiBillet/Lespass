@@ -163,6 +163,30 @@
 			}
 		})
 
+		/**
+		 * Force le swap HTMX sur les reponses 400 et 422 (validation cote serveur).
+		 * Par defaut, htmx 2.0 ignore les 4xx (responseHandling = no-swap), donc
+		 * un message d'erreur renvoye par le serveur n'est jamais affiche cote
+		 * caisse. Cette config permet au partial hx_messages.html (renvoye en 400)
+		 * d'etre swappe normalement dans la cible HTMX.
+		 *
+		 * Concerne notamment :
+		 *  - sortie de caisse a 0 (bug 1)
+		 *  - vente refusee pour stock insuffisant (bug 8)
+		 *  - toute autre validation cote serveur qui renvoie hx_messages.html en 400/422.
+		 *
+		 * / Force HTMX swap on 400 and 422 responses (server-side validation).
+		 * htmx 2.0 ignores 4xx by default. This config allows server error partials
+		 * to be swapped normally into the HTMX target.
+		 */
+		document.addEventListener('htmx:beforeSwap', function (event) {
+			const status = event.detail.xhr.status
+			if (status === 400 || status === 422) {
+				event.detail.shouldSwap = true
+				event.detail.isError = false
+			}
+		})
+
 	</script>
 	{% block script %} {% endblock script %}
 	<div id="event-organizer" class="hide"></div>

@@ -62,6 +62,15 @@ function tarifSelection(event) {
 			const prixReference = tarif.prix_reference_label || '/kg'
 			const diviseur = (uniteSaisie === 'cl') ? 100 : 1000
 
+			// Donnees stock pour la garde JS (bug 8) : permet de bloquer le submit
+			// cote front quand vente hors stock interdite et quantite > stock dispo.
+			// / Stock data for the JS guard (bug 8): blocks submit client-side when
+			// out-of-stock sale is forbidden and quantity > available stock.
+			const stockDisponible = (tarif.stock_disponible !== undefined && tarif.stock_disponible !== null)
+				? tarif.stock_disponible
+				: ''
+			const autoriserHorsStock = tarif.autoriser_hors_stock === false ? 'false' : 'true'
+
 			boutonsHtml += `
 				<div class="tarif-btn tarif-btn-poids" data-testid="tarif-btn-poids-${tarif.price_uuid}">
 					<div class="tarif-btn-label">
@@ -96,9 +105,13 @@ function tarifSelection(event) {
 								data-currency="${currencySafe}"
 								data-unite-saisie="${escapeHtml(uniteSaisie)}"
 								data-diviseur="${diviseur}"
+								data-stock-disponible="${stockDisponible}"
+								data-autoriser-hors-stock="${autoriserHorsStock}"
 								data-testid="tarif-numpad-ok-${tarif.price_uuid}"
 							>OK</button>
 						</div>
+						<div class="tarif-numpad-alerte-stock" id="tarif-numpad-alerte-${tarif.price_uuid}"
+							role="alert" aria-live="polite" style="display: none;"></div>
 					</div>
 				</div>
 			`
@@ -230,6 +243,13 @@ function tarifSelection(event) {
 				const valueEl = zone.querySelector('.tarif-numpad-value')
 				const totalEl = zone.querySelector('.tarif-numpad-total')
 
+				// Masquer l'alerte stock quand l'utilisateur change la saisie
+				// / Hide stock alert when user changes the input
+				const alerteStockEl = zone.querySelector('.tarif-numpad-alerte-stock')
+				if (alerteStockEl) {
+					alerteStockEl.style.display = 'none'
+				}
+
 				if (digit === 'C') {
 					// Effacer la saisie / Clear input
 					valueEl.textContent = '0'
@@ -244,6 +264,34 @@ function tarifSelection(event) {
 					if (quantiteSaisie <= 0) {
 						return
 					}
+
+					// Garde stock cote front (bug 8).
+					// Si vente hors stock interdite ET quantite saisie > stock disponible,
+					// on bloque cote front pour eviter un round-trip serveur.
+					// Le serveur reste autoritaire (validation amont via _valider_stock_panier).
+					// / Front-side stock guard (bug 8). If out-of-stock sale is forbidden and
+					// quantity > available stock, block client-side to avoid a server round-trip.
+					// Server remains authoritative.
+					const autoriserHorsStock = btn.dataset.autoriserHorsStock !== 'false'
+					const stockDisponibleStr = btn.dataset.stockDisponible
+					const stockDisponible = (stockDisponibleStr === '' || stockDisponibleStr === undefined)
+						? null
+						: Number(stockDisponibleStr)
+					if (!autoriserHorsStock && stockDisponible !== null && quantiteSaisie > stockDisponible) {
+						const priceUuid = btn.dataset.priceUuid
+						const alerteEl = document.querySelector(`#tarif-numpad-alerte-${priceUuid}`)
+						if (alerteEl) {
+							const uniteSaisieAlerte = btn.dataset.uniteSaisie || ''
+							alerteEl.innerHTML = `
+								<i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+								Stock insuffisant : ${quantiteSaisie}${uniteSaisieAlerte} demandes,
+								${stockDisponible}${uniteSaisieAlerte} disponibles.
+							`
+							alerteEl.style.display = 'block'
+						}
+						return
+					}
+
 					const prixUnitaireCentimes = Number(btn.dataset.prixCentimes)
 					const diviseur = Number(btn.dataset.diviseur)
 					const prixCalculeCentimes = Math.round(quantiteSaisie / diviseur * prixUnitaireCentimes)
@@ -402,14 +450,21 @@ function addArticleWithPrice(productUuid, priceUuid, prixCentimes, displayName, 
 		quantity = existingInput ? Number(existingInput.value) + 1 : 1
 	}
 
-	// Incrémente la quantité sur la tuile article
-	// / Increment quantity on article tile
+	// Incrémente la quantité sur la tuile article.
+	// Pendant l'overlay tarif (vrac/multi-tarif), #products est remplacé : la tuile
+	// n'existe pas dans le DOM. On guard null pour eviter un TypeError noye dans
+	// le try/catch (faux negatif en debug).
+	// / Increment quantity on article tile.
+	// During the rate overlay, #products is replaced: the tile is not in the DOM.
+	// Guard null to avoid a TypeError swallowed by try/catch.
 	try {
 		const eleQuantity = document.querySelector(`#article-quantity-number-${productUuid}`)
-		let tileQty = Number(eleQuantity.innerText)
-		tileQty++
-		eleQuantity.innerText = tileQty
-		eleQuantity.classList.add('badge-visible')
+		if (eleQuantity) {
+			let tileQty = Number(eleQuantity.innerText)
+			tileQty++
+			eleQuantity.innerText = tileQty
+			eleQuantity.classList.add('badge-visible')
+		}
 	} catch (error) {
 		console.log('-> tarif.js - addArticleWithPrice, tile update error:', error)
 	}

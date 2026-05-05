@@ -290,7 +290,18 @@ function additionReset() {
 function additionDisplayPaymentTypes() {
 	let nbArticles = 0
 	const form = document.querySelector('#addition-form')
-	
+
+	// Fermer l'overlay tarif s'il est encore ouvert (vrac/multi-tarif).
+	// Sans ca, #products contient toujours l'overlay numpad au moment du paiement
+	// et le broadcast WebSocket post-vente ne trouve pas les badges stock cibles
+	// (htmx:oobErrorNoTarget). Cf. Session 35 §10.2.
+	// / Close the rate overlay if still open. Without this, #products holds the
+	// numpad overlay during payment and the post-sale WS broadcast can't find
+	// the stock badge targets (htmx:oobErrorNoTarget).
+	if (typeof tarifClose === 'function') {
+		tarifClose()
+	}
+
 	// Compte les articles (inputs repid-*)
 	form.querySelectorAll('input').forEach(ele => {
 		const name = ele.getAttribute('name')

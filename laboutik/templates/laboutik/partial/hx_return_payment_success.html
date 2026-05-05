@@ -73,6 +73,35 @@ FLUX :
 
   {% endif %}
 
+  <!--
+  Alerte stock négatif : un ou plusieurs produits ont un stock < 0 après cette vente.
+  N'apparaît QUE si autoriser_vente_hors_stock=True. Sinon la vente aurait
+  été bloquée en amont (cf. _valider_stock_panier dans laboutik/views.py).
+  / Negative stock alert: one or more products have stock < 0 after this sale.
+  Only appears if autoriser_vente_hors_stock=True. Otherwise the sale would have
+  been blocked upstream (see _valider_stock_panier in laboutik/views.py).
+  -->
+  {% if produits_stock_negatif %}
+  <div class="stock-negatif-box"
+       data-testid="alerte-stock-negatif"
+       role="alert">
+    <div class="stock-negatif-titre">
+      <i class="fas fa-exclamation-triangle stock-negatif-icone" aria-hidden="true"></i>
+      <span>{% translate "Stock négatif" %}</span>
+    </div>
+    <ul class="stock-negatif-liste">
+      {% for produit in produits_stock_negatif %}
+      <li data-testid="produit-stock-negatif">
+        {{ produit.name }} ({{ produit.quantite }} {{ produit.unite }})
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="stock-negatif-hint">
+      {% translate "Vous pouvez bloquer la vente via le menu clic long sur cet article." %}
+    </p>
+  </div>
+  {% endif %}
+
   <!-- Bouton imprimer le ticket de vente / Print receipt button -->
   {% if uuid_transaction and uuid_pv %}
   <div class="bt-basic-container bt-imprimer-ticket"
