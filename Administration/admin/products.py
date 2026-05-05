@@ -524,7 +524,7 @@ class POSPriceInline(BasePriceInline):
 
     fields = (
         "name",
-        "prix",
+        ("prix", "free_price"),
         "poids_mesure",
         "contenance",
         "non_fiduciaire",
