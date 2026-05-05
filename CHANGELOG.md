@@ -1,5 +1,29 @@
 # Changelog / Journal des modifications
 
+## Session 38 — Alerte plein ecran sortie de caisse / Cash withdrawal full-screen alert (2026-05-05)
+
+**Quoi / What :** Refonte du rendu d'erreur de la sortie de caisse (bug 1 du retour Antoine 2026-05-04, residuel post-Session 37). Le partial generique `hx_messages.html` etait inadapte au contexte `#ventes-zone` : trop petit, sans contraste suffisant, et son `<c-bt.return />` (selecteur defaut `#messages`) tapait dans le vide. Nouveau partial dedie `hx_alerte_ventes_zone.html` calque sur le pattern card de `hx_sortie_succes.html` : meme animation `correction-slide-in`, meme bouton retour transparent, gradients de couleur par `msg_type` (warning / error / info / success). Bouton retour HTMX vers le formulaire de sortie de caisse avec `uuid_pv` + `tag_id_cm` conserves dans la query string (l'utilisateur retombe sur son contexte caisse, pas sur le Ticket X).
+/ Reworked the cash withdrawal error rendering (residual bug 1 from Antoine's 2026-05-04 review, after Session 37). The generic `hx_messages.html` partial was unfit for the `#ventes-zone` context: too small, low contrast, and its `<c-bt.return />` (default selector `#messages`) hit nothing. New dedicated partial `hx_alerte_ventes_zone.html` mirrors the success card pattern from `hx_sortie_succes.html`: same `correction-slide-in` animation, same transparent back button, color gradients by `msg_type`. HTMX back button targets the cash withdrawal form with `uuid_pv` + `tag_id_cm` preserved (user lands back on their cash drawer context, not on Ticket X).
+
+**Pourquoi / Why :** L'utilisateur voyait bien le message "Aucune coupure saisie" mais (1) il etait moche et peu visible, (2) le bouton retour ne ramenait pas au formulaire — il fallait recharger la page pour reprendre la saisie.
+/ The user did see the "No denomination entered" message but (1) it was ugly and barely visible, (2) the back button didn't return to the form — they had to reload the page to retry input.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/templates/laboutik/partial/hx_alerte_ventes_zone.html` | **Nouveau / New.** Partial plein ecran avec card coloree, icone, message, bouton retour HTMX optionnel (`back_url`) |
+| `laboutik/views.py` | `creer_sortie_de_caisse` : calcul `back_url` en debut de vue, 3 renders d'erreur basculent sur `hx_alerte_ventes_zone.html`, dedup `params_ventes` (calcule une fois, reutilise pour succes) |
+| `laboutik/static/css/sortie_de_caisse.css` | +section `.alerte-vz-*` : 4 variantes de gradient (warning/error/info/success), bouton retour aligne sur `hx_sortie_succes.html` |
+| `tests/pytest/test_corrections_fond_sortie.py` | +`test_sortie_de_caisse_aucune_coupure_render_alerte_plein_ecran` : verrouille testid card, testid bouton retour, conservation `uuid_pv`+`tag_id_cm`, absence du vieux `alerte-messages` |
+
+### Migration
+- **Migration necessaire / Migration required :** Non / No
+- Aucun changement de modele. Nouveau template + ajouts CSS + reorga vue.
+
+### Tests
+- 22 tests pytest `test_corrections_fond_sortie.py` (21 existants + 1 nouveau) verts.
+- `hx_messages.html` reste intact : zero impact sur Session 37 (validation stock paiement, qui cible `#messages`).
+
 ## Session 37 — Stock vrac negatif et alerte ecran de validation / Vrac negative stock and validation screen alert (2026-05-05)
 
 **Quoi / What :** Correction du bug 8 du retour Antoine 2026-05-04. Le flag `autoriser_vente_hors_stock` etait contourne par un `except Exception: pass` trop large dans `_creer_lignes_articles`, ce qui creait des "ventes fantomes" comptablement validees mais avec stock non decremente. Ajout d'une validation amont pour bloquer les ventes interdites (avec partial d'erreur visible cote front) et d'une alerte sur l'ecran de succes pour les stocks autorises passes en negatif. Correction au passage du quirk htmx 2.0 qui ignore les reponses 4xx.

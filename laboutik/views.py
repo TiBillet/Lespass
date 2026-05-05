@@ -2454,6 +2454,22 @@ class CaisseViewSet(viewsets.ViewSet):
 
         LOCALISATION : laboutik/views.py
         """
+        # URL de retour vers le formulaire de sortie de caisse, conservant uuid_pv
+        # et tag_id_cm pour reconstruire le contexte (PV courant + carte manager).
+        # Calcule en debut de vue pour etre disponible dans tous les renders d'erreur.
+        # / Back URL to the cash withdrawal form, preserving uuid_pv and tag_id_cm.
+        # Computed early to be available in all error renders.
+        uuid_pv_brut = request.POST.get("uuid_pv", "")
+        tag_id_cm_brut = request.POST.get("tag_id_cm", "")
+        params_ventes = (
+            f"uuid_pv={uuid_pv_brut}&tag_id_cm={tag_id_cm_brut}"
+            if uuid_pv_brut
+            else ""
+        )
+        back_url_form = reverse("laboutik-caisse-sortie_de_caisse")
+        if params_ventes:
+            back_url_form = f"{back_url_form}?{params_ventes}"
+
         # Validation du PV et de la note via serializer DRF
         # / Validate POS and note via DRF serializer
         from laboutik.serializers import SortieDeCaisseSerializer
@@ -2463,10 +2479,11 @@ class CaisseViewSet(viewsets.ViewSet):
             premiere_erreur = list(serializer.errors.values())[0][0]
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_alerte_ventes_zone.html",
                 {
                     "msg_type": "warning",
                     "msg_content": str(premiere_erreur),
+                    "back_url": back_url_form,
                 },
                 status=400,
             )
@@ -2481,10 +2498,11 @@ class CaisseViewSet(viewsets.ViewSet):
         except PointDeVente.DoesNotExist:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_alerte_ventes_zone.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Point de vente introuvable"),
+                    "back_url": back_url_form,
                 },
                 status=404,
             )
@@ -2515,10 +2533,11 @@ class CaisseViewSet(viewsets.ViewSet):
         if montant_total_centimes <= 0:
             return render(
                 request,
-                "laboutik/partial/hx_messages.html",
+                "laboutik/partial/hx_alerte_ventes_zone.html",
                 {
                     "msg_type": "warning",
                     "msg_content": _("Aucune coupure saisie"),
+                    "back_url": back_url_form,
                 },
                 status=400,
             )
@@ -2538,11 +2557,10 @@ class CaisseViewSet(viewsets.ViewSet):
             f"depuis PV {point_de_vente.name} par {request.user}"
         )
 
-        # Propager les params pour le bouton retour
-        # / Propagate params for the back button
-        tag_id_cm = request.POST.get("tag_id_cm", "")
-        params_ventes = f"uuid_pv={uuid_pv}&tag_id_cm={tag_id_cm}" if uuid_pv else ""
-
+        # params_ventes est deja calcule en debut de vue pour les renders d'erreur ;
+        # on le reutilise tel quel pour le bouton retour de l'ecran de succes.
+        # / params_ventes is already computed at the top of the view for error renders;
+        # we reuse it as-is for the success screen back button.
         montant_euros = f"{montant_total_centimes / 100:.2f}"
         return render(
             request,
