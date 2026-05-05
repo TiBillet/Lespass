@@ -1,9 +1,54 @@
 # LaBoutik — Index des tâches
 
 > Suivi simplifié de l'avancement. Le détail complet est dans [`PLAN_LABOUTIK.md`](PLAN_LABOUTIK.md).
-> Les comptes-rendus de sessions sont dans les dossiers `Session 01 - construction UX/` et `Session 02 - Billetterie POS et ventes/`.
 >
-> Dernière mise à jour : 2026-04-20 (session 31 Phases A-B-C-D terminees, 24 tests pytest verts)
+> **Organisation des sessions :**
+> - [`DONE/`](DONE/) — sessions terminées et validées (01 → 06 Cascade, 30 → 34)
+> - [`TODO/`](TODO/) — sessions en attente d'implémentation (06 Rapport temps réel, 35, 36)
+> - `excalidraw/` — schémas et diagrammes
+>
+> Dernière mise à jour : 2026-05-05 (rangement DONE/TODO + intégration retour Antoine 2026-05-04 dans Sessions 35 et 36)
+
+---
+
+## À faire — sessions prioritaires (TODO/)
+
+### Session 35 — Audit front HTMX et fuite NfcReader (audit fait, fix non implémenté)
+
+Diagnostic : 1er paiement cashless OK, 2ème KO. Cause : zombies `NfcReader` jamais
+arrêtés, `eventsOrganizer` qui avale les erreurs en silence.
+**Élargi par retour Antoine 2026-05-04 (§10) :** même classe de bug sur
+`_tarifOverlayOriginalContent`, `additionReset()` incomplet, bouton RETOUR
+identification client.
+
+Fix : ~30 lignes initialement, mais scope élargi à 6 actions chirurgicales
+(singleton NfcReader, console.warn event-bus, fermeture overlay tarif sur
+RESET / changement catégorie, audit champs `additionReset`, comportement
+uniforme `<c-bt.return />`).
+
+→ `TODO/Session 35 - Audit front HTMX et NfcReader.md`
+
+### Session 36 — UI écrans paiement POS (design validé, périmètre élargi)
+
+Refonte CSS/HTML de `hx_complement_paiement.html`, `hx_funds_insufficient.html`,
+`hx_display_type_payment.html` (3 lots, ~2h).
+**Élargi par retour Antoine 2026-05-04 :** ajouter `hx_return_payment_success.html`
+(monnaie restante peu lisible) + `<select>` du récap ventes (flèche manquante).
+3 bugs JS pour Nico documentés (htmx:targetError, viderCarteManageForm,
+_obtenir_ou_creer_wallet).
+
+**Prérequis** : fix Session 35 (sinon le swap `#confirm` reste cassé).
+
+→ `TODO/Session 36 - UI ecrans paiement POS.md`
+
+### Session 06 — Rapport temps réel (plan rédigé, non implémenté)
+
+Bouton « Rapport en cours » sur la changelist des clôtures de caisse. Ouvre
+dans un nouvel onglet un rapport comptable complet calculé en temps réel
+depuis la dernière clôture (13 sections de `RapportComptableService`).
+Tasks 1 à 6 prêtes (vue, template, bouton admin, traductions, tests, CHANGELOG).
+
+→ `TODO/Session 06 - Rapport temps reel.md`
 
 ---
 
@@ -112,7 +157,7 @@ Cascade de débit NFC : TNF (cadeau) → TLF (local) → FED (fédéré), ordre 
 N LigneArticle par article (1 par asset débité), qty décimale, amount entier centimes.
 Paiement complémentaire (espèces/CB/2ème carte) si la cascade ne couvre pas tout.
 Tarifs non-fiduciaires (TIM/FID) via `Price.non_fiduciaire` + débit direct.
-Session 2026-04-08. Spec : `Session 06 - Cascade multi-asset NFC/DESIGN_CASCADE_MULTI_ASSET_NFC.md`.
+Session 2026-04-08. Spec : `DONE/Session 06 - Cascade multi-asset NFC/DESIGN_CASCADE_MULTI_ASSET_NFC.md`.
 
 - [x] `Price.non_fiduciaire` BooleanField + `clean()` validation (migration 0209)
 - [x] `POSPriceInline` : `non_fiduciaire` + `asset` conditionnel (filtré TIM/FID)
@@ -224,7 +269,7 @@ Sessions 10-11-12 (bouton).
 ### 6. Conformité LNE + Rapports Comptables ← PROCHAIN
 
 Conformité au référentiel LNE v1.7 (21 exigences). Design spec validé le 2026-03-30.
-Sessions 12 à 19. Voir `TECH DOC/Laboutik sessions/Session 02 - Billetterie POS et ventes/specs/2026-03-30-conformite-lne-caisse-design.md`.
+Sessions 12 à 19. Voir `DONE/Session 02 - Billetterie POS et ventes/specs/2026-03-30-conformite-lne-caisse-design.md`.
 
 **Session 12 — Fondation HMAC + service de calcul** (Ex.3, Ex.8) ✅ FAIT
 - [x] Clé HMAC par tenant (Fernet) dans LaboutikConfiguration
@@ -390,7 +435,7 @@ Voir sessions 16 et 17 ci-dessus.
 
 Remplacement du PriceInline unique (TabularInline conditionnel) par 4 StackedInline
 spécifiques par proxy product. Session 26.
-Spec : `Session 04 - PriceInline refactoring/DESIGN_PRICEINLINE_REFACTORING.md`.
+Spec : `DONE/Session 04 - PriceInline refactoring/DESIGN_PRICEINLINE_REFACTORING.md`.
 
 - [x] **Session 26 — 4 StackedInline par proxy + champs conditionnels JS** :
   - [x] `BasePriceInline` (name, prix, free_price, publish, order)
@@ -407,7 +452,7 @@ Spec : `Session 04 - PriceInline refactoring/DESIGN_PRICEINLINE_REFACTORING.md`.
 ### Inventaire et stock POS ✅
 
 Gestion de stock optionnelle par produit POS. App `inventaire` (TENANT_APP).
-Spec : `Session 03 - Inventaire et stock/SPEC_INVENTAIRE.md`.
+Spec : `DONE/Session 03 - Inventaire et stock/SPEC_INVENTAIRE.md`.
 
 - [x] **Session 23 — Modèles + services + fondation** : app `inventaire`, mod��les Stock + MouvementStock, `contenance` sur Price, `module_inventaire` sur Configuration, service décrémentation atomique `F()`, branchement dans `_creer_lignes_articles()`
 - [x] **Session 24 — Admin Unfold + API + actions rapides** : StockInline (quantité read-only), MouvementStockAdmin avec ajout (réception/ajustement/perte/offert/DM), sidebar conditionnelle, ajustement admin, StockViewSet, DebitMetreViewSet, résumé stock clôture, templates HTMX, 27 tests pytest, 427 total, 0 régression
@@ -416,7 +461,7 @@ Spec : `Session 03 - Inventaire et stock/SPEC_INVENTAIRE.md`.
 ### 8. Multi-Tarif UX + Poids/Mesure ⏳ EN COURS
 
 Refonte overlay tarif + vente au poids/volume.
-Spec : `Session 05 - Multi-tarif et poids-mesure/DESIGN_MULTI_TARIF_POIDS_MESURE.md`
+Spec : `DONE/Session 05 - Multi-tarif et poids-mesure/DESIGN_MULTI_TARIF_POIDS_MESURE.md`
 
 - [x] **Session 28 — Backend + admin + overlay multi-clic + pavé numérique** :
   - [x] `Price.poids_mesure` BooleanField + `LigneArticle.weight_quantity` IntegerField (migration 0214)
@@ -451,7 +496,7 @@ Migration de la recharge FED (monnaie fédérée) vers `fedow_core` en accès DB
 Plus de passage par le serveur Fedow distant pour la recharge. Les nouveaux tenants
 utilisent la V2 ; les anciens (avec `Configuration.server_cashless` renseigné) restent
 sur le flow legacy.
-Spec : `Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md`.
+Spec : `DONE/Session 31 - Recharge FED V2/SPEC_RECHARGE_FED_V2.md`.
 
 Principe : séparation stricte **moyen** (Paiement_stripe, remplaçable par autre PSP)
 et **résultat** (Transaction REFILL + crédit Token, indépendant du PSP). Contrat PSP
@@ -485,7 +530,7 @@ documenté dans `fedow_core/PSP_INTERFACE.md`.
 Migration du flow public "scan QR cashless" de `fedow_connect` (HTTP Fedow distant)
 vers `fedow_core` (DB direct). Dispatch V1/V2 via `Configuration.server_cashless`.
 Les nouveaux tenants utilisent la V2, les legacy restent sur V1 inchangé.
-Spec : `Session 34 - Scan QR carte V2/SPEC_SCAN_QR_CARTE_V2.md`.
+Spec : `DONE/Session 34 - Scan QR carte V2/SPEC_SCAN_QR_CARTE_V2.md`.
 
 Principe : **CarteService** dans `fedow_core/services.py` avec 4 méthodes
 (`scanner_carte`, `lier_a_user`, `declarer_perdue`, `lister_cartes_du_user`)
@@ -520,7 +565,7 @@ Aucune migration de schema (Option 3 YAGNI).
   **Total : 16 tests pytest verts + 0 régression.**
 
 - [ ] **Task 8 — Tests E2E Playwright (reportée)** : 19 scénarios documentés dans
-  `Session 34 - Scan QR carte V2/TESTS_E2E_A_FAIRE.md`. Reportée suite à incident
+  `DONE/Session 34 - Scan QR carte V2/TESTS_E2E_A_FAIRE.md`. Reportée suite à incident
   DB (teardown trop agressif a vidé `Configuration` via cascade). Règle stricte
   "zéro teardown agressif" documentée dans `tests/PIEGES.md` section 12.4.
 
