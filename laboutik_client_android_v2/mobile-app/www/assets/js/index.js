@@ -1,25 +1,31 @@
 import {
   getDevicesStatusAndShow,
   awaitDevicesOk,
-  getConfigurationAndSave,
+  getConfFile,
   showLogs,
   managedPinCode,
   updateCurrentServerAndGoServer
 } from "./modules/utils.js"
 import { showMainContent } from './modules/renderHtml.js'
 
+
 /**
  * wait cordova (devices activation)
  */
 document.addEventListener('deviceready', async () => {
-  // 1  devices status
+  window.state = {}
+  const confFile = await getConfFile()
+  // étape 1/init - affectation des propriétées de state 
+  for (const key in confFile) {
+    state[key] = confFile[key]
+  }
+  state['step'] = 'init'
+
+  // 2 required devices status
   const result = getDevicesStatusAndShow()
   if (result.nfcStatus !== 'enabled' || result.networkOK !== true) {
     await awaitDevicesOk()
   }
-
-  // 2 read configuration
-  const confFile = await getConfigurationAndSave()
 
   // 3 - affiche la liste des serveurs et le "boutan add place"
   showMainContent(confFile)

@@ -1,6 +1,6 @@
 // https://github.com/nerdy-harry/phonegap-nfc-api31?tab=readme-ov-file#nfcshowsettings
 
-let NfcReader = class {
+const NfcReader = class {
 	constructor() {
 		this.modeNfc = ''
 		this.uuidConnexion = null

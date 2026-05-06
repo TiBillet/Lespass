@@ -12,46 +12,88 @@
 import { NFC } from 'nfc-pcsc'
 
 let nfcInstance = null
-let currentSocket = null
+let currentReader = null
+let nfcStatus = 'disable'  // 'available' | 'disable' | 'error'
 
-export function initNfcReader(socket) {
-  currentSocket = socket
+// get status
+export function getStatus(socket) {
+  socket.emit('nfcMessage', { status: nfcStatus })
+  // console.log("-> nfc status:", nfcStatus)
+}
 
-  if (nfcInstance !== null) {
-    console.log('NFC déjà initialisé, socket mis à jour')
-    return
-  }
+// stop listening
+export function stopListening() {
+  return new Promise((resolve) => {
+    try {
+      if (currentReader && typeof currentReader.close === 'function') {
+        currentReader.close()
+      }
+    } catch (err) {
+      console.error('Erreur fermeture lecteur:', err.message)
+    } finally {
+      currentReader = null
+    }
 
+    try {
+      if (nfcInstance && typeof nfcInstance.close === 'function') {
+        nfcInstance.close()
+      }
+    } catch (err) {
+      console.error('Erreur fermeture NFC:', err.message)
+    } finally {
+      nfcInstance = null
+    }
+
+    nfcStatus = 'disable'
+    // console.log("-> nfc stop listening")
+    resolve()
+  })
+}
+
+// start listening
+export async function startListening(socket, data) {
+  await stopListening()
   function emit(msg) {
-    if (currentSocket) currentSocket.emit('nfcMessage', msg)
+    if (socket) socket.emit('nfcMessage', msg)
   }
 
+  console.log("-> nfc start listening")
   nfcInstance = new NFC()
 
   nfcInstance.on('reader', reader => {
+    currentReader = reader
+    // status
+    nfcStatus = 'available'
 
-    emit({ status: 'available' })
+    // get status
+    if (data === "nfcReaderStatus") {
+      nfcStatus = 'available'
+      emit({ status: nfcStatus })
+      stopListening()
+    }
 
+    // get read card
     reader.on('card', card => {
-      emit({ tagId: card.uid })
+      console.log('nfc - tagId =', card.uid, '  --  data =', data)
+      emit({ tagId: card.uid, data })
+      stopListening()
     })
 
-
+    // status
     reader.on('error', err => {
-      // console.log(`${reader.reader.name}  an error occurred`, err);
-      emit({ errorNfcReader: err })
+      nfcStatus = 'error'
     })
 
+    // status
     reader.on('end', () => {
-      // console.log(`${reader.reader.name}  device removed`)
-      emit({ status: 'disable' })
+      currentReader = null
+      nfcStatus = 'disable'
     })
 
   });
 
   nfcInstance.on('error', err => {
-    // console.log('an error occurred', err);
-    emit({ errorNfc: err })
+    nfcStatus = 'error'
   })
 }
 

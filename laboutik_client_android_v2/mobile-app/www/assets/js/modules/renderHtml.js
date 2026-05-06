@@ -2,10 +2,10 @@ import { putLog } from './utils.js'
 import { updateCurrentServerAndGoServer, deleteServer } from "./utils.js"
 
 
-export function showDevicesStatus(ctx) {
+export function showDevicesStatus(state) {
   let alertContent = '<div class="status-body">'
   // network
-  if (ctx.networkOK === false) {
+  if (state.networkStatus === false) {
     alertContent += `
     <div class="status-item">
       <div class="status-messages">
@@ -24,7 +24,7 @@ export function showDevicesStatus(ctx) {
   }
 
   // not_available / enabled / disabled
-  if (ctx.nfcStatus !== 'enabled') {
+  if (state.nfcStatus !== 'enabled') {
     alertContent += `
     <div class="status-item">
       <div class="status-messages">
@@ -32,7 +32,7 @@ export function showDevicesStatus(ctx) {
           <img src="http://localhost/assets/images/no-nfc.svg" />
         </div>`
 
-    if (ctx.nfcStatus === 'disabled') {
+    if (state.nfcStatus === 'disabled') {
       alertContent += `
         <div class="status-messages-info">
           <div class="BF-ligne">NFC disabled</div>
@@ -65,7 +65,7 @@ function showInputPinCode() {
 }
 
 export function showMainContent(confFile) {
-  // putLog('info', '-> showMainContent', confFile)
+  putLog('info', '-> showMainContent', confFile)
   let content = `<div class="main-content">
     <div class="main-content-servers">`
   // show servers list

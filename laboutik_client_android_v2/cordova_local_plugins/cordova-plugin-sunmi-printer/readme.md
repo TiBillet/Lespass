@@ -1,83 +1,98 @@
-# plugin cordova
-- langage : kotlin
+# cordova-plugin-sunmi-printer
 
-# structure du plugin cordova
-```
-cordova-plugin-sunmi-printer/
-├── plugin.xml                         # Fichier de configuration du plugin
-├── src/                               # Code natif pour les différentes plateformes
-│   └── android/                       # Dossier spécifique à la plateforme Android
-│       └── SunmiPrinterPlugin.kt      # Code Kotlin pour l'intégration avec l'imprimante Sunmi
-│
-├── www/                               # Dossier contenant le code JavaScript du plugin
-│   └── sunmiPrinterPlugin.js          # Fichier JavaScript exposant l'API du plugin
-│
-├── README.md                          # Documentation du plugin
-├── package.json                       # Fichier de configuration npm pour le plugin
-└── LICENSE                            # Licence du plugin
+Plugin Cordova pour imprimer sur les terminaux **Sunmi** (V2, D3mini, etc.) via le SDK `com.sunmi:printerlibrary:1.0.23`.
+
+## Prérequis
+
+Terminal Sunmi avec le service `woyou.aidlservice.jiuiv5` préinstallé. Ce plugin ne fonctionne pas sur les appareils non-Sunmi.
+
+## Installation
+
+```bash
+cordova plugin add /cordova_local_plugins/cordova-plugin-sunmi-printer
 ```
 
+## Utilisation
 
-# package
-package re.filaos.sunmiprinterplugin
+Toutes les méthodes retournent une **Promise**.
 
-# fichiers du plugin cordova
+### Exemple : imprimer un ticket
 
-## plugin.xml
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<plugin xmlns="http://apache.org/ns/plugins" id="re.filaos.sunmiprinterplugin" version="1.0.0">
+```javascript
+async function printTicket() {
+  try {
+    // 1. Initialiser le service (obligatoire avant toute impression)
+    await SunmiPrinterPlugin.initSunmiPrinterService();
 
-  <!-- Informations générales sur le plugin -->
-  <name>SunmiPrinterPlugin</name>
-  <description>Plugin Cordova pour imprimer avec les imprimantes Sunmi</description>
-  <author>filaos</author>
-  <license>MIT</license>
+    // 2. Vérifier la disponibilité
+    const ok = await SunmiPrinterPlugin.isPrinterAvailable();
+    if (!ok) {
+      console.error("Imprimante non disponible");
+      return;
+    }
 
-  <!-- Déclaration du module JavaScript -->
-  <js-module src="www/sunmiPrinterPlugin.js" name="sunmiPrinterPlugin">
-    <clobbers target="sunmiPrinterPlugin" />
-  </js-module>
+    // 3. Imprimer
+    await SunmiPrinterPlugin.setAlign(1);                    // 0=gauche, 1=centre, 2=droite
+    await SunmiPrinterPlugin.printText("TIBILLET", 32, true, false);
+    await SunmiPrinterPlugin.lineWrap(1);
+    await SunmiPrinterPlugin.printText("Ticket #12345", 24, false, false);
+    await SunmiPrinterPlugin.printText("15.00 EUR", 28, true, false);
+    await SunmiPrinterPlugin.lineWrap(2);
+    await SunmiPrinterPlugin.printQr("https://tibillet.coop", 8, 0);
+    await SunmiPrinterPlugin.lineWrap(3);
+    await SunmiPrinterPlugin.cutPaper();
 
-  <!-- Déclaration de la plateforme Android -->
-  <platform name="android">
-   
-    <!-- Fichier gradle pour les dépendances -->
-    <framework src="src/android/build-extras.gradle" custom="true" type="gradleReference" />
-
-    <config-file target="AndroidManifest.xml" parent="/*">
-      <!-- Permissions -->
-      <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
-      <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
-      <uses-permission android:name="android.permission.NFC" />
-      <uses-permission android:name="android.permission.BLUETOOTH" />
-      <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-      <!-- Déclaration d'une fonctionnalité matérielle -->
-      <uses-feature android:name="android.hardware.bluetooth" android:required="true" />
-    </config-file>
-
-    <!-- Déclaration du fichier source Kotlin -->
-    <source-file src="src/android/SunmiPrinterPlugin.kt" target-dir="app/src/main/kotlin/re/filaos/sunmiprinterplugin" />
-
-    <!-- Configuration du plugin Kotlin dans Gradle 
-    <config-file target="config.xml" parent="/*">
-      <preference name="AndroidPersistentFileLocation" value="Compatibility" />
-      <preference name="GradlePluginKotlinEnabled" value="true" />
-      <preference name="GradlePluginKotlinCodeStyle" value="official" />
-    </config-file> -->
-
-    <!-- Association de la classe Kotlin/Java à la fonctionnalité du plugin -->
-    <config-file target="res/xml/config.xml" parent="/*">
-      <feature name="SunmiPrinterPlugin">
-        <param name="android-package" value="re.filaos.sunmiprinterplugin.SunmiPrinterPlugin" />
-        <param name="onload" value="true" />
-      </feature>
-    </config-file>
-
-  </platform>
-
-</plugin>
+    console.log("Ticket imprimé");
+  } catch (err) {
+    console.error("Erreur d'impression:", err);
+  }
+}
 ```
 
-await sunmiPrinterPlugin.isPrinterAvailable((retour) => console.log('retour =',retour), (error) => console.log('error =',error))
-await sunmiPrinterPlugin.printText('salut la compagnie',(retour) => console.log('retour =',retour), (error) => console.log('error =',error))
+### API disponible
+
+| Méthode | Arguments | Description |
+|---------|-----------|-------------|
+| `initSunmiPrinterService()` | — | Connecte le service AIDL Sunmi (appeler en premier) |
+| `isPrinterAvailable()` | — | `true` si le service est connecté |
+| `printText(text, size, bold, underline)` | String, Float, Bool, Bool | Texte simple |
+| `setAlign(align)` | Int (0/1/2) | Alignement |
+| `printQr(data, moduleSize, errorLevel)` | String, Int, Int | QR code |
+| `printBarCode(data, symbology, height, width, textPos)` | String + 4 Ints | Code-barres |
+| `printTable(texts[], widths[], aligns[])` | 3 arrays | Colonnes alignées |
+| `lineWrap(n)` | Int | Saut de lignes |
+| `cutPaper()` | — | Coupe du papier |
+| `openDrawer()` | — | Ouvre le tiroir-caisse |
+| `autoOutPaper()` | — | Éjection auto du papier |
+| `updatePrinterState()` | — | État matériel (int) |
+| `printBitmap(base64)` | String Base64 | Image Base64 → Bitmap → impression (voir ci-dessous) |
+
+### Impression d'image
+
+**Formats supportés** : PNG, JPEG, BMP (décodage via `BitmapFactory` Android).
+
+**Préparation côté JS** :
+```javascript
+// Depuis un canvas
+const canvas = document.getElementById('monCanvas');
+const base64 = canvas.toDataURL('image/png').split(',')[1]; // retire le prefixe data:image/...
+
+// Depuis un fichier (FileReader)
+const file = input.files[0];
+const reader = new FileReader();
+reader.onloadend = () => {
+  const base64 = reader.result.split(',')[1];
+  SunmiPrinterPlugin.printBitmap(base64);
+};
+reader.readAsDataURL(file);
+```
+
+**Conseils** :
+- Largeur max : **384 px** (imprimantes thermiques Sunmi 58mm : V2, V2s, D3mini, etc. à 203 DPI).
+- Le préfixe `data:image/...;base64,` doit être retiré avant d'envoyer.
+
+## Debug
+
+```bash
+adb logcat | grep SunmiPrintHelper
+```

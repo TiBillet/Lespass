@@ -92,8 +92,8 @@ export async function awaitDevicesOk() {
 }
 
 /**
- * 
- * @returns {object} - configuration
+ * read a configuration file
+ * @returns {object} - configuration | null
  */
 async function readConfFile() {
   const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
@@ -147,7 +147,7 @@ async function writeFile(confFile) {
   })
 }
 
-export async function getConfigurationAndSave() {
+export async function getConfFile() {
   //confFile = fichier sauvegardé dans dossier app
   let confFile = await readConfFile()
   if (confFile === null) {
@@ -171,9 +171,6 @@ export async function getConfigurationAndSave() {
       { server_url: 'https://lespass11.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-11' },
     ]
     */
-
-    // création confFile
-    await writeFile(confFile)
   }
 
   return confFile

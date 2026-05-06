@@ -152,15 +152,8 @@ object SunmiPrintHelper {
       }
 
     fun printBitmap(bitmap: Bitmap) {
-      /* 
-      withPrinterService { service ->
-        try {
-            service.printBitmap(bitmap, null) // null = callback optionnel
-        } catch (e: RemoteException) {
-            e.printStackTrace()
-            Log.e(TAG, "Erreur lors de l'impression du bitmap")
+        withPrinterService { service ->
+            service.printBitmap(bitmap, null)
         }
-      }
-        */
     }
 }

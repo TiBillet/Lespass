@@ -23,6 +23,24 @@
 let currentConfiguration = null
 const logTypes = ['DANGER', 'WARNING', 'INFO']
 
+
+/**
+ * Is cordova application ?
+ * @public
+ * @returns {boolean}
+ */
+function isCordovaApp() {
+  try {
+    if (window.cordova) {
+      return true
+    }
+  } catch (error) {
+    return false
+  }
+}
+
+
+
 /**
  * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
  * Utilisé pour tout texte dynamique injecté via innerHTML ou insertAdjacentHTML

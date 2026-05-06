@@ -4,6 +4,23 @@ import { env } from '../env.js'
 
 const root = process.cwd(), confFileName = 'configLaboutik.json'
 
+
+export function readfile(path) {
+  // console.log('-> readfile, path =', path)
+  try {
+    const fileExists = fs.existsSync(path)
+    if (fileExists) {
+      const data = fs.readFileSync(path, 'utf8')
+      return data
+    } else {
+      throw new Error("File doesn't exist.")
+    }
+  } catch (error) {
+    console.log(`Read file ${path} :`, error.message)
+    return null
+  }
+}
+
 function readJson(path) {
   // console.log('-> readJson, path =', path)
   try {
@@ -22,12 +39,16 @@ function readJson(path) {
 }
 
 export function writeJson(path, data) {
+  if (typeof(data) !== 'string') {
+    data = JSON.stringify(data)
+  }
   try {
-    fs.writeFileSync(path, JSON.stringify(data, null, 2), 'utf8')
-    return { status: true, msg: '' }
+    const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    fs.writeFileSync(path, content, 'utf8')
+    return { status: true, msg: 'File backup success.' }
   } catch (error) {
     console.log("sauvegarde fichier de configuration,", error.message)
-    return { status: false, msg: error.message }
+    return { status: false, msg: 'File backup error.' }
   }
 }
 
@@ -72,15 +93,28 @@ export async function testNetworkStatus(timeout = 3000) {
   return 'disable'
 }
 
+/**
+ * Retour le fichier de configuration si il existe, sinon env
+ * @returns {object}
+ */
 export function readConfigFile() {
-  // console.log('-> readConfigFile, headers =', headers)
   let configFile
   const configFromFile = readJson(root + '/' + confFileName)
+  // console.log('-> readConfigFile - configFromFile =', configFromFile)
+
   if (configFromFile !== null) {
-    configFile = JSON.parse(configFromFile)
+    configFile = configFromFile
   } else {
     configFile = env
+    // création du fichier de configuration
+    writeJson(root + '/' + confFileName, env)
   }
   configFile['version'] = env.version
   return configFile
+}
+
+
+export function writeConfigFile(content) {
+  console.log('-> writeConfigFile, content =', content)
+  return writeJson(root + '/' + confFileName, content)
 }
