@@ -1760,3 +1760,145 @@
 		font-size: 1rem;
 	}
 }
+
+
+/* ==========================================================================
+   Alerte hx_messages.html — generique pour warning / info / success / error
+   Affiche le message renvoye par le serveur (validation, erreur metier, etc.)
+   / Generic alert for warning / info / success / error server messages.
+   ========================================================================== */
+
+.alerte-messages {
+	gap: 1.25rem;
+	padding: 2.5rem 1.5rem;
+	text-align: center;
+	color: var(--noir01);
+}
+
+.alerte-messages-icone {
+	font-size: 3.5rem;
+	line-height: 1;
+	color: var(--noir01);
+}
+
+.alerte-messages-texte {
+	font-size: 1.4rem;
+	font-weight: 700;
+	line-height: 1.35;
+	max-width: 32rem;
+	margin: 0;
+	color: var(--noir01);
+	text-wrap: balance;
+	font-variant-numeric: tabular-nums;
+}
+
+
+/* ==========================================================================
+   Zone alerte stock negatif (hx_return_payment_success.html)
+   Affichee uniquement si autoriser_vente_hors_stock=True ET stock devenu < 0.
+   / Negative stock alert zone on the payment success screen.
+   Shown only when autoriser_vente_hors_stock=True AND stock went < 0.
+   ========================================================================== */
+
+.stock-negatif-box {
+	margin-top: 0.85rem;
+	padding: 0.9rem 1.05rem;
+	border-radius: 10px;
+	background-color: var(--warning00);
+	color: var(--noir01);
+	display: flex;
+	flex-direction: column;
+	gap: 0.45rem;
+	max-width: 32rem;
+	border: 2px solid var(--noir01);
+}
+
+.stock-negatif-titre {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	font-weight: 800;
+	font-size: 1.05rem;
+	line-height: 1.2;
+	color: var(--noir01);
+}
+
+.stock-negatif-icone {
+	font-size: 1.15rem;
+	line-height: 1;
+	color: var(--noir01);
+}
+
+.stock-negatif-liste {
+	margin: 0;
+	padding-left: 1.6rem;
+	font-variant-numeric: tabular-nums;
+	font-size: 1rem;
+	line-height: 1.5;
+	color: var(--noir01);
+	font-weight: 600;
+}
+
+.stock-negatif-liste li {
+	margin: 0.05rem 0;
+}
+
+.stock-negatif-hint {
+	margin: 0;
+	font-size: 0.9rem;
+	line-height: 1.4;
+	color: var(--noir01);
+	font-weight: 500;
+	text-wrap: balance;
+}
+
+/* ==========================================================================
+   Alerte cote front : pave numerique vrac, quantite > stock disponible.
+   Affiche par tarif.js avant submit pour eviter un round-trip serveur.
+   / Front-side alert: vrac numpad, quantity > available stock.
+   Shown by tarif.js before submit to avoid a server round-trip.
+   ========================================================================== */
+
+.tarif-numpad-alerte-stock {
+	margin-top: 0.6rem;
+	padding: 0.55rem 0.75rem;
+	border-radius: 8px;
+	background-color: var(--warning00);
+	color: var(--noir01);
+	border: 2px solid var(--noir01);
+	font-size: 0.95rem;
+	font-weight: 700;
+	line-height: 1.35;
+	text-wrap: balance;
+	font-variant-numeric: tabular-nums;
+}
+
+.tarif-numpad-alerte-stock i {
+	margin-right: 0.4rem;
+}
+
+/* Sunmi V2s portrait : tasser un peu / Squeeze on V2s portrait */
+@media (max-width: 540px) {
+	.alerte-messages {
+		padding: 2rem 1rem;
+		gap: 1rem;
+	}
+	.alerte-messages-icone {
+		font-size: 2.75rem;
+	}
+	.alerte-messages-texte {
+		font-size: 1.2rem;
+	}
+	.stock-negatif-box {
+		padding: 0.7rem 0.85rem;
+	}
+	.stock-negatif-titre {
+		font-size: 1rem;
+	}
+	.stock-negatif-liste {
+		font-size: 0.95rem;
+	}
+	.stock-negatif-hint {
+		font-size: 0.85rem;
+	}
+}

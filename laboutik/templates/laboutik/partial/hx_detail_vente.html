@@ -29,7 +29,8 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
                 <th>{% translate "Article" %}</th>
                 <th>{% translate "Tarif" %}</th>
                 <th class="text-end">{% translate "Qty" %}</th>
-                <th class="text-end">{% translate "Montant" %}</th>
+                <th class="text-end">{% translate "Prix unit." %}</th>
+                <th class="text-end">{% translate "Total" %}</th>
             </tr>
         </thead>
         <tbody>
@@ -37,13 +38,23 @@ LOCALISATION : laboutik/templates/laboutik/partial/hx_detail_vente.html
             <tr>
                 <td>{{ article.nom }}</td>
                 <td>{{ article.tarif }}</td>
-                <td class="text-end">{{ article.qty|floatformat:0 }}</td>
-                <td class="text-end">{{ article.montant|euros }}</td>
+                {# Pour les lignes vrac : afficher le poids/volume (350g, 1,5kg, 50cl, 2L) #}
+                {# au lieu de la qty entiere (toujours 1 pour vrac, sans valeur metier).   #}
+                {# / For vrac lines: show weight/volume instead of integer qty (always 1).#}
+                <td class="text-end" data-testid="detail-qty">
+                    {% if article.est_vrac %}{{ article|afficher_poids }}{% else %}{{ article.qty|floatformat:0 }}{% endif %}
+                </td>
+                {# Pour les lignes vrac : prix au kg / L (12,00 €/kg) au lieu du prix de la ligne. #}
+                {# / For vrac lines: price per kg / L (12,00 €/kg) instead of line amount.        #}
+                <td class="text-end" data-testid="detail-prix-unit">
+                    {% if article.est_vrac and article.prix_par_unite %}{{ article.prix_par_unite }}{% else %}{{ article.prix_unitaire|euros }}{% endif %}
+                </td>
+                <td class="text-end" data-testid="detail-total-ligne">{{ article.total_ligne|euros }}</td>
             </tr>
             {% endfor %}
             <tr class="ventes-total-row">
-                <td colspan="3"><strong>{% translate "Total" %}</strong></td>
-                <td class="text-end"><strong>{{ total|euros }}</strong></td>
+                <td colspan="4"><strong>{% translate "Total" %}</strong></td>
+                <td class="text-end"><strong data-testid="detail-total-transaction">{{ total|euros }}</strong></td>
             </tr>
         </tbody>
     </table>

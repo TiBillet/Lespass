@@ -7,7 +7,6 @@ LOCALISATION : tests/pytest/test_inventaire.py
 
 import time
 
-import pytest
 from django_tenants.test.cases import FastTenantTestCase
 
 from Customers.models import Client
@@ -370,25 +369,52 @@ class TestStockService(FastTenantTestCase):
         self.stock.refresh_from_db()
         assert self.stock.quantite == -20
 
-    def test_decrementer_stock_bloquant_leve_exception(self):
-        """Stock bloquant + insuffisant => StockInsuffisant. / Blocking + insufficient raises."""
-        from inventaire.models import StockInsuffisant
+    def test_decrementer_stock_retourne_true_si_negatif(self):
+        """
+        Le service decremente toujours et retourne True si le stock vient
+        de passer en negatif. Le caller (vues de paiement) a la responsabilite
+        de bloquer en amont via _valider_stock_panier si vente hors stock interdite.
+        / The service always decrements and returns True if stock just went negative.
+        Caller is responsible for upstream blocking via _valider_stock_panier.
+        """
         from inventaire.services import StockService
 
+        # Stock 30, on retire 50 → passe a -20
+        # / Stock 30, remove 50 → goes to -20
         self.stock.quantite = 30
-        self.stock.autoriser_vente_hors_stock = False
         self.stock.save()
 
-        with pytest.raises(StockInsuffisant):
-            StockService.decrementer_pour_vente(
-                stock=self.stock,
-                contenance=50,
-                qty=1,
-            )
+        result = StockService.decrementer_pour_vente(
+            stock=self.stock,
+            contenance=50,
+            qty=1,
+        )
 
-        # Le stock n'a pas bougé / Stock unchanged
+        assert result is True
         self.stock.refresh_from_db()
-        assert self.stock.quantite == 30
+        assert self.stock.quantite == -20
+
+    def test_decrementer_stock_retourne_false_si_positif(self):
+        """
+        Le service retourne False quand le stock reste positif apres la vente.
+        / The service returns False when stock stays positive after sale.
+        """
+        from inventaire.services import StockService
+
+        # Stock 100, on retire 50 → reste a 50
+        # / Stock 100, remove 50 → stays at 50
+        self.stock.quantite = 100
+        self.stock.save()
+
+        result = StockService.decrementer_pour_vente(
+            stock=self.stock,
+            contenance=50,
+            qty=1,
+        )
+
+        assert result is False
+        self.stock.refresh_from_db()
+        assert self.stock.quantite == 50
 
     def test_creer_mouvement_reception(self):
         """Réception de 3000cl ajoute au stock. / Reception adds to stock."""

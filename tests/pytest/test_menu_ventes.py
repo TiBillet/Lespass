@@ -113,10 +113,14 @@ def _make_client(admin_user, tenant):
     return client
 
 
-def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method_code, pv=None, uuid_tx=None):
+def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method_code, pv=None, uuid_tx=None, qty=1, weight_quantity=None):
     """
     Cree une LigneArticle directement en base (sans passer par la vue).
     Creates a LigneArticle directly in DB (without going through the view).
+
+    :param qty: quantite de la ligne (defaut 1). Mettre > 1 pour reproduire le bug 4
+                (Sum(amount) au lieu de Sum(amount * qty)).
+    :param weight_quantity: int en g ou cl (vrac). Pour vrac : qty=1 + weight_quantity > 0.
     """
     product_sold, _ = ProductSold.objects.get_or_create(
         product=produit,
@@ -130,13 +134,14 @@ def _creer_ligne_article_directe(produit, prix, montant_centimes, payment_method
     )
     ligne = LigneArticle.objects.create(
         pricesold=price_sold,
-        qty=1,
+        qty=qty,
         amount=montant_centimes,
         sale_origin=SaleOrigin.LABOUTIK,
         payment_method=payment_method_code,
         status=LigneArticle.VALID,
         point_de_vente=pv,
         uuid_transaction=uuid_tx,
+        weight_quantity=weight_quantity,
     )
     return ligne
 
@@ -284,6 +289,77 @@ class TestListeVentes:
             # / Filter is applied — we verify the page loads
             assert 'data-testid="ventes-liste"' in contenu
 
+    def test_liste_ventes_total_qty_multiplie(
+        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
+    ):
+        """
+        Bug 4 : 3 pintes a 5€ doivent afficher 15€ dans la liste, pas 5€.
+        Le Sum doit etre amount * qty, pas amount seul.
+        / Bug 4: 3 pints at 5€ must show 15€ in the list, not 5€.
+        Sum must be amount * qty, not amount alone.
+        """
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = premier_produit_et_prix
+            uuid_tx = uuid_module.uuid4()
+
+            # Creer une ligne avec qty=3, amount=500 (5€ unitaire)
+            # Total reel transaction = 500 * 3 = 1500 centimes = 15€
+            # Ancien bug : Sum(amount) ramenait 500 → 5€ affiches.
+            # / Create line with qty=3, amount=500 (5€ unit). Real total = 1500c = 15€.
+            _creer_ligne_article_directe(
+                produit, prix, 500, PaymentMethod.CASH,
+                pv=premier_pv, uuid_tx=uuid_tx, qty=3,
+            )
+
+            client = _make_client(admin_user, tenant)
+            response = client.get(f'/laboutik/caisse/liste-ventes/?pv={premier_pv.uuid}&moyen={PaymentMethod.CASH}')
+            assert response.status_code == 200
+
+            contenu = response.content.decode('utf-8')
+            # Le total affiche doit etre 15,00 (3 pintes * 5€), pas 5,00.
+            # Format du filtre |euros : "15,00 €" (espace insecable U+00A0 entre montant et symbole).
+            # / The displayed total must be 15,00, not 5,00.
+            assert '15,00' in contenu, (
+                f"Total devrait inclure 15,00 € (3 x 5€), regression du bug 4. "
+                f"Si '5,00' est la, le Sum(amount) ne multiplie pas par qty. "
+                f"Contenu (extrait) : {contenu[:2000]}"
+            )
+
+    def test_liste_ventes_multi_lignes_qty(
+        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
+    ):
+        """
+        Une transaction = 2 lignes (pinte qty=3 a 5€, demi qty=2 a 3€).
+        Total reel = 15 + 6 = 21€. Verifie que le total agrege est correct.
+        / One transaction = 2 lines (pint qty=3 at 5€, half qty=2 at 3€).
+        Real total = 15 + 6 = 21€. Verify aggregate total is correct.
+        """
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = premier_produit_et_prix
+            uuid_tx = uuid_module.uuid4()
+
+            # Ligne 1 : 3 unites a 500c → 1500c
+            _creer_ligne_article_directe(
+                produit, prix, 500, PaymentMethod.CASH,
+                pv=premier_pv, uuid_tx=uuid_tx, qty=3,
+            )
+            # Ligne 2 : 2 unites a 300c → 600c (sur la meme transaction)
+            _creer_ligne_article_directe(
+                produit, prix, 300, PaymentMethod.CASH,
+                pv=premier_pv, uuid_tx=uuid_tx, qty=2,
+            )
+
+            client = _make_client(admin_user, tenant)
+            response = client.get(f'/laboutik/caisse/liste-ventes/?pv={premier_pv.uuid}&moyen={PaymentMethod.CASH}')
+            assert response.status_code == 200
+
+            contenu = response.content.decode('utf-8')
+            # Total reel = 1500 + 600 = 2100c = 21,00 €
+            # / Real total = 1500 + 600 = 2100c = 21,00 €
+            assert '21,00' in contenu, (
+                "Total devrait inclure 21,00 € (3*5 + 2*3), regression du bug 4."
+            )
+
 
 # ---------------------------------------------------------------------------
 # Tests detail vente
@@ -337,6 +413,106 @@ class TestDetailVente:
             client = _make_client(admin_user, tenant)
             response = client.get(f'/laboutik/caisse/detail-vente/{uuid_bidon}/')
             assert response.status_code == 404
+
+    def test_detail_vente_total_qty_multiplie(
+        self, admin_user, tenant, premier_pv, premier_produit_et_prix,
+    ):
+        """
+        Bug 4 (detail) : meme principe sur le detail vente.
+        3 pintes a 5€ → ligne montre Qty=3, Prix unit=5€, Total=15€.
+        Total transaction en bas = 15€.
+        / Bug 4 (detail): same principle on sale detail.
+        3 pints at 5€ → row shows Qty=3, Unit price=5€, Total=15€.
+        """
+        with schema_context(TENANT_SCHEMA):
+            produit, prix = premier_produit_et_prix
+            uuid_tx = uuid_module.uuid4()
+
+            _creer_ligne_article_directe(
+                produit, prix, 500, PaymentMethod.CASH,
+                pv=premier_pv, uuid_tx=uuid_tx, qty=3,
+            )
+
+            client = _make_client(admin_user, tenant)
+            response = client.get(f'/laboutik/caisse/detail-vente/{uuid_tx}/')
+            assert response.status_code == 200
+
+            contenu = response.content.decode('utf-8')
+
+            # data-testid sur le total ligne et le total transaction
+            # / data-testid on line total and transaction total
+            assert 'data-testid="detail-total-ligne"' in contenu
+            assert 'data-testid="detail-total-transaction"' in contenu
+
+            # Le total ligne et le total transaction doivent etre 15,00 €.
+            # Le prix unitaire 5,00 € apparait aussi (colonne dediee).
+            # / Both line total and transaction total must be 15,00 €.
+            assert '15,00' in contenu, (
+                "Total ligne ou transaction devrait inclure 15,00 € (3 x 5€), regression du bug 4."
+            )
+            assert '5,00' in contenu, (
+                "Le prix unitaire 5,00 € doit apparaitre dans la colonne dediee."
+            )
+
+    def test_detail_vente_vrac_qty_en_grammes_prix_au_kg(
+        self, admin_user, tenant, premier_pv,
+    ):
+        """
+        Bug 4 (vrac) : pour une ligne vrac (poids_mesure), le detail vente doit afficher
+            Qty = "350g" (pas "1")
+            Prix unit. = "12,00 €/kg" (pas le prix de la ligne)
+            Total = 4,20 € (350 * 0,012 €/g = amount calcule cote JS)
+        / Bug 4 (vrac): for a weight-based line, sale detail must display weight
+        in qty column and price per kg in unit price column.
+        """
+        from BaseBillet.models import Product, Price
+        from inventaire.models import Stock, UniteStock
+
+        with schema_context(TENANT_SCHEMA):
+            # Charge ou cree les fixtures vrac (Cacahuetes en vrac, 12€/kg, stock GR).
+            # Les fixtures sont posees par create_test_pos_data ; sinon on les recree.
+            # / Load or create vrac fixtures.
+            cacahuetes = Product.objects.filter(name="Cacahuetes en vrac").first()
+            if cacahuetes is None:
+                pytest.skip("Fixture 'Cacahuetes en vrac' absente — create_test_pos_data ne la cree pas dans ce contexte")
+            prix_vrac = Price.objects.filter(
+                product=cacahuetes, poids_mesure=True
+            ).first()
+            assert prix_vrac is not None, "Le prix poids_mesure des cacahuetes doit exister"
+
+            # S'assurer que le Stock existe avec unite GR
+            # / Ensure Stock exists with GR unit
+            Stock.objects.get_or_create(
+                product=cacahuetes,
+                defaults={"quantite": 5000, "unite": UniteStock.GR},
+            )
+
+            # Vente : 350g a 12€/kg → amount = 350 * 12 / 1000 = 4,20 € = 420c
+            # / Sale: 350g at 12€/kg → amount = 420 cents
+            uuid_tx = uuid_module.uuid4()
+            _creer_ligne_article_directe(
+                cacahuetes, prix_vrac, 420, PaymentMethod.CASH,
+                pv=premier_pv, uuid_tx=uuid_tx,
+                qty=1, weight_quantity=350,
+            )
+
+            client = _make_client(admin_user, tenant)
+            response = client.get(f'/laboutik/caisse/detail-vente/{uuid_tx}/')
+            assert response.status_code == 200
+
+            contenu = response.content.decode('utf-8')
+
+            # Affichage attendu sur la ligne :
+            # / Expected line display:
+            assert '350g' in contenu, (
+                "La colonne Qty doit afficher '350g' pour le vrac, pas '1'."
+            )
+            assert '12,00 €/kg' in contenu, (
+                "La colonne Prix unit. doit afficher le prix au kg, pas le prix de la ligne."
+            )
+            # Total ligne et total transaction = 4,20 €
+            # / Line total and transaction total = 4,20 €
+            assert '4,20' in contenu
 
     def test_detail_vente_uuid_invalide(
         self, admin_user, tenant,

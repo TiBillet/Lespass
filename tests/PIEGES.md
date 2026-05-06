@@ -2203,5 +2203,138 @@ avec la regle "zero teardown agressif".
 
 ---
 
+**12.5 — `Customers.Client` orphelin bloque FastTenantTestCase.**
+
+Si on `DROP SCHEMA test_X CASCADE` manuellement (debug, cleanup), le
+`Customers.Client` correspondant reste en DB. Au run suivant,
+`FastTenantTestCase.setUpClass` echoue avec :
+```
+django.db.utils.IntegrityError: duplicate key value violates unique
+constraint "Customers_client_schema_name_key"
+DETAIL:  Key (schema_name)=(test_X) already exists.
+```
+
+Et tenter de nettoyer via Django shell (`Client.objects.filter(schema_name='test_X').delete()`)
+plante avec :
+```
+ProgrammingError: relation "BaseBillet_configuration_federated_with" does not exist
+```
+…parce que la cascade tenant essaie d'acceder a des tables dans le schema dropped.
+
+**Fix** : SQL direct sur public pour casser la dependance.
+```sql
+DELETE FROM "Customers_domain"
+  WHERE tenant_id IN (SELECT uuid FROM "Customers_client" WHERE schema_name LIKE 'test_X%');
+DELETE FROM "Customers_client" WHERE schema_name LIKE 'test_X%';
+```
+
+Apres, FastTenantTestCase recree proprement le schema avec toutes les migrations.
+
+Decouvert Session 37 (bug 8 stock vrac) en debuguant un schema test partiellement migre.
+
+---
+
+**12.6 — `except Exception: pass` qui mange une exception metier.**
+
+Pattern dangereux dans `_creer_lignes_articles` (Session 37, bug 8 Antoine) :
+```python
+try:
+    stock = produit.stock_inventaire
+    StockService.decrementer_pour_vente(...)  # peut lever StockInsuffisant
+    # ... 50 lignes de logique metier
+except Exception:
+    # "Pas de stock géré pour ce produit"
+    pass
+```
+
+L'intention etait d'attraper `Stock.DoesNotExist` (produit sans stock).
+Mais `Exception` avale aussi toutes les autres exceptions, y compris
+les exceptions metier importantes. Resultat : le flag
+`autoriser_vente_hors_stock=False` etait silencieusement contourne,
+et des "ventes fantomes" etaient creees en DB (stock non decremente).
+
+**Regle** : `except` doit toujours cibler la classe d'exception attendue.
+Pour un acces FK reverse OneToOne, c'est `Model.DoesNotExist`.
+Si plusieurs classes attendues, les lister explicitement, pas `Exception`.
+
+```python
+# BON
+try:
+    stock = produit.stock_inventaire
+except Stock.DoesNotExist:
+    stock = None
+
+# MAUVAIS
+try:
+    stock = produit.stock_inventaire
+except Exception:
+    stock = None
+```
+
+Fix Session 37 : remplacement par `except Stock.DoesNotExist`, plus
+deux fonctions amont `_valider_stock_panier()` et `_formater_erreurs_stock()`
+pour bloquer en amont avec un partial 400 ou afficher une alerte sur
+l'ecran de validation.
+
+---
+
+**12.7 — htmx 2.0 ignore les reponses 4xx/5xx par defaut.**
+
+Le serveur peut renvoyer un partial d'erreur (`hx_messages.html`) avec
+status 400 / 422, mais htmx 2.0.6 a cette config par defaut :
+```js
+responseHandling: [
+    { code: "[23]..", swap: true },
+    { code: "[45]..", swap: false, error: true }
+]
+```
+
+Resultat : aucun swap, l'utilisateur voit "rien ne se passe" + une erreur
+dans la console nav. C'est le piege qui a fait ressembler le bug 1 (sortie
+de caisse 0€ → 400 silencieux) a un "404" pour Antoine.
+
+**Fix global** : ajouter dans la base laboutik (`base.html`) :
+```js
+document.addEventListener('htmx:beforeSwap', function (event) {
+    const status = event.detail.xhr.status
+    if (status === 400 || status === 422) {
+        event.detail.shouldSwap = true
+        event.detail.isError = false
+    }
+})
+```
+
+Vaut pour tout partial d'erreur du POS (sortie de caisse, validation amont
+stock, etc.). Ne pas inventer un nouveau pattern par vue — utiliser ce
+listener global.
+
+Decouvert Session 37, bug 1 + bug 8 Antoine.
+
+---
+
+**12.8 — Broadcast WebSocket OOB swap qui ne trouve pas sa cible.**
+
+Apres une vente, `transaction.on_commit()` lance `broadcast_stock_update()`
+qui envoie un partial avec `<div hx-swap-oob="outerHTML" id="stock-badge-{uuid}">`
+a toutes les caisses du tenant via WebSocket.
+
+Si l'utilisateur a un overlay tarif/numpad encore ouvert au moment du
+paiement, `#products.innerHTML` a ete remplace par l'overlay (cf. tarif.js)
+et les `#stock-badge-{uuid}` n'existent plus dans le DOM. htmx leve
+`htmx:oobErrorNoTarget` dans la console.
+
+**Fix** : appeler `tarifClose()` au debut de `additionDisplayPaymentTypes()`
+(addition.js), pour fermer l'overlay avant le submit. Les badges sont
+restaures avant l'arrivee du broadcast WS.
+
+Plus largement : tout WebSocket OOB swap doit s'assurer que les cibles
+existent dans le DOM courant. Si elles peuvent etre absentes (overlay,
+modal), prevoir un guard cote front (fermeture forcee) ou cote serveur
+(skip OOB si non pertinent).
+
+Decouvert Session 37, lie au bug 8.
+
+---
+
 *Ce document est un commun numerique. Prenez-en soin !*
 *This document is a digital common. Take care of it!*

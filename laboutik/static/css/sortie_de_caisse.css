@@ -374,3 +374,116 @@
         max-width: 100%;
     }
 }
+
+/* ==========================================================================
+   Alerte plein ecran (hx_alerte_ventes_zone.html)
+   Pendant warning de la card succes (hx_sortie_succes.html) — meme structure,
+   meme animation, simple changement de couleur selon msg_type.
+   / Full-zone alert — counterpart of the success card. Same structure,
+   same animation, color change by msg_type.
+   ========================================================================== */
+
+.alerte-vz-card {
+    padding: 1.25rem 1.5rem;
+    border-radius: 10px;
+    margin-top: 1rem;
+    animation: correction-slide-in 400ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+    font-family: 'Luciole-regular', sans-serif;
+}
+
+.alerte-vz-card-warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.08) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.alerte-vz-card-error {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(185, 28, 28, 0.08) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.alerte-vz-card-info {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(29, 78, 216, 0.08) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.alerte-vz-card-success {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.alerte-vz-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.alerte-vz-icone-bulle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    background: rgba(245, 158, 11, 0.25);
+    color: #f59e0b;
+}
+
+.alerte-vz-card-error .alerte-vz-icone-bulle {
+    background: rgba(239, 68, 68, 0.25);
+    color: #ef4444;
+}
+
+.alerte-vz-card-info .alerte-vz-icone-bulle {
+    background: rgba(59, 130, 246, 0.25);
+    color: #3b82f6;
+}
+
+.alerte-vz-card-success .alerte-vz-icone-bulle {
+    background: rgba(16, 185, 129, 0.25);
+    color: #10b981;
+}
+
+.alerte-vz-titre {
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-wrap: balance;
+    line-height: 1.35;
+    color: #fde68a;
+}
+
+.alerte-vz-card-error .alerte-vz-titre { color: #fecaca; }
+.alerte-vz-card-info .alerte-vz-titre  { color: #bfdbfe; }
+.alerte-vz-card-success .alerte-vz-titre { color: #d1fae5; }
+
+.alerte-vz-actions {
+    margin-top: 1.5rem;
+}
+
+/* Bouton retour calque sur celui de hx_sortie_succes.html
+   / Back button styled like hx_sortie_succes.html */
+.alerte-vz-btn-retour {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #a0a0a0;
+    padding: 0.5rem 1.25rem;
+    border-radius: 6px;
+    font-family: 'Luciole-regular', sans-serif;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease, transform 120ms ease;
+}
+
+.alerte-vz-btn-retour:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e0e0e0;
+    transform: translateY(-1px);
+}
+
+.alerte-vz-btn-retour:active {
+    transform: translateY(0);
+}

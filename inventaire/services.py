@@ -12,7 +12,6 @@ from django.db.models import F
 from inventaire.models import (
     MouvementStock,
     Stock,
-    StockInsuffisant,
     TypeMouvement,
 )
 
@@ -31,28 +30,24 @@ class StockService:
         """
         Décrémente le stock après une vente POS.
         Utilise F() pour un update atomique sans verrou.
+        Le caller a la responsabilité de bloquer en amont (via _valider_stock_panier)
+        si la vente hors stock est interdite. Ici on décrémente toujours.
         / Decrements stock after a POS sale. Uses F() for lockless atomic update.
+        Caller is responsible for upstream blocking (via _valider_stock_panier)
+        when out-of-stock sale is forbidden. Here we always decrement.
 
         :param stock: instance Stock
         :param contenance: int ou None. Quantité par unité vendue. None=1.
         :param qty: int. Nombre d'unités vendues.
         :param ligne_article: LigneArticle ou None.
-        :raises StockInsuffisant: si stock bloquant et insuffisant.
+        :return: True si le stock est passé négatif après cette vente, False sinon.
+        / True if stock went negative after this sale, False otherwise.
         """
         contenance_effective = contenance or 1
         delta = qty * contenance_effective
         stock_avant = stock.quantite
 
-        if stock.autoriser_vente_hors_stock:
-            Stock.objects.filter(pk=stock.pk).update(quantite=F("quantite") - delta)
-        else:
-            lignes_mises_a_jour = Stock.objects.filter(
-                pk=stock.pk,
-                quantite__gte=delta,
-            ).update(quantite=F("quantite") - delta)
-
-            if not lignes_mises_a_jour:
-                raise StockInsuffisant(stock.product, delta, stock.quantite)
+        Stock.objects.filter(pk=stock.pk).update(quantite=F("quantite") - delta)
 
         MouvementStock.objects.create(
             stock=stock,
@@ -68,6 +63,8 @@ class StockService:
             f"-{delta} {stock.get_unite_display()} "
             f"(avant={stock_avant})"
         )
+
+        return (stock_avant - delta) < 0
 
     @staticmethod
     def creer_mouvement(stock, type_mouvement, quantite, motif="", utilisateur=None):

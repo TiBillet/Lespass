@@ -464,6 +464,35 @@ class TestCorrectionsFondSortie(FastTenantTestCase):
         # / The template contains denominations
         assert '500' in response.content.decode()
 
+    def test_sortie_de_caisse_aucune_coupure_render_alerte_plein_ecran(self):
+        """Le 400 'aucune coupure' renvoie le partial plein ecran avec bouton retour
+        vers le formulaire (uuid_pv conserve dans la query string).
+        / The 'no denomination' 400 renders the full-screen partial with a back button
+        to the form (uuid_pv preserved in query string).
+        """
+        response = self.c.post('/laboutik/caisse/creer-sortie-de-caisse/', {
+            'uuid_pv': str(self.pv.uuid),
+            'tag_id_cm': 'TAG123',
+        })
+
+        assert response.status_code == 400
+        contenu = response.content.decode()
+
+        # Carte d'alerte presente / alert card present
+        assert 'data-testid="alerte-vz-card"' in contenu
+        assert 'alerte-vz-card-warning' in contenu
+
+        # Bouton retour HTMX present, ciblant le formulaire avec uuid_pv conserve
+        # / HTMX back button targeting the form with preserved uuid_pv
+        assert 'data-testid="alerte-vz-btn-retour"' in contenu
+        assert f'uuid_pv={self.pv.uuid}' in contenu
+        assert 'tag_id_cm=TAG123' in contenu
+        assert 'hx-target="#ventes-zone"' in contenu
+
+        # Plus d'usage du vieux partial hx_messages.html dans ce flow
+        # / No more reference to the old hx_messages.html partial in this flow
+        assert 'alerte-messages' not in contenu
+
     # ----------------------------------------------------------------------- #
     #  Tests 404 : ligne introuvable                                           #
     #  404 tests: line not found                                               #

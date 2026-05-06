@@ -292,3 +292,57 @@ le pattern `.modal-*` du lot 5. La refacto CSS/HTML est validée visuellement.
 ## Suite
 
 Implémentation lot par lot, avec validation visuelle Chrome entre chaque lot. Le mainteneur fait les commits.
+
+---
+
+## Retour utilisateur Antoine — 2026-05-04 — élargissement de scope
+
+Antoine a passé une journée de tests. Plusieurs de ses retours **confirment et
+élargissent** le périmètre de cette session. À traiter avant l'implémentation.
+
+### A. Bugs UI/CSS POS qui rejoignent les écrans déjà refactés
+
+| Bug Antoine | Écran concerné | Action |
+|---|---|---|
+| **Affichage de la monnaie restante après un achat cashless « pas clair »** | `hx_return_payment_success.html` (post-paiement) — pas dans le périmètre initial des 4 fichiers | **Ajouter au périmètre.** Aligner sur le pattern `give-back-box` + `role="alert"` du lot 1. |
+| **Selects pas clairs (flèche manquante)** dans le récapitulatif des ventes | `hx_recap_en_cours.html`, `hx_liste_ventes.html` | Hors POS pur, mais cohérent à traiter dans ce lot CSS. Ajouter une icône `▼` ou `chevron-down` sur les `<select>` via `appearance` + `background-image`. |
+| **Type point de vente billetterie / non-billetterie** : tous les billets apparaissent ou aucun | `_construire_donnees_articles()` côté Python | **Hors scope front.** À documenter pour une session backend séparée. |
+| **Articles non-fiduciaires non affichés sur l'interface** | Filtre serveur côté `_construire_donnees_articles()` | **Hors scope front.** |
+
+### B. Bugs JS pour Nico — confirmation et précision
+
+Les 3 bugs JS découverts en fin de session 36 sont **directement confirmés** par
+les tests d'Antoine :
+
+| Bug session 36 | Confirmation Antoine |
+|---|---|
+| `htmx:targetError` après cycle de paiement complet (clic CASHLESS suivant ne réagit pas) | *« 2 cartes insuffisantes → erreurs JS console et obligation de reset »* — même cause sous-jacente : `#confirm` cassé + zombie `NfcReader` (cf. Session 35 §3.1). |
+| `viderCarteManageForm` jamais implémenté | Pas testé par Antoine, à vérifier après fix. |
+| `_obtenir_ou_creer_wallet` ignore `carte.user.wallet` | Backend, hors scope JS. |
+
+**Lien direct avec Session 35** : le fix CSS de cette session ne suffira pas tant
+que `NfcReader` fuit. Le fix JS Session 35 §5.1-5.2 est **un prérequis** pour
+que les écrans `hx_complement_paiement.html` et `hx_funds_insufficient.html`
+fonctionnent correctement en cycle répété.
+
+### C. Bugs UI orthogonaux à traiter dans des sessions séparées
+
+Pour traçabilité, à ne PAS traiter ici :
+
+- Détail article rapport : 2 prix différents sur même ligne → backend rapports
+- Vrac : afficher quantité (g/cl) dans détail vente → backend rapports
+- Sortie caisse 0€ → 404 → validation serializer
+- Total faux sur liste des ventes → agrégation `reports.py`
+- Stock vrac : pas de message d'erreur → feedback front à concevoir
+- Bouton RESET / RETOUR / changement catégorie qui n'efface pas l'état → couvert par Session 35 §10.2-10.3
+- Vrac « 0.00€/L » → « X.XX€ » sans `/L` après sélection → couvert par Session 35 §10.4
+
+### D. Périmètre élargi confirmé pour cette session
+
+À l'implémentation, ajouter aux 4 fichiers initiaux :
+
+5. `laboutik/templates/laboutik/partial/hx_return_payment_success.html` — réécrire
+   l'affichage du « solde restant » avec `give-back-box` + `role="alert"` + classes
+   `.cascade-badges-list` / `.cascade-badge` cohérentes avec le complément.
+6. `laboutik/static/css/ventes.css` (ou équivalent) — styliser les `<select>` du
+   récap ventes avec une flèche visible.

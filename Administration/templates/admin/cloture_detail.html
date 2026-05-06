@@ -106,6 +106,7 @@
     <div style="margin-bottom: 20px;" data-testid="section-detail-ventes">
         <h3 style="border-bottom: 2px solid #333; padding-bottom: 4px;">{% translate "Sales detail" %}</h3>
         {% for categorie_nom, categorie_data in section.items %}
+        {% with afficher_col_poids=categorie_data.articles|has_poids %}
         <h4 style="margin: 12px 0 4px; color: #555;">{{ categorie_nom }}</h4>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 8px;">
             <thead>
@@ -114,6 +115,9 @@
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Sold" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Free" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Total qty" %}</th>
+                    {% if afficher_col_poids %}
+                    <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "Poids/Vol" %}</th>
+                    {% endif %}
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "HT" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "VAT" %}</th>
                     <th style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{% translate "TTC" %}</th>
@@ -128,6 +132,9 @@
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.qty_vendus|default:0 }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.qty_offerts|default:0 }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.qty_total|default:0 }}</td>
+                    {% if afficher_col_poids %}
+                    <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;" data-testid="cloture-poids-vol">{{ article|afficher_poids }}</td>
+                    {% endif %}
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.total_ht|euros }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.total_tva|euros }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ article.total_ttc|euros }}</td>
@@ -137,12 +144,15 @@
                 {% endfor %}
                 {# Total de la catégorie / Category total #}
                 <tr style="background: #e8f5e9; font-weight: bold;">
-                    <td colspan="6" style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %} {{ categorie_nom }}</td>
+                    {# colspan adapte selon presence de la colonne Poids/Vol
+                       / colspan adapted depending on Weight/Vol column presence #}
+                    <td colspan="{% if afficher_col_poids %}7{% else %}6{% endif %}" style="padding: 6px 8px; border: 1px solid #ddd;">{% translate "Total" %} {{ categorie_nom }}</td>
                     <td style="padding: 6px 8px; border: 1px solid #ddd; text-align: right;">{{ categorie_data.total_ttc|euros }}</td>
                     <td colspan="2" style="padding: 6px 8px; border: 1px solid #ddd;"></td>
                 </tr>
             </tbody>
         </table>
+        {% endwith %}
         {% endfor %}
     </div>
     {% endif %}

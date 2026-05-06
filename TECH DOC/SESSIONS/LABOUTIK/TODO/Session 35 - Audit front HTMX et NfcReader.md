@@ -317,3 +317,84 @@ Total : 4-5 fichiers, ~30 lignes modifiées.
 - [ ] Si fix : TDD via `superpowers:test-driven-development` (tests E2E d'abord)
 - [ ] Mettre à jour `CHANGELOG.md` après le fix
 - [ ] Ajouter une entrée dans `A TESTER et DOCUMENTER/` pour le scénario manuel
+
+---
+
+## 10. Confirmation par retour utilisateur — Antoine, 2026-05-04
+
+Antoine a passé une journée de tests sur la caisse LaBoutik. Plusieurs de ses retours
+confirment et **élargissent** le diagnostic de cet audit. Ce ne sont pas des bugs
+isolés mais bien la même classe de problème : **état global JS jamais nettoyé
+proprement quand on quitte / réouvre un layer ou un overlay**.
+
+### 10.1 Bugs Antoine qui relèvent du fix proposé en §5.1 (singleton NfcReader)
+
+> **2 cartes insuffisantes consécutives → erreurs JS console + obligation de RESET.**
+> *« Si au moment de payer, on selectionne une carte mais qu'elle n'as pas assez de
+> fond, puis qu'on selectionne une deuxième qui n'as pas non plus assez de fond,
+> le js fait des erreurs dans la console et on est obligé de reset. »*
+
+C'est exactement le scénario reproduit ligne 178 du tableau §4. Le flux
+`hx_funds_insufficient.html` re-déclenche un `<c-read-nfc>` à chaque clic CASHLESS
+sans appeler `stop()` sur l'instance précédente. Avec deux cartes insuffisantes
+de suite, on accumule au minimum 2 instances `NfcReader` zombies.
+
+**Couvert par §5.1 + §5.2** (singleton global + `disconnect()` socket).
+
+### 10.2 Bugs Antoine qui élargissent le scope au-delà de NfcReader
+
+Ces bugs sont la **même classe** que la fuite NfcReader (état global JS qui survit
+aux changements de contexte), mais sur des objets différents :
+
+| Bug Antoine | État global concerné | Localisation |
+|---|---|---|
+| Modal de prix ouvert + change de catégorie → articles affichés restent ceux de la catégorie précédente | `window._tarifOverlayOriginalContent` | `tarif.js:165` (sauvegarde) + `tarif.js:441` (restauration) |
+| Bouton RESET ne ferme pas le modal de sélection de prix | `window._tarifOverlayOriginalContent` non touché par `additionReset()` | `addition.js:221` |
+| Changer de catégorie devrait fermer le modal de prix | `articlesDisplayCategory()` ignore l'overlay actif | `articles.js:190` |
+| RESET ne reset pas le mail (formulaire adhésion) | Champs identification client jamais touchés par `additionReset()` | `addition.js:221` |
+| Bouton RETOUR identification client = annule juste le paiement, ne revient pas en arrière | Layer `#messages` géré par `<c-bt.return />` qui `hideAndEmptyElement('#confirm')` ne sait pas reconstruire l'état panier | `cotton/bt/return.html` (à vérifier) |
+
+**Diagnostic commun** : `additionReset()`, `articlesDisplayCategory()`, et le bouton
+RETOUR ne savent pas que d'autres modules JS ont des états globaux ou des overlays
+ouverts. Chacun nettoie sa propre zone, jamais celle des autres.
+
+### 10.3 Élargissement proposé du fix
+
+Le fix §5 reste valide mais doit être étendu :
+
+1. **§5.1-5.2 inchangé** : singleton `window.tibilletNfc` + `stop()` correct.
+2. **§5.3 inchangé** : `console.warn` au lieu de catch silencieux dans `eventsOrganizer`.
+3. **§5.4 obligatoire (pas optionnel)** : `_tarifVariableCounter` ET fermeture
+   d'overlay tarif dans `additionReset()`.
+4. **§5.5 (NOUVEAU)** : exposer `tarifClose()` globalement et l'appeler depuis
+   `articlesDisplayCategory()` (clic catégorie) et depuis `additionReset()`
+   (bouton RESET).
+5. **§5.6 (NOUVEAU)** : audit complet des champs `#addition-form` que
+   `additionReset()` doit vider — actuellement seulement 5 champs hard-codés
+   (`addition-comportement`, `addition-total`, `addition-moyen-paiement`,
+   `addition-uuid-transaction`, `addition-given-sum`). Il faut ajouter au
+   minimum les champs d'identification client (mail, prénom, nom).
+6. **§5.7 (NOUVEAU)** : le composant `<c-bt.return />` doit avoir un
+   comportement uniforme selon le layer : sur `#messages` (identification),
+   il doit reconstruire l'écran précédent (récap panier ou choix paiement),
+   pas juste vider `#confirm`.
+
+### 10.4 Bugs Antoine NON couverts par cette session
+
+Ces retours nécessitent une session séparée :
+
+- **Vrac : « 0.00€/L » → « X.XX€ » sans `/L` après sélection** : tweak d'affichage
+  isolé dans `tarif.js:300`, hors périmètre fuite d'état.
+- **Sortie de caisse 0€ → 404** : validation manquante côté serializer Python.
+- **Total faux sur liste des ventes (quantité ignorée)** : bug agrégation
+  `laboutik/reports.py`.
+- **Détail article : 2 prix différents sur même ligne** : group_by manquant
+  sur `price_uuid` côté serveur.
+- **Type point de vente billetterie / non-billetterie** : filtrage articles
+  côté vue POS.
+- **Articles non-fiduciaires non affichés** : filtre serveur.
+- **Stock vrac : pas de message d'erreur si hors stock** : feedback front
+  manquant.
+
+Ces points sont **listés** ici pour mémoire mais doivent rester hors scope du
+fix front pour éviter le mélange front/serveur dans une même session.

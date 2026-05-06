@@ -1,5 +1,96 @@
 # Changelog / Journal des modifications
 
+## Session 38 — Alerte plein ecran + Poids/Vol detail + Total liste ventes corrige / Full-screen alert + Weight/Vol detail + Sales list total fix (2026-05-05)
+
+**Quoi / What :** Trois corrections du retour Antoine 2026-05-04.
+
+(1) **Bug 1** — refonte du rendu d'erreur de la sortie de caisse (residuel post-Session 37). Le partial generique `hx_messages.html` etait inadapte au contexte `#ventes-zone` : trop petit, sans contraste suffisant, et son `<c-bt.return />` (selecteur defaut `#messages`) tapait dans le vide. Nouveau partial dedie `hx_alerte_ventes_zone.html` calque sur le pattern card de `hx_sortie_succes.html` : meme animation `correction-slide-in`, meme bouton retour transparent, gradients de couleur par `msg_type` (warning / error / info / success). Bouton retour HTMX vers le formulaire de sortie de caisse avec `uuid_pv` + `tag_id_cm` conserves (l'utilisateur retombe sur son contexte caisse, pas sur le Ticket X).
+/ (1) Bug 1 — reworked the cash withdrawal error rendering (residual after Session 37). New dedicated partial `hx_alerte_ventes_zone.html` mirrors the success card pattern. HTMX back button targets the cash withdrawal form with `uuid_pv` + `tag_id_cm` preserved.
+
+(2) **Bug 3** — colonne "Poids/Vol" dans le detail des ventes par article. Pour les articles vrac (`Price.poids_mesure=True`, ex: cacahuetes, vin pression), `qty_total` ne montre que le nombre de lignes, pas la quantite reelle vendue (g ou cl). Enrichissement du `RapportComptableService.calculer_detail_ventes` avec `unite_poids` (lu via `Min` sur `Stock.unite`, jointure `OneToOne` Product→Stock) en plus du `poids_total` deja calcule. Nouveau filtre template `afficher_poids` (conversion automatique : 1500g → "1,5kg", 200cl → "2L", 350g reste "350g") + filtre `has_poids` pour afficher la colonne uniquement si au moins un article vrac est present dans la categorie. Ticket X (HTML) + admin cloture + PDF cloture impactes. Ticket X et Z imprimes non touches : ils n'affichent que les totaux par moyen de paiement, pas le detail article — hors scope.
+/ (2) Bug 3 — "Weight/Vol" column in sales detail per article. For vrac products, `qty_total` only shows line count, not actual quantity sold. Enriched the service with `unite_poids` (via `Min` on `Stock.unite`). New `afficher_poids` and `has_poids` template filters with auto kg/L conversion. X-ticket HTML + admin closure + PDF closure impacted. Printed X/Z tickets don't have a per-article section — out of scope.
+
+(3) **Bug 4** — total des ventes faux dans le menu Ventes. La vue `liste_ventes` faisait `Sum("amount")` sans multiplier par `qty`. Or `LigneArticle.amount` est le **prix unitaire** en centimes et le total ligne = `amount * qty` (cf. `LigneArticle.total()`). Bug systematique des qu'une ligne avait `qty > 1` (cas typique : caissier clique 3 fois sur "Pinte" → le JS du panier `addition.js` agrege en 1 input avec value=3, donc 1 LigneArticle qty=3). Resultat : 3 pintes a 5€ s'affichaient `5,00 €` au lieu de `15,00 €` dans la liste. Fix avec `ExpressionWrapper(F("amount") * F("qty"))` cote SQL puis cast `int` en Python pour rester en centimes. Meme bug sur `detail_vente` (boucle Python `total_transaction += ligne.amount`) : refonte du dict article avec `prix_unitaire` + `total_ligne` separes, et nouvelle colonne dediee dans le template.
+/ (3) Bug 4 — wrong sales total in the sales menu. `liste_ventes` was doing `Sum("amount")` without multiplying by `qty`. Triggered whenever a line had `qty > 1` (typical: clicking 3 times on "Pint" aggregates JS-side into one input with value=3). Fix uses `ExpressionWrapper(F("amount") * F("qty"))` SQL-side. Same fix on `detail_vente` (Python loop) with separate `prix_unitaire` + `total_ligne` and new dedicated column in template.
+
+**Pourquoi / Why :**
+(1) L'utilisateur voyait bien le message "Aucune coupure saisie" mais il etait moche, peu visible, et le bouton retour ne ramenait pas au formulaire — il fallait recharger la page pour reprendre la saisie.
+(2) Antoine signalait que pour deux ventes du meme produit a tarifs differents (Pinte vs Demi), la qty totale ne distinguait plus les tarifs. Apres analyse, vrai bug = le poids/volume vendu n'apparaissait nulle part pour les articles vrac (cacahuetes, vin pression). Donc impossible de savoir combien de g/cl ont ete ecoules sans relire chaque LigneArticle.
+(3) Erreur comptable evidente cote caisse : le total qui s'affiche dans la liste des ventes ne correspondait jamais a ce qui avait reellement ete encaisse des qu'un client achetait plusieurs unites du meme article. Bug present depuis Session 16 (Menu Ventes — Ticket X + liste).
+/ (1) Ugly error rendering. (2) Vrac volume invisible. (3) Wrong total in sales list since Session 16.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `laboutik/templates/laboutik/partial/hx_alerte_ventes_zone.html` | **Nouveau / New.** Partial plein ecran avec card coloree, icone, message, bouton retour HTMX optionnel (`back_url`) — bug 1 |
+| `laboutik/views.py` | `creer_sortie_de_caisse` : calcul `back_url` en debut de vue, 3 renders d'erreur basculent sur `hx_alerte_ventes_zone.html`, dedup `params_ventes` — bug 1 |
+| `laboutik/static/css/sortie_de_caisse.css` | +section `.alerte-vz-*` : 4 variantes de gradient (warning/error/info/success), bouton retour aligne sur `hx_sortie_succes.html` — bug 1 |
+| `laboutik/reports.py` | `calculer_detail_ventes` : +`unite_poids` (Min sur `Stock.unite`) dans l'agregat existant `poids_total` ; ajout `Min` aux imports `django.db.models` — bug 3 |
+| `laboutik/templatetags/laboutik_filters.py` | +`afficher_poids` (conversion auto g/kg, cl/L, format compact "1,5kg", "200cl"…) +`has_poids` (booleen affichage colonne) — bug 3 |
+| `laboutik/templates/laboutik/partial/hx_recap_en_cours.html` | +colonne "Poids/Vol" conditionnelle dans la vue "detail articles" du Ticket X — bug 3 |
+| `Administration/templates/admin/cloture_detail.html` | +colonne "Poids/Vol" conditionnelle dans la section 2 du rapport admin (colspan total adapte) — bug 3 |
+| `laboutik/templates/laboutik/pdf/rapport_comptable.html` | +colonne "Poids/Vol" conditionnelle dans le PDF cloture (colspan total adapte) — bug 3 |
+| `tests/pytest/test_corrections_fond_sortie.py` | +`test_sortie_de_caisse_aucune_coupure_render_alerte_plein_ecran` — bug 1 |
+| `tests/pytest/test_afficher_poids.py` | **Nouveau / New.** 22 tests : conversion GR (350g, 999g, 1000g, 1500g, 1250g, 12500g), conversion CL (50cl, 99cl, 100cl, 200cl, 175cl), cas degeneres (None, 0, dict vide, unite inconnue), `has_poids` (vide, sans, avec, premier element, zero) — bug 3 |
+| `laboutik/views.py` (suite) | `liste_ventes` : import `ExpressionWrapper` + `DecimalField` ; `total = Sum(amount * qty)` au lieu de `Sum(amount)` ; cast `int` (centimes) post-aggregat. `detail_vente` : refonte boucle avec `prix_unitaire` + `total_ligne` (= `amount * qty`) ; `total_transaction` cumule les totaux ligne — bug 4 |
+| `laboutik/templates/laboutik/partial/hx_detail_vente.html` | Tableau detail vente : 5 colonnes (Article, Tarif, Qty, **Prix unit.**, **Total**) au lieu de 4. `colspan=4` sur la ligne Total. +`data-testid="detail-total-ligne"` et `data-testid="detail-total-transaction"` — bug 4 |
+| `tests/pytest/test_menu_ventes.py` | +param `qty=1` au helper `_creer_ligne_article_directe`. +3 tests : `test_liste_ventes_total_qty_multiplie` (3 pintes 5€ → 15€), `test_liste_ventes_multi_lignes_qty` (panier multi-lignes, total exact), `test_detail_vente_total_qty_multiplie` — bug 4 |
+
+### Migration
+- **Migration necessaire / Migration required :** Non / No
+- Aucun changement de modele. Nouveaux templates / partial + ajouts CSS + filtres + reorga vue.
+
+### Tests
+- 22 tests `test_corrections_fond_sortie.py` (21 existants + 1 nouveau) verts — bug 1
+- 22 tests `test_afficher_poids.py` (nouveau, filtres) verts — bug 3
+- 12 tests `test_menu_ventes.py` (9 existants + 3 nouveaux Bug 4) verts — bug 4
+- 7 tests `test_rapport_comptable.py` (existants) verts — pas de regression sur l'agregat
+- 21 tests cumules cloture (`test_rapport_comptable` + `test_cloture_enrichie` + `test_cloture_caisse`) verts
+- `hx_messages.html` reste intact : zero impact sur Session 37 (validation stock paiement, qui cible `#messages`).
+
+## Session 37 — Stock vrac negatif et alerte ecran de validation / Vrac negative stock and validation screen alert (2026-05-05)
+
+**Quoi / What :** Correction du bug 8 du retour Antoine 2026-05-04. Le flag `autoriser_vente_hors_stock` etait contourne par un `except Exception: pass` trop large dans `_creer_lignes_articles`, ce qui creait des "ventes fantomes" comptablement validees mais avec stock non decremente. Ajout d'une validation amont pour bloquer les ventes interdites (avec partial d'erreur visible cote front) et d'une alerte sur l'ecran de succes pour les stocks autorises passes en negatif. Correction au passage du quirk htmx 2.0 qui ignore les reponses 4xx.
+/ Fixed bug 8 from Antoine's 2026-05-04 review. The `autoriser_vente_hors_stock` flag was bypassed by a too-broad `except Exception: pass`, creating "phantom sales" validated accounting-wise but with stock not decremented. Added upstream validation to block forbidden sales (with visible front error partial) and an alert on the success screen for allowed stocks gone negative. Also fixed the htmx 2.0 quirk that silently ignores 4xx responses.
+
+**Pourquoi / Why :** Risque comptable reel : le flag d'autorisation etait sans effet, et l'utilisateur n'avait aucun feedback. Antoine a confirme le scenario en une journee de tests.
+/ Real accounting risk: the authorization flag had no effect, and the user got no feedback. Antoine confirmed the scenario in a day of testing.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `inventaire/services.py` | `decrementer_pour_vente` decremente toujours (plus de raise), retourne `True` si stock devenu negatif |
+| `laboutik/views.py` | +`_valider_stock_panier()` + `_formater_erreurs_stock()` ; `except Stock.DoesNotExist` (au lieu d'`except Exception`) ; signature `_creer_lignes_articles*` retourne tuple `(lignes, produits_stock_negatif)` ; validation amont + propagation au contexte dans 3 vues de paiement (`_payer_par_carte_ou_cheque`, `_payer_en_especes`, `_payer_par_nfc` + `payer_complementaire`) ; enrichissement tarifs poids/mesure avec `stock_disponible` + `autoriser_hors_stock` |
+| `laboutik/templates/laboutik/partial/hx_messages.html` | Refonte : icone contextuelle (warning / info / success / error), text-wrap balance, tabular-nums, contraste max |
+| `laboutik/templates/laboutik/partial/hx_return_payment_success.html` | +zone alerte stock negatif (`.stock-negatif-box`) sous l'ecran de succes |
+| `laboutik/templates/laboutik/base.html` | +listener global `htmx:beforeSwap` qui force le swap sur 400/422 (corrige aussi bug 1 sortie de caisse 0€) |
+| `laboutik/static/js/tarif.js` | Garde null sur `eleQuantity` ; bouton OK numpad enrichi avec `data-stock-disponible` + `data-autoriser-hors-stock` ; alerte inline si quantite > stock dispo (vente hors stock interdite) ; masquage auto a la prochaine saisie |
+| `laboutik/static/js/addition.js` | `additionDisplayPaymentTypes()` ferme l'overlay tarif via `tarifClose()` (corrige `htmx:oobErrorNoTarget` post-vente sur broadcast WS) |
+| `laboutik/static/css/overlay.css` | +classes `.alerte-messages*`, `.stock-negatif-*`, `.tarif-numpad-alerte-stock` (contraste max, bordure noire 2px, sans animation) |
+| `tests/pytest/test_inventaire.py` | Test `test_decrementer_stock_bloquant_leve_exception` adapte au nouveau contrat (retourne `True`, plus de raise) + 1 nouveau test |
+| `tests/pytest/test_stock_negatif.py` | Nouveau, 9 tests : validation amont (5), retour tuple `_creer_lignes_articles` (2), flow paiement HTTP bloque/alerte (2) |
+| `tests/pytest/test_billetterie_pos.py` | Adaptation : 6 destructurations `lignes, _ = _creer_lignes_articles(...)` |
+| `tests/pytest/test_pos_vider_carte.py` | `carte_caissier_vc` passe en `get_or_create()` (corrige IntegrityError teardown VCT00001) |
+
+### Logique en 4 cas / 4-case logic
+| `autoriser_vente_hors_stock` | Stock suffisant ? | Comportement / Behavior |
+|---|---|---|
+| **True** | Oui | Vente normale, ecran succes classique |
+| **True** | Non | **Vente passe** + alerte « Stock negatif » sur ecran de succes |
+| **False** | Oui | Vente normale |
+| **False** | Non | **Vente bloquee** + alerte inline pave numerique (front) OU partial 400 (serveur si bypass front). Aucune ecriture en DB. |
+
+### Migration
+- **Migration necessaire / Migration required :** Non / No
+- Aucun changement de modele. Pure refacto de signature + classes CSS.
+
+### Tests
+- 56 tests pytest verts (`test_inventaire` 28 + `test_stock_negatif` 9 + `test_paiement_especes_cb` 7 + `test_billetterie_pos` 12)
+- Erreur de teardown pre-existante sur `test_billetterie_pos` (catégorie 2, `BaseBillet_ticket relation does not exist`) — le test passe.
+
+### Effet de bord positif
+- Le listener global `htmx:beforeSwap` corrige aussi le **bug 1** (sortie de caisse 0€ → 400 silencieux) signale par Antoine. Tous les partials d'erreur 400/422 du POS sont desormais swappes correctement.
+
 ## Session 34 — Scan QR carte V2 (fedow_core) / QR card scan V2
 
 **Quoi / What :** Bascule du flow public "scan QR carte cashless" de `fedow_connect/fedow_api.py` (HTTP vers Fedow distant) vers `fedow_core/services.py` (DB direct). Scope : scan, identification user (link), fusion wallet ephemere, perte de carte.
