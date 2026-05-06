@@ -181,7 +181,7 @@ dev-filaos
 letsencrypt
 docker-compose-filaos.yml
 
-# Cordova
+# laboutik client Cordova/android
 **/mobile-app/node_modules/
 **/mobile-app/plugins/
 **/mobile-app/platforms/
@@ -191,3 +191,7 @@ docker-compose-filaos.yml
 !laboutik_client_android_v2/mobile-app/www/
 !laboutik_client_android_v2/mobile-app/www/**
 env.js
+
+# laboutik client pi/dektop
+!laboutik_client_pi_desktop_v2/www/
+!laboutik_client_pi_desktop_v2/www/**
