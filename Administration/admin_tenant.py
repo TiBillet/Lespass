@@ -2319,13 +2319,33 @@ class MembershipAdmin(ModelAdmin, ImportExportModelAdmin):
 
 ### VENTES ###
 
+class LigneArticlePublishedFilter(admin.SimpleListFilter):
+    """
+    Filter for filtering LigneArticle by Produc
+    """
+    title = _('Product')
+    parameter_name = 'product'
+
+    def lookups(self, request, model_admin):
+        # Return only product that are not archived
+        return [
+            (product.pk, product.name)
+            for product in Product.objects.filter(archive=False)
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            # Return only sales where the product correspond to the selected product
+            return queryset.filter(pricesold__productsold__product=self.value())
+        return queryset
+
 @admin.register(LigneArticle, site=staff_admin_site)
 class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
 
     list_filter = ('status',
-                   'pricesold__productsold',
+                   LigneArticlePublishedFilter,
                    ('datetime', RangeDateTimeFilter),
                    )
 
