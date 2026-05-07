@@ -1,4 +1,4 @@
-import { showDevicesStatus, showMainContent } from './renderHtml.js'
+import { renderHtml } from './renderHtml.js'
 import { env } from '../../../env.js'
 // dev
 import './dev.js'
@@ -50,25 +50,26 @@ export function setGeneralStatus(status) {
   document.querySelector('.header-status').style.backgroundColor = `var(--${status})`
 }
 
-export async function testNetworkStatus(timeout = 3000) {
+export async function testNetworkStatus(timeout = 5000) {
   const urls = [
-    "https://clients3.google.com/generate_204",
-    "https://1.1.1.1",
-    "https://api.github.com"
+    "https://httpbin.org/get",
+    "https://www.google.com/generate_204",
+    "https://postman-echo.com/get"
   ]
   const promises = urls.map(async (url) => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeout)
     try {
       const response = await fetch(url, {
-        method: "GET",
+        method: "HEAD",
+        mode: "no-cors",
         signal: controller.signal,
         cache: "no-store"
       })
       clearTimeout(timer)
       return response
     } catch (error) {
-      // console.log('-> testNetworkOk - fetch', error)
+      clearTimeout(timer)
       return null
     }
   })
@@ -80,46 +81,39 @@ export async function testNetworkStatus(timeout = 3000) {
   return 'disable'
 }
 
-
-export async function getDevicesStatusAndShow() {
-  // console.log('-> getDevicesStatusAndShow')
-  // NFC : not_available / enabled / disabled
-  const nfcStatus = (await ConnectivityPlugin.getNfcStatus()).status
-
-  // réseau : true / false
-  const networkOK = await testNetWorkOk()
-  showDevicesStatus({ networkOK, nfcStatus })
-  return { nfcStatus, networkOK }
-}
-
-export async function awaitDevicesOk() {
-  return new Promise((resolve) => {
-    const testNetWorkOk = setInterval(async () => {
-      const result = await getDevicesStatusAndShow()
-      if (result.nfcStatus === 'enabled' && result.networkOK === true) {
-        clearInterval(testNetWorkOk)
-        resolve(result)
-      }
-    }, 3000)
-  })
-}
-
-
+/**
+ * Listen required devices status
+ */
 export async function initListenDevicesStatus() {
   console.log('-> initListenDevicesStatus');
   try {
-    // NFC : not_available / enabled / disabled
-    const nfcStatus = (await ConnectivityPlugin.getNfcStatus()).status
-    console.log('nfcStatus =', nfcStatus)
-    // state['nfcStatus'] = msg.status
-    // réseau : true / false
-    const networkOK = await testNetWorkOk()
-    console.log('nfcStatus =', nfcStatus)
-    //  state['networkStatus'] = 
+    // NFC : available / disabled
+    const nfcStatus = await nfcPlugin.available()
+    if (nfcStatus !== 'available') {
+      putLog('error', 'nfcStatus =', nfcStatus)
+      setGeneralStatus('error')
+    } else {
+      setGeneralStatus('success')
+    }
+    state['nfcStatus'] = nfcStatus
+
+    // network :available / disabled
+    const networkStatus = await testNetworkStatus()
+    if (networkStatus === 'disable') {
+      putLog('error', 'networkStatus =', networkStatus)
+      setGeneralStatus('error')
+    } else {
+      setGeneralStatus('success')
+    }
+    state['networkStatus'] = networkStatus
   } catch (error) {
     putLog('error', "-> initListenDevicesStatus,", error)
     setGeneralStatus('error')
   }
+
+  renderHtml(state)
+  // relance les écoutes dans 5 secondes
+  const timeoutId = setTimeout(initListenDevicesStatus, 5000)
 }
 
 /**
@@ -195,7 +189,7 @@ export async function readConfFile() {
   // console.log('-> readConfFile')
   try {
     let configFile
-     const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
+    const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
     const confFile = await cordovaReadFile(pathFile)
 
     if (confFile !== null) {
@@ -246,7 +240,8 @@ async function getServerInfos(pinCode) {
 }
 
 
-export async function updateCurrentServerAndGoServer(event) {
+export async function goServer(event) {
+  /*
   const url = event.target.getAttribute('data-server')
   const confFile = await readConfFile()
   confFile.currentServer = url
@@ -270,9 +265,11 @@ export async function updateCurrentServerAndGoServer(event) {
   form.appendChild(input)
   document.body.appendChild(form)
   form.submit()
+  */
 }
 
 export async function deleteServer(event) {
+  /*
   const url = event.target.getAttribute('data-server')
   let confFile = await readConfFile()
   // trouver tous les servers sauf url
@@ -283,6 +280,7 @@ export async function deleteServer(event) {
   putLog('info', 'update config file, after delete server =', updateConfFile)
   // render
   showMainContent(confFile)
+*/
 }
 
 /**

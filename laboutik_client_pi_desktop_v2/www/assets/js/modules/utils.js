@@ -12,7 +12,7 @@ export async function readConfFile() {
       method: "GET",
       mode: 'cors'
     })
-    if(response.status === 400) {
+    if (response.status === 400) {
       throw new Error('update/create file - backup error.')
     }
     return await response.json()
@@ -75,15 +75,26 @@ export function showLogs() {
 
 // écoute les messages du back
 function listens(socket) {
-  socket.on('networkStatus', (data) => {
-    // console.log('- networkStatus =', data)
-    state['networkStatus'] = data
+  socket.on('networkStatus', (status) => {
+    if (status === 'disable') {
+      putLog('error', 'networkStatus =', status)
+      setGeneralStatus('error')
+    } else {
+      setGeneralStatus('success')
+    }
+    state['networkStatus'] = status
     renderHtml(state)
   })
 
   socket.on('nfcMessage', (msg) => {
     console.log('- nfcMessage =', msg)
     if (msg.status) {
+      if (msg.status === 'disable') {
+        putLog('error', 'nfcStatus =', msg.status)
+        setGeneralStatus('error')
+      } else {
+        setGeneralStatus('success')
+      }
       state['nfcStatus'] = msg.status
       renderHtml(state)
     }

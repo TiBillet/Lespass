@@ -36,6 +36,7 @@ document.addEventListener('deviceready', async () => {
   state['step'] = 'init'
 
   // listen devices status
+   // étape 2 - listen devices status 
   initListenDevicesStatus()
 })
 

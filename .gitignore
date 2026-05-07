@@ -195,3 +195,4 @@ env.js
 # laboutik client pi/dektop
 !laboutik_client_pi_desktop_v2/www/
 !laboutik_client_pi_desktop_v2/www/**
+configLaboutik.json

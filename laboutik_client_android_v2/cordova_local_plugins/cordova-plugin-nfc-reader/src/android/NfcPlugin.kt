@@ -67,23 +67,26 @@ class NfcPlugin : CordovaPlugin() {
         callbackContext.success("stop listening nfc !")
         true
       }
-      
+
       "available" -> {
         try {
-          val result = JSONObject()
-          if ( nfcAdapter == null || nfcAdapter?.isEnabled == false ) {
-            result.put("status", false)
-            callbackContext.success(result)
-          } else {
-            result.put("status", true)
-            callbackContext.success(result)
+          if ( nfcAdapter == null) {
+            callbackContext.success("no nfc")
+          }
+          
+          if ( nfcAdapter?.isEnabled == false ) {
+            callbackContext.success("disable")
+          }
+          
+          if (nfcAdapter?.isEnabled == true ) {
+            callbackContext.success("available")
           }
         } catch (e: Exception) {
           callbackContext.error("Erreur Nfc: ${e.message}")
         }
         true
       }
-      
+
       else -> false
     }
   }

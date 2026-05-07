@@ -25,13 +25,10 @@ export function renderHtml(state) {
           <div class="BF-ligne">Activate wifi, xG network.</div>
         </div>
       </div>
-      <div class="status-action">
-        <div class="bt" onclick="ConnectivityPlugin.openWifiSettings()">Settings network</div>
-      </div>
     </div>`
     }
 
-    // nfcStatus : available / disabled
+    // nfcStatus : disabled
     if (state.nfcStatus !== 'available') {
       content += `
     <div class="status-item">

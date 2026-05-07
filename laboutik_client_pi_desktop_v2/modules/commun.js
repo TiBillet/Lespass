@@ -45,7 +45,7 @@ function readJson(path) {
  * @returns {object} - object.stasus = true|false , object.msg ...success|...error
  */
 export function writeJson(path, data) {
-  if (typeof(data) !== 'string') {
+  if (typeof (data) !== 'string') {
     data = JSON.stringify(data)
   }
   try {
@@ -71,23 +71,24 @@ export function startBrowser(url) {
 
 export async function testNetworkStatus(timeout = 3000) {
   const urls = [
-    "https://clients3.google.com/generate_204",
-    "https://1.1.1.1",
-    "https://api.github.com"
+    "https://httpbin.org/get",
+    "https://www.google.com/generate_204",
+    "https://postman-echo.com/get"
   ]
   const promises = urls.map(async (url) => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeout)
     try {
       const response = await fetch(url, {
-        method: "GET",
+        method: "HEAD",
+        mode: "no-cors",
         signal: controller.signal,
         cache: "no-store"
       })
       clearTimeout(timer)
       return response
     } catch (error) {
-      // console.log('-> testNetworkOk - fetch', error)
+      clearTimeout(timer)
       return null
     }
   })
@@ -105,24 +106,24 @@ export async function testNetworkStatus(timeout = 3000) {
  */
 export function readConfigFile() {
   try {
-  let configFile
-  const configFromFile = readJson(root + '/' + confFileName)
-  // console.log('-> readConfigFile - configFromFile =', configFromFile)
+    let configFile
+    const configFromFile = readJson(root + '/' + confFileName)
+    // console.log('-> readConfigFile - configFromFile =', configFromFile)
 
-  if (configFromFile !== null) {
-    configFile = configFromFile
-  } else {
-    configFile = env
-    configFile['version'] = env.version
-    // création du fichier de configuration
-    const result = writeJson(root + '/' + confFileName, env)
-    if(result.status === false) {
-      throw new Error(result.msg)
+    if (configFromFile !== null) {
+      configFile = configFromFile
+    } else {
+      configFile = env
+      configFile['version'] = env.version
+      // création du fichier de configuration
+      const result = writeJson(root + '/' + confFileName, env)
+      if (result.status === false) {
+        throw new Error(result.msg)
+      }
     }
-  }
-  return configFile    
+    return configFile
   } catch (error) {
-    console.log('readConfigFile,',error)
+    console.log('readConfigFile,', error)
     return null
   }
 }
