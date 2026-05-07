@@ -408,7 +408,11 @@
                         const amountInput = order.querySelector('.js-order-amount');
                         const customPriceInput = order.querySelector('.js-order-custom-price');
                         if (!amountInput || !customPriceInput) return;
-                        if (parseInt(amountInput.value) <= 0) return;
+                        // Le tarif libre n'est pas selectionne (quantite = 0, ou bs-counter pas encore upgrade) : on saute la validation.
+                        // bs-counter.value peut etre "null", "" ou undefined → parseInt() renvoie NaN, et NaN <= 0 est false.
+                        // / Free price not selected (qty = 0, or bs-counter not yet upgraded): skip validation.
+                        const ticketsQuantity = Number(amountInput.value) || 0;
+                        if (ticketsQuantity <= 0) return;
 
                         const errorDiv = customPriceInput.parentElement.querySelector('.invalid-feedback');
                         const rawValue = customPriceInput.value;
