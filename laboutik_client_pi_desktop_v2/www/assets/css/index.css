@@ -70,6 +70,13 @@ header {
   height: 85%;
 }
 
+.header-status {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--success);
+}
+
 .header-menu {
   width: var(--header-menu-width);
   height: 100%;
@@ -92,48 +99,48 @@ header {
   opacity: 0;
   visibility: hidden;
   transition: opacity 200ms ease-out, visibility 0ms 200ms;
-   user-select: none;
+  user-select: none;
 }
 
 .menu-burger-show {
- opacity: 1;
-	visibility: visible;
-	transition: opacity 200ms ease-out, visibility 0ms 0ms;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 200ms ease-out, visibility 0ms 0ms;
 }
 
 
 .menu-burger-content {
   position: absolute;
-	top: calc(var(--header-height) + 8px);
-	right: 0;
-	background-color: var(--noir03);
-	overflow-y: auto;
-	transform: translateY(-8px);
-	transition: transform 200ms ease-out, opacity 200ms ease-out, visibility 0ms 200ms;
+  top: calc(var(--header-height) + 8px);
+  right: 0;
+  background-color: var(--noir03);
+  overflow-y: auto;
+  transform: translateY(-8px);
+  transition: transform 200ms ease-out, opacity 200ms ease-out, visibility 0ms 200ms;
 }
 
 .menu-burger-item {
   position: relative;
-	min-width: 300px;
-	height: 60px;
-	display: flex;
-	flex-direction: row;
-	justify-content: flex-start;
-	align-items: center;
-	line-height: 60px;
-	text-transform: uppercase;
-	font-size: 1.4rem;
-	border-bottom: 1px solid var(--gris01);
-	cursor: pointer;
-	overflow: hidden;
-	padding-left: 10px;
-	padding-right: 10px;
+  min-width: 300px;
+  height: 60px;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  line-height: 60px;
+  text-transform: uppercase;
+  font-size: 1.4rem;
+  border-bottom: 1px solid var(--gris01);
+  cursor: pointer;
+  overflow: hidden;
+  padding-left: 10px;
+  padding-right: 10px;
   background-color: var(--bleu09);
   color: var(--blanc01);
 }
 
 .menu-burger-item svg {
-	padding-right: 6px;
+  padding-right: 6px;
 }
 
 .menu-burger-item-touch {

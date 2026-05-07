@@ -5,16 +5,19 @@ import { renderHtml } from './renderHtml.js'
  * @returns {object} - configuration
  */
 export async function readConfFile() {
-  console.log('-> fetchConfFile')
+  console.log('-> readConfFile')
   try {
     // PORT est déclaré dans index.html
     const response = await fetch(`http://localhost:${PORT}/read_config_file`, {
       method: "GET",
       mode: 'cors'
     })
+    if(response.status === 400) {
+      throw new Error('update/create file - backup error.')
+    }
     return await response.json()
   } catch (error) {
-    console.log('readConfFile,', error)
+    putLog('error', 'readConfigFile,', error)
     return null
   }
 }
@@ -115,6 +118,14 @@ function showSpinner() {
 function hideSpinner() {
   const spinner = document.querySelector('.spinner')
   spinner.style.display = "none"
+}
+
+/**
+ * Change background color of general status
+ * @param {string} status - error|success|info|warning
+ */
+export function setGeneralStatus(status) {
+  document.querySelector('.header-status').style.backgroundColor = `var(--${status})`
 }
 
 

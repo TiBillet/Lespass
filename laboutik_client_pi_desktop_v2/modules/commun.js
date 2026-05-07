@@ -33,11 +33,17 @@ function readJson(path) {
       throw new Error("The file doesn't exist")
     }
   } catch (error) {
-    console.log("Lecture fichier de configuration,", error.message)
+    console.log("readJson -", error.message)
     return null
   }
 }
 
+/**
+ * 
+ * @param {string} path 
+ * @param {string} data 
+ * @returns {object} - object.stasus = true|false , object.msg ...success|...error
+ */
 export function writeJson(path, data) {
   if (typeof(data) !== 'string') {
     data = JSON.stringify(data)
@@ -45,10 +51,10 @@ export function writeJson(path, data) {
   try {
     const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
     fs.writeFileSync(path, content, 'utf8')
-    return { status: true, msg: 'File backup success.' }
+    return { status: true, msg: 'Update/create file - backup success.' }
   } catch (error) {
     console.log("sauvegarde fichier de configuration,", error.message)
-    return { status: false, msg: 'File backup error.' }
+    return { status: false, msg: 'Update/create file - backup error.' }
   }
 }
 
@@ -95,9 +101,10 @@ export async function testNetworkStatus(timeout = 3000) {
 
 /**
  * Retour le fichier de configuration si il existe, sinon env
- * @returns {object}
+ * @returns {object|null}
  */
 export function readConfigFile() {
+  try {
   let configFile
   const configFromFile = readJson(root + '/' + confFileName)
   // console.log('-> readConfigFile - configFromFile =', configFromFile)
@@ -106,11 +113,18 @@ export function readConfigFile() {
     configFile = configFromFile
   } else {
     configFile = env
+    configFile['version'] = env.version
     // création du fichier de configuration
-    writeJson(root + '/' + confFileName, env)
+    const result = writeJson(root + '/' + confFileName, env)
+    if(result.status === false) {
+      throw new Error(result.msg)
+    }
   }
-  configFile['version'] = env.version
-  return configFile
+  return configFile    
+  } catch (error) {
+    console.log('readConfigFile,',error)
+    return null
+  }
 }
 
 

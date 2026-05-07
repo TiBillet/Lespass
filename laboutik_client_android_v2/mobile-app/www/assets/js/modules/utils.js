@@ -1,5 +1,7 @@
 import { showDevicesStatus, showMainContent } from './renderHtml.js'
 import { env } from '../../../env.js'
+// dev
+import './dev.js'
 
 export function putLog(typeMsg, msg, options) {
   let msgFinal = ''
@@ -40,39 +42,50 @@ function hideSpinner() {
   spinner.style.display = "none"
 }
 
-async function testNetWorkOk(url = "https://api.github.com", timeout = 3000, retries = 2) {
-  let test = false
-  async function tryFetch() {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
+/**
+ * Change background color of general status
+ * @param {string} status - error|success|info|warning
+ */
+export function setGeneralStatus(status) {
+  document.querySelector('.header-status').style.backgroundColor = `var(--${status})`
+}
 
+export async function testNetworkStatus(timeout = 3000) {
+  const urls = [
+    "https://clients3.google.com/generate_204",
+    "https://1.1.1.1",
+    "https://api.github.com"
+  ]
+  const promises = urls.map(async (url) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeout)
     try {
-      showSpinner()
       const response = await fetch(url, {
-        method: "HEAD",
+        method: "GET",
         signal: controller.signal,
         cache: "no-store"
       })
-      return true
-    } catch (error) {
-      return false
-    } finally {
       clearTimeout(timer)
-      hideSpinner()
+      return response
+    } catch (error) {
+      // console.log('-> testNetworkOk - fetch', error)
+      return null
     }
-  }
+  })
+  const responses = await Promise.all(promises);
 
-  for (let i = 0; i < retries; i++) {
-    test = await tryFetch()
+  if (responses.filter(item => item !== null).length >= 1) {
+    return 'available'
   }
-
-  return test
+  return 'disable'
 }
+
 
 export async function getDevicesStatusAndShow() {
   // console.log('-> getDevicesStatusAndShow')
   // NFC : not_available / enabled / disabled
   const nfcStatus = (await ConnectivityPlugin.getNfcStatus()).status
+
   // réseau : true / false
   const networkOK = await testNetWorkOk()
   showDevicesStatus({ networkOK, nfcStatus })
@@ -91,29 +104,22 @@ export async function awaitDevicesOk() {
   })
 }
 
-/**
- * read a configuration file
- * @returns {object} - configuration | null
- */
-async function readConfFile() {
-  const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
-  return await new Promise((resolve) => {
-    window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
-      fileEntry.file(function (file) {
-        const reader = new FileReader()
-        reader.onloadend = function () {
-          resolve(JSON.parse(this.result))
-        }
-        reader.readAsText(file)
-      }, () => {
-        putLog('error', `- info, read "configLaboutik.json" failed !`)
-        resolve(null)
-      })
-    }, () => {
-      putLog('error', `- info, read "configLaboutik.json" failed !`)
-      resolve(null)
-    })
-  })
+
+export async function initListenDevicesStatus() {
+  console.log('-> initListenDevicesStatus');
+  try {
+    // NFC : not_available / enabled / disabled
+    const nfcStatus = (await ConnectivityPlugin.getNfcStatus()).status
+    console.log('nfcStatus =', nfcStatus)
+    // state['nfcStatus'] = msg.status
+    // réseau : true / false
+    const networkOK = await testNetWorkOk()
+    console.log('nfcStatus =', nfcStatus)
+    //  state['networkStatus'] = 
+  } catch (error) {
+    putLog('error', "-> initListenDevicesStatus,", error)
+    setGeneralStatus('error')
+  }
 }
 
 /**
@@ -121,10 +127,9 @@ async function readConfFile() {
  * @param {object} confFile
  * @returns {boolean}
  */
-async function writeFile(confFile) {
-  // console.log('-> writeToFile, saveFileName =', state.saveFileName, '  --  basePath =', state.basePath)
+async function writeConfigFile(confFile) {
+  // console.log('2 -> writeConfigFile, confFile =', confFile)
   const data = JSON.stringify(confFile)
-
   return await new Promise((resolve) => {
     window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function (directoryEntry) {
       directoryEntry.getFile('configLaboutik.json', { create: true },
@@ -136,7 +141,6 @@ async function writeFile(confFile) {
             }
             fileWriter.onerror = function (e) {
               // you could hook this up with our global error handler, or pass in an error callback
-              putLog('error', `- info, write "configLaboutik.json" failed: ${e.toString()}`)
               resolve(false)
             }
             const blob = new Blob([data], { type: 'text/plain' })
@@ -147,39 +151,75 @@ async function writeFile(confFile) {
   })
 }
 
-export async function getConfFile() {
-  //confFile = fichier sauvegardé dans dossier app
-  let confFile = await readConfFile()
-  if (confFile === null) {
-    // confFile = fichier env.js dans www
-    confFile = env
+/**
+ * read a  file
+ * @returns {string} string content file
+ */
+async function cordovaReadFile(pathFile) {
+  console.log('-> readFile')
+  return await new Promise((resolve) => {
+    window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
+      fileEntry.file(function (file) {
+        const reader = new FileReader()
+        reader.onloadend = function () {
+          resolve(this.result)
+        }
+        reader.readAsText(file)
+      }, () => {
+        resolve(null)
+      })
+    }, () => {
+      resolve(null)
+    })
+  })
+}
 
-    /*
-    // dev mock
-    env.servers = [
-      { server_url: 'https://lespass.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini' },
-      { server_url: 'https://lespass1.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-1' },
-      { server_url: 'https://lespass2.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-2' },
-      { server_url: 'https://lespass3.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-3' },
-      { server_url: 'https://lespass4.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-4' },
-      { server_url: 'https://lespass5.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-5' },
-      { server_url: 'https://lespass6.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-6' },
-      { server_url: 'https://lespass7.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-7' },
-      { server_url: 'https://lespass8.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-8' },
-      { server_url: 'https://lespass9.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-9' },
-      { server_url: 'https://lespass10.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-10' },
-      { server_url: 'https://lespass11.filaos.re', api_key: 'ZtYOljZ6.pOOzpDrZxBgNldQ6hljZnCC1gfnxXWcY', device_name: 'd3mini-11' },
-    ]
-    */
+/**
+ * Vérifie le parse
+ * @param {string} content 
+ * @returns 
+ */
+function ParseStringToObject(content) {
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    putLog('error', '-> ParseStringToObject,', error)
   }
+}
 
-  return confFile
+/**
+ * Retour le fichier de configuration si il existe, sinon env
+ * @returns {object|null} The configuration object | null
+ */
+export async function readConfFile() {
+  // console.log('-> readConfFile')
+  try {
+    let configFile
+     const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
+    const confFile = await cordovaReadFile(pathFile)
+
+    if (confFile !== null) {
+      configFile = ParseStringToObject(confFile)
+    } else {
+      configFile = env
+      configFile['version'] = env.version
+      // création du fichier de configuration
+      const result = writeConfigFile(configFile)
+      if (result === false) {
+        throw new Error('update/create file - backup error.')
+      }
+    }
+    return configFile
+  } catch (error) {
+    putLog('error', 'readConfigFile,', error)
+    return null
+  }
 }
 
 async function getServerInfos(pinCode) {
   putLog('info', '-> getServerInfos  -- type pinCode =', pinCode)
   const confFile = await readConfFile()
-  putLog('info','confFile = ', confFile)
+  putLog('info', 'confFile = ', confFile)
   try {
     // requête à l'app django discovery
     showSpinner()

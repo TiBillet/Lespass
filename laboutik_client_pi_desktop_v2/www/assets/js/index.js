@@ -1,5 +1,5 @@
 import { addAllMenuItems } from './modules/menuPlugins/addAllMenuPlugins.js'
-import { initBridgeHardFront, putLog, managedPinCode, readConfFile } from './modules/utils.js'
+import { initBridgeHardFront, putLog, managedPinCode, readConfFile, setGeneralStatus } from './modules/utils.js'
 
 // Ouvrir/fermer le menu burger / Toggle burger menu
 function toggleClassMenuBurger(event) {
@@ -21,6 +21,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   window.state = {}
   const confFile = await readConfFile()
+
+  if (confFile === null) {
+    setGeneralStatus('error')
+    return
+  }
+
   // étape 1/init - affectation des propriétées de state 
   for (const key in confFile) {
     state[key] = confFile[key]
@@ -38,4 +44,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // validation du pincode
   document.querySelector('#pin-code').addEventListener('keydown', managedPinCode)
-})
+})  
