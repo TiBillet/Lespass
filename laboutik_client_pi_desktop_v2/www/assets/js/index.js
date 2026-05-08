@@ -1,5 +1,6 @@
 import { addAllMenuItems } from './modules/menuPlugins/addAllMenuPlugins.js'
-import { initBridgeHardFront, putLog, managedPinCode, readConfFile, setGeneralStatus } from './modules/utils.js'
+import { initBridgeHardFront, putLog, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from './modules/utils.js'
+import { renderHtml } from './modules/renderHtml.js'
 
 // Ouvrir/fermer le menu burger / Toggle burger menu
 function toggleClassMenuBurger(event) {
@@ -13,6 +14,14 @@ function hideMenu(event) {
   if (classEle.contains('menu-burger-container') || classEle.contains('menu-burger-item-touch')) {
     toggleClassMenuBurger()
   }
+}
+
+function hideContentInput() {
+  document.querySelector('.content-input').style.display = 'none'
+}
+
+function hideConfirmDeleteServer() {
+  document.querySelector('.confirm-container').style.display = 'none'
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -33,6 +42,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   state['step'] = 'init'
 
+  renderHtml(state)
+
   // initialise le bridge(socket.io)  hardware/front transfert des données de l'os.
   initBridgeHardFront()
 
@@ -44,4 +55,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // validation du pincode
   document.querySelector('#pin-code').addEventListener('keydown', managedPinCode)
-})  
+
+  // gestion bouton return
+  document.querySelector('.bt-input-return').addEventListener('click', hideContentInput)
+
+  // hide window confirm delete server, bt cancel
+  document.querySelector('.bt-delete-cancel').addEventListener('click', hideConfirmDeleteServer)
+
+  // validate delete server
+  document.querySelector('.bt-delete-validate').addEventListener('click', deleteServer)
+})

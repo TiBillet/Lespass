@@ -203,7 +203,7 @@ main {
 .content-input {
   position: absolute;
   left: 0;
-  top: var(--footer-height);
+  top: var(--header-height);
   width: 100%;
   height: calc(100vh - var(--header-height));
   display: none;
@@ -301,4 +301,12 @@ main {
 .bt-delete-server {
   width: 20%;
   background-color: var(--rouge06);
+}
+
+.bt-input-return {
+  width: 20%;
+  color: var(--blanc01);
+  background-color: var(--bleu05);
+  font-size: 2rem;
+  margin-top: 40px;
 }

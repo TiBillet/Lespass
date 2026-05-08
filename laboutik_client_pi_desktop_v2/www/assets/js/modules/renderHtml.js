@@ -1,5 +1,5 @@
 import { putLog } from './utils.js'
-import { goServer, deleteServer } from "./utils.js"
+import { goServer, confirmDeleteServer } from "./utils.js"
 
 function showInputPinCode() {
   // putLog('info', '-> showInputPinCode')
@@ -72,7 +72,7 @@ export function renderHtml(state) {
 
     // listen all .bt-delete-server elements
     document.querySelectorAll('.bt-delete-server').forEach((element) => {
-      element.addEventListener('click', deleteServer)
+      element.addEventListener('click', confirmDeleteServer)
     })
   } 
 }

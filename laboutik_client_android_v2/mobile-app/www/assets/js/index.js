@@ -15,6 +15,10 @@ function hideMenu(event) {
   }
 }
 
+function hideContentInput() {
+ document.querySelector('.content-input').style.display = 'none'
+}
+
 /**
  * wait cordova (devices activation)
  */
@@ -50,4 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // validation du pincode
   document.querySelector('#pin-code').addEventListener('keydown', managedPinCode)
+
+  // gestion bouton return
+  document.querySelector('.bt-input-return').addEventListener('click', hideContentInput)
 })

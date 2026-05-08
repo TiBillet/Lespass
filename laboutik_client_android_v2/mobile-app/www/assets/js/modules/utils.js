@@ -198,7 +198,7 @@ export async function readConfFile() {
       configFile = env
       configFile['version'] = env.version
       // création du fichier de configuration
-      const result = writeConfigFile(configFile)
+      const result = await writeConfigFile(configFile)
       if (result === false) {
         throw new Error('update/create file - backup error.')
       }
@@ -210,14 +210,17 @@ export async function readConfFile() {
   }
 }
 
+/**
+ * Post le pinCode au serveur discovery pour récupérer
+ * @param {int} pinCode 
+ * @returns {object} 
+ */
 async function getServerInfos(pinCode) {
-  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode)
-  const confFile = await readConfFile()
-  putLog('info', 'confFile = ', confFile)
+  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode, typeof(pinCode))
   try {
     // requête à l'app django discovery
     showSpinner()
-    const response = await fetch(confFile.server_pin_code + '/api/discovery/claim/', {
+    const response = await fetch(state.server_pin_code + '/api/discovery/claim/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -239,17 +242,17 @@ async function getServerInfos(pinCode) {
   }
 }
 
-
+/**
+ * Go server - post api_key and follow back redirection
+ * @param {object} event 
+ */
 export async function goServer(event) {
-  /*
+  console.log('-> goServer')
   const url = event.target.getAttribute('data-server')
-  const confFile = await readConfFile()
-  confFile.currentServer = url
-  // update conFile
-  const updateConfFile = await writeFile(confFile)
-  putLog('info', 'update config file, current server =', updateConfFile)
+  const data = state.servers.find(item => item.server_url === url)
+  console.log('data =', data)
 
-  const data = confFile.servers.find(item => item.server_url === url)
+  // TODO: peut être ajouter le current server dans config file.
 
   // Soumission POST via formulaire natif pour éviter les restrictions CORS/fetch
   // et garantir la transmission du cookie session sur la redirection Django
@@ -265,22 +268,39 @@ export async function goServer(event) {
   form.appendChild(input)
   document.body.appendChild(form)
   form.submit()
-  */
 }
 
+/**
+ * Delete server in list after click button "Delete"
+ * @param {object} event 
+ */
 export async function deleteServer(event) {
-  /*
-  const url = event.target.getAttribute('data-server')
-  let confFile = await readConfFile()
-  // trouver tous les servers sauf url
-  const filterServers = confFile.servers.filter(item => item.server_url !== url)
-  confFile.servers = filterServers
-  // update conFile
-  const updateConfFile = await writeFile(confFile)
-  putLog('info', 'update config file, after delete server =', updateConfFile)
-  // render
-  showMainContent(confFile)
-*/
+ console.log('-> deleteServer')
+
+   const url = event.target.getAttribute('data-server')
+   let typeMsg = "success"
+ 
+   // copie l'ancien state
+   const oldState = structuredClone(state)
+ 
+   // trouver tous les servers sauf url
+   const filterServers = state.servers.filter(item => item.server_url !== url)
+   state.servers = filterServers
+ 
+   // update conFile
+   const updateConfFile = await writeConfigFile(state)
+ 
+   // retour à l'ancien state si fichier pas sauvegardé
+   if (updateConfFile === false) {
+     state = structuredClone(oldState)
+     oldState = null
+     typeMsg = "error"
+   }
+ 
+   putLog(typeMsg, 'update config file, after delete server =', updateConfFile)
+ 
+   // render
+   renderHtml(state)
 }
 
 /**
@@ -312,18 +332,31 @@ export async function managedPinCode(event) {
 
       // pinCode entré -> get server
       const result = await getServerInfos(parseInt(pinCode))
+      let typeMsg = "success"
 
       if (result.error === false) {
-        const confFile = await readConfFile()
         // cache la vue permettant d'entrer le pincode
         document.querySelector('.content-input').style.display = 'none'
+
+        // copie l'ancien state
+        const oldState = structuredClone(state)
+
         // add server in servers list
-        confFile.servers.push(result.server)
+        state.servers.push(result.server)
+
         // update conFile
-        const updateConfFile = await writeFile(confFile)
-        putLog('info', 'update config file, add server =', updateConfFile)
+        const updateConfFile = await writeConfigFile(state)
+
+        // retour à l'ancien state si fichier pas sauvegardé
+        if (updateConfFile === false) {
+          state = structuredClone(oldState)
+          oldState = null
+          typeMsg = "error"
+        }
+
+        putLog('typeMsg', 'update config file, add server =', updateConfFile)
         // render
-        showMainContent(confFile)
+        showMainContent(state)
 
       } else {
         result.msgs.forEach(msg => {

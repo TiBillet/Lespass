@@ -1,5 +1,16 @@
 import { renderHtml } from './renderHtml.js'
 
+function showSpinner() {
+  const spinner = document.querySelector('.spinner')
+  spinner.style.display = "flex"
+}
+
+function hideSpinner() {
+  const spinner = document.querySelector('.spinner')
+  spinner.style.display = "none"
+}
+
+
 /**
  * read a configuration file from an http server
  * @returns {object} - configuration
@@ -7,6 +18,7 @@ import { renderHtml } from './renderHtml.js'
 export async function readConfFile() {
   console.log('-> readConfFile')
   try {
+    showSpinner()
     // PORT est déclaré dans index.html
     const response = await fetch(`http://localhost:${PORT}/read_config_file`, {
       method: "GET",
@@ -15,8 +27,11 @@ export async function readConfFile() {
     if (response.status === 400) {
       throw new Error('update/create file - backup error.')
     }
-    return await response.json()
+    const result = await response.json()
+    hideSpinner()
+    return result
   } catch (error) {
+    hideSpinner()
     putLog('error', 'readConfigFile,', error)
     return null
   }
@@ -119,16 +134,6 @@ export function initBridgeHardFront() {
   } catch (error) {
     putLog('error', '-> initSocketIo -', error)
   }
-}
-
-function showSpinner() {
-  const spinner = document.querySelector('.spinner')
-  spinner.style.display = "flex"
-}
-
-function hideSpinner() {
-  const spinner = document.querySelector('.spinner')
-  spinner.style.display = "none"
 }
 
 /**
@@ -244,8 +249,12 @@ export async function managedPinCode(event) {
   }
 }
 
+/**
+ * Go server - post api_key and follow back redirection
+ * @param {object} event 
+ */
 export async function goServer(event) {
-  console.log('-> deleteSgoServererver')
+  console.log('-> goServer')
 
   const url = event.target.getAttribute('data-server')
   const data = state.servers.find(item => item.server_url === url)
@@ -268,8 +277,27 @@ export async function goServer(event) {
 
 }
 
+/**
+ * Delete server in list after click button "Delete"
+ * @param {object} event 
+ */
+export async function confirmDeleteServer(event) {
+  console.log('-> confirmDeleteServer')
+  document.querySelector('.confirm-container').style.display = "flex"
+  const url = event.target.getAttribute('data-server')
+  document.querySelector('.bt-delete-validate').setAttribute('data-server', url)
+}
+
+/**
+ * Delete server in list after click button "Delete"
+ * @param {object} event 
+ */
 export async function deleteServer(event) {
-  console.log('-> deleteServer')
+  // console.log('-> deleteServer')
+
+  // hide window confirmation
+  document.querySelector('.confirm-container').style.display = "flex"
+ 
   const url = event.target.getAttribute('data-server')
   let typeMsg = "success"
 
