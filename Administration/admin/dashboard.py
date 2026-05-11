@@ -56,6 +56,43 @@ def get_sidebar_navigation(request):
                 }
             ],
         },
+        {
+            "title": _("Products"),
+            "separator": True,  # Top border
+            "collapsible": True,  # Collapsible group of links
+            "items": [
+                {
+                    "title": _("Products"),
+                    "icon": "storefront",  # Supported icon set: https://fonts.google.com/icons
+                    "link": reverse_lazy("staff_admin:BaseBillet_product_changelist"),
+                    # "badge": "Administration.admin_tenant.badge_callback",
+                    "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                },
+                {
+                    "title": _("Promotional codes"),
+                    "icon": "local_offer",  # Supported icon set: https://fonts.google.com/icons
+                    "link": reverse_lazy("staff_admin:BaseBillet_promotionalcode_changelist"),
+                    "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                },
+                {
+                    "title": _("Tags"),
+                    "icon": "style",  # Supported icon set: https://fonts.google.com/icons
+                    "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
+                    # "badge": "Administration.admin_tenant.badge_callback",
+                    "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+
+                },
+                # {
+                #     "title": _("Options"),
+                #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
+                #     "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
+                #     # "badge": "Administration.admin_tenant.badge_callback",
+                #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
+                # },
+            ],
+        },
     ]
 
 
@@ -68,14 +105,15 @@ def get_sidebar_navigation(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    {
-                        "title": _("Membership products"),
-                        "icon": "loyalty",
-                        "link": reverse_lazy(
-                            "staff_admin:BaseBillet_membershipproduct_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
+                    # FROM V2 : PAGE TO IMPLEMENT
+                    # {
+                    #     "title": _("Membership products"),
+                    #     "icon": "loyalty",
+                    #     "link": reverse_lazy(
+                    #         "staff_admin:BaseBillet_membershipproduct_changelist"
+                    #     ),
+                    #     "permission": admin_permission,
+                    # },
                     {
                         "title": _("Subscriptions"),
                         "icon": "card_membership",
@@ -98,20 +136,21 @@ def get_sidebar_navigation(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    {
-                        "title": _("Dashboard"),
-                        "icon": "monitoring",
-                        "link": reverse_lazy("staff_admin:BaseBillet_event_dashboard"),
-                        "permission": admin_permission,
-                    },
-                    {
-                        "title": _("Ticket products"),
-                        "icon": "storefront",
-                        "link": reverse_lazy(
-                            "staff_admin:BaseBillet_ticketproduct_changelist"
-                        ),
-                        "permission": admin_permission,
-                    },
+                    # FROM V2 : PAGES TO IMPLEMENT
+                    # {
+                    #     "title": _("Dashboard"),
+                    #     "icon": "monitoring",
+                    #     "link": reverse_lazy("staff_admin:BaseBillet_event_dashboard"),
+                    #     "permission": admin_permission,
+                    # },
+                    # {
+                    #     "title": _("Ticket products"),
+                    #     "icon": "storefront",
+                    #     "link": reverse_lazy(
+                    #         "staff_admin:BaseBillet_ticketproduct_changelist"
+                    #     ),
+                    #     "permission": admin_permission,
+                    # },
                     {
                         "title": _("Carousel"),
                         "icon": "photo_library",
@@ -176,6 +215,37 @@ def get_sidebar_navigation(request):
             }
         )
 
+    # --- module_federation : tout ce qui est lié a la fédération ---
+    # --- module_federation : everything linked to the federation ---
+    if configuration.module_federation:
+        navigation.append(
+            {
+                "title": _("Fédération"),
+                "separator": True,
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Espaces"),
+                        "icon": "linked_services",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_federatedplace_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                    {
+                        "title": _("Assets"),
+                        "icon": "currency_exchange",
+                        "link": reverse_lazy(
+                            "staff_admin:fedow_public_assetfedowpublic_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
+                ],
+            }
+        )
+
+
+    # FROM V2 : TO ADD LATER
     # --- module_caisse : Caisse LaBoutik ---
     # --- module_caisse: POS LaBoutik ---
     if configuration.module_caisse:
@@ -522,58 +592,33 @@ def get_sidebar_navigation(request):
                     ),
                     "permission": admin_permission,
                 },
+                # FROM V2 : TO ADD LATER
                 # {
                 #     "title": _("Operation logs"),
                 #     "icon": "history",
                 #     "link": reverse_lazy("staff_admin:laboutik_journaloperation_changelist"),
                 #     "permission": admin_permission,
                 # },
-                {
-                    "title": _("Accounting codes"),
-                    "icon": "account_balance",
-                    "link": reverse_lazy(
-                        "staff_admin:laboutik_comptecomptable_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Payment method mapping"),
-                    "icon": "swap_horiz",
-                    "link": reverse_lazy(
-                        "staff_admin:laboutik_mappingmoyendepaiement_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
+                # {
+                #     "title": _("Accounting codes"),
+                #     "icon": "account_balance",
+                #     "link": reverse_lazy(
+                #         "staff_admin:laboutik_comptecomptable_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # },
+                # {
+                #     "title": _("Payment method mapping"),
+                #     "icon": "swap_horiz",
+                #     "link": reverse_lazy(
+                #         "staff_admin:laboutik_mappingmoyendepaiement_changelist"
+                #     ),
+                #     "permission": admin_permission,
+                # },
             ],
         }
     )
 
-    # --- Toujours visible : Fédération ---
-    navigation.append(
-        {
-            "title": _("Fédération"),
-            "separator": True,
-            "collapsible": True,
-            "items": [
-                {
-                    "title": _("Espaces"),
-                    "icon": "linked_services",
-                    "link": reverse_lazy(
-                        "staff_admin:BaseBillet_federatedplace_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-                {
-                    "title": _("Assets"),
-                    "icon": "currency_exchange",
-                    "link": reverse_lazy(
-                        "staff_admin:fedow_public_assetfedowpublic_changelist"
-                    ),
-                    "permission": admin_permission,
-                },
-            ],
-        }
-    )
 
     # --- module_crowdfunding : Contributions ---
     if configuration.module_crowdfunding:
@@ -673,12 +718,12 @@ def get_sidebar_navigation(request):
                     "link": reverse_lazy("staff_admin:Customers_client_changelist"),
                     "permission": root_permission,
                 },
-                {
-                    "title": _("Virements pot central"),
-                    "icon": "account_balance",
-                    "link": reverse_lazy("staff_admin:bank_transfers_dashboard"),
-                    "permission": root_permission,
-                },
+                # {
+                #     "title": _("Virements pot central"),
+                #     "icon": "account_balance",
+                #     "link": reverse_lazy("staff_admin:bank_transfers_dashboard"),
+                #     "permission": root_permission,
+                # },
             ],
         }
     )
@@ -709,6 +754,11 @@ MODULE_FIELDS = {
         "name": _("Crowdfunding"),
         "description": _("Participatory funding and adaptive contributions"),
         "testid": "dashboard-card-crowdfunding",
+    },
+    "module_federation": {
+        "name": _("Federation"),
+        "description": _("Explore federation with other TiBillet instance."),
+        "testid": "dashboard-card-federation",
     },
     # FROM V2 : TO IMPLEMENT LATER ON
     # "module_monnaie_locale": {
@@ -791,16 +841,20 @@ def dashboard_callback(request, context):
     # / Phase 2: inject central pot debt for the tenant widget
     # Cf. tests/PIEGES.md 9.1b : verifier isinstance(connection.tenant, Client)
     # car en contexte de test connection.tenant peut etre un FakeTenant.
-    try:
-        config_phase2 = Configuration.get_solo()
-    except Exception:
-        config_phase2 = None
-    if config_phase2 is not None and getattr(config_phase2, "module_monnaie_locale", False):
-        from fedow_core.services import BankTransferService
-        from Customers.models import Client as CustomersClient
-        if isinstance(connection.tenant, CustomersClient):
-            context["dettes_pot_central"] = BankTransferService.obtenir_dette_pour_tenant(
-                connection.tenant
-            )
+
+    # FROM V2 : TO ADD WHEN FEDOW IS IMPLEMENTED
+    # try:
+    #     config_phase2 = Configuration.get_solo()
+    # except Exception:
+    #     config_phase2 = None
+    # if config_phase2 is not None and getattr(config_phase2, "module_monnaie_locale", False):
+    #     from fedow_core.services import BankTransferService
+    #     from Customers.models import Client as CustomersClient
+    #     if isinstance(connection.tenant, CustomersClient):
+    #         context["dettes_pot_central"] = BankTransferService.obtenir_dette_pour_tenant(
+    #             connection.tenant
+    #         )
+    #
+    # NEW V2 END
 
     return context

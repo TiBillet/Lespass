@@ -549,6 +549,11 @@ class Configuration(SingletonModel):
         verbose_name=_("Crowdfunding module"),
     )
 
+    module_federation = models.BooleanField(
+        default=False,
+        verbose_name=_("Federation module"),
+    )
+
     # FROM V2 : UNUSED
     module_monnaie_locale = models.BooleanField(
         default=False,
@@ -571,10 +576,11 @@ class Configuration(SingletonModel):
         help_text=_("Enable connected beer tap management (controlvanne)."),
     )
     module_booking = models.BooleanField(
-        default=True,
+        default=False,
         verbose_name=_("Booking module"),
         help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
     )
+    # NEW V2 END
 
     currency_code = models.CharField(max_length=3, default="EUR")
 
