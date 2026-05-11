@@ -1,30 +1,16 @@
-// point d'entré de l'app laboutik
-globalThis.state = {
-  confFile: null, // fichier de configuration pour la persistance des données
-  nfc: null  // instance global du lecteur nfc
-}
+/** ask_primary_card.html et le point d'entrée front de l'application laboutik.
+ * récupération du type d'application cordova/pi/desktop par l'url de la page 
+ * pour toute l'aplication
+ */
+state.typeApp = location.search.toString().split('&').find(item => item.includes('type_app')).split('=')[1]
 
-const PORT = 3000
+// port socketIo pour application pi et desktop
+state.socketIoPort = 3000 
 
 /**
- * Is cordova application ?
- * @public
- * @returns {boolean}
- */
-function isCordovaApp() {
-  try {
-    if (cordova) {
-      return true
-    }
-  } catch (error) {
-    return false
-  }
-}
-
-/**
- * Read the configuration file
- * @returns {object} - configuration
- */
+* Read the configuration file
+* @returns {object} - configuration
+*/
 async function cordovaReadConfFile() {
   const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
   return await new Promise((resolve) => {
@@ -46,14 +32,13 @@ async function cordovaReadConfFile() {
   })
 }
 
-
 /**
  * read a configuration file from an http server
  * @returns {object} - configuration
  */
 async function readConfFile() {
   try {
-    const response = await fetch(`http://localhost:${PORT}/read_config_file`, {
+    const response = await fetch(`http://localhost:${state.socketIoPort}/read_config_file`, {
       method: "GET",
       mode: 'cors'
     })
@@ -63,6 +48,21 @@ async function readConfFile() {
     console.log('httpReadFromFile,', error)
     return null
   }
+}
+
+/**
+ * Load config file in state.configFile
+ * @param {string} typeApp - cordova/pi/desktop 
+ */
+async function loadConfigFile(typeApp) {
+  // console.log('-> loadConfigFile - typeApp =', typeApp)
+  let configFile = null
+  if (typeApp !== 'cordova') {
+    configFile = await readConfFile()
+  } else  {
+    configFile = await cordovaReadConfFile()
+  }
+  state['configFile'] = configFile
 }
 
 // gestionnaire du formulaire
@@ -95,35 +95,22 @@ function primaryCardManageForm(event) {
   }
 }
 
-async function initApp(typeApp) {
-  if (typeApp === 'pi/desktop') {
-    console.log('app pi/desktop !')
-    state.confFile = await readConfFile()
-  }
-
-  if (typeApp === 'cordova') {
-    console.log('app cordova !')
-    state.confFile = await cordovaReadConfFile()
-  }
-  state.nfc = new NfcReader()
-  initNfc()
-}
-
 
 /**
- * TODO
- * pi et desktop :
- * affectation des propriétées de state
+ * Attend le chargement de la page
  */
 document.addEventListener("DOMContentLoaded", () => {
-  // écoute des commandes sur le formulaire "#form-nfc"
+  // écoute des commandes/évènements sur le formulaire "#form-nfc"
   document.querySelector('#form-nfc').addEventListener('primaryCardManageForm', primaryCardManageForm)
 
-  if (isCordovaApp() === false) {
-    initApp('pi/desktop')
+  // entrée front de l'application, chargement du fichier de configuration
+  if (state.typeApp !== 'cordova') {
+    // application non cordova, page chargée
+    loadConfigFile(state.typeApp)
   } else {
+    // application cordova, attent que les périphériques soient pris en compte :
     document.addEventListener('deviceready', async () => {
-      initApp('cordova')
+      loadConfigFile(state.typeApp)
     })
   }
 })

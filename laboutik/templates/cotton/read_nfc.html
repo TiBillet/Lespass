@@ -1,6 +1,6 @@
 {% load static %}
 <div {{ attrs }} class="nfc-container">
-	<c-spinner size="240" />
+	<c-spinner size=" 240" />
 	<div class="nfc-container-slot">
 		{{ slot }}
 		<!-- reference(id) for the insertion of simulation buttons -->
@@ -11,19 +11,34 @@
 	</div>
 
 	<script>
-		<!-- initNfc est une fonction dynamique construite par coton, --> 
-		<!-- elle doit être lancée après la mise à jour du state      -->
-		<!-- par un fichier de configuration, persistance des données -->
-		function initNfc() {
-			console.log('-> initNfc , state =', state)
+		async function initNfc(typeApp) {
 			try {
-				
+				if (!state.nfc) {
+					console.log('Première instanciations de nfc !')
+					state['nfc'] = new NfcReader(3000, typeApp)
+				}
+				console.log(state)
 				// start read nfc
-				state.nfc.start({ eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}' })
+				await state.nfc.start({ eventManageForm: '{{ event_manage_form }}', submitUrl: '{{ submit_url }}' })
 			} catch (error) {
 				console.log('-> Cotton - read_nfc.html - initNfc,', error)
 			}
 		}
-	</script>
 
+		/**
+		 * Attend le chargement de la page
+		 * si app cordova attent que les périphériques soient pris en compte
+		 */
+		document.addEventListener("DOMContentLoaded", () => {
+			if (state.typeApp !== 'cordova') {
+				initNfc(state.typeApp)
+			} else {
+				// cordova attent que les périphériques soient pris en compte
+				document.addEventListener('deviceready', async () => {
+					initNfc(state.typeApp)
+				})
+			}
+		})
+
+	</script>
 </div>

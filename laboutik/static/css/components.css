@@ -16,6 +16,22 @@
 	height: 100%;
 }
 
+.nfc-toggle-simu {
+	position: absolute;
+	right: 0;
+	top: 0;
+	width: 60px;
+	height: 60px;
+	color: var(--blanc01);
+	margin: 16px;
+
+	svg {
+		width: 100%;
+		height: 100%;
+		cursor: pointer;
+	}
+}
+
 .nfc-container-slot,
 .spinner {
 	grid-area: 1 / 1;
