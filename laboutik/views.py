@@ -1144,11 +1144,13 @@ class CaisseViewSet(viewsets.ViewSet):
         Affiche la page d'attente de la carte primaire (carte du responsable de caisse).
         Displays the primary card waiting page (cash register manager's card).
         """
+        type_app = request.GET.get("type_app", "unknown")
         state = _construire_state()
         context = {
             "state": state,
             "stateJson": dumps(state),
             "method": request.method,
+            "type_app": type_app,
         }
         return render(request, "laboutik/views/ask_primary_card.html", context)
 
@@ -8832,6 +8834,9 @@ class LaBoutikAuthBridgeView(APIView):
         # Extraction de la clé depuis le POST form-data
         # / Extract key from POST form-data
         api_key_string = request.POST.get("api_key", "").strip()
+        type_app = request.POST.get("type_app", "unknown").strip()
+        print("-------------------------------------------------")
+        print(f"-> post - type_app = {type_app}")
 
         if not api_key_string:
             # Log : tentative d'accès sans api_key dans le POST
@@ -8894,4 +8899,4 @@ class LaBoutikAuthBridgeView(APIView):
             term_user.email,
         )
 
-        return HttpResponseRedirect("/laboutik/caisse/")
+        return HttpResponseRedirect("/laboutik/caisse?type_app=" + type_app)

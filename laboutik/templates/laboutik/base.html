@@ -130,7 +130,9 @@
 	-->
 	<div id="messages" aria-live="polite"></div>
 	<div id="confirm" aria-live="polite"></div>
+	{% if type_app == "cordova" %}
 	<script src="http://localhost/cordova.js"></script>
+	{% endif %}
 	<script src="{% static 'js/htmx@2.0.6.min.js' %}"></script>
 	<!-- Extension loading-states — spinner avec delai configurable (pas de blink si requete rapide)
 	     / loading-states extension — spinner with configurable delay (no blink on fast requests) -->
@@ -138,7 +140,7 @@
 	<!-- Extension WebSocket HTMX — push serveur vers navigateur (jauges, notifications)
 	     / HTMX WebSocket extension — server push to browser (gauges, notifications) -->
 	<script src="{% static 'js/ext/ws.js' %}"></script>
-	<script src="{% static 'js/socket.io.3.0.4.js' %}"></script>
+	<script src="{% static 'js/socket.io.min.js' %}"></script>
 	<script>
 		/**
 		 * Retire la classe .hide des overlays #messages et #confirm

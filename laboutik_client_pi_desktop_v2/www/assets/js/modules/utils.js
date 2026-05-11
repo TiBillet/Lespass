@@ -258,7 +258,7 @@ export async function goServer(event) {
 
   const url = event.target.getAttribute('data-server')
   const data = state.servers.find(item => item.server_url === url)
-  console.log('data =', data);
+  // console.log('data =', data);
 
   // Soumission POST via formulaire natif pour éviter les restrictions CORS/fetch
   // et garantir la transmission du cookie session sur la redirection Django
@@ -271,7 +271,13 @@ export async function goServer(event) {
   input.name = 'api_key'
   input.value = data.api_key
 
+  const input2 = document.createElement('input')
+  input2.type = 'hidden'
+  input2.name = 'type_app'
+  input2.value = state.type_app
+
   form.appendChild(input)
+  form.appendChild(input2)
   document.body.appendChild(form)
   form.submit()
 
@@ -297,7 +303,7 @@ export async function deleteServer(event) {
 
   // hide window confirmation
   document.querySelector('.confirm-container').style.display = "flex"
- 
+
   const url = event.target.getAttribute('data-server')
   let typeMsg = "success"
 

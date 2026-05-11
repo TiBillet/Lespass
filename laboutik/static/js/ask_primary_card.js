@@ -4,6 +4,23 @@ globalThis.state = {
   nfc: null  // instance global du lecteur nfc
 }
 
+const PORT = 3000
+
+/**
+ * Is cordova application ?
+ * @public
+ * @returns {boolean}
+ */
+function isCordovaApp() {
+  try {
+    if (cordova) {
+      return true
+    }
+  } catch (error) {
+    return false
+  }
+}
+
 /**
  * Read the configuration file
  * @returns {object} - configuration
@@ -34,9 +51,9 @@ async function cordovaReadConfFile() {
  * read a configuration file from an http server
  * @returns {object} - configuration
  */
-async function fetchConfFile() {
+async function readConfFile() {
   try {
-    const response = await fetch('http://localhost:3000/config_file', {
+    const response = await fetch(`http://localhost:${PORT}/read_config_file`, {
       method: "GET",
       mode: 'cors'
     })
@@ -78,25 +95,19 @@ function primaryCardManageForm(event) {
   }
 }
 
-async function initStateForPiDesktop() {
-  console.log('pi/desktop')
-  // TODO: ajouter la route http://localhost:3000/config_file au nfcServer.js
-  // state.confFile = await fetchConfFile() 
+async function initApp(typeApp) {
+  if (typeApp === 'pi/desktop') {
+    console.log('app pi/desktop !')
+    state.confFile = await readConfFile()
+  }
+
+  if (typeApp === 'cordova') {
+    console.log('app cordova !')
+    state.confFile = await cordovaReadConfFile()
+  }
   state.nfc = new NfcReader()
   initNfc()
 }
-
-/**
- * cordova :
- * attente de la prise en compte des périphériques
- * affectation des propriétées de state
- */
-document.addEventListener('deviceready', async () => {
-  console.log('cordova - deviceready')
-  state.confFile = await cordovaReadConfFile()
-  state.nfc = new NfcReader()
-  initNfc()
-})
 
 
 /**
@@ -109,6 +120,10 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelector('#form-nfc').addEventListener('primaryCardManageForm', primaryCardManageForm)
 
   if (isCordovaApp() === false) {
-    initStateForPiDesktop()
+    initApp('pi/desktop')
+  } else {
+    document.addEventListener('deviceready', async () => {
+      initApp('cordova')
+    })
   }
 })

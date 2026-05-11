@@ -216,7 +216,7 @@ export async function readConfFile() {
  * @returns {object} 
  */
 async function getServerInfos(pinCode) {
-  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode, typeof(pinCode))
+  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode, typeof (pinCode))
   try {
     // requête à l'app django discovery
     showSpinner()
@@ -265,7 +265,15 @@ export async function goServer(event) {
   input.name = 'api_key'
   input.value = data.api_key
 
+  const input2 = document.createElement('input')
+  input2.type = 'hidden'
+  input2.name = 'type_app'
+  console.log('state.type_app =', state.type_app);
+  
+  input2.value = state.type_app
+
   form.appendChild(input)
+  form.appendChild(input2)
   document.body.appendChild(form)
   form.submit()
 }
@@ -275,32 +283,32 @@ export async function goServer(event) {
  * @param {object} event 
  */
 export async function deleteServer(event) {
- console.log('-> deleteServer')
+  console.log('-> deleteServer')
 
-   const url = event.target.getAttribute('data-server')
-   let typeMsg = "success"
- 
-   // copie l'ancien state
-   const oldState = structuredClone(state)
- 
-   // trouver tous les servers sauf url
-   const filterServers = state.servers.filter(item => item.server_url !== url)
-   state.servers = filterServers
- 
-   // update conFile
-   const updateConfFile = await writeConfigFile(state)
- 
-   // retour à l'ancien state si fichier pas sauvegardé
-   if (updateConfFile === false) {
-     state = structuredClone(oldState)
-     oldState = null
-     typeMsg = "error"
-   }
- 
-   putLog(typeMsg, 'update config file, after delete server =', updateConfFile)
- 
-   // render
-   renderHtml(state)
+  const url = event.target.getAttribute('data-server')
+  let typeMsg = "success"
+
+  // copie l'ancien state
+  const oldState = structuredClone(state)
+
+  // trouver tous les servers sauf url
+  const filterServers = state.servers.filter(item => item.server_url !== url)
+  state.servers = filterServers
+
+  // update conFile
+  const updateConfFile = await writeConfigFile(state)
+
+  // retour à l'ancien state si fichier pas sauvegardé
+  if (updateConfFile === false) {
+    state = structuredClone(oldState)
+    oldState = null
+    typeMsg = "error"
+  }
+
+  putLog(typeMsg, 'update config file, after delete server =', updateConfFile)
+
+  // render
+  renderHtml(state)
 }
 
 /**

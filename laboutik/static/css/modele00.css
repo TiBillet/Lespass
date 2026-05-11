@@ -4,7 +4,7 @@
 /* http://luciole-vision.com/#top */
 @font-face {
   font-family: "Luciole-regular";
-  src: url("./fonts/Luciole-Regular.ttf") format("truetype");
+  src: url("./fonts/Luciole-Regular.woff") format("woff");
   font-weight: normal;
 }
 
@@ -213,12 +213,12 @@
   }
 
   /* pour une largeur supérieure à 600 pixels  */
-	@media only screen and (width > 600px) {
-		.bt-basic-container {
-			width: calc(var(--bt-basic-width) * 1.42);
-			height: calc(var(--bt-basic-height) * 1.34);
-		}
-	}
+  @media only screen and (width > 600px) {
+    .bt-basic-container {
+      width: calc(var(--bt-basic-width) * 1.42);
+      height: calc(var(--bt-basic-height) * 1.34);
+    }
+  }
 
   /* pour une largeur supérieure à 1022 pixels */
   @media only screen and (width > 1022px) {
