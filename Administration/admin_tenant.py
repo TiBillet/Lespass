@@ -2343,6 +2343,7 @@ class LigneArticlePublishedFilter(admin.SimpleListFilter):
 class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
     warn_unsaved_form = True  # Default: False
+    list_filter_submit = True
 
     list_filter = ('status',
                    LigneArticlePublishedFilter,

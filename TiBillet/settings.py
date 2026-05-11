@@ -63,6 +63,8 @@ if not DEBUG and os.environ.get('SENTRY_DNS'):
         profiles_sample_rate=0.3,
     )
 
+DATETIME_INPUT_FORMATS = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d %H:%M', '%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M', '%d/%m/%y %H:%M:%S', '%d/%m/%y %H:%M:%S.%f', '%d/%m/%y %H:%M']
+
 ALLOWED_HOSTS = [
     f'{os.environ["DOMAIN"]}',
     f'.{os.environ["DOMAIN"]}',
