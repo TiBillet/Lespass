@@ -1,3 +1,8 @@
+from Administration.admin.dashboard import (  # noqa: F401
+    dashboard_callback, environment_callback, get_sidebar_navigation,
+    MODULE_FIELDS, _build_modules_context, adhesion_badge_callback,
+)
+
 import json
 import logging
 import re
@@ -6,7 +11,20 @@ from decimal import Decimal
 from typing import Any, Optional, Dict
 from urllib.parse import urlencode
 from uuid import UUID, uuid4
+from collections.abc import Iterator
+from django.urls import path, reverse
 
+from django.contrib import admin
+from django.contrib.admin.options import ModelAdmin
+from django.contrib.admin.views.main import ChangeList
+from django.core.validators import EMPTY_VALUES
+from django.db.models import Model, QuerySet
+from django.db.models.fields import DateField, DateTimeField, Field
+from django.forms import ValidationError
+from django.http import HttpRequest
+
+from unfold.contrib.filters.forms import RangeDateForm, RangeDateTimeForm
+from unfold.utils import parse_date_str, parse_datetime_str
 import requests
 import segno
 from django import forms
@@ -410,24 +428,76 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         }
     }
 
-    #
-    # def get_urls(self):
-    #     urls = super().get_urls()
-    #     custom_urls = [
-    #         re_path(
-    #             r'^slugify_preview/$',
-    #             self.admin_site.admin_view(csrf_protect(require_POST(self.slugify_preview))),
-    #             name='configuration-slugify-preview',
-    #         ),
-    #     ]
-    #     return custom_urls + urls
-    #
-    # def slugify_preview(self, request: HttpRequest):
-    #     """HTMX endpoint: returns the slugified version of posted domain_name."""
-    #     if not TenantAdminPermissionWithRequest(request):
-    #         return HttpResponse("", status=403)
-    #     value = request.POST.get('domain_name', '')
-    #     return HttpResponse(slugify(value))
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'module-toggle-modal/<str:field_name>/',
+                self.admin_site.admin_view(self.module_toggle_modal),
+                name='configuration-module-modal',
+            ),
+            path(
+                'module-toggle/<str:field_name>/',
+                self.admin_site.admin_view(csrf_protect(require_POST(self.module_toggle))),
+                name='configuration-module-toggle',
+            ),
+        ]
+        return custom_urls + urls
+
+    def module_toggle_modal(self, request, field_name):
+        """HTMX GET : renvoie le modal de confirmation pour activer/desactiver un module."""
+        if field_name not in MODULE_FIELDS:
+            return HttpResponse("", status=400)
+
+        configuration = Configuration.get_solo()
+        is_active = getattr(configuration, field_name)
+        module_name = str(MODULE_FIELDS[field_name]["name"])
+
+        toggle_url = reverse(
+            'staff_admin:configuration-module-toggle',
+            args=[field_name],
+        )
+
+        html = render_to_string(
+            'admin/dashboard_module_modal.html',
+            {
+                "module_name": module_name,
+                "is_active": is_active,
+                "toggle_url": toggle_url,
+                "csrf_token": request.META.get("CSRF_COOKIE", ""),
+            },
+            request=request,
+        )
+        return HttpResponse(html)
+
+    def module_toggle(self, request, field_name):
+        """HTMX POST : bascule un module et renvoie les cartes mises a jour."""
+        if field_name not in MODULE_FIELDS:
+            return HttpResponse("", status=400)
+
+        configuration = Configuration.get_solo()
+        current_value = getattr(configuration, field_name)
+        setattr(configuration, field_name, not current_value)
+        new_value = getattr(configuration, field_name)
+
+        if field_name == "module_monnaie_locale" and new_value is False and configuration.module_caisse is True:
+            messages.add_message(request, messages.ERROR, _("The \"POS & restaurant\" module required this module. You must disable it before disabling "))
+            setattr(configuration, field_name, current_value)
+
+        logger.error(field_name is "module_caisse")
+
+        if field_name == "module_caisse" and new_value is True and configuration.module_monnaie_locale is False:
+            messages.add_message(request, messages.ERROR, _("The \"Local currency & cashless\" module is required by this module. You must enabled it before"))
+            setattr(configuration, field_name, current_value)
+
+
+        configuration.clean()
+        configuration.save()
+
+        # HX-Refresh force un reload complet : la sidebar se met a jour
+        response = HttpResponse("")
+        response["HX-Refresh"] = "true"
+        return response
 
     def save_model(self, request, obj, form, change):
         obj: Configuration
@@ -4967,19 +5037,3 @@ class InitiativeAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return TenantAdminPermissionWithRequest(request)
-
-
-### UNFOLD ADMIN DASHBOARD
-def environment_callback(request):
-    if settings.DEBUG:
-        return [_("Development"), "primary"]
-
-    return [_("Production"), "primary"]
-
-
-def dashboard_callback(request, context):
-    context.update({
-        "custom_variable": "value",
-    })
-
-    return context

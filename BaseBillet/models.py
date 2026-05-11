@@ -532,12 +532,60 @@ class Configuration(SingletonModel):
     allow_concurrent_bookings = models.BooleanField(default=True, verbose_name=_("Allow concurrent bookings"),
                                                     help_text=_("Events need start and end dates to be comparable."))
 
+    """
+    ######### MODULES GROUPWARE #########
+    """
+
+    module_billetterie = models.BooleanField(
+        default=True,
+        verbose_name=_("Event ticketing module"),
+    )
+    module_adhesion = models.BooleanField(
+        default=False,
+        verbose_name=_("Membership module"),
+    )
+    module_crowdfunding = models.BooleanField(
+        default=False,
+        verbose_name=_("Crowdfunding module"),
+    )
+
+    # FROM V2 : UNUSED
+    module_monnaie_locale = models.BooleanField(
+        default=False,
+        verbose_name=_("Local currency & cashless module"),
+    )
+    module_caisse = models.BooleanField(
+        default=False,
+        verbose_name=_("POS & restaurant module"),
+    )
+    module_inventaire = models.BooleanField(
+        default=False,
+        verbose_name=_("Inventory module"),
+        help_text=_("Enable stock management for POS products."),
+    )
+    # Module tireuse connectee (controlvanne) — gestion de tireuses a biere avec paiement NFC
+    # / Connected tap module (controlvanne) — beer tap management with NFC payment
+    module_tireuse = models.BooleanField(
+        default=False,
+        verbose_name=_("Connected tap module"),
+        help_text=_("Enable connected beer tap management (controlvanne)."),
+    )
+    module_booking = models.BooleanField(
+        default=True,
+        verbose_name=_("Booking module"),
+        help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
+    )
+
     currency_code = models.CharField(max_length=3, default="EUR")
 
-    additional_text_in_membership_mail = models.TextField(blank=True, null=True,
-                                                          verbose_name=_("Additional text in membership mail"),
-                                                          help_text=_(
-                                                              "You can add additional information that will be e-mailed to you when you sign up."))
+    additional_text_in_membership_mail = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Additional text in membership mail"),
+        help_text=_(
+        "You can add additional information that will be e-mailed to you when you sign up."
+        )
+    )
 
     """
     PERSONALISATION
