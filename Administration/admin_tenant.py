@@ -6,7 +6,8 @@ from decimal import Decimal
 from typing import Any, Optional, Dict
 from urllib.parse import urlencode
 from uuid import UUID, uuid4
-
+from unfold.utils import parse_datetime_str
+from django.core.validators import EMPTY_VALUES
 import requests
 import segno
 from django import forms
@@ -2339,6 +2340,47 @@ class LigneArticlePublishedFilter(admin.SimpleListFilter):
             return queryset.filter(pricesold__productsold__product=self.value())
         return queryset
 
+class RangeDateTimeFilterWithTimeZone(RangeDateTimeFilter):
+    """
+    This just override the 'RangeDateTimeFilter' 'queryset' method to take the timezone into account
+    """
+    def queryset(self, request, queryset):
+        filters = {}
+
+        # Get the timezone from the tenant config
+        config = Configuration.get_solo()
+        new_timezone = config.get_tzinfo()
+
+        date_value_from = self.used_parameters.get(f"{self.parameter_name}_from_0")
+        time_value_from = self.used_parameters.get(f"{self.parameter_name}_from_1")
+
+        date_value_to = self.used_parameters.get(f"{self.parameter_name}_to_0")
+        time_value_to = self.used_parameters.get(f"{self.parameter_name}_to_1")
+
+        if date_value_from not in EMPTY_VALUES and time_value_from not in EMPTY_VALUES:
+            # Add the timezone to the datetime for the filter to work correctly
+            value_from = new_timezone.localize(parse_datetime_str(f"{date_value_from} {time_value_from}"))
+
+            filters.update(
+                {
+                    f"{self.parameter_name}__gte": value_from,
+                }
+            )
+
+        if date_value_to not in EMPTY_VALUES and time_value_to not in EMPTY_VALUES:
+            # Add the timezone to the datetime for the filter to work correctly
+            value_to = new_timezone.localize(parse_datetime_str(f"{date_value_to} {time_value_to}"))
+
+            filters.update(
+                {
+                    f"{self.parameter_name}__lte": value_to
+                }
+            )
+        try:
+            return queryset.filter(**filters)
+        except (ValueError, ValidationError):
+            return None
+
 @admin.register(LigneArticle, site=staff_admin_site)
 class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
     compressed_fields = True  # Default: False
@@ -2347,7 +2389,7 @@ class LigneArticleAdmin(ModelAdmin,ExportActionModelAdmin):
 
     list_filter = ('status',
                    LigneArticlePublishedFilter,
-                   ('datetime', RangeDateTimeFilter),
+                   ('datetime', RangeDateTimeFilterWithTimeZone),
                    )
 
     list_display = [
@@ -2801,7 +2843,7 @@ class EventAdmin(ModelAdmin, ImportExportModelAdmin):
     search_fields = ['name']
     list_filter = [
         EventArchiveFilter,
-        ('datetime', RangeDateTimeFilter),
+        ('datetime', RangeDateTimeFilterWithTimeZone),
         'published',
     ]
     list_filter_submit = True
