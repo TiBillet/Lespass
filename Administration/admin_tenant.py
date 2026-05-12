@@ -995,6 +995,8 @@ class PriceAdmin(ModelAdmin):
         }),
     )
 
+    # FROM V2 : def get_fieldset to add later
+
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
         # Breadcrumb : afficher "Produits > [nom du produit]" au lieu de "Tarifs > [nom du tarif]"
         extra_context = extra_context or {}
