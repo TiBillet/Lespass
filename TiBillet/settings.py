@@ -498,58 +498,14 @@ UNFOLD = {
         },
     ],
     "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": False,
+        "navigation": "Administration.admin_tenant.get_sidebar_navigation",
+    },
+    "SIDEBAR-TEMP-OLD": {
         "show_search": True,  # Search in applications and models names
         "show_all_applications": False,  # Dropdown with all applications and models
         "navigation": [
-
-            {
-                "title": _("Global information"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Dashboard"),
-                        "icon": "dashboard",
-                        "link": reverse_lazy("admin:index"),
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Settings"),
-                        "icon": "manufacturing",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_configuration_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        # "permission": lambda request: request.user.is_staff,
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Carousel"),
-                        "icon": "photo_library",
-                        "link": reverse_lazy("staff_admin:BaseBillet_carrousel_changelist"),
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                ],
-            },
-            {
-                "title": _("Users"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("User accounts"),
-                        "icon": "person_add",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:AuthBillet_humanuser_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                    {
-                        "title": _("Subscriptions"),
-                        "icon": "card_membership",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_membership_changelist"),
-                        "badge": "Administration.admin_tenant.adhesion_badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                    },
-                ],
-            },
             {
                 "title": _("Products"),
                 "separator": True,  # Top border
@@ -585,48 +541,6 @@ UNFOLD = {
                     #     # "badge": "Administration.admin_tenant.badge_callback",
                     #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
                     # },
-                ],
-            },
-            {
-                "title": _("Ticketing"),
-                "separator": True,  # Top border
-                "collapsible": True,  # Collapsible group of links
-                "items": [
-                    {
-                        "title": _("Addresses"),
-                        "icon": "signpost",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_postaladdress_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-                    },
-                    {
-                        "title": _("Events"),
-                        "icon": "event",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_event_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-                    },
-                    {
-                        "title": _("Bookings"),
-                        "icon": "event_upcoming",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_reservation_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-                    },
-                    {
-                        "title": _("Tickets"),
-                        "icon": "confirmation_number",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_ticket_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-                    },
-                    {
-                        "title": _("Scan App"),
-                        "icon": "qr_code_scanner",  # Supported icon set: https://fonts.google.com/icons
-                        "link": reverse_lazy("staff_admin:BaseBillet_scanapp_changelist"),
-                        # "badge": "Administration.admin_tenant.badge_callback",
-                        "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest",
-                    },
                 ],
             },
             # {
