@@ -392,7 +392,9 @@ class MembershipPriceInlineForm(BasePriceInlineForm):
     def clean_subscription_type(self):
         product = self.cleaned_data.get("product")
         subscription_type = self.cleaned_data.get("subscription_type")
-        if product and product.categorie_article == Product.ADHESION:
+        # Get the categorie_article of the product
+        categorie_article = self.data.get("categorie_article")
+        if categorie_article == Product.ADHESION:
             if subscription_type == Price.NA:
                 raise forms.ValidationError(
                     _("A subscription must have a duration"), code="invalid"
