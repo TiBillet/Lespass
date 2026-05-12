@@ -4,11 +4,10 @@ const NfcReader = class {
   constructor(socketIoPort, typeApp) {
     this.typeApp = typeApp
     this.uuidConnexion = null
-    this.socket = null
-    this.socketPort = socketIoPort
-    this.intervalIDVerifApiCordova = null
-    this.cordovaLecture = false
+    this.socketIo = null
+    this.socketIoPort = socketIoPort
     this.simuData = state.demo.tags_id
+    this.simuActivate = false
     this.conf = null
   }
 
@@ -41,8 +40,7 @@ const NfcReader = class {
   }
 
   verificationTagId(tagId, uuidConnexion) {
-    const conf = this.conf
-    let msgErreurs = 0, data
+    let msgErreurs = []
 
     // mettre tagId en majuscule
     if (tagId !== null) {
@@ -51,80 +49,51 @@ const NfcReader = class {
       // vérifier taille tagId
       let tailleTagId = tagId.length
       if (tailleTagId < 8 || tailleTagId > 8) {
-        msgErreurs++
-        console.log('Erreur, taille tagId = ' + tailleTagId + ' !!')
+        msgErreurs.push('Erreur, taille tagId = ' + tailleTagId + ' !!')
       }
 
       // vérifier uuidConnexion
       if (uuidConnexion !== this.uuidConnexion) {
-        msgErreurs++
-        console.log('Erreur uuidConnexion différent !!')
+        msgErreurs.push('Erreur uuidConnexion différent !!')
       }
 
       // envoyer le résultat du lecteur
-      if (msgErreurs === 0) {
-        this.SendTagIdAndSubmit(tagId, conf)
+      if (msgErreurs.length === 0) {
+        this.SendTagIdAndSubmit(tagId, this.conf)
         this.stop()
       }
+    } else {
+      msgErreurs.push('tagId null')
+    }
+
+    if (msgErreurs.length > 0) {
+      console.log('-> verificationTagId :')
+      msgErreurs.forEach(msg => console.log(msg))
+      this.stop()
     }
   }
 
+  showUiSimu() {
+    // compose l'interface de simulation à afficher
+    let uiSimu = ''
+    console.log('-> nfc.toggleSimu')
 
-  /**
-  * Gestion de la réception du tagIDS et de l'uuidConnexion
-  * @param mode
-  */
-  async gestionModeLectureNfc(mode) {
-    const conf = this.conf
-    console.log('1 -> gestionModeLectureNfc, mode =', mode)
-    this.uuidConnexion = crypto.randomUUID()
-
-    // nfc serveur socket_io + front sur le même appareil (pi ou desktop)
-    if (mode === 'NFCLO') {
-      // initialise la connexion
-      this.socket = io('http://localhost:' + this.socketPort, {})
-
-      // initialise la réception d'un tagId, méssage = 'envoieTagId'
-      this.socket.on('envoieTagId', (retour) => {
-        this.verificationTagId(retour.tagId, retour.uuidConnexion)
-      })
-
-      // initialise la getion des erreurs socket.io
-      this.socket.on('connect_error', (error) => {
-        // TODO: émettre un log
-        console.error(`Socket.io - ${this.socketUrl}:${this.socketPort} :`, error)
-      })
-
-      // demande la lecture
-      this.socket.emit('demandeTagId', { uuidConnexion: this.uuidConnexion })
-    }
-
-    // cordova
-    if (mode === 'NFCMC') {
-      const tagId = await nfcPlugin.startListening()
-      this.verificationTagId(tagId, this.uuidConnexion)
-    }
-
-    // simulation
-    if (mode === 'NFCSIMU') {
-      // compose le message à afficher
-      let uiSimu = ''
-      this.simuData.forEach((item, i) => {
-        uiSimu += `
+    this.simuData.forEach((item, i) => {
+      uiSimu += `
         <div class="nfc-reader-simu-bt" tag-id="${item.tag_id}">${escapeHtml(item.name)}</div>
       `
-      })
+    })
 
-      // Zone de saisie manuelle : permet de tester un tag_id qui n'est
-      // pas dans la liste. Persistance du dernier tag saisi via localStorage.
-      // Manual input zone: allows testing a tag_id not in the list.
-      // Persists last entered tag via localStorage.
-      // Le parent .nfc-container-slot est flex-column avec text blanc :
-      // on force color/background et une largeur fixe sur l'input.
-      // Parent .nfc-container-slot is flex-column with white text:
-      // force color/background and a fixed width on the input.
-      const dernierTagSaisi = localStorage.getItem('nfcSimuManualTag') || ''
-      uiSimu += `
+    // Zone de saisie manuelle : permet de tester un tag_id qui n'est
+    // pas dans la liste. Persistance du dernier tag saisi via localStorage.
+    // Manual input zone: allows testing a tag_id not in the list.
+    // Persists last entered tag via localStorage.
+    // Le parent .nfc-container-slot est flex-column avec text blanc :
+    // on force color/background et une largeur fixe sur l'input.
+    // Parent .nfc-container-slot is flex-column with white text:
+    // force color/background and a fixed width on the input.
+    const dernierTagSaisi = localStorage.getItem('nfcSimuManualTag') || ''
+    uiSimu += `
         <div class="nfc-reader-simu-manual" style="margin-top:1rem;display:flex;gap:8px;align-items:center;justify-content:center;">
           <input type="text"
                  id="nfc-simu-manual-input"
@@ -140,105 +109,162 @@ const NfcReader = class {
         </div>
       `
 
-      document.querySelector('#nfc-simu-tag').innerHTML = uiSimu
+    document.querySelector('#nfc-simu-tag').innerHTML = uiSimu
 
-      // bt simulation receipt tag id
-      document.querySelector('#nfc-simu-tag').addEventListener('click', (ev) => {
-        if (ev.target.className === 'nfc-reader-simu-bt') {
-          try {
-            const tagId = ev.target.getAttribute('tag-id')
-            this.SendTagIdAndSubmit(tagId, conf)
-            this.stop()
-          } catch (error) {
-            console.log('-> simulaton tag id,', error)
-          }
+    // bt simulation receipt tag id
+    document.querySelector('#nfc-simu-tag').addEventListener('click', (ev) => {
+      if (ev.target.className === 'nfc-reader-simu-bt') {
+        try {
+          const tagId = ev.target.getAttribute('tag-id')
+          this.SendTagIdAndSubmit(tagId, this.conf)
+          this.stop()
+        } catch (error) {
+          console.log('-> simulaton tag id,', error)
         }
-      })
-
-      // Submit du tag saisi manuellement (clic bouton OU touche Entree).
-      // Submit manually entered tag (button click OR Enter key).
-      const soumettreTagManuel = () => {
-        const input = document.querySelector('#nfc-simu-manual-input')
-        const tagSaisi = input.value.trim().toUpperCase()
-        if (tagSaisi === '') return
-        localStorage.setItem('nfcSimuManualTag', tagSaisi)
-        this.SendTagIdAndSubmit(tagSaisi, conf)
-        this.stop()
       }
+    })
 
-      document.querySelector('#nfc-simu-manual-submit').addEventListener('click', soumettreTagManuel)
-      document.querySelector('#nfc-simu-manual-input').addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') {
-          ev.preventDefault()
-          soumettreTagManuel()
-        }
-      })
+    // Submit du tag saisi manuellement (clic bouton OU touche Entree).
+    // Submit manually entered tag (button click OR Enter key).
+    const soumettreTagManuel = () => {
+      const input = document.querySelector('#nfc-simu-manual-input')
+      const tagSaisi = input.value.trim().toUpperCase()
+      if (tagSaisi === '') return
+      localStorage.setItem('nfcSimuManualTag', tagSaisi)
+      this.SendTagIdAndSubmit(tagSaisi, conf)
+      this.stop()
+    }
+
+    document.querySelector('#nfc-simu-manual-submit').addEventListener('click', soumettreTagManuel)
+    document.querySelector('#nfc-simu-manual-input').addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault()
+        soumettreTagManuel()
+      }
+    })
+  }
+
+  hideUiSimu() {
+    document.querySelector('#nfc-simu-tag').innerHTML = ''
+  }
+
+  piDesktopStopRead() {
+    if (this.socketIo) {
+      this.socketIo.emit('nfcStopListening')
+      this.socketIo.disconnect()
+      this.socketIo = null
     }
   }
 
+  piDesktopStarRead() {
+    // initialise la connexion
+    this.socketIo = io('http://localhost:' + this.socketIoPort, {})
+
+    // initialise la réception d'un tagId, méssage = 'nfcMessage'
+    this.socketIo.on('nfcMessage', (retour) => {
+      console.log('réception du message "nfcMessage" - retour =', retour)
+      if (retour.tagId) {
+        this.piDesktopStopRead()
+        this.verificationTagId(retour.tagId, retour.data.uuidConnexion)
+      }
+    })
+
+    // initialise la getion des erreurs socket.io
+    this.socketIo.on('connect_error', (error) => {
+      // TODO: émettre un log
+      console.error(`Socket.io - 'http://localhost:${this.socketPort} :`, error)
+    })
+
+    // Demande de lecture, le back stope les anciennes lectures 
+    // et en démarre une nouvelle.
+    this.socketIo.emit('nfcStartListening', { uuidConnexion: this.uuidConnexion })
+  }
+
+  async cordovaStopRead() {
+    const result = await nfcPlugin.stopListening()
+    console.log('-> nfc.cordovaStopRead -', result)
+  }
+
   async start(conf) {
-    this.conf = conf
-    console.log('---------------------------------------------------')
-    console.log('nfc startLecture  --  DEMO =', state.demo.active)
-    console.log('- this =',  this)
-    
-    // ajoute du bouton toggleSimu si démo activée
-    if(state.demo.active) {
-      const btToggleSimu = `
+    console.log('-> nfc.start');
+    try {
+      this.conf = conf
+      this.uuidConnexion = crypto.randomUUID()
+
+      // ajoute le bouton .nfc-toggle-simu si démo activée
+      if (state.demo.active) {
+        // bt toggle simu
+        const btToggleSimu = `
       <div class="nfc-toggle-simu">
+        <div class="touch"></div>
 		    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 			  <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" />
 			  <path d="M9 9l-2 3 2 3" stroke="currentColor" stroke-width="2" />
 			  <path d="M15 9l2 3-2 3" stroke="currentColor" stroke-width="2" />
 		    </svg>
 	    </div>`
-      const eleIsInDom = document.querySelector('.nfc-container div[class="nfc-toggle-simu"]')
-      if(eleIsInDom === null) {
-        document.querySelector('.nfc-container').insertAdjacentHTML('afterbegin', btToggleSimu)
+
+        const eleIsInDom = document.querySelector('.nfc-container div[class="nfc-toggle-simu"]')
+        // insertion in dom
+        if (eleIsInDom === null) {
+          document.querySelector('.nfc-container').insertAdjacentHTML('beforeend', btToggleSimu)
+          // action
+          document.querySelector('.nfc-toggle-simu .touch').addEventListener('click', (event) => {
+            event.stopPropagation()
+            event.preventDefault()
+            document.querySelector('.nfc-toggle-simu .touch').classList.toggle('activate')
+            if (document.querySelector('.nfc-toggle-simu .touch').classList.contains('activate')) {
+              this.simuActivate = true
+            } else {
+              this.simuActivate = false
+            }
+            this.start(this.conf)
+          })
+        }
       }
 
-      
-    }
-    
-    /*
-    try {
-      if (state.demo.active) {
-        // simule
-        this.modeNfc = 'NFCSIMU'
+      // simu
+      if (this.simuActivate) {
+        this.showUiSimu()
       } else {
-        // hardware: récupère le nfcMode
-        const cordovaNfcPlugin = await nfcPlugin.available()
-        if (cordovaNfcPlugin === 1) {
-          this.modeNfc = "NFCMC"
+        this.hideUiSimu()
+        // pi ou desktop
+        if (this.typeApp === 'desktop' || this.typeApp === 'pi') {
+          this.piDesktopStarRead()
         }
-        // TODO: ajouter le  pi(mfc...) et desktop(usb)
+        // cordova
+        if (this.typeApp === 'cordova') {
+          console.log('mode : cordova')
+          // lance la lecture, seul nfcPlugin.stopListening peut l'arréter
+          const result = await nfcPlugin.startListening()
+          this.verificationTagId(result.tagId, this.uuidConnexion)
+
+        }
       }
-      this.gestionModeLectureNfc(this.modeNfc)
-    } catch (err) {
-      console.log(`Nfc initLecture, storage: ${err}  !`)
+    } catch (error) {
+      console.log('nfc.start, error:', error)
+      this.cordovaStopRead()
     }
-      */
+
   }
 
   async stop() {
-    // console.log('1 -> stopLecture')
-    let modeNfc = this.modeNfc
+    try {
+      // simu
+      if (this.simuActivate) {
+        this.hideUiSimu()
+      }
 
-    // tagId pour "un serveur nfc + front" en local
-    if (modeNfc === "NFCLO") {
-      // console.log('-> émettre: "AnnuleDemandeTagId"')
-      this.socket.emit('AnnuleDemandeTagId', { uuidConnexion: this.uuidConnexion })
+      // pi ou desktop
+      if (this.typeApp === 'desktop' || this.typeApp === 'pi') {
+        this.piDesktopStopRead()
+      }
+      // cordova
+      if (this.typeApp === 'cordova') {
+        this.cordovaStopRead()
+      }
+    } catch (error) {
+      console.log('nfc.stop, error:', error)
     }
-
-    // cordova
-    if (modeNfc === 'NFCMC') {
-      await nfcPlugin.stopListening()
-    }
-
-    // simulation
-    if (modeNfc === 'NFCSIMU') {
-      document.querySelector('#nfc-simu-tag').removeEventListener('click', this.sendSimuNfcTagId)
-    }
-    this.uuidConnexion = null
   }
 }

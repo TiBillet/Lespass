@@ -6,8 +6,11 @@
 <c-read-nfc id="nfc-container" event-manage-form="primaryCardManageForm"
 	submit-url="{% url 'laboutik-caisse-carte_primaire' %}">
 	<form id="form-nfc" class="hide" hx-post="{% url 'laboutik-caisse-carte_primaire' %}" hx-trigger=""
-		hx-target=".message-nfc" hx-swap="innerHTML" data-testid="caisse-carte-primaire-form">
+		hx-target=".message-nfc" hx-swap="innerHTML" data-testid="caisse-carte-primaire-form" 
+		hx-on::after-request="initNfc()">
 		<input id="nfc-tag-id" name="tag_id" />
+		<!-- Continue de renseigner le back sur le type_app pour l'injection de cordova -->
+		<input name="type_app" />
 	</form>
 	<h1>{% translate "Attente carte primaire" %}</h1>
 	<h3 class="message-nfc" aria-live="polite">{{msg}}</h3>

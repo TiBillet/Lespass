@@ -63,6 +63,8 @@ async function loadConfigFile(typeApp) {
     configFile = await cordovaReadConfFile()
   }
   state['configFile'] = configFile
+  // stockage configFile
+  localStorage.setItem("configFile", JSON.stringify(configFile));
 }
 
 // gestionnaire du formulaire
@@ -102,6 +104,9 @@ function primaryCardManageForm(event) {
 document.addEventListener("DOMContentLoaded", () => {
   // écoute des commandes/évènements sur le formulaire "#form-nfc"
   document.querySelector('#form-nfc').addEventListener('primaryCardManageForm', primaryCardManageForm)
+
+  // ajout du type_app dans le formulaire
+  document.querySelector('input[name="type_app"]').value = state.typeApp
 
   // entrée front de l'application, chargement du fichier de configuration
   if (state.typeApp !== 'cordova') {

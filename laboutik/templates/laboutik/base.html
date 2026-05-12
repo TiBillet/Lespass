@@ -26,15 +26,15 @@
 	<link rel="icon" href="{% static 'images/favicon.ico' %}" />
 	{% block css %} {% endblock css %}
 
+	<script>
+		const state = JSON.parse("{{stateJson|escapejs}}")
+	</script>
 	<!-- https://github.com/MikeMcl/big.js/tree/main -->
 	<script src="{% static 'js/big.js' %}"></script>
 	<!-- passing django values to javascript - ex : state.demo.active -->
 	<script src="{% static 'js/nfc.js' %}"></script>
 	<!-- init global values and function -->
 	<script src="{% static 'js/tibilletUtils.js' %}"></script>
-	<script>
-		const state = JSON.parse("{{stateJson|escapejs}}")
-	</script>
 </head>
 
 <!-- <body id="contenu" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-on::before-request="spinnerRequestOn()"

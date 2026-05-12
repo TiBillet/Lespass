@@ -15,19 +15,19 @@ We do NOT set id="messages" on the read-nfc component because the #messages
 element already exists in base.html.
 Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
 -->
-<c-read-nfc selector="#messages" event-manage-form="checkCardManageForm" submit-url="{% url 'laboutik-paiement-retour_carte' %}">
-  <form id="form-check-nfc" class="hide" hx-post="{% url 'laboutik-paiement-retour_carte' %}" hx-trigger="" hx-target="#messages"
-    hx-swap="innerHTML">
+<c-read-nfc selector="#messages" event-manage-form="checkCardManageForm"
+  submit-url="{% url 'laboutik-paiement-retour_carte' %}">
+  <form id="form-check-nfc" class="hide" hx-post="{% url 'laboutik-paiement-retour_carte' %}" hx-trigger=""
+    hx-target="#messages" hx-swap="innerHTML">
     {% csrf_token %}
     <input id="nfc-tag-id" name="tag_id" />
-  </form>
+  </form>  
   <h1>{% translate "Attente lecture carte" %}</h1>
-
   <script>
     // gestionnaire de formulaire
     function checkCardManageForm(event) {
       console.log('-> checkCardManageForm, event.detail =', event.detail);
-      
+
       try {
         const data = event.detail
         const form = document.querySelector('#form-check-nfc')
@@ -57,5 +57,13 @@ Note: 'tarifSelection' listener is on #articles-zone (tarif.js), not #messages.
     }
     // écoute des commandes sur le formulaire "#form-nfc"
     document.querySelector('#form-check-nfc').addEventListener('checkCardManageForm', checkCardManageForm)
+
+    document.body.addEventListener('htmx:afterSwap', function (event) {
+      console.log('event.detail =', event.detail)
+      // hx-get="/laboutik/paiement/verifier_carte/" du bouton "check carte"
+      if (event.detail.pathInfo.requestPath === '/laboutik/paiement/verifier_carte/') {
+        initNfc(state?.configFile?.type_app)
+      }
+    });
   </script>
 </c-read-nfc>
