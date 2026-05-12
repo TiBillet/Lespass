@@ -178,14 +178,7 @@ def get_context(request):
         "mode_test": True if os.environ.get('TEST') == '1' else False,
         "loading_delay": 400,
         "carrousel_event_list": Carrousel.objects.filter(on_event_list_page=True).order_by('order'),
-        "main_nav": [
-            {'name': 'memberships_mvt', 'url': '/memberships/',
-             'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
-             'icon': 'person-badge'},
-            {'name': 'event-list', 'url': '/event/',
-             'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
-             'icon': 'calendar-date'},
-        ]
+        "main_nav": []
     }
 
     navbar: list = context["main_nav"]
@@ -206,19 +199,39 @@ def get_context(request):
              'icon': 'info-circle'}
         )
 
+    if config.module_adhesion:
+        navbar.append({
+            'name': 'memberships_mvt',
+            'url': '/memberships/',
+            'label': config.membership_menu_name if config.membership_menu_name else _('Subscriptions'),
+            'icon': 'person-badge'
+        })
+
+    if config.module_billetterie:
+        navbar.append({
+            'name': 'event-list',
+            'url': '/event/',
+            'label': config.event_menu_name if config.event_menu_name else _('Calendar'),
+            'icon': 'calendar-date'
+        })
+
     agenda_federation_active = FederatedPlace.objects.exists()
     asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
-    if agenda_federation_active or asset_federation_active:
-        navbar.append(
-            {'name': 'federation', 'url': '/federation/',
-             'label': 'Local network', 'icon': 'diagram-2-fill'}
-        )
+    if (agenda_federation_active or asset_federation_active) and config.module_federation:
+        navbar.append({
+            'name': 'federation',
+            'url': '/federation/',
+            'label': 'Local network',
+            'icon': 'diagram-2-fill'
+        })
 
-    if crowd_config.active and Initiative.objects.exists():
-        navbar.append(
-            {'name': f'crowd-list', 'url': '/contrib/',
-             'label': f'{crowd_config.title}', 'icon': 'people-fill'}
-        )
+    if crowd_config.active and Initiative.objects.exists() and config.module_crowdfunding:
+        navbar.append({
+            'name': f'crowd-list',
+            'url': '/contrib/',
+            'label': f'{crowd_config.title}',
+            'icon': 'people-fill'
+        })
 
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
