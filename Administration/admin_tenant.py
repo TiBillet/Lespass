@@ -2033,10 +2033,6 @@ class MembershipChangeForm(ModelForm):
             'commentaire',
         )
 
-# Le petit badge route a droite du titre "adhésion"
-def adhesion_badge_callback(request):
-    # Recherche de la quantité de nouvelles adhésions ces 14 dernièrs jours
-    return f"+ {Membership.objects.filter(last_contribution__gte=timezone.localtime() - timedelta(days=7)).count()}"
 
 
 class MembershipStatusFilter(admin.SimpleListFilter):
