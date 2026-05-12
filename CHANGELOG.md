@@ -1,5 +1,75 @@
 # Changelog / Journal des modifications
 
+## v1.7.18 — Fix 500 sur compte Stripe Connect sans nom commercial / Fix 500 on Stripe Connect account missing business name
+
+**Date :** 2026-05-12
+**Migration :** Non
+
+---
+
+### Gestion gracieuse de `account or business name` (Stripe Checkout) / Graceful handling of `account or business name` (Stripe Checkout)
+
+**FR :**
+Quand un tenant tente de creer une session Stripe Checkout (adhesion, reservation) alors
+que son compte Stripe Connect n'a pas de nom commercial configure, Stripe leve
+`InvalidRequestError: In order to use Checkout, you must set an account or business name`.
+
+Avant : l'erreur tombait dans le fallback `else` de `_checkout_session()` qui retentait
+betement avec `force=True` sur les line_items (corrige rien) → l'exception bubblait jusqu'a
+la vue → **500** pour l'utilisateur final.
+
+Apres : le cas est detecte explicitement, on logge le `schema_name` du tenant concerne pour
+que l'admin sache ou intervenir, et on leve `serializers.ValidationError` avec un message
+generique. Le `MembershipMVT.create()` (et autres ViewSets qui consomment `is_valid()` sans
+`raise_exception=True`) recoit l'erreur dans `.errors`, l'affiche via `django.messages`, et
+redirige proprement vers le `Referer`.
+
+**EN :**
+When a tenant tries to create a Stripe Checkout session while its Connect account is
+missing a business name, Stripe raises `InvalidRequestError`. The error used to fall into
+the `else` fallback that retried with `force=True` on line_items — useless, since the
+issue is on the account side. Now caught explicitly: we log the tenant schema_name and
+raise a user-friendly `ValidationError`. No more 500, the user sees a clear message.
+
+### Patch preventif : pre-remplir business_profile.name a la creation du compte Connect / Preventive fix: pre-fill business_profile.name when creating Connect account
+
+**FR :**
+`Configuration.get_stripe_connect_account()` (BaseBillet/models.py) creait le compte Stripe
+Connect avec seulement `type="standard"` et `country="FR"` — aucun nom commercial. C'est la
+cause racine de l'erreur "you must set an account or business name" rencontree par
+`association-ludicite`.
+
+Le patch ajoute `business_profile={"name": self.organisation}` (tronque a 100 char par
+securite) lors de la creation. Le gerant du tenant peut toujours modifier ce nom dans son
+propre dashboard Stripe Connect lors de l'onboarding ; on lui evite juste l'erreur initiale.
+Tous les **nouveaux** tenants beneficient immediatement de ce pre-remplissage.
+
+**EN :**
+`Configuration.get_stripe_connect_account()` was creating Stripe Connect accounts without
+any business name — root cause of the Checkout error. Patch pre-fills `business_profile.name`
+with the tenant's `organisation` field (truncated to 100 chars). Tenant admins can still
+edit it from their own Stripe dashboard during onboarding.
+
+**Tenants existants deja sans nom commercial :** ils doivent fixer manuellement via
+dashboard Stripe ou `stripe accounts update <acct_id> -d "business_profile[name]=..."`.
+
+### Fichiers modifies / Modified files
+| Fichier / File | Changement / Change |
+|---|---|
+| `PaiementStripe/views.py` | Nouveau branch `elif 'account or business name'` dans `CreationPaiementStripe._checkout_session()` (avant le fallback retry). Loggue l'erreur avec le schema_name du tenant, leve `ValidationError` avec un message generique. |
+| `BaseBillet/models.py` | `Configuration.get_stripe_connect_account()` : ajout de `business_profile={"name": self.organisation}` a `stripe.Account.create()`. |
+
+### Migration
+- **Migration necessaire / Migration required:** Non
+
+### i18n
+Une nouvelle chaine traduisible ajoutee :
+- `"Online payment is temporarily unavailable. Please contact the site administrator."`
+
+A executer : `makemessages -l fr -l en` puis `compilemessages`.
+
+---
+
 ## v1.7.17 — Améliorations SEO home Faire Festival + humans.txt / SEO improvements on Faire Festival home + humans.txt
 
 **Date :** 2026-05-05

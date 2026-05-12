@@ -197,6 +197,18 @@ class CreationPaiementStripe():
                 # Le montant total est inférieur au minimum Stripe (€0.50).
                 # Ne pas retenter — la validation en amont aurait dû bloquer ceci.
                 raise serializers.ValidationError(str(e))
+            elif 'account or business name' in str(e).lower():
+                # Compte Stripe Connect du tenant mal configure : pas de nom commercial.
+                # L'utilisateur final ne peut rien y faire. On loggue le tenant pour
+                # que l'admin sache ou intervenir, et on renvoie un message generique.
+                # / Tenant's Stripe Connect account is missing a business name.
+                logger.error(
+                    f"Stripe account misconfigured for tenant "
+                    f"{connection.tenant.schema_name}: {e}"
+                )
+                raise serializers.ValidationError(
+                    _("Online payment is temporarily unavailable. Please contact the site administrator.")
+                )
             else:
                 # L'id stripe d'un prix est mauvais.
                 # Probablement du a un changement d'etat de test/prod.
