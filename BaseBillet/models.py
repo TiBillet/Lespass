@@ -910,11 +910,7 @@ class Product(models.Model):
     )
 
     publish = models.BooleanField(default=True, verbose_name=_("Publish"))
-    poids = models.PositiveSmallIntegerField(
-        default=0,
-        verbose_name=_("Weight"),
-        help_text=_("Products are ordered lightest first.")
-    )
+
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="produit_tags")
 
@@ -1004,6 +1000,12 @@ class Product(models.Model):
     )
 
     archive = models.BooleanField(default=False, verbose_name=_("Archive"))
+
+    poids = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name=_("Display order"),
+        help_text=_("Smallest appears first.")
+    )
 
     max_per_user = models.PositiveSmallIntegerField(
         blank=True,
