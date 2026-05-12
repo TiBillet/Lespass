@@ -757,7 +757,7 @@ MODULE_FIELDS = {
     },
     "module_federation": {
         "name": _("Federation"),
-        "description": _("Explore federation with other TiBillet instance."),
+        "description": _("Explore federation with other TiBillet instance"),
         "testid": "dashboard-card-federation",
     },
     # FROM V2 : TO IMPLEMENT LATER ON
