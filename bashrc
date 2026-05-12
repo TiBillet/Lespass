@@ -1,27 +1,27 @@
 # only for convenient :)
 
-alias mm="poetry run python /DjangoFiles/manage.py migrate"
-alias sp="poetry run python manage.py tenant_command shell_plus --print-sql"
+alias mm="uv /DjangoFiles/manage.py migrate"
+alias sp="uv run manage.py tenant_command shell_plus --print-sql"
 
-alias rsp="poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
+alias rsp="uv run /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
 
-alias guni="poetry run python /DjangoFiles/manage.py collectstatic --no-input && poetry run gunicorn TiBillet.wsgi --capture-output --reload -w 3 -b 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
+alias guni="uv run /DjangoFiles/manage.py collectstatic --no-input && uv run gunicorn TiBillet.wsgi --capture-output --reload -w 3 -b 0.0.0.0:8002 2>&1 | tee /DjangoFiles/runserver.log"
 
-alias cel="poetry run celery -A TiBillet worker -l INFO"
+alias cel="uv run celery -A TiBillet worker -l INFO"
 
-alias test="poetry run python /DjangoFiles/manage.py test"
+alias test="uv run /DjangoFiles/manage.py test"
 
-alias mmes="poetry run python manage.py makemessages -l en && poetry run python manage.py  makemessages -l fr"
-alias cmes="poetry run python manage.py compilemessages"
+alias mmes="uv run manage.py makemessages -l en && uv run manage.py  makemessages -l fr"
+alias cmes="uv run manage.py compilemessages"
 
-alias pshell="eval $(poetry env activate)"
+alias pshell="source .venv/bin/activate"
 
 tibinstall() {
-    poetry run python /DjangoFiles/manage.py collectstatic
-    poetry run python /DjangoFiles/manage.py migrate
-    poetry run python /DjangoFiles/manage.py create_public
+    uv run /DjangoFiles/manage.py collectstatic
+    uv run /DjangoFiles/manage.py migrate
+    uv run /DjangoFiles/manage.py create_public
     echo "Création du super utilisateur :"
-    poetry run python /DjangoFiles/manage.py create_tenant_superuser -s public
+    uv run /DjangoFiles/manage.py create_tenant_superuser -s public
 }
 
 load_sql() {

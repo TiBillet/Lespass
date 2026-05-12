@@ -6,7 +6,7 @@
 C'est une brique de l'ecosysteme TiBillet (avec LaBoutik pour la caisse/cashless et Fedow pour le portefeuille federe). 
 Fabrique par la Cooperative Code Commun, licence AGPLv3.
 
-Stack : Django 4.2, Python 3.11, Django REST Framework, PostgreSQL 13, Redis, Memcached, Celery, Poetry, Docker.
+Stack : Django 4.2, Python 3.11, Django REST Framework, PostgreSQL 13, Redis, Memcached, Celery, UV, Docker.
 
 ## FALC — Principe fondamental
 
@@ -159,7 +159,7 @@ Vocabulaire schema.org avec champs JSON-LD. Voir `api_v2/GUIDELINES.md` pour le 
 
 ```bash
 # Lance dans le terminal actuel ET garde un trace dans un fichier de log : 
-docker exec lespass_django poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/logs/runserver.log
+docker exec lespass_django uv run /DjangoFiles/manage.py runserver 0.0.0.0:8002 2>&1 | tee /DjangoFiles/logs/runserver.log
 ```
 
 Les logs du serveur (tracebacks, requetes) sont ecrits dans un fichier temporaire :
@@ -175,21 +175,21 @@ tail -f logs/runserver.log
 docker compose up -d
 
 # Commandes Django dans le conteneur
-docker exec lespass_django poetry run python manage.py <commande>
+docker exec lespass_django uv run manage.py <commande>
 
 # Migrations multi-tenant
-docker exec lespass_django poetry run python manage.py migrate_schemas --executor=multiprocessing
+docker exec lespass_django uv run manage.py migrate_schemas --executor=multiprocessing
 
 # Collectstatic
-docker exec lespass_django poetry run python manage.py collectstatic --no-input
+docker exec lespass_django uv run manage.py collectstatic --no-input
 
 # i18n
-docker exec lespass_django poetry run django-admin makemessages -l fr
-docker exec lespass_django poetry run django-admin makemessages -l en
-docker exec lespass_django poetry run django-admin compilemessages
+docker exec lespass_django uv run django-admin makemessages -l fr
+docker exec lespass_django uv run django-admin makemessages -l en
+docker exec lespass_django uv run django-admin compilemessages
 
 # Celery (lance via docker-compose, commande pour reference)
-poetry run celery -A TiBillet worker -l INFO -B --concurrency=6
+uv run celery -A TiBillet worker -l INFO -B --concurrency=6
 ```
 
 ## Tests
@@ -198,16 +198,16 @@ poetry run celery -A TiBillet worker -l INFO -B --concurrency=6
 
 ```bash
 # Tous les tests API
-poetry run pytest tests/pytest/ -v
+uv run pytest tests/pytest/ -v
 
 # Tests integration API v2 uniquement
-poetry run pytest -m integration tests/pytest/
+uv run pytest -m integration tests/pytest/
 
 # Un seul fichier
-poetry run pytest tests/pytest/test_events_list.py -qs
+uv run pytest tests/pytest/test_events_list.py -qs
 
 # Avec cle API
-poetry run pytest tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
+uv run pytest tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
 ```
 
 ### E2E (Playwright)
@@ -224,7 +224,7 @@ Les tests sont numerotes pour l'ordre d'execution (01 a 24+). Carte Stripe test 
 
 Verification DB apres un test E2E :
 ```bash
-docker exec lespass_django poetry run python manage.py verify_test_data --type reservation --email <EMAIL>
+docker exec lespass_django uv run manage.py verify_test_data --type reservation --email <EMAIL>
 ```
 
 ### Regles d'ecriture des tests

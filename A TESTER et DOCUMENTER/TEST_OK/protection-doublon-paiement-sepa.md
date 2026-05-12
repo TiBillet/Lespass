@@ -32,7 +32,7 @@ a chaque clic. Resultat : doubles prelevements SEPA.
 
 Verification en base :
 ```bash
-docker exec lespass_django poetry run python manage.py shell -c "
+docker exec lespass_django uv run manage.py shell -c "
 from BaseBillet.models import Membership, Paiement_stripe
 m = Membership.objects.get(uuid='<UUID>')
 print('Nb paiements:', m.stripe_paiement.count())

@@ -218,7 +218,7 @@ test.describe('Admin Membership Custom Form Edit / Édition custom_form adhésio
             // Utiliser manage.py tenant_command shell pour injecter le custom_form
             // Use manage.py tenant_command shell to inject the custom_form
             const { execSync } = require('child_process');
-            const shellCmd = `docker exec lespass_django poetry run python /DjangoFiles/manage.py tenant_command shell -s lespass -c "
+            const shellCmd = `docker exec lespass_django uv run /DjangoFiles/manage.py tenant_command shell -s lespass -c "
 from BaseBillet.models import Membership
 m = Membership.objects.get(pk=${membershipPk})
 m.custom_form = {'Nom complet': 'Jean Dupont', 'Ville': 'Paris', 'Newsletter': True}

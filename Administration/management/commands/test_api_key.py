@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     """
-    docker exec lespass_django poetry run python manage.py test_api_key
+    docker exec lespass_django uv run manage.py test_api_key
     """
     def handle(self, *args, **options):
         if not settings.TEST:

@@ -21,7 +21,7 @@ Exemple d'utilisation :
 python manage.py get_login_link user@example.com mytenant
 
 Via Docker :
-docker exec lespass_django poetry run python manage.py get_login_link user@example.com mytenant
+docker exec lespass_django uv run manage.py get_login_link user@example.com mytenant
         """
         parser.add_argument('email', type=str, help="L'email de l'utilisateur")
         parser.add_argument('schema_name', type=str, help="Le schema_name du tenant")

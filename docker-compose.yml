@@ -163,7 +163,7 @@ services:
       - lespass.tibillet.localhost:172.17.0.1
       - laboutik.tibillet.localhost:172.17.0.1
       - laboutik2.tibillet.localhost:172.17.0.1
-    command: "poetry run celery -A TiBillet worker -l INFO -B --concurrency=6"
+    command: "uv run celery -A TiBillet worker -l INFO -B --concurrency=6"
 
 
   lespass_nginx:
@@ -206,7 +206,7 @@ volumes:
 # stripe listen --forward-to https://fedow.tibillet.localhost/api/webhook_stripe/ --skip-verify
 # stripe listen --forward-to https://tibillet.localhost/api/webhook_stripe/ --skip-verify
 
-# poetry shell
+# uv shell
 # django-admin makemessages -l fr && django-admin makemessages -l en
 # django-admin compilemessages
 

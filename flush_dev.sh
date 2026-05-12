@@ -41,17 +41,17 @@ for app in "${APPS[@]}"; do
 done
 
 echo "=== 3/5 — Generation des nouvelles migrations (1 par app) ==="
-poetry run python manage.py makemigrations "${APPS[@]}"
+uv run manage.py makemigrations "${APPS[@]}"
 
 echo "=== 4/5 — Migrations + install + demo ==="
-poetry run python manage.py migrate_schemas --executor=multiprocessing
-poetry run python manage.py install
-poetry run python manage.py demo_data_v2
+uv run manage.py migrate_schemas --executor=multiprocessing
+uv run manage.py install
+uv run manage.py demo_data_v2
 
 echo "=== 5/5 — Collectstatic ==="
-poetry run python manage.py collectstatic --no-input
+uv run manage.py collectstatic --no-input
 
 echo ""
 echo "Termine ! Migrations squashees, DB neuve, donnees de demo chargees."
 echo "Demarrage du serveur : https://${SUB}.${DOMAIN}/"
-poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002
+uv run /DjangoFiles/manage.py runserver 0.0.0.0:8002

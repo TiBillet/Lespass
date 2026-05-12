@@ -15,7 +15,7 @@ export async function verifyDbData(params: {
 }) {
     const { type, email, event, product } = params;
     
-    let command = `docker exec -w /DjangoFiles -e PYTHONPATH=/DjangoFiles lespass_django poetry run python tests/scripts/verify_test_data.py --type ${type} --email ${email}`;
+    let command = `docker exec -w /DjangoFiles -e PYTHONPATH=/DjangoFiles lespass_django uv run tests/scripts/verify_test_data.py --type ${type} --email ${email}`;
     
     if (event) command += ` --event "${event}"`;
     if (product) command += ` --product "${product}"`;

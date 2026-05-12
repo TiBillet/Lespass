@@ -7,7 +7,7 @@ Scénario:
 - Vérifie que le retrieve renvoie location.address correspondant
 
 Lancement:
-  poetry run pytest -q tests/pytest/test_event_link_address.py
+  uv run pytest -q tests/pytest/test_event_link_address.py
 """
 import json
 import os

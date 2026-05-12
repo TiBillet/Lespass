@@ -6,7 +6,7 @@ Management command to clear the cashless (LaBoutik) configuration
 for a tenant and allow a fresh handshake from scratch.
 
 Usage :
-    docker exec lespass_django poetry run python manage.py reset_cashless_handshake --tenant <schema_name>
+    docker exec lespass_django uv run manage.py reset_cashless_handshake --tenant <schema_name>
 """
 
 import logging

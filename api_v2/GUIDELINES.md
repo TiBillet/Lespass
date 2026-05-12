@@ -16,8 +16,8 @@ These guidelines define how to build the v2 API with a strong focus on semantic,
   - Granular authorization per resource/action with custom DRF permission classes defined in this folder.
   - Keys must be manageable from Django admin.
 - Testing strategy
-  - Use Poetry to run tests: `poetry install` then `poetry run pytest`.
-  - Example: `poetry run pytest -q tests/pytest/test_events_list.py`.
+  - Use UV to run tests: `uv sync` then `uv run pytest`.
+  - Example: `uv run pytest -q tests/pytest/test_events_list.py`.
   - Unit/integration tests run with plain pytest (not Django `manage.py test`).
   - Prefer black-box HTTP calls against a dev hostname like `lespass.tibillet.localhost`.
   - Keep tests in standalone Python scripts under `tests/` or project-level `tests/` executed by `pytest`.
@@ -132,9 +132,9 @@ Usage notes
   - DELETE /api/v2/events/{uuid}/ → delete an Event by UUID. Response 204 on success.
 - Authentication
   - Send header: `Authorization: Api-Key <your_key>`
-- Running tests (Poetry)
-  - `poetry install`
-  - `poetry run pytest -qs tests/pytest`
+- Running tests (UV)
+  - `uv sync`
+  - `uv run pytest -qs tests/pytest`
   - Tests are ordered to run in the following sequence for Event CRUD: create → list → retrieve → delete. A `conftest.py` hook enforces this order.
   - The create test also stores the created `identifier` and `name` in pytest cache; subsequent tests read from this cache to make assertions independent of demo data.
 
@@ -142,14 +142,14 @@ Usage notes
 
 ---
 
-## Running tests with Poetry and API key
+## Running tests with UV and API key
 
 You can pass the API key (and optionally the base URL) directly via pytest CLI flags.
 
 Examples:
 
-- `poetry run pytest -qs tests/pytest --api-key <YOUR_KEY>`
-- `poetry run pytest -qs tests/pytest --api-key <YOUR_KEY> --api-base-url https://lespass.tibillet.localhost`
+- `uv run pytest -qs tests/pytest --api-key <YOUR_KEY>`
+- `uv run pytest -qs tests/pytest --api-key <YOUR_KEY> --api-base-url https://lespass.tibillet.localhost`
 
 Notes:
 - The `--api-key` and `--api-base-url` flags are injected into environment variables `API_KEY` and `API_BASE_URL` by a session fixture in `tests/pytest/conftest.py`.

@@ -70,7 +70,7 @@ Le back sera code dans un plan ulterieur. Pour l'instant on pose juste le bouton
 ## Verification
 
 ```bash
-docker exec lespass_django poetry run python manage.py check
+docker exec lespass_django uv run manage.py check
 
 # Manuellement :
 # 1. Se connecter

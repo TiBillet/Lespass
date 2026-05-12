@@ -16,7 +16,7 @@ USER tibillet
 ENV POETRY_NO_INTERACTION=1
 
 ## PYTHON
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/home/tibillet/.local/bin:$PATH"
 
 COPY --chown=tibillet:tibillet ./ /DjangoFiles
@@ -24,7 +24,7 @@ COPY --chown=tibillet:tibillet ./bashrc /home/tibillet/.bashrc
 
 WORKDIR /DjangoFiles
 
-RUN poetry install
+RUN uv sync
 
 CMD ["bash", "/DjangoFiles/start.sh"]
 
