@@ -541,16 +541,16 @@ class Configuration(SingletonModel):
         verbose_name=_("Event ticketing module"),
     )
     module_adhesion = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name=_("Membership module"),
     )
     module_crowdfunding = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name=_("Crowdfunding module"),
     )
 
     module_federation = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name=_("Federation module"),
     )
 
