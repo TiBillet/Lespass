@@ -492,10 +492,8 @@ msgid "Vin rouge / rose"
 msgstr ""
 
 #: Administration/admin/products.py:105
-#, fuzzy
-#| msgid "My balance"
 msgid "Vin blanc"
-msgstr "Ma tirelire"
+msgstr "Vin blanc"
 
 #: Administration/admin/products.py:106
 msgid "Bouteille vin"
@@ -550,10 +548,8 @@ msgid "Eau minerale / source"
 msgstr ""
 
 #: Administration/admin/products.py:120
-#, fuzzy
-#| msgid "Restaurant menu"
 msgid "Restaurant / plat"
-msgstr "Carte de restaurant"
+msgstr "Restaurant / plat"
 
 #: Administration/admin/products.py:121
 msgid "Pizza"
@@ -600,10 +596,8 @@ msgid "Snack"
 msgstr ""
 
 #: Administration/admin/products.py:132
-#, fuzzy
-#| msgid "Place"
 msgid "Glace"
-msgstr "Endroit"
+msgstr "Glace"
 
 #: Administration/admin/products.py:133
 msgid "Grill / BBQ"
@@ -622,10 +616,8 @@ msgid "Epice / piment"
 msgstr ""
 
 #: Administration/admin/products.py:137
-#, fuzzy
-#| msgid "Conference"
 msgid "Confiserie / sucre"
-msgstr "Conférence"
+msgstr "Confiserie / sucre"
 
 #: Administration/admin/products.py:138
 msgid "Gaufre / crepe"
@@ -640,16 +632,12 @@ msgid "Gateau d'anniversaire"
 msgstr ""
 
 #: Administration/admin/products.py:142
-#, fuzzy
-#| msgid "Recharge My Wallet"
 msgid "Recharge euros"
-msgstr "Recharger mon portefeuille"
+msgstr "Recharge euros"
 
 #: Administration/admin/products.py:143
-#, fuzzy
-#| msgid "Wallets"
 msgid "Wallet / solde"
-msgstr "Tirelires"
+msgstr "Wallet / solde"
 
 #: Administration/admin/products.py:144
 msgid "Especes"
@@ -700,38 +688,28 @@ msgid "Won"
 msgstr ""
 
 #: Administration/admin/products.py:156
-#, fuzzy
-#| msgid "Recharge My Wallet"
 msgid "Recharge cadeau"
-msgstr "Recharger mon portefeuille"
+msgstr "Recharge cadeau"
 
 #: Administration/admin/products.py:157
-#, fuzzy
-#| msgid "Premium"
 msgid "Jeton premium"
-msgstr "Premium"
+msgstr "Jeton premium"
 
 #: Administration/admin/products.py:158
-#, fuzzy
-#| msgid "Recharge My Wallet"
 msgid "Recharge temps"
-msgstr "Recharger mon portefeuille"
+msgstr "Recharge temps"
 
 #: Administration/admin/products.py:160
-#, fuzzy
-#| msgid "Adhesion"
 msgid "Adhesion / membre"
-msgstr "Adhésion"
+msgstr "Adhésion / membre"
 
 #: Administration/admin/products.py:161
 msgid "Nouvel adherent"
 msgstr ""
 
 #: Administration/admin/products.py:162
-#, fuzzy
-#| msgid "Comment about the address."
 msgid "Communaute / asso"
-msgstr "Commentaire sur l'adresse."
+msgstr "Communauté / asso"
 
 #: Administration/admin/products.py:163
 msgid "Partenariat / cooperative"
@@ -768,10 +746,8 @@ msgid "Theatre"
 msgstr ""
 
 #: Administration/admin/products.py:172
-#, fuzzy
-#| msgid "Festival"
 msgid "Festival / camping"
-msgstr "Festival"
+msgstr "Festival / camping"
 
 #: Administration/admin/products.py:173
 msgid "Navette / transport"
@@ -830,10 +806,8 @@ msgid "Echoppe / marche"
 msgstr ""
 
 #: Administration/admin/products.py:188
-#, fuzzy
-#| msgid "Retour a l'accueil"
 msgid "Entree / accueil"
-msgstr "Retour à l'accueil"
+msgstr "Entrée / accueil"
 
 #: Administration/admin/products.py:189
 msgid "Lieu / emplacement"
@@ -900,10 +874,8 @@ msgid "Verrouille"
 msgstr ""
 
 #: Administration/admin/products.py:206
-#, fuzzy
-#| msgid "Valid tickets"
 msgid "Valide / succes"
-msgstr "Billets valides"
+msgstr "Valide / succès"
 
 #: Administration/admin/products.py:308 Administration/admin_tenant.py:745
 #: Administration/admin_tenant.py:899
@@ -921,13 +893,10 @@ msgid ""
 msgstr ""
 
 #: Administration/admin/products.py:380
-#, fuzzy
-#| msgid "Maximum capacity"
 msgid "Maximum total quantity"
-msgstr "Jauge maximale"
+msgstr "Quantité totale maximale"
 
 #: Administration/admin/products.py:382
-#, fuzzy
 #| msgid ""
 #| "Number of valid memberships possible simultaneously or maximum capacity "
 #| "for this price per event. Leave this field blank if the quantity is "
@@ -936,17 +905,14 @@ msgid ""
 "Maximum number of valid memberships allowed simultaneously for this price. "
 "Leave blank for unlimited."
 msgstr ""
-"Nombre d'adhésions valides possibles simultanément ou capacité maximale pour "
-"ce prix par événement. Laissez ce champ vide si la quantité est illimité."
+"Nombre maximal d'adhésions valides possibles simultanément pour ce tarif. "
+"Laissez vide pour illimité."
 
 #: Administration/admin/products.py:386
-#, fuzzy
-#| msgid "Maximum per user"
 msgid "Max per member"
-msgstr "Maximum par utilisateur·ice"
+msgstr "Maximum par adhérent·e"
 
 #: Administration/admin/products.py:388
-#, fuzzy
 #| msgid ""
 #| "Maximum number of times this code can be used. Leave empty for unlimited "
 #| "usage."
@@ -954,8 +920,8 @@ msgid ""
 "Maximum number of active memberships a single user can hold for this price. "
 "Leave blank for unlimited."
 msgstr ""
-"Nombre maximal d'utilisations de ce code. Laissez vide pour une utilisation "
-"illimitée."
+"Nombre maximal d'adhésions actives qu'un·e utilisateur·ice peut détenir pour "
+"ce tarif. Laissez vide pour illimité."
 
 #: Administration/admin/products.py:398 Administration/admin_tenant.py:754
 msgid "A subscription must have a duration"
@@ -979,13 +945,10 @@ msgstr ""
 "dessus."
 
 #: Administration/admin/products.py:452
-#, fuzzy
-#| msgid "Event category"
 msgid "Event capacity"
-msgstr "Catégorie d'évènement"
+msgstr "Capacité de l'événement"
 
 #: Administration/admin/products.py:454
-#, fuzzy
 #| msgid ""
 #| "Maximum number of times this code can be used. Leave empty for unlimited "
 #| "usage."
@@ -993,26 +956,20 @@ msgid ""
 "Maximum number of tickets available per event for this price. Leave blank "
 "for unlimited."
 msgstr ""
-"Nombre maximal d'utilisations de ce code. Laissez vide pour une utilisation "
-"illimitée."
+"Nombre maximal de billets disponibles par événement pour ce tarif. Laissez "
+"vide pour illimité."
 
 #: Administration/admin/products.py:458
-#, fuzzy
-#| msgid "Maximum per user"
 msgid "Max tickets per user"
-msgstr "Maximum par utilisateur·ice"
+msgstr "Maximum de billets par utilisateur·ice"
 
 #: Administration/admin/products.py:460
-#, fuzzy
-#| msgid ""
-#| "Maximum number of times this code can be used. Leave empty for unlimited "
-#| "usage."
 msgid ""
 "Maximum number of tickets a single user can book for this price. Leave blank "
 "for unlimited."
 msgstr ""
-"Nombre maximal d'utilisations de ce code. Laissez vide pour une utilisation "
-"illimitée."
+"Nombre maximal de billets qu'un·e utilisateur·ice peut réserver pour ce "
+"tarif. Laissez vide pour illimité."
 
 #: Administration/admin/products.py:585
 msgid "Choices"
@@ -1078,10 +1035,8 @@ msgid "Archivé"
 msgstr ""
 
 #: Administration/admin/products.py:826
-#, fuzzy
-#| msgid "Archive"
 msgid "Archivés"
-msgstr "Archiver"
+msgstr "Archivés"
 
 #: Administration/admin/products.py:827
 msgid "Tous"
@@ -1092,10 +1047,8 @@ msgid "General"
 msgstr "General"
 
 #: Administration/admin/products.py:901
-#, fuzzy
-#| msgid "Duplicate (month+1)"
 msgid "Duplicate product"
-msgstr "Dupliquer (+1 mois)"
+msgstr "Dupliquer le produit"
 
 #: Administration/admin/products.py:924
 #, python-brace-format
