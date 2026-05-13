@@ -255,6 +255,67 @@ def refresh_seo_cache():
     set_memcached_l1(SEOCache.SITEMAP_INDEX, None, sitemap_data)
 
     # ------------------------------------------------------------------
+    # Etape 5.bis : Calcul des arretes entrantes de fédération.
+    # Pour chaque tenant X, on liste les tenants qui ont une FederatedPlace
+    # pointant vers X (= les tenants qui federent AVEC X).
+    # Permet a /federation/ d'un tenant d'afficher les voisins qui le federent
+    # meme s'il n'a pas declare de relation reciproque.
+    # / Step 5.bis: Compute incoming federation edges.
+    # For each tenant X, list the tenants that have a FederatedPlace pointing
+    # to X (= tenants that federate WITH X).
+    # Allows /federation/ of a tenant to display neighbors that federate with
+    # them even without a reciprocal declaration.
+    # ------------------------------------------------------------------
+    # Schema -> uuid lookup pour passer du schema_name (source de l'edge)
+    # a l'UUID du tenant source.
+    # / schema -> uuid lookup to map source schema_name to source tenant UUID.
+    schema_to_uuid = {row["schema_name"]: row["tenant_id"] for row in tenant_counts}
+
+    # Construction par UNION ALL : 1 sous-requete par schema tenant.
+    # Chaque ligne donne (source_schema, target_uuid) ou target_uuid est
+    # l'UUID du tenant fédéré (FederatedPlace.tenant_id).
+    # / UNION ALL build: one sub-query per tenant schema.
+    # Each row yields (source_schema, target_uuid).
+    incoming_by_tenant = {}
+    if tenant_schemas:
+        from django.db import connection as _conn
+        edge_parts = []
+        edge_params = []
+        for _tid, schema_name in tenant_schemas:
+            edge_parts.append(
+                f"SELECT %s AS source_schema, tenant_id::text AS target_uuid "
+                f'FROM "{schema_name}"."BaseBillet_federatedplace"'
+            )
+            edge_params.append(schema_name)
+
+        edge_sql = " UNION ALL ".join(edge_parts)
+
+        with _conn.cursor() as cursor:
+            cursor.execute(edge_sql, edge_params)
+            for source_schema, target_uuid in cursor.fetchall():
+                source_uuid = schema_to_uuid.get(source_schema)
+                if not source_uuid or not target_uuid:
+                    continue
+                # On ne note pas les self-loops (un tenant qui se federe lui-meme)
+                # / Skip self-loops (a tenant federating with itself)
+                if source_uuid == target_uuid:
+                    continue
+                incoming_by_tenant.setdefault(target_uuid, []).append(source_uuid)
+
+        # Tri stable des UUIDs sources pour chaque target.
+        # / Stable sort of source UUIDs for each target.
+        for target_uuid in incoming_by_tenant:
+            incoming_by_tenant[target_uuid] = sorted(set(incoming_by_tenant[target_uuid]))
+
+    federation_incoming_data = {"by_tenant": incoming_by_tenant}
+    SEOCache.objects.update_or_create(
+        cache_type=SEOCache.FEDERATION_INCOMING,
+        tenant=None,
+        defaults={"data": federation_incoming_data},
+    )
+    set_memcached_l1(SEOCache.FEDERATION_INCOMING, None, federation_incoming_data)
+
+    # ------------------------------------------------------------------
     # Etape 6 : Nettoyage des entrees obsoletes (tenants supprimes/inactifs)
     # / Step 6: Clean up stale entries (deleted/inactive tenants)
     # ------------------------------------------------------------------

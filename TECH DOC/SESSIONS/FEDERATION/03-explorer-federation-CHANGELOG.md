@@ -11,6 +11,26 @@
 - Le code de la carte (JS, CSS, widget HTML, builder data) est en **source unique** dans `seo/`, partagé entre le public `/explorer/` et chaque tenant `/federation/`.
 - Le JS a été entièrement refactoré pour la prod : IIFE encapsulée (zéro pollution `window`), event delegation (zéro `onclick=` inline), i18n via `data-i18n-*`, garde-fous défensifs, Leaflet vendoré (plus de CDN externe), event `animationend` au lieu de `setTimeout(...,400)`.
 - Marker visuel spécial pour le tenant courant ("Vous êtes ici" + couleur primaire + halo).
+- **Mini-extension** : la carte d'un tenant affiche **les voisins fédérés dans les 2 sens** (sortantes ET entrantes). Si X fédère avec moi mais que je ne fédère pas explicitement avec X, X apparaît quand même sur ma carte (sémantique : on partage la même fédération, peu importe qui l'a déclarée). Implementé via pré-calcul cross-schema dans le Celery task + lookup cache au request time.
+
+## Mini-extension : voisins bidirectionnels
+
+**Sémantique** : un voisin X apparaît sur la carte d'un tenant T si **au moins une des conditions** est vraie :
+- T a une `FederatedPlace` qui pointe vers X (sortante — comme avant)
+- X a une `FederatedPlace` qui pointe vers T (entrante — **nouveau**)
+- X = T (tenant courant)
+
+**Pas de transitivité** : si X fédère avec Y, et Y fédère avec T, X **n'apparaît pas** sur la carte de T (sauf si X fédère aussi directement avec T).
+
+**Implémentation** :
+- Nouveau cache_type `SEOCache.FEDERATION_INCOMING` (cache global, schema public)
+- Calcul cross-schema dans `seo/tasks.py::refresh_seo_cache` (étape 5.bis) : UNION ALL sur `basebillet_federatedplace` de tous les schemas, agrégation par `tenant_id` cible
+- Stockage : `{"by_tenant": {target_uuid: [source_uuids]}}`
+- Lecture dans `BaseBillet/views.py::FederationViewset.list` : union de `outgoing_uuids` (queryset local) et `incoming_uuids` (lookup cache)
+
+**Self-loops** ignorés (un tenant qui se fédère lui-même n'apparaît pas en tant que voisin).
+
+**Migration** : `seo/migrations/0002_alter_seocache_cache_type.py` (changement de choices, no schema change).
 
 ## Fichiers crees
 

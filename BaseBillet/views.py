@@ -215,9 +215,20 @@ def get_context(request):
             'icon': 'calendar-date'
         })
 
-    agenda_federation_active = FederatedPlace.objects.exists()
-    asset_federation_active = AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()
-    if (agenda_federation_active or asset_federation_active) and config.module_federation:
+    # Activation du menu "Réseau local" : pilotee UNIQUEMENT par le flag
+    # config.module_federation. Le test d'existence de FederatedPlace est
+    # devenu superflu depuis le support des entrantes : un tenant sans
+    # FederatedPlace sortante peut quand meme avoir des voisins entrants
+    # (autres tenants qui le federent), donc afficher /federation/ a du sens.
+    # Si jamais le tenant n'a vraiment aucun voisin, la vue affiche le
+    # message "Aucune autre place federee pour le moment.".
+    # / "Local network" menu activation: driven ONLY by the
+    # config.module_federation flag. The existence test on FederatedPlace
+    # became superfluous when we added incoming-edge support: a tenant with
+    # no outgoing FederatedPlace can still have incoming neighbors, so
+    # showing /federation/ makes sense. If the tenant has no neighbor at
+    # all, the view shows the "No other federated place" message.
+    if config.module_federation:
         navbar.append({
             'name': 'federation',
             'url': '/federation/',
@@ -1601,23 +1612,39 @@ class FederationViewset(viewsets.ViewSet):
         on FederatedPlace UUIDs + the current tenant.
         """
         from seo.services import build_explorer_data_for_tenants
+        from seo.models import SEOCache
+        from seo.views_common import get_seo_cache
 
         config = Configuration.get_solo()
+        current_uuid = str(connection.tenant.uuid)
 
-        # Construire l'ensemble des UUIDs des AUTRES places federees.
-        # / Build the UUID set of OTHER federated places.
-        other_federated_uuids = {
+        # Arretes SORTANTES : les FederatedPlace dans le schema du tenant courant.
+        # = "les lieux avec lesquels JE federe (declaration de mon cote)".
+        # / OUTGOING edges: FederatedPlace in current tenant's schema.
+        # = "places I federate with (my declaration)".
+        outgoing_uuids = {
             str(fp.tenant.uuid)
             for fp in FederatedPlace.objects.select_related('tenant').all()
         }
-        current_uuid = str(connection.tenant.uuid)
 
-        # On retire le tenant courant si jamais il apparait (cas degenere).
-        # / Remove the current tenant if it appears (degenerate case).
+        # Arretes ENTRANTES : les FederatedPlace d'AUTRES tenants pointant vers moi.
+        # Pre-calcule par le Celery task refresh_seo_cache (UNION ALL cross-schema).
+        # = "les lieux qui federent AVEC moi (declaration de leur cote)".
+        # / INCOMING edges: FederatedPlace from OTHER tenants pointing to me.
+        # Pre-computed by refresh_seo_cache Celery task (cross-schema UNION ALL).
+        # = "places that federate WITH me (their declaration)".
+        incoming_data = get_seo_cache(SEOCache.FEDERATION_INCOMING) or {}
+        incoming_uuids = set(
+            incoming_data.get("by_tenant", {}).get(current_uuid, [])
+        )
+
+        # Union des deux directions = mes voisins directs dans le graphe de federation.
+        # / Union of both directions = my direct neighbors in the federation graph.
+        other_federated_uuids = (outgoing_uuids | incoming_uuids)
         other_federated_uuids.discard(current_uuid)
 
-        # Union pour l'explorer : autres federes + tenant courant.
-        # / Union for the explorer: other federated + current tenant.
+        # Ensemble final pour l'explorer : voisins + tenant courant.
+        # / Final set for the explorer: neighbors + current tenant.
         all_uuids = other_federated_uuids | {current_uuid}
         sorted_uuids = sorted(all_uuids)
         explorer_data = build_explorer_data_for_tenants(sorted_uuids)
