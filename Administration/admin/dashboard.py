@@ -68,7 +68,6 @@ def get_sidebar_navigation(request):
                 "separator": True,
                 "collapsible": True,
                 "items": [
-                    # FROM V2 : PAGE TO IMPLEMENT
                     {
                         "title": _("Membership products"),
                         "icon": "loyalty",
