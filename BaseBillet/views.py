@@ -233,6 +233,14 @@ def get_context(request):
             'icon': 'people-fill'
         })
 
+    # Module réservation de ressources — visible seulement si activé dans la config.
+    # / Resource booking module — visible only when enabled in admin config.
+    if config.module_booking:
+        navbar.append(
+            {'name': 'booking-list', 'url': '/booking/',
+             'label': _('Ressources'), 'icon': 'building'}
+        )
+
     # cache.set(f'get_context_{connection.tenant.uuid}', context, 10)
     return context
 
@@ -1125,7 +1133,6 @@ class MyAccount(viewsets.ViewSet):
             messages.add_message(request, messages.ERROR, _("Payment verification error"))
 
         return redirect('/my_account/')
-
 
 class QrCodeScanPay(viewsets.ViewSet):
     authentication_classes = [SessionAuthentication, ]

@@ -3,6 +3,7 @@ import os
 import random
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
@@ -1894,6 +1895,17 @@ class Command(BaseCommand):
                         user.save(update_fields=['client_source'])
         except Exception as e:
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
+
+        # -----------------------------
+        # 4) Données booking de démonstration (si booking est installé)
+        # -----------------------------
+        if 'booking' in settings.INSTALLED_APPS:
+            from django.core.management import call_command as _call_command
+            for tenant in created_tenants:
+                with tenant_context(tenant):
+                    self.stdout.write(f"Création des données booking pour {tenant.name}…")
+                    _call_command('create_booking_fixtures')
+
 
         # Export du dump SQL pour --quick
         # self._dump_database()

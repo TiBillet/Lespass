@@ -1,0 +1,96 @@
+{% extends "booking/booking_base.html" %}
+{% load i18n %}
+
+<!--
+LOCALISATION : booking/templates/booking/views/cancel_booking.html
+
+Confirmation d'annulation d'une réservation.
+/ Booking cancellation confirmation.
+
+Flux / Flow:
+  GET  /booking/cancel/<booking_pk>/
+  POST /booking/cancel/<booking_pk>/
+  Contexte / Context: booking, deadline, deadline_passed
+-->
+
+{% block title %}{% translate "Annuler la réservation" %}{% endblock %}
+
+{% block booking_content %}
+
+<h1 class="mb-4">{% translate "Annuler la réservation" %}</h1>
+
+<!--
+Détails de la réservation à annuler.
+/ Details of the booking to cancel.
+-->
+<div class="card mb-4" data-testid="booking-cancel-details">
+  <div class="card-body">
+    <h2 class="card-title h5">{{ booking.resource.name }}</h2>
+    <p class="mb-1">
+      <strong>{{ booking.start_datetime|date:"l d F Y" }}</strong>
+      {% translate "à" %} {{ booking.start_datetime|date:"H\hi" }}
+      – {{ booking.end_datetime|date:"H\hi" }}
+    </p>
+    {% if booking.slot_count > 1 %}
+    <p class="mb-0 text-muted">
+      {{ booking.slot_count }} {% translate "créneaux" %}
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+{% if deadline_passed %}
+<!--
+La deadline est dépassée — annulation impossible.
+/ Deadline has passed — cancellation not possible.
+-->
+<div class="alert alert-danger" role="alert" data-testid="booking-cancel-deadline-passed">
+  <i class="bi bi-x-circle" aria-hidden="true"></i>
+  {% blocktrans with deadline=deadline|date:"d F Y à H\hi" %}
+    La date limite d'annulation ({{ deadline }}) est dépassée.
+    L'annulation n'est plus possible.
+  {% endblocktrans %}
+</div>
+
+<a href="{% url 'booking-my-bookings' %}"
+   class="btn btn-outline-secondary"
+   data-testid="booking-cancel-back-btn">
+  {% translate "Retour à mes réservations" %}
+</a>
+
+{% else %}
+<!--
+La deadline n'est pas encore dépassée — affiche le formulaire de confirmation.
+/ Deadline not yet passed — show the confirmation form.
+-->
+<div class="alert alert-info mb-4" role="note" data-testid="booking-cancel-deadline-info">
+  <i class="bi bi-info-circle" aria-hidden="true"></i>
+  {% blocktrans with deadline=deadline|date:"d F Y à H\hi" %}
+    Annulation possible jusqu'au {{ deadline }}.
+  {% endblocktrans %}
+</div>
+
+<p class="mb-4">{% translate "Confirmez-vous l'annulation de cette réservation ?" %}</p>
+
+<form method="post"
+      action="{% url 'booking-cancel' booking_pk=booking.pk %}"
+      data-testid="booking-cancel-form">
+  {% csrf_token %}
+
+  <div class="d-flex gap-2">
+    <button type="submit"
+            class="btn btn-danger"
+            data-testid="booking-cancel-confirm-btn">
+      {% translate "Confirmer l'annulation" %}
+    </button>
+    <a href="{% url 'booking-my-bookings' %}"
+       class="btn btn-outline-secondary"
+       data-testid="booking-cancel-back-btn">
+      {% translate "Retour" %}
+    </a>
+  </div>
+</form>
+
+{% endif %}
+
+{% endblock booking_content %}
