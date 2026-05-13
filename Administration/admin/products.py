@@ -1141,13 +1141,11 @@ class ProductAdmin(ModelAdmin):
         else:
             default_action_row.append("archive")
 
-        # Reuse code from 'ActionModelAdminMixin' (from Unfold) from two methods :
-        # get_actions_row and _get_base_actions_row
-        # Now we can create dynamic menu !
-        return self._filter_unfold_actions_by_permissions(request,[
-            self.get_unfold_action(action)
-            for action in self._extract_action_names(default_action_row) or []
-        ])
+        # Set actions_row to our dynamic actions
+        self.actions_row = default_action_row
+
+        # And return super res
+        return super().get_actions_row(request)
 
     def has_changelist_row_action_permission(
         self, request: HttpRequest, *args, **kwargs
