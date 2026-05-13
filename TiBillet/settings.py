@@ -152,6 +152,7 @@ SHARED_APPS = (
     'wsocket',
     'fedow_public',
     'discovery',
+    'seo',
 
     'django_extensions',
     'solo',

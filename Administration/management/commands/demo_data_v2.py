@@ -1,8 +1,11 @@
 import logging
 import os
 import random
+import shutil
 from datetime import timedelta
 
+from django.conf import settings
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
@@ -210,11 +213,11 @@ class Command(BaseCommand):
                "adresse": {
                     "name": "En bas de chez moi",
                     "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
-                    "address_country": "",
-                    "latitude": "",
-                    "longitude": "",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
+                    "address_country": "FR",
+                    "latitude": "45.7676",
+                    "longitude": "4.8799",
                 },
                 "events": [
                     {  # Gratuit, entrée libre (aucune réservation)
@@ -594,11 +597,11 @@ class Command(BaseCommand):
                 "adresse": {
                     "name": "La grange conviviale",
                     "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7660",
+                    "longitude": "4.8730",
                 },
                 "events": [
                     {"name": "Bal trad du vendredi", "categorie": "CONCERT", "reservation": "payante",
@@ -656,11 +659,11 @@ class Command(BaseCommand):
                 "adresse": {
                     "name": "Maison du projet",
                     "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7715",
+                    "longitude": "4.8622",
                 },
                 "events": [
                     {"name": "Scène ouverte acoustique (entrée libre)", "categorie": "CONCERT", "reservation": "aucune",
@@ -706,11 +709,11 @@ class Command(BaseCommand):
                 "adresse": {
                     "name": "L'atelier partagé",
                     "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7740",
+                    "longitude": "4.8855",
                 },
                 "events": [
                     {"name": "Atelier bois débutant", "categorie": "ATELIER", "reservation": "payante",
@@ -762,11 +765,11 @@ class Command(BaseCommand):
                 "adresse": {
                     "name": "Maison du Réseau",
                     "street_address": "",
-                    "address_locality": "",
-                    "postal_code": "",
+                    "address_locality": "Villeurbanne",
+                    "postal_code": "69100",
                     "address_country": "FR",
-                    "latitude": "",
-                    "longitude": "",
+                    "latitude": "45.7695",
+                    "longitude": "4.8770",
                 },
                 # Réseau régional: uniquement des adhésions
                 "adhesions": [
@@ -926,6 +929,22 @@ class Command(BaseCommand):
                                 )
                         except Exception as e:
                             logger.error(f"--flush: échec de purge pour '{name}': {e}")
+
+                # Nettoyage du dossier media (images uploadees par les runs precedents).
+                # StdImageField genere des variations (fhd, hdr, med, thumbnail, crop, etc.)
+                # qui s'accumulent a chaque flush + reimport. On supprime le contenu de
+                # MEDIA_ROOT/images/ (pas le dossier lui-meme).
+                # / Clean up media directory (images uploaded by previous runs).
+                # StdImageField generates variations that accumulate with each flush + reimport.
+                # We delete the contents of MEDIA_ROOT/images/ (not the directory itself).
+                try:
+                    media_images_dir = os.path.join(settings.MEDIA_ROOT, "images")
+                    if os.path.isdir(media_images_dir):
+                        shutil.rmtree(media_images_dir)
+                        os.makedirs(media_images_dir, exist_ok=True)
+                        self.stdout.write("  Media images nettoyees / Media images cleaned")
+                except Exception as e:
+                    logger.warning(f"--flush: erreur nettoyage media: {e}")
 
                 self.stdout.write(self.style.SUCCESS("Purge sélective terminée. Réimport en cours…"))
 
@@ -1894,6 +1913,158 @@ class Command(BaseCommand):
                         user.save(update_fields=['client_source'])
         except Exception as e:
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
+
+        # -----------------------------
+        # 4) Images de demo (logos tenants, backgrounds, events)
+        # Les images sont pre-telechargees dans Administration/fixtures/
+        # et assignees aux objets via StdImageField.save().
+        # / Demo images (tenant logos, backgrounds, events)
+        # Images are pre-downloaded in Administration/fixtures/
+        # and assigned to objects via StdImageField.save().
+        # -----------------------------
+        # NB : on n'importe ici QUE ce qui sert a la landing SEO V1 (lieux + events).
+        # Les images d'adhesions, stickers et initiatives ne sont pas portees.
+        # / NB: only what powers the V1 SEO landing (venues + events) is imported here.
+        # Membership, sticker and initiative images are intentionally skipped.
+        self.stdout.write("Assignation des images de demo…")
+        fixtures_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "fixtures",
+        )
+
+        # Images 404 reduites (960x640) — fallback "joli" pour le tenant Lespass.
+        # / Resized 404 images (960x640) — pretty fallback for the Lespass tenant.
+        images_404_dir = os.path.join(fixtures_dir, "demo_404")
+        images_404 = sorted([
+            f for f in os.listdir(images_404_dir)
+            if f.startswith("404-") and f.endswith(".jpg")
+        ]) if os.path.isdir(images_404_dir) else []
+
+        # 4a) Logos des tenants → Configuration.logo
+        # Le fichier PNG porte le nom du schema (ex: lespass.png)
+        # / Tenant logos → Configuration.logo
+        # The PNG file is named after the schema (e.g. lespass.png)
+        logos_dir = os.path.join(fixtures_dir, "demo_logos")
+        for tenant in created_tenants:
+            # Chercher le logo par schema_name OU par slugify(name).
+            # Certains tenants ont un schema different du slug de leur nom
+            # (ex: tenant "agenda" a schema_name="meta").
+            # / Look for logo by schema_name OR by slugify(name).
+            # Some tenants have a schema different from their name slug
+            # (e.g. tenant "agenda" has schema_name="meta").
+            logo_path = os.path.join(logos_dir, f"{tenant.schema_name}.png")
+            if not os.path.isfile(logo_path):
+                logo_path = os.path.join(logos_dir, f"{slugify(tenant.name)}.png")
+            if not os.path.isfile(logo_path):
+                continue
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                # Verifier que le logo existe PHYSIQUEMENT sur le disque.
+                # Apres un flush, le champ Django est encore renseigne mais
+                # le fichier a ete supprime par le nettoyage media.
+                # / Check that the logo physically EXISTS on disk.
+                # After a flush, the Django field is still set but
+                # the file was deleted by the media cleanup.
+                if config.logo:
+                    try:
+                        logo_exists = config.logo.storage.exists(config.logo.name)
+                    except Exception:
+                        logo_exists = False
+                    if logo_exists:
+                        continue
+                with open(logo_path, "rb") as f:
+                    config.logo.save(
+                        f"{tenant.schema_name}_logo.png",
+                        ContentFile(f.read()),
+                        save=True,
+                    )
+                self.stdout.write(f"  Logo: {tenant.name}")
+
+        # 4b) Background du tenant → Configuration.img
+        # Image de fond + social_card (Open Graph) du lieu.
+        # Lespass → image 404 (jolie). Autres → image picsum.
+        # / Tenant background → Configuration.img
+        # Background image + social_card (Open Graph) of the venue.
+        # Lespass → 404 image (pretty). Others → picsum image.
+        backgrounds_dir = os.path.join(fixtures_dir, "demo_backgrounds")
+        background_images = sorted([
+            f for f in os.listdir(backgrounds_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(backgrounds_dir) else []
+
+        bg_index = 0
+        for tenant in created_tenants:
+            with tenant_context(tenant):
+                config = Configuration.get_solo()
+                if config.img:
+                    try:
+                        img_exists = config.img.storage.exists(config.img.name)
+                    except Exception:
+                        img_exists = False
+                    if img_exists:
+                        bg_index += 1
+                        continue
+
+                # Lespass → image 404, autres → picsum
+                # / Lespass → 404 image, others → picsum
+                if tenant.schema_name == "lespass" and images_404:
+                    img_file = images_404[0]
+                    img_path = os.path.join(images_404_dir, img_file)
+                elif background_images:
+                    img_file = background_images[bg_index % len(background_images)]
+                    img_path = os.path.join(backgrounds_dir, img_file)
+                else:
+                    bg_index += 1
+                    continue
+
+                with open(img_path, "rb") as f:
+                    config.img.save(
+                        f"{tenant.schema_name}_bg.jpg",
+                        ContentFile(f.read()),
+                        save=True,
+                    )
+                self.stdout.write(f"  Background: {tenant.name}")
+            bg_index += 1
+
+        # 4c) Event.img (image principale)
+        # Pour Lespass → image 404 du projet. Pour les autres → image picsum.
+        # / Event main image
+        # For Lespass → project 404 image. For others → picsum image.
+        events_dir = os.path.join(fixtures_dir, "demo_events")
+        event_images = sorted([
+            f for f in os.listdir(events_dir)
+            if f.endswith(".jpg")
+        ]) if os.path.isdir(events_dir) else []
+
+        def _choisir_image_event(tenant, index):
+            """
+            Pour Lespass → image 404 du projet. Pour les autres → image picsum.
+            / For Lespass → project 404 image. For others → picsum image.
+            """
+            if tenant.schema_name == "lespass" and images_404:
+                img_file = images_404[index % len(images_404)]
+                return os.path.join(images_404_dir, img_file)
+            elif event_images:
+                img_file = event_images[index % len(event_images)]
+                return os.path.join(events_dir, img_file)
+            return None
+
+        img_count = 0
+        for tenant in created_tenants:
+            idx = 0
+            with tenant_context(tenant):
+                for event_obj in Event.objects.filter(img="").order_by("datetime"):
+                    img_path = _choisir_image_event(tenant, idx)
+                    if img_path:
+                        with open(img_path, "rb") as f:
+                            event_obj.img.save(
+                                f"event_{event_obj.slug or event_obj.pk}.jpg",
+                                ContentFile(f.read()),
+                                save=True,
+                            )
+                        img_count += 1
+                    idx += 1
+        self.stdout.write(f"  Events: {img_count} images assignees")
 
         # Export du dump SQL pour --quick
         # self._dump_database()

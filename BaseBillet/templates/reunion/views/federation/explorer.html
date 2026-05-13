@@ -1,0 +1,39 @@
+{% extends base_template %}
+{% load static i18n %}
+
+{# Wrapper tenant : plug le widget explorer dans le skin reunion. #}
+{# Source du widget : seo/templates/seo/partials/explorer_widget.html #}
+{# / Tenant wrapper: plugs the explorer widget into the reunion skin. #}
+{# Widget source: seo/templates/seo/partials/explorer_widget.html #}
+
+{% block title %}{% translate 'Réseau local' %}{% endblock %}
+{% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Réseau local' %}{% endblock %}
+
+{% block extra_meta %}
+    {# Leaflet vendore (meme source que le public /explorer/) #}
+    {# / Vendored Leaflet (same source as public /explorer/) #}
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+{% endblock %}
+
+{% block main %}
+    {# Message d'etat vide : si le tenant n'a aucune autre place federee. #}
+    {# / Empty-state message: if the tenant has no other federated place. #}
+    {% if not has_other_federated_places %}
+    <div class="alert alert-info text-center my-3 mx-auto" style="max-width: 800px;"
+         role="status" data-testid="federation-empty-state">
+        <i class="bi bi-info-circle" aria-hidden="true"></i>
+        {% translate "Aucune autre place fédérée pour le moment." %}
+    </div>
+    {% endif %}
+
+    {% include "seo/partials/explorer_widget.html" %}
+{% endblock %}
+
+{% block scripts %}
+    <script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
+    <script src="{% static 'seo/vendor/leaflet/markercluster.js' %}"></script>
+    <script src="{% static 'seo/explorer.js' %}"></script>
+{% endblock %}

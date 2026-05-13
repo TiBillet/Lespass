@@ -1,0 +1,32 @@
+{% extends "seo/base.html" %}
+{% load static i18n %}
+
+{# Wrapper public : plug le widget explorer dans le base SEO. #}
+{# Source du widget : seo/templates/seo/partials/explorer_widget.html #}
+{# / Public wrapper: plugs the explorer widget into the SEO base. #}
+{# Widget source: seo/templates/seo/partials/explorer_widget.html #}
+
+{% block extra_head %}
+    {# Pas d'indexation : outil interactif, pas une page SEO #}
+    {# / No indexing: interactive tool, not a SEO page #}
+    <meta name="robots" content="noindex, nofollow">
+
+    {# Leaflet vendore (plus de CDN externe) / Vendored Leaflet (no external CDN) #}
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
+    <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
+
+    <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+{% endblock %}
+
+{% block main_wrapper %}
+<main>
+    {% include "seo/partials/explorer_widget.html" %}
+</main>
+{% endblock %}
+
+{% block extra_js %}
+    <script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
+    <script src="{% static 'seo/vendor/leaflet/markercluster.js' %}"></script>
+    <script src="{% static 'seo/explorer.js' %}"></script>
+{% endblock %}

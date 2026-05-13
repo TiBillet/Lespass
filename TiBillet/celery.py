@@ -56,6 +56,20 @@ def setup_periodic_tasks(sender, **kwargs):
         crontab(hour=5, minute=0),
         cron_morning.s(),
     )
+
+    # Rafraichissement du cache SEO cross-tenant toutes les 4 heures.
+    # On passe par un wrapper @app.task local (pattern cron_morning) pour
+    # eviter la race entre on_after_configure et autodiscover_tasks.
+    # / Cross-tenant SEO cache refresh every 4 hours.
+    # We go through a local @app.task wrapper (cron_morning pattern) to
+    # avoid the on_after_configure vs autodiscover_tasks race.
+    # cf. seo/tasks.py + TECH DOC/SESSIONS/M-To-V2/02-app-seo.md
+    logger.info(f'setup_periodic_tasks cron_refresh_seo_cache every 4 hours')
+    sender.add_periodic_task(
+        crontab(minute=0, hour='*/4'),
+        cron_refresh_seo_cache.s(),
+    )
+
     logger.info(f'setup_periodic_tasks DONE')
 
 
@@ -74,3 +88,16 @@ def cron_morning():
     logger.info(f'call_command cron_morning START')
     call_command('cron_morning')
     logger.info(f'call_command cron_morning END')
+
+
+@app.task
+def cron_refresh_seo_cache():
+    """
+    Wrapper local pour la task seo. On passe par call_command pour
+    benificier de l'enregistrement automatique au niveau de l'app Celery.
+    / Local wrapper for the seo task. Goes through call_command to
+    benefit from automatic registration at the Celery app level.
+    """
+    logger.info(f'call_command refresh_seo_cache START')
+    call_command('refresh_seo_cache')
+    logger.info(f'call_command refresh_seo_cache END')

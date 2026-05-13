@@ -1584,94 +1584,60 @@ class FederationViewset(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
 
     def list(self, request):
+        """
+        Affiche l'explorer (carte + liste) restreint au tenant courant
+        et a ses lieux federes via FederatedPlace.
+        / Renders the explorer (map + list) restricted to the current tenant
+        and its federated places via FederatedPlace.
+
+        LOCALISATION : BaseBillet/views.py — FederationViewset.list
+
+        Reprend la meme source de donnees que le public /explorer/
+        (SEOCache via build_explorer_data_for_tenants) en filtrant
+        sur les UUIDs des FederatedPlace + le tenant courant.
+
+        Reuses the same data source as the public /explorer/
+        (SEOCache via build_explorer_data_for_tenants) by filtering
+        on FederatedPlace UUIDs + the current tenant.
+        """
+        from seo.services import build_explorer_data_for_tenants
+
+        config = Configuration.get_solo()
+
+        # Construire l'ensemble des UUIDs des AUTRES places federees.
+        # / Build the UUID set of OTHER federated places.
+        other_federated_uuids = {
+            str(fp.tenant.uuid)
+            for fp in FederatedPlace.objects.select_related('tenant').all()
+        }
+        current_uuid = str(connection.tenant.uuid)
+
+        # On retire le tenant courant si jamais il apparait (cas degenere).
+        # / Remove the current tenant if it appears (degenerate case).
+        other_federated_uuids.discard(current_uuid)
+
+        # Union pour l'explorer : autres federes + tenant courant.
+        # / Union for the explorer: other federated + current tenant.
+        all_uuids = other_federated_uuids | {current_uuid}
+        sorted_uuids = sorted(all_uuids)
+        explorer_data = build_explorer_data_for_tenants(sorted_uuids)
+
+        # Etat vide : a-t-on AUTRE chose que le tenant courant sur la carte ?
+        # / Empty state: do we have something OTHER than the current tenant on the map?
+        has_other_federated_places = bool(other_federated_uuids)
+
+        # Contexte standard du skin + variables specifiques a l'explorer
+        # / Standard skin context + explorer-specific variables
         template_context = get_context(request)
+        template_context.update({
+            'explorer_data': explorer_data,
+            'current_tenant_uuid': current_uuid,
+            'has_other_federated_places': has_other_federated_places,
+            'page_title': _('Réseau local'),
+        })
 
-        def build_federated_places():
-            results = list()
-            tenants = list()
-            assets = list()
-
-            actual_tenant: Client = connection.tenant
-            tenants.append(actual_tenant)
-            # Les lieux fédéré en agenda
-            for fed in FederatedPlace.objects.all().select_related('tenant'):
-                if fed.tenant not in tenants:
-                    tenants.append(fed.tenant)
-
-            for asset in AssetFedowPublic.objects.filter(
-                    origin=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
-                'federated_with'):
-                assets.append(asset)
-
-            for asset in AssetFedowPublic.objects.filter(
-                    federated_with=actual_tenant, archive=False
-            ).exclude(category=AssetFedowPublic.STRIPE_FED_FIAT).select_related('origin').prefetch_related(
-                'federated_with'):
-                assets.append(asset)
-
-            # Les lieux fédéré en Asset
-            for asset in assets:
-                tenant_origin = asset.origin
-                if tenant_origin not in tenants:
-                    tenants.append(tenant_origin)
-                for tenant in asset.federated_with.all():
-                    if tenant not in tenants:
-                        tenants.append(tenant)
-
-            for tenant in tenants:
-                if tenant.categorie == Client.ROOT:
-                    tenants.remove(tenant)
-            # logger.info(f"Tenants: {tenants}")
-
-            for client in list(set(tenants)):
-                with tenant_context(client):
-                    # logger.info(f"with tenant_context(client): {client}")
-                    # logger.info(f"with tenant: {client}")
-                    # logger.info(f"with categorie: {client.categorie}")
-
-                    config = Configuration.get_solo()
-
-                    assets = list()
-
-                    # les assets fédérés
-                    for asset in client.federated_assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ], archive=False):
-                        assets.append(asset)
-
-                    # Les assets créés
-                    for asset in client.assets_fedow_public.exclude(
-                            category__in=[
-                                AssetFedowPublic.BADGE,
-                                AssetFedowPublic.SUBSCRIPTION,
-                            ], archive=False):
-                        if asset not in assets:
-                            assets.append(asset)
-
-                    results.append({
-                        "organisation": config.organisation,
-                        "slug": config.slug,
-                        "short_description": config.short_description,
-                        "long_description": config.long_description,
-                        "img": config.get_med_img,
-                        "assets": [{"name": f"{asset.name}", "category": f"{asset.category}"} for asset in assets],
-                        "url": config.full_url(),
-                    })
-
-            logger.info(f"Mse en cache : federated places: {results}")
-            return results
-
-        # federated_places = None
-        federated_places = cache.get(f'federated_places_{connection.tenant.uuid}')
-        if not federated_places:
-            federated_places = build_federated_places()
-            cache.set(f'federated_places_{connection.tenant.uuid}', federated_places, 60)
-
-        template_context['federated_places'] = federated_places
-        return render(request, "reunion/views/federation/list.html", context=template_context)
+        template_path = get_skin_template(config, "views/federation/explorer.html")
+        return render(request, template_path, context=template_context)
 
 
 class HomeViewset(viewsets.ViewSet):

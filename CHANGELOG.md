@@ -1,5 +1,60 @@
 # Changelog / Journal des modifications
 
+## Chantier FEDERATION #01 — Explorer in-tenant + refactor JS prod / In-tenant explorer + production-grade JS refactor
+
+**Date :** 2026-05-13
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** `/federation/` (Réseau local) sur chaque tenant rend maintenant l'explorer
+(carte Leaflet + filtres) avec uniquement le tenant courant + ses FederatedPlace.
+Le code de la carte est consolidé en source unique dans `seo/` (JS + CSS + widget
+HTML + data builder), partagé avec le public `/explorer/`. Le JS a été refactoré
+pour la prod : IIFE encapsulé (zéro pollution `window`), event delegation (zéro
+`onclick=` inline), i18n via `data-i18n-*`, garde-fous défensifs (try/catch JSON,
+DOM presence), Leaflet vendoré (plus de CDN externe unpkg.com), event Leaflet
+`animationend` au lieu de `setTimeout(...,400)`. Marker visuel "Vous êtes ici"
+pour le tenant courant.
+
+**EN :** `/federation/` (Local network) on each tenant now renders the explorer
+(Leaflet map + filters) limited to the current tenant + its FederatedPlace.
+Map code is consolidated as a single source under `seo/` (JS + CSS + widget HTML +
+data builder), shared with the public `/explorer/`. The JS has been refactored
+for production: encapsulated IIFE (zero `window` pollution), event delegation
+(zero inline `onclick=`), i18n via `data-i18n-*`, defensive guards (try/catch
+JSON, DOM presence), vendored Leaflet (no external unpkg.com CDN), Leaflet
+`animationend` event instead of `setTimeout(...,400)`. Visual "You are here"
+marker for the current tenant.
+
+**Fichiers :** voir `TECH DOC/SESSIONS/FEDERATION/03-explorer-federation-CHANGELOG.md`
+
+---
+
+## Chantier M-To-V2 #02 — Port app `seo/` allegee (landing ROOT lieux + events) / Port lightweight `seo/` app
+
+**Date :** 2026-05-13
+**Migration :** Oui (`seo/0001_initial.py` sur le schema public)
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Portage de l'app `seo` de V2 (lespass-main) vers V1 en version allegee.
+On agrege uniquement les **lieux + evenements** du reseau (pas d'adhesions, pas
+d'initiatives crowdfunding, pas de monnaies fedow_core). La landing ROOT remplace
+l'ancienne redirection MetaBillet vers tibillet.org. Cache 2 niveaux (Memcached
+L1 + DB L2) rafraichi toutes les 4h par Celery Beat. 7 routes : `/`, `/lieux/`,
+`/evenements/`, `/recherche/`, `/explorer/`, `/robots.txt`, `/sitemap.xml`.
+
+**EN :** Port of the V2 `seo` app to V1 in a lightweight version. Aggregates only
+**venues + events** (no memberships, no crowdfunding initiatives, no fedow_core
+currencies). The ROOT landing replaces the previous MetaBillet redirect to
+tibillet.org. 2-tier cache (Memcached L1 + DB L2) refreshed every 4h by Celery
+Beat. 7 routes: `/`, `/lieux/`, `/evenements/`, `/recherche/`, `/explorer/`,
+`/robots.txt`, `/sitemap.xml`.
+
+**Fichiers crees :** voir `TECH DOC/SESSIONS/M-To-V2/02-app-seo.md`
+**Fichiers modifies :** `TiBillet/settings.py`, `TiBillet/urls_public.py`, `TiBillet/celery.py`
+
+---
+
 ## v1.8 — Modules Groupware + refacto admin + proxies Product / Groupware modules + admin refactor + Product proxies
 
 **Date :** 2026-05-13

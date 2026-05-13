@@ -133,9 +133,21 @@ Sous-étapes :
 - [ ] 1.17 Templates `dashboard.html` + `dashboard_module_modal.html`
 - [ ] 1.18 Toggle HTMX + CSRF + admin_view + whitelist field_name
 
-### Chantier 2 — Améliorations admin V2 (sans modèles nouveaux)
+### Chantier 2 — Port app `seo/` allegee (landing ROOT lieux + events) ✅ CODE PORTE
 
-À détailler après le chantier 1. Inclut potentiellement :
+**But.** Servir une vraie landing page sur le schema public (ROOT) avec agregation
+multi-tenant lieux + evenements. Remplace la redirection MetaBillet vers tibillet.org.
+
+Voir `02-app-seo.md` pour le detail. Statut :
+- Code, migrations, settings, celery beat : ✅ FAIT
+- `manage.py check` : OK
+- Refresh execute (DB de dev vide donc 0 resultats)
+- Test visuel `https://tibillet.localhost/` : bloque par django-tenants tant qu'aucun
+  Domain n'existe en DB (besoin de bootstrap dev via `install` ou demo command)
+
+### Chantier 3 — Améliorations admin V2 (sans modèles nouveaux)
+
+À détailler après les chantiers 1 et 2. Inclut potentiellement :
 - Refonte `PriceInline` unique → inlines spécialisés par proxy product
   (mais ça suppose des proxy models, donc à voir)
 - Améliorations UX Unfold (sections, badges, filtres avancés)
