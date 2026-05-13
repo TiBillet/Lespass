@@ -463,22 +463,32 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
         setattr(configuration, field_name, not current_value)
         new_value = getattr(configuration, field_name)
 
-        if field_name == "module_monnaie_locale" and new_value is False and configuration.module_caisse is True:
+        if field_name == "module_monnaie_locale" and not new_value and configuration.module_caisse:
             messages.add_message(request, messages.ERROR, _("The \"POS & restaurant\" module required this module. You must disable it before disabling "))
             setattr(configuration, field_name, current_value)
 
-        # /DjangoFiles/Administration/admin_tenant.py:470: SyntaxWarning: "is" with a literal. Did you mean "=="?
-        # logger.error(field_name is "module_caisse")
-
-        if field_name == "module_caisse" and new_value is True and configuration.module_monnaie_locale is False:
+        if field_name == "module_caisse" and new_value and not configuration.module_monnaie_locale:
             messages.add_message(request, messages.ERROR, _("The \"Local currency & cashless\" module is required by this module. You must enabled it before"))
             setattr(configuration, field_name, current_value)
 
 
         configuration.clean()
-        configuration.save()
+
+        # Configuration.save() peut lever ValidationError (ex: SEPA pas actif cote Stripe).
+        # Sans ce try/except, l'exception remonte en 500 silencieux cote HTMX.
+        # On capture comme ConfigurationAdmin.save_model() le fait deja plus haut.
+        # / Configuration.save() may raise ValidationError (e.g. SEPA not active on Stripe).
+        # / Without this guard, the exception bubbles up as a silent 500 over HTMX.
+        try:
+            configuration.save()
+        except ValidationError as e:
+            error_message = e.message if hasattr(e, "message") else str(e)
+            messages.error(request, error_message)
 
         # HX-Refresh force un reload complet : la sidebar se met a jour
+        # et les messages d'erreur eventuels apparaissent en toast.
+        # / HX-Refresh forces a full reload: sidebar updates and any error
+        # / messages show up as toast notifications.
         response = HttpResponse("")
         response["HX-Refresh"] = "true"
         return response

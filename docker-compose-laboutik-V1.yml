@@ -43,12 +43,12 @@ services:
     restart: unless-stopped
     env_file: .env
     user: fedow
+    links:
+      - fedow_memcached:memcached
     environment:
       # Override DOMAIN pour LaBoutik : sous-domaine du service, pas le wildcard tenant.
       # Resolu par compose via le .env (DOMAIN=tibillet.localhost) -> laboutik.tibillet.localhost.
       DOMAIN: fedow.$DOMAIN
-    links:
-      - fedow_memcached:memcached
     volumes:
       - fedow_database:/home/fedow/Fedow/database
     networks:
@@ -192,8 +192,116 @@ services:
       - frontend
 
 
+  #### CASHLESS 1 ####
+
+  laboutik_postgres:
+    image: postgres:11.5-alpine
+    restart: always
+    env_file: .env
+    container_name: laboutik_postgres
+    hostname: laboutik_postgres
+    volumes:
+      - laboutik_postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  laboutik_memcached:
+    image: memcached:1.6
+    container_name: laboutik_memcached
+    hostname: laboutik_memcached
+    restart: always
+    networks:
+      - backend
+
+  laboutik_redis:
+    image: redis:6-alpine
+    restart: always
+    env_file: .env
+    container_name: laboutik_redis
+    hostname: laboutik_redis
+    networks:
+      - backend
+
+  laboutik_django:
+    image: tibillet/laboutik:latest
+    restart: always
+    env_file: .env
+    container_name: laboutik_django
+    hostname: laboutik_django
+    volumes:
+      - ../LaBoutik:/DjangoFiles
+    links:
+      - laboutik_postgres:postgres
+      - laboutik_redis:redis
+      - laboutik_memcached:memcached
+    depends_on:
+      - laboutik_postgres
+      - laboutik_redis
+      - laboutik_memcached
+    environment:
+      # Override DOMAIN pour LaBoutik : sous-domaine du service, pas le wildcard tenant.
+      # Resolu par compose via le .env (DOMAIN=tibillet.localhost) -> laboutik.tibillet.localhost.
+      DOMAIN: laboutik.$DOMAIN
+    command: 'bash start_dev.sh'
+    extra_hosts:
+      - fedow.tibillet.localhost:172.17.0.1
+      - lespass.tibillet.localhost:172.17.0.1
+      - laboutik.tibillet.localhost:172.17.0.1
+      - laboutik2.tibillet.localhost:172.17.0.1
+    networks:
+      - backend
+
+  laboutik_celery:
+    image: tibillet/laboutik:latest
+    restart: always
+    env_file: .env
+    container_name: laboutik_celery
+    hostname: laboutik_celery
+    environment:
+      # Override DOMAIN pour LaBoutik : sous-domaine du service, pas le wildcard tenant.
+      # Resolu par compose via le .env (DOMAIN=tibillet.localhost) -> laboutik.tibillet.localhost.
+      DOMAIN: laboutik.$DOMAIN
+    volumes:
+      - ../LaBoutik:/DjangoFiles
+    links:
+      - laboutik_postgres:postgres
+      - laboutik_redis:redis
+      - laboutik_memcached:memcached
+    depends_on:
+      - laboutik_postgres
+      - laboutik_django
+      - laboutik_memcached
+    command: "bash start_celery.sh"
+    extra_hosts:
+      - fedow.tibillet.localhost:172.17.0.1
+      - lespass.tibillet.localhost:172.17.0.1
+      - laboutik.tibillet.localhost:172.17.0.1
+      - laboutik2.tibillet.localhost:172.17.0.1
+    networks:
+      - backend
 
 
+  laboutik_nginx:
+    image: nginx
+    restart: always
+    container_name: laboutik_nginx
+    hostname: laboutik_nginx
+    depends_on:
+      - laboutik_django
+    links:
+      - laboutik_django:laboutik_django
+    volumes:
+      - ../LaBoutik/www:/DjangoFiles/www
+      - ../LaBoutik/logs:/DjangoFiles/logs
+      - ../LaBoutik/nginx:/etc/nginx/conf.d
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=frontend
+      - traefik.http.routers.laboutik_nginx.tls.certresolver=myresolver
+      - traefik.http.routers.laboutik_nginx.rule=Host(`laboutik.$DOMAIN`) || Host(`cashless.$DOMAIN`)
+    networks:
+      - frontend
+      - backend
 
 networks:
   frontend:
@@ -204,7 +312,7 @@ volumes:
   lespass_dev_db:
   fedow_database:
   fedow_dev_db:
-
+  laboutik_postgres_data:
 
 # Pour test stripe :
 # stripe listen --forward-to https://fedow.tibillet.localhost/api/webhook_stripe/ --skip-verify

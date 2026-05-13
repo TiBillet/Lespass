@@ -1843,21 +1843,21 @@ msgstr ""
 
 #: Administration/templates/admin/dashboard_module_modal.html:10
 msgid "Disable module"
-msgstr ""
+msgstr "Disable module"
 
 #: Administration/templates/admin/dashboard_module_modal.html:12
 msgid "Enable module"
-msgstr ""
+msgstr "Enable module"
 
 #: Administration/templates/admin/dashboard_module_modal.html:18
 #, python-format
 msgid "Are you sure you want to disable \"%(name)s\"?"
-msgstr ""
+msgstr "Are you sure you want to disable \"%(name)s\"?"
 
 #: Administration/templates/admin/dashboard_module_modal.html:20
 #, python-format
 msgid "Are you sure you want to enable \"%(name)s\"?"
-msgstr ""
+msgstr "Are you sure you want to enable \"%(name)s\"?"
 
 #: Administration/templates/admin/dashboard_module_modal.html:28
 #: BaseBillet/templates/reunion/forms/contact.html:34

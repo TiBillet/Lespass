@@ -17,33 +17,29 @@ Avant, l'exception tombait dans le fallback `else` qui retentait avec `force=Tru
 line_items (corrige rien, c'est un probleme de compte). Maintenant, le cas est detecte
 explicitement et leve une `serializers.ValidationError` avec un message generique.
 
-### 2) Pre-remplissage de `business_profile.name` a la creation du compte Connect
+Le `logger.error(...)` inclut le `schema_name` du tenant pour que Sentry remonte
+l'incident et que l'admin sache ou intervenir.
 
-`Configuration.get_stripe_connect_account()` cree maintenant le compte avec
-`business_profile={"name": Configuration.organisation}`. Les nouveaux tenants ne tomberont
-plus jamais dans cette erreur a la premiere transaction.
+### 2) Decision : pas de patch preventif cote Lespass
+
+On a envisage de pre-remplir `business_profile.name` dans
+`Configuration.get_stripe_connect_account()`. **Decision finale : non.** Le bug racine est
+gere cote Stripe (le gerant doit completer son `business_profile.name` lors du onboarding,
+le dashboard Stripe le demande explicitement). Cote Lespass, on se contente de remonter
+l'erreur a l'utilisateur et de logger pour Sentry.
+
+`Configuration.get_stripe_connect_account()` reste donc inchange.
 
 ### Modifications
 
 | Fichier | Changement |
 |---|---|
-| `PaiementStripe/views.py` | Nouveau `elif 'account or business name' in str(e).lower()` dans `_checkout_session()`. |
-| `BaseBillet/models.py` | `get_stripe_connect_account()` : `stripe.Account.create(..., business_profile={"name": ...})` |
+| `PaiementStripe/views.py` | Nouveau `elif 'account or business name' in str(e).lower()` dans `_checkout_session()`. Loggue le `schema_name` du tenant (Sentry). |
 | `CHANGELOG.md` | Entree v1.7.18 |
 
 ## Tests a realiser
 
-### Test 1 : Nouveau tenant — pre-remplissage automatique
-
-1. Creer un nouveau tenant via le flow d'inscription habituel (`/swagger/` ou
-   `Administration/management/commands/demo_data*.py`).
-2. Verifier en base : la `Configuration.organisation` est bien renseignee.
-3. Aller dans l'admin Stripe (super-admin), forcer la creation du compte Connect (ex:
-   tenter une adhesion payante depuis le tenant).
-4. Verifier dans le dashboard Stripe Connect que le compte cree a bien
-   `business_profile.name` = `Configuration.organisation`.
-
-### Test 2 : Ancien tenant cassé — message UX au lieu du 500
+### Test 1 : Ancien tenant cassé — message UX au lieu du 500
 
 Prerequis : un tenant existant avec un `stripe_connect_account` (ex: `acct_XXX`) dont le
 `business_profile.name` est vide.
@@ -57,7 +53,7 @@ Prerequis : un tenant existant avec un `stripe_connect_account` (ex: `acct_XXX`)
 5. Verifier les logs serveur : ligne
    `ERROR Stripe account misconfigured for tenant <schema_name>: ...`
 
-### Test 3 : Fix de production via stripe-cli
+### Test 2 : Fix de production via stripe-cli
 
 Pour fixer un tenant deja casse sans toucher au code :
 
@@ -81,7 +77,7 @@ stripe accounts update acct_XXX \
 stripe accounts retrieve acct_XXX | grep -A2 business_profile
 ```
 
-### Test 4 : Verification que le retry SEPA fonctionne toujours
+### Test 3 : Verification que le retry SEPA fonctionne toujours
 
 Le nouveau `elif` est intercale entre `sepa_debit` et `total amount due` — l'ordre des
 branches est important. Faire un paiement classique pour confirmer que le flow nominal
@@ -93,8 +89,8 @@ docker exec lespass_django poetry run pytest tests/pytest/test_stripe_membership
 
 ## Compatibilite
 
-- **Backwards compatible** : les anciens comptes Connect deja crees ne sont pas modifies.
-  Le code ajoute `business_profile.name` uniquement a la creation d'un nouveau compte.
+- **Backwards compatible** : aucune modification des comptes Connect existants. On ne
+  fait que rattraper l'erreur cote utilisateur.
 - **Pas de migration DB** : le changement est purement applicatif.
 - **Erreur affichee** : message en anglais (passe par `_()`) — sera traduit en francais
   apres `makemessages` + `compilemessages`.
