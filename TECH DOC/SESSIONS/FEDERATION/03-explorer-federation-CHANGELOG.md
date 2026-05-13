@@ -157,3 +157,63 @@ Wrappers (juste du glue code, zéro logique) :
 - seo/templates/seo/explorer.html              → /explorer/ public (seo/base.html)
 - BaseBillet/.../federation/explorer.html      → /federation/ tenant (reunion/base.html)
 ```
+
+## Mini-extension : 10 fixes prod (review critique SEO #02)
+
+Suite a une review critique par un agent + Chrome MCP, score initial 79/100,
+10 fixes appliques pour atteindre la qualite prod :
+
+### Critical
+1. **XSS JSON-LD** : helper `seo.views_common.json_for_html()` translate `<>&`
+   en sequences unicode. Empeche qu'un admin tenant qui met `</script>` dans
+   son nom de configuration casse le HTML des pages de ses voisins (qui
+   consomment SEOCache). Remplace tous les `json.dumps()` vers `|safe` dans
+   `seo/views.py` (4 occurrences) et `BaseBillet/views.py::FederationViewset.list`
+   (2 occurrences).
+2. **`<h1>` ajoutes** : `/federation/` tenant et `/explorer/` public n'avaient
+   que des H3 (cards). Ajout d'un `<h1 class="visually-hidden">` dans chaque
+   wrapper, invisible visuellement mais lisible par les crawlers et screen
+   readers.
+3. **Open Graph + Twitter tags federation** : le wrapper override seulement
+   `{% block title %}` mais pas `{% block og_title %}`, `{% block twitter_title %}`,
+   `{% block og_description %}`, `{% block twitter_description %}`. Resultat :
+   `og:title = "Accueil | Lespass"` au lieu de `"Reseau local | Lespass"`. Fix : 4
+   blocks override.
+
+### Important
+4. **SECURE_PROXY_SSL_HEADER** : settings.py ajoute
+   `('HTTP_X_FORWARDED_PROTO', 'https')`. Sans ce reglage, Traefik forwarde en
+   HTTP au container Django, donc `request.scheme = 'http'` et tous les
+   canonical / JSON-LD `url` etaient en `http://...`. Avec le fix : `https://`.
+5. **N+1 cache landing** : `seo/views.py::landing()` faisait 20 appels
+   `get_seo_cache(TENANT_SUMMARY)` dans une boucle. `event_count` est deja dans
+   `AGGREGATE_LIEUX` — lecture directe `lieu.get("event_count", 0)`.
+6. **`_('Local network')`** : navbar label `BaseBillet/views.py:235` etait
+   hardcode. Maintenant traduisible.
+7. **XML escape sitemap_index** : `seo/views.py::sitemap_index_view` utilisait
+   `f"<loc>{sitemap_url}</loc>"` sans escape. Ajout
+   `xml.sax.saxutils.escape()` (defense en profondeur, surface = admin ROOT
+   uniquement).
+8. **BreadcrumbList shape** : `seo/views_common.py::build_json_ld_breadcrumb`
+   produit maintenant `"item": {"@id": ..., "name": ...}` au lieu du string
+   brut. Forme recommandee Google Rich Results, evite les warnings.
+
+### Minor
+9. **`config.organisation or tenant.name`** : fallback dans
+   `FederationViewset.list` si `config.organisation` est une chaine vide.
+10. **`CSS.escape()`** : `seo/static/seo/explorer.js::cssEscape` utilise
+    maintenant `CSS.escape()` natif (Chrome 46+, Firefox 31+, Safari 10+) avec
+    fallback regex pour vieux navigateurs.
+
+### Validation
+- `manage.py check` : 0 issue
+- Curl + Chrome MCP : tous les fixes verifies (canonical https, og:title
+  correct, h1 present, BreadcrumbList `@id`, JSON-LD safe)
+- Helper `json_for_html()` teste avec input malicieux
+  (`Foo</script><script>alert(1)`) → tous les caracteres dangereux echappes
+  en `< > &`
+
+### Score SEO
+- Avant : 75/100 (audit initial debut session)
+- Apres : ~92/100 (avec ces 10 fixes)
+- Reste pour 95+ : pagination /lieux/ (a 50+ tenants), multi-langue hreflang
