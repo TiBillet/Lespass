@@ -3,6 +3,7 @@ import os
 import random
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.text import slugify
 from django_tenants.utils import tenant_context, schema_context
@@ -1896,19 +1897,7 @@ class Command(BaseCommand):
             logger.warning(f"Erreur lors de l'assignation aléatoire des origines utilisateur: {e}")
 
         # -----------------------------
-        # 4) Données POS de test (si laboutik est installé)
-        # -----------------------------
-        if 'laboutik' in settings.INSTALLED_APPS:
-            from django.core.management import call_command
-            for tenant in created_tenants:
-                with tenant_context(tenant):
-                    config = Configuration.get_solo()
-                    if config.module_caisse:
-                        self.stdout.write(f"Création des données POS pour {tenant.name}…")
-                        call_command('create_test_pos_data')
-
-        # -----------------------------
-        # 5) Données booking de démonstration (si booking est installé)
+        # 4) Données booking de démonstration (si booking est installé)
         # -----------------------------
         if 'booking' in settings.INSTALLED_APPS:
             from django.core.management import call_command as _call_command

@@ -46,15 +46,7 @@ urlpatterns = [
     re_path(r'crowd/', include('crowds.urls')),
     re_path(r'contrib/', include('crowds.urls')),
 
-    path('laboutik/', include('laboutik.urls')),
     path('booking/', include('booking.urls')),
-
-    # Tireuses connectees (controlvanne) — API Pi + kiosk + calibration
-    # / Connected beer taps (controlvanne) — Pi API + kiosk + calibration
-    path('controlvanne/', include('controlvanne.urls')),
-
-    # Endpoints inventaire (stock + debit metre) / Inventory endpoints
-    path('api/inventaire/', include('inventaire.urls')),
 
 
     # pour carte GEN1 Bisik

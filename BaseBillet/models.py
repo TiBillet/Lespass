@@ -576,11 +576,11 @@ class Configuration(SingletonModel):
         help_text=_("Enable connected beer tap management (controlvanne)."),
     )
     module_booking = models.BooleanField(
-        default=True,
+        default=False,
         verbose_name=_("Booking module"),
         help_text=_("Enable resource booking (rooms, equipment, coworking desks)."),
     )
-
+    # NEW V2 END
     currency_code = models.CharField(max_length=3, default="EUR")
 
     additional_text_in_membership_mail = models.TextField(

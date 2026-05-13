@@ -182,9 +182,6 @@ TENANT_APPS = (
     'tibrss',
     'fedow_connect',
     'crowds',
-    'laboutik',
-    'inventaire',
-    'controlvanne',
     'booking',
 )
 
