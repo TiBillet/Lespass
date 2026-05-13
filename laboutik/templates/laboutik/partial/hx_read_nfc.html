@@ -5,3 +5,12 @@
 		<h1>{% translate "Attente lecture carte" %}</h1>
 
 	</c-read-nfc>
+	<script>
+		document.body.addEventListener('htmx:afterSwap', function (event) {
+    		// console.log('event.detail =', event.detail)
+      		if (event.detail.pathInfo.requestPath === '/laboutik/paiement/lire_nfc/') {
+        		initNfc(state?.configFile?.type_app)
+      		}
+    	})
+	</script>
+</div>

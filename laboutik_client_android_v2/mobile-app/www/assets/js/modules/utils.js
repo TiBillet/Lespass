@@ -43,6 +43,101 @@ function hideSpinner() {
 }
 
 /**
+ * Vérifie le parse
+ * @param {string} content 
+ * @returns 
+ */
+function ParseStringToObject(content) {
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    putLog('error', '-> ParseStringToObject,', error)
+  }
+}
+
+/**
+ * read file
+ * @returns {string} string content file
+ */
+async function cordovaReadFile(pathFile) {
+  // console.log('-> readFile')
+  return await new Promise((resolve) => {
+    window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
+      fileEntry.file(function (file) {
+        const reader = new FileReader()
+        reader.onloadend = function () {
+          resolve(this.result)
+        }
+        reader.readAsText(file)
+      }, () => {
+        resolve(null)
+      })
+    }, () => {
+      resolve(null)
+    })
+  })
+}
+
+/**
+ * Retourne le fichier de configuration si il existe, sinon env
+ * @returns {object|null} The configuration object | null
+ */
+export async function readConfFile() {
+  // console.log('-> readConfFile')
+  try {
+    let configFile
+    const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
+    const confFile = await cordovaReadFile(pathFile)
+
+    if (confFile !== null) {
+      configFile = ParseStringToObject(confFile)
+    } else {
+      configFile = env
+      configFile['version'] = env.version
+      // création du fichier de configuration
+      const result = await writeConfigFile(configFile)
+      if (result === false) {
+        throw new Error('update/create file - backup error.')
+      }
+    }
+    return configFile
+  } catch (error) {
+    putLog('error', 'readConfigFile,', error)
+    return null
+  }
+}
+
+/**
+ * Write configuration file
+ * @param {object} config file
+ * @returns {boolean}
+ */
+async function writeConfigFile(confFile) {
+  // console.log('2 -> writeConfigFile, confFile =', confFile)
+  const data = JSON.stringify(confFile)
+  return await new Promise((resolve) => {
+    window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function (directoryEntry) {
+      directoryEntry.getFile('configLaboutik.json', { create: true },
+        function (fileEntry) {
+          fileEntry.createWriter(function (fileWriter) {
+            fileWriter.onwriteend = function () {
+              // file write ok
+              resolve(true)
+            }
+            fileWriter.onerror = function (e) {
+              // you could hook this up with our global error handler, or pass in an error callback
+              resolve(false)
+            }
+            const blob = new Blob([data], { type: 'text/plain' })
+            fileWriter.write(blob)
+          }, () => { resolve(false) })
+        }, () => { resolve(false) })
+    }, () => { resolve(false) })
+  })
+}
+
+
+/**
  * Change background color of general status
  * @param {string} status - error|success|info|warning
  */
@@ -85,7 +180,7 @@ export async function testNetworkStatus(timeout = 5000) {
  * Listen required devices status
  */
 export async function initListenDevicesStatus() {
-  console.log('-> initListenDevicesStatus');
+  // console.log('-> initListenDevicesStatus')
   try {
     // NFC : available / disabled
     const nfcStatus = await nfcPlugin.available()
@@ -116,99 +211,6 @@ export async function initListenDevicesStatus() {
   const timeoutId = setTimeout(initListenDevicesStatus, 5000)
 }
 
-/**
- * Write configuration file
- * @param {object} confFile
- * @returns {boolean}
- */
-async function writeConfigFile(confFile) {
-  // console.log('2 -> writeConfigFile, confFile =', confFile)
-  const data = JSON.stringify(confFile)
-  return await new Promise((resolve) => {
-    window.resolveLocalFileSystemURL(cordova.file.dataDirectory, function (directoryEntry) {
-      directoryEntry.getFile('configLaboutik.json', { create: true },
-        function (fileEntry) {
-          fileEntry.createWriter(function (fileWriter) {
-            fileWriter.onwriteend = function () {
-              // file write ok
-              resolve(true)
-            }
-            fileWriter.onerror = function (e) {
-              // you could hook this up with our global error handler, or pass in an error callback
-              resolve(false)
-            }
-            const blob = new Blob([data], { type: 'text/plain' })
-            fileWriter.write(blob)
-          }, () => { resolve(false) })
-        }, () => { resolve(false) })
-    }, () => { resolve(false) })
-  })
-}
-
-/**
- * read a  file
- * @returns {string} string content file
- */
-async function cordovaReadFile(pathFile) {
-  console.log('-> readFile')
-  return await new Promise((resolve) => {
-    window.resolveLocalFileSystemURL(pathFile, function (fileEntry) {
-      fileEntry.file(function (file) {
-        const reader = new FileReader()
-        reader.onloadend = function () {
-          resolve(this.result)
-        }
-        reader.readAsText(file)
-      }, () => {
-        resolve(null)
-      })
-    }, () => {
-      resolve(null)
-    })
-  })
-}
-
-/**
- * Vérifie le parse
- * @param {string} content 
- * @returns 
- */
-function ParseStringToObject(content) {
-  try {
-    return JSON.parse(content)
-  } catch (error) {
-    putLog('error', '-> ParseStringToObject,', error)
-  }
-}
-
-/**
- * Retour le fichier de configuration si il existe, sinon env
- * @returns {object|null} The configuration object | null
- */
-export async function readConfFile() {
-  // console.log('-> readConfFile')
-  try {
-    let configFile
-    const pathFile = cordova.file.dataDirectory + 'configLaboutik.json'
-    const confFile = await cordovaReadFile(pathFile)
-
-    if (confFile !== null) {
-      configFile = ParseStringToObject(confFile)
-    } else {
-      configFile = env
-      configFile['version'] = env.version
-      // création du fichier de configuration
-      const result = await writeConfigFile(configFile)
-      if (result === false) {
-        throw new Error('update/create file - backup error.')
-      }
-    }
-    return configFile
-  } catch (error) {
-    putLog('error', 'readConfigFile,', error)
-    return null
-  }
-}
 
 /**
  * Post le pinCode au serveur discovery pour récupérer
@@ -216,7 +218,7 @@ export async function readConfFile() {
  * @returns {object} 
  */
 async function getServerInfos(pinCode) {
-  putLog('info', '-> getServerInfos  -- type pinCode =', pinCode, typeof (pinCode))
+  // putLog('info', '-> getServerInfos  -- type pinCode =', pinCode, typeof (pinCode))
   try {
     // requête à l'app django discovery
     showSpinner()
@@ -247,10 +249,12 @@ async function getServerInfos(pinCode) {
  * @param {object} event 
  */
 export async function goServer(event) {
-  console.log('-> goServer')
+  // console.log('-> goServer')
+  showSpinner()
+
   const url = event.target.getAttribute('data-server')
   const data = state.servers.find(item => item.server_url === url)
-  console.log('data =', data)
+  // console.log('data =', data)
 
   // TODO: peut être ajouter le current server dans config file.
 
@@ -269,7 +273,7 @@ export async function goServer(event) {
   input2.type = 'hidden'
   input2.name = 'type_app'
   console.log('state.type_app =', state.type_app);
-  
+
   input2.value = state.type_app
 
   form.appendChild(input)
@@ -282,8 +286,25 @@ export async function goServer(event) {
  * Delete server in list after click button "Delete"
  * @param {object} event 
  */
+export async function confirmDeleteServer(event) {
+  console.log('-> confirmDeleteServer')
+  // show window confirmation
+  document.querySelector('.confirm-container').style.display = "flex"
+  // ajoute l'url du serveur cliqué dans le bouton valider
+  const url = event.target.getAttribute('data-server')
+  document.querySelector('.bt-delete-validate').setAttribute('data-server', url)
+}
+
+
+/**
+ * Delete server in list after click button "Delete"
+ * @param {object} event 
+ */
 export async function deleteServer(event) {
-  console.log('-> deleteServer')
+  // console.log('-> deleteServer')
+
+  // hide window confirmation
+  document.querySelector('.confirm-container').style.display = "none"
 
   const url = event.target.getAttribute('data-server')
   let typeMsg = "success"
@@ -304,8 +325,7 @@ export async function deleteServer(event) {
     oldState = null
     typeMsg = "error"
   }
-
-  putLog(typeMsg, 'update config file, after delete server =', updateConfFile)
+  // putLog(typeMsg, 'update config file, after delete server =', updateConfFile)
 
   // render
   renderHtml(state)

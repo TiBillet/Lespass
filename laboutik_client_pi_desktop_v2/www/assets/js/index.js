@@ -1,5 +1,5 @@
 import { addAllMenuItems } from './modules/menuPlugins/addAllMenuPlugins.js'
-import { initBridgeHardFront, putLog, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from './modules/utils.js'
+import { initBridgeHardFront, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from './modules/utils.js'
 import { renderHtml } from './modules/renderHtml.js'
 
 // Ouvrir/fermer le menu burger / Toggle burger menu

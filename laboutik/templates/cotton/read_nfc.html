@@ -6,7 +6,7 @@
 		<!-- reference(id) for the insertion of simulation buttons -->
 		<div id="nfc-simu-tag"></div>
 		{% if selector %}
-		<c-bt.return selector="{{selector}}" />
+		<c-bt.return selector="{{selector}}" action="state.nfc.stop()"/>
 		{% endif %}
 	</div>
 

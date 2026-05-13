@@ -23,7 +23,6 @@
 let currentConfiguration = null
 const logTypes = ['DANGER', 'WARNING', 'INFO']
 
-
 /**
  * Is cordova application ?
  * @public
@@ -38,8 +37,6 @@ function isCordovaApp() {
     return false
   }
 }
-
-
 
 /**
  * Echappe les caractères spéciaux HTML pour éviter les injections XSS.
@@ -135,6 +132,7 @@ function bigToFloat(value) {
  * @param {object} data - Données à passer (disponibles dans event.detail)
  */
 function sendEvent(name, selector, data) {
+	// console.log('-> sendEvent - selector =', selector, '  --  data =', data);
 	data = data === undefined ? {} : data
 	try {
 		const event = new CustomEvent(name, { detail: data })
@@ -200,7 +198,7 @@ const switches = {
 	additionManageForm: [{ name: 'additionManageForm', selector: '#addition' }],
 	primaryCardManageForm: [{ name: 'primaryCardManageForm', selector: '#form-nfc' }],
 	checkCardManageForm: [{ name: 'checkCardManageForm', selector: '#form-check-nfc' }],
-	tarifSelection: [{ name: 'tarifSelection', selector: '#products' }]
+	tarifSelection: [{ name: 'tarifSelection', selector: '#products' }],
 }
 
 /**
@@ -225,12 +223,14 @@ function eventsOrganizer(event) {
 		const src = event.detail.src
 		const msg = event.detail.msg
 
+		// keys of switches in array
+		const keys = Object.keys(switches)
+		if (!keys.includes(msg)) {
+			throw new Error(`eventsOrganizer - message "${msg}" unknown !`);
+		}
+
 		// Récupère les routes depuis la table switches
 		const eventSwitch = switches[msg]
-		
-		// TODO : Si 'msg' n'existe pas dans 'switches', eventSwitch sera undefined
-		// et le forEach plantera. Ne devrait-on pas vérifier si eventSwitch existe
-		// ou logger un warning pour les événements non reconnus ?
 
 		// Envoie l'événement vers chaque destination
 		for (let i = 0; i < eventSwitch.length; i++) {
@@ -238,7 +238,7 @@ function eventsOrganizer(event) {
 			sendEvent(eventData.name, eventData.selector, data)
 		}
 	} catch (error) {
-		// Silencieux en production
+		console.warn(error.message)
 	}
 }
 

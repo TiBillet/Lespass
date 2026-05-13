@@ -157,6 +157,12 @@ const NfcReader = class {
   }
 
   piDesktopStarRead() {
+    // déconnecte anciennes connexion sur le back, évite plusieurs écoutes
+    // un appel front donne une seule réponse back
+    if (this.socketIo) {
+      this.socketIo.disconnect();
+    }
+
     // initialise la connexion
     this.socketIo = io('http://localhost:' + this.socketIoPort, {})
 

@@ -374,6 +374,20 @@ function additionManageForm(event) {
 			form.click()
 		}
 
+		// Ajoute une liste d'inputs dans le formulaire.
+		// exemple : hx_lire_nfc_client.html fonction sendEvent
+		if (data.actionType === 'addInputsAndValue') {
+			data.inputs.forEach(ele => {
+				let input = document.querySelector(`input[name="${ele.name}"]`)
+				if (!input) {
+					input = document.createElement('input');
+					input.name = ele.name
+					form.appendChild(input)
+				}
+				input.value = ele.value
+			})
+		}
+
 	} catch (error) {
 		console.log('-> addition.js - additionManageForm,', error)
 	}

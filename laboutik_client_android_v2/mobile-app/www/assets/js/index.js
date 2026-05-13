@@ -1,5 +1,5 @@
 import { addAllMenuItems } from './modules/menuPlugins/addAllMenuPlugins.js'
-import { readConfFile, initListenDevicesStatus, setGeneralStatus, managedPinCode } from "./modules/utils.js"
+import { initListenDevicesStatus, managedPinCode, readConfFile, setGeneralStatus, deleteServer } from "./modules/utils.js"
 
 // Ouvrir/fermer le menu burger / Toggle burger menu
 function toggleClassMenuBurger(event) {
@@ -16,7 +16,11 @@ function hideMenu(event) {
 }
 
 function hideContentInput() {
- document.querySelector('.content-input').style.display = 'none'
+  document.querySelector('.content-input').style.display = 'none'
+}
+
+function hideConfirmDeleteServer() {
+  document.querySelector('.confirm-container').style.display = 'none'
 }
 
 /**
@@ -40,13 +44,13 @@ document.addEventListener('deviceready', async () => {
   state['step'] = 'init'
 
   // listen devices status
-   // étape 2 - listen devices status 
+  // étape 2 - listen devices status 
   initListenDevicesStatus()
 })
 
 
 document.addEventListener('DOMContentLoaded', () => {
-// add method on icon menu burger
+  // add method on icon menu burger
   document.querySelector('.header-menu > svg').addEventListener('click', toggleClassMenuBurger)
 
   // hide menu burger
@@ -57,4 +61,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // gestion bouton return
   document.querySelector('.bt-input-return').addEventListener('click', hideContentInput)
+
+  // hide window confirm delete server, bt cancel
+  document.querySelector('.bt-delete-cancel').addEventListener('click', hideConfirmDeleteServer)
+
+  // validate delete server
+  document.querySelector('.bt-delete-validate').addEventListener('click', deleteServer)
 })

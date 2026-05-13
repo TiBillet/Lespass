@@ -26,13 +26,23 @@
   </header>
   <main></main>
   <div class="content-input">
-    <input type="number" id="pin-code" placeholder="pin-code"/>
+    <input type="number" id="pin-code" placeholder="pin-code" />
     <label id="pin-code-message" style="color: var(--yellow00);"></label>
     <div class="bt bt-input-return">Return</div>
   </div>
   <div class="logs-content"></div>
   <div class="menu-burger-container" aria-label="Menu principal">
     <nav class="menu-burger-content"></nav>
+  </div>
+  <div class="confirm-container">
+    <div class="confirm-content">
+      <div class="confirm-title">Confirmation</div>
+      <div class="confirm-body">delete the server</div>
+      <div class="confirm-select">
+        <div class="bt bt-delete-cancel">Cancel</div>
+        <div data-server="" class="bt bt-delete-validate">validate</div>
+      </div>
+    </div>
   </div>
   <script src="http://localhost/cordova.js"></script>
   <script type="module" src="assets/js/index.js"></script>

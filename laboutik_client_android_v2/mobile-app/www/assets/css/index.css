@@ -310,3 +310,67 @@ main {
   font-size: 2rem;
   margin-top: 40px;
 }
+
+
+/* confirm delete server */
+.confirm-container {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--noir03);
+  opacity: 0.8;
+  user-select: none;
+}
+
+.confirm-content {
+  width: 50%;
+  /* height: 20%; */
+  display: flex;
+  flex-direction: column;
+  justify-content:space-around;
+  align-items: center;
+  background-color: var( --noir03);
+  color: var(--blanc01);
+  border-radius: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--blanc02);
+  box-shadow: 2px 2px var(--blanc01);
+
+  .confirm-title {
+    font-size: 2rem;
+  }
+
+  .confirm-body {
+    font-size: 1.5rem;
+  }
+
+  .confirm-select {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    margin-top: 16px;
+  }
+
+  .bt-delete-cancel {
+    min-width: 150px;
+    background-color: var(--bleu05);
+    font-size: 1.5rem;
+    padding: 0 16px;
+    margin: 0 16px;
+  }
+
+  .bt-delete-validate {
+    min-width: 150px;
+    background-color: var(--rouge06);
+    font-size: 1.5rem;
+    padding: 0 16px;
+    margin: 0 16px;
+  }
+}

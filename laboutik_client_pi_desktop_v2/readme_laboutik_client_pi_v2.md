@@ -1,4 +1,6 @@
 # Installation Raspberry Pi - LaBoutik Client v2
+## Attention, doc pas encore finalisée
+## configuration tactile à déboguer
 
 ## Prérequis matériels
 
