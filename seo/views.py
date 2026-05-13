@@ -29,6 +29,7 @@ from seo.views_common import (
     build_json_ld_item_list,
     build_json_ld_organization,
     get_seo_cache,
+    json_for_html,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,14 +56,15 @@ def landing(request):
     events_count = global_counts.get("events", 0)
 
     # Lieux tries par activite (nombre d'events) pour le bandeau deferoulant.
+    # event_count est deja dans AGGREGATE_LIEUX (rempli par refresh_seo_cache),
+    # pas besoin de N requetes TENANT_SUMMARY supplementaires.
     # / Venues sorted by activity (event count) for the scrolling marquee.
+    # event_count is already in AGGREGATE_LIEUX (filled by refresh_seo_cache),
+    # no need for N additional TENANT_SUMMARY queries.
     lieux_pour_bandeau = []
     for lieu in all_lieux:
-        tenant_id = lieu.get("tenant_id")
-        summary = get_seo_cache(SEOCache.TENANT_SUMMARY, tenant_id) or {}
-        activite = summary.get("event_count", 0)
         lieu_enrichi = dict(lieu)
-        lieu_enrichi["activite"] = activite
+        lieu_enrichi["activite"] = lieu.get("event_count", 0)
         # Initiale pour le fallback quand pas de logo
         # / Initial letter fallback when no logo
         nom = lieu.get("name", "?")
@@ -89,7 +91,7 @@ def landing(request):
         "events_count": events_count,
         "lieux_pour_bandeau": lieux_pour_bandeau,
         "top_events": top_events,
-        "json_ld": json.dumps(json_ld_org),
+        "json_ld": json_for_html(json_ld_org),
         "page_title": "TiBillet — Billetterie coopérative et lieux culturels",
         "page_description": (
             "TiBillet : billetterie en ligne libre et coopérative pour les lieux "
@@ -126,7 +128,7 @@ def lieux(request):
 
     context = {
         "lieux": all_lieux,
-        "json_ld": json.dumps(json_ld_list),
+        "json_ld": json_for_html(json_ld_list),
         "page_title": "Lieux - TiBillet",
         "page_description": (
             "Découvrez les lieux culturels et associatifs du réseau coopératif "
@@ -166,7 +168,7 @@ def evenements(request):
 
     context = {
         "page_obj": page_obj,
-        "json_ld": json.dumps(json_ld_list),
+        "json_ld": json_for_html(json_ld_list),
         "page_title": "Evenements - TiBillet",
         "page_description": (
             "Tous les événements à venir dans le réseau TiBillet : concerts, "
@@ -292,7 +294,7 @@ def explorer(request):
         # ROOT public : aucun tenant courant a highlighter sur la carte.
         # / Public ROOT: no current tenant to highlight on the map.
         "current_tenant_uuid": "",
-        "federation_json_ld": json.dumps(federation_json_ld_dict, ensure_ascii=False),
+        "federation_json_ld": json_for_html(federation_json_ld_dict),
         "page_title": "Explorer - TiBillet",
         "page_description": (
             "Explorez sur une carte interactive les lieux culturels et "
@@ -312,10 +314,17 @@ def sitemap_index_view(request):
 
     LOCALISATION: seo/views.py
     """
+    from xml.sax.saxutils import escape as xml_escape
+
     data = get_seo_cache(SEOCache.SITEMAP_INDEX) or {"tenants": []}
     tenants = data.get("tenants", [])
 
-    # Construire le XML du sitemap index / Build sitemap index XML
+    # Construire le XML du sitemap index. On echappe les valeurs avec
+    # xml.sax.saxutils.escape pour eviter qu'un domain ou une URL contenant
+    # & ou < ne casse le document XML (cas peu probable mais defensif).
+    # / Build sitemap index XML. Escape values via xml.sax.saxutils.escape
+    # to avoid a domain or URL containing & or < breaking the XML
+    # document (unlikely but defensive).
     xml_parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -327,8 +336,8 @@ def sitemap_index_view(request):
         )
         updated = tenant.get("updated_at", timezone.now().isoformat())
         xml_parts.append("  <sitemap>")
-        xml_parts.append(f"    <loc>{sitemap_url}</loc>")
-        xml_parts.append(f"    <lastmod>{updated[:10]}</lastmod>")
+        xml_parts.append(f"    <loc>{xml_escape(sitemap_url)}</loc>")
+        xml_parts.append(f"    <lastmod>{xml_escape(updated[:10])}</lastmod>")
         xml_parts.append("  </sitemap>")
     xml_parts.append("</sitemapindex>")
 

@@ -632,8 +632,17 @@
     }
 
     function cssEscape(value) {
-        // Echappement pour attribute selectors — CSS.escape n'est pas universel
-        // / Escape for attribute selectors — CSS.escape isn't universal
+        // CSS.escape() est dispo dans tous les navigateurs modernes (Chrome 46+,
+        // Firefox 31+, Safari 10+) et gere correctement TOUS les caracteres CSS
+        // dangereux. Fallback minimal pour les vieux navigateurs (échappe juste
+        // " et \ — suffisant pour des UUIDs).
+        // / CSS.escape() is available in all modern browsers (Chrome 46+,
+        // Firefox 31+, Safari 10+) and handles ALL CSS-dangerous characters
+        // correctly. Minimal fallback for legacy browsers (escapes only " and \
+        // — sufficient for UUIDs).
+        if (window.CSS && typeof window.CSS.escape === 'function') {
+            return window.CSS.escape(String(value));
+        }
         return String(value).replace(/(["\\])/g, '\\$1');
     }
 

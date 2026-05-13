@@ -10,7 +10,9 @@ Version V1 allegee : pas de /adhesions/. La navigation pointe vers
 /explorer/ which offers an interactive venues + events map.
 """
 
+from django.templatetags.static import static
 from django.urls import path
+from django.views.generic import RedirectView
 
 from seo import views
 from seo.views_common import humans_txt, robots_txt
@@ -26,4 +28,14 @@ urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
     path("humans.txt", humans_txt, name="humans_txt"),
     path("sitemap.xml", views.sitemap_index_view, name="sitemap_index"),
+    # /favicon.ico est demande automatiquement par les navigateurs sur toutes
+    # les pages, y compris non-HTML (sitemap.xml, robots.txt). On evite le 404
+    # en redirigeant vers le SVG vendore.
+    # / Browsers auto-request /favicon.ico on all pages including non-HTML.
+    # Redirect to the vendored SVG to avoid 404s.
+    path(
+        "favicon.ico",
+        RedirectView.as_view(url=static("seo/favicon.svg"), permanent=True),
+        name="favicon_ico",
+    ),
 ]

@@ -232,7 +232,7 @@ def get_context(request):
         navbar.append({
             'name': 'federation',
             'url': '/federation/',
-            'label': 'Local network',
+            'label': _('Local network'),
             'icon': 'diagram-2-fill'
         })
 
@@ -1611,10 +1611,14 @@ class FederationViewset(viewsets.ViewSet):
         (SEOCache via build_explorer_data_for_tenants) by filtering
         on FederatedPlace UUIDs + the current tenant.
         """
-        import json as _json
         from seo.services import build_explorer_data_for_tenants
         from seo.models import SEOCache
-        from seo.views_common import get_seo_cache, build_json_ld_federation, build_json_ld_breadcrumb
+        from seo.views_common import (
+            get_seo_cache,
+            build_json_ld_federation,
+            build_json_ld_breadcrumb,
+            json_for_html,
+        )
 
         config = Configuration.get_solo()
         current_uuid = str(connection.tenant.uuid)
@@ -1693,7 +1697,9 @@ class FederationViewset(viewsets.ViewSet):
             if self_lieu_data.get("country"):
                 root_address["addressCountry"] = self_lieu_data["country"]
         else:
-            root_name = config.organisation
+            # Fallback : config.organisation peut etre une chaine vide.
+            # / Fallback: config.organisation can be an empty string.
+            root_name = config.organisation or connection.tenant.name
             root_description = (config.short_description or "")
             root_address = {}
 
@@ -1708,7 +1714,7 @@ class FederationViewset(viewsets.ViewSet):
                 "url": "https://tibillet.org/",
             },
         )
-        federation_json_ld = _json.dumps(federation_json_ld_dict, ensure_ascii=False)
+        federation_json_ld = json_for_html(federation_json_ld_dict)
 
         # BreadcrumbList : Accueil > Reseau local. Pour les rich snippets SERP.
         # / BreadcrumbList: Home > Local network. For SERP rich snippets.
@@ -1716,7 +1722,7 @@ class FederationViewset(viewsets.ViewSet):
             {"name": str(config.organisation), "url": root_url},
             {"name": str(_("Réseau local")), "url": request.build_absolute_uri()},
         ])
-        breadcrumb_json_ld = _json.dumps(breadcrumb_json_ld_dict, ensure_ascii=False)
+        breadcrumb_json_ld = json_for_html(breadcrumb_json_ld_dict)
 
         # Contexte standard du skin + variables specifiques a l'explorer
         # / Standard skin context + explorer-specific variables

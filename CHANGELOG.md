@@ -1,5 +1,130 @@
 # Changelog / Journal des modifications
 
+## Chantier SEO #02 — Review critique + 10 fixes prod / Critical review + 10 prod fixes
+
+**Date :** 2026-05-13
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Review critique de la session SEO/FEDERATION par un agent + navigation
+Chrome MCP. Score initial 79/100, 10 fixes appliques pour atteindre la qualite
+prod :
+
+1. **Critical XSS JSON-LD** : helper `json_for_html()` qui translate `<>&` en
+   sequences unicode `< > &`. Empeche qu'un admin tenant qui met
+   `</script>` dans son nom de configuration casse le HTML des pages de ses
+   voisins (qui consomment le SEOCache).
+2. **`<h1>` ajoutes** sur `/federation/` tenant et `/explorer/` public (etaient
+   absents, 21+ H3 seulement). Visually-hidden, n'affecte pas l'UI.
+3. **Open Graph + Twitter tags** : override `og_title`, `twitter_title`,
+   `og_description`, `twitter_description` sur le wrapper `/federation/`
+   (etaient au fallback "Accueil | <tenant>").
+4. **`SECURE_PROXY_SSL_HEADER`** dans settings.py : canonical URLs et JSON-LD
+   contiennent maintenant `https://` (etaient en `http://` car Traefik forwarde
+   en HTTP au container Django).
+5. **N+1 cache landing** : `event_count` lu directement de `AGGREGATE_LIEUX`
+   au lieu de 20 appels `get_seo_cache(TENANT_SUMMARY, ...)`.
+6. **`_('Local network')`** : navbar label maintenant traduisible (etait
+   hardcode).
+7. **XML escape sitemap_index** : `xml.sax.saxutils.escape` sur les URLs et
+   timestamps (defense en profondeur).
+8. **BreadcrumbList shape** : `"item": {"@id": ..., "name": ...}` (forme
+   recommandee Google Rich Results, au lieu du string brut qui passe les tests
+   mais genere des warnings).
+9. **`config.organisation or tenant.name`** : fallback si organisation vide.
+10. **`CSS.escape()`** : remplace l'echappement regex maison dans explorer.js,
+    avec fallback pour vieux navigateurs.
+
+**EN :** Critical review of the SEO/FEDERATION session by an agent + Chrome MCP
+navigation. Initial score 79/100, 10 fixes applied to reach prod quality:
+
+1. **Critical XSS JSON-LD**: `json_for_html()` helper translating `<>&` to
+   `< > &` unicode sequences. Prevents a tenant admin who puts
+   `</script>` in their configuration name from breaking the HTML of neighbor
+   pages (which consume SEOCache).
+2. **`<h1>` added** on tenant `/federation/` and public `/explorer/` (were
+   missing, 21+ H3 only). Visually-hidden, doesn't affect UI.
+3. **Open Graph + Twitter tags**: override `og_title`, `twitter_title`,
+   `og_description`, `twitter_description` on the `/federation/` wrapper
+   (defaulted to "Accueil | <tenant>").
+4. **`SECURE_PROXY_SSL_HEADER`** in settings.py: canonical URLs and JSON-LD
+   now contain `https://` (were `http://` because Traefik forwards HTTP to
+   the Django container).
+5. **N+1 cache landing**: `event_count` read directly from `AGGREGATE_LIEUX`
+   instead of 20 `get_seo_cache(TENANT_SUMMARY, ...)` calls.
+6. **`_('Local network')`**: navbar label now translatable (was hardcoded).
+7. **XML escape sitemap_index**: `xml.sax.saxutils.escape` on URLs and
+   timestamps (defense in depth).
+8. **BreadcrumbList shape**: `"item": {"@id": ..., "name": ...}` (Google Rich
+   Results recommended shape, instead of raw string that passes tests but
+   generates warnings).
+9. **`config.organisation or tenant.name`**: fallback when organisation empty.
+10. **`CSS.escape()`**: replaces homemade regex escaping in explorer.js, with
+    fallback for legacy browsers.
+
+**Validation** : tous les fixes verifies via curl + Chrome MCP. Helper
+`json_for_html()` teste avec input malicieux (`Foo</script><script>alert(1)`)
+→ tous les caracteres dangereux echappes.
+
+---
+
+## Chantier SEO #01 — Decouverte LLM/Google du reseau federe / LLM and Google discovery of the federated network
+
+**Date :** 2026-05-13
+**Migration :** Oui (`seo/0002_alter_seocache_cache_type.py`)
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Trois axes pour rendre le reseau TiBillet visible aux LLMs (GPTBot,
+ClaudeBot, PerplexityBot, CommonCrawl) et a Google.
+
+1. **Voisins bidirectionnels** : la carte d'un tenant affiche les voisins
+   declarations dans les 2 sens. Si X federate avec moi mais que je n'ai pas
+   declare X dans mes `FederatedPlace`, X apparait quand meme. Pre-calcul
+   cross-schema dans le Celery task `refresh_seo_cache`, stockage en
+   `SEOCache.FEDERATION_INCOMING`. La navbar "Reseau local" est desormais
+   pilotee uniquement par `config.module_federation`.
+
+2. **JSON-LD federation** : nouvelle helper
+   `seo.views_common.build_json_ld_federation()` qui produit un schema.org/
+   Organization + `subOrganization` + `memberOf`. Injecte sur `/federation/`
+   tenant (racine = tenant, subOrg = voisins federes, memberOf = reseau
+   TiBillet) et sur `/explorer/` public (racine = TiBillet, subOrg = tous les
+   tenants). Les crawlers no-JS recoivent immediatement la structure du
+   reseau sans avoir besoin d'executer Leaflet. Fix collateral : `meta_robots`
+   devient un `{% block %}` dans `seo/base.html`.
+
+3. **Quick wins SEO** :
+   - `/humans.txt` sur le ROOT public (manquait avant)
+   - `/federation/` ajoute au `StaticViewSitemap` tenant
+   - Helper `build_json_ld_breadcrumb()` + BreadcrumbList sur `/federation/`
+
+**EN :** Three axes to make the TiBillet network visible to LLMs (GPTBot,
+ClaudeBot, PerplexityBot, CommonCrawl) and Google.
+
+1. **Bidirectional neighbors**: a tenant's map shows neighbors declared in
+   both directions. If X federates with me but I haven't declared X in my
+   `FederatedPlace`, X still appears. Cross-schema pre-computation in the
+   `refresh_seo_cache` Celery task, stored in `SEOCache.FEDERATION_INCOMING`.
+   The "Local network" navbar is now driven solely by `config.module_federation`.
+
+2. **Federation JSON-LD**: new helper
+   `seo.views_common.build_json_ld_federation()` produces a schema.org/
+   Organization + `subOrganization` + `memberOf`. Injected on `/federation/`
+   tenant (root = tenant, subOrg = federated neighbors, memberOf = TiBillet
+   network) and on `/explorer/` public (root = TiBillet, subOrg = all
+   tenants). No-JS crawlers immediately receive the network structure without
+   executing Leaflet. Collateral fix: `meta_robots` becomes a `{% block %}`
+   in `seo/base.html`.
+
+3. **SEO quick wins**:
+   - `/humans.txt` on public ROOT (was missing)
+   - `/federation/` added to tenant `StaticViewSitemap`
+   - `build_json_ld_breadcrumb()` helper + BreadcrumbList on `/federation/`
+
+**Fichiers :** voir `TECH DOC/SESSIONS/FEDERATION/03-explorer-federation-CHANGELOG.md`
+
+---
+
 ## Chantier FEDERATION #01 — Explorer in-tenant + refactor JS prod / In-tenant explorer + production-grade JS refactor
 
 **Date :** 2026-05-13

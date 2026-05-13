@@ -5,6 +5,7 @@ Helpers SEO : lecteur cache L1/L2, builders JSON-LD, robots.txt.
 LOCALISATION: seo/views_common.py
 """
 
+import json
 import logging
 
 from django.http import HttpResponse
@@ -13,6 +14,45 @@ from seo.models import SEOCache
 from seo.services import get_memcached_l1, set_memcached_l1
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# JSON-LD safe encoder / Encodeur JSON-LD safe pour HTML
+# ---------------------------------------------------------------------------
+
+# Caracteres a echapper en sequences unicode dans le JSON inline du HTML.
+# Pattern de Django json_script : evite qu'un nom de tenant contenant
+# "</script>" ne casse la balise script parente (vecteur XSS).
+# / Characters to escape as unicode sequences in HTML-inlined JSON.
+# Django json_script pattern: prevents a tenant name containing "</script>"
+# from breaking the parent script tag (XSS vector).
+_HTML_JSON_ESCAPES = {
+    ord(">"): "\\u003E",
+    ord("<"): "\\u003C",
+    ord("&"): "\\u0026",
+}
+
+
+def json_for_html(data):
+    """
+    Serialise un dict en JSON safe pour injection dans une balise <script>.
+    Les caracteres < > & sont echappes en sequences unicode (\\u003C etc.)
+    qui restent semantiquement equivalentes pour un parser JSON mais ne
+    cassent pas le HTML parent.
+    / Serialise a dict to JSON safe for injection in a <script> tag.
+    Characters < > & are escaped as unicode sequences which stay
+    semantically equivalent for a JSON parser but do not break the parent HTML.
+
+    LOCALISATION : seo/views_common.py
+
+    A utiliser systematiquement pour tout JSON-LD passe a |safe dans un
+    template Django. Pour les donnees JSON cote JS (consommees par fetch ou
+    JSON.parse), prefere {{ data|json_script:"my-id" }} qui fait le meme job.
+    / Use systematically for any JSON-LD passed to |safe in a Django template.
+    For JS-side JSON (consumed by fetch or JSON.parse), prefer
+    {{ data|json_script:"my-id" }} which does the same job.
+    """
+    return json.dumps(data, ensure_ascii=False).translate(_HTML_JSON_ESCAPES)
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +228,14 @@ def build_json_ld_breadcrumb(items):
             "@type": "ListItem",
             "position": position,
             "name": item.get("name", ""),
-            "item": item.get("url", ""),
+            # Forme recommandee Google Rich Results : objet avec @id (URL canonique).
+            # Le string brut "item": "url" passe les tests mais genere des warnings.
+            # / Google Rich Results recommended shape: object with @id (canonical URL).
+            # Raw string "item": "url" passes tests but generates warnings.
+            "item": {
+                "@id": item.get("url", ""),
+                "name": item.get("name", ""),
+            },
         })
     return {
         "@context": "https://schema.org",

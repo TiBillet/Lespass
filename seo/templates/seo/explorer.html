@@ -33,6 +33,12 @@
 
 {% block main_wrapper %}
 <main>
+    {# H1 visually-hidden : visible des screen readers + Google, mais ne perturbe #}
+    {# pas l'UI (la toolbar de l'explorer reste l'element visuel dominant). #}
+    {# / H1 visually-hidden: visible to screen readers + Google, but does not #}
+    {# disturb the UI (the explorer toolbar stays the dominant visual element). #}
+    <h1 class="visually-hidden">{% translate "Explorer le réseau TiBillet" %}</h1>
+
     {% include "seo/partials/explorer_widget.html" %}
 </main>
 {% endblock %}

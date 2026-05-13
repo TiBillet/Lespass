@@ -1,4 +1,6 @@
+from django.templatetags.static import static
 from django.urls import path, include
+from django.views.generic import RedirectView
 from rest_framework import routers
 from BaseBillet import views as base_view
 from BaseBillet.views_robots import robots_txt
@@ -27,6 +29,17 @@ urlpatterns = [
     # Dynamic humans.txt - Access at: https://yourdomain.com/humans.txt
     # Standard humanstxt.org : credits the Cooperative Code Commun team
     path('humans.txt', humans_txt, name='humans_txt'),
+
+    # /favicon.ico est demande automatiquement par les navigateurs sur toutes
+    # les pages, y compris non-HTML (sitemap.xml, robots.txt). On evite le 404
+    # en redirigeant vers le favicon du skin reunion (PNG).
+    # / Browsers auto-request /favicon.ico on all pages including non-HTML.
+    # Redirect to the reunion skin favicon (PNG) to avoid 404s.
+    path(
+        'favicon.ico',
+        RedirectView.as_view(url=static('reunion/img/favicon.png'), permanent=True),
+        name='favicon_ico',
+    ),
 
     ### SCAN TICKET API
     path('scan/check_api_scan/', views_scan.check_api_scan.as_view(), name='check_api_scan'),

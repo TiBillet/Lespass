@@ -222,6 +222,20 @@ MIDDLEWARE = [
 if DEBUG and not TEST :
     MIDDLEWARE += ['django_browser_reload.middleware.BrowserReloadMiddleware', ]
 
+# Detection HTTPS derriere proxy (Traefik termine TLS et forwarde HTTP au container).
+# Sans ce reglage, request.scheme = 'http' → canonical URLs et JSON-LD contiennent
+# http://... au lieu de https://... ce qui penalise le SEO.
+# Le header X-Forwarded-Proto doit etre setting cote Traefik (par defaut dans
+# le mode HTTPS auto, mais a verifier). En dev local, le browser accepte http
+# meme si on tape https:// donc le canonical http:// reste cosmetique.
+# / HTTPS detection behind proxy (Traefik terminates TLS, forwards HTTP to container).
+# Without this, request.scheme = 'http' → canonical URLs and JSON-LD contain
+# http://... instead of https://... which hurts SEO.
+# The X-Forwarded-Proto header must be set on Traefik side (default in
+# HTTPS auto mode, but worth checking). In local dev, browsers accept http
+# even if typed as https://, so http:// canonical stays cosmetic.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

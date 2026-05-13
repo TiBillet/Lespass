@@ -9,6 +9,15 @@
 {% block title %}{% translate 'Réseau local' %}{% endblock %}
 {% block meta_description %}{{ config.short_description|striptags|default:config.organisation }} - {% translate 'Réseau local' %}{% endblock %}
 
+{# Override des Open Graph + Twitter tags : par defaut le base.html retombe sur #}
+{# "Accueil | <tenant>" qui n'est pas adapte a cette page Reseau local. #}
+{# / Override Open Graph + Twitter tags: base.html defaults to "Home | <tenant>" #}
+{# which is not appropriate for this Local Network page. #}
+{% block og_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block og_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
+{% block twitter_title %}{% translate 'Réseau local' %} | {{ config.organisation }}{% endblock %}
+{% block twitter_description %}{% blocktranslate with tenant=config.organisation %}Découvrez le réseau coopératif de {{ tenant }} : lieux fédérés, événements partagés.{% endblocktranslate %}{% endblock %}
+
 {% block extra_meta %}
     {# Leaflet vendore (meme source que le public /explorer/) #}
     {# / Vendored Leaflet (same source as public /explorer/) #}
@@ -34,6 +43,12 @@
 {% endblock %}
 
 {% block main %}
+    {# H1 visually-hidden : visible des screen readers + Google, mais ne perturbe #}
+    {# pas l'UI (la toolbar de l'explorer reste l'element visuel dominant). #}
+    {# / H1 visually-hidden: visible to screen readers + Google, but does not #}
+    {# disturb the UI (the explorer toolbar stays the dominant visual element). #}
+    <h1 class="visually-hidden">{% translate "Réseau local" %} — {{ config.organisation }}</h1>
+
     {# Message d'etat vide : si le tenant n'a aucune autre place federee. #}
     {# / Empty-state message: if the tenant has no other federated place. #}
     {% if not has_other_federated_places %}

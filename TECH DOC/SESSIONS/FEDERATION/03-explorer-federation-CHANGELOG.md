@@ -13,6 +13,17 @@
 - Marker visuel spécial pour le tenant courant ("Vous êtes ici" + couleur primaire + halo).
 - **Mini-extension** : la carte d'un tenant affiche **les voisins fédérés dans les 2 sens** (sortantes ET entrantes). Si X fédère avec moi mais que je ne fédère pas explicitement avec X, X apparaît quand même sur ma carte (sémantique : on partage la même fédération, peu importe qui l'a déclarée). Implementé via pré-calcul cross-schema dans le Celery task + lookup cache au request time.
 
+## Mini-extension : navbar Reseau local pilotee uniquement par module_federation
+
+**But** : permettre l'acces a la page `/federation/` meme aux tenants qui n'ont declare aucune `FederatedPlace` sortante mais qui sont fedeles entrantes (un voisin pointe vers eux).
+
+**Ce qu'on a fait** :
+
+- Dans `BaseBillet/views.py::get_context()` : retire les tests d'existence `FederatedPlace.objects.exists()` et `AssetFedowPublic.objects.filter(federated_with__isnull=False).exists()`.
+- Le menu navbar "Reseau local" s'affiche desormais des que `config.module_federation = True`, sans aucun autre prerequis.
+
+**Raison** : avec le support des entrantes, un tenant sans sortante peut quand meme avoir des voisins (entrantes). Le test d'existence devenait superflu et masquait l'entree navbar inutilement. L'etat vide est deja gere cote vue (alert "Aucune autre place federee").
+
 ## Mini-extension : JSON-LD federation (decouverte LLM/Google du reseau)
 
 **But** : permettre aux crawlers no-JS (GPTBot, ClaudeBot, PerplexityBot, CommonCrawl) et au scoring SEO Google de comprendre la structure du reseau TiBillet sans avoir a executer le rendu JavaScript de la carte.
@@ -34,6 +45,21 @@
 **Resultat valide par simulation crawler GPTBot** : la page `/federation/` de Lespass expose 2 blocs JSON-LD coherents (1 du base.html `@graph` Organization+WebSite, 1 nouveau Organization+subOrganization+memberOf). Un LLM peut repondre sans ambiguite a "Lespass fait partie de quel reseau ?" et "Quels sont les voisins federes de Lespass ?".
 
 **Note** : `/explorer/` public reste `noindex, nofollow` (c'est un outil interactif). Mais Google et les LLMs **parsent quand meme les structured data des pages noindex** pour leur knowledge graph — donc le JSON-LD reste utile.
+
+**Fix collateral** : `seo/base.html` avait `<meta name="robots" content="index, follow">` en dur. Le wrapper `explorer.html` ajoutait un 2e meta noindex dans `extra_head` → 2 tags meta robots dans le HEAD, Chrome retournait le premier (`index, follow`) au lieu du noindex souhaite. Refactor en `{% block meta_robots %}index, follow{% endblock %}` permet la surcharge propre via `{% block meta_robots %}noindex, nofollow{% endblock %}` dans le wrapper explorer. Plus qu'un seul meta robots.
+
+## Mini-extension : SEO quick wins (humans.txt + breadcrumb + sitemap)
+
+**But** : finaliser la couverture SEO de base sur les pages cle.
+
+**Ce qu'on a fait** :
+
+- **`/humans.txt` sur le ROOT public** (`seo/views_common.py::humans_txt` + `seo/urls.py`) — meme contenu que la version tenant (equipe Code Commun + version + stack). Permet aux crawlers de credit l'equipe meme depuis le domaine public.
+- **`/federation/` ajoute au `StaticViewSitemap`** (`BaseBillet/sitemap.py`) — la page est maintenant indexable via le sitemap tenant, en plus du sitemap_index public qui pointe vers chaque sitemap tenant.
+- **Helper `build_json_ld_breadcrumb(items)`** (`seo/views_common.py`) — produit un schema.org/BreadcrumbList pour rich snippets Google.
+- **BreadcrumbList sur `/federation/` tenant** : `<tenant.name> > Reseau local`. Injection via le wrapper dans `extra_meta`.
+
+**Note** : le breadcrumb est extensible — on peut l'appliquer aussi sur event detail, membership detail, etc. via le meme helper. Reporte si besoin.
 
 ## Mini-extension : voisins bidirectionnels
 
