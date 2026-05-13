@@ -56,43 +56,6 @@ def get_sidebar_navigation(request):
                 }
             ],
         },
-        {
-            "title": _("Products"),
-            "separator": True,  # Top border
-            "collapsible": True,  # Collapsible group of links
-            "items": [
-                {
-                    "title": _("Products"),
-                    "icon": "storefront",  # Supported icon set: https://fonts.google.com/icons
-                    "link": reverse_lazy("staff_admin:BaseBillet_product_changelist"),
-                    # "badge": "Administration.admin_tenant.badge_callback",
-                    "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                },
-                {
-                    "title": _("Promotional codes"),
-                    "icon": "local_offer",  # Supported icon set: https://fonts.google.com/icons
-                    "link": reverse_lazy("staff_admin:BaseBillet_promotionalcode_changelist"),
-                    "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                },
-                {
-                    "title": _("Tags"),
-                    "icon": "style",  # Supported icon set: https://fonts.google.com/icons
-                    "link": reverse_lazy("staff_admin:BaseBillet_tag_changelist"),
-                    # "badge": "Administration.admin_tenant.badge_callback",
-                    "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-
-                },
-                # {
-                #     "title": _("Options"),
-                #     "icon": "page_info",  # Supported icon set: https://fonts.google.com/icons
-                #     "link": reverse_lazy("staff_admin:BaseBillet_optiongenerale_changelist"),
-                #     # "badge": "Administration.admin_tenant.badge_callback",
-                #     "permission": "ApiBillet.permissions.TenantAdminPermissionWithRequest"
-                # },
-            ],
-        },
     ]
 
 
@@ -106,14 +69,14 @@ def get_sidebar_navigation(request):
                 "collapsible": True,
                 "items": [
                     # FROM V2 : PAGE TO IMPLEMENT
-                    # {
-                    #     "title": _("Membership products"),
-                    #     "icon": "loyalty",
-                    #     "link": reverse_lazy(
-                    #         "staff_admin:BaseBillet_membershipproduct_changelist"
-                    #     ),
-                    #     "permission": admin_permission,
-                    # },
+                    {
+                        "title": _("Membership products"),
+                        "icon": "loyalty",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_membershipproduct_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
                     {
                         "title": _("Subscriptions"),
                         "icon": "card_membership",
@@ -143,14 +106,14 @@ def get_sidebar_navigation(request):
                     #     "link": reverse_lazy("staff_admin:BaseBillet_event_dashboard"),
                     #     "permission": admin_permission,
                     # },
-                    # {
-                    #     "title": _("Ticket products"),
-                    #     "icon": "storefront",
-                    #     "link": reverse_lazy(
-                    #         "staff_admin:BaseBillet_ticketproduct_changelist"
-                    #     ),
-                    #     "permission": admin_permission,
-                    # },
+                    {
+                        "title": _("Ticket products"),
+                        "icon": "storefront",
+                        "link": reverse_lazy(
+                            "staff_admin:BaseBillet_ticketproduct_changelist"
+                        ),
+                        "permission": admin_permission,
+                    },
                     {
                         "title": _("Carousel"),
                         "icon": "photo_library",

@@ -885,33 +885,50 @@ class Product(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid4, editable=False, unique=True, db_index=True)
 
     name = models.CharField(max_length=500, verbose_name=_("Name"))
-    tva = models.ForeignKey(Tva, on_delete=models.PROTECT, null=True, blank=True,
-                            verbose_name=_("TVA rate"), help_text=_("Leave if zero VAT"))
+    tva = models.ForeignKey(
+        Tva,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_("TVA rate"),
+        help_text=_("Leave if zero VAT")
+    )
 
-    short_description = models.CharField(max_length=250, blank=True, null=True, verbose_name=_("Short description"),
-                                         help_text=_("Displayed only for membership/subscription products."))
-    long_description = models.TextField(blank=True, null=True, verbose_name=_("Long description"),
-                                        help_text=_("Displayed only for membership/subscription products."))
+    short_description = models.CharField(
+        max_length=250,
+        blank=True,
+        null=True,
+        verbose_name=_("Short description"),
+        help_text=_("Displayed only for membership/subscription products.")
+    )
+
+    long_description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name=_("Long description"),
+        help_text=_("Displayed only for membership/subscription products.")
+    )
 
     publish = models.BooleanField(default=True, verbose_name=_("Publish"))
-    poids = models.PositiveSmallIntegerField(default=0, verbose_name=_("Weight"),
-                                             help_text=_("Products are ordered lightest first."))
+
 
     tag = models.ManyToManyField(Tag, blank=True, related_name="produit_tags")
 
-    option_generale_radio = models.ManyToManyField(OptionGenerale,
-                                                   blank=True,
-                                                   related_name="produits_radio",
-                                                   verbose_name=_("Single choice options"),
-                                                   help_text=_(
-                                                       "Only one choice can be selected at order time."))
+    option_generale_radio = models.ManyToManyField(
+        OptionGenerale,
+        blank=True,
+        related_name="produits_radio",
+        verbose_name=_("Single choice options"),
+        help_text=_("Only one choice can be selected at order time.")
+    )
 
-    option_generale_checkbox = models.ManyToManyField(OptionGenerale,
-                                                      blank=True,
-                                                      related_name="produits_checkbox",
-                                                      verbose_name=_("Multiple choice options"),
-                                                      help_text=_(
-                                                          "Any number of choices can be selected at order time."))
+    option_generale_checkbox = models.ManyToManyField(
+        OptionGenerale,
+        blank=True,
+        related_name="produits_checkbox",
+        verbose_name=_("Multiple choice options"),
+        help_text=_("Any number of choices can be selected at order time.")
+    )
 
     # TODO: doublon ?
     terms_and_conditions_document = models.URLField(blank=True, null=True)
@@ -919,25 +936,38 @@ class Product(models.Model):
                                  help_text=_(
                                      "Not required. If completed, displays a checkbox to validate the membership product."))
 
-    img = StdImageField(upload_to='images/',
-                        null=True, blank=True,
-                        variations={
-                            'fhd': (1920, 1920),
-                            'hdr': (720, 720),
-                            'med': (480, 480),
-                            'thumbnail': (150, 90),
-                            'crop_hdr': (960, 540, True),
-                            'crop': (480, 270, True),
-                            'social_card': (1200, 630, True),
-                        },
-                        delete_orphans=True,
-                        verbose_name=_('Product image'),
-                        )
+
+    img = StdImageField(
+        upload_to='images/',
+        null=True,
+        blank=True,
+        variations={
+            'fhd': (1920, 1920),
+            'hdr': (720, 720),
+            'med': (480, 480),
+            'thumbnail': (150, 90),
+            'crop_hdr': (960, 540, True),
+            'crop': (480, 270, True),
+            'social_card': (1200, 630, True),
+        },
+        delete_orphans=True,
+        verbose_name=_('Product image'),
+    )
 
     NONE, BILLET, PACK, RECHARGE_CASHLESS = 'N', 'B', 'P', 'R'
     RECHARGE_FEDERATED, VETEMENT, MERCH, ADHESION, BADGE = 'S', 'T', 'M', 'A', 'G'
     DON, FREERES, NEED_VALIDATION = 'D', 'F', 'V'
     QRCODE_MA = 'Q'
+
+    # FROM V2 : TODO
+    # Recharge cashless FED : produit système créé par bootstrap_fed_asset.
+    # Un seul Product avec cette catégorie existe, lié à l'asset FED unique.
+    # / Cashless FED refill: system product created by bootstrap_fed_asset.
+    # Only one Product with this category exists, linked to the unique FED asset.
+    RECHARGE_CASHLESS_FED = "E"
+    # Fut de boisson pour tireuse connectee (controlvanne)
+    # / Beverage keg for connected tap (controlvanne)
+    FUT = "U"
 
     CATEGORIE_ARTICLE_CHOICES = [
         (NONE, _('Select a category')),
@@ -951,22 +981,35 @@ class Product(models.Model):
         (ADHESION, _('Subscription or membership')),
         (BADGE, _('Punchclock')),
         (QRCODE_MA, _('QrCode paiement on my account')),
+        # (FUT, _("Keg (connected tap)")), # FROM V2 : TO IMPLEMENT WITH TIHEUREUSE
         # (DON, _('Don')),
         # (NEED_VALIDATION, _('Nécessite une validation manuelle'))
     ]
 
-    categorie_article = models.CharField(max_length=3, choices=CATEGORIE_ARTICLE_CHOICES, default=NONE,
-                                         verbose_name=_("Product type"))
+    categorie_article = models.CharField(
+        max_length=3,
+        choices=CATEGORIE_ARTICLE_CHOICES,
+        default=NONE,
+        verbose_name=_("Product type")
+    )
 
-    nominative = models.BooleanField(default=False,
-                                     verbose_name=_("Named booking"),
-                                     help_text=_("Intended recipient's first and last names required for each ticket."),
-                                     )
+    nominative = models.BooleanField(
+        default=False,
+        verbose_name=_("Named booking"),
+        help_text=_("Intended recipient's first and last names required for each ticket."),
+    )
 
     archive = models.BooleanField(default=False, verbose_name=_("Archive"))
 
+    poids = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name=_("Display order"),
+        help_text=_("Smallest appears first.")
+    )
+
     max_per_user = models.PositiveSmallIntegerField(
-        blank=True, null=True,
+        blank=True,
+        null=True,
         verbose_name=_("Maximum per user"),
         help_text=_("Limit the quantity per user. Leave this field blank if the number is unlimited.")
     )
@@ -977,30 +1020,38 @@ class Product(models.Model):
 
         if self.categorie_article == self.ADHESION:
             # Adhésion: on compte uniquement les adhésions encore valides pour CE produit
-            return user.memberships.filter(
-                deadline__gte=timezone.now(),
-                price__product__pk=self.pk,
-            ).exclude(
-                status__in=['C', 'AC'] # Membership.CANCELED, Membership.ADMIN_CANCELED
-            ).count() >= self.max_per_user
+            # Exclut les adhesions annulees (CANCELED, ADMIN_CANCELED) du count.
+            # / Excludes canceled memberships from the count.
+            return (
+                    user.memberships.filter(
+                        deadline__gte=timezone.now(),
+                        price__product__pk=self.pk,
+                    )
+                    .exclude(status__in=['C', 'AC'])
+                    .count()
+                    >= self.max_per_user
+            )
 
         # Billetterie / réservations gratuites: on compte tous les tickets de l'utilisateur (logique existante)
         elif self.categorie_article in [self.BILLET, self.FREERES] and event:
             # Compte direct des tickets liés aux réservations de l'utilisateur
-            count = (Ticket.objects.filter(
+            count = Ticket.objects.filter(
                 reservation__user_commande=user,
                 reservation__event=event,
                 pricesold__price__product__pk=self.pk,
                 status__in=[Ticket.NOT_SCANNED, Ticket.SCANNED]
-            ).count())
+            ).count()
             return count >= self.max_per_user
 
         return False
 
-    validate_button_text = models.CharField(blank=True, null=True, max_length=20,
-                                            verbose_name=_("Validate button text for membership"),
-                                            help_text=_(
-                                                "'Subscribe' If empty. Only useful for membership or subscription products."))
+    validate_button_text = models.CharField(
+        blank=True,
+        null=True,
+        max_length=20,
+        verbose_name=_("Validate button text for membership"),
+        help_text=_("'Subscribe' If empty. Only useful for membership or subscription products.")
+    )
 
 
     def fedow_category(self):
@@ -1022,6 +1073,54 @@ class Product(models.Model):
         verbose_name = _('Product')
         verbose_name_plural = _('Products')
         unique_together = ('categorie_article', 'name')
+
+
+class TicketProduct(Product):
+    """Proxy pour afficher uniquement les produits billetterie dans l'admin.
+    Proxy to display only ticket products in admin.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Ticket product")
+        verbose_name_plural = _("Ticket products")
+
+
+class MembershipProduct(Product):
+    """Proxy pour afficher uniquement les produits adhesion dans l'admin.
+    Proxy to display only membership products in admin.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Membership product")
+        verbose_name_plural = _("Membership products")
+
+# FROM V2 : TODO
+class POSProduct(Product):
+    """Proxy pour afficher uniquement les produits de caisse dans l'admin.
+    Filtre : methode_caisse IS NOT NULL (= disponible au point de vente).
+    Proxy to display only POS products in admin.
+    Filter: methode_caisse IS NOT NULL (= available at point of sale).
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("POS product")
+        verbose_name_plural = _("POS products")
+
+
+class FutProduct(Product):
+    """Proxy pour afficher uniquement les produits fut (tireuses) dans l'admin.
+    Proxy to display only keg products in admin.
+    Les infos biere (brasseur, type, degre) vont dans long_description.
+    Beer info (brewer, type, ABV) goes in long_description.
+    Meme table, zero migration."""
+
+    class Meta:
+        proxy = True
+        verbose_name = _("Keg product")
+        verbose_name_plural = _("Keg products")
 
 
 class PromotionalCode(models.Model):
