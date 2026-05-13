@@ -467,7 +467,8 @@ class ConfigurationAdmin(SingletonModelAdmin, ModelAdmin):
             messages.add_message(request, messages.ERROR, _("The \"POS & restaurant\" module required this module. You must disable it before disabling "))
             setattr(configuration, field_name, current_value)
 
-        logger.error(field_name is "module_caisse")
+        # /DjangoFiles/Administration/admin_tenant.py:470: SyntaxWarning: "is" with a literal. Did you mean "=="?
+        # logger.error(field_name is "module_caisse")
 
         if field_name == "module_caisse" and new_value is True and configuration.module_monnaie_locale is False:
             messages.add_message(request, messages.ERROR, _("The \"Local currency & cashless\" module is required by this module. You must enabled it before"))
