@@ -1611,9 +1611,10 @@ class FederationViewset(viewsets.ViewSet):
         (SEOCache via build_explorer_data_for_tenants) by filtering
         on FederatedPlace UUIDs + the current tenant.
         """
+        import json as _json
         from seo.services import build_explorer_data_for_tenants
         from seo.models import SEOCache
-        from seo.views_common import get_seo_cache
+        from seo.views_common import get_seo_cache, build_json_ld_federation, build_json_ld_breadcrumb
 
         config = Configuration.get_solo()
         current_uuid = str(connection.tenant.uuid)
@@ -1653,6 +1654,70 @@ class FederationViewset(viewsets.ViewSet):
         # / Empty state: do we have something OTHER than the current tenant on the map?
         has_other_federated_places = bool(other_federated_uuids)
 
+        # JSON-LD federation : declare la structure du reseau pour les LLMs et
+        # les moteurs de recherche. Le tenant courant = racine, les autres lieux
+        # de la liste = subOrganization. memberOf pointe vers le reseau TiBillet.
+        # / Federation JSON-LD: declares the network structure to LLMs and
+        # search engines. Current tenant = root, other lieux = subOrganization.
+        # memberOf points to the global TiBillet network.
+        federation_members = []
+        self_lieu_data = None
+        for lieu in explorer_data.get("lieux", []):
+            domain = lieu.get("domain", "")
+            member_url = f"https://{domain}/" if domain else ""
+            member_dict = {
+                "name": lieu.get("name", ""),
+                "url": member_url,
+                "short_description": lieu.get("short_description", ""),
+                "locality": lieu.get("locality", ""),
+                "country": lieu.get("country", ""),
+                "logo_url": lieu.get("logo_url") or "",
+            }
+            if lieu.get("tenant_id") == current_uuid:
+                self_lieu_data = member_dict
+            else:
+                federation_members.append(member_dict)
+
+        # Racine du JSON-LD = tenant courant. Si le SEOCache n'a pas encore
+        # de donnees pour le tenant courant (refresh non encore lance), on
+        # utilise les valeurs courantes de config en fallback.
+        # / JSON-LD root = current tenant. If SEOCache has no data yet for
+        # current tenant, fall back to current config values.
+        root_url = request.build_absolute_uri("/")
+        if self_lieu_data:
+            root_name = self_lieu_data["name"] or config.organisation
+            root_description = self_lieu_data.get("short_description") or ""
+            root_address = {}
+            if self_lieu_data.get("locality"):
+                root_address["addressLocality"] = self_lieu_data["locality"]
+            if self_lieu_data.get("country"):
+                root_address["addressCountry"] = self_lieu_data["country"]
+        else:
+            root_name = config.organisation
+            root_description = (config.short_description or "")
+            root_address = {}
+
+        federation_json_ld_dict = build_json_ld_federation(
+            root_name=root_name,
+            root_url=root_url,
+            federation_members=federation_members,
+            root_description=root_description,
+            root_address=root_address or None,
+            member_of={
+                "name": "TiBillet — Réseau coopératif de lieux culturels",
+                "url": "https://tibillet.org/",
+            },
+        )
+        federation_json_ld = _json.dumps(federation_json_ld_dict, ensure_ascii=False)
+
+        # BreadcrumbList : Accueil > Reseau local. Pour les rich snippets SERP.
+        # / BreadcrumbList: Home > Local network. For SERP rich snippets.
+        breadcrumb_json_ld_dict = build_json_ld_breadcrumb([
+            {"name": str(config.organisation), "url": root_url},
+            {"name": str(_("Réseau local")), "url": request.build_absolute_uri()},
+        ])
+        breadcrumb_json_ld = _json.dumps(breadcrumb_json_ld_dict, ensure_ascii=False)
+
         # Contexte standard du skin + variables specifiques a l'explorer
         # / Standard skin context + explorer-specific variables
         template_context = get_context(request)
@@ -1660,6 +1725,8 @@ class FederationViewset(viewsets.ViewSet):
             'explorer_data': explorer_data,
             'current_tenant_uuid': current_uuid,
             'has_other_federated_places': has_other_federated_places,
+            'federation_json_ld': federation_json_ld,
+            'breadcrumb_json_ld': breadcrumb_json_ld,
             'page_title': _('Réseau local'),
         })
 

@@ -25,6 +25,7 @@ from django.utils import timezone
 
 from seo.models import SEOCache
 from seo.views_common import (
+    build_json_ld_federation,
     build_json_ld_item_list,
     build_json_ld_organization,
     get_seo_cache,
@@ -245,9 +246,13 @@ def recherche(request):
 def explorer(request):
     """
     Page Explorer : carte Leaflet + liste filtree de lieux/events.
-    Outil de decouverte interactif (pas SEO crawlable).
+    Outil de decouverte interactif. La page elle-meme reste noindex (cf.
+    seo/templates/seo/explorer.html), mais le JSON-LD declare la structure
+    du reseau pour les LLMs et les rich snippets.
     / Explorer page: Leaflet map + filtered list of venues/events.
-    Interactive discovery tool (not SEO crawlable).
+    Interactive discovery tool. The page itself stays noindex (cf.
+    seo/templates/seo/explorer.html), but the JSON-LD declares the
+    network structure for LLMs and rich snippets.
 
     URL: GET /explorer/
     """
@@ -255,11 +260,39 @@ def explorer(request):
 
     explorer_data = build_explorer_data()
 
+    # JSON-LD reseau : racine = TiBillet, subOrganization = tous les tenants.
+    # Permet aux LLMs et a Google de comprendre l'ensemble du reseau cooperatif.
+    # / Network JSON-LD: root = TiBillet, subOrganization = all tenants.
+    # Lets LLMs and Google understand the whole cooperative network.
+    federation_members = []
+    for lieu in explorer_data.get("lieux", []):
+        domain = lieu.get("domain", "")
+        member_url = f"https://{domain}/" if domain else ""
+        federation_members.append({
+            "name": lieu.get("name", ""),
+            "url": member_url,
+            "short_description": lieu.get("short_description", ""),
+            "locality": lieu.get("locality", ""),
+            "country": lieu.get("country", ""),
+            "logo_url": lieu.get("logo_url") or "",
+        })
+
+    federation_json_ld_dict = build_json_ld_federation(
+        root_name="TiBillet",
+        root_url=request.build_absolute_uri("/"),
+        federation_members=federation_members,
+        root_description=(
+            "Cooperative de lieux culturels et associatifs. Billetterie, "
+            "adhesions, agenda federe, monnaie locale."
+        ),
+    )
+
     context = {
         "explorer_data": explorer_data,
         # ROOT public : aucun tenant courant a highlighter sur la carte.
         # / Public ROOT: no current tenant to highlight on the map.
         "current_tenant_uuid": "",
+        "federation_json_ld": json.dumps(federation_json_ld_dict, ensure_ascii=False),
         "page_title": "Explorer - TiBillet",
         "page_description": (
             "Explorez sur une carte interactive les lieux culturels et "

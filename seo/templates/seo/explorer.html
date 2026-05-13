@@ -6,17 +6,29 @@
 {# / Public wrapper: plugs the explorer widget into the SEO base. #}
 {# Widget source: seo/templates/seo/partials/explorer_widget.html #}
 
-{% block extra_head %}
-    {# Pas d'indexation : outil interactif, pas une page SEO #}
-    {# / No indexing: interactive tool, not a SEO page #}
-    <meta name="robots" content="noindex, nofollow">
+{# Pas d'indexation de l'outil interactif lui-meme. Surcharge propre via le #}
+{# block meta_robots (sinon Chrome retourne le premier meta robots du HEAD). #}
+{# Les JSON-LD restent parses par Google et les LLMs meme sur pages noindex. #}
+{# / The interactive tool itself stays noindex. Clean override via meta_robots #}
+{# block (otherwise Chrome returns the first meta robots tag found in HEAD). #}
+{# JSON-LD blocks are still parsed by Google and LLMs on noindex pages. #}
+{% block meta_robots %}noindex, nofollow{% endblock %}
 
+{% block extra_head %}
     {# Leaflet vendore (plus de CDN externe) / Vendored Leaflet (no external CDN) #}
     <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
     <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
     <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
 
     <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+
+    {# JSON-LD federation : structure complete du reseau TiBillet. #}
+    {# Lisible par tous les crawlers (Google, Bing, GPTBot, ClaudeBot, PerplexityBot). #}
+    {# / Federation JSON-LD: complete TiBillet network structure. #}
+    {# Readable by all crawlers (Google, Bing, GPTBot, ClaudeBot, PerplexityBot). #}
+    {% if federation_json_ld %}
+    <script type="application/ld+json">{{ federation_json_ld|safe }}</script>
+    {% endif %}
 {% endblock %}
 
 {% block main_wrapper %}

@@ -13,6 +13,28 @@
 - Marker visuel spécial pour le tenant courant ("Vous êtes ici" + couleur primaire + halo).
 - **Mini-extension** : la carte d'un tenant affiche **les voisins fédérés dans les 2 sens** (sortantes ET entrantes). Si X fédère avec moi mais que je ne fédère pas explicitement avec X, X apparaît quand même sur ma carte (sémantique : on partage la même fédération, peu importe qui l'a déclarée). Implementé via pré-calcul cross-schema dans le Celery task + lookup cache au request time.
 
+## Mini-extension : JSON-LD federation (decouverte LLM/Google du reseau)
+
+**But** : permettre aux crawlers no-JS (GPTBot, ClaudeBot, PerplexityBot, CommonCrawl) et au scoring SEO Google de comprendre la structure du reseau TiBillet sans avoir a executer le rendu JavaScript de la carte.
+
+**Ce qu'on a fait** :
+
+- Nouveau helper `seo.views_common.build_json_ld_federation(root_name, root_url, federation_members, member_of=None, ...)` qui produit un dict JSON-LD schema.org/Organization avec un tableau `subOrganization`.
+- Sur `/federation/` tenant : `FederationViewset.list` construit le JSON-LD avec :
+  - racine = tenant courant (name, url, description, address)
+  - `memberOf` = `{name: "TiBillet — Réseau coopératif de lieux culturels", url: "https://tibillet.org/"}`
+  - `subOrganization` = liste des voisins federes (chacun avec name, url, description, address)
+- Sur `/explorer/` public : `seo.views.explorer` construit le JSON-LD avec :
+  - racine = "TiBillet"
+  - `subOrganization` = tous les tenants visibles sur la carte
+- Injection dans le `<head>` via `<script type="application/ld+json">` :
+  - tenant : block `extra_meta` du wrapper `federation/explorer.html`
+  - public : block `extra_head` du wrapper `seo/explorer.html`
+
+**Resultat valide par simulation crawler GPTBot** : la page `/federation/` de Lespass expose 2 blocs JSON-LD coherents (1 du base.html `@graph` Organization+WebSite, 1 nouveau Organization+subOrganization+memberOf). Un LLM peut repondre sans ambiguite a "Lespass fait partie de quel reseau ?" et "Quels sont les voisins federes de Lespass ?".
+
+**Note** : `/explorer/` public reste `noindex, nofollow` (c'est un outil interactif). Mais Google et les LLMs **parsent quand meme les structured data des pages noindex** pour leur knowledge graph — donc le JSON-LD reste utile.
+
 ## Mini-extension : voisins bidirectionnels
 
 **Sémantique** : un voisin X apparaît sur la carte d'un tenant T si **au moins une des conditions** est vraie :

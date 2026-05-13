@@ -13,7 +13,7 @@ Version V1 allegee : pas de /adhesions/. La navigation pointe vers
 from django.urls import path
 
 from seo import views
-from seo.views_common import robots_txt
+from seo.views_common import humans_txt, robots_txt
 
 app_name = "seo"
 
@@ -24,5 +24,6 @@ urlpatterns = [
     path("recherche/", views.recherche, name="recherche"),
     path("explorer/", views.explorer, name="explorer"),
     path("robots.txt", robots_txt, name="robots_txt"),
+    path("humans.txt", humans_txt, name="humans_txt"),
     path("sitemap.xml", views.sitemap_index_view, name="sitemap_index"),
 ]

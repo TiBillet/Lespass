@@ -16,6 +16,21 @@
     <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.css' %}">
     <link rel="stylesheet" href="{% static 'seo/vendor/leaflet/MarkerCluster.Default.css' %}">
     <link rel="stylesheet" href="{% static 'seo/explorer.css' %}">
+
+    {# JSON-LD federation : declare la structure du reseau pour Google et les LLMs. #}
+    {# Sans ce schema, les crawlers no-JS (GPTBot, ClaudeBot, PerplexityBot, CommonCrawl) #}
+    {# ne voient que le shell vide de la page rendue cote JS. #}
+    {# / Federation JSON-LD: declares the network structure for Google and LLMs. #}
+    {# Without this schema, no-JS crawlers see only the empty page shell. #}
+    {% if federation_json_ld %}
+    <script type="application/ld+json">{{ federation_json_ld|safe }}</script>
+    {% endif %}
+
+    {# Breadcrumb pour rich snippets Google : Accueil > Reseau local #}
+    {# / Breadcrumb for Google rich snippets: Home > Local network #}
+    {% if breadcrumb_json_ld %}
+    <script type="application/ld+json">{{ breadcrumb_json_ld|safe }}</script>
+    {% endif %}
 {% endblock %}
 
 {% block main %}
