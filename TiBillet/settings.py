@@ -153,6 +153,7 @@ SHARED_APPS = (
     'fedow_public',
     'discovery',
     'seo',
+    'onboard',
 
     'django_extensions',
     'solo',
