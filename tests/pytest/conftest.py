@@ -12,8 +12,8 @@ def pytest_addoption(parser):
     """Add CLI options to inject API key and base URL into the test session.
 
     Usage examples:
-      poetry run pytest -qs tests/pytest --api-key <KEY>
-      poetry run pytest -qs tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
+      uv run pytest -qs tests/pytest --api-key <KEY>
+      uv run pytest -qs tests/pytest --api-key <KEY> --api-base-url https://lespass.tibillet.localhost
     """
     parser.addoption(
         "--api-key",
@@ -47,7 +47,7 @@ def _inject_cli_env(request):
                 "-e",
                 "TEST=1",
                 "lespass_django",
-                "poetry",
+                "uv",
                 "run",
                 "python",
                 "manage.py",
@@ -59,7 +59,7 @@ def _inject_cli_env(request):
         if result.returncode != 0:
             pytest.fail(
                 "Unable to fetch API key from docker. "
-                "Command failed: docker exec lespass_django poetry run python manage.py test_api_key\n"
+                "Command failed: docker exec lespass_django uv run manage.py test_api_key\n"
                 f"stderr: {result.stderr.strip()}"
             )
         api_key = result.stdout.strip()

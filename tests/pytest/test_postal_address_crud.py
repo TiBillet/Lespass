@@ -6,7 +6,7 @@ Pré-requis:
 - Instance accessible via API_BASE_URL
 
 Lancement:
-    poetry run pytest -q tests/pytest/test_postal_address_crud.py
+    uv run pytest -q tests/pytest/test_postal_address_crud.py
 """
 import os
 import json

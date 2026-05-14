@@ -23,7 +23,7 @@ function generateRandomId() {
 
 function djangoShell(pythonCode: string): string {
   const escaped = pythonCode.replace(/"/g, '\\"');
-  const command = `docker exec lespass_django poetry run python /DjangoFiles/manage.py tenant_command shell -s lespass -c "${escaped}"`;
+  const command = `docker exec lespass_django uv run /DjangoFiles/manage.py tenant_command shell -s lespass -c "${escaped}"`;
   try {
     return execSync(command, { encoding: 'utf-8', timeout: 20000 }).trim();
   } catch (error: any) {

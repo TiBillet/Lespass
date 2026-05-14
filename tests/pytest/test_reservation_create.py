@@ -12,7 +12,7 @@ Prerequisites:
 - API_BASE_URL reachable (default https://lespass.tibillet.localhost)
 
 Run:
-  poetry run pytest -q tests/pytest/test_reservation_create.py
+  uv run pytest -q tests/pytest/test_reservation_create.py
 """
 import json
 import os

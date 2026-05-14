@@ -6,7 +6,7 @@ Pré‑requis:
 - L'évènement a été créé par le test de création précédent (UUID en cache)
 
 Lancement:
-    poetry run pytest -q tests/pytest/test_event_delete.py
+    uv run pytest -q tests/pytest/test_event_delete.py
 """
 import json
 import os

@@ -9,19 +9,19 @@ if [ "$DEBUG" = "1" ]; then
   createdb $POSTGRES_DB
   echo "Database reset complete."
 
-#  poetry run python manage.py migrate
-  poetry run python manage.py migrate_schemas --executor=multiprocessing
-  poetry run python manage.py install
+#  uv run manage.py migrate
+  uv run manage.py migrate_schemas --executor=multiprocessing
+  uv run manage.py install
 
   # Mode light par défaut (1 tenant, 3 events, 2 adhésions).
   # Ajouter --full pour charger toutes les données de démo (5 tenants, initiatives, fédérations).
-  poetry run python manage.py demo_data_v2
+  uv run manage.py demo_data_v2
 
-  poetry run python manage.py collectstatic --no-input
-#  poetry run python manage.py create_tenant_superuser --noinput --username root --email root@root.root --schema=public
+  uv run manage.py collectstatic --no-input
+#  uv run manage.py create_tenant_superuser --noinput --username root --email root@root.root --schema=public
 
   echo "start dev server : https://"$SUB"."$DOMAIN"/"
-  poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002
+  uv run /DjangoFiles/manage.py runserver 0.0.0.0:8002
 else
   echo "DEBUG environment variable is not set"
 fi

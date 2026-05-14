@@ -32,7 +32,7 @@ Exemple d'utilisation :
 python manage.py launch_payment user@example.com mytenant 1000
 
 Via Docker :
-docker exec lespass_django poetry run python manage.py launch_payment user@example.com mytenant 1000
+docker exec lespass_django uv run manage.py launch_payment user@example.com mytenant 1000
         """
         parser.add_argument('email', type=str, help="L'email de l'utilisateur qui paye")
         parser.add_argument('schema_name', type=str, help="Le schema_name du tenant (lieu de vente)")

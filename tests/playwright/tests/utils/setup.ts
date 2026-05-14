@@ -8,7 +8,7 @@ function runSetupCommand(args: string[]) {
   const command = [
     'docker exec -w /DjangoFiles -e PYTHONPATH=/DjangoFiles',
     'lespass_django',
-    'poetry run python tests/scripts/setup_test_data.py',
+    'uv run tests/scripts/setup_test_data.py',
     ...args,
   ].join(' ');
 

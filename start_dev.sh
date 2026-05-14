@@ -14,4 +14,4 @@ touch /DjangoFiles/logs/Djangologfile
 echo "dev mode : sleep infinity"
 echo "To start the server : rsp"
 sleep infinity
-#poetry run python /DjangoFiles/manage.py runserver 0.0.0.0:8002
+#uv run /DjangoFiles/manage.py runserver 0.0.0.0:8002

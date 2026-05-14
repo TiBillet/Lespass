@@ -11,30 +11,29 @@ if [[ -f VERSION ]]; then
   source VERSION
 fi
 
-#curl -sSL https://install.python-poetry.org | python3
 export PATH="/home/tibillet/.local/bin:$PATH"
-poetry install
-echo "Poetry install ok"
+uv sync
+echo "UV install ok"
 
-poetry run python /DjangoFiles/manage.py collectstatic --no-input
+uv run /DjangoFiles/manage.py collectstatic --no-input
 
 
 # Création des tenant publics et agenda
-# poetry run python /DjangoFiles/manage.py install
+# uv run /DjangoFiles/manage.py install
 
 #if [ "$TEST" = "1" ]; then
-#  poetry run python manage.py demo_data
+#  uv run manage.py demo_data
 #fi
 
 # Migration conditionnelle
 # Peut être qu'on pourra utilise ./manage.py showmigrations | grep '\[ \]' a terme ?
 if [[ "${MIGRATE:-0}" = "1" ]]; then
   echo "Migrate"
-  poetry run python /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing
+  uv run /DjangoFiles/manage.py migrate_schemas --executor=multiprocessing
 else
   echo "Skip migrate (MIGRATE=${MIGRATE:-0})"
 fi
 
 echo "Gunicorn start"
-poetry run gunicorn TiBillet.wsgi --log-level=info --access-logfile /DjangoFiles/logs/gunicorn.logs --log-file /DjangoFiles/logs/gunicorn.logs --error-logfile /DjangoFiles/logs/gunicorn.logs --log-level info --capture-output --reload -w 5 -b 0.0.0.0:8002
+uv run gunicorn TiBillet.wsgi --log-level=info --access-logfile /DjangoFiles/logs/gunicorn.logs --log-file /DjangoFiles/logs/gunicorn.logs --error-logfile /DjangoFiles/logs/gunicorn.logs --log-level info --capture-output --reload -w 5 -b 0.0.0.0:8002
 

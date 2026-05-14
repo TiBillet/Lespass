@@ -10,7 +10,7 @@ Pré-requis:
 - Instance accessible via API_BASE_URL
 
 Lancement:
-    poetry run pytest -q tests/pytest/test_event_retrieve.py
+    uv run pytest -q tests/pytest/test_event_retrieve.py
 """
 import json
 import os

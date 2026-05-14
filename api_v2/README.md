@@ -19,8 +19,8 @@ OpenAPI / Auto‑generated docs (drf-spectacular)
 - Redoc UI: GET `/api/schema/redoc/`
 - Scope: schema generation is limited to `/api/v2/...` endpoints via `SPECTACULAR_SETTINGS['SCHEMA_PATH_PREFIX'] = r'/api/v2'`.
 
-Export the schema file (with Poetry)
-- `poetry run python manage.py spectacular --color --file api_v2/openapi-schema.yaml`
+Export the schema file (with UV)
+- `uv run manage.py spectacular --color --file api_v2/openapi-schema.yaml`
 - Add `--validate` to also validate against the OpenAPI spec
 
 Example response

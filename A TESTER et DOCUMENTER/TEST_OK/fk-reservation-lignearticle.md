@@ -55,7 +55,7 @@ Cette FK est la premiere etape pour decouplage de Stripe :
 1. Admin → Evenements → choisir un evenement
 2. Creer une reservation via l'admin (moyen de paiement : Especes)
 3. Verifier en base :
-   docker exec lespass_django poetry run python manage.py shell -c "
+   docker exec lespass_django uv run manage.py shell -c "
    from BaseBillet.models import LigneArticle
    for l in LigneArticle.objects.filter(sale_origin='AD').order_by('-datetime')[:3]:
        print(l.uuid, l.reservation_id, l.paiement_stripe_id)
@@ -94,7 +94,7 @@ Cette FK est la premiere etape pour decouplage de Stripe :
 
 ```
 Verifier que les lignes existantes ont ete backfillees :
-docker exec lespass_django poetry run python manage.py shell -c "
+docker exec lespass_django uv run manage.py shell -c "
 from BaseBillet.models import LigneArticle
 total = LigneArticle.objects.filter(paiement_stripe__reservation__isnull=False).count()
 filled = LigneArticle.objects.filter(reservation__isnull=False).count()

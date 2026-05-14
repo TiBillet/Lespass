@@ -39,4 +39,4 @@
 2. Aller sur `/event/<slug-freeres>/`
 3. Cliquer sur `[data-testid="booking-easy-reservation"]`
 4. Verifier la reponse (redirection ou message de confirmation)
-5. Verifier en DB : `docker exec lespass_django poetry run python manage.py verify_test_data --type reservation --email <EMAIL>`
+5. Verifier en DB : `docker exec lespass_django uv run manage.py verify_test_data --type reservation --email <EMAIL>`

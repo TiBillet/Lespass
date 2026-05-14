@@ -9,8 +9,8 @@ Prérequis:
 - Clé API (ExternalApiKey) avec droit "event"
 - Service accessible via API_BASE_URL (ex: https://lespass.tibillet.localhost)
 
-Lancez avec Poetry:
-  poetry run pytest -q tests/pytest/test_event_create.py
+Lancez avec UV:
+  uv run pytest -q tests/pytest/test_event_create.py
 """
 import os
 import json

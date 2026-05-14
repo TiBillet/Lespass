@@ -38,11 +38,11 @@ Vous devez être à la racine du projet (là où il y a le fichier `pyproject.to
 ```bash
 # Lancer tous les tests API direct depuis l'hote, pas besoin d'entrer dans le conteneur
 # Run all API tests
-poetry run pytest tests/pytest/
+uv run pytest tests/pytest/
 
 # Lancer uniquement les tests d'integration API v2
 # Run only API v2 integration tests
-poetry run pytest -m integration tests/pytest/
+uv run pytest -m integration tests/pytest/
 ```
 
 ### Ce qu'ils testent / What they check:
@@ -177,7 +177,7 @@ appelée depuis les tests Playwright via Docker :
 *To ensure tests are not just visual "façades", we use a custom Django command called from Playwright tests via Docker:*
 
 ```bash
-docker exec lespass_django poetry run python manage.py verify_test_data --type reservation --email <EMAIL>
+docker exec lespass_django uv run manage.py verify_test_data --type reservation --email <EMAIL>
 ```
 
 Cette commande permet de confirmer que les données (réservations, adhésions, formulaires) sont correctement enregistrées
@@ -190,7 +190,7 @@ Pour préparer des cas specifiques (stock, max par utilisateur, adhesion obligat
 
 ```bash
 docker exec -w /DjangoFiles -e PYTHONPATH=/DjangoFiles lespass_django \
-  poetry run python tests/scripts/setup_test_data.py --action create_ticket \
+  uv run tests/scripts/setup_test_data.py --action create_ticket \
   --event "<EVENT>" --product "<PRODUCT>" --price "<PRICE>" --email "<EMAIL>" --qty 1
 ```
 
@@ -236,7 +236,7 @@ Si vous devez ajouter un test, suivez ces conseils :
    *Use simple words (Easy-to-read format).*
 5. **Script post test** : Si vous avez besoin d'un script python pour vérifier la base de donnée après avoir fait un
    test E2E ou créer un objet au préalable, utilisez le dossier script en nommant verify_<nom du test>.py ou
-   post_<nom du test>.py. Puis, lancez le avec docker exec lespass_django poetry run python manage.py tests/script/<nom du script>.py.
+   post_<nom du test>.py. Puis, lancez le avec docker exec lespass_django uv run manage.py tests/script/<nom du script>.py.
    *If you need a python script to verify the database after a test E2E, use the script folder and name it verify
    _<test name>.py.*
 
