@@ -17,6 +17,7 @@ initiatives. We aggregate only venues + events.
 
 import json
 import logging
+import random
 
 from django.core.paginator import Paginator
 from django.http import HttpResponse
@@ -49,31 +50,56 @@ def landing(request):
     all_lieux = lieux_data.get("lieux", [])
     all_events = events_data.get("events", [])
 
-    # Chiffres cles bruts depuis le cache GLOBAL_COUNTS.
-    # / Raw key figures from the GLOBAL_COUNTS cache.
-    global_counts = get_seo_cache(SEOCache.GLOBAL_COUNTS) or {}
-    lieux_count = global_counts.get("lieux", len(all_lieux))
-    events_count = global_counts.get("events", 0)
-
-    # Lieux tries par activite (nombre d'events) pour le bandeau deferoulant.
-    # event_count est deja dans AGGREGATE_LIEUX (rempli par refresh_seo_cache),
-    # pas besoin de N requetes TENANT_SUMMARY supplementaires.
-    # / Venues sorted by activity (event count) for the scrolling marquee.
-    # event_count is already in AGGREGATE_LIEUX (filled by refresh_seo_cache),
-    # no need for N additional TENANT_SUMMARY queries.
+    # Lieux pour le bandeau deferoulant : ordre aleatoire a chaque chargement.
+    # On limite le nombre affiche pour ne pas alourdir le DOM, et la duree
+    # d'animation est calculee dynamiquement pour garder une vitesse de
+    # defilement constante peu importe le nombre de lieux. Avant ce fix,
+    # avec 375 tenants en prod, le bandeau defilait a 2500 px/sec (illisible)
+    # parce que la duree etait fixee a 30s en CSS.
+    # / Venues for the scrolling marquee: random order on each load.
+    # We limit the number displayed to avoid bloating the DOM, and the
+    # animation duration is computed dynamically to keep scroll speed
+    # constant regardless of how many lieux there are. Before this fix,
+    # with 375 tenants in prod the marquee scrolled at 2500 px/sec
+    # (unreadable) because duration was hardcoded to 30s in CSS.
     lieux_pour_bandeau = []
     for lieu in all_lieux:
         lieu_enrichi = dict(lieu)
-        lieu_enrichi["activite"] = lieu.get("event_count", 0)
         # Initiale pour le fallback quand pas de logo
         # / Initial letter fallback when no logo
         nom = lieu.get("name", "?")
         lieu_enrichi["initiale"] = nom[0].upper() if nom else "?"
         lieux_pour_bandeau.append(lieu_enrichi)
 
-    # Trier par activite decroissante (les plus actifs en premier)
-    # / Sort by descending activity (most active first)
-    lieux_pour_bandeau.sort(key=lambda l: l["activite"], reverse=True)
+    # Melange aleatoire : chaque chargement de la page propose un ordre
+    # different, ce qui valorise tous les lieux du reseau de maniere equitable.
+    # / Random shuffle: each page load shows a different order, giving every
+    # venue equal exposure across the network.
+    random.shuffle(lieux_pour_bandeau)
+
+    # Plafond : on n'affiche jamais plus de 100 lieux dans le bandeau.
+    # Avec le doublage du template (`{% for copy in "ab" %}`), cela fait
+    # 200 elements DOM au pire, ce qui reste leger.
+    # / Cap: never more than 100 lieux in the marquee. With the template
+    # duplication (`{% for copy in "ab" %}`) it's at worst 200 DOM nodes,
+    # still lightweight.
+    LIMITE_BANDEAU_LIEUX = 100
+    if len(lieux_pour_bandeau) > LIMITE_BANDEAU_LIEUX:
+        lieux_pour_bandeau = lieux_pour_bandeau[:LIMITE_BANDEAU_LIEUX]
+
+    # Duree d'animation calculee pour viser une vitesse de defilement
+    # constante (~40 px/sec). On estime la largeur moyenne d'un item a
+    # ~150px (logo 36px + padding + nom). Plancher a 30s pour ne pas
+    # defiler trop vite quand il y a peu de lieux.
+    # / Animation duration sized for constant scroll speed (~40 px/sec).
+    # We estimate the average item width at ~150px (logo 36px + padding +
+    # name). Floor at 30s to avoid scrolling too fast with few venues.
+    LARGEUR_ITEM_PX = 150
+    VITESSE_CIBLE_PX_PAR_SEC = 40
+    marquee_lieux_duration_sec = max(
+        30,
+        int(len(lieux_pour_bandeau) * LARGEUR_ITEM_PX / VITESSE_CIBLE_PX_PAR_SEC),
+    )
 
     # Top 6 evenements / Top 6 events
     top_events = all_events[:6]
@@ -87,9 +113,8 @@ def landing(request):
     )
 
     context = {
-        "lieux_count": lieux_count,
-        "events_count": events_count,
         "lieux_pour_bandeau": lieux_pour_bandeau,
+        "marquee_lieux_duration_sec": marquee_lieux_duration_sec,
         "top_events": top_events,
         "json_ld": json_for_html(json_ld_org),
         "page_title": "TiBillet — Billetterie coopérative et lieux culturels",

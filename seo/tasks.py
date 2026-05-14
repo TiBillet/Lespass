@@ -31,31 +31,38 @@ def refresh_seo_cache():
     Called by Celery Beat every 4 hours.
 
     Pipeline allege (V1) :
-    1. get_active_tenants_with_event_count() — 1 requete SQL UNION ALL
+    1. get_active_tenants_with_counts() — 1 requete SQL UNION ALL
+       (event_count futur publie + product_count BILLET/FREERES/ADHESION)
     2. get_events_for_tenants() — 1 requete SQL UNION ALL
     3. build_tenant_config_data() — N requetes ORM (1 par tenant)
     4. Ecriture SEOCache per-tenant (TENANT_SUMMARY, TENANT_EVENTS)
+       — tous les tenants actifs, sans filtre "lieu vivant"
     5. Ecriture SEOCache global (AGGREGATE_EVENTS, AGGREGATE_LIEUX,
-       GLOBAL_COUNTS, SITEMAP_INDEX)
+       SITEMAP_INDEX) — filtre "lieu vivant" applique : un lieu n'apparait
+       que s'il a au moins 1 event futur publie OU au moins 1 produit
+       (BILLET, FREERES, ADHESION) publie.
     6. Nettoyage des entrees obsoletes (tenants supprimes)
     7. Ecriture Memcached L1 a chaque update
     """
     from seo.services import (
         build_stdimage_variation_url,
         build_tenant_config_data,
-        get_active_tenants_with_event_count,
+        get_active_tenants_with_counts,
         get_events_for_tenants,
-        get_global_event_count,
         set_memcached_l1,
     )
 
     logger.info("Debut refresh_seo_cache / Starting refresh_seo_cache")
 
     # ------------------------------------------------------------------
-    # Etape 1 : Comptes par tenant (1 requete SQL)
-    # / Step 1: Per-tenant counts (1 SQL query)
+    # Etape 1 : Comptes par tenant (1 requete SQL).
+    # On recupere a la fois event_count et product_count par tenant ;
+    # le product_count sert plus loin a filtrer les "lieux vivants".
+    # / Step 1: Per-tenant counts (1 SQL query). We fetch event_count AND
+    # product_count per tenant; product_count is used later to filter
+    # "alive venues".
     # ------------------------------------------------------------------
-    tenant_counts = get_active_tenants_with_event_count()
+    tenant_counts = get_active_tenants_with_counts()
     logger.info(
         "Tenants actifs trouves : %d / Active tenants found: %d",
         len(tenant_counts),
@@ -72,6 +79,7 @@ def refresh_seo_cache():
     for row in tenant_counts:
         counts_by_tenant[row["tenant_id"]] = {
             "event_count": row["event_count"],
+            "product_count": row["product_count"],
         }
 
     # ------------------------------------------------------------------
@@ -113,7 +121,9 @@ def refresh_seo_cache():
     for tenant_id in active_tenant_ids:
         client = clients_by_id[tenant_id]
         config_data = configs_by_tenant.get(tenant_id, {})
-        counts = counts_by_tenant.get(tenant_id, {"event_count": 0})
+        counts = counts_by_tenant.get(
+            tenant_id, {"event_count": 0, "product_count": 0}
+        )
         tenant_events = events_by_tenant.get(tenant_id, [])
 
         # Enrichir chaque event avec image_url et canonical_url.
@@ -183,30 +193,43 @@ def refresh_seo_cache():
     )
     set_memcached_l1(SEOCache.AGGREGATE_EVENTS, None, aggregate_events_data)
 
-    # aggregate_lieux : liste des lieux actifs (tenants avec domaine)
-    # / aggregate_lieux: list of active venues (tenants with domain)
+    # aggregate_lieux : liste des lieux VIVANTS (tenants avec domaine ET
+    # au moins 1 event futur publie OU au moins 1 produit BILLET/FREERES/
+    # ADHESION publie). Un tenant sans contenu visible ne pollue donc plus
+    # le marquee, la page /lieux/ ni la carte explorer.
+    # / aggregate_lieux: list of ALIVE venues (with domain AND at least
+    # one published future event OR one published BILLET/FREERES/ADHESION
+    # product). Empty tenants no longer pollute the marquee, /lieux/ or
+    # the explorer map.
     lieux = []
     for tenant_id in active_tenant_ids:
         config = configs_by_tenant.get(tenant_id, {})
-        if config.get("domain"):
-            lieux.append(
-                {
-                    "tenant_id": tenant_id,
-                    "name": config.get("organisation") or config.get("name", ""),
-                    "domain": config["domain"],
-                    "slug": config.get("slug", ""),
-                    "short_description": config.get("short_description", ""),
-                    "locality": config.get("locality", ""),
-                    "country": config.get("country", ""),
-                    "logo_url": config.get("logo_url"),
-                    "categorie": config.get("categorie", ""),
-                    "latitude": config.get("latitude"),
-                    "longitude": config.get("longitude"),
-                    "event_count": counts_by_tenant.get(tenant_id, {}).get(
-                        "event_count", 0
-                    ),
-                }
-            )
+        counts = counts_by_tenant.get(
+            tenant_id, {"event_count": 0, "product_count": 0}
+        )
+        domaine_du_tenant = config.get("domain")
+        a_des_events = counts.get("event_count", 0) > 0
+        a_des_produits = counts.get("product_count", 0) > 0
+        lieu_est_vivant = bool(domaine_du_tenant) and (a_des_events or a_des_produits)
+        if not lieu_est_vivant:
+            continue
+        lieux.append(
+            {
+                "tenant_id": tenant_id,
+                "name": config.get("organisation") or config.get("name", ""),
+                "domain": domaine_du_tenant,
+                "slug": config.get("slug", ""),
+                "short_description": config.get("short_description", ""),
+                "locality": config.get("locality", ""),
+                "country": config.get("country", ""),
+                "logo_url": config.get("logo_url"),
+                "categorie": config.get("categorie", ""),
+                "latitude": config.get("latitude"),
+                "longitude": config.get("longitude"),
+                "event_count": counts.get("event_count", 0),
+                "product_count": counts.get("product_count", 0),
+            }
+        )
     aggregate_lieux_data = {"lieux": lieux}
     SEOCache.objects.update_or_create(
         cache_type=SEOCache.AGGREGATE_LIEUX,
@@ -215,37 +238,33 @@ def refresh_seo_cache():
     )
     set_memcached_l1(SEOCache.AGGREGATE_LIEUX, None, aggregate_lieux_data)
 
-    # global_counts : comptages bruts (tous events, tous lieux)
-    # Ces comptages ne sont PAS filtres (ni par date, ni par publish).
-    # Utilises pour les "chiffres cles" de la landing page.
-    # / global_counts: raw counts (all events, all lieux)
-    # These counts are NOT filtered (neither by date nor by publish).
-    # Used for the "key figures" on the landing page.
-    global_events = get_global_event_count(tenant_schemas)
-    global_counts = {
-        "events": global_events,
-        "lieux": len(lieux),
-    }
-    SEOCache.objects.update_or_create(
-        cache_type=SEOCache.GLOBAL_COUNTS,
-        tenant=None,
-        defaults={"data": global_counts},
-    )
-    set_memcached_l1(SEOCache.GLOBAL_COUNTS, None, global_counts)
-
-    # sitemap_index : liste des tenants avec domaine pour le sitemap
-    # / sitemap_index: list of tenants with domain for sitemap
+    # sitemap_index : MEME filtre que aggregate_lieux. Inutile de pointer
+    # un crawler Google ou un LLM (GPTBot, ClaudeBot) vers un sitemap
+    # tenant qui ne contient rien d'autre que la page d'accueil — ca
+    # gaspille le crawl budget et dilue le signal qualite du domaine ROOT.
+    # / sitemap_index: SAME filter as aggregate_lieux. No point pointing
+    # Google or LLM crawlers (GPTBot, ClaudeBot) to a tenant sitemap that
+    # holds nothing but the home page — wastes crawl budget and dilutes
+    # the ROOT domain's quality signal.
     sitemap_tenants = []
     for tenant_id in active_tenant_ids:
         config = configs_by_tenant.get(tenant_id, {})
-        if config.get("domain"):
-            sitemap_tenants.append(
-                {
-                    "tenant_id": tenant_id,
-                    "domain": config["domain"],
-                    "name": config.get("organisation") or config.get("name", ""),
-                }
-            )
+        counts = counts_by_tenant.get(
+            tenant_id, {"event_count": 0, "product_count": 0}
+        )
+        domaine_du_tenant = config.get("domain")
+        a_des_events = counts.get("event_count", 0) > 0
+        a_des_produits = counts.get("product_count", 0) > 0
+        lieu_est_vivant = bool(domaine_du_tenant) and (a_des_events or a_des_produits)
+        if not lieu_est_vivant:
+            continue
+        sitemap_tenants.append(
+            {
+                "tenant_id": tenant_id,
+                "domain": domaine_du_tenant,
+                "name": config.get("organisation") or config.get("name", ""),
+            }
+        )
     sitemap_data = {"tenants": sitemap_tenants}
     SEOCache.objects.update_or_create(
         cache_type=SEOCache.SITEMAP_INDEX,
@@ -332,19 +351,28 @@ def refresh_seo_cache():
             stale_count,
         )
 
+    # Comptages remontes apres filtre "lieu vivant" — `lieux` est ce que
+    # le public verra (marquee root, /lieux/, sitemap). `aggregate_events`
+    # est ce qu'on aggrege apres filtre publish + futur sur les events.
+    # / Counts after the "alive venue" filter — `lieux` is what the
+    # public sees (root marquee, /lieux/, sitemap). `aggregate_events`
+    # is what we aggregate after the publish + future event filter.
+    nombre_de_lieux_vivants = len(lieux)
+    nombre_de_events_publies = len(aggregate_events)
     logger.info(
-        "Fin refresh_seo_cache : %d tenants, %d events, %d lieux / "
-        "Done: %d tenants, %d events, %d lieux",
+        "Fin refresh_seo_cache : %d tenants actifs, %d events publies, "
+        "%d lieux vivants / Done: %d active tenants, %d published events, "
+        "%d alive venues",
         len(active_tenant_ids),
-        global_counts["events"],
-        global_counts["lieux"],
+        nombre_de_events_publies,
+        nombre_de_lieux_vivants,
         len(active_tenant_ids),
-        global_counts["events"],
-        global_counts["lieux"],
+        nombre_de_events_publies,
+        nombre_de_lieux_vivants,
     )
 
     return {
         "tenants": len(active_tenant_ids),
-        "events": global_counts["events"],
-        "lieux": global_counts["lieux"],
+        "events": nombre_de_events_publies,
+        "lieux": nombre_de_lieux_vivants,
     }

@@ -97,16 +97,37 @@ def build_stdimage_variation_url(img_path, variation="crop"):
 # controlled by admin, never from user input.
 
 
-def get_active_tenants_with_event_count():
+# Categories de Product qui temoignent qu'un lieu est "vivant" cote SEO :
+# billetterie payante, reservation gratuite, adhesion/abonnement.
+# Si on en trouve au moins 1 publie, le lieu a une raison d'apparaitre
+# dans la landing root, la page /lieux/ et le sitemap.
+# / Product categories that prove a venue is "alive" SEO-wise: paid
+# ticketing, free booking, membership. At least 1 published is enough
+# to justify listing the venue on root landing, /lieux/ and sitemap.
+CATEGORIES_PRODUIT_LIEU_VIVANT = ("B", "F", "A")
+
+
+def get_active_tenants_with_counts():
     """
     Retourne la liste des tenants actifs (hors ROOT et WAITING_CONFIG)
-    avec le nombre d'evenements publies et futurs.
+    avec deux comptages par tenant :
+    - event_count : nombre d'evenements publies et futurs
+    - product_count : nombre de Product publies appartenant aux categories
+      "lieu vivant" (BILLET, FREERES, ADHESION)
     1 seule requete SQL UNION ALL sur tous les schemas tenant.
-    / Returns list of active tenants (excluding ROOT and WAITING_CONFIG)
-    with published future event count.
-    Single SQL query using UNION ALL across all tenant schemas.
+    Chaque sous-requete utilise des sous-selects scalaires pour
+    ramener event_count + product_count sur la meme ligne.
 
-    Retourne / Returns: list[dict] avec cles tenant_id, schema_name, event_count
+    / Returns list of active tenants (excluding ROOT and WAITING_CONFIG)
+    with two per-tenant counts:
+    - event_count: published future event count
+    - product_count: published Product count for "alive venue" categories
+      (BILLET, FREERES, ADHESION)
+    Single SQL query (UNION ALL across all tenant schemas, scalar
+    sub-selects to bring both counts on the same row).
+
+    Retourne / Returns: list[dict] avec cles tenant_id, schema_name,
+    event_count, product_count
     """
     # Recuperer tous les tenants actifs (pas ROOT, pas WAITING_CONFIG)
     # / Get all active tenants (not ROOT, not WAITING_CONFIG)
@@ -116,39 +137,57 @@ def get_active_tenants_with_event_count():
     if not tenants.exists():
         return []
 
-    # Construire les sous-requetes UNION ALL pour le comptage d'evenements
-    # / Build UNION ALL sub-queries for event counting
-    event_parts = []
-    event_params = []
+    # Construire les sous-requetes UNION ALL. Chaque ligne ramene
+    # (tenant_id, schema_name, event_count, product_count) via deux
+    # sous-selects scalaires.
+    # / Build UNION ALL sub-queries. Each row returns
+    # (tenant_id, schema_name, event_count, product_count) via two
+    # scalar sub-selects.
+    parts = []
+    params = []
 
     now = timezone.now()
+    # On prepare une fois la liste des codes categorie pour la clause IN.
+    # / Build the IN clause placeholders for product categories once.
+    placeholders_categories = ", ".join(
+        ["%s"] * len(CATEGORIES_PRODUIT_LIEU_VIVANT)
+    )
+
     for tenant in tenants:
         schema = tenant.schema_name
         tenant_uuid_str = str(tenant.uuid)
 
-        # Comptage des evenements publies et futurs
-        # / Count published and future events
-        event_parts.append(
+        # 1 ligne par tenant avec event_count + product_count.
+        # / One row per tenant with event_count + product_count.
+        parts.append(
             f"SELECT %s AS tenant_id, %s AS schema_name, "
-            f"COUNT(*) AS event_count "
-            f'FROM "{schema}"."BaseBillet_event" '
-            f"WHERE published = true AND datetime >= %s"
+            f"(SELECT COUNT(*) "
+            f' FROM "{schema}"."BaseBillet_event" '
+            f" WHERE published = true AND datetime >= %s"
+            f") AS event_count, "
+            f"(SELECT COUNT(*) "
+            f' FROM "{schema}"."BaseBillet_product" '
+            f" WHERE publish = true "
+            f"   AND categorie_article IN ({placeholders_categories})"
+            f") AS product_count"
         )
-        event_params.extend([tenant_uuid_str, schema, now])
+        params.append(tenant_uuid_str)
+        params.append(schema)
+        params.append(now)
+        params.extend(CATEGORIES_PRODUIT_LIEU_VIVANT)
 
-    # Joindre les sous-requetes avec UNION ALL
-    # / Join sub-queries with UNION ALL
-    sql = " UNION ALL ".join(event_parts)
+    sql = " UNION ALL ".join(parts)
 
     results = []
     with connection.cursor() as cursor:
-        cursor.execute(sql, event_params)
+        cursor.execute(sql, params)
         for row in cursor.fetchall():
             results.append(
                 {
                     "tenant_id": row[0],
                     "schema_name": row[1],
                     "event_count": row[2],
+                    "product_count": row[3],
                 }
             )
 
@@ -205,44 +244,6 @@ def get_events_for_tenants(tenant_schemas):
             )
 
     return results
-
-
-def get_global_event_count(tenant_schemas):
-    """
-    Compte le nombre TOTAL (non filtre) d'events sur tous les schemas tenants.
-    1 seule requete SQL UNION ALL.
-    / Count the TOTAL (unfiltered) number of events across all tenant schemas.
-    Single UNION ALL SQL query.
-
-    Contrairement a get_active_tenants_with_event_count() qui filtre les events
-    publies et futurs, cette fonction compte TOUT : passes, non publies, etc.
-    C'est pour l'affichage "chiffres cles" de la landing page.
-    / Unlike get_active_tenants_with_event_count() which filters published future
-    events, this function counts EVERYTHING: past, unpublished, etc.
-    This is for the "key figures" display on the landing page.
-
-    Parametres / Parameters:
-        tenant_schemas: list[tuple(uuid, schema_name)]
-    Retourne / Returns: int — total events across all tenants
-    """
-    if not tenant_schemas:
-        return 0
-
-    parts = []
-    for _tenant_uuid, schema_name in tenant_schemas:
-        # On compte tous les events sans filtre (passes, futurs, publies, non publies)
-        # / Count all events without filter (past, future, published, unpublished)
-        parts.append(
-            f"SELECT COUNT(*) AS nb "
-            f'FROM "{schema_name}"."BaseBillet_event"'
-        )
-
-    sql = f"SELECT SUM(nb) FROM ({' UNION ALL '.join(parts)}) AS counts"
-
-    with connection.cursor() as cursor:
-        cursor.execute(sql)
-        row = cursor.fetchone()
-        return int(row[0]) if row and row[0] is not None else 0
 
 
 def build_tenant_config_data(client):

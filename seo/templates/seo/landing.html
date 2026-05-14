@@ -17,10 +17,12 @@
     <div class="hero-layout">
         <div class="hero-text">
             <h1 class="hero-title">
-                <span class="hero-kw">{% translate "Lieux culturels" %}</span>,
-                {% translate "billetterie" %}
+                <span class="hero-kw">{% translate "Adhésion" %}</span>,
+                {% translate "billetterie," %}
                 <br>
+                <span class="hero-kw">{% translate "caisse enregistreuse" %}</span>
                 {% translate "et" %}
+                <br>
                 <span class="hero-kw">{% translate "outils" %}</span>
                 {% translate "libres et fédérés." %}
             </h1>
@@ -59,12 +61,12 @@
         <div class="philo-col">
             <p>
                 {% blocktranslate %}
-                TiBillet est né sur le terrain, dans les festivals et les cafés associatifs de La Réunion. Pas dans un bureau d'études, mais dans les besoins concrets des lieux qui accueillent du public : vendre des billets sans frais cachés, gérer les adhésions, et fédérer les agendas entre structures voisines.
+                TiBillet est né sur le terrain, dans les festivals et les cafés associatifs de La Réunion. Pas dans un bureau d'études, mais dans les besoins concrets des lieux qui accueillent du public : vendre des billets sans frais cachés, gérer les adhésions, encaisser au bar, et fédérer les agendas entre structures voisines.
                 {% endblocktranslate %}
             </p>
             <p>
                 {% blocktranslate %}
-                Aujourd'hui, c'est une boîte à outils — billetterie, adhésions, agenda fédéré — conçue pour et par des associations culturelles. Zéro dark pattern, remboursement garanti, open source.
+                Aujourd'hui, c'est une boîte à outils complète — billetterie, cashless, caisse enregistreuse, monnaie locale, budget contributif — conçue pour et par des associations culturelles. Zéro dark pattern, remboursement garanti, open source.
                 {% endblocktranslate %}
             </p>
         </div>
@@ -76,7 +78,7 @@
             </p>
             <p>
                 {% blocktranslate %}
-                Le principe fédératif est simple : chaque lieu garde son autonomie (son agenda, ses adhésions) et choisit avec qui se connecter. Un réseau qui grandit par le bouche-à-oreille, pas par le marketing.
+                Le principe fédératif est simple : chaque lieu garde son autonomie (son agenda, sa caisse, ses adhésions) et choisit avec qui se connecter. Une seule carte pour plusieurs lieux. Un réseau qui grandit par le bouche-à-oreille, pas par le marketing.
                 {% endblocktranslate %}
             </p>
         </div>
@@ -90,7 +92,7 @@
 <section class="features-section" data-testid="features-section">
     <h2 class="features-heading">{% translate "Fonctionnalités" %}</h2>
     <p class="features-subheading text-center">
-        {% translate "Une boîte à outils pour les lieux culturels et associatifs." %}
+        {% translate "Une solution complète pour les lieux culturels et associatifs." %}
     </p>
     <div class="features-grid">
 
@@ -136,7 +138,11 @@
 
         <div class="feature-card" data-testid="feature-cashless">
             <div class="feature-icon">
-                <i class="bi bi-contactless" aria-hidden="true"></i>
+                {# bi-contactless n'existe pas dans Bootstrap Icons 1.11.3.        #}
+                {# On utilise bi-credit-card-2-front (carte bancaire avec puce). #}
+                {# / bi-contactless missing from Bootstrap Icons 1.11.3.            #}
+                {# Using bi-credit-card-2-front instead (credit card with chip).    #}
+                <i class="bi bi-credit-card-2-front" aria-hidden="true"></i>
             </div>
             <h3 class="feature-title">{% translate "Cashless et carte NFC" %}</h3>
             <p class="feature-desc">
@@ -157,38 +163,35 @@
     </div>
 </section>
 
-{# Chiffres cles bruts — utilise des <span> et pas des <h2> car ce sont #}
-{# des valeurs numeriques, pas des titres de section.                   #}
-{# / Raw key figures — uses <span> not <h2> because these are numeric   #}
-{# values, not section headings.                                        #}
-<div class="row mb-5 text-center justify-content-center" data-testid="stats-row">
-    <div class="col-6 col-md-4 mb-3">
-        <div class="card seo-card bg-light">
-            <div class="card-body">
-                <span class="card-title display-6 stat-number d-block">{{ lieux_count }}</span>
-                <p class="card-text text-muted mb-0">{% translate "Lieux" %}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-6 col-md-4 mb-3">
-        <div class="card seo-card bg-light">
-            <div class="card-body">
-                <span class="card-title display-6 stat-number d-block">{{ events_count }}</span>
-                <p class="card-text text-muted mb-0">{% translate "Événements" %}</p>
-            </div>
-        </div>
-    </div>
-</div>
+{# Pas de "chiffres cles" (X lieux, Y events) volontairement : ce sont des  #}
+{# vanity metrics typiques d'une plateforme SaaS, et ca jure avec le ton    #}
+{# coop / commun numerique. Les marquees ci-dessous (lieux vivants +        #}
+{# prochains events) suffisent a montrer que le reseau est actif.           #}
+{# / No "key figures" (X venues, Y events) on purpose: SaaS-style vanity    #}
+{# metrics clash with the cooperative tone. The marquees below (active      #}
+{# venues + upcoming events) already prove the network is alive.            #}
 
-{# Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini #}
-{# / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee #}
+{# Bandeau deferoulant "Nos lieux vivants" — marquee CSS infini.            #}
+{# La duree d'animation est passee via la CSS variable --marquee-duration   #}
+{# pour garder une vitesse de defilement constante quel que soit le nombre  #}
+{# de lieux (calculee dans seo.views.landing).                              #}
+{# / Scrolling marquee "Nos lieux vivants" — infinite CSS marquee.          #}
+{# Animation duration passed via the --marquee-duration CSS variable to     #}
+{# keep scroll speed constant regardless of how many lieux there are.       #}
 {% if lieux_pour_bandeau %}
 <section class="marquee-section mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>{% translate "Nos lieux vivants" %}</h2>
-        <a href="/lieux/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
+        {# "Voir tous" pointe vers /explorer/ (UX) plutot que /lieux/  #}
+        {# (page indexable conservee pour le SEO mais peu interessante #}
+        {# en navigation humaine).                                     #}
+        {# / "See all" points to /explorer/ (UX) instead of /lieux/    #}
+        {# (kept indexable for SEO ranking, not great for humans).     #}
+        <a href="/explorer/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
     </div>
-    <div class="marquee-track" aria-label="{% translate 'Lieux du réseau TiBillet' %}">
+    <div class="marquee-track"
+         style="--marquee-duration: {{ marquee_lieux_duration_sec }}s"
+         aria-label="{% translate 'Lieux du réseau TiBillet' %}">
         {% for copy in "ab" %}
         <div class="marquee-content" aria-hidden="{% if copy == 'b' %}true{% else %}false{% endif %}">
             {% for lieu in lieux_pour_bandeau %}
@@ -220,7 +223,11 @@
 <section class="marquee-section mb-5">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h2>{% translate "Prochains événements" %}</h2>
-        <a href="/evenements/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
+        {# Idem : "Voir tous" envoie sur /explorer/, vue interactive       #}
+        {# avec carte + filtres. /evenements/ reste indexable pour le SEO. #}
+        {# / Same: "See all" goes to /explorer/, interactive map + filters. #}
+        {# /evenements/ stays indexable for SEO ranking.                    #}
+        <a href="/explorer/" class="btn btn-outline-primary btn-sm">{% translate "Voir tous" %}</a>
     </div>
     <div class="marquee-track marquee-track--events" aria-label="{% translate 'Prochains événements du réseau TiBillet' %}">
         {% for copy in "ab" %}

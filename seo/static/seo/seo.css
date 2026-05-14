@@ -313,14 +313,19 @@ body {
     );
 }
 
-/* Bande de contenu : defilement infini, dure 30s, lineaire */
-/* / Content strip: infinite scroll, 30s duration, linear */
+/* Bande de contenu : defilement infini, duree pilotee par CSS variable.    */
+/* La duree est calculee cote serveur (seo/views.py::landing) pour garder   */
+/* une vitesse de defilement constante quel que soit le nombre de lieux.    */
+/* Sans cette variable (autres pages), valeur par defaut a 30s.             */
+/* / Content strip: infinite scroll, duration driven by CSS variable.       */
+/* Computed server-side (seo/views.py::landing) to keep constant scroll     */
+/* speed regardless of how many lieux there are. Falls back to 30s.         */
 .marquee-content {
     display: flex;
     gap: 1rem;
     padding-right: 1rem;
     flex-shrink: 0;
-    animation: marquee-scroll 30s linear infinite;
+    animation: marquee-scroll var(--marquee-duration, 30s) linear infinite;
 }
 
 /* Pause au survol — respect du prefers-reduced-motion */

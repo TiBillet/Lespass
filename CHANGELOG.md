@@ -1,5 +1,119 @@
 # Changelog / Journal des modifications
 
+## Chantier landing #04 — Filtre "lieu vivant" + UX "Voir tous" → explorer
+
+**Date :** 2026-05-14
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**FR :** Le cache SEO listait tous les tenants ayant un domaine, sans
+verifier s'il y avait quelque chose a voir/acheter chez eux. En prod
+avec 375 tenants, le marquee, `/lieux/`, la carte explorer et le
+sitemap pointaient vers des dizaines de pages quasi-vides — bruit UX
+et crawl budget gaspille pour Google + bots LLM.
+
+1. **Filtre "lieu vivant"** sur `AGGREGATE_LIEUX` et `SITEMAP_INDEX` :
+   un tenant n'apparait que s'il a un domaine ET (au moins 1 event
+   futur publie OU au moins 1 produit BILLET/FREERES/ADHESION publie).
+   Implementation : `seo/services.py::get_active_tenants_with_counts()`
+   ramene `event_count` + `product_count` par tenant en 1 seule requete
+   SQL (UNION ALL avec sous-selects scalaires). `seo/tasks.py` applique
+   le filtre `lieu_est_vivant` avant de remplir `lieux` et
+   `sitemap_tenants`. `TENANT_SUMMARY` / `TENANT_EVENTS` (caches
+   per-tenant) restent inchanges.
+2. **Chiffres cles supprimes** : "X lieux", "Y events" sur la landing
+   — vanity metrics SaaS qui jurent avec le ton commun cooperatif. Bloc
+   `stats-row` retire du template. `GLOBAL_COUNTS` n'est plus genere
+   (suppression de `get_global_event_count()` dans `seo/services.py` et
+   du bloc de generation dans `tasks.py`). Constante
+   `SEOCache.GLOBAL_COUNTS` laissee dans `choices` pour eviter une
+   migration de schema sur du code mort.
+3. **UX "Voir tous"** : les 2 boutons sous les marquees pointent
+   maintenant vers `/explorer/` (carte + filtres, vue interactive)
+   plutot que `/lieux/` et `/evenements/`. Ces deux pages restent
+   indexables pour le SEO/ranking mais ne sont plus mises en avant
+   dans la navigation humaine.
+
+**EN :** SEO cache listed every tenant with a domain, no check if there
+was anything to see/buy there. In prod with 375 tenants, the marquee,
+`/lieux/`, the explorer map and the sitemap pointed to dozens of
+near-empty pages — UX noise and wasted crawl budget for Google + LLM
+bots. Added an "alive venue" filter, removed vanity counters on the
+landing, redirected "See all" buttons to `/explorer/` for humans.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/services.py` | `get_active_tenants_with_event_count()` → `get_active_tenants_with_counts()` (+ `product_count`). `get_global_event_count()` supprime. Constante `CATEGORIES_PRODUIT_LIEU_VIVANT = ("B","F","A")`. |
+| `seo/tasks.py` | Filtre `lieu_est_vivant` sur `aggregate_lieux` + `sitemap_tenants`. Suppression du bloc `GLOBAL_COUNTS`. Log final reflete `lieux_vivants` au lieu de `lieux totaux`. |
+| `seo/views.py` | `landing()` : suppression de `lieux_count`, `events_count`, lecture `GLOBAL_COUNTS`. |
+| `seo/templates/seo/landing.html` | Bloc `stats-row` retire. 2 boutons "Voir tous" → `/explorer/`. |
+
+### Migration / Migration
+- **Migration necessaire / Migration required :** Non.
+- Anciennes entrees `SEOCache(cache_type='global_counts')` deviennent du
+  data mort, ignorees a la lecture. Nettoyage automatique au prochain
+  refresh ? Non — la step 6 ne supprime que les entrees rattachees a un
+  tenant disparu, pas les entrees globales obsoletes. Pas grave : 1 ligne.
+
+## Chantier landing #03 — Marquee scalable + textes V2 + icone cashless + flush cache
+
+**Date :** 2026-05-14
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**Quoi / What :** Quatre fixes sur la landing root `/` qui se voyaient
+en prod avec 375 tenants ou apres un `flush`.
+
+1. **Marquee "Nos lieux vivants" scalable** : la duree d'animation etait
+   figee a 30s dans le CSS. Avec 6 lieux, vitesse ~41 px/sec (lisible).
+   Avec 375 lieux, vitesse ~2580 px/sec (illisible, eclair). Fix :
+   - `seo/views.py::landing()` calcule `marquee_lieux_duration_sec` pour
+     viser ~40 px/sec constants.
+   - Liste melangee aleatoirement (`random.shuffle`) a chaque chargement
+     pour valoriser tous les lieux du reseau equitablement.
+   - Plafonnee a 30 lieux pour ne pas alourdir le DOM (doublee par le
+     `{% for copy in "ab" %}`).
+   - `seo/static/seo/seo.css` consomme la duree via la CSS variable
+     `--marquee-duration` (fallback 30s pour les autres pages).
+
+2. **Textes V2 portes sur la landing** : hero title "Adhesion,
+   billetterie, caisse enregistreuse et outils libres et federes"
+   (etait "Lieux culturels, billetterie, outils libres et federes").
+   Philosophie etoffee (encaisser au bar, boite a outils complete avec
+   cashless/caisse/monnaie locale/budget contributif, "une seule carte
+   pour plusieurs lieux"). Subheading features "Une solution complete"
+   (au lieu de "Une boite a outils"). Source : prototype V2
+   `../lespass-main/seo/templates/seo/landing.html`.
+
+3. **Icone cashless invisible** : `bi-contactless` n'existe pas dans
+   Bootstrap Icons 1.11.3. La feature card etait sans icone visible
+   (width 0, `content: none`). Remplace par `bi-credit-card-2-front`
+   (carte bancaire avec puce).
+
+4. **Cache SEO ne se recharge pas apres `flush.sh` / `flush_dev.sh`** :
+   la landing root affichait "0 lieux 0 events" tant que Celery beat
+   n'avait pas tourne (toutes les 4h). Ajout de
+   `python manage.py refresh_seo_cache` en fin de chaque script de flush.
+
+### Fichiers modifies / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `seo/views.py` | `landing()` : `random.shuffle`, cap 30 lieux, calcul `marquee_lieux_duration_sec` |
+| `seo/templates/seo/landing.html` | Hero V2, philosophie V2, subheading V2, `bi-contactless` → `bi-credit-card-2-front`, `style="--marquee-duration: ...s"` sur la track |
+| `seo/static/seo/seo.css` | `.marquee-content` lit `var(--marquee-duration, 30s)` |
+| `flush.sh` | Ajout `manage.py refresh_seo_cache` apres collectstatic |
+| `flush_dev.sh` | Ajout etape 6/6 `manage.py refresh_seo_cache` |
+
+### Migration / Migration
+- **Migration necessaire / Migration required :** Non
+- Pas de nouvelle chaine `_()` ajoutee — les `{% translate %}` du hero
+  V2 ("Adhesion", "billetterie,", "caisse enregistreuse") n'avaient pas
+  d'entree dans les `.po`. **makemessages + compilemessages reportes**
+  (le francais s'affiche correctement comme fallback).
+
 ## Chantier SEO #02 — Review critique + 10 fixes prod / Critical review + 10 prod fixes
 
 **Date :** 2026-05-13
