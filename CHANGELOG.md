@@ -9,22 +9,31 @@
 **Quoi / What:** nouveau widget Django+Leaflet+leaflet-geosearch réutilisable
 pour saisir une adresse (search live, marqueur draggable, géocodage inverse).
 Refonte de la step 03_place du wizard onboard pour l'utiliser.
+**Architecture full client** : recherche live ET reverse geocode appellent
+Nominatim direct depuis le navigateur (pas de proxy serveur).
 
 **Pourquoi / Why:** UX précédente (saisie en 4 champs séparés + géocodage HTMX
 au change) trop friction. Pattern GPS standard (suggestions live + drag) plus
 intuitif et réutilisable dans d'autres formulaires (Event admin, etc.).
+
+**Décision architecturale 2026-05-15** : la spec initiale proposait une approche
+"Hybride" (search client + reverse via endpoint serveur `/widgets/geocode-reverse/`
+avec cache Redis). Bascule en **full client** après découverte d'un problème
+multi-tenant routing : la route `BaseBillet/urls.py` n'est inclus que dans
+`urls_tenants.py`, pas dans `urls_public.py` → 404 sur ROOT (où tourne le
+wizard onboard). Plutôt que dupliquer l'URL dans 2 fichiers, on a supprimé
+l'endpoint serveur et on appelle Nominatim direct (CORS open, déjà fait par
+leaflet-geosearch pour le forward). Trade-off : pas de cache mutualisé, mais
+acceptable pour notre volume.
 
 ### Fichiers modifiés / Modified files
 
 | Fichier / File | Changement / Change |
 |---|---|
 | `templates/widgets/widget_carte_adresse.html` | NOUVEAU — widget réutilisable |
-| `static/widgets/widget_carte_adresse.js` | NOUVEAU — init IIFE multi-widget |
+| `static/widgets/widget_carte_adresse.js` | NOUVEAU — init IIFE multi-widget, fetch Nominatim direct |
 | `static/widgets/widget_carte_adresse.css` | NOUVEAU — surcharges palette TiBillet |
-| `BaseBillet/services_geocode.py` | NOUVEAU — `reverse_geocode()` cache Redis 24h |
-| `BaseBillet/views_widgets.py` | NOUVEAU — `WidgetReverseGeocodeViewSet` |
-| `BaseBillet/form_fields.py` | NOUVEAU — `AdresseGeolocaliseeField` helper |
-| `BaseBillet/urls.py` | route `/widgets/geocode-reverse/` |
+| `BaseBillet/form_fields.py` | NOUVEAU — `AdresseGeolocaliseeField` helper (validation serveur) |
 | `TiBillet/settings.py` | + `BASE_DIR / "templates"` dans TEMPLATES dirs, + `BASE_DIR / "static"` dans STATICFILES_DIRS |
 | `onboard/templates/onboard/steps/03_place.html` | utilise le widget |
 | `onboard/serializers.py` | `OnboardPlaceSerializer` : nouveaux champs `place_*` |
@@ -32,7 +41,7 @@ intuitif et réutilisable dans d'autres formulaires (Event admin, etc.).
 | `onboard/urls.py` | suppression route geocode |
 | `onboard/templates/onboard/partials/map_widget.html` | SUPPRIMÉ |
 | `onboard/templates/onboard/partials/geocode_result.html` | SUPPRIMÉ |
-| `tests/pytest/test_widget_*.py` | NOUVEAUX (3 fichiers, 14 tests) |
+| `tests/pytest/test_widget_form_field_geo.py` | NOUVEAU (6 tests `AdresseGeolocaliseeField`) |
 | `onboard/tests/test_step_place.py` | adapté + suppression test endpoint geocode |
 
 ### Migration

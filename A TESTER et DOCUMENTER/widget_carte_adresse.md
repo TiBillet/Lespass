@@ -42,7 +42,9 @@ docker exec -e API_KEY=dummy lespass_django bash -c "cd /DjangoFiles && poetry r
 1. Sur `/onboard/place/` après Test 1.
 2. Drag du marqueur de ~50 mètres.
 3. **Attendu :** au drop, les 4 champs adresse se mettent à jour (nouveau quartier / nouvelle rue selon Nominatim). Pas de flash visuel sur la carte.
-4. Vérifier dans DevTools Network : POST `/widgets/geocode-reverse/` avec `{lat, lng}`, réponse 200 JSON avec `display_name` + `address`.
+4. Vérifier dans DevTools Network : GET vers `https://nominatim.openstreetmap.org/reverse?lat=...&lon=...&format=json&addressdetails=1&accept-language=fr`, réponse 200 JSON avec `display_name` + `address`.
+
+   **Note architecture (revert 2026-05-15)** : le reverse appelle Nominatim **direct depuis le navigateur** (pas de proxy serveur). Pas de cache mutualisé mais évite le problème multi-tenant routing.
 
 ### Test 3 : Click direct sur carte (sans search)
 1. Sur `/onboard/place/` page fraîche.

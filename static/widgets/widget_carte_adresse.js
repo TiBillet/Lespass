@@ -25,9 +25,20 @@
 (function () {
     "use strict";
 
-    // Configuration : alignée sur le serveur (politique Nominatim, route widget).
-    // / Config: aligned with server-side (Nominatim policy, widget route).
-    const URL_ENDPOINT_REVERSE = "/widgets/geocode-reverse/";
+    // Configuration : Nominatim direct depuis le navigateur. Pas de proxy
+    // serveur — leaflet-geosearch fait deja la search forward direct vers
+    // Nominatim, on garde la meme approche pour le reverse au drag du
+    // marqueur. Avantages : pas de probleme multi-tenant routing, moins
+    // de moving parts. Limites : pas de cache mutualise (chaque user
+    // hit Nominatim individuellement) — acceptable pour notre volume.
+    // Politique Nominatim : 1 req/s/IP. Le drag d'un user reste tres
+    // en-dessous de cette limite (un user ne drag pas 10x/s).
+    // / Config: Nominatim direct from the browser. No server proxy
+    // (leaflet-geosearch already calls Nominatim direct for forward search,
+    // we use the same approach for reverse on marker drag). Pros: no
+    // multi-tenant routing issue, fewer moving parts. Cons: no shared
+    // cache (each user hits Nominatim) — fine for our volume.
+    const URL_NOMINATIM_REVERSE = "https://nominatim.openstreetmap.org/reverse";
     const URL_TUILES_CARTODB = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
     const ATTRIBUTION_TUILES = "&copy; OpenStreetMap &copy; CARTO";
     const CENTRE_FRANCE = [46.6, 2.5];
@@ -167,34 +178,50 @@
         }
 
         /**
-         * Geocodage inverse après drag du marqueur. POST vers
-         * /widgets/geocode-reverse/, met à jour les champs.
-         * / Reverse geocoding after marker drag. POST to
-         * /widgets/geocode-reverse/, update fields.
+         * Geocodage inverse après drag du marqueur. GET direct vers
+         * nominatim.openstreetmap.org/reverse (CORS open) — pas de proxy
+         * serveur, meme approche que leaflet-geosearch pour le forward.
+         * Met à jour les hidden inputs lat/lng/adresse + les 4 champs
+         * adresse séparés.
+         * / Reverse geocoding after marker drag. Direct GET to Nominatim
+         * (CORS open) — no server proxy, same pattern as leaflet-geosearch
+         * uses for forward. Updates hidden inputs + separate address fields.
          */
         async function recuperer_coordonnees_apres_deplacement_du_marqueur(evenement_drag) {
             const nouvelle_position = evenement_drag.target.getLatLng();
             const latitude = nouvelle_position.lat;
             const longitude = nouvelle_position.lng;
 
-            // Mise à jour immédiate des hidden lat/lng (UX réactive).
-            // / Immediate update of hidden lat/lng (responsive UX).
+            // Mise à jour immédiate des hidden lat/lng (UX réactive,
+            // visible meme si le reverse echoue).
+            // / Immediate update of hidden lat/lng (responsive UX,
+            // visible even if reverse fails).
             input_latitude.value = latitude.toFixed(6);
             input_longitude.value = longitude.toFixed(6);
 
+            // Construction de l'URL Nominatim avec params standards.
+            // `addressdetails=1` pour avoir le dict `address` structuré.
+            // `accept-language` selon la locale de la page.
+            // / Build Nominatim URL with standard params. addressdetails=1
+            // to get structured `address` dict. accept-language from page.
+            const params = new URLSearchParams({
+                lat: latitude.toFixed(6),
+                lon: longitude.toFixed(6),
+                format: "json",
+                addressdetails: "1",
+                "accept-language": langue_html,
+            });
+            const url = URL_NOMINATIM_REVERSE + "?" + params.toString();
+
             try {
-                const reponse = await fetch(URL_ENDPOINT_REVERSE, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": _lire_token_csrf(),
-                    },
-                    body: JSON.stringify({ lat: latitude, lng: longitude }),
+                const reponse = await fetch(url, {
+                    method: "GET",
+                    headers: { "Accept": "application/json" },
                 });
 
                 if (!reponse.ok) {
                     console.warn(
-                        "widget_carte_adresse: reverse endpoint status",
+                        "widget_carte_adresse: Nominatim reverse status",
                         reponse.status,
                     );
                     return;
@@ -208,26 +235,13 @@
                     donnees.address || {},
                 );
             } catch (erreur) {
-                // Réseau coupé ou erreur fetch : on garde le marqueur placé,
-                // les hidden lat/lng à jour, on log un warn discret.
-                // / Network error: keep marker placed, hidden updated, warn.
+                // Réseau coupé, CORS, ou erreur fetch : on garde le marqueur
+                // placé, les hidden lat/lng à jour, log discret. L'utilisateur
+                // peut completer les champs adresse a la main.
+                // / Network/CORS/fetch error: keep marker placed, hidden
+                // updated, discreet warn. User can fill address fields manually.
                 console.warn("widget_carte_adresse: reverse fetch error", erreur);
             }
-        }
-
-        /**
-         * Lit le token CSRF depuis le cookie Django (nom standard `csrftoken`).
-         * / Read CSRF token from Django's standard `csrftoken` cookie.
-         */
-        function _lire_token_csrf() {
-            const cookies = document.cookie.split(";");
-            for (let i = 0; i < cookies.length; i++) {
-                const paire = cookies[i].trim().split("=");
-                if (paire[0] === "csrftoken") {
-                    return decodeURIComponent(paire[1]);
-                }
-            }
-            return "";
         }
 
         // Event leaflet-geosearch : l'utilisateur a cliqué sur une suggestion.

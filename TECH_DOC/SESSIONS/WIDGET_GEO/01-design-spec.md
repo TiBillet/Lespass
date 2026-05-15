@@ -2,7 +2,9 @@
 
 **Date** : 2026-05-15
 **Auteur** : conception JonasFW13 + Claude (brainstorming via skill superpowers:brainstorming)
-**Statut** : approuvée pour implémentation
+**Statut** : implémentée — **architecture revue 2026-05-15 : full client (cf. note ci-dessous)**
+
+> **Revert architecture 2026-05-15** : la spec validait l'approche Hybride (search client + reverse via endpoint serveur). Bascule en full client après découverte d'un problème multi-tenant routing (la route serveur n'était pas accessible sur ROOT où tourne le wizard onboard). Décision : supprimer l'endpoint serveur et appeler Nominatim direct depuis le browser pour le reverse aussi. Trade-off accepté : pas de cache mutualisé serveur (volume faible). Les sections 3.5 (service serveur) et 3.6 (endpoint) sont **obsolètes** — ne pas implémenter. Le helper `AdresseGeolocaliseeField` (3.4) reste valide et utile pour la validation serveur.
 **Topic** : nouveau widget réutilisable Django + Leaflet + leaflet-geosearch
 **Premier consommateur** : refonte step 03_place du wizard onboard
 **Future** : Event admin, formulaire "ajouter un event" frontend, tout autre formulaire qui a besoin d'une adresse géolocalisée

@@ -7,7 +7,6 @@ from BaseBillet.views_robots import robots_txt
 from BaseBillet.views_humans import humans_txt
 from BaseBillet.test_error_views import test_404, test_500
 import BaseBillet.views_scan as views_scan
-from BaseBillet.views_widgets import WidgetReverseGeocodeViewSet
 
 router = routers.DefaultRouter()
 router.register(r'memberships', base_view.MembershipMVT, basename='membership_mvt')
@@ -92,15 +91,3 @@ urlpatterns = [
 ]
 
 urlpatterns += router.urls
-
-# Widget carte adresse — endpoint géocodage inverse (proxy Nominatim).
-# ViewSet explicite sans router : l'@action est câblé directement via path().
-# / Address map widget — reverse geocode endpoint (Nominatim proxy).
-# Explicit ViewSet without router: @action wired directly via path().
-urlpatterns += [
-    path(
-        "widgets/geocode-reverse/",
-        WidgetReverseGeocodeViewSet.as_view({"post": "geocode_reverse"}),
-        name="widget-geocode-reverse",
-    ),
-]
