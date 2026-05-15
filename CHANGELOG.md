@@ -1,5 +1,47 @@
 # Changelog / Journal des modifications
 
+## Widget de saisie d'adresse géolocalisée / Geolocated address input widget
+
+**Date :** 2026-05-15
+**Migration :** Non
+**Contributeurs / Contributors :** JonasFW13 (Jonas)
+
+**Quoi / What:** nouveau widget Django+Leaflet+leaflet-geosearch réutilisable
+pour saisir une adresse (search live, marqueur draggable, géocodage inverse).
+Refonte de la step 03_place du wizard onboard pour l'utiliser.
+
+**Pourquoi / Why:** UX précédente (saisie en 4 champs séparés + géocodage HTMX
+au change) trop friction. Pattern GPS standard (suggestions live + drag) plus
+intuitif et réutilisable dans d'autres formulaires (Event admin, etc.).
+
+### Fichiers modifiés / Modified files
+
+| Fichier / File | Changement / Change |
+|---|---|
+| `templates/widgets/widget_carte_adresse.html` | NOUVEAU — widget réutilisable |
+| `static/widgets/widget_carte_adresse.js` | NOUVEAU — init IIFE multi-widget |
+| `static/widgets/widget_carte_adresse.css` | NOUVEAU — surcharges palette TiBillet |
+| `BaseBillet/services_geocode.py` | NOUVEAU — `reverse_geocode()` cache Redis 24h |
+| `BaseBillet/views_widgets.py` | NOUVEAU — `WidgetReverseGeocodeViewSet` |
+| `BaseBillet/form_fields.py` | NOUVEAU — `AdresseGeolocaliseeField` helper |
+| `BaseBillet/urls.py` | route `/widgets/geocode-reverse/` |
+| `TiBillet/settings.py` | + `BASE_DIR / "templates"` dans TEMPLATES dirs, + `BASE_DIR / "static"` dans STATICFILES_DIRS |
+| `onboard/templates/onboard/steps/03_place.html` | utilise le widget |
+| `onboard/serializers.py` | `OnboardPlaceSerializer` : nouveaux champs `place_*` |
+| `onboard/views.py` | mapping persistance + suppression action `geocode` |
+| `onboard/urls.py` | suppression route geocode |
+| `onboard/templates/onboard/partials/map_widget.html` | SUPPRIMÉ |
+| `onboard/templates/onboard/partials/geocode_result.html` | SUPPRIMÉ |
+| `tests/pytest/test_widget_*.py` | NOUVEAUX (3 fichiers, 14 tests) |
+| `onboard/tests/test_step_place.py` | adapté + suppression test endpoint geocode |
+
+### Migration
+- **Migration nécessaire / Migration required:** Non
+- Pas de modification de schéma DB.
+
+### Breaking changes
+- Endpoint `POST /onboard/geocode/` supprimé. Aucun consommateur externe (uniquement utilisé en interne par l'ex-step 03_place).
+
 ## Chantier landing #04 — Filtre "lieu vivant" + UX "Voir tous" → explorer
 
 **Date :** 2026-05-14

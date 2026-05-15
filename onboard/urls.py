@@ -20,7 +20,6 @@ Routes :
   - `/onboard/verify/`       -> step 2 verification OTP (Task 11)
   - `/onboard/resend-otp/`   -> renvoi OTP (Task 11)
   - `/onboard/place/`        -> step 3 lieu + GPS (Task 12)
-  - `/onboard/geocode/`      -> proxy Nominatim (Task 12, rate-limit 1/s)
   - `/onboard/descriptions/` -> step 4 descriptions + logo (Task 13)
   - `/onboard/events/`       -> step 5 brouillons d'events (Task 14, finalize)
   - `/onboard/events/add/`   -> ajoute un event draft (Task 14, HTMX)
@@ -33,7 +32,6 @@ Routes :
   - `/onboard/verify/`       -> step 2 OTP verify (Task 11)
   - `/onboard/resend-otp/`   -> OTP resend (Task 11)
   - `/onboard/place/`        -> step 3 place + GPS (Task 12)
-  - `/onboard/geocode/`      -> Nominatim proxy (Task 12, rate-limit 1/s)
   - `/onboard/descriptions/` -> step 4 descriptions + logo (Task 13)
   - `/onboard/events/`       -> step 5 event drafts (Task 14, finalize)
   - `/onboard/events/add/`   -> add an event draft (Task 14, HTMX)
@@ -66,11 +64,6 @@ onboard_resend_otp = OnboardViewSet.as_view({
 })
 onboard_place = OnboardViewSet.as_view({
     "get": "place", "post": "place",
-})
-# Endpoint geocode du wizard (Task 12) — POST only, partial HTMX.
-# / Wizard geocode endpoint (Task 12) — POST only, HTMX partial.
-onboard_geocode = OnboardViewSet.as_view({
-    "post": "geocode_endpoint",
 })
 onboard_descriptions = OnboardViewSet.as_view({
     "get": "descriptions", "post": "descriptions",
@@ -119,9 +112,6 @@ urlpatterns = [
     # (not under /verify/) per plan spec + ViewSet binding.
     path("onboard/resend-otp/", onboard_resend_otp, name="onboard-resend-otp"),
     path("onboard/place/", onboard_place, name="onboard-place"),
-    # Proxy Nominatim, rate-limite 1 req/s/IP (cf. GeocodeRateThrottle).
-    # / Nominatim proxy, rate-limited 1 req/s/IP (cf. GeocodeRateThrottle).
-    path("onboard/geocode/", onboard_geocode, name="onboard-geocode"),
     path("onboard/descriptions/", onboard_descriptions, name="onboard-descriptions"),
     path("onboard/events/", onboard_events, name="onboard-events"),
     # Sous-routes HTMX de la step 5 (Task 14). Ajouter + supprimer un

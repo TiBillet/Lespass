@@ -105,30 +105,42 @@ class OnboardVerifySerializer(serializers.Serializer):
 
 class OnboardPlaceSerializer(serializers.Serializer):
     """
-    Step 3 — Lieu : adresse postale + coordonnees GPS.
+    Step 3 — Adresse + coordonnées GPS via le widget carte adresse.
+    / Step 3 — Address + GPS coords via the address map widget.
 
-    NOTE : `short_description` a ete deplace vers `OnboardDescriptionsSerializer`
-    (feedback mainteneur 2026-05-14) pour regrouper toutes les descriptions
-    + le logo sur une seule page "Presentation".
-
-    / Step 3 — Place: postal address + GPS coordinates.
-
-    NOTE: `short_description` was moved to `OnboardDescriptionsSerializer`
-    (maintainer feedback 2026-05-14) so that all descriptions + the logo
-    sit on a single "Presentation" page.
+    Les champs `place_*` viennent du widget réutilisable
+    `templates/widgets/widget_carte_adresse.html` (préfixe
+    `identifiant_widget="place"`). Les 4 champs adresse séparés
+    (street_address, postal_code, address_locality, address_country)
+    gardent leurs noms historiques pour rester compatibles avec le
+    modèle `WaitingConfiguration`.
     """
 
-    street_address = serializers.CharField(max_length=255, required=True)
-    postal_code = serializers.CharField(max_length=20, required=True)
-    address_locality = serializers.CharField(max_length=120, required=True)
-    address_country = serializers.CharField(max_length=80, required=True)
-    latitude = serializers.DecimalField(
-        max_digits=9, decimal_places=6, required=True,
-        min_value=-90, max_value=90,
+    # Champs adresse historiques (auto-remplis par le widget).
+    # / Historical address fields (auto-filled by the widget).
+    street_address = serializers.CharField(
+        max_length=255, required=True, allow_blank=False,
     )
-    longitude = serializers.DecimalField(
-        max_digits=9, decimal_places=6, required=True,
-        min_value=-180, max_value=180,
+    postal_code = serializers.CharField(
+        max_length=20, required=True, allow_blank=False,
+    )
+    address_locality = serializers.CharField(
+        max_length=120, required=True, allow_blank=False,
+    )
+    address_country = serializers.CharField(
+        max_length=80, required=True, allow_blank=False,
+    )
+
+    # Coordonnées GPS du widget (préfixe identifiant_widget="place").
+    # / GPS coords from widget (identifiant_widget="place").
+    place_latitude = serializers.FloatField(
+        min_value=-90, max_value=90, required=True,
+    )
+    place_longitude = serializers.FloatField(
+        min_value=-180, max_value=180, required=True,
+    )
+    place_adresse = serializers.CharField(
+        required=False, allow_blank=True, max_length=500,
     )
 
 

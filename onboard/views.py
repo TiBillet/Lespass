@@ -34,32 +34,9 @@ from django.utils.translation import gettext_lazy as _
 from django_tenants.utils import schema_context
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
-from rest_framework.throttling import AnonRateThrottle
-
 from MetaBillet.models import WaitingConfiguration
-# Import module-level pour permettre aux tests de patcher
-# `onboard.views.geocode` (cf. Task 12 plan).
-# / Module-level import so tests can patch `onboard.views.geocode`
-# (cf. Task 12 plan).
-from onboard.services import geocode  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-
-# Throttle dedie au proxy Nominatim : on respecte la politique d'usage
-# d'OpenStreetMap (1 requete/seconde par IP). On declare `rate` directement
-# sur la classe car le projet n'a pas active `DEFAULT_THROTTLE_RATES` dans
-# REST_FRAMEWORK ; `SimpleRateThrottle.__init__` lit `self.rate` en priorite,
-# evitant ainsi `get_rate()` qui exigerait un `scope` declare en settings.
-# / Dedicated throttle for the Nominatim proxy: respect OpenStreetMap's
-# usage policy (1 req/s per IP). We set `rate` directly on the class because
-# the project hasn't enabled `DEFAULT_THROTTLE_RATES`; `SimpleRateThrottle.__init__`
-# reads `self.rate` first, bypassing `get_rate()` which would otherwise
-# require a `scope` declared in settings.
-class GeocodeRateThrottle(AnonRateThrottle):
-    """1 req/s/IP — respecte la politique d'usage Nominatim/OpenStreetMap."""
-
-    rate = "1/second"
 
 
 # Clef de session unique pour le wizard : on stocke l'UUID du brouillon
@@ -809,7 +786,7 @@ class OnboardViewSet(viewsets.ViewSet):
             for key in (
                 "street_address", "postal_code", "address_locality",
                 "address_country",
-                "latitude", "longitude",
+                "place_latitude", "place_longitude", "place_adresse",
             )
         }
         if not serializer.is_valid():
@@ -830,46 +807,11 @@ class OnboardViewSet(viewsets.ViewSet):
                 postal_code=data["postal_code"],
                 address_locality=data["address_locality"],
                 address_country=data["address_country"],
-                latitude=data["latitude"],
-                longitude=data["longitude"],
+                latitude=data["place_latitude"],   # nouveau nom prefixe widget
+                longitude=data["place_longitude"], # idem
                 current_step=WaitingConfiguration.STEP_DESCRIPTIONS,
             )
         return redirect("onboard-descriptions")
-
-    # ------------------------------------------------------------------
-    # Step 3bis — Endpoint geocode Nominatim (Task 12).
-    # ------------------------------------------------------------------
-
-    @action(
-        detail=False, methods=["POST"], url_path="geocode",
-        throttle_classes=[GeocodeRateThrottle],
-    )
-    def geocode_endpoint(self, request):
-        """
-        POST `/onboard/geocode/` -> proxy server-side vers Nominatim.
-
-        Renvoie un partial HTML (`onboard/partials/geocode_result.html`)
-        contenant les coords resolues ou un message "adresse introuvable".
-        L'endpoint est rate-limite a 1 req/s/IP (cf. `GeocodeRateThrottle`)
-        pour respecter la politique d'usage d'OpenStreetMap.
-
-        / POST `/onboard/geocode/` -> server-side proxy to Nominatim.
-
-        Returns an HTML partial (`onboard/partials/geocode_result.html`)
-        with the resolved coordinates or an "address not found" message.
-        Rate-limited to 1 req/s/IP (cf. `GeocodeRateThrottle`) to comply
-        with the OpenStreetMap usage policy.
-        """
-        # On lit la fonction depuis le module courant pour que les tests
-        # qui patchent `onboard.views.geocode` soient respectes.
-        # / Resolve from the current module so tests patching
-        # `onboard.views.geocode` are honored.
-        from onboard import views as current_module
-        query = request.data.get("query", "")
-        result = current_module.geocode(query)
-        return render(request, "onboard/partials/geocode_result.html", {
-            "result": result, "query": query,
-        })
 
     # ------------------------------------------------------------------
     # Step 4 — Descriptions + logo (Task 13).

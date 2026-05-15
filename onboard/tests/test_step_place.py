@@ -1,6 +1,6 @@
 """
-Tests de la step 3 — Place + endpoint geocode (Task 12).
-/ Tests for wizard step 3 — Place + geocode endpoint (Task 12).
+Tests de la step 3 — Place (Task 12).
+/ Tests for wizard step 3 — Place (Task 12).
 
 LOCALISATION: onboard/tests/test_step_place.py
 
@@ -10,10 +10,7 @@ On verifie :
        - street_address / postal_code / address_locality / address_country
        - latitude / longitude
        - current_step="descriptions".
-  2. POST `/onboard/geocode/` (sans appel reseau reel) -> 200 + partial HTML
-     contenant la latitude resolvee. La fonction `geocode` est patchee
-     pour ne pas frapper Nominatim depuis les tests.
-  3. POST `/onboard/place/` avec donnees invalides (lat hors range) -> 422
+  2. POST `/onboard/place/` avec donnees invalides (lat hors range) -> 422
      + le HTML contient un message d'erreur.
 
 NOTE : `short_description` n'est plus dans le payload de cette step
@@ -25,9 +22,7 @@ champs non declares), mais on la retire pour rester explicite.
   1. POST `/onboard/place/` with valid data -> 302/303 to
      `/onboard/descriptions/`, draft updated (address fields + GPS +
      current_step).
-  2. POST `/onboard/geocode/` (no real network call) -> 200 + partial HTML
-     with the resolved latitude. `geocode` is patched.
-  3. POST `/onboard/place/` with invalid data (lat out of range) -> 422.
+  2. POST `/onboard/place/` with invalid data (lat out of range) -> 422.
 
 NOTE: `short_description` is no longer part of this step's payload
 (moved to the "Presentation" step).
@@ -36,18 +31,9 @@ PIEGE : `WaitingConfiguration` vit dans le schema `meta` (cf. tests des
 steps precedentes). On force `schema_context("meta")` avant chaque acces
 ORM. / PITFALL: `WaitingConfiguration` lives in the `meta` schema. Force
 `schema_context("meta")` before any ORM access.
-
-PIEGE : `onboard.views.geocode` est importe au top du module pour que
-le patch fonctionne. On patche bien `onboard.views.geocode` (et non
-`onboard.services.geocode`) car la vue resout le nom depuis son propre
-module. / PITFALL: `onboard.views.geocode` is imported at module-top so
-the patch works. We patch `onboard.views.geocode` (not
-`onboard.services.geocode`) because the view resolves the name from its
-own module.
 """
 
 import time
-from unittest.mock import patch
 
 import pytest
 from django.test import Client
@@ -144,8 +130,9 @@ def test_place_post_saves_address_and_advances_to_descriptions(cleanup_waiting_c
         "postal_code": "97400",
         "address_locality": "St Denis",
         "address_country": "Réunion",
-        "latitude": "-20.88",
-        "longitude": "55.45",
+        "place_latitude": "-20.88",
+        "place_longitude": "55.45",
+        "place_adresse": "1 rue Test, 97400 St Denis, Réunion",
     })
 
     assert response.status_code in (302, 303), (
@@ -171,34 +158,6 @@ def test_place_post_saves_address_and_advances_to_descriptions(cleanup_waiting_c
     assert float(wc.longitude) == pytest.approx(55.45, rel=1e-3)
 
 
-def test_geocode_endpoint_returns_partial_with_coords(cleanup_waiting_configs):
-    """
-    POST `/onboard/geocode/` avec une query, en patchant `geocode` pour
-    eviter tout appel reseau reel. La reponse doit etre 200 + un partial
-    HTML contenant la latitude resolue.
-
-    On a besoin d'un brouillon en session car l'endpoint est sous la
-    meme ViewSet — meme si la vue elle-meme ne lit pas wc, on aligne
-    le contexte sur celui d'un user au step 3.
-
-    / POST `/onboard/geocode/` with a query, patching `geocode` to avoid
-    real network calls. Response should be 200 + HTML partial with the
-    resolved latitude.
-    """
-    client = Client(HTTP_HOST=DEV_HOST)
-    _create_wc_at_place(client, cleanup=cleanup_waiting_configs)
-
-    fake_result = {"latitude": 48.85, "longitude": 2.35, "display_name": "Paris"}
-    with patch("onboard.views.geocode", return_value=fake_result):
-        response = client.post("/onboard/geocode/", data={"query": "Paris"})
-
-    assert response.status_code == 200, (
-        f"Expected 200, got {response.status_code}. "
-        f"Body excerpt: {response.content[:300]!r}"
-    )
-    assert b"48.85" in response.content
-
-
 def test_place_post_invalid_data_returns_422(cleanup_waiting_configs):
     """
     POST `/onboard/place/` avec une latitude hors plage (-200) -> 422.
@@ -215,8 +174,8 @@ def test_place_post_invalid_data_returns_422(cleanup_waiting_configs):
         "postal_code": "97400",
         "address_locality": "St Denis",
         "address_country": "Réunion",
-        "latitude": "-200",  # hors plage [-90, 90] / out of range
-        "longitude": "55.45",
+        "place_latitude": "-200",  # hors plage [-90, 90] / out of range
+        "place_longitude": "55.45",
     })
 
     assert response.status_code == 422, (

@@ -241,7 +241,10 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         # 'DIRS': [],
-        'DIRS': [BASE_DIR / "Administration/templates"],  # Pour le dashboard d'admin unfold
+        'DIRS': [
+            BASE_DIR / "Administration/templates",  # Pour le dashboard d'admin unfold
+            BASE_DIR / "templates",  # Templates réutilisables projet (widgets, etc.)
+        ],
         'APP_DIRS': True,
 
         'OPTIONS': {
@@ -369,8 +372,12 @@ LOCALE_PATHS = (
 STATIC_ROOT = os.path.join(BASE_DIR, "www", "static")
 STATIC_URL = '/static/'
 
-STATICFILES_DIRS = ['BaseBillet/static', 'MetaBillet/static', 'QrcodeCashless/static', ]
-# STATICFILES_DIRS = [BASE_DIR / "static"]
+STATICFILES_DIRS = [
+    'BaseBillet/static',
+    'MetaBillet/static',
+    'QrcodeCashless/static',
+    BASE_DIR / "static",  # Fichiers statiques projet (widgets, etc.)
+]
 
 MEDIA_ROOT = os.path.join(BASE_DIR, "www", "media")
 MEDIA_URL = '/media/'

@@ -1,320 +1,66 @@
 {% extends "onboard/base_wizard.html" %}
-{% load i18n static %}
+{% load i18n %}
 
 {% comment %}
-  LOCALISATION: onboard/templates/onboard/steps/03_place.html
+LOCALISATION: onboard/templates/onboard/steps/03_place.html
 
-  Step 3 du wizard d'onboarding : adresse + carte Leaflet draggable.
-  Permet a l'utilisateur de :
-    - saisir une adresse postale (rue, code postal, ville, pays),
-    - declencher un geocodage Nominatim via HTMX (delay:1s apres change),
-    - voir le resultat sur une carte Leaflet,
-    - ajuster manuellement la position par drag du marker ou click sur la carte.
+Step 3 du wizard onboarding : adresse + carte. Refondue 2026-05-15
+pour utiliser le widget réutilisable `templates/widgets/widget_carte_adresse.html`
+(pattern GPS avec leaflet-geosearch).
 
-  NOTE : la description courte (short_description) a ete deplacee vers la
-  step "Presentation" (template 04_descriptions.html) — feedback mainteneur
-  2026-05-14 pour regrouper toutes les descriptions sur une meme page.
+Soumet à `onboard-place` (POST). En cas d'erreur (422), la vue re-rend
+ce template avec `errors` et `initial` (qui re-pré-remplit le widget
+via `latitude_initiale` / `longitude_initiale` / `adresse_initiale`).
 
-  Soumet a `onboard-place` (POST). En cas d'erreur (422), la vue re-rend ce
-  meme template avec `errors` et `initial`.
-
-  / Step 3 of the onboarding wizard: address + draggable Leaflet map.
-  Lets the user type an address, trigger HTMX geocoding (Nominatim), see the
-  result on a Leaflet map, and fine-tune the position by dragging the marker
-  or clicking on the map.
-
-  NOTE: the short description was moved to the "Presentation" step
-  (04_descriptions.html) so all descriptions live on the same page.
-
-  Submits to `onboard-place` (POST). On 422, the view re-renders with
-  `errors` and `initial`.
+/ Step 3 of the onboarding wizard: address + map. Refactored 2026-05-15
+to use the reusable widget (GPS pattern with leaflet-geosearch).
 {% endcomment %}
 
 {% block page_title %}{% translate "Créer votre espace TiBillet — Lieu" %}{% endblock %}
 
-{% block extra_head %}
-{{ block.super }}
-{# Leaflet CSS vendore. Doit etre charge AVANT le JS Leaflet pour le rendu. #}
-{# / Vendored Leaflet CSS. Must be loaded BEFORE Leaflet JS for proper rendering. #}
-<link rel="stylesheet" href="{% static 'seo/vendor/leaflet/leaflet.css' %}">
-{% endblock %}
-
 {% block step_content %}
 <header class="mb-4">
     <p class="onboard-step-counter mb-1">{% translate "Étape 3 / 6" %}</p>
-    <h1 class="onboard-h1 mb-2">{% translate "Votre lieu" %}</h1>
-    <p class="text-muted">
-        {% translate "Nous allons localiser votre lieu sur la carte du réseau. Saisissez votre adresse, la carte apparaît sous les champs. Vous pouvez ensuite déplacer le marqueur pour ajuster." %}
+    <p class="text-muted mb-0">
+        {% translate "Cherchez votre adresse dans la barre de recherche, ou cliquez directement sur la carte. Le marqueur peut être déplacé pour ajuster la position." %}
     </p>
 </header>
 
 {% if errors %}
-    {# Recapitulatif global d'erreurs. / Global error recap. #}
-    <div class="alert alert-danger"
-         role="alert"
-         data-testid="onboard-place-errors">
-        <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
-        <ul class="mb-0 mt-1">
-            {% for field, msgs in errors.items %}
-                <li>
-                    <strong>{{ field }}</strong> :
-                    {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
-                </li>
-            {% endfor %}
-        </ul>
-    </div>
+<div class="alert alert-danger" role="alert" data-testid="onboard-place-errors">
+    <strong>{% translate "Merci de corriger les erreurs ci-dessous." %}</strong>
+    <ul class="mb-0 mt-1">
+        {% for field, msgs in errors.items %}
+        <li>
+            <strong>{{ field }}</strong> :
+            {% for msg in msgs %}{{ msg }}{% if not forloop.last %} / {% endif %}{% endfor %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
 {% endif %}
 
-<form method="post"
-      action="{% url 'onboard-place' %}"
-      novalidate
-      data-testid="onboard-place-form"
-      class="vstack gap-3">
+<form method="post" action="{% url 'onboard-place' %}" novalidate
+      data-testid="onboard-place-form" class="vstack gap-3">
     {% csrf_token %}
 
-    {# Rue et numero. Declenche un geocodage HTMX 1s apres modification. #}
-    {# Le partial geocode_result.html remplace #map-widget, qui inclut #}
-    {# de nouveau le bloc carte + des inputs hidden #geocode-lat/lng lus #}
-    {# par le JS pour repositionner le marker. #}
-    {# / Street address. Triggers HTMX geocoding 1s after change. The #}
-    {# geocode_result partial replaces #map-widget, which re-includes the #}
-    {# map block + hidden #geocode-lat/lng inputs read by JS to reposition. #}
-    <div>
-        <label for="onboard-place-street" class="form-label">
-            {% translate "Rue et numéro" %} *
-        </label>
-        <input id="onboard-place-street"
-               type="text"
-               name="street_address"
-               required
-               maxlength="255"
-               class="form-control{% if errors.street_address %} is-invalid{% endif %}"
-               value="{{ initial.street_address|default:wc.street_address|default:'' }}"
-               hx-post="{% url 'onboard-geocode' %}"
-               hx-trigger="change delay:1s"
-               hx-target="#map-widget"
-               hx-include="closest form"
-               hx-vals='js:{"query": (document.getElementById("onboard-place-street").value + " " + document.getElementById("onboard-place-postal").value + " " + document.getElementById("onboard-place-locality").value + " " + document.getElementById("onboard-place-country").value).trim()}'
-               data-testid="onboard-place-street-address">
-        {% if errors.street_address %}
-            <div class="invalid-feedback">
-                {% for msg in errors.street_address %}{{ msg }}{% endfor %}
-            </div>
-        {% endif %}
-    </div>
-
-    <div class="row g-3">
-        <div class="col-md-4">
-            <label for="onboard-place-postal" class="form-label">
-                {% translate "Code postal" %}
-            </label>
-            <input id="onboard-place-postal"
-                   type="text"
-                   name="postal_code"
-                   required
-                   maxlength="20"
-                   class="form-control{% if errors.postal_code %} is-invalid{% endif %}"
-                   value="{{ initial.postal_code|default:wc.postal_code|default:'' }}"
-                   data-testid="onboard-place-postal-code">
-            {% if errors.postal_code %}
-                <div class="invalid-feedback">
-                    {% for msg in errors.postal_code %}{{ msg }}{% endfor %}
-                </div>
-            {% endif %}
-        </div>
-        <div class="col-md-8">
-            <label for="onboard-place-locality" class="form-label">
-                {% translate "Ville" %}
-            </label>
-            <input id="onboard-place-locality"
-                   type="text"
-                   name="address_locality"
-                   required
-                   maxlength="120"
-                   class="form-control{% if errors.address_locality %} is-invalid{% endif %}"
-                   value="{{ initial.address_locality|default:wc.address_locality|default:'' }}"
-                   data-testid="onboard-place-address-locality">
-            {% if errors.address_locality %}
-                <div class="invalid-feedback">
-                    {% for msg in errors.address_locality %}{{ msg }}{% endfor %}
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <div>
-        <label for="onboard-place-country" class="form-label">
-            {% translate "Pays" %}
-        </label>
-        <input id="onboard-place-country"
-               type="text"
-               name="address_country"
-               required
-               maxlength="80"
-               class="form-control{% if errors.address_country %} is-invalid{% endif %}"
-               value="{{ initial.address_country|default:wc.address_country|default:'France' }}"
-               data-testid="onboard-place-address-country">
-        {% if errors.address_country %}
-            <div class="invalid-feedback">
-                {% for msg in errors.address_country %}{{ msg }}{% endfor %}
-            </div>
-        {% endif %}
-    </div>
-
-    {# Carte Leaflet + marker draggable. Le widget est dans un container #}
-    {# remplacable par HTMX (target du geocode endpoint). #}
-    {# / Leaflet map + draggable marker. The widget sits in a container #}
-    {# replaceable by HTMX (target of the geocode endpoint). #}
-    <div id="map-widget">
-        {% include "onboard/partials/map_widget.html" %}
-    </div>
-
-    {# Hidden inputs lat/lng, peuples par le JS Leaflet (drag, click ou #}
-    {# afterSwap du partial geocode). Submit avec le form. #}
-    {# / Hidden lat/lng inputs, filled by Leaflet JS (drag, click, or #}
-    {# afterSwap of the geocode partial). Submitted with the form. #}
-    <input id="onboard-place-latitude"
-           type="hidden"
-           name="latitude"
-           value="{{ initial.latitude|default:wc.latitude|default:'' }}"
-           data-testid="onboard-place-latitude">
-    <input id="onboard-place-longitude"
-           type="hidden"
-           name="longitude"
-           value="{{ initial.longitude|default:wc.longitude|default:'' }}"
-           data-testid="onboard-place-longitude">
+    {# Widget réutilisable carte adresse. Préfixe "place" pour les name=. #}
+    {# Pré-remplissage depuis WC si on a déjà des coords (resume / 422). #}
+    {# / Reusable address map widget. "place" prefix for name=. Pre-fills #}
+    {# from WC if coords exist (resume / 422). #}
+    {% include "widgets/widget_carte_adresse.html" with identifiant_widget="place" latitude_initiale=initial.place_latitude|default:wc.latitude longitude_initiale=initial.place_longitude|default:wc.longitude adresse_initiale=initial.place_adresse|default:wc.street_address hauteur_carte="350px" champs_adresse_separes=True required=True %}
 
     <div class="d-flex justify-content-between pt-2">
-        {# "Precedent" pointe vers `onboard-identity` (et NON vers verify) :   #}
-        {# l'OTP de la step 2 est deja consomme et son hash purge, retomber   #}
-        {# sur le formulaire OTP afficherait des cases vides sans aucun moyen #}
-        {# de proceder. L'utilisateur peut amender son email/nom de lieu      #}
-        {# depuis identity sans avoir a renvoyer un OTP.                      #}
-        {# / "Previous" points to `onboard-identity` (NOT verify): the OTP    #}
-        {# was already consumed and its hash purged; falling back on the OTP #}
-        {# form would show empty cells with no way to proceed. The user can  #}
-        {# adjust their email/venue name from identity without resending OTP. #}
-        <a href="{% url 'onboard-identity' %}"
-           class="btn btn-link"
+        <a href="{% url 'onboard-identity' %}" class="btn btn-link"
            data-testid="onboard-place-prev">
-            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i> {% translate "Précédent" %}
+            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>
+            {% translate "Précédent" %}
         </a>
-        <button type="submit"
-                class="btn btn-primary btn-lg"
+        <button type="submit" class="btn btn-primary btn-lg"
                 data-testid="onboard-place-submit">
-            {% translate "Continuer" %} <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
+            {% translate "Continuer" %}
+            <i class="bi bi-arrow-right ms-1" aria-hidden="true"></i>
         </button>
     </div>
 </form>
-
-{# Leaflet JS vendore + script d'initialisation de la carte. #}
-{# Place a la fin du step_content pour que le DOM de la map soit deja monte. #}
-{# / Vendored Leaflet JS + map init script. Placed at the end of step_content #}
-{# so the map DOM is already mounted when JS runs. #}
-<script src="{% static 'seo/vendor/leaflet/leaflet.js' %}"></script>
-<script>
-(function () {
-    // Init carte avec marker draggable. Si on a deja des coords (resume ou
-    // POST 422), centre dessus et place le marker. Sinon, vue centree sur
-    // la France (zoom 5), marker pose au 1er click ou au retour du geocode.
-    // / Init map with draggable marker. If coords already exist (resume or
-    // POST 422), center and place the marker. Otherwise, view centered on
-    // France (zoom 5), marker dropped on first click or geocode return.
-    const latInput = document.getElementById('onboard-place-latitude');
-    const lngInput = document.getElementById('onboard-place-longitude');
-    const mapEl = document.getElementById('onboard-leaflet-map');
-    if (!mapEl || typeof L === 'undefined') return;
-
-    const initialLat = parseFloat(latInput.value);
-    const initialLng = parseFloat(lngInput.value);
-    const hasCoords = !isNaN(initialLat) && !isNaN(initialLng);
-
-    const map = L.map(mapEl).setView(
-        hasCoords ? [initialLat, initialLng] : [46.6, 2.5],
-        hasCoords ? 14 : 5
-    );
-    // Tile provider CartoDB "Voyager" : gratuit, no API key, style propre
-    // et respectueux. Evite les 403 que tile.openstreetmap.org renvoie
-    // quand l'usage est interprete comme trafic non-OSM (hotlinking).
-    // / CartoDB "Voyager" tiles: free, no API key, clean style, friendly
-    // policy. Avoids the 403s thrown by tile.openstreetmap.org on hotlinked
-    // / non-OSM traffic.
-    // Note : on n'utilise pas le placeholder {r} (Retina @2x) car certaines
-    // tuiles CartoCDN renvoient des reponses partielles sur @2x → image vide
-    // affichee (naturalWidth=0) sur les ecrans Retina. La version standard
-    // est plus fiable et reste lisible.
-    // / Note: we skip the {r} (Retina @2x) placeholder since some CartoCDN
-    // tiles return partial responses on @2x → blank image (naturalWidth=0)
-    // on Retina screens. The standard version is more reliable.
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20,
-    }).addTo(map);
-
-    let marker = null;
-
-    function updateCoords(ll) {
-        latInput.value = ll.lat.toFixed(6);
-        lngInput.value = ll.lng.toFixed(6);
-    }
-
-    function placeMarker(ll) {
-        if (!marker) {
-            marker = L.marker(ll, { draggable: true }).addTo(map);
-            marker.on('dragend', function () {
-                updateCoords(marker.getLatLng());
-            });
-        } else {
-            marker.setLatLng(ll);
-        }
-        updateCoords(ll);
-    }
-
-    if (hasCoords) {
-        placeMarker(L.latLng(initialLat, initialLng));
-    }
-
-    // Click n'importe ou sur la carte = (re)position du marker.
-    // / Click anywhere on the map = (re)position the marker.
-    map.on('click', function (e) {
-        placeMarker(e.latlng);
-    });
-
-    // HTMX vient de remplacer #map-widget par le partial geocode_result :
-    // le DOM de la map a ete detruit/recree. On lit les coords renvoyees
-    // par le serveur (inputs hidden #geocode-lat/#geocode-lng dans le
-    // partial), on recree la map et on place le marker.
-    // / HTMX just replaced #map-widget with the geocode_result partial:
-    // the map DOM has been destroyed/recreated. Read the server-sent
-    // coords (hidden #geocode-lat/#geocode-lng in the partial), rebuild
-    // the map and place the marker.
-    document.body.addEventListener('htmx:afterSwap', function (evt) {
-        if (evt.detail.target && evt.detail.target.id === 'map-widget') {
-            const newLat = parseFloat(document.getElementById('geocode-lat')?.value);
-            const newLng = parseFloat(document.getElementById('geocode-lng')?.value);
-            if (!isNaN(newLat) && !isNaN(newLng)) {
-                // Re-init la map sur le nouveau DOM (mapEl precedent detruit).
-                // / Re-init the map on the new DOM (previous mapEl destroyed).
-                const newMapEl = document.getElementById('onboard-leaflet-map');
-                if (!newMapEl) return;
-                const newMap = L.map(newMapEl).setView([newLat, newLng], 15);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap',
-                    maxZoom: 19,
-                }).addTo(newMap);
-                const newMarker = L.marker([newLat, newLng], { draggable: true }).addTo(newMap);
-                newMarker.on('dragend', function () {
-                    updateCoords(newMarker.getLatLng());
-                });
-                newMap.on('click', function (e) {
-                    newMarker.setLatLng(e.latlng);
-                    updateCoords(e.latlng);
-                });
-                updateCoords(L.latLng(newLat, newLng));
-            }
-        }
-    });
-})();
-</script>
 {% endblock step_content %}

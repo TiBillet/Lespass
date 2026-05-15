@@ -1,0 +1,87 @@
+/*
+ * Widget carte adresse — surcharges minimales harmonisation TiBillet.
+ * / Address map widget — minimal overrides for TiBillet harmonization.
+ *
+ * LOCALISATION: static/widgets/widget_carte_adresse.css
+ */
+
+.widget-carte-adresse-map {
+    border-radius: 0.625rem;
+    overflow: hidden;
+    box-shadow:
+        0 0 0 1px rgba(15, 23, 42, 0.04),
+        0 1px 2px -1px rgba(15, 23, 42, 0.06),
+        0 2px 4px 0 rgba(15, 23, 42, 0.04);
+    /* z-index: assure que la carte reste sous les modals Bootstrap (1050+). */
+    /* / z-index: keeps the map below Bootstrap modals (1050+). */
+    position: relative;
+    z-index: 1;
+}
+
+/* leaflet-geosearch : container — fond blanc opaque + ombre marquée pour
+   bien le distinguer visuellement de la navbar TiBillet (qui a son propre
+   input de recherche en haut de page). Sans ce contraste, l'utilisateur
+   peut confondre les deux barres de recherche. */
+/* / leaflet-geosearch: opaque white bg + strong shadow to visually stand
+   out from the TiBillet navbar (which has its own search input). */
+.leaflet-control-geosearch.leaflet-geosearch-bar {
+    background: #ffffff;
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+    box-shadow:
+        0 0 0 1px rgba(15, 23, 42, 0.08),
+        0 4px 6px -2px rgba(15, 23, 42, 0.12),
+        0 10px 15px -3px rgba(15, 23, 42, 0.10);
+    margin-top: 0.5rem !important;  /* éloigne légèrement du bord de la carte */
+    margin-left: 0.5rem !important;
+}
+
+/* leaflet-geosearch input : harmonise le style avec les form-control Bootstrap. */
+/* / leaflet-geosearch input: harmonize style with Bootstrap form-control. */
+.leaflet-control-geosearch form input {
+    border-radius: 0.5rem !important;
+    border: 1px solid #cbd5e1 !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.95rem !important;
+    background-color: #ffffff !important;
+}
+.leaflet-control-geosearch form input:focus {
+    border-color: #16a34a !important;
+    box-shadow:
+        0 0 0 1px #16a34a,
+        0 0 0 4px rgba(22, 163, 74, 0.15) !important;
+    outline: none !important;
+}
+
+/* Bouton reset (×) : leaflet-geosearch l'affiche en permanence par défaut.
+   Quand l'input est vide, la croix sert à rien et confond l'utilisateur.
+   On la masque tant que l'input n'est pas focus + non-vide.
+   / Reset button (×): hidden by default; shown only when input has value
+   or is focused (otherwise it's noise). */
+.leaflet-control-geosearch .reset {
+    display: none !important;
+}
+.leaflet-control-geosearch form input:not(:placeholder-shown) ~ .reset,
+.leaflet-control-geosearch form input:focus ~ .reset {
+    display: block !important;
+}
+
+/* Liste de suggestions : style cohérent avec la palette TiBillet. */
+/* / Suggestions list: TiBillet palette consistency. */
+.leaflet-control-geosearch .results {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow:
+        0 0 0 1px rgba(15, 23, 42, 0.06),
+        0 4px 6px -2px rgba(15, 23, 42, 0.08),
+        0 10px 15px -3px rgba(15, 23, 42, 0.05);
+}
+.leaflet-control-geosearch .results > * {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+}
+.leaflet-control-geosearch .results > .active,
+.leaflet-control-geosearch .results > :hover {
+    background-color: rgba(22, 163, 74, 0.08);
+    color: #166534;
+}
