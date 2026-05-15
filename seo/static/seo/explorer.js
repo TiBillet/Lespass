@@ -720,5 +720,32 @@
     // ============================================================
     // ENTRY POINT
     // ============================================================
-    document.addEventListener('DOMContentLoaded', init);
+    //
+    // On veut lancer init() dans 2 contextes differents :
+    //
+    // 1. Chargement complet de la page (F5, navigation directe) :
+    //    explorer.js est execute pendant le parse du HTML, le DOM
+    //    n'est pas encore pret. On attend l'evenement DOMContentLoaded.
+    //
+    // 2. Navigation interne via HTMX (la navbar fait hx-target="body"
+    //    + hx-swap="innerHTML") : explorer.js est reinjecte dans la
+    //    page deja chargee. DOMContentLoaded a deja ete declenche au
+    //    chargement initial et ne se redeclenchera plus. Il faut donc
+    //    appeler init() immediatement.
+    //
+    // document.readyState distingue les 2 cas :
+    //   - 'loading' : on est dans le cas 1, on attend l'evenement
+    //   - 'interactive' ou 'complete' : on est dans le cas 2, on lance direct
+    //
+    // / Run init() in two contexts:
+    // / 1. Full page load (F5, direct navigation): DOM not yet ready,
+    // /    wait for DOMContentLoaded.
+    // / 2. HTMX navigation (navbar uses hx-target="body" + innerHTML
+    // /    swap): script is reinjected after DOMContentLoaded already
+    // /    fired, so it would never trigger again. Call init() now.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
